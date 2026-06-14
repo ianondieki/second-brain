@@ -36,6 +36,14 @@ Every morning at 08:00 it scans your Markdown notes, finds projects whose
 phone-formatted nudge (Hook → Context → Micro-action), and sends it to your
 WhatsApp.
 
+Two optional workflows make it two-way (§7):
+- **Inbound capture & commands** — message the bot `/note <text>` to capture a
+  thought, `/touch <project>` to reset its staleness, `/done <project>` to stop
+  nudging it. Captures land in a separate writable inbox; the vault stays
+  read-only.
+- **Error → WhatsApp alert** — if a run fails, you get a one-line alert instead
+  of silent breakage.
+
 ## Repo map
 | Path | Purpose |
 |------|---------|
@@ -47,10 +55,13 @@ WhatsApp.
 | [`docs/04-automation-engine.md`](docs/04-automation-engine.md) | §4 node-by-node pipeline |
 | [`docs/05-cloud-inference-prompt.md`](docs/05-cloud-inference-prompt.md) | §5 the cognitive prompt |
 | [`docs/06-operations-troubleshooting.md`](docs/06-operations-troubleshooting.md) | §6 runbook & fixes |
-| [`n8n/morning-nudge-workflow.json`](n8n/morning-nudge-workflow.json) | Importable n8n workflow |
+| [`docs/07-inbound-and-errors.md`](docs/07-inbound-and-errors.md) | §7 inbound capture, commands, error alerts |
+| [`n8n/morning-nudge-workflow.json`](n8n/morning-nudge-workflow.json) | Morning nudge workflow |
+| [`n8n/inbound-capture-workflow.json`](n8n/inbound-capture-workflow.json) | WhatsApp → capture/commands |
+| [`n8n/error-handler-workflow.json`](n8n/error-handler-workflow.json) | Error → WhatsApp alert |
 | [`n8n/cloud-inference-prompt.md`](n8n/cloud-inference-prompt.md) | Canonical LLM prompt |
 | [`notes/templates/`](notes/templates/) | `#Project-File` & `#Learning-Log` templates |
-| [`scripts/`](scripts/) | `smoke-test.sh` / `smoke-test.ps1` end-to-end checks |
+| [`scripts/`](scripts/) | smoke tests + `test-pipeline.mjs` regression test |
 
 ## Quick start
 1. **Get a free API key:** [Groq](https://console.groq.com/keys) (default) or
@@ -62,9 +73,15 @@ WhatsApp.
 4. Open <http://localhost:5678>, create the n8n **owner account** (one-time).
 5. Pair WhatsApp via QR (see §3) using the instance name from `.env`.
 6. Import `n8n/morning-nudge-workflow.json`, **Execute Workflow** once to
-   dry-run, then toggle **Active** (§4).
+   dry-run, then toggle **Active** (§4). Optionally import the inbound and
+   error workflows and wire them up (§7).
 7. Drop `notes/templates/EXAMPLE-stale-project.md` into your vault to force a
    nudge on the dry-run, or run `scripts/smoke-test.ps1` to verify the gateway.
+
+Verify the workflow logic anytime (no Docker needed):
+```bash
+node scripts/test-pipeline.mjs     # runs the shipped Code-node logic against fixtures
+```
 
 Full instructions are in the `docs/` sections in order; §6 is the troubleshooting runbook.
 

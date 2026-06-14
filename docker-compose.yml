@@ -87,6 +87,10 @@ services:
       # Set VAULT_PATH in .env (forward slashes), e.g. C:/Users/you/SecondBrain
       # Inside every container the vault is ALWAYS at /data/vault.
       - "${VAULT_PATH}:/data/vault:ro"
+      # WRITABLE inbox for inbound WhatsApp captures + the action log
+      # (/data/inbox/.actions.jsonl). Separate from the read-only vault so a
+      # capture flow can never corrupt your notes. See docs/07.
+      - "${INBOX_PATH}:/data/inbox"
     mem_limit: 450m
     mem_reservation: 256m
     networks:

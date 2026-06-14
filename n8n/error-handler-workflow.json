@@ -1,0 +1,96 @@
+{
+  "name": "Error Handler -> WhatsApp Alert",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "timezone": "Africa/Lagos"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b1111111-1111-1111-1111-111111111111",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format a concise WhatsApp alert from the failed execution.\nconst e = $input.first().json || {};\nconst wfName = (e.workflow && e.workflow.name) || 'unknown workflow';\nconst lastNode = (e.execution && e.execution.lastNodeExecuted) || 'unknown node';\nconst errMsg = (e.execution && e.execution.error && e.execution.error.message) || 'no error message';\nconst url = (e.execution && e.execution.url) || '';\nconst text = `⚠️ *Second Brain failed*\\n*Workflow:* ${wfName}\\n*Node:* ${lastNode}\\n*Error:* ${errMsg}` + (url ? `\\n${url}` : '');\nreturn [{ json: { text } }];\n"
+      },
+      "id": "b2222222-2222-2222-2222-222222222222",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{$env.EVOLUTION_INSTANCE}}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.text, \"delay\": 500 } }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "b3333333-3333-3333-3333-333333333333",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

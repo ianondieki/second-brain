@@ -1,0 +1,102 @@
+{
+  "name": "WhatsApp Inbound Capture & Commands",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "timezone": "Africa/Lagos"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wa-inbound",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1111111-1111-1111-1111-111111111111",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wa-inbound-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle inbound WhatsApp commands. Only messages starting with \"/\" are acted\n// on — the bot's own emoji-formatted nudges never start with \"/\", so no loops.\nconst fs = require('fs');\nconst path = require('path');\nconst INBOX = '/data/inbox';\nconst out = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;          // n8n webhook nests under .body\n  const data = body.data || {};\n  const msg = data.message || {};\n  const text = String(msg.conversation || (msg.extendedTextMessage && msg.extendedTextMessage.text) || '').trim();\n  const jid = (data.key && data.key.remoteJid) || '';\n  const number = jid.replace(/@.*$/, '');\n  if (!text || !number || !text.startsWith('/')) continue;   // ignore non-commands\n\n  const m = text.match(/^\\/(\\w+)\\s*([\\s\\S]*)$/);\n  const cmd = (m ? m[1] : '').toLowerCase();\n  const arg = m ? m[2].trim() : '';\n  try { fs.mkdirSync(INBOX, { recursive: true }); } catch (e) {}\n\n  let reply;\n  if ((cmd === 'note' || cmd === 'n' || cmd === 'capture') && arg) {\n    const ts = new Date();\n    const slug = (arg.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)) || 'note';\n    const fname = `${ts.toISOString().slice(0, 10)}-${ts.getTime()}-${slug}.md`;\n    const md = `---\\ntype: capture\\ncreated: ${ts.toISOString()}\\nsource: whatsapp\\n---\\n\\n${arg}\\n`;\n    fs.writeFileSync(path.join(INBOX, fname), md);\n    reply = `📥 Captured to inbox as _${fname}_`;\n  } else if ((cmd === 'done' || cmd === 'touch' || cmd === 'did' || cmd === 'reopen') && arg) {\n    const action = cmd === 'done' ? 'done' : (cmd === 'reopen' ? 'reopen' : 'touch');\n    fs.appendFileSync(path.join(INBOX, '.actions.jsonl'), JSON.stringify({ ts: new Date().toISOString(), action, project: arg }) + '\\n');\n    reply = action === 'done'\n      ? `✅ Marked _${arg}_ as done — it won't nudge you again.`\n      : `👍 Logged activity on _${arg}_ — staleness clock reset.`;\n  } else if (cmd === 'help') {\n    reply = '*Second Brain commands*\\n📥 /note <text> — capture a thought\\n👍 /touch <project> — reset its staleness clock\\n✅ /done <project> — stop nudging it\\n♻️ /reopen <project> — undo a done\\n❓ /help — this message';\n  } else {\n    reply = '🤖 Unknown or empty command. Send */help* for the list.';\n  }\n  out.push({ json: { number, reply } });\n}\nreturn out;\n"
+      },
+      "id": "a2222222-2222-2222-2222-222222222222",
+      "name": "Handle Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{$env.EVOLUTION_INSTANCE}}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"number\": $json.number, \"text\": $json.reply, \"delay\": 800 } }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a3333333-3333-3333-3333-333333333333",
+      "name": "Reply on WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Handle Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Command": {
+      "main": [
+        [
+          {
+            "node": "Reply on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

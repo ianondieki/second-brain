@@ -38,6 +38,10 @@ unshared drive — see §1).
    `# comments`, quotes, `[a, b]` lists, and a UTF-8 BOM). No `gray-matter`
    dependency.
 2. Keeps only `type: project`; drops `status: done`.
+2b. Applies the optional **WhatsApp action log** (`/data/inbox/.actions.jsonl`,
+   see §7): the latest matching `done` excludes a project, `touch` advances its
+   staleness clock, `reopen` un-excludes without touching the clock. The read is
+   skipped silently if the inbox isn't mounted, so the nudge works standalone.
 3. Computes `days_stale = today − last_actionable_date` using **local-midnight**
    dates on both sides, so there is no timezone off-by-one.
 4. Compares against `stale_after_days` (per-note) or the global default of **5**.
