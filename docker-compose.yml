@@ -1,0 +1,204 @@
+# ==============================================================================
+#  AGENTIC SECOND BRAIN — Hybrid Local/Cloud Stack
+#  Target host: Windows 10/11 + Docker Desktop (WSL2 backend), 8 GB physical RAM
+#  Hard ceiling for this stack: < 1.5 GB combined (see mem_limit per service)
+#
+#  Memory budget (mem_limit ceilings, real RSS is lower):
+#    n8n          450m   (SQLite backend — no Postgres dependency for n8n)
+#    evolution    400m   (Baileys WhatsApp engine)
+#    postgres     256m   (Evolution metadata only)
+#    redis         96m   (Evolution cache, capped maxmemory 64mb)
+#    -------------------
+#    CEILING     1202m   (~1.18 GB worst case)
+#
+#  NOTE on Compose v2 + mem_limit:
+#    `mem_limit` / `cpus` (the short form) are honored by `docker compose up`
+#    on Docker Desktop. Do NOT run this through `docker stack deploy` (Swarm),
+#    which ignores these and requires deploy.resources instead. Both forms are
+#    provided below so the file is portable.
+# ==============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # 1) n8n — Orchestrator. Reads local Markdown, calls cloud LLM, posts to WA.
+  #    Uses SQLite (default) to avoid a second Postgres process in RAM.
+  # ---------------------------------------------------------------------------
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: sb-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # --- Core ---
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=${TZ:-Africa/Lagos}
+      - TZ=${TZ:-Africa/Lagos}
+      # --- Persistence: SQLite keeps the footprint tiny ---
+      - DB_TYPE=sqlite
+      - N8N_USER_FOLDER=/home/node/.n8n
+      # --- Security ---
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      # --- Allow the Local File System + Execute nodes to touch the vault ---
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      - NODE_FUNCTION_ALLOW_BUILTIN=fs,path,crypto
+      - NODE_FUNCTION_ALLOW_EXTERNAL=gray-matter
+      # --- Memory hygiene: prune old executions so SQLite never balloons ---
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168            # hours = 7 days
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      # --- Cap the V8 heap so Node never tries to grab the whole laptop ---
+      - NODE_OPTIONS=--max-old-space-size=320
+      # --- Exposed to workflow expressions via $env (gateway + recipient) ---
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-secondbrain}
+      - WA_TARGET_NUMBER=${WA_TARGET_NUMBER}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # READ-ONLY bind mount of the Windows Obsidian/Logseq vault.
+      # Set VAULT_PATH in .env to e.g. C:/Users/you/Documents/SecondBrain
+      # Inside containers the vault is ALWAYS at /data/vault.
+      - "${VAULT_PATH}:/data/vault:ro"
+    mem_limit: 450m
+    mem_reservation: 256m
+    cpus: 1.0
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    networks:
+      - sbnet
+
+  # ---------------------------------------------------------------------------
+  # 2) Evolution API — open-source WhatsApp Web gateway (Baileys engine).
+  #    Local HTTP <-> WhatsApp bridge. QR pairing, send/receive messages.
+  # ---------------------------------------------------------------------------
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    container_name: sb-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - LANGUAGE=en
+      # --- Persistence in Postgres (metadata only, messages can be off) ---
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution
+      # Keep stored data minimal to protect RAM + disk
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_MESSAGE_UPDATE=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_CHATS=false
+      # --- Redis cache ---
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=true
+      - CACHE_LOCAL_ENABLED=false
+      # --- Webhook: forward inbound WA messages into n8n (optional, Section 3) ---
+      - WEBHOOK_GLOBAL_ENABLED=false
+      # --- Quieter logs = less I/O churn on a constrained host ---
+      - LOG_LEVEL=ERROR
+      - LOG_BAILEYS=error
+      - DEL_INSTANCE=false
+      - QRCODE_LIMIT=10
+      - NODE_OPTIONS=--max-old-space-size=280
+    volumes:
+      - evolution_instances:/evolution/instances
+    mem_limit: 400m
+    mem_reservation: 200m
+    cpus: 1.0
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+    networks:
+      - sbnet
+
+  # ---------------------------------------------------------------------------
+  # 3) Postgres — used ONLY by Evolution API. Tuned for a tiny footprint.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: sb-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=evolution
+    # Shrink the default memory grants so a near-idle DB stays small.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=32MB"
+      - "-c"
+      - "max_connections=20"
+      - "-c"
+      - "work_mem=2MB"
+      - "-c"
+      - "maintenance_work_mem=16MB"
+      - "-c"
+      - "effective_cache_size=128MB"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    mem_limit: 256m
+    mem_reservation: 96m
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - sbnet
+
+  # ---------------------------------------------------------------------------
+  # 4) Redis — Evolution cache. Hard maxmemory cap with LRU eviction.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sb-redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    volumes:
+      - redis_data:/data
+    mem_limit: 96m
+    mem_reservation: 32m
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+    networks:
+      - sbnet
+
+networks:
+  sbnet:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  evolution_instances:
+  postgres_data:
+  redis_data:

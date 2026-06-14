@@ -1,0 +1,20 @@
+# Secrets
+.env
+*.key
+
+# Local runtime / volumes if ever bind-mounted into repo
+n8n_data/
+evolution_instances/
+postgres_data/
+redis_data/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Personal vault content (keep only templates in git)
+notes/projects/*
+notes/learning/*
+!notes/projects/.gitkeep
+!notes/learning/.gitkeep

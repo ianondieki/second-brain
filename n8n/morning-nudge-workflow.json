@@ -1,0 +1,114 @@
+{
+  "name": "Autonomous Morning Nudge Pipeline",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "timezone": "Africa/Lagos"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 8 * * *" }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Cron 08:00 Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/vault/**/*.md",
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Read Vault Markdown",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Node 3: parse frontmatter + filter STALE projects (no vector DB) ===\n// Runs once for ALL items. Robust to filesystem binary mode via getBinaryDataBuffer.\nconst items = $input.all();\nconst GLOBAL_STALE_DAYS = 5;\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst toDate = (s) => { const d = new Date(String(s).trim()); return isNaN(d) ? null : d; };\nconst daysBetween = (a, b) => Math.floor((a - b) / 86400000);\n\n// Minimal flat-YAML frontmatter parser. Handles `key: value` and `key: [a, b]`.\nfunction parseFrontmatter(text) {\n  const m = text.match(/^---\\s*\\n([\\s\\S]*?)\\n---/);\n  if (!m) return { fm: {}, body: text };\n  const fm = {};\n  for (const line of m[1].split(/\\r?\\n/)) {\n    if (!line.trim() || line.trim().startsWith('#')) continue;\n    const idx = line.indexOf(':');\n    if (idx === -1) continue;\n    let key = line.slice(0, idx).trim();\n    let val = line.slice(idx + 1).trim();\n    val = val.replace(/^[\"']|[\"']$/g, '');\n    if (val.startsWith('[') && val.endsWith(']')) {\n      val = val.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);\n    }\n    fm[key] = val;\n  }\n  return { fm, body: text.slice(m[0].length).trim() };\n}\n\nconst stale = [];\nfor (let i = 0; i < items.length; i++) {\n  const binMeta = items[i].binary && items[i].binary.data;\n  if (!binMeta) continue;\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const text = buf.toString('utf8');\n  const { fm, body } = parseFrontmatter(text);\n  if ((fm.type || '').toLowerCase() !== 'project') continue;        // projects only\n  const status = (fm.status || '').toLowerCase();\n  if (status === 'done') continue;                                  // ignore finished\n  const last = toDate(fm.last_actionable_date);\n  if (!last) continue;\n  const threshold = parseInt(fm.stale_after_days, 10) || GLOBAL_STALE_DAYS;\n  const age = daysBetween(today, last);\n  if (age < threshold) continue;                                    // still warm\n\n  // Keep payload small: trim the body to the most recent signal lines.\n  const recent = body.split(/\\r?\\n/).filter(l => /log|^- |\\[ \\]|next/i.test(l)).slice(-8).join('\\n');\n  stale.push({\n    title: fm.title || (binMeta.fileName || 'untitled').replace(/\\.md$/, ''),\n    status,\n    priority: fm.priority || 'medium',\n    deadline: fm.deadline || '',\n    last_actionable_date: fm.last_actionable_date,\n    days_stale: age,\n    recent_notes: recent\n  });\n}\n\nif (stale.length === 0) return [];   // nothing cold -> pipeline ends, no message sent\nstale.sort((a, b) => b.days_stale - a.days_stale);\n\nconst SYSTEM_PROMPT = `You are the user's Agentic Second Brain — a terse, perceptive chief-of-staff that resurfaces neglected projects each morning over WhatsApp.\nYou receive JSON: today's date and an array of STALE projects (each with title, status, priority, deadline, days_stale, recent_notes).\n\nRULES:\n1. Pick the SINGLE highest-leverage project to nudge. Prefer: nearest deadline, then highest priority, then most days_stale. Mention at most one secondary project in a single short line.\n2. Output ONLY the WhatsApp message body. No preamble, no explanation, no markdown code fences.\n3. Format STRICTLY for a narrow phone screen using WhatsApp formatting: *bold* with single asterisks, _italics_ with underscores, and leading emojis as bullets. Keep total length under ~90 words. Short lines. Blank line between the three blocks.\n4. Follow this exact 3-step flow:\n   *🧊 THE HOOK* — name what went cold and for how many days (use days_stale).\n   *🧠 THE CONTEXT* — paraphrase the recent_notes so they recognise where they left off.\n   *✅ THE MICRO-ACTION* — ONE concrete task doable in 10 minutes. Make it absurdly low-friction.\n5. Tone: warm, direct, zero guilt-tripping. Never invent facts not present in the notes.`;\n\nconst USER_CONTENT = JSON.stringify({\n  today: today.toISOString().slice(0, 10),\n  stale_projects: stale\n}, null, 2);\n\nreturn [{ json: { system: SYSTEM_PROMPT, user: USER_CONTENT, count: stale.length } }];"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Filter Stale Projects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.4, \"max_tokens\": 700, \"messages\": [ { \"role\": \"system\", \"content\": $json.system }, { \"role\": \"user\", \"content\": $json.user } ] } }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Cloud LLM Synthesis (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_GROQ_CRED_ID", "name": "Groq API (Bearer)" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{$env.EVOLUTION_INSTANCE}}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.EVOLUTION_API_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.choices[0].message.content, \"delay\": 1200 } }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Send to WhatsApp Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 300]
+    }
+  ],
+  "connections": {
+    "Cron 08:00 Daily": {
+      "main": [[{ "node": "Read Vault Markdown", "type": "main", "index": 0 }]]
+    },
+    "Read Vault Markdown": {
+      "main": [[{ "node": "Filter Stale Projects", "type": "main", "index": 0 }]]
+    },
+    "Filter Stale Projects": {
+      "main": [[{ "node": "Cloud LLM Synthesis (Groq)", "type": "main", "index": 0 }]]
+    },
+    "Cloud LLM Synthesis (Groq)": {
+      "main": [[{ "node": "Send to WhatsApp Gateway", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {}
+}
