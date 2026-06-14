@@ -57,6 +57,7 @@ Two optional workflows make it two-way (§7):
 | [`docs/05-cloud-inference-prompt.md`](docs/05-cloud-inference-prompt.md) | §5 the cognitive prompt |
 | [`docs/06-operations-troubleshooting.md`](docs/06-operations-troubleshooting.md) | §6 runbook & fixes |
 | [`docs/07-inbound-and-errors.md`](docs/07-inbound-and-errors.md) | §7 inbound capture, commands, error alerts |
+| [`docs/08-confidence-and-verification.md`](docs/08-confidence-and-verification.md) | §8 what's proven vs trusted + 5-min check |
 | [`n8n/morning-nudge-workflow.json`](n8n/morning-nudge-workflow.json) | Morning nudge workflow |
 | [`n8n/inbound-capture-workflow.json`](n8n/inbound-capture-workflow.json) | WhatsApp → capture/commands |
 | [`n8n/error-handler-workflow.json`](n8n/error-handler-workflow.json) | Error → WhatsApp alert |

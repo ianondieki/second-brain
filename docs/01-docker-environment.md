@@ -53,11 +53,20 @@ constraint while leaving the rest to Windows + browser.
 ```powershell
 # from the repo root, next to docker-compose.yml
 copy .env.example .env       # then edit .env with real values
+
+# IMPORTANT: create the inbox folder BEFORE `up`, or the bind mount errors.
+# Use the same path you set for INBOX_PATH in .env:
+mkdir "C:\Users\<you>\Documents\SecondBrain\_inbox"   # e.g.
+
 docker compose pull          # fetch images
 docker compose up -d
-docker compose ps            # all four up? postgres should be "healthy"
+docker compose ps            # all four up? postgres + n8n should be "healthy"
 docker stats --no-stream     # confirm RSS is well under the limits
 ```
+
+> Docker bind-mounts a host path; if `INBOX_PATH` (or `VAULT_PATH`) doesn't
+> exist on disk, `docker compose up` fails with a mount error. The vault
+> already exists (your notes); just make sure the inbox folder does too.
 
 ## First-run n8n account (no basic auth!)
 

@@ -48,7 +48,7 @@ const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBo
 
 const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
-const runHandle = (items) => new Function('$input', 'require', handleCode)({ all: () => items }, require);
+const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
@@ -118,6 +118,8 @@ try {
   ok(gCustom.model === 'llama-3.1-8b-instant', 'GROQ_MODEL env overrides the default model');
   const reviewsA = JSON.parse(out[0].json.user).due_reviews.map((r) => r.topic);
   ok(reviewsA.includes('Spaced repetition'), 'overdue learning log surfaced in due_reviews');
+  const stripeRec = JSON.parse(out[0].json.user).stale_projects.find((p) => p.title === 'Stripe billing migration').recent_notes;
+  ok(!/Recent log/.test(stripeRec) && /Verified/.test(stripeRec), 'recent_notes excludes Markdown headings, keeps log lines');
   const mock = { choices: [{ message: { content: '🧊 *HOOK*\nYour _BOM note_ went cold.' } }] };
   const e = JSON.parse(JSON.stringify(evalExpr(evoBody, mock, env)));
   ok(e.number === '2348012345678' && e.text === mock.choices[0].message.content && e.delay === 1200, 'Evolution body intact (number from $env, text, delay)');
@@ -156,7 +158,7 @@ try {
   // ---------------------------------------------------------------- Round F (NEW)
   console.log('\n# Round F — inbound command handler');
   reset();
-  const wh = (text) => ({ json: { body: { event: 'messages.upsert', data: { key: { remoteJid: '2348012345678@s.whatsapp.net', fromMe: false }, message: { conversation: text } } } } });
+  const wh = (text, jid = '2348012345678@s.whatsapp.net') => ({ json: { body: { event: 'messages.upsert', data: { key: { remoteJid: jid, fromMe: false }, message: { conversation: text } } } } });
   const r1 = runHandle([wh('/note Call the accountant about Q3 VAT')]);
   ok(r1.length === 1 && /Captured/.test(r1[0].json.reply), '/note returns a capture confirmation');
   const captured = fs.readdirSync(INBOX).filter((f) => f.endsWith('.md'));
@@ -174,6 +176,9 @@ try {
   ok(runHandle([wh('/note')])[0].json.reply.includes('Unknown') || runHandle([wh('/note')]).length >= 0, '/note with no text does not crash');
   const r4 = runHandle([wh('/done Stripe')]);
   ok(r4[0].json.number === '2348012345678', 'reply targets the sender number (jid stripped)');
+  ok(runHandle([wh('/note hijack', '19998887777@s.whatsapp.net')]).length === 0, 'command from a NON-owner number is ignored (owner-only)');
+  ok(runHandle([wh('/help', '120363999@g.us')]).length === 0, 'group message is ignored');
+  ok(runHandle([wh('/help', 'status@broadcast')]).length === 0, 'status broadcast is ignored');
 
   // ---------------------------------------------------------------- Round G (NEW)
   console.log('\n# Round G — error-handler formatting');

@@ -55,7 +55,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.text, \"delay\": 500 } }}",
         "options": {
-          "timeout": 20000
+          "timeout": 30000
         }
       },
       "id": "b3333333-3333-3333-3333-333333333333",
