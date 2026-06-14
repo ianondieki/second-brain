@@ -47,9 +47,14 @@ unshared drive — see §1).
 4. Compares against `stale_after_days` (per-note) or the global default of **5**.
 5. Trims each note body to ≤8 signal lines (list items / dated log lines / the
    word *next*) to keep the cloud payload — and token cost — tiny.
-6. **Ranks** the survivors: nearest deadline → priority → most days_stale.
-7. Emits **one** item `{ system, user, count }`, where `system` is the cognitive
-   prompt (Section 5) and `user` is the pre-sorted JSON of stale projects.
+6. Also collects **due learning reviews**: `type: learning` notes (not `done`,
+   not `/done`) whose days since `last_actionable_date` ≥ `review_interval_days`
+   (default `GLOBAL_REVIEW_DAYS = 7`), sorted most-overdue first.
+7. **Ranks** stale projects: nearest deadline → priority → most days_stale.
+8. Emits **one** item `{ system, user, count }`, where `system` is the cognitive
+   prompt (Section 5) and `user` is the pre-sorted JSON
+   `{ today, stale_projects, due_reviews }`. Returns `[]` only when **both**
+   arrays are empty.
 
 ### Node 4 — Cloud LLM (HTTP Request)
 `HTTP Request`, POST to Groq's OpenAI-compatible endpoint
@@ -61,7 +66,7 @@ unshared drive — see §1).
 - **Body (JSON expression):**
   ```js
   {
-    "model": "llama-3.3-70b-versatile",
+    "model": ($env.GROQ_MODEL || "llama-3.3-70b-versatile"),
     "temperature": 0.4,
     "max_tokens": 700,
     "messages": [
@@ -70,7 +75,14 @@ unshared drive — see §1).
     ]
   }
   ```
+  The model is env-driven (`GROQ_MODEL` in `.env`) so you can swap it without
+  editing the workflow — handy when Groq retires a model id.
 - **Output:** message text at `choices[0].message.content`.
+
+> **Resilience:** the Groq node and both WhatsApp send nodes have
+> `Retry On Fail` enabled (3 tries, 3 s apart) for transient 429s/network blips.
+> If all retries fail, the run errors — which the §7 error-handler workflow can
+> turn into a WhatsApp alert.
 
 > **Swap to Google Gemini free tier** instead of Groq:
 > - URL: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`

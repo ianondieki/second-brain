@@ -32,9 +32,10 @@ morning over WhatsApp about projects that have gone cold. Built to run on an
 
 ## What it does
 Every morning at 08:00 it scans your Markdown notes, finds projects whose
-`last_actionable_date` has gone stale, asks a cloud LLM to write a short,
-phone-formatted nudge (Hook → Context → Micro-action), and sends it to your
-WhatsApp.
+`last_actionable_date` has gone stale (and learning notes due for spaced
+review), asks a cloud LLM to write a short, phone-formatted nudge (Hook →
+Context → Micro-action, plus a 📚 review line when one's due), and sends it to
+your WhatsApp.
 
 Two optional workflows make it two-way (§7):
 - **Inbound capture & commands** — message the bot `/note <text>` to capture a

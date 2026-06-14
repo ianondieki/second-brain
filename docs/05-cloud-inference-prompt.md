@@ -7,10 +7,15 @@ engineering behind it.
 
 ## Contract
 - **System message:** the cognitive prompt (role, ranking logic, format,
-  3-step flow, guardrails).
-- **User message:** raw JSON `{ today, stale_projects[] }`. We deliberately
-  send *structured data*, not prose, so the model reasons over fields instead
-  of guessing.
+  3-step flow, optional review line, guardrails).
+- **User message:** raw JSON `{ today, stale_projects[], due_reviews[] }`. We
+  deliberately send *structured data*, not prose, so the model reasons over
+  fields instead of guessing. Either array may be empty; the prompt leads with
+  whichever is present (projects take precedence).
+
+> **Authoring constraint:** the prompt lives inside a JS template literal in
+> Node 3, so it must contain no backticks or `${...}`. Field names are written
+> as plain words (`stale_projects`, not `` `stale_projects` ``).
 
 ## Design decisions
 1. **Pre-sorted, single-target selection.** Node 3 ranks the array (deadline →
@@ -42,5 +47,5 @@ verbatim block and a rendered example.
 | Punchier copy | drop `max_tokens` to 400, temp 0.3 |
 | More variety | temp 0.6–0.7 |
 | Two nudges | allow 2 primary blocks; raise word cap to ~140 |
-| Include learning logs | in Node 3, also pass `type: learning` items whose `last_actionable_date` exceeds `review_interval_days`, and add a 4th flow step `📚 REVIEW` |
-| Different model | Groq `llama-3.3-70b-versatile` (quality) or `llama-3.1-8b-instant` (speed); Gemini `gemini-1.5-flash` |
+| Learning reviews | **Already wired in.** Node 3 emits `due_reviews` for `type: learning` notes past their `review_interval_days`, and rule 5 adds the `📚 REVIEW` line. Tune the global default via `GLOBAL_REVIEW_DAYS` in Node 3. |
+| Different model | Set `GROQ_MODEL` in `.env` — no workflow edit. `llama-3.3-70b-versatile` (quality) / `llama-3.1-8b-instant` (speed); Gemini `gemini-1.5-flash` |

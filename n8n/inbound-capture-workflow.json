@@ -3,9 +3,9 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
+    "saveExecutionProgress": false,
     "saveDataSuccessExecution": "none",
-    "saveDataErrorExecution": "all",
-    "timezone": "Africa/Lagos"
+    "saveDataErrorExecution": "all"
   },
   "nodes": [
     {
@@ -71,7 +71,10 @@
       "position": [
         720,
         300
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     }
   ],
   "connections": {

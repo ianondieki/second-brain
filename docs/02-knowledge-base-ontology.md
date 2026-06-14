@@ -60,8 +60,8 @@ tags: [memory, study]
 | `deadline`             | project   | date    | ✅ (ranking) | hard date |
 | `last_actionable_date` | both      | date    | ✅ (heartbeat) | last real touch |
 | `stale_after_days`     | project   | int     | ✅ (threshold)| per-note override (default 5) |
-| `review_interval_days` | learning  | int     | ⏳ (future flow) | desired revisit cadence |
-| `confidence`           | learning  | float   | ⏳ | self-rated mastery |
+| `review_interval_days` | learning  | int     | ✅ (review due) | revisit cadence (default 7) |
+| `confidence`           | learning  | float   | ✅ (tie-break) | self-rated mastery; lower = reviewed first |
 | `tags`                 | both      | list    | — | Obsidian/Logseq graph |
 
 ## Why this beats a vector DB *here*

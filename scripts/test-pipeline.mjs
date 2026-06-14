@@ -113,7 +113,11 @@ try {
 
   // HTTP bodies
   const g = JSON.parse(JSON.stringify(evalExpr(groqBody, out[0].json, env)));
-  ok(g.model === 'llama-3.3-70b-versatile' && g.messages[0].content === out[0].json.system && g.messages[1].content === out[0].json.user, 'Groq body intact (model + messages + escaping)');
+  ok(g.model === 'llama-3.3-70b-versatile' && g.messages[0].content === out[0].json.system && g.messages[1].content === out[0].json.user, 'Groq body intact (default model + messages + escaping)');
+  const gCustom = JSON.parse(JSON.stringify(evalExpr(groqBody, out[0].json, { ...env, GROQ_MODEL: 'llama-3.1-8b-instant' })));
+  ok(gCustom.model === 'llama-3.1-8b-instant', 'GROQ_MODEL env overrides the default model');
+  const reviewsA = JSON.parse(out[0].json.user).due_reviews.map((r) => r.topic);
+  ok(reviewsA.includes('Spaced repetition'), 'overdue learning log surfaced in due_reviews');
   const mock = { choices: [{ message: { content: '🧊 *HOOK*\nYour _BOM note_ went cold.' } }] };
   const e = JSON.parse(JSON.stringify(evalExpr(evoBody, mock, env)));
   ok(e.number === '2348012345678' && e.text === mock.choices[0].message.content && e.delay === 1200, 'Evolution body intact (number from $env, text, delay)');
@@ -178,6 +182,29 @@ try {
   ok(/Second Brain failed/.test(at) && /Morning Nudge/.test(at) && /401/.test(at) && /execution\/42/.test(at), 'error alert includes workflow, node, message, url');
   const alert2 = runError({ json: {} });
   ok(/unknown workflow/.test(alert2[0].json.text), 'error formatter is defensive against a sparse payload');
+
+  // ---------------------------------------------------------------- Round H (NEW)
+  console.log('\n# Round H — learning-log spaced reviews');
+  const wreviews = () => { const o = runFilter(runScan()); return o.length ? JSON.parse(o[0].json.user).due_reviews.map((r) => r.topic) : []; };
+  reset();
+  put('learning/due.md', `---\ntype: learning\ntitle: Due topic\nlast_actionable_date: ${D(-10)}\n---\n- notes`);
+  put('learning/fresh.md', `---\ntype: learning\ntitle: Fresh topic\nlast_actionable_date: ${D(-2)}\n---`);
+  put('learning/custom.md', `---\ntype: learning\ntitle: Custom interval\nreview_interval_days: 3\nlast_actionable_date: ${D(-5)}\nconfidence: 0.2\n---`);
+  put('learning/finished.md', `---\ntype: learning\ntitle: Mastered\nstatus: done\nlast_actionable_date: ${D(-99)}\n---`);
+  let revs = wreviews();
+  ok(revs.includes('Due topic'), 'learning note past the default 7d interval is due');
+  ok(!revs.includes('Fresh topic'), 'recently-reviewed learning note is not due');
+  ok(revs.includes('Custom interval'), 'review_interval_days override honoured');
+  ok(!revs.includes('Mastered'), 'status:done learning note excluded from reviews');
+  const oH = runFilter(runScan());
+  const pj = JSON.parse(oH[0].json.user);
+  ok(oH.length === 1 && pj.stale_projects.length === 0 && pj.due_reviews.length > 0, 'review-only morning (no stale projects) still emits a message');
+  writeActions([{ ts: new Date().toISOString(), action: 'done', project: 'Due topic' }]);
+  ok(!wreviews().includes('Due topic'), '/done on a learning topic stops its reviews too');
+  reset();
+  put('learning/a.md', `---\ntype: learning\ntitle: A\nlast_actionable_date: ${D(-20)}\n---`);
+  put('learning/b.md', `---\ntype: learning\ntitle: B\nlast_actionable_date: ${D(-40)}\n---`);
+  ok(JSON.stringify(wreviews()) === JSON.stringify(['B', 'A']), 'reviews sorted most-overdue first');
 
 } finally {
   fs.rmSync(VAULT, { recursive: true, force: true });
