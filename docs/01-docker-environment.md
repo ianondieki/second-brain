@@ -13,25 +13,25 @@ covers the *why*, the RAM math, and the Windows-specific gotchas.
 | `redis`     | Redis 7-alpine (64MB cap) | 96 MB       | 15–40 MB         |
 | **Ceiling** |                           | **1202 MB** | **~0.5–0.7 GB**  |
 
-The `mem_limit` is the kernel-enforced hard wall (OOM-kill above it). Real
-resident memory at idle sits well under 0.7 GB, comfortably inside your
-"<1 GB free" constraint while leaving the other ~7 GB to Windows + browser.
+`mem_limit` is the kernel-enforced hard wall (OOM-kill above it). Real resident
+memory at idle sits well under 0.7 GB — comfortably inside your "<1 GB free"
+constraint while leaving the rest to Windows + browser.
 
 ### Levers that keep it small
 - **n8n on SQLite**, not Postgres — removes an entire DB process from n8n's path.
-- **`--max-old-space-size`** on both Node services caps the V8 heap *before*
-  the container hits `mem_limit`, so you get a clean GC instead of an OOM kill.
-- **Execution pruning** (`EXECUTIONS_DATA_PRUNE`, 7-day age) stops the SQLite
-  file and in-memory execution log from growing unbounded.
-- **Evolution `DATABASE_SAVE_DATA_NEW_MESSAGE=false`** — we never need full
-  chat history; storing it would bloat Postgres and Redis.
-- **Redis `maxmemory 64mb` + `allkeys-lru` + no persistence** — cache only.
+- **`NODE_OPTIONS=--max-old-space-size`** on both Node services caps the V8 heap
+  *below* the container limit, so you get a clean GC instead of an OOM kill.
+- **Execution pruning** (`EXECUTIONS_DATA_PRUNE`, 7-day age, don't save
+  successes) stops the SQLite file and execution log from growing unbounded.
+- **Evolution `DATABASE_SAVE_DATA_NEW_MESSAGE=false`** + history/contacts/chats
+  off — we never need chat history; storing it would bloat Postgres and Redis.
+- **Redis `maxmemory 64mb` + `allkeys-lru` + no persistence** — pure cache.
 - **Postgres tuned down** (`shared_buffers=32MB`, `work_mem=2MB`).
 
 ## Windows Docker Desktop setup
 
-1. Install **Docker Desktop** with the **WSL2** backend (Settings →
-   General → "Use the WSL 2 based engine").
+1. Install **Docker Desktop** with the **WSL2** backend (Settings → General →
+   "Use the WSL 2 based engine").
 2. **Cap Docker's global RAM** so it can never starve Windows. Create
    `C:\Users\<you>\.wslconfig`:
    ```ini
@@ -40,27 +40,50 @@ resident memory at idle sits well under 0.7 GB, comfortably inside your
    processors=2
    swap=2GB
    ```
-   Then `wsl --shutdown` and restart Docker Desktop. 2 GB is plenty for this
-   stack and hard-guarantees Windows keeps ~6 GB.
+   Then in PowerShell: `wsl --shutdown`, and restart Docker Desktop. 2 GB is
+   plenty for this stack and hard-guarantees Windows keeps ~6 GB.
 3. **Enable file sharing** for the drive holding your vault: Docker Desktop →
    Settings → Resources → File Sharing → add `C:\` (or the specific folder).
    This is what makes the `${VAULT_PATH}:/data/vault:ro` bind mount work.
+   *(WSL2 backend usually shares all drives automatically; if the mount is
+   empty inside the container, this setting is the first thing to check.)*
 
 ## Bring-up
 
 ```powershell
 # from the repo root, next to docker-compose.yml
 copy .env.example .env       # then edit .env with real values
+docker compose pull          # fetch images
 docker compose up -d
-docker compose ps            # all four healthy?
+docker compose ps            # all four up? postgres should be "healthy"
 docker stats --no-stream     # confirm RSS is well under the limits
 ```
 
-Open n8n at <http://localhost:5678> (basic-auth from `.env`). The vault is
-visible read-only inside the n8n container at `/data/vault`.
+## First-run n8n account (no basic auth!)
+
+Modern n8n (v1+) **removed** the old `N8N_BASIC_AUTH_*` variables. Instead:
+
+1. Open <http://localhost:5678>.
+2. n8n shows a one-time **"Set up owner account"** screen — create your local
+   admin (email + password). This is stored in the n8n SQLite DB, not in `.env`.
+3. That account gates the editor from then on.
+
+We set `N8N_SECURE_COOKIE=false` because the owner-account login cookie is
+marked `Secure` by default, which browsers refuse to store over plain
+`http://localhost` — leaving you unable to log in. Relaxing it is safe here
+because the port is bound to `127.0.0.1` only (loopback, not the LAN).
 
 ## Why read-only mount (`:ro`)
 n8n only ever *reads* your notes for the nudge pipeline. Mounting read-only
-removes any chance a buggy/compromised workflow rewrites or deletes your
-knowledge base. If you later add a "capture to vault" flow, give it a
-*separate*, narrowly-scoped writable subfolder (e.g. `/data/inbox`).
+removes any chance a buggy or compromised workflow rewrites or deletes your
+knowledge base. If you later add a "capture to vault" flow, give it a separate,
+narrowly-scoped writable subfolder (e.g. `/data/inbox`), never the whole vault.
+
+## Image pinning
+The compose file ships with explicit-ish tags. `postgres:16-alpine` and
+`redis:7-alpine` are stable. For **n8n** and **Evolution**, pin to the exact
+version you tested before any long-lived deploy:
+- n8n tags: <https://hub.docker.com/r/n8nio/n8n/tags> (e.g. `:1.71.3`)
+- Evolution releases: <https://github.com/EvolutionAPI/evolution-api/releases>
+
+A floating tag can silently introduce a breaking change on the next `pull`.

@@ -13,21 +13,23 @@ engineering behind it.
   of guessing.
 
 ## Design decisions
-1. **Single-target selection.** The model must pick ONE project to avoid a
-   wall of text on a phone. Ranking is deterministic-ish: deadline → priority
-   → days_stale. One optional secondary line only.
-2. **Output discipline.** "Output ONLY the message body, no code fences" — so
-   Node 5 can pipe `choices[0].message.content` straight to WhatsApp with no
-   post-processing.
+1. **Pre-sorted, single-target selection.** Node 3 ranks the array (deadline →
+   priority → days_stale) *before* the call, and the prompt says "nudge the
+   FIRST item." This makes the output deterministic and lets a fast/cheap model
+   do well — it doesn't have to re-derive priority. One optional secondary line.
+2. **Output discipline.** "Output ONLY the message body, no code fences, no
+   JSON" — so Node 5 can pipe `choices[0].message.content` straight to WhatsApp
+   with no post-processing.
 3. **Phone-first formatting.** Single-asterisk `*bold*`, `_italics_`, emoji
-   bullets, <90 words, blank line between blocks — matches the WhatsApp
-   renderer exactly.
-4. **The 3-step persuasion flow:**
-   - `🧊 THE HOOK` — names what went cold + `days_stale` (loss-aversion cue).
-   - `🧠 THE CONTEXT` — paraphrases `recent_notes` so re-entry is frictionless.
-   - `✅ THE MICRO-ACTION` — one ≤10-minute task; defeats activation energy.
+   bullets, <90 words, blank line between blocks — matches the WhatsApp renderer
+   exactly (double `**asterisks**` do NOT render bold on WhatsApp).
+4. **The 3-step persuasion flow** (each label emoji-prefixed, on its own line):
+   - `🧊 *HOOK*` — names what went cold + `days_stale` (loss-aversion cue).
+   - `🧠 *CONTEXT*` — paraphrases `recent_notes` so re-entry is frictionless.
+   - `✅ *MICRO-ACTION*` — one ≤10-minute task; defeats activation energy.
 5. **Anti-hallucination guardrail.** "Never invent facts not present in the
-   notes" — the model may only paraphrase `recent_notes`.
+   notes" — the model may only paraphrase `recent_notes`; an empty
+   `recent_notes` triggers a "re-read the note" fallback action.
 6. **Low temperature (0.4).** Consistent structure, mild wording variety.
 
 ## The prompt
