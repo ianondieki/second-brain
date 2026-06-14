@@ -42,6 +42,23 @@ PowerShell users:
 > `docker compose up -d` recreates changed services; `docker compose restart`
 > does **not** pick up new env values.
 
+## Verifying the workflow logic (no Docker needed)
+
+The nudge logic — vault scanning, frontmatter parsing, staleness, ranking, and
+both HTTP request bodies — has a standalone regression test that runs the
+**exact** JavaScript embedded in `n8n/morning-nudge-workflow.json` against a
+battery of edge-case notes:
+
+```bash
+node scripts/test-pipeline.mjs      # needs only Node 18+; no Docker, no keys
+```
+
+It exits non-zero on any failure, so you can run it in CI or as a pre-commit
+check. All fixture dates are relative to "today", so the test never goes stale.
+**Run it after any edit to the workflow's Code nodes** — if it still passes, the
+logic is intact; then do the live §4 dry-run for the parts only the real stack
+can exercise (image pulls, n8n's runtime expressions, the Groq/Evolution APIs).
+
 ## Backups
 - **Your notes** are the source of truth — back up the Windows vault folder
   (it's just Markdown; put it in git, Syncthing, or any cloud drive).
