@@ -43,6 +43,7 @@ const scanCode = codeOf(morning, 'Scan & Read Vault').replace("'/data/vault'", J
 const filterCode = codeOf(morning, 'Filter Stale Projects').replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS));
 const handleCode = codeOf(inbound, 'Handle Command').replace("'/data/inbox'", JSON.stringify(INBOX));
 const errorCode = codeOf(errwf, 'Format Alert');
+const extractCode = codeOf(morning, 'Extract Nudge');
 const groqBody = nodeNamed(morning, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
 const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBody;
 
@@ -50,6 +51,7 @@ const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
 const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
+const runExtract = (json) => new Function('$input', extractCode)({ first: () => ({ json }) });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
 
@@ -120,9 +122,9 @@ try {
   ok(reviewsA.includes('Spaced repetition'), 'overdue learning log surfaced in due_reviews');
   const stripeRec = JSON.parse(out[0].json.user).stale_projects.find((p) => p.title === 'Stripe billing migration').recent_notes;
   ok(!/Recent log/.test(stripeRec) && /Verified/.test(stripeRec), 'recent_notes excludes Markdown headings, keeps log lines');
-  const mock = { choices: [{ message: { content: '🧊 *HOOK*\nYour _BOM note_ went cold.' } }] };
+  const mock = { text: '🧊 *HOOK*\nYour _BOM note_ went cold.' };
   const e = JSON.parse(JSON.stringify(evalExpr(evoBody, mock, env)));
-  ok(e.number === '2348012345678' && e.text === mock.choices[0].message.content && e.delay === 1200, 'Evolution body intact (number from $env, text, delay)');
+  ok(e.number === '2348012345678' && e.text === mock.text && e.delay === 1200, 'Evolution body intact (number from $env, normalized text, delay)');
 
   // ---------------------------------------------------------------- Round B/C/D
   console.log('\n# Round B/C/D — halt, empty vault, empty recent_notes');
@@ -210,6 +212,26 @@ try {
   put('learning/a.md', `---\ntype: learning\ntitle: A\nlast_actionable_date: ${D(-20)}\n---`);
   put('learning/b.md', `---\ntype: learning\ntitle: B\nlast_actionable_date: ${D(-40)}\n---`);
   ok(JSON.stringify(wreviews()) === JSON.stringify(['B', 'A']), 'reviews sorted most-overdue first');
+
+  // ---------------------------------------------------------------- Round I (NEW)
+  console.log('\n# Round I — LLM response normalization & guard (Extract Nudge)');
+  ok(runExtract({ choices: [{ message: { content: '  🧊 *HOOK*\nGo  ' } }] })[0].json.text === '🧊 *HOOK*\nGo',
+    'Groq/OpenAI shape -> trimmed text');
+  ok(runExtract({ candidates: [{ content: { parts: [{ text: '🧊 ' }, { text: 'HOOK' }] } }] })[0].json.text === '🧊 HOOK',
+    'Gemini shape (candidates/parts) -> concatenated text');
+  ok(runExtract({ choices: [{ message: { content: '```\n🧊 *HOOK*\nx\n```' } }] })[0].json.text === '🧊 *HOOK*\nx',
+    'stray ``` code fences are unwrapped');
+  let xThrew = false, xMsg = '';
+  try { runExtract({ choices: [{ message: { content: '   ' }, finish_reason: 'content_filter' }] }); }
+  catch (err) { xThrew = true; xMsg = err.message; }
+  ok(xThrew && /no usable text/.test(xMsg), 'empty completion throws (no blank WhatsApp send)');
+  ok(/content_filter/.test(xMsg), 'thrown error surfaces the finish_reason for triage');
+  let eThrew = false, eMsg = '';
+  try { runExtract({ error: { message: 'rate_limit_exceeded' } }); }
+  catch (err) { eThrew = true; eMsg = err.message; }
+  ok(eThrew && /rate_limit_exceeded/.test(eMsg), 'error-shaped 200 surfaces the provider message, not a TypeError');
+  const longOut = runExtract({ choices: [{ message: { content: 'x'.repeat(5000) } }] })[0].json.text;
+  ok(longOut.length <= 4000 && longOut.endsWith('…'), 'runaway output is truncated with an ellipsis');
 
 } finally {
   fs.rmSync(VAULT, { recursive: true, force: true });
