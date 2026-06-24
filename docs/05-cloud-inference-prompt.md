@@ -23,8 +23,9 @@ engineering behind it.
    FIRST item." This makes the output deterministic and lets a fast/cheap model
    do well — it doesn't have to re-derive priority. One optional secondary line.
 2. **Output discipline.** "Output ONLY the message body, no code fences, no
-   JSON" — so Node 5 can pipe `choices[0].message.content` straight to WhatsApp
-   with no post-processing.
+   JSON" — keeps the reply WhatsApp-ready. Node 4b (Extract Nudge) still
+   normalizes and strips any stray fences as a belt-and-braces guard before the
+   send.
 3. **Phone-first formatting.** Single-asterisk `*bold*`, `_italics_`, emoji
    bullets, <90 words, blank line between blocks — matches the WhatsApp renderer
    exactly (double `**asterisks**` do NOT render bold on WhatsApp).

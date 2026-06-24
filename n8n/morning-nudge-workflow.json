@@ -94,6 +94,19 @@
     },
     {
       "parameters": {
+        "jsCode": "// Node 4b — Normalize the cloud LLM reply into a clean WhatsApp body.\n// Accepts the Groq/OpenAI shape (choices[0].message.content) OR the Gemini\n// shape (candidates[0].content.parts[].text), unwraps stray \\`\\`\\` code fences,\n// and fails LOUD on an empty reply so the error-handler alerts you instead of\n// Evolution rejecting a blank message (HTTP 400) or a garbage nudge going out.\nconst res = $input.first().json || {};\n\nlet text = '';\nif (res.choices && res.choices[0] && res.choices[0].message) {\n  text = res.choices[0].message.content || '';\n} else if (res.candidates && res.candidates[0] && res.candidates[0].content) {\n  text = (res.candidates[0].content.parts || []).map((p) => (p && p.text) || '').join('');\n} else if (typeof res.content === 'string') {\n  text = res.content;\n}\n\ntext = String(text).trim();\nconst fence = text.match(/^```[a-zA-Z]*\\r?\\n?([\\s\\S]*?)\\r?\\n?```$/);\nif (fence) text = fence[1].trim();\n\nif (!text) {\n  const reason = (res.error && res.error.message)\n    || (res.choices && res.choices[0] && res.choices[0].finish_reason)\n    || (res.candidates && res.candidates[0] && res.candidates[0].finishReason)\n    || 'empty response';\n  throw new Error('Cloud LLM returned no usable text (' + reason + '). Nothing sent to WhatsApp.');\n}\n\n// Safety net: WhatsApp accepts long text, but never let a runaway model blast\n// a wall of text to the phone. The nudge is designed to be ~90 words.\nif (text.length > 4000) text = text.slice(0, 3990) + '\\n…';\n\nreturn [{ json: { text } }];\n"
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Extract Nudge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "=http://evolution-api:8080/message/sendText/{{$env.EVOLUTION_INSTANCE}}",
         "authentication": "none",
@@ -113,7 +126,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.choices[0].message.content, \"delay\": 1200 } }}",
+        "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.text, \"delay\": 1200 } }}",
         "options": {
           "timeout": 30000
         }
@@ -123,7 +136,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1180,
+        1420,
         300
       ],
       "retryOnFail": true,
@@ -166,6 +179,17 @@
       ]
     },
     "Cloud LLM Synthesis (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Extract Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Nudge": {
       "main": [
         [
           {

@@ -4,7 +4,7 @@ Honest engineering: here is exactly what has been **proven**, what is
 **trusted but not yet executed**, and the **5-minute** way to settle it.
 
 ## ✅ Proven here (automated, repeatable)
-Run `node scripts/test-pipeline.mjs` — **42 assertions, 0 failures**, executed
+Run `node scripts/test-pipeline.mjs` — **49 assertions, 0 failures**, executed
 against the *exact* JavaScript shipped inside the workflow JSON files:
 
 - Vault scan: recursion, skipping `.git`/`.obsidian`/etc., non-`.md` ignored, empty-vault error.
@@ -15,9 +15,10 @@ against the *exact* JavaScript shipped inside the workflow JSON files:
 - Learning reviews: `review_interval_days` due/not-due, `done` excluded, review-only still messages, ordering, `/done` on a topic.
 - Inbound handler: `/note` writes a file, `/touch` `/done` append the log, `/help`, unknown command, **owner-only** filter, group/status ignored, no-loop guard.
 - Error formatter: full + sparse payloads.
+- LLM response guard (Extract Nudge): Groq **and** Gemini response shapes, ``` fence stripping, empty/blocked completion throws a clear error (no blank send), error-shaped 200 surfaced (no `TypeError`), runaway output truncated.
 - Request bodies (Groq + Evolution): correct JSON, `$env` interpolation, `GROQ_MODEL` override, multi-line content survives escaping.
 
-Also re-checked every change: all 4 Code nodes `node --check` clean; all 3
+Also re-checked every change: all 5 Code nodes `node --check` clean; all 3
 workflow JSONs parse; `docker compose config` validates. The suite is **time-
 relative** — verified identical at today and +500 days, so it cannot rot.
 
@@ -48,7 +49,8 @@ Keep this handy during the first run:
   change `jsonBody` from `={{ { ... } }}` to `={{ JSON.stringify({ ... }) }}`.
   (Both forms are valid n8n; stringify is the bulletproof fallback.)
 - **Evolution send returns 400 "text".** Your image expects the v1 shape — use
-  body `={{ { "number": $env.WA_TARGET_NUMBER, "textMessage": { "text": $json.choices[0].message.content } } }}`.
+  body `={{ { "number": $env.WA_TARGET_NUMBER, "textMessage": { "text": $json.text } } }}`
+  (Node 4b already normalized the LLM reply into `$json.text`).
 - **Groq returns 404 model_not_found.** That model id was retired — set a
   current one in `.env` `GROQ_MODEL` (check https://console.groq.com/docs/models),
   e.g. `llama-3.1-8b-instant`. No workflow edit needed.

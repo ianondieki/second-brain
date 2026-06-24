@@ -3,11 +3,12 @@
 Importable workflow: [`n8n/morning-nudge-workflow.json`](../n8n/morning-nudge-workflow.json)
 Import via n8n → **Workflows → top-right ⋯ → Import from File**.
 
-## Pipeline topology (5 nodes)
+## Pipeline topology (6 nodes)
 
 ```text
 (1) Cron 08:00 ─▶ (2) Scan & Read Vault ─▶ (3) Filter Stale (Code)
-        ─▶ (4) Cloud LLM Synthesis (Groq) ─▶ (5) Send to WhatsApp Gateway
+        ─▶ (4) Cloud LLM Synthesis (Groq) ─▶ (4b) Extract Nudge (Code)
+        ─▶ (5) Send to WhatsApp Gateway
 ```
 
 If Node 3 finds nothing stale it returns `[]`, so nodes 4–5 never fire and **no
@@ -77,19 +78,32 @@ unshared drive — see §1).
   ```
   The model is env-driven (`GROQ_MODEL` in `.env`) so you can swap it without
   editing the workflow — handy when Groq retires a model id.
-- **Output:** message text at `choices[0].message.content`.
+- **Output:** raw provider JSON; Node 4b normalizes it (see below).
 
 > **Resilience:** the Groq node and both WhatsApp send nodes have
 > `Retry On Fail` enabled (3 tries, 3 s apart) for transient 429s/network blips.
 > If all retries fail, the run errors — which the §7 error-handler workflow can
 > turn into a WhatsApp alert.
 
-> **Swap to Google Gemini free tier** instead of Groq:
+> **Swap to Google Gemini free tier** instead of Groq — only Node 4 changes:
 > - URL: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
 > - Auth: header `x-goog-api-key: {{$env.GEMINI_API_KEY}}`.
 > - Body: `{ "contents": [{ "parts": [{ "text": $json.system + "\n\n" + $json.user }] }], "generationConfig": { "temperature": 0.4 } }`
-> - In Node 5 read the result from
->   `{{$json.candidates[0].content.parts[0].text}}` instead of the Groq path.
+> - **No edit to Node 4b or 5** — the Extract Nudge node already reads the Gemini
+>   `candidates[0].content.parts[].text` shape as well as Groq's.
+
+### Node 4b — Extract Nudge (`Code`)
+Normalizes the LLM response into a single clean WhatsApp body so junk never
+reaches your phone. It:
+- reads **either** the Groq/OpenAI shape (`choices[0].message.content`) **or**
+  the Gemini shape (`candidates[0].content.parts[].text`);
+- unwraps stray ` ``` ` code fences the model sometimes adds despite the prompt;
+- **throws a clear error on an empty/blocked completion** (surfacing the
+  `finish_reason` / provider `error.message`) so the §7 error-handler alerts you
+  instead of Evolution rejecting a blank `text` with HTTP 400;
+- truncates a runaway response (>4000 chars) as a last-resort safety net.
+
+Output: `{ text }`.
 
 ### Node 5 — Outbound to WhatsApp gateway (HTTP Request)
 `HTTP Request`, POST
@@ -99,7 +113,7 @@ unshared drive — see §1).
 - **Headers:** `apikey: {{$env.EVOLUTION_API_KEY}}`, `Content-Type: application/json`.
 - **Body (JSON expression):**
   ```js
-  { "number": $env.WA_TARGET_NUMBER, "text": $json.choices[0].message.content, "delay": 1200 }
+  { "number": $env.WA_TARGET_NUMBER, "text": $json.text, "delay": 1200 }
   ```
   `delay` gives a human-like typing pause (anti-spam, §3).
 
@@ -124,7 +138,8 @@ No in-app credentials to wire up. Confirm these are set before the first run:
 2. Node 2 → confirm it found your `.md` files.
 3. Node 3 → confirm it isolated the stale project(s). (Drop
    `notes/templates/EXAMPLE-stale-project.md` into your vault to force one.)
-4. Node 4 → confirm a clean WhatsApp-formatted string in `choices[0].message.content`.
+4. Node 4 → confirm a 200 from Groq; Node 4b → confirm a clean
+   WhatsApp-formatted string in `text`.
 5. Node 5 → confirm a `key.id` in the response and the message on your phone.
 6. Toggle the workflow **Active** to arm the 08:00 cron.
 
