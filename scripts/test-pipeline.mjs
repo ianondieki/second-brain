@@ -51,6 +51,9 @@ const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBo
 const telegram = load('morning-nudge-telegram.json');
 const extractTgCode = codeOf(telegram, 'Extract Nudge');
 const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
+const filterTgCode = codeOf(telegram, 'Filter Stale Projects')
+  .replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS))
+  .replace("'/data/inbox/.tg_context.json'", JSON.stringify(path.join(INBOX, '.tg_context.json')));
 
 // Two-way Telegram assistant — polling getUpdates, owner-only, commands + chat.
 const tgAssistant = load('telegram-assistant-workflow.json');
@@ -69,6 +72,7 @@ const runExtractTg = (json) => new Function('$input', extractTgCode)({ first: ()
 const tgEnv = { TELEGRAM_CHAT_ID: '6379545167' };
 const runRoute = (result) => new Function('$input', 'require', '$env', routeCode)({ first: () => ({ json: { result } }) }, require, tgEnv);
 const runReadOffset = () => new Function('require', readOffsetCode)(require);
+const runFilterTg = (items) => new Function('$input', 'require', filterTgCode)({ all: () => items }, require);
 const runExtractReply = (json) => new Function('$input', extractReplyCode)({ first: () => ({ json }) });
 const tgMsg = (id, text, over = {}) => ({ update_id: id, message: { message_id: id, from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' }, text, ...over } });
 const evalExpr = (tpl, $json, $env) =>
@@ -324,6 +328,26 @@ try {
   const tgSb = evalExpr(tgSendBody, { reply: '<b>x</b>' }, { TELEGRAM_CHAT_ID: '6379545167' });
   ok(tgSb.chat_id === '6379545167' && tgSb.text === '<b>x</b>' && tgSb.parse_mode === 'HTML', 'send reply body: chat_id from $env, text, parse_mode HTML');
   ok(/getUpdates/.test(tgGetUrl) && /offset=/.test(tgGetUrl), 'get updates: URL polls getUpdates with an offset');
+
+  // ---------------------------------------------------------------- Round L (NEW)
+  console.log('\n# Round L — grounded follow-ups (nudge writes focus, assistant reads it)');
+  reset();
+  put('projects/p.md', '---\ntype: project\ntitle: "Stripe billing"\npriority: high\nlast_actionable_date: ' + D(-20) + '\nstale_after_days: 5\n---\n\n## log\n- ' + D(-20) + ' wired sandbox keys');
+  const fout = runFilterTg(runScan());
+  ok(fout.length === 1, 'tg nudge filter: stale project produces a nudge request');
+  const ctx = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_context.json'), 'utf8'));
+  ok(ctx.projects && ctx.projects[0].title === 'Stripe billing', 'tg nudge: writes focus context (the nudged project) to disk');
+
+  // With focus present, free text is grounded on that project.
+  const grounded = runRoute([tgMsg(20, 'explain more')]);
+  ok(grounded[0].json.needs_llm === true && /CURRENT FOCUS/.test(grounded[0].json.system), 'assistant: follow-up is grounded with CURRENT FOCUS');
+  ok(/Stripe billing/.test(grounded[0].json.system), 'assistant: grounding carries the actual nudged project into the prompt');
+
+  // No focus file -> plain assistant, no crash, no forced grounding.
+  reset();
+  const plain = runRoute([tgMsg(21, 'hello there')]);
+  ok(plain[0].json.needs_llm === true && !/CURRENT FOCUS/.test(plain[0].json.system), 'assistant: no focus file -> plain chat, no grounding');
+  reset();
 
 } finally {
   fs.rmSync(VAULT, { recursive: true, force: true });
