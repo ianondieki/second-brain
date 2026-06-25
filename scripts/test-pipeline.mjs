@@ -47,11 +47,17 @@ const extractCode = codeOf(morning, 'Extract Nudge');
 const groqBody = nodeNamed(morning, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
 const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBody;
 
+// Telegram delivery variant — same pipeline, HTML-rendering Extract + Telegram send.
+const telegram = load('morning-nudge-telegram.json');
+const extractTgCode = codeOf(telegram, 'Extract Nudge');
+const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
+
 const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
 const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
 const runExtract = (json) => new Function('$input', extractCode)({ first: () => ({ json }) });
+const runExtractTg = (json) => new Function('$input', extractTgCode)({ first: () => ({ json }) });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
 
@@ -232,6 +238,18 @@ try {
   ok(eThrew && /rate_limit_exceeded/.test(eMsg), 'error-shaped 200 surfaces the provider message, not a TypeError');
   const longOut = runExtract({ choices: [{ message: { content: 'x'.repeat(5000) } }] })[0].json.text;
   ok(longOut.length <= 4000 && longOut.endsWith('…'), 'runaway output is truncated with an ellipsis');
+
+  // ---------------------------------------------------------------- Round J (NEW)
+  console.log('\n# Round J — Telegram HTML rendering (Extract Nudge + send body, Telegram variant)');
+  const tg = runExtractTg({ choices: [{ message: { content: '🧊 *HOOK*\n_soft_ <x> & y' } }] })[0].json;
+  ok(tg.text === '🧊 *HOOK*\n_soft_ <x> & y', 'telegram: raw .text is preserved untouched');
+  ok(tg.html === '🧊 <b>HOOK</b>\n<i>soft</i> &lt;x&gt; &amp; y',
+    'telegram: *bold*/_italic_ -> <b>/<i>, and <,>,& escaped FIRST so nothing breaks parsing');
+  ok(runExtractTg({ choices: [{ message: { content: 'a * b' } }] })[0].json.html === 'a * b',
+    'telegram: a lone asterisk is left literal (no dangling <b>)');
+  const tgB = evalExpr(tgBody, { html: '<b>HOOK</b>' }, { TELEGRAM_CHAT_ID: '6379545167' });
+  ok(tgB.chat_id === '6379545167' && tgB.text === '<b>HOOK</b>', 'telegram body: chat_id from $env, text from $json.html');
+  ok(tgB.parse_mode === 'HTML', 'telegram body: parse_mode HTML so the tags render');
 
 } finally {
   fs.rmSync(VAULT, { recursive: true, force: true });

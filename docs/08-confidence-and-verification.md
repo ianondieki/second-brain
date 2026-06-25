@@ -4,7 +4,7 @@ Honest engineering: here is exactly what has been **proven**, what is
 **trusted but not yet executed**, and the **5-minute** way to settle it.
 
 ## ✅ Proven here (automated, repeatable)
-Run `node scripts/test-pipeline.mjs` — **49 assertions, 0 failures**, executed
+Run `node scripts/test-pipeline.mjs` — **54 assertions, 0 failures**, executed
 against the *exact* JavaScript shipped inside the workflow JSON files:
 
 - Vault scan: recursion, skipping `.git`/`.obsidian`/etc., non-`.md` ignored, empty-vault error.
@@ -17,6 +17,7 @@ against the *exact* JavaScript shipped inside the workflow JSON files:
 - Error formatter: full + sparse payloads.
 - LLM response guard (Extract Nudge): Groq **and** Gemini response shapes, ``` fence stripping, empty/blocked completion throws a clear error (no blank send), error-shaped 200 surfaced (no `TypeError`), runaway output truncated.
 - Request bodies (Groq + Evolution): correct JSON, `$env` interpolation, `GROQ_MODEL` override, multi-line content survives escaping.
+- Telegram rendering (Extract Nudge, Telegram variant): `*bold*`/`_italic_` → `<b>`/`<i>`, `<`/`>`/`&` HTML-escaped first (no parse breakage/injection), lone asterisk left literal, send body carries `parse_mode: HTML` + `chat_id` from `$env`.
 
 Also re-checked every change: all 5 Code nodes `node --check` clean; all 3
 workflow JSONs parse; `docker compose config` validates. The suite is **time-
