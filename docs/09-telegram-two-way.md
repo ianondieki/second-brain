@@ -77,6 +77,32 @@ writable `_inbox` mount, `NODE_FUNCTION_ALLOW_BUILTIN=fs,path`) is already in yo
 > file when handling completes; if you spam it during manual tests you might see
 > a message answered twice. Activating is the real mode.
 
+## Grounded follow-ups (the nudge → conversation handoff)
+The nudge and the assistant are two workflows, but they're wired together so it
+*feels* like one bot: **nudge arrives, then you discuss it.**
+
+- When the morning nudge fires, its **Filter Stale Projects** node writes the
+  project it's nudging you about to `/data/inbox/.tg_context.json` (title,
+  `days_stale`, `deadline`, `recent_notes`, plus any due reviews).
+- When you then reply with free text, the assistant's **Route & Handle** node
+  loads that focus file and injects it into the Groq prompt as `CURRENT FOCUS`.
+
+So the real flow is:
+```
+08:00  bot →  🧊 HOOK … 🧠 CONTEXT … ✅ MICRO-ACTION       (nudge + writes focus)
+       you → explain more / why does this matter / where did I leave off?
+       bot →  <answer about THAT project, using its recent_notes>
+```
+If no nudge has fired yet (no focus file), the assistant just answers as a
+general helper — no crash, no stale project forced into unrelated questions.
+
+> **You must run BOTH workflows.** The *nudge* workflow
+> (`morning-nudge-telegram.json`) is what proactively sends the project message —
+> on its 08:00 cron, or whenever you hit **Execute Workflow** to fire it now. The
+> *assistant* (`telegram-assistant-workflow.json`) is what listens for your
+> replies. Activate both; the assistant alone will only ever react to messages,
+> never start the conversation.
+
 ## Notes & upgrade paths
 - **Stateless by design.** Each message is answered on its own — there's no
   conversation memory yet. To add it, persist the last few turns per chat in a
