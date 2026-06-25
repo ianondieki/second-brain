@@ -1,0 +1,201 @@
+{
+  "name": "Autonomous Morning Nudge Pipeline (Telegram)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Cron 08:00 Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 2 — Scan the read-only vault and emit one item per Markdown file.\n// Uses Node's fs/path, enabled via NODE_FUNCTION_ALLOW_BUILTIN=fs,path.\nconst fs = require('fs');\nconst path = require('path');\n\nconst ROOT = '/data/vault';\nconst SKIP_DIRS = new Set(['.git', '.obsidian', '.trash', 'node_modules', '.stfolder']);\nconst out = [];\n\nfunction walk(dir) {\n  let entries;\n  try {\n    entries = fs.readdirSync(dir, { withFileTypes: true });\n  } catch (e) {\n    return; // unreadable dir -> skip silently\n  }\n  for (const entry of entries) {\n    const full = path.join(dir, entry.name);\n    if (entry.isDirectory()) {\n      if (SKIP_DIRS.has(entry.name)) continue;\n      walk(full);\n    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {\n      try {\n        out.push({ json: { file: path.relative(ROOT, full), raw: fs.readFileSync(full, 'utf8') } });\n      } catch (e) { /* skip unreadable file */ }\n    }\n  }\n}\n\nwalk(ROOT);\n\nif (out.length === 0) {\n  throw new Error('No Markdown files under /data/vault. Check VAULT_PATH in .env and that the drive is shared in Docker Desktop > Settings > Resources > File Sharing.');\n}\nreturn out;\n"
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Scan & Read Vault",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 3 — Parse frontmatter, apply optional WhatsApp action-log overrides,\n// collect STALE projects AND due learning reviews, rank, build the LLM request.\n// Returns [] when there is nothing to send, so nodes 4 & 5 never run.\nconst items = $input.all();\nconst GLOBAL_STALE_DAYS = 5;\nconst GLOBAL_REVIEW_DAYS = 7;\nconst ACTIONS_FILE = '/data/inbox/.actions.jsonl';\n\nconst now = new Date();\nconst today = new Date(now.getFullYear(), now.getMonth(), now.getDate());\nconst z = (n) => String(n).padStart(2, '0');\nconst ymd = (d) => `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;\n\nlet actions = [];\ntry {\n  const fs = require('fs');\n  if (fs.existsSync(ACTIONS_FILE)) {\n    actions = fs.readFileSync(ACTIONS_FILE, 'utf8')\n      .split(/\\r?\\n/).filter(Boolean)\n      .map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })\n      .filter((a) => a && a.project && a.ts && a.action);\n  }\n} catch (e) { /* no inbox -> ignore overrides */ }\n\nfunction latestAction(title) {\n  const t = String(title).toLowerCase().trim();\n  let best = null;\n  for (const a of actions) {\n    const p = String(a.project).toLowerCase().trim();\n    if (!p) continue;\n    if (t.includes(p) || p.includes(t)) {\n      if (!best || new Date(a.ts) > new Date(best.ts)) best = a;\n    }\n  }\n  return best;\n}\n\nfunction parseLocalDate(s) {\n  const m = String(s).trim().match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (!m) return null;\n  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));\n}\nconst daysBetween = (a, b) => Math.round((a - b) / 86400000);\n\nfunction parseFrontmatter(text) {\n  const m = text.match(/^﻿?---\\s*\\r?\\n([\\s\\S]*?)\\r?\\n---/);\n  if (!m) return {};\n  const fm = {};\n  for (const line of m[1].split(/\\r?\\n/)) {\n    const t = line.trim();\n    if (!t || t.startsWith('#')) continue;\n    const idx = line.indexOf(':');\n    if (idx === -1) continue;\n    const key = line.slice(0, idx).trim();\n    let val = line.slice(idx + 1).trim();\n    val = val.replace(/\\s+#.*$/, '');\n    val = val.replace(/^[\"']|[\"']$/g, '');\n    if (val.startsWith('[') && val.endsWith(']')) {\n      val = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^[\"']|[\"']$/g, '')).filter(Boolean);\n    }\n    fm[key] = val;\n  }\n  return fm;\n}\n\nfunction bodyOf(text) {\n  const m = text.match(/^﻿?---\\s*\\r?\\n[\\s\\S]*?\\r?\\n---\\s*\\r?\\n?/);\n  return m ? text.slice(m[0].length) : text;\n}\n\nfunction effectiveDate(title, fmDate) {\n  let last = parseLocalDate(fmDate);\n  const act = latestAction(title);\n  if (act) {\n    const a = String(act.action).toLowerCase();\n    if (a === 'done') return { removed: true, last };\n    if (a === 'touch') {\n      const ad = parseLocalDate(String(act.ts).slice(0, 10));\n      if (ad && last && ad > last) last = ad;\n    }\n    // 'reopen' un-excludes without resetting the clock.\n  }\n  return { removed: false, last };\n}\n\nconst stale = [];\nconst reviews = [];\nfor (const item of items) {\n  const text = item.json.raw;\n  if (typeof text !== 'string') continue;\n  const fm = parseFrontmatter(text);\n  const type = String(fm.type || '').toLowerCase();\n  const status = String(fm.status || '').toLowerCase();\n  if (status === 'done') continue;\n  const fallbackTitle = String(item.json.file || 'untitled').replace(/\\.md$/i, '').split('/').pop();\n\n  if (type === 'project') {\n    const title = fm.title || fallbackTitle;\n    const { removed, last } = effectiveDate(title, fm.last_actionable_date);\n    if (removed || !last) continue;\n    const threshold = parseInt(fm.stale_after_days, 10) || GLOBAL_STALE_DAYS;\n    const daysStale = daysBetween(today, last);\n    if (daysStale < threshold) continue;\n    const recent = bodyOf(text).split(/\\r?\\n/).map((l) => l.trim())\n      .filter((l) => l && !/^#{1,6}\\s/.test(l) && /^- |^\\* |^\\d+\\.|\\[ \\]|\\bnext\\b|\\blog\\b|\\d{4}-\\d{2}-\\d{2}/i.test(l))\n      .slice(-8).join('\\n');\n    stale.push({ title, status, priority: String(fm.priority || 'medium').toLowerCase(),\n      deadline: fm.deadline || '', last_actionable_date: ymd(last), days_stale: daysStale, recent_notes: recent });\n  } else if (type === 'learning') {\n    const topic = fm.title || fallbackTitle;\n    const { removed, last } = effectiveDate(topic, fm.last_actionable_date);\n    if (removed || !last) continue;\n    const interval = parseInt(fm.review_interval_days, 10) || GLOBAL_REVIEW_DAYS;\n    const daysSince = daysBetween(today, last);\n    if (daysSince < interval) continue;\n    reviews.push({ topic, days_since: daysSince, confidence: fm.confidence || '' });\n  }\n}\n\nif (stale.length === 0 && reviews.length === 0) return [];\n\nconst prRank = { high: 0, medium: 1, low: 2 };\nstale.sort((a, b) => {\n  const ad = a.deadline ? parseLocalDate(a.deadline) : null;\n  const bd = b.deadline ? parseLocalDate(b.deadline) : null;\n  if (ad && bd && +ad !== +bd) return ad - bd;\n  if (ad && !bd) return -1;\n  if (!ad && bd) return 1;\n  const pr = (prRank[a.priority] ?? 1) - (prRank[b.priority] ?? 1);\n  if (pr !== 0) return pr;\n  return b.days_stale - a.days_stale;\n});\nreviews.sort((a, b) => (b.days_since - a.days_since) || ((parseFloat(a.confidence) || 1) - (parseFloat(b.confidence) || 1)));\n\nconst SYSTEM_PROMPT = `You are the user's Agentic Second Brain - a terse, perceptive chief-of-staff that resurfaces neglected work each morning over WhatsApp.\nYou receive JSON with today's date, a PRE-SORTED array stale_projects (most important first), and a due_reviews array of learning notes due for spaced recall. Either array may be empty.\n\nRULES:\n1. If stale_projects is non-empty, centre the message on the FIRST project. If it is empty but due_reviews is non-empty, centre the message on the first review instead.\n2. Output ONLY the WhatsApp message body. No preamble, no sign-off, no markdown code fences, no JSON.\n3. Format for a narrow phone screen with WhatsApp syntax: *bold* (single asterisks), _italics_, leading emojis as bullets. Keep it under ~90 words. Short lines. One blank line between blocks.\n4. When nudging a project, use this EXACT 3-step flow, each label on its own line:\n   🧊 *HOOK* - what went cold and for how many days (use days_stale).\n   🧠 *CONTEXT* - paraphrase recent_notes so they recognise where they left off.\n   ✅ *MICRO-ACTION* - ONE concrete task doable in 10 minutes. Absurdly low-friction.\n5. If due_reviews is non-empty, add ONE final line: 📚 *REVIEW* - name one topic from due_reviews and suggest a 2-minute active-recall prompt.\n6. Tone: warm, direct, zero guilt-tripping. Never invent facts not present in the notes. If recent_notes is empty, say the thread went quiet and make the micro-action \"re-read the note\".`;\nconst user = JSON.stringify({ today: ymd(today), stale_projects: stale, due_reviews: reviews }, null, 2);\nreturn [{ json: { system: SYSTEM_PROMPT, user, count: stale.length + reviews.length } }];\n"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Filter Stale Projects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GROQ_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"model\": ($env.GROQ_MODEL || \"llama-3.3-70b-versatile\"), \"temperature\": 0.4, \"max_tokens\": 700, \"messages\": [ { \"role\": \"system\", \"content\": $json.system }, { \"role\": \"user\", \"content\": $json.user } ] } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Cloud LLM Synthesis (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 4b — Normalize the cloud LLM reply into a clean WhatsApp body.\n// Accepts the Groq/OpenAI shape (choices[0].message.content) OR the Gemini\n// shape (candidates[0].content.parts[].text), unwraps stray \\`\\`\\` code fences,\n// and fails LOUD on an empty reply so the error-handler alerts you instead of\n// Evolution rejecting a blank message (HTTP 400) or a garbage nudge going out.\nconst res = $input.first().json || {};\n\nlet text = '';\nif (res.choices && res.choices[0] && res.choices[0].message) {\n  text = res.choices[0].message.content || '';\n} else if (res.candidates && res.candidates[0] && res.candidates[0].content) {\n  text = (res.candidates[0].content.parts || []).map((p) => (p && p.text) || '').join('');\n} else if (typeof res.content === 'string') {\n  text = res.content;\n}\n\ntext = String(text).trim();\nconst fence = text.match(/^```[a-zA-Z]*\\r?\\n?([\\s\\S]*?)\\r?\\n?```$/);\nif (fence) text = fence[1].trim();\n\nif (!text) {\n  const reason = (res.error && res.error.message)\n    || (res.choices && res.choices[0] && res.choices[0].finish_reason)\n    || (res.candidates && res.candidates[0] && res.candidates[0].finishReason)\n    || 'empty response';\n  throw new Error('Cloud LLM returned no usable text (' + reason + '). Nothing sent to WhatsApp.');\n}\n\n// Safety net: WhatsApp accepts long text, but never let a runaway model blast\n// a wall of text to the phone. The nudge is designed to be ~90 words.\nif (text.length > 4000) text = text.slice(0, 3990) + '\\n…';\n\nreturn [{ json: { text } }];\n"
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Extract Nudge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"chat_id\": $env.TELEGRAM_CHAT_ID, \"text\": $json.text } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "77777777-7777-7777-7777-777777777777",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Cron 08:00 Daily": {
+      "main": [
+        [
+          {
+            "node": "Scan & Read Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan & Read Vault": {
+      "main": [
+        [
+          {
+            "node": "Filter Stale Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Stale Projects": {
+      "main": [
+        [
+          {
+            "node": "Cloud LLM Synthesis (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cloud LLM Synthesis (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Extract Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Nudge": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
