@@ -42,8 +42,8 @@ services:
       - N8N_PROTOCOL=http
       - N8N_EDITOR_BASE_URL=http://localhost:5678/
       - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=${TZ:-Africa/Lagos}
-      - TZ=${TZ:-Africa/Lagos}
+      - GENERIC_TIMEZONE=${TZ:-Africa/Nairobi}
+      - TZ=${TZ:-Africa/Nairobi}
       # --- Auth: modern n8n has no basic-auth env. You create an OWNER account
       #     on first visit to http://localhost:5678 (see docs/01). Over plain
       #     http on localhost the secure cookie must be relaxed or login fails. ---

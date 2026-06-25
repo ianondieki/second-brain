@@ -13,14 +13,14 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 1
+              "field": "seconds",
+              "secondsInterval": 5
             }
           ]
         }
       },
       "id": "b1111111-1111-1111-1111-111111111111",
-      "name": "Poll Every Minute",
+      "name": "Poll Every 5s",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -44,10 +44,10 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/getUpdates?timeout=0&allowed_updates=%5B%22message%22%5D&offset={{ $json.offset }}",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/getUpdates?timeout=4&allowed_updates=%5B%22message%22%5D&offset={{ $json.offset }}",
         "authentication": "none",
         "options": {
-          "timeout": 30000
+          "timeout": 20000
         }
       },
       "id": "b3333333-3333-3333-3333-333333333333",
@@ -193,7 +193,7 @@
     }
   ],
   "connections": {
-    "Poll Every Minute": {
+    "Poll Every 5s": {
       "main": [
         [
           {
