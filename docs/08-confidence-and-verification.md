@@ -4,7 +4,7 @@ Honest engineering: here is exactly what has been **proven**, what is
 **trusted but not yet executed**, and the **5-minute** way to settle it.
 
 ## ✅ Proven here (automated, repeatable)
-Run `node scripts/test-pipeline.mjs` — **73 assertions, 0 failures**, executed
+Run `node scripts/test-pipeline.mjs` — **87 assertions, 0 failures**, executed
 against the *exact* JavaScript shipped inside the workflow JSON files:
 
 - Vault scan: recursion, skipping `.git`/`.obsidian`/etc., non-`.md` ignored, empty-vault error.
@@ -21,6 +21,7 @@ against the *exact* JavaScript shipped inside the workflow JSON files:
 - **Grounded follow-ups**: the Telegram nudge writes the nudged project to a focus file; the assistant loads it so a free-text reply (e.g. "explain more") is answered about that exact project (`CURRENT FOCUS` injected); with no focus file it falls back to plain chat without crashing.
 - **Conversation memory** (bounded, self-resetting): prior user+assistant turns are replayed into the next prompt as a real `messages` array, the current message is always last, a newer nudge focus resets the thread (no cross-day bleed), and the window is trimmed so it can't blow up the token budget.
 - **Low-latency polling**: `getUpdates` uses a long-poll (`timeout>0`, returns the instant a message arrives) on a seconds-based cadence, and the poll hold is asserted to stay **below** the schedule interval so two `getUpdates` can never overlap (no Telegram 409).
+- **Evening check-in**: the prompt scans active items into a roster (done items excluded); an in-window reply is routed as a *mapping* (not chat) and the `awaiting` flag is consumed by the first reply; Extract Reply parses the LLM's JSON mapping into `touch` actions on the shared log, an expired window falls back to chat, and a no-match mapping logs nothing and says so.
 
 Also re-checked every change: all Code nodes `node --check` clean; all
 workflow JSONs parse. The suite is **time-relative** — verified identical at

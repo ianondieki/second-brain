@@ -39,6 +39,9 @@ The bot is two-way (§9):
   <text>` to capture a thought, `/touch <project>` to reset its staleness,
   `/done <project>` to stop nudging it. Captures land in a separate writable
   inbox; the vault stays read-only.
+- **Evening check-in (§10)** — at 20:30 the bot asks "what did you move forward
+  today?"; you reply in plain language and it auto-logs `touch` actions to the
+  right projects, so the staleness clock stays honest with zero command-typing.
 - **Error → Telegram alert** — if a run fails, you get a one-line alert instead
   of silent breakage.
 
@@ -55,8 +58,10 @@ The bot is two-way (§9):
 | [`docs/07-inbound-and-errors.md`](docs/07-inbound-and-errors.md) | §7 inbound capture, commands, error alerts |
 | [`docs/08-confidence-and-verification.md`](docs/08-confidence-and-verification.md) | §8 what's proven vs trusted + 5-min check |
 | [`docs/09-telegram-two-way.md`](docs/09-telegram-two-way.md) | §9 interactive two-way Telegram bot |
+| [`docs/10-evening-checkin.md`](docs/10-evening-checkin.md) | §10 evening check-in → auto-logs progress |
 | [`n8n/morning-nudge-telegram.json`](n8n/morning-nudge-telegram.json) | Morning nudge workflow (Telegram) |
 | [`n8n/telegram-assistant-workflow.json`](n8n/telegram-assistant-workflow.json) | Two-way Telegram assistant (chat + commands) |
+| [`n8n/evening-checkin-workflow.json`](n8n/evening-checkin-workflow.json) | Evening check-in → maps your reply to `touch` actions |
 | [`n8n/error-handler-workflow.json`](n8n/error-handler-workflow.json) | Error → Telegram alert |
 | [`n8n/cloud-inference-prompt.md`](n8n/cloud-inference-prompt.md) | Canonical LLM prompt |
 | [`notes/templates/`](notes/templates/) | `#Project-File` & `#Learning-Log` templates |
