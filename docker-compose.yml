@@ -82,6 +82,9 @@ services:
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-secondbrain}
       - WA_TARGET_NUMBER=${WA_TARGET_NUMBER}
+      # --- Telegram delivery (reliable alternative to the WhatsApp gateway) ---
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     volumes:
       - n8n_data:/home/node/.n8n
       # READ-ONLY bind mount of the Windows Obsidian/Logseq vault.
