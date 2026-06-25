@@ -109,7 +109,7 @@ services:
   #    Local HTTP <-> WhatsApp bridge. QR pairing, send/receive messages.
   # ---------------------------------------------------------------------------
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    image: atendai/evolution-api:latest
     container_name: sb-evolution
     restart: unless-stopped
     depends_on:
