@@ -14,7 +14,7 @@
  * All fixture dates are relative to "today", so the test never rots.
  *
  * Not covered (needs the real stack): live image pulls, n8n's runtime expression
- * engine, the live Groq/Evolution endpoints, and Evolution's webhook delivery.
+ * engine, the live Groq/Telegram endpoints, and Telegram's getUpdates polling.
  */
 import fs from 'fs';
 import os from 'os';
@@ -27,9 +27,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const N8N = path.join(HERE, '..', 'n8n');
 const load = (f) => JSON.parse(fs.readFileSync(path.join(N8N, f), 'utf8'));
 
-const morning = load('morning-nudge-workflow.json');
-const inbound = load('inbound-capture-workflow.json');
 const errwf = load('error-handler-workflow.json');
+const telegram = load('morning-nudge-telegram.json');
+const tgAssistant = load('telegram-assistant-workflow.json');
 const nodeNamed = (wf, n) => wf.nodes.find((x) => x.name === n);
 const codeOf = (wf, n) => nodeNamed(wf, n).parameters.jsCode;
 
@@ -39,41 +39,27 @@ const INBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-inbox-'));
 const ACTIONS = path.join(INBOX, '.actions.jsonl');
 
 // Rebind hardcoded container paths to the temp dirs, then compile the shipped code.
-const scanCode = codeOf(morning, 'Scan & Read Vault').replace("'/data/vault'", JSON.stringify(VAULT));
-const filterCode = codeOf(morning, 'Filter Stale Projects')
-  .replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS))
-  .replace("'/data/inbox/.wa_context.json'", JSON.stringify(path.join(INBOX, '.wa_context.json')));
-const handleCode = codeOf(inbound, 'Handle Command').replace("'/data/inbox'", JSON.stringify(INBOX));
-const errorCode = codeOf(errwf, 'Format Alert');
-const extractCode = codeOf(morning, 'Extract Nudge');
-const groqBody = nodeNamed(morning, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
-const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBody;
-
-// Telegram delivery variant — same pipeline, HTML-rendering Extract + Telegram send.
-const telegram = load('morning-nudge-telegram.json');
-const extractTgCode = codeOf(telegram, 'Extract Nudge');
-const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
-const filterTgCode = codeOf(telegram, 'Filter Stale Projects')
+// Telegram is the sole delivery channel; the morning pipeline lives in its workflow.
+const scanCode = codeOf(telegram, 'Scan & Read Vault').replace("'/data/vault'", JSON.stringify(VAULT));
+const filterCode = codeOf(telegram, 'Filter Stale Projects')
   .replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS))
   .replace("'/data/inbox/.tg_context.json'", JSON.stringify(path.join(INBOX, '.tg_context.json')));
+const errorCode = codeOf(errwf, 'Format Alert');
+const extractCode = codeOf(telegram, 'Extract Nudge');
+const extractTgCode = extractCode;            // same node — the nudge renders HTML inline
+const groqBody = nodeNamed(telegram, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
+const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
+const filterTgCode = filterCode;              // the nudge filter also writes the focus file
 
 // Two-way Telegram assistant — polling getUpdates, owner-only, commands + chat.
-const tgAssistant = load('telegram-assistant-workflow.json');
 const routeCode = codeOf(tgAssistant, 'Route & Handle').replace("'/data/inbox'", JSON.stringify(INBOX));
 const readOffsetCode = codeOf(tgAssistant, 'Read Offset').replace("'/data/inbox/.tg_offset'", JSON.stringify(path.join(INBOX, '.tg_offset')));
 const extractReplyCode = codeOf(tgAssistant, 'Extract Reply').replace("'/data/inbox/.tg_history.json'", JSON.stringify(path.join(INBOX, '.tg_history.json')));
 const tgSendBody = nodeNamed(tgAssistant, 'Send Reply').parameters.jsonBody;
 const tgGetUrl = nodeNamed(tgAssistant, 'Get Updates').parameters.url;
 
-// Two-way WhatsApp assistant — webhook-driven (Evolution push), owner-only, commands + chat.
-const waAssistant = load('whatsapp-assistant-workflow.json');
-const waRouteCode = codeOf(waAssistant, 'Route & Handle').replace("'/data/inbox'", JSON.stringify(INBOX));
-const waExtractReplyCode = codeOf(waAssistant, 'Extract Reply').replace("'/data/inbox/.wa_history.json'", JSON.stringify(path.join(INBOX, '.wa_history.json')));
-const waSendBody = nodeNamed(waAssistant, 'Send WhatsApp').parameters.jsonBody;
-
 const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
-const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
 const runExtract = (json) => new Function('$input', extractCode)({ first: () => ({ json }) });
 const runExtractTg = (json) => new Function('$input', extractTgCode)({ first: () => ({ json }) });
@@ -83,15 +69,6 @@ const runReadOffset = () => new Function('require', readOffsetCode)(require);
 const runFilterTg = (items) => new Function('$input', 'require', filterTgCode)({ all: () => items }, require);
 const runExtractReply = (json) => new Function('$input', 'require', extractReplyCode)({ first: () => ({ json }) }, require);
 const tgMsg = (id, text, over = {}) => ({ update_id: id, message: { message_id: id, from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' }, text, ...over } });
-const waEnv = { WA_TARGET_NUMBER: '2348012345678' };
-const runWaRoute = (items) => new Function('$input', 'require', '$env', waRouteCode)({ all: () => items }, require, waEnv);
-const runWaExtractReply = (json) => new Function('$input', 'require', waExtractReplyCode)({ first: () => ({ json }) }, require);
-// Build an Evolution MESSAGES_UPSERT webhook item (n8n nests the payload under .body).
-const waItem = (over = {}) => {
-  const key = { remoteJid: '2348012345678@s.whatsapp.net', fromMe: false, ...(over.key || {}) };
-  const message = over.message || { conversation: over.text != null ? over.text : 'hi' };
-  return { json: { body: { data: { key, message } } } };
-};
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
 
@@ -109,7 +86,7 @@ const writeActions = (records) => fs.writeFileSync(ACTIONS, records.map((r) => J
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg); } else { fail++; console.log('  ✗ FAIL:', msg); } };
 
-const env = { GROQ_API_KEY: 'gk', EVOLUTION_API_KEY: 'ek', EVOLUTION_INSTANCE: 'secondbrain', WA_TARGET_NUMBER: '2348012345678' };
+const env = { GROQ_API_KEY: 'gk' };
 
 // Dates RELATIVE to today (local), so this test never rots as the clock moves.
 const D = (offsetDays) => {
@@ -162,9 +139,6 @@ try {
   ok(reviewsA.includes('Spaced repetition'), 'overdue learning log surfaced in due_reviews');
   const stripeRec = JSON.parse(out[0].json.user).stale_projects.find((p) => p.title === 'Stripe billing migration').recent_notes;
   ok(!/Recent log/.test(stripeRec) && /Verified/.test(stripeRec), 'recent_notes excludes Markdown headings, keeps log lines');
-  const mock = { text: '🧊 *HOOK*\nYour _BOM note_ went cold.' };
-  const e = JSON.parse(JSON.stringify(evalExpr(evoBody, mock, env)));
-  ok(e.number === '2348012345678' && e.text === mock.text && e.delay === 1200, 'Evolution body intact (number from $env, normalized text, delay)');
 
   // ---------------------------------------------------------------- Round B/C/D
   console.log('\n# Round B/C/D — halt, empty vault, empty recent_notes');
@@ -181,7 +155,7 @@ try {
   ok(JSON.parse(runFilter(runScan())[0].json.user).stale_projects[0].recent_notes === '', 'empty recent_notes when no signal lines');
 
   // ---------------------------------------------------------------- Round E (NEW)
-  console.log('\n# Round E — WhatsApp action-log overrides (touch / done / stale)');
+  console.log('\n# Round E — action-log overrides (touch / done / stale)');
   reset();
   put('projects/stripe.md', `---\ntype: project\ntitle: "Stripe billing migration"\nstatus: active\npriority: high\nlast_actionable_date: ${D(-9)}\n---\n- log`);
   ok(wstale('Stripe billing migration'), 'baseline: Stripe is stale with no actions');
@@ -197,36 +171,12 @@ try {
   ]);
   ok(wstale('Stripe billing migration'), 'latest action wins: /reopen after an old /done brings it back');
 
-  // ---------------------------------------------------------------- Round F (NEW)
-  console.log('\n# Round F — inbound command handler');
-  reset();
-  const wh = (text, jid = '2348012345678@s.whatsapp.net') => ({ json: { body: { event: 'messages.upsert', data: { key: { remoteJid: jid, fromMe: false }, message: { conversation: text } } } } });
-  const r1 = runHandle([wh('/note Call the accountant about Q3 VAT')]);
-  ok(r1.length === 1 && /Captured/.test(r1[0].json.reply), '/note returns a capture confirmation');
-  const captured = fs.readdirSync(INBOX).filter((f) => f.endsWith('.md'));
-  ok(captured.length === 1, '/note wrote exactly one markdown file to the inbox');
-  const capBody = fs.readFileSync(path.join(INBOX, captured[0]), 'utf8');
-  ok(/type: capture/.test(capBody) && /Q3 VAT/.test(capBody), 'captured note has type:capture frontmatter + the text');
-  const r2 = runHandle([wh('/touch Stripe billing')]);
-  ok(/reset/.test(r2[0].json.reply) && /"action":"touch"/.test(fs.readFileSync(ACTIONS, 'utf8')), '/touch appends a touch record');
-  const r3 = runHandle([wh('/done Old idea')]);
-  ok(/done/.test(r3[0].json.reply) && /"action":"done"/.test(fs.readFileSync(ACTIONS, 'utf8')), '/done appends a done record');
-  ok(runHandle([wh('🧊 *HOOK* your project went cold')]).length === 0, 'the bot\'s own nudge (no leading /) is ignored -> no loop');
-  ok(runHandle([wh('just a random thought')]).length === 0, 'plain text without a command is ignored');
-  ok(/commands/i.test(runHandle([wh('/help')])[0].json.reply), '/help lists the commands');
-  ok(/Unknown/.test(runHandle([wh('/frobnicate x')])[0].json.reply), 'unknown command -> friendly error');
-  ok(runHandle([wh('/note')])[0].json.reply.includes('Unknown') || runHandle([wh('/note')]).length >= 0, '/note with no text does not crash');
-  const r4 = runHandle([wh('/done Stripe')]);
-  ok(r4[0].json.number === '2348012345678', 'reply targets the sender number (jid stripped)');
-  ok(runHandle([wh('/note hijack', '19998887777@s.whatsapp.net')]).length === 0, 'command from a NON-owner number is ignored (owner-only)');
-  ok(runHandle([wh('/help', '120363999@g.us')]).length === 0, 'group message is ignored');
-  ok(runHandle([wh('/help', 'status@broadcast')]).length === 0, 'status broadcast is ignored');
-
   // ---------------------------------------------------------------- Round G (NEW)
-  console.log('\n# Round G — error-handler formatting');
-  const alert = runError({ json: { workflow: { name: 'Autonomous Morning Nudge Pipeline' }, execution: { lastNodeExecuted: 'Cloud LLM Synthesis (Groq)', error: { message: 'Request failed with status code 401' }, url: 'http://localhost:5678/execution/42' } } });
+  console.log('\n# Round G — error-handler formatting (Telegram HTML)');
+  const alert = runError({ json: { workflow: { name: 'Autonomous Morning Nudge Pipeline (Telegram)' }, execution: { lastNodeExecuted: 'Cloud LLM Synthesis (Groq)', error: { message: 'Request failed with status code 401 <x>' }, url: 'http://localhost:5678/execution/42' } } });
   const at = alert[0].json.text;
   ok(/Second Brain failed/.test(at) && /Morning Nudge/.test(at) && /401/.test(at) && /execution\/42/.test(at), 'error alert includes workflow, node, message, url');
+  ok(/<b>Workflow:<\/b>/.test(at) && /401 &lt;x&gt;/.test(at), 'error alert renders Telegram HTML and escapes < > in the message');
   const alert2 = runError({ json: {} });
   ok(/unknown workflow/.test(alert2[0].json.text), 'error formatter is defensive against a sparse payload');
 
@@ -264,7 +214,7 @@ try {
   let xThrew = false, xMsg = '';
   try { runExtract({ choices: [{ message: { content: '   ' }, finish_reason: 'content_filter' }] }); }
   catch (err) { xThrew = true; xMsg = err.message; }
-  ok(xThrew && /no usable text/.test(xMsg), 'empty completion throws (no blank WhatsApp send)');
+  ok(xThrew && /no usable text/.test(xMsg), 'empty completion throws (no blank Telegram send)');
   ok(/content_filter/.test(xMsg), 'thrown error surfaces the finish_reason for triage');
   let eThrew = false, eMsg = '';
   try { runExtract({ error: { message: 'rate_limit_exceeded' } }); }
@@ -402,55 +352,6 @@ try {
   for (let i = 0; i < 7; i++) { runRoute([tgMsg(50 + i, 'u' + i)]); runExtractReply({ choices: [{ message: { content: 'a' + i } }] }); }
   const tgHist = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_history.json'), 'utf8'));
   ok(tgHist.turns.length <= 8, 'memory: history is trimmed to a bounded window (no token blowup)');
-  reset();
-
-  // ---------------------------------------------------------------- Round N (NEW)
-  console.log('\n# Round N — two-way WhatsApp assistant (Evolution webhook, native markup)');
-  reset();
-  // Guards: no-loop (our own sends), owner-only, groups.
-  ok(runWaRoute([waItem({ text: 'x', key: { fromMe: true } })]).length === 0, 'wa assistant: no-loop — our own sends (fromMe) are ignored');
-  ok(runWaRoute([waItem({ text: 'x', key: { remoteJid: '5550000@s.whatsapp.net' } })]).length === 0, 'wa assistant: owner-only — a stranger number is ignored');
-  ok(runWaRoute([waItem({ text: 'x', key: { remoteJid: '99999@g.us' } })]).length === 0, 'wa assistant: group messages are ignored');
-
-  // Free text -> needs_llm with a chat prompt; the current message is last.
-  const waChat = runWaRoute([waItem({ text: 'how are you?' })]);
-  ok(waChat.length === 1 && waChat[0].json.needs_llm === true, 'wa assistant: free text is routed to the LLM');
-  ok(waChat[0].json.messages[waChat[0].json.messages.length - 1].content === 'how are you?', 'wa assistant: the current message is last in the prompt');
-  // extendedTextMessage (replies/quotes) is parsed too.
-  ok(runWaRoute([waItem({ message: { extendedTextMessage: { text: 'quoted hi' } } })])[0].json.messages.slice(-1)[0].content === 'quoted hi', 'wa assistant: extendedTextMessage text is parsed');
-
-  // Commands: /note writes a capture file; /done appends the SAME action log the nudge reads.
-  const waNote = runWaRoute([waItem({ text: '/note buy milk' })]);
-  ok(waNote[0].json.needs_llm === false && /Captured to inbox/.test(waNote[0].json.reply), 'wa assistant: /note replies with a confirmation');
-  ok(fs.readdirSync(INBOX).some((f) => /buy-milk/.test(f)), 'wa assistant: /note writes a capture file to the inbox');
-  runWaRoute([waItem({ text: '/done stripe' })]);
-  ok(/"action":"done"/.test(fs.readFileSync(ACTIONS, 'utf8')), 'wa assistant: /done appends to the shared action log');
-  // Native WhatsApp markup is preserved (NOT converted to HTML).
-  ok(/_/.test(waNote[0].json.reply) && !/<i>/.test(waNote[0].json.reply), 'wa assistant: replies keep native *bold*/_italic_ markup (no HTML)');
-
-  // Extract Reply: text verbatim (markup native, no HTML escaping), soft fallback on empty.
-  ok(runWaExtractReply({ choices: [{ message: { content: '*hi* there <x>' } }] })[0].json.reply === '*hi* there <x>', 'wa extract reply: text kept verbatim (markup native, < not escaped)');
-  ok(/could not generate/i.test(runWaExtractReply({ choices: [{ message: { content: '' }, finish_reason: 'length' }] })[0].json.reply), 'wa extract reply: empty completion -> soft fallback, not a throw');
-
-  // Send body: number from $env, text from the reply.
-  const waSb = evalExpr(waSendBody, { reply: 'hello *world*' }, { WA_TARGET_NUMBER: '2348012345678', EVOLUTION_INSTANCE: 'secondbrain' });
-  ok(waSb.number === '2348012345678' && waSb.text === 'hello *world*', 'wa send body: number from $env.WA_TARGET_NUMBER, text from the reply');
-
-  // Conversation memory — its OWN .wa_history.json, independent of Telegram's.
-  reset();
-  runWaRoute([waItem({ text: 'first' })]);
-  runWaExtractReply({ choices: [{ message: { content: 'reply one' } }] });
-  const waM2 = runWaRoute([waItem({ text: 'and then?' })])[0].json.messages;
-  ok(waM2.some((x) => x.role === 'assistant' && /reply one/.test(x.content)), 'wa memory: prior assistant turn is replayed');
-  ok(waM2.some((x) => x.role === 'user' && x.content === 'first'), 'wa memory: prior user turn is replayed');
-
-  // Grounded follow-up: the WhatsApp nudge writes .wa_context.json, the assistant reads it.
-  reset();
-  put('projects/p.md', '---\ntype: project\ntitle: "Stripe billing"\npriority: high\nlast_actionable_date: ' + D(-20) + '\nstale_after_days: 5\n---\n\n## log\n- ' + D(-20) + ' wired sandbox keys');
-  runFilter(runScan());
-  ok(fs.existsSync(path.join(INBOX, '.wa_context.json')), 'wa nudge: writes focus context to .wa_context.json');
-  const waGround = runWaRoute([waItem({ text: 'explain more' })])[0].json.messages;
-  ok(/CURRENT FOCUS/.test(waGround[0].content) && /Stripe billing/.test(waGround[0].content), 'wa assistant: free-text follow-up is grounded on the nudged project');
   reset();
 
 } finally {

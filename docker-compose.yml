@@ -1,31 +1,28 @@
 # ==============================================================================
 #  AGENTIC SECOND BRAIN — Hybrid Local/Cloud Stack
 #  Target host: Windows 10/11 + Docker Desktop (WSL2 backend), 8 GB physical RAM
-#  Hard ceiling for this stack: < 1.25 GB combined (see mem_limit per service)
 #
-#  Memory budget (mem_limit ceilings; real resident set is far lower):
-#    n8n          450m   (SQLite backend — no Postgres dependency for n8n)
-#    evolution    400m   (Baileys WhatsApp engine)
-#    postgres     256m   (Evolution metadata only, tuned tiny)
-#    redis         96m   (Evolution cache, hard maxmemory 64mb)
-#    -------------------
-#    CEILING     1202m   (~1.18 GB worst case; idle ~0.5-0.7 GB)
+#  Single service now: n8n. Delivery is via Telegram (cloud Bot API), so there is
+#  no local WhatsApp gateway — the Evolution/Postgres/Redis containers were
+#  removed. Footprint dropped from ~1.2 GB to well under 0.5 GB.
+#
+#  Memory budget (mem_limit ceiling; real resident set is far lower):
+#    n8n          450m   (SQLite backend — no second DB process)
 #
 #  IMPORTANT — run with `docker compose up -d` (Compose v2 on Docker Desktop).
 #  The legacy `mem_limit` short syntax is honoured there. Do NOT deploy this via
 #  `docker stack deploy` (Swarm), which ignores mem_limit.
 #
-#  IMAGE PINNING: tags below are intentionally explicit for reproducibility.
-#  Before any long-lived deploy, confirm the latest patch tags:
-#    n8n        -> https://hub.docker.com/r/n8nio/n8n/tags
-#    evolution  -> https://github.com/EvolutionAPI/evolution-api/releases
-#  and bump them deliberately rather than tracking a floating tag.
+#  IMAGE PINNING: confirm the latest patch tag before any long-lived deploy:
+#    n8n  -> https://hub.docker.com/r/n8nio/n8n/tags
+#  and bump it deliberately rather than tracking a floating tag.
 # ==============================================================================
 
 services:
 
   # ---------------------------------------------------------------------------
-  # 1) n8n — Orchestrator. Reads local Markdown, calls cloud LLM, posts to WA.
+  # n8n — Orchestrator. Reads the local Markdown vault, calls the cloud LLM,
+  #    delivers the nudge over Telegram, and answers replies (two-way assistant).
   #    SQLite backend keeps the footprint tiny (no second DB process).
   # ---------------------------------------------------------------------------
   n8n:
@@ -61,10 +58,10 @@ services:
       - N8N_RUNNERS_ENABLED=false
       # --- Allow the Code node to read the vault with Node's fs/path ---
       - NODE_FUNCTION_ALLOW_BUILTIN=fs,path
-      # --- Allow workflow EXPRESSIONS to read $env (GROQ_API_KEY, TELEGRAM_*,
-      #     EVOLUTION_API_KEY, etc.). n8n blocks this by default; without it the
-      #     HTTP nodes fail with "access to env vars denied". Safe here: this is a
-      #     single-user, loopback-only instance and the only $env secrets are ours. ---
+      # --- Allow workflow EXPRESSIONS to read $env (GROQ_API_KEY, TELEGRAM_*).
+      #     n8n blocks this by default; without it the HTTP nodes fail with
+      #     "access to env vars denied". Safe here: this is a single-user,
+      #     loopback-only instance and the only $env secrets are ours. ---
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       # --- Keep large binaries off the V8 heap ---
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
@@ -84,10 +81,7 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
-      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-secondbrain}
-      - WA_TARGET_NUMBER=${WA_TARGET_NUMBER}
-      # --- Telegram delivery (reliable alternative to the WhatsApp gateway) ---
+      # --- Telegram delivery (the only channel) ---
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     volumes:
@@ -96,7 +90,7 @@ services:
       # Set VAULT_PATH in .env (forward slashes), e.g. C:/Users/you/SecondBrain
       # Inside every container the vault is ALWAYS at /data/vault.
       - "${VAULT_PATH}:/data/vault:ro"
-      # WRITABLE inbox for inbound WhatsApp captures + the action log
+      # WRITABLE inbox for inbound captures + the action log
       # (/data/inbox/.actions.jsonl). Separate from the read-only vault so a
       # capture flow can never corrupt your notes. See docs/07.
       - "${INBOX_PATH}:/data/inbox"
@@ -112,127 +106,9 @@ services:
     networks:
       - sbnet
 
-  # ---------------------------------------------------------------------------
-  # 2) Evolution API — open-source WhatsApp Web gateway (Baileys engine).
-  #    Local HTTP <-> WhatsApp bridge. QR pairing, send/receive messages.
-  # ---------------------------------------------------------------------------
-  evolution-api:
-    image: atendai/evolution-api:v2.1.1   # PINNED: :latest often ships a broken QR build
-    container_name: sb-evolution
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    ports:
-      - "127.0.0.1:8080:8080"
-    environment:
-      - SERVER_URL=http://localhost:8080
-      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
-      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
-      - LANGUAGE=en
-      # --- Persistence in Postgres (metadata only; message bodies disabled) ---
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evolution:${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public
-      - DATABASE_CONNECTION_CLIENT_NAME=evolution
-      - DATABASE_SAVE_DATA_INSTANCE=true
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
-      - DATABASE_SAVE_MESSAGE_UPDATE=false
-      - DATABASE_SAVE_DATA_CONTACTS=false
-      - DATABASE_SAVE_DATA_CHATS=false
-      - DATABASE_SAVE_DATA_LABELS=false
-      - DATABASE_SAVE_DATA_HISTORIC=false
-      # --- Redis cache ---
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379/0
-      - CACHE_REDIS_PREFIX_KEY=evolution
-      - CACHE_REDIS_SAVE_INSTANCES=false
-      - CACHE_LOCAL_ENABLED=false
-      # --- Inbound webhook to n8n is OFF by default (one-way nudge). Flip on
-      #     and point at your n8n webhook URL to handle replies (see docs/03). ---
-      - WEBHOOK_GLOBAL_ENABLED=false
-      # --- Logs: INFO surfaces the QR/connection state while pairing. Set back to
-      #     just ERROR once the phone is linked, to cut I/O churn on a small host. ---
-      - LOG_LEVEL=ERROR,WARN,INFO
-      - LOG_BAILEYS=error
-      - DEL_INSTANCE=false
-      - QRCODE_LIMIT=30
-      - NODE_OPTIONS=--max-old-space-size=280
-    volumes:
-      - evolution_instances:/evolution/instances
-    mem_limit: 400m
-    mem_reservation: 200m
-    networks:
-      - sbnet
-
-  # ---------------------------------------------------------------------------
-  # 3) Postgres — used ONLY by Evolution API. Tuned for a tiny footprint.
-  # ---------------------------------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    container_name: sb-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=evolution
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=evolution
-    command:
-      - "postgres"
-      - "-c"
-      - "shared_buffers=32MB"
-      - "-c"
-      - "max_connections=20"
-      - "-c"
-      - "work_mem=2MB"
-      - "-c"
-      - "maintenance_work_mem=16MB"
-      - "-c"
-      - "effective_cache_size=128MB"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 20s
-    mem_limit: 256m
-    mem_reservation: 96m
-    networks:
-      - sbnet
-
-  # ---------------------------------------------------------------------------
-  # 4) Redis — Evolution cache. Hard maxmemory cap, LRU eviction, no persistence.
-  # ---------------------------------------------------------------------------
-  redis:
-    image: redis:7-alpine
-    container_name: sb-redis
-    restart: unless-stopped
-    command:
-      - "redis-server"
-      - "--maxmemory"
-      - "64mb"
-      - "--maxmemory-policy"
-      - "allkeys-lru"
-      - "--save"
-      - ""
-      - "--appendonly"
-      - "no"
-    volumes:
-      - redis_data:/data
-    mem_limit: 96m
-    mem_reservation: 32m
-    networks:
-      - sbnet
-
 networks:
   sbnet:
     driver: bridge
 
 volumes:
   n8n_data:
-  evolution_instances:
-  postgres_data:
-  redis_data:

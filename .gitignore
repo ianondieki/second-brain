@@ -4,9 +4,6 @@
 
 # Local runtime / volumes if ever bind-mounted into repo
 n8n_data/
-evolution_instances/
-postgres_data/
-redis_data/
 
 # OS noise
 .DS_Store

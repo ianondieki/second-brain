@@ -1,5 +1,5 @@
 {
-  "name": "Error Handler -> WhatsApp Alert",
+  "name": "Error Handler -> Telegram Alert",
   "active": false,
   "settings": {
     "executionOrder": "v1",
@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Format a concise WhatsApp alert from the failed execution.\nconst e = $input.first().json || {};\nconst wfName = (e.workflow && e.workflow.name) || 'unknown workflow';\nconst lastNode = (e.execution && e.execution.lastNodeExecuted) || 'unknown node';\nconst errMsg = (e.execution && e.execution.error && e.execution.error.message) || 'no error message';\nconst url = (e.execution && e.execution.url) || '';\nconst text = `⚠️ *Second Brain failed*\\n*Workflow:* ${wfName}\\n*Node:* ${lastNode}\\n*Error:* ${errMsg}` + (url ? `\\n${url}` : '');\nreturn [{ json: { text } }];\n"
+        "jsCode": "// Format a concise Telegram alert from the failed execution. Telegram uses\n// parse_mode HTML, so escape the dynamic parts FIRST (an error message can\n// contain <, > or &) and then wrap the labels in <b> tags.\nconst e = $input.first().json || {};\nconst wfName = (e.workflow && e.workflow.name) || 'unknown workflow';\nconst lastNode = (e.execution && e.execution.lastNodeExecuted) || 'unknown node';\nconst errMsg = (e.execution && e.execution.error && e.execution.error.message) || 'no error message';\nconst url = (e.execution && e.execution.url) || '';\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst text = '⚠️ <b>Second Brain failed</b>\\n<b>Workflow:</b> ' + esc(wfName) + '\\n<b>Node:</b> ' + esc(lastNode) + '\\n<b>Error:</b> ' + esc(errMsg) + (url ? '\\n' + esc(url) : '');\nreturn [{ json: { text } }];\n"
       },
       "id": "b2222222-2222-2222-2222-222222222222",
       "name": "Format Alert",
@@ -35,16 +35,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://evolution-api:8080/message/sendText/{{$env.EVOLUTION_INSTANCE}}",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{$env.EVOLUTION_API_KEY}}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -53,7 +49,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"number\": $env.WA_TARGET_NUMBER, \"text\": $json.text, \"delay\": 500 } }}",
+        "jsonBody": "={{ { \"chat_id\": $env.TELEGRAM_CHAT_ID, \"text\": $json.text, \"parse_mode\": \"HTML\", \"disable_web_page_preview\": true } }}",
         "options": {
           "timeout": 30000
         }
