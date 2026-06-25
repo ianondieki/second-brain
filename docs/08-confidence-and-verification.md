@@ -4,7 +4,7 @@ Honest engineering: here is exactly what has been **proven**, what is
 **trusted but not yet executed**, and the **5-minute** way to settle it.
 
 ## ✅ Proven here (automated, repeatable)
-Run `node scripts/test-pipeline.mjs` — **78 assertions, 0 failures**, executed
+Run `node scripts/test-pipeline.mjs` — **84 assertions, 0 failures**, executed
 against the *exact* JavaScript shipped inside the workflow JSON files:
 
 - Vault scan: recursion, skipping `.git`/`.obsidian`/etc., non-`.md` ignored, empty-vault error.
@@ -20,6 +20,7 @@ against the *exact* JavaScript shipped inside the workflow JSON files:
 - Telegram rendering (Extract Nudge, Telegram variant): `*bold*`/`_italic_` → `<b>`/`<i>`, `<`/`>`/`&` HTML-escaped first (no parse breakage/injection), lone asterisk left literal, send body carries `parse_mode: HTML` + `chat_id` from `$env`.
 - Telegram **two-way assistant** (polling): offset file read/parse/advance (no message replays), owner-only filter, no self-loop (ignores `is_bot`), non-text ignored, `/note` writes a tagged capture file, `/done` appends to the action log + HTML-escapes the echo, free text routed to the LLM with the chat prompt, empty LLM reply → soft fallback (never silent), `getUpdates` URL carries the offset.
 - **Grounded follow-ups**: the Telegram nudge writes the nudged project to a focus file; the assistant loads it so a free-text reply (e.g. "explain more") is answered about that exact project (`CURRENT FOCUS` injected); with no focus file it falls back to plain chat without crashing.
+- **Conversation memory** (bounded, self-resetting): prior user+assistant turns are replayed into the next prompt as a real `messages` array, the current message is always last, a newer nudge focus resets the thread (no cross-day bleed), and the window is trimmed so it can't blow up the token budget.
 
 Also re-checked every change: all 5 Code nodes `node --check` clean; all 3
 workflow JSONs parse; `docker compose config` validates. The suite is **time-

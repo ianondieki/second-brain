@@ -103,10 +103,24 @@ general helper — no crash, no stale project forced into unrelated questions.
 > replies. Activate both; the assistant alone will only ever react to messages,
 > never start the conversation.
 
+## Short-term memory (multi-turn)
+The assistant remembers the last few turns so a real back-and-forth flows
+naturally ("explain more" → "ok what first?" → "how long will that take?").
+
+- **Where.** A bounded window lives in `/data/inbox/.tg_history.json`. **Route**
+  builds the Groq prompt as a full `messages` array — `system → prior turns →
+  new message` — and records the user turn; **Extract Reply** appends the
+  assistant turn (stored as *plain* text, never the HTML that's sent).
+- **Bounded.** Only the last 8 turns are kept and each is length-clipped, so the
+  token budget (and the file) can't balloon no matter how long you chat.
+- **Self-resetting — no stale bleed.** The thread auto-clears when a **newer
+  nudge focus** arrives (each morning's nudge, or a manual re-fire, starts a
+  clean conversation) or after a **6-hour** cold-chat gap. So yesterday's chat
+  about a different project never leaks into today's.
+- **Best-effort.** Every read/write is guarded; if memory can't be written the
+  reply still goes out — the bot degrades to stateless, never breaks.
+
 ## Notes & upgrade paths
-- **Stateless by design.** Each message is answered on its own — there's no
-  conversation memory yet. To add it, persist the last few turns per chat in a
-  file keyed by `chat_id` and prepend them to the Groq `messages` array.
 - **Latency** is up to ~1 minute (the poll interval). Drop the Schedule to
   "seconds" if you want snappier replies, at the cost of more idle API calls.
 - **Vault-grounded answers** ("what am I behind on?") would mean feeding the

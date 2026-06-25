@@ -59,7 +59,7 @@ const filterTgCode = codeOf(telegram, 'Filter Stale Projects')
 const tgAssistant = load('telegram-assistant-workflow.json');
 const routeCode = codeOf(tgAssistant, 'Route & Handle').replace("'/data/inbox'", JSON.stringify(INBOX));
 const readOffsetCode = codeOf(tgAssistant, 'Read Offset').replace("'/data/inbox/.tg_offset'", JSON.stringify(path.join(INBOX, '.tg_offset')));
-const extractReplyCode = codeOf(tgAssistant, 'Extract Reply');
+const extractReplyCode = codeOf(tgAssistant, 'Extract Reply').replace("'/data/inbox/.tg_history.json'", JSON.stringify(path.join(INBOX, '.tg_history.json')));
 const tgSendBody = nodeNamed(tgAssistant, 'Send Reply').parameters.jsonBody;
 const tgGetUrl = nodeNamed(tgAssistant, 'Get Updates').parameters.url;
 
@@ -73,7 +73,7 @@ const tgEnv = { TELEGRAM_CHAT_ID: '6379545167' };
 const runRoute = (result) => new Function('$input', 'require', '$env', routeCode)({ first: () => ({ json: { result } }) }, require, tgEnv);
 const runReadOffset = () => new Function('require', readOffsetCode)(require);
 const runFilterTg = (items) => new Function('$input', 'require', filterTgCode)({ all: () => items }, require);
-const runExtractReply = (json) => new Function('$input', extractReplyCode)({ first: () => ({ json }) });
+const runExtractReply = (json) => new Function('$input', 'require', extractReplyCode)({ first: () => ({ json }) }, require);
 const tgMsg = (id, text, over = {}) => ({ update_id: id, message: { message_id: id, from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' }, text, ...over } });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
@@ -286,10 +286,13 @@ try {
   ok(runRoute([{ update_id: 3, message: { from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' } } }]).length === 0,
     'route: non-text message (sticker/photo) ignored');
 
-  // Free text -> LLM with the chat system prompt.
+  // Free text -> LLM with a full messages array (system ... user).
+  reset();
   const tgChat = runRoute([tgMsg(5, 'thanks!')]);
   ok(tgChat.length === 1 && tgChat[0].json.needs_llm === true, 'route: free text -> needs_llm');
-  ok(tgChat[0].json.user === 'thanks!' && /assistant/i.test(tgChat[0].json.system), 'route: chat carries user text + system prompt');
+  const tgMsgs = tgChat[0].json.messages;
+  ok(Array.isArray(tgMsgs) && tgMsgs[0].role === 'system' && /assistant/i.test(tgMsgs[0].content), 'route: chat builds messages, leading with the system prompt');
+  ok(tgMsgs[tgMsgs.length - 1].role === 'user' && tgMsgs[tgMsgs.length - 1].content === 'thanks!', 'route: the new user message is last');
   reset();
 
   // /help and unknown command -> direct reply, no LLM.
@@ -338,15 +341,43 @@ try {
   const ctx = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_context.json'), 'utf8'));
   ok(ctx.projects && ctx.projects[0].title === 'Stripe billing', 'tg nudge: writes focus context (the nudged project) to disk');
 
-  // With focus present, free text is grounded on that project.
+  // With focus present, free text is grounded on that project (in the system msg).
   const grounded = runRoute([tgMsg(20, 'explain more')]);
-  ok(grounded[0].json.needs_llm === true && /CURRENT FOCUS/.test(grounded[0].json.system), 'assistant: follow-up is grounded with CURRENT FOCUS');
-  ok(/Stripe billing/.test(grounded[0].json.system), 'assistant: grounding carries the actual nudged project into the prompt');
+  const gSys = grounded[0].json.messages[0].content;
+  ok(grounded[0].json.needs_llm === true && /CURRENT FOCUS/.test(gSys), 'assistant: follow-up is grounded with CURRENT FOCUS');
+  ok(/Stripe billing/.test(gSys), 'assistant: grounding carries the actual nudged project into the prompt');
 
   // No focus file -> plain assistant, no crash, no forced grounding.
   reset();
   const plain = runRoute([tgMsg(21, 'hello there')]);
-  ok(plain[0].json.needs_llm === true && !/CURRENT FOCUS/.test(plain[0].json.system), 'assistant: no focus file -> plain chat, no grounding');
+  ok(plain[0].json.needs_llm === true && !/CURRENT FOCUS/.test(plain[0].json.messages[0].content), 'assistant: no focus file -> plain chat, no grounding');
+  reset();
+
+  // ---------------------------------------------------------------- Round M (NEW)
+  console.log('\n# Round M — short-term conversation memory (bounded, self-resetting)');
+  reset();
+  // Turn 1: user says hello; the assistant reply is recorded by Extract Reply.
+  runRoute([tgMsg(30, 'hello')]);
+  runExtractReply({ choices: [{ message: { content: 'Hi! How can I help?' } }] });
+  // Turn 2: prior turns must be replayed into the new prompt.
+  const tgM2 = runRoute([tgMsg(31, 'and then?')])[0].json.messages;
+  ok(tgM2.some((x) => x.role === 'assistant' && /How can I help/.test(x.content)), 'memory: prior assistant turn is replayed into the next prompt');
+  ok(tgM2.some((x) => x.role === 'user' && x.content === 'hello'), 'memory: prior user turn is replayed');
+  ok(tgM2[tgM2.length - 1].content === 'and then?', 'memory: the current message is always last');
+
+  // A newer nudge focus starts a fresh thread (no stale bleed across days).
+  reset();
+  runRoute([tgMsg(40, 'one')]);
+  runExtractReply({ choices: [{ message: { content: 'reply one' } }] });
+  fs.writeFileSync(path.join(INBOX, '.tg_context.json'), JSON.stringify({ ts: new Date(Date.now() + 1000).toISOString(), today: '2026-06-25', projects: [{ title: 'New' }], reviews: [] }));
+  const tgM3 = runRoute([tgMsg(41, 'two')])[0].json.messages;
+  ok(!tgM3.some((x) => /reply one/.test(String(x.content))), 'memory: a newer nudge focus resets the conversation');
+
+  // The window stays bounded no matter how long you chat.
+  reset();
+  for (let i = 0; i < 7; i++) { runRoute([tgMsg(50 + i, 'u' + i)]); runExtractReply({ choices: [{ message: { content: 'a' + i } }] }); }
+  const tgHist = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_history.json'), 'utf8'));
+  ok(tgHist.turns.length <= 8, 'memory: history is trimmed to a bounded window (no token blowup)');
   reset();
 
 } finally {
