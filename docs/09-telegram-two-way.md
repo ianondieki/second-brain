@@ -10,8 +10,9 @@ A Telegram bot receives messages two ways: a **webhook** (Telegram pushes to a
 public HTTPS URL) or **`getUpdates` polling** (you ask "anything new?"). Your n8n
 is bound to `127.0.0.1` — there is no public URL — so a webhook would need a
 tunnel (Cloudflare Tunnel / ngrok). This workflow **polls** instead: a Schedule
-Trigger fires every minute and calls `getUpdates`. Nothing is exposed to the
-internet, and it works on the same localhost stack you already run.
+Trigger fires every few seconds and calls `getUpdates` as a **long poll** (see
+*Latency* below). Nothing is exposed to the internet, and it works on the same
+localhost stack you already run.
 
 > Only **one** consumer may call `getUpdates` per bot at a time. The morning
 > nudge workflow only *sends*, so there is no conflict. Don't set a Telegram
@@ -19,7 +20,7 @@ internet, and it works on the same localhost stack you already run.
 
 ## Topology
 ```
-[Poll Every Minute] -> [Read Offset] -> [Get Updates] -> [Route & Handle] -> [Needs LLM?]
+[Poll Every 5s] -> [Read Offset] -> [Get Updates] -> [Route & Handle] -> [Needs LLM?]
                                                                                |-- true  --> [Chat LLM (Groq)] -> [Extract Reply] --\
                                                                                |-- false --------------------------------------------> [Send Reply]
 ```
@@ -28,8 +29,10 @@ internet, and it works on the same localhost stack you already run.
   already handled. A *file* is used deliberately (not n8n static data): static
   data isn't persisted on manual test runs, which would replay messages. The
   file behaves identically for manual and active runs.
-- **Get Updates** — `GET …/getUpdates?timeout=0&allowed_updates=["message"]&offset=<n>`.
-  `timeout=0` returns immediately, so the execution never hangs.
+- **Get Updates** — `GET …/getUpdates?timeout=4&allowed_updates=["message"]&offset=<n>`.
+  `timeout=4` is a **long poll**: the request holds open and returns the *instant*
+  a message arrives (or after 4s if none), instead of returning empty immediately.
+  That's the bulk of the latency win — see *Latency*.
 - **Route & Handle** — the brain. For each update it enforces the guards below,
   then either runs the command inline or marks the message `needs_llm`. Finally
   it advances the offset file to `max(update_id)+1` so nothing is processed twice.
@@ -120,8 +123,32 @@ naturally ("explain more" → "ok what first?" → "how long will that take?").
 - **Best-effort.** Every read/write is guarded; if memory can't be written the
   reply still goes out — the bot degrades to stateless, never breaks.
 
+## Latency (why replies are near-instant)
+Two settings, working together, decide how fast the bot answers:
+
+- **Long poll — `getUpdates?timeout=4`.** The request *holds open* and returns the
+  moment your message lands, rather than `timeout=0` returning empty and forcing
+  you to wait for the next tick. Most messages are answered in ~1s.
+- **5-second cadence.** The Schedule Trigger fires every 5s, so even a message
+  that arrives in the ~1s gap between polls waits at most ~1s. (Was a 1-minute
+  schedule → up to 60s of dead wait. That was the whole problem.)
+
+**Why this is safe (no double replies, no 409):**
+- The interval (5s) is kept **greater** than the poll hold (4s), so two
+  `getUpdates` calls never run at once — Telegram allows only one consumer.
+- **Route advances the offset early** — it writes `.tg_offset` the instant it
+  reads the batch, *before* the slow Groq call. So if a long LLM answer makes the
+  next poll fire mid-flight, that poll reads the already-advanced offset, sees
+  nothing new, and exits. A message can't be handled (or answered) twice.
+- These invariants are locked by tests: `timeout > 0`, cadence is `seconds`, and
+  `timeout < interval` are all asserted in `scripts/test-pipeline.mjs`.
+
+> **Tuning.** Want it even snappier under chatty bursts? Lower the Schedule to
+> every 3s and set `timeout=2` (keep `timeout < interval`). Want fewer idle calls?
+> Raise both (e.g. 15s / `timeout=10`). The only hard rule is poll-hold < interval.
+> Truly sub-second, push-based delivery needs a **webhook**, which requires
+> exposing n8n via a public HTTPS tunnel — more infra, not built here.
+
 ## Notes & upgrade paths
-- **Latency** is up to ~1 minute (the poll interval). Drop the Schedule to
-  "seconds" if you want snappier replies, at the cost of more idle API calls.
 - **Vault-grounded answers** ("what am I behind on?") would mean feeding the
   scan results into the chat prompt — a natural next step, not built here.

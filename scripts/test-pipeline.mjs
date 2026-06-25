@@ -331,6 +331,13 @@ try {
   const tgSb = evalExpr(tgSendBody, { reply: '<b>x</b>' }, { TELEGRAM_CHAT_ID: '6379545167' });
   ok(tgSb.chat_id === '6379545167' && tgSb.text === '<b>x</b>' && tgSb.parse_mode === 'HTML', 'send reply body: chat_id from $env, text, parse_mode HTML');
   ok(/getUpdates/.test(tgGetUrl) && /offset=/.test(tgGetUrl), 'get updates: URL polls getUpdates with an offset');
+  // Low-latency wiring: long-poll (timeout>0) on a fast (seconds) cadence, and the
+  // poll hold must stay below the schedule interval so two getUpdates never overlap.
+  const tgTimeout = parseInt((tgGetUrl.match(/[?&]timeout=(\d+)/) || [])[1], 10);
+  const tgInterval = nodeNamed(tgAssistant, 'Poll Every 5s').parameters.rule.interval[0];
+  ok(tgTimeout >= 1, 'get updates: long-poll timeout > 0 (returns the instant a message arrives)');
+  ok(tgInterval.field === 'seconds' && tgInterval.secondsInterval >= 1, 'poll cadence: seconds-based (not the old 1-minute lag)');
+  ok(tgTimeout < tgInterval.secondsInterval, 'no overlap: poll hold stays under the schedule interval (single getUpdates consumer)');
 
   // ---------------------------------------------------------------- Round L (NEW)
   console.log('\n# Round L — grounded follow-ups (nudge writes focus, assistant reads it)');
