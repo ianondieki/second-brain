@@ -4,7 +4,7 @@ Honest engineering: here is exactly what has been **proven**, what is
 **trusted but not yet executed**, and the **5-minute** way to settle it.
 
 ## ✅ Proven here (automated, repeatable)
-Run `node scripts/test-pipeline.mjs` — **87 assertions, 0 failures**, executed
+Run `node scripts/test-pipeline.mjs` — **104 assertions, 0 failures**, executed
 against the *exact* JavaScript shipped inside the workflow JSON files:
 
 - Vault scan: recursion, skipping `.git`/`.obsidian`/etc., non-`.md` ignored, empty-vault error.
@@ -22,6 +22,7 @@ against the *exact* JavaScript shipped inside the workflow JSON files:
 - **Grounded follow-ups**: the Telegram nudge writes the nudged project to a focus file; the assistant loads it so a free-text reply (e.g. "explain more") is answered about that exact project (`CURRENT FOCUS` injected); with no focus file it falls back to plain chat without crashing.
 - **Conversation memory** (bounded, self-resetting): prior user+assistant turns are replayed into the next prompt as a real `messages` array, the current message is always last, a newer nudge focus resets the thread (no cross-day bleed), and the window is trimmed so it can't blow up the token budget.
 - **Low-latency polling**: `getUpdates` uses a long-poll (`timeout>0`, returns the instant a message arrives) on a seconds-based cadence, and the poll hold is asserted to stay **below** the schedule interval so two `getUpdates` can never overlap (no Telegram 409).
+- **WhatsApp two-way assistant** (Evolution webhook): the Evolution `MESSAGES_UPSERT` payload is parsed (`conversation` **and** `extendedTextMessage`), no-loop guard skips our own sends (`key.fromMe`), owner-only by number, groups/status ignored, `/note` writes a capture + `/done` appends the shared action log, free text → LLM, native `*bold*`/`_italic_` markup kept verbatim (no HTML), empty reply → soft fallback, send body carries `number` from `$env.WA_TARGET_NUMBER`; plus its own conversation memory (`.wa_history.json`) and grounded follow-ups via the WhatsApp nudge's `.wa_context.json`.
 
 Also re-checked every change: all 5 Code nodes `node --check` clean; all 3
 workflow JSONs parse; `docker compose config` validates. The suite is **time-

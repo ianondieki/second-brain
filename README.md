@@ -59,10 +59,12 @@ Two optional workflows make it two-way (§7):
 | [`docs/07-inbound-and-errors.md`](docs/07-inbound-and-errors.md) | §7 inbound capture, commands, error alerts |
 | [`docs/08-confidence-and-verification.md`](docs/08-confidence-and-verification.md) | §8 what's proven vs trusted + 5-min check |
 | [`docs/09-telegram-two-way.md`](docs/09-telegram-two-way.md) | §9 interactive two-way Telegram bot |
+| [`docs/10-whatsapp-two-way.md`](docs/10-whatsapp-two-way.md) | §10 interactive two-way WhatsApp bot |
 | [`n8n/morning-nudge-workflow.json`](n8n/morning-nudge-workflow.json) | Morning nudge workflow (WhatsApp) |
 | [`n8n/morning-nudge-telegram.json`](n8n/morning-nudge-telegram.json) | Morning nudge workflow (Telegram) |
 | [`n8n/telegram-assistant-workflow.json`](n8n/telegram-assistant-workflow.json) | Two-way Telegram assistant (chat + commands) |
-| [`n8n/inbound-capture-workflow.json`](n8n/inbound-capture-workflow.json) | WhatsApp → capture/commands |
+| [`n8n/whatsapp-assistant-workflow.json`](n8n/whatsapp-assistant-workflow.json) | Two-way WhatsApp assistant (chat + commands) |
+| [`n8n/inbound-capture-workflow.json`](n8n/inbound-capture-workflow.json) | WhatsApp → capture/commands (superseded by the assistant) |
 | [`n8n/error-handler-workflow.json`](n8n/error-handler-workflow.json) | Error → WhatsApp alert |
 | [`n8n/cloud-inference-prompt.md`](n8n/cloud-inference-prompt.md) | Canonical LLM prompt |
 | [`notes/templates/`](notes/templates/) | `#Project-File` & `#Learning-Log` templates |
