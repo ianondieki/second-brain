@@ -61,6 +61,11 @@ services:
       - N8N_RUNNERS_ENABLED=false
       # --- Allow the Code node to read the vault with Node's fs/path ---
       - NODE_FUNCTION_ALLOW_BUILTIN=fs,path
+      # --- Allow workflow EXPRESSIONS to read $env (GROQ_API_KEY, TELEGRAM_*,
+      #     EVOLUTION_API_KEY, etc.). n8n blocks this by default; without it the
+      #     HTTP nodes fail with "access to env vars denied". Safe here: this is a
+      #     single-user, loopback-only instance and the only $env secrets are ours. ---
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       # --- Keep large binaries off the V8 heap ---
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
       # --- Memory hygiene: prune executions so SQLite never balloons ---
@@ -112,7 +117,7 @@ services:
   #    Local HTTP <-> WhatsApp bridge. QR pairing, send/receive messages.
   # ---------------------------------------------------------------------------
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    image: atendai/evolution-api:latest
     container_name: sb-evolution
     restart: unless-stopped
     depends_on:
