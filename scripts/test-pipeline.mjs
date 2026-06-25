@@ -47,11 +47,30 @@ const extractCode = codeOf(morning, 'Extract Nudge');
 const groqBody = nodeNamed(morning, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
 const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBody;
 
+// Telegram delivery variant — same pipeline, HTML-rendering Extract + Telegram send.
+const telegram = load('morning-nudge-telegram.json');
+const extractTgCode = codeOf(telegram, 'Extract Nudge');
+const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
+
+// Two-way Telegram assistant — polling getUpdates, owner-only, commands + chat.
+const tgAssistant = load('telegram-assistant-workflow.json');
+const routeCode = codeOf(tgAssistant, 'Route & Handle').replace("'/data/inbox'", JSON.stringify(INBOX));
+const readOffsetCode = codeOf(tgAssistant, 'Read Offset').replace("'/data/inbox/.tg_offset'", JSON.stringify(path.join(INBOX, '.tg_offset')));
+const extractReplyCode = codeOf(tgAssistant, 'Extract Reply');
+const tgSendBody = nodeNamed(tgAssistant, 'Send Reply').parameters.jsonBody;
+const tgGetUrl = nodeNamed(tgAssistant, 'Get Updates').parameters.url;
+
 const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
 const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
 const runExtract = (json) => new Function('$input', extractCode)({ first: () => ({ json }) });
+const runExtractTg = (json) => new Function('$input', extractTgCode)({ first: () => ({ json }) });
+const tgEnv = { TELEGRAM_CHAT_ID: '6379545167' };
+const runRoute = (result) => new Function('$input', 'require', '$env', routeCode)({ first: () => ({ json: { result } }) }, require, tgEnv);
+const runReadOffset = () => new Function('require', readOffsetCode)(require);
+const runExtractReply = (json) => new Function('$input', extractReplyCode)({ first: () => ({ json }) });
+const tgMsg = (id, text, over = {}) => ({ update_id: id, message: { message_id: id, from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' }, text, ...over } });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
 
@@ -232,6 +251,79 @@ try {
   ok(eThrew && /rate_limit_exceeded/.test(eMsg), 'error-shaped 200 surfaces the provider message, not a TypeError');
   const longOut = runExtract({ choices: [{ message: { content: 'x'.repeat(5000) } }] })[0].json.text;
   ok(longOut.length <= 4000 && longOut.endsWith('…'), 'runaway output is truncated with an ellipsis');
+
+  // ---------------------------------------------------------------- Round J (NEW)
+  console.log('\n# Round J — Telegram HTML rendering (Extract Nudge + send body, Telegram variant)');
+  const tg = runExtractTg({ choices: [{ message: { content: '🧊 *HOOK*\n_soft_ <x> & y' } }] })[0].json;
+  ok(tg.text === '🧊 *HOOK*\n_soft_ <x> & y', 'telegram: raw .text is preserved untouched');
+  ok(tg.html === '🧊 <b>HOOK</b>\n<i>soft</i> &lt;x&gt; &amp; y',
+    'telegram: *bold*/_italic_ -> <b>/<i>, and <,>,& escaped FIRST so nothing breaks parsing');
+  ok(runExtractTg({ choices: [{ message: { content: 'a * b' } }] })[0].json.html === 'a * b',
+    'telegram: a lone asterisk is left literal (no dangling <b>)');
+  const tgB = evalExpr(tgBody, { html: '<b>HOOK</b>' }, { TELEGRAM_CHAT_ID: '6379545167' });
+  ok(tgB.chat_id === '6379545167' && tgB.text === '<b>HOOK</b>', 'telegram body: chat_id from $env, text from $json.html');
+  ok(tgB.parse_mode === 'HTML', 'telegram body: parse_mode HTML so the tags render');
+
+  // ---------------------------------------------------------------- Round K (NEW)
+  console.log('\n# Round K — Telegram two-way assistant (poll, route, commands, chat)');
+  reset();
+
+  // Read Offset: missing state file -> 0; existing -> parsed.
+  ok(runReadOffset()[0].json.offset === 0, 'read offset: no state file -> 0');
+  fs.writeFileSync(path.join(INBOX, '.tg_offset'), '4242');
+  ok(runReadOffset()[0].json.offset === 4242, 'read offset: existing state file is parsed');
+  reset();
+
+  // Guards: owner-only, no self-loop, non-text ignored.
+  ok(runRoute([{ update_id: 1, message: { from: { id: 999, is_bot: false }, chat: { id: 999, type: 'private' }, text: 'hi' } }]).length === 0,
+    'route: stranger chat is ignored (owner-only, no surprise LLM bill)');
+  ok(runRoute([tgMsg(2, 'hi', { from: { id: 6379545167, is_bot: true } })]).length === 0,
+    'route: bot-authored message ignored (no self-loop)');
+  ok(runRoute([{ update_id: 3, message: { from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' } } }]).length === 0,
+    'route: non-text message (sticker/photo) ignored');
+
+  // Free text -> LLM with the chat system prompt.
+  const tgChat = runRoute([tgMsg(5, 'thanks!')]);
+  ok(tgChat.length === 1 && tgChat[0].json.needs_llm === true, 'route: free text -> needs_llm');
+  ok(tgChat[0].json.user === 'thanks!' && /assistant/i.test(tgChat[0].json.system), 'route: chat carries user text + system prompt');
+  reset();
+
+  // /help and unknown command -> direct reply, no LLM.
+  const tgHelp = runRoute([tgMsg(6, '/help')]);
+  ok(tgHelp.length === 1 && tgHelp[0].json.needs_llm === false && /Second Brain/.test(tgHelp[0].json.reply), 'route: /help -> direct reply, no LLM');
+  ok(runRoute([tgMsg(7, '/wat')])[0].json.reply.includes('Unknown'), 'route: unknown command -> guidance');
+  reset();
+
+  // /note writes a capture file to the inbox and confirms.
+  const tgNote = runRoute([tgMsg(8, '/note buy <milk> & eggs')]);
+  ok(tgNote[0].json.needs_llm === false && tgNote[0].json.reply.includes('Captured'), 'route: /note -> capture confirmation');
+  const tgCaptures = fs.readdirSync(INBOX).filter((f) => f.endsWith('.md'));
+  ok(tgCaptures.length === 1, 'route: /note actually wrote a .md capture file');
+  const tgCapBody = fs.readFileSync(path.join(INBOX, tgCaptures[0]), 'utf8');
+  ok(/source: telegram/.test(tgCapBody) && tgCapBody.includes('buy <milk> & eggs'), 'route: capture file tagged source: telegram, raw text preserved');
+  reset();
+
+  // /done appends to the action log (feeds the morning staleness filter) and escapes HTML.
+  ok(runRoute([tgMsg(9, '/done a<b>')])[0].json.reply.includes('a&lt;b&gt;'), 'route: /done escapes < > in the echoed project name');
+  const tgLog = fs.readFileSync(ACTIONS, 'utf8').trim();
+  ok(/"action":"done"/.test(tgLog) && /a<b>/.test(tgLog), 'route: /done appends a done record to the action log');
+  reset();
+
+  // Offset advances past the highest update_id seen, so nothing ever replays.
+  runRoute([tgMsg(10, 'a'), tgMsg(14, '/help')]);
+  ok(fs.readFileSync(path.join(INBOX, '.tg_offset'), 'utf8').trim() === '15', 'route: offset advanced to max(update_id)+1');
+  reset();
+
+  // Extract Reply: HTML render + soft fallback (a chat turn must never go silent).
+  ok(runExtractReply({ choices: [{ message: { content: '*hi* <x>' } }] })[0].json.reply === '<b>hi</b> &lt;x&gt;',
+    'extract reply: *bold* -> <b>, < > escaped');
+  ok(/could not generate/i.test(runExtractReply({ choices: [{ message: { content: '' }, finish_reason: 'length' }] })[0].json.reply),
+    'extract reply: empty completion -> soft fallback, not a throw');
+
+  // Send body + Get Updates URL wiring.
+  const tgSb = evalExpr(tgSendBody, { reply: '<b>x</b>' }, { TELEGRAM_CHAT_ID: '6379545167' });
+  ok(tgSb.chat_id === '6379545167' && tgSb.text === '<b>x</b>' && tgSb.parse_mode === 'HTML', 'send reply body: chat_id from $env, text, parse_mode HTML');
+  ok(/getUpdates/.test(tgGetUrl) && /offset=/.test(tgGetUrl), 'get updates: URL polls getUpdates with an offset');
 
 } finally {
   fs.rmSync(VAULT, { recursive: true, force: true });
