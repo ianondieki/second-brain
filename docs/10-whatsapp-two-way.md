@@ -82,6 +82,31 @@ Everything it needs is already in your `.env` / `docker-compose.yml`
 > proactively sends the morning message and writes the focus; the *assistant*
 > listens and answers. Activate both.
 
+## If the QR code won't appear (the usual WhatsApp blocker)
+None of the above matters until Evolution pairs with your phone, and a missing QR
+is the classic stumbling block. In order of likelihood:
+
+1. **Image was `:latest`.** Evolution's `latest` tag frequently ships a build
+   where QR generation is broken. The compose file is now **pinned to
+   `atendai/evolution-api:v2.1.1`** — after `git pull`, run `docker compose pull`
+   then `docker compose up -d` to recreate the container on the pinned image.
+2. **You were looking in the logs.** In Evolution **v2** the QR is *not* printed to
+   the terminal. Get it from the **Manager UI**: open
+   **http://localhost:8080/manager**, log in with your `EVOLUTION_API_KEY`, create
+   an instance named exactly your `EVOLUTION_INSTANCE` (`secondbrain`), integration
+   **WHATSAPP-BAILEYS**, then click **Connect** — the QR renders in the browser.
+3. **Instance didn't exist yet.** You must *create* the instance before you can
+   *connect* it. The Manager UI does both; via API it's `POST /instance/create`
+   with `{ "instanceName": "secondbrain", "integration": "WHATSAPP-BAILEYS",
+   "qrcode": true }` and header `apikey: <EVOLUTION_API_KEY>`.
+4. **Postgres not healthy.** Evolution `depends_on` a healthy Postgres; if that
+   container isn't up, Evolution can't persist the instance and loops without a QR.
+   Check `docker compose ps` — Postgres must be **healthy**.
+5. **Phone side.** WhatsApp → **Settings → Linked Devices → Link a Device** → scan.
+
+`LOG_LEVEL` is temporarily set to `ERROR,WARN,INFO` so pairing problems are
+visible. Once linked, set it back to just `ERROR` to cut log churn.
+
 ## Telegram vs WhatsApp — which to run
 You can run **either or both** (they share the vault, action log, and nudge logic;
 only the delivery channel differs).

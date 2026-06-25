@@ -117,7 +117,7 @@ services:
   #    Local HTTP <-> WhatsApp bridge. QR pairing, send/receive messages.
   # ---------------------------------------------------------------------------
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: atendai/evolution-api:v2.1.1   # PINNED: :latest often ships a broken QR build
     container_name: sb-evolution
     restart: unless-stopped
     depends_on:
@@ -153,8 +153,9 @@ services:
       # --- Inbound webhook to n8n is OFF by default (one-way nudge). Flip on
       #     and point at your n8n webhook URL to handle replies (see docs/03). ---
       - WEBHOOK_GLOBAL_ENABLED=false
-      # --- Quieter logs = less I/O churn on a constrained host ---
-      - LOG_LEVEL=ERROR
+      # --- Logs: INFO surfaces the QR/connection state while pairing. Set back to
+      #     just ERROR once the phone is linked, to cut I/O churn on a small host. ---
+      - LOG_LEVEL=ERROR,WARN,INFO
       - LOG_BAILEYS=error
       - DEL_INSTANCE=false
       - QRCODE_LIMIT=30
