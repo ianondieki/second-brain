@@ -8,25 +8,21 @@ covers the *why*, the RAM math, and the Windows-specific gotchas.
 | Service     | Engine                    | `mem_limit` | Typical idle RSS |
 |-------------|---------------------------|-------------|------------------|
 | `n8n`       | Node + SQLite             | 450 MB      | 180–300 MB       |
-| `evolution` | Baileys (WhatsApp Web)    | 400 MB      | 150–260 MB       |
-| `postgres`  | Postgres 16-alpine        | 256 MB      | 40–120 MB        |
-| `redis`     | Redis 7-alpine (64MB cap) | 96 MB       | 15–40 MB         |
-| **Ceiling** |                           | **1202 MB** | **~0.5–0.7 GB**  |
+| **Total**   |                           | **450 MB**  | **~0.2–0.3 GB**  |
 
-`mem_limit` is the kernel-enforced hard wall (OOM-kill above it). Real resident
-memory at idle sits well under 0.7 GB — comfortably inside your "<1 GB free"
-constraint while leaving the rest to Windows + browser.
+`mem_limit` is the kernel-enforced hard wall (OOM-kill above it). With delivery
+on the cloud Telegram Bot API there is no local WhatsApp gateway, so this is a
+**single container** — idle resident memory sits around 0.2–0.3 GB, far inside
+your "<1 GB free" constraint.
 
 ### Levers that keep it small
+- **One service.** Telegram delivery removed the Evolution/Postgres/Redis trio
+  that the old WhatsApp gateway needed (~750 MB of ceiling gone).
 - **n8n on SQLite**, not Postgres — removes an entire DB process from n8n's path.
-- **`NODE_OPTIONS=--max-old-space-size`** on both Node services caps the V8 heap
-  *below* the container limit, so you get a clean GC instead of an OOM kill.
+- **`NODE_OPTIONS=--max-old-space-size`** caps the V8 heap *below* the container
+  limit, so you get a clean GC instead of an OOM kill.
 - **Execution pruning** (`EXECUTIONS_DATA_PRUNE`, 7-day age, don't save
   successes) stops the SQLite file and execution log from growing unbounded.
-- **Evolution `DATABASE_SAVE_DATA_NEW_MESSAGE=false`** + history/contacts/chats
-  off — we never need chat history; storing it would bloat Postgres and Redis.
-- **Redis `maxmemory 64mb` + `allkeys-lru` + no persistence** — pure cache.
-- **Postgres tuned down** (`shared_buffers=32MB`, `work_mem=2MB`).
 
 ## Windows Docker Desktop setup
 
@@ -58,10 +54,10 @@ copy .env.example .env       # then edit .env with real values
 # Use the same path you set for INBOX_PATH in .env:
 mkdir "C:\Users\<you>\Documents\SecondBrain\_inbox"   # e.g.
 
-docker compose pull          # fetch images
+docker compose pull          # fetch the image
 docker compose up -d
-docker compose ps            # all four up? postgres + n8n should be "healthy"
-docker stats --no-stream     # confirm RSS is well under the limits
+docker compose ps            # n8n up & "healthy"
+docker stats --no-stream     # confirm RSS is well under the limit
 ```
 
 > Docker bind-mounts a host path; if `INBOX_PATH` (or `VAULT_PATH`) doesn't
@@ -89,10 +85,8 @@ knowledge base. If you later add a "capture to vault" flow, give it a separate,
 narrowly-scoped writable subfolder (e.g. `/data/inbox`), never the whole vault.
 
 ## Image pinning
-The compose file ships with explicit-ish tags. `postgres:16-alpine` and
-`redis:7-alpine` are stable. For **n8n** and **Evolution**, pin to the exact
-version you tested before any long-lived deploy:
+The compose file ships with an explicit-ish tag for the one service. Pin **n8n**
+to the exact version you tested before any long-lived deploy:
 - n8n tags: <https://hub.docker.com/r/n8nio/n8n/tags> (e.g. `:1.71.3`)
-- Evolution releases: <https://github.com/EvolutionAPI/evolution-api/releases>
 
 A floating tag can silently introduce a breaking change on the next `pull`.

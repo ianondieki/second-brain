@@ -14,7 +14,7 @@
  * All fixture dates are relative to "today", so the test never rots.
  *
  * Not covered (needs the real stack): live image pulls, n8n's runtime expression
- * engine, the live Groq/Evolution endpoints, and Evolution's webhook delivery.
+ * engine, the live Groq/Telegram endpoints, and Telegram's getUpdates polling.
  */
 import fs from 'fs';
 import os from 'os';
@@ -27,9 +27,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const N8N = path.join(HERE, '..', 'n8n');
 const load = (f) => JSON.parse(fs.readFileSync(path.join(N8N, f), 'utf8'));
 
-const morning = load('morning-nudge-workflow.json');
-const inbound = load('inbound-capture-workflow.json');
 const errwf = load('error-handler-workflow.json');
+const telegram = load('morning-nudge-telegram.json');
+const tgAssistant = load('telegram-assistant-workflow.json');
 const nodeNamed = (wf, n) => wf.nodes.find((x) => x.name === n);
 const codeOf = (wf, n) => nodeNamed(wf, n).parameters.jsCode;
 
@@ -39,33 +39,34 @@ const INBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-inbox-'));
 const ACTIONS = path.join(INBOX, '.actions.jsonl');
 
 // Rebind hardcoded container paths to the temp dirs, then compile the shipped code.
-const scanCode = codeOf(morning, 'Scan & Read Vault').replace("'/data/vault'", JSON.stringify(VAULT));
-const filterCode = codeOf(morning, 'Filter Stale Projects').replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS));
-const handleCode = codeOf(inbound, 'Handle Command').replace("'/data/inbox'", JSON.stringify(INBOX));
-const errorCode = codeOf(errwf, 'Format Alert');
-const extractCode = codeOf(morning, 'Extract Nudge');
-const groqBody = nodeNamed(morning, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
-const evoBody = nodeNamed(morning, 'Send to WhatsApp Gateway').parameters.jsonBody;
-
-// Telegram delivery variant — same pipeline, HTML-rendering Extract + Telegram send.
-const telegram = load('morning-nudge-telegram.json');
-const extractTgCode = codeOf(telegram, 'Extract Nudge');
-const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
-const filterTgCode = codeOf(telegram, 'Filter Stale Projects')
+// Telegram is the sole delivery channel; the morning pipeline lives in its workflow.
+const scanCode = codeOf(telegram, 'Scan & Read Vault').replace("'/data/vault'", JSON.stringify(VAULT));
+const filterCode = codeOf(telegram, 'Filter Stale Projects')
   .replace("'/data/inbox/.actions.jsonl'", JSON.stringify(ACTIONS))
   .replace("'/data/inbox/.tg_context.json'", JSON.stringify(path.join(INBOX, '.tg_context.json')));
+const errorCode = codeOf(errwf, 'Format Alert');
+const extractCode = codeOf(telegram, 'Extract Nudge');
+const extractTgCode = extractCode;            // same node — the nudge renders HTML inline
+const groqBody = nodeNamed(telegram, 'Cloud LLM Synthesis (Groq)').parameters.jsonBody;
+const tgBody = nodeNamed(telegram, 'Send to Telegram').parameters.jsonBody;
+const filterTgCode = filterCode;              // the nudge filter also writes the focus file
 
 // Two-way Telegram assistant — polling getUpdates, owner-only, commands + chat.
-const tgAssistant = load('telegram-assistant-workflow.json');
 const routeCode = codeOf(tgAssistant, 'Route & Handle').replace("'/data/inbox'", JSON.stringify(INBOX));
 const readOffsetCode = codeOf(tgAssistant, 'Read Offset').replace("'/data/inbox/.tg_offset'", JSON.stringify(path.join(INBOX, '.tg_offset')));
-const extractReplyCode = codeOf(tgAssistant, 'Extract Reply').replace("'/data/inbox/.tg_history.json'", JSON.stringify(path.join(INBOX, '.tg_history.json')));
+const extractReplyCode = codeOf(tgAssistant, 'Extract Reply').replace("'/data/inbox'", JSON.stringify(INBOX));
 const tgSendBody = nodeNamed(tgAssistant, 'Send Reply').parameters.jsonBody;
 const tgGetUrl = nodeNamed(tgAssistant, 'Get Updates').parameters.url;
 
+// Evening check-in — scheduled prompt that writes the roster the assistant maps a reply against.
+const checkinWf = load('evening-checkin-workflow.json');
+const checkinCode = codeOf(checkinWf, 'Build Check-in')
+  .replace("'/data/vault'", JSON.stringify(VAULT))
+  .replace("'/data/inbox'", JSON.stringify(INBOX));
+const checkinSendBody = nodeNamed(checkinWf, 'Send Check-in').parameters.jsonBody;
+
 const runScan = () => new Function('require', scanCode)(require);
 const runFilter = (items) => new Function('$input', 'require', filterCode)({ all: () => items }, require);
-const runHandle = (items) => new Function('$input', 'require', '$env', handleCode)({ all: () => items }, require, env);
 const runError = (item) => new Function('$input', errorCode)({ first: () => item });
 const runExtract = (json) => new Function('$input', extractCode)({ first: () => ({ json }) });
 const runExtractTg = (json) => new Function('$input', extractTgCode)({ first: () => ({ json }) });
@@ -74,6 +75,7 @@ const runRoute = (result) => new Function('$input', 'require', '$env', routeCode
 const runReadOffset = () => new Function('require', readOffsetCode)(require);
 const runFilterTg = (items) => new Function('$input', 'require', filterTgCode)({ all: () => items }, require);
 const runExtractReply = (json) => new Function('$input', 'require', extractReplyCode)({ first: () => ({ json }) }, require);
+const runCheckin = () => new Function('require', checkinCode)(require);
 const tgMsg = (id, text, over = {}) => ({ update_id: id, message: { message_id: id, from: { id: 6379545167, is_bot: false }, chat: { id: 6379545167, type: 'private' }, text, ...over } });
 const evalExpr = (tpl, $json, $env) =>
   new Function('$json', '$env', 'return (' + tpl.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim() + ');')($json, $env);
@@ -92,7 +94,7 @@ const writeActions = (records) => fs.writeFileSync(ACTIONS, records.map((r) => J
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg); } else { fail++; console.log('  ✗ FAIL:', msg); } };
 
-const env = { GROQ_API_KEY: 'gk', EVOLUTION_API_KEY: 'ek', EVOLUTION_INSTANCE: 'secondbrain', WA_TARGET_NUMBER: '2348012345678' };
+const env = { GROQ_API_KEY: 'gk' };
 
 // Dates RELATIVE to today (local), so this test never rots as the clock moves.
 const D = (offsetDays) => {
@@ -145,9 +147,6 @@ try {
   ok(reviewsA.includes('Spaced repetition'), 'overdue learning log surfaced in due_reviews');
   const stripeRec = JSON.parse(out[0].json.user).stale_projects.find((p) => p.title === 'Stripe billing migration').recent_notes;
   ok(!/Recent log/.test(stripeRec) && /Verified/.test(stripeRec), 'recent_notes excludes Markdown headings, keeps log lines');
-  const mock = { text: '🧊 *HOOK*\nYour _BOM note_ went cold.' };
-  const e = JSON.parse(JSON.stringify(evalExpr(evoBody, mock, env)));
-  ok(e.number === '2348012345678' && e.text === mock.text && e.delay === 1200, 'Evolution body intact (number from $env, normalized text, delay)');
 
   // ---------------------------------------------------------------- Round B/C/D
   console.log('\n# Round B/C/D — halt, empty vault, empty recent_notes');
@@ -164,7 +163,7 @@ try {
   ok(JSON.parse(runFilter(runScan())[0].json.user).stale_projects[0].recent_notes === '', 'empty recent_notes when no signal lines');
 
   // ---------------------------------------------------------------- Round E (NEW)
-  console.log('\n# Round E — WhatsApp action-log overrides (touch / done / stale)');
+  console.log('\n# Round E — action-log overrides (touch / done / stale)');
   reset();
   put('projects/stripe.md', `---\ntype: project\ntitle: "Stripe billing migration"\nstatus: active\npriority: high\nlast_actionable_date: ${D(-9)}\n---\n- log`);
   ok(wstale('Stripe billing migration'), 'baseline: Stripe is stale with no actions');
@@ -180,36 +179,12 @@ try {
   ]);
   ok(wstale('Stripe billing migration'), 'latest action wins: /reopen after an old /done brings it back');
 
-  // ---------------------------------------------------------------- Round F (NEW)
-  console.log('\n# Round F — inbound command handler');
-  reset();
-  const wh = (text, jid = '2348012345678@s.whatsapp.net') => ({ json: { body: { event: 'messages.upsert', data: { key: { remoteJid: jid, fromMe: false }, message: { conversation: text } } } } });
-  const r1 = runHandle([wh('/note Call the accountant about Q3 VAT')]);
-  ok(r1.length === 1 && /Captured/.test(r1[0].json.reply), '/note returns a capture confirmation');
-  const captured = fs.readdirSync(INBOX).filter((f) => f.endsWith('.md'));
-  ok(captured.length === 1, '/note wrote exactly one markdown file to the inbox');
-  const capBody = fs.readFileSync(path.join(INBOX, captured[0]), 'utf8');
-  ok(/type: capture/.test(capBody) && /Q3 VAT/.test(capBody), 'captured note has type:capture frontmatter + the text');
-  const r2 = runHandle([wh('/touch Stripe billing')]);
-  ok(/reset/.test(r2[0].json.reply) && /"action":"touch"/.test(fs.readFileSync(ACTIONS, 'utf8')), '/touch appends a touch record');
-  const r3 = runHandle([wh('/done Old idea')]);
-  ok(/done/.test(r3[0].json.reply) && /"action":"done"/.test(fs.readFileSync(ACTIONS, 'utf8')), '/done appends a done record');
-  ok(runHandle([wh('🧊 *HOOK* your project went cold')]).length === 0, 'the bot\'s own nudge (no leading /) is ignored -> no loop');
-  ok(runHandle([wh('just a random thought')]).length === 0, 'plain text without a command is ignored');
-  ok(/commands/i.test(runHandle([wh('/help')])[0].json.reply), '/help lists the commands');
-  ok(/Unknown/.test(runHandle([wh('/frobnicate x')])[0].json.reply), 'unknown command -> friendly error');
-  ok(runHandle([wh('/note')])[0].json.reply.includes('Unknown') || runHandle([wh('/note')]).length >= 0, '/note with no text does not crash');
-  const r4 = runHandle([wh('/done Stripe')]);
-  ok(r4[0].json.number === '2348012345678', 'reply targets the sender number (jid stripped)');
-  ok(runHandle([wh('/note hijack', '19998887777@s.whatsapp.net')]).length === 0, 'command from a NON-owner number is ignored (owner-only)');
-  ok(runHandle([wh('/help', '120363999@g.us')]).length === 0, 'group message is ignored');
-  ok(runHandle([wh('/help', 'status@broadcast')]).length === 0, 'status broadcast is ignored');
-
   // ---------------------------------------------------------------- Round G (NEW)
-  console.log('\n# Round G — error-handler formatting');
-  const alert = runError({ json: { workflow: { name: 'Autonomous Morning Nudge Pipeline' }, execution: { lastNodeExecuted: 'Cloud LLM Synthesis (Groq)', error: { message: 'Request failed with status code 401' }, url: 'http://localhost:5678/execution/42' } } });
+  console.log('\n# Round G — error-handler formatting (Telegram HTML)');
+  const alert = runError({ json: { workflow: { name: 'Autonomous Morning Nudge Pipeline (Telegram)' }, execution: { lastNodeExecuted: 'Cloud LLM Synthesis (Groq)', error: { message: 'Request failed with status code 401 <x>' }, url: 'http://localhost:5678/execution/42' } } });
   const at = alert[0].json.text;
   ok(/Second Brain failed/.test(at) && /Morning Nudge/.test(at) && /401/.test(at) && /execution\/42/.test(at), 'error alert includes workflow, node, message, url');
+  ok(/<b>Workflow:<\/b>/.test(at) && /401 &lt;x&gt;/.test(at), 'error alert renders Telegram HTML and escapes < > in the message');
   const alert2 = runError({ json: {} });
   ok(/unknown workflow/.test(alert2[0].json.text), 'error formatter is defensive against a sparse payload');
 
@@ -247,7 +222,7 @@ try {
   let xThrew = false, xMsg = '';
   try { runExtract({ choices: [{ message: { content: '   ' }, finish_reason: 'content_filter' }] }); }
   catch (err) { xThrew = true; xMsg = err.message; }
-  ok(xThrew && /no usable text/.test(xMsg), 'empty completion throws (no blank WhatsApp send)');
+  ok(xThrew && /no usable text/.test(xMsg), 'empty completion throws (no blank Telegram send)');
   ok(/content_filter/.test(xMsg), 'thrown error surfaces the finish_reason for triage');
   let eThrew = false, eMsg = '';
   try { runExtract({ error: { message: 'rate_limit_exceeded' } }); }
@@ -385,6 +360,54 @@ try {
   for (let i = 0; i < 7; i++) { runRoute([tgMsg(50 + i, 'u' + i)]); runExtractReply({ choices: [{ message: { content: 'a' + i } }] }); }
   const tgHist = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_history.json'), 'utf8'));
   ok(tgHist.turns.length <= 8, 'memory: history is trimmed to a bounded window (no token blowup)');
+  reset();
+
+  // ---------------------------------------------------------------- Round O (NEW)
+  console.log('\n# Round O — evening check-in (roster prompt → reply maps to touch actions)');
+  reset();
+  put('projects/stripe.md', '---\ntype: project\ntitle: "Stripe billing"\nstatus: active\nlast_actionable_date: ' + D(-3) + '\n---\n- log');
+  put('learning/sr.md', '---\ntype: learning\ntitle: "Spaced repetition"\nlast_actionable_date: ' + D(-3) + '\n---');
+  put('projects/old.md', '---\ntype: project\ntitle: "Old thing"\nstatus: done\nlast_actionable_date: ' + D(-3) + '\n---');
+  const ck = runCheckin();
+  ok(/Evening check-in/.test(ck[0].json.text), 'checkin: prompt asks what you moved forward today');
+  const roster = JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_checkin.json'), 'utf8'));
+  ok(roster.awaiting === true && roster.projects.includes('Stripe billing') && roster.projects.includes('Spaced repetition'), 'checkin: writes an awaiting roster of active items');
+  ok(!roster.projects.includes('Old thing'), 'checkin: done items are excluded from the roster');
+
+  // A free-text reply WHILE awaiting -> mapping prompt + pending marker (not chat).
+  const ckReply = runRoute([tgMsg(60, 'pushed the stripe integration and revised spaced repetition')]);
+  ok(ckReply[0].json.needs_llm === true && /JSON array/.test(ckReply[0].json.messages[0].content), 'checkin: in-window reply builds the mapping prompt, not the chat prompt');
+  ok(fs.existsSync(path.join(INBOX, '.tg_checkin_pending.json')), 'checkin: an in-flight pending marker is written');
+  ok(JSON.parse(fs.readFileSync(path.join(INBOX, '.tg_checkin.json'), 'utf8')).awaiting === false, 'checkin: the awaiting flag is consumed by the first reply');
+
+  // Extract Reply parses the LLM mapping, logs touch actions, and confirms.
+  const ckOut = runExtractReply({ choices: [{ message: { content: '[{"item":"Stripe billing","note":"pushed integration"},{"item":"Spaced repetition","note":"revised"}]' } }] });
+  ok(/Logged today/.test(ckOut[0].json.reply) && /Stripe billing/.test(ckOut[0].json.reply), 'checkin: confirms the items it logged');
+  const ckLog = fs.readFileSync(ACTIONS, 'utf8');
+  ok(/"action":"touch","project":"Stripe billing"/.test(ckLog) && /"project":"Spaced repetition"/.test(ckLog), 'checkin: writes touch actions to the shared action log');
+  ok(!fs.existsSync(path.join(INBOX, '.tg_checkin_pending.json')), 'checkin: the pending marker is consumed');
+
+  // After the reply is consumed, a later message is normal chat again.
+  const ckAfter = runRoute([tgMsg(61, 'what is on my plate?')]);
+  ok(ckAfter[0].json.needs_llm === true && /assistant/i.test(ckAfter[0].json.messages[0].content) && !/JSON array/.test(ckAfter[0].json.messages[0].content), 'checkin: a later message returns to normal chat');
+  reset();
+
+  // Expired window -> a free-text reply is normal chat, not a check-in.
+  fs.writeFileSync(path.join(INBOX, '.tg_checkin.json'), JSON.stringify({ ts: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), awaiting: true, projects: ['Stripe billing'] }));
+  const ckExpired = runRoute([tgMsg(62, 'did some stuff')]);
+  ok(/assistant/i.test(ckExpired[0].json.messages[0].content) && !fs.existsSync(path.join(INBOX, '.tg_checkin_pending.json')), 'checkin: a reply after the window is chat (no mapping, no pending)');
+  reset();
+
+  // No-match mapping -> graceful reply, nothing logged.
+  fs.writeFileSync(path.join(INBOX, '.tg_checkin.json'), JSON.stringify({ ts: new Date().toISOString(), awaiting: true, projects: ['Stripe billing'] }));
+  runRoute([tgMsg(63, 'just watched a movie')]);
+  const ckNo = runExtractReply({ choices: [{ message: { content: '[]' } }] });
+  ok(/couldn.t match|nothing was logged/i.test(ckNo[0].json.reply), 'checkin: an empty mapping logs nothing and says so');
+  ok(!fs.existsSync(ACTIONS), 'checkin: no spurious action written on no-match');
+
+  // Send body carries the prompt text with HTML.
+  const ckSb = evalExpr(checkinSendBody, { text: '🌙 hi' }, { TELEGRAM_CHAT_ID: '6379545167' });
+  ok(ckSb.chat_id === '6379545167' && ckSb.text === '🌙 hi' && ckSb.parse_mode === 'HTML', 'checkin: send body has chat_id from $env, text, parse_mode HTML');
   reset();
 
 } finally {

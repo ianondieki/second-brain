@@ -14,10 +14,9 @@ Get-Content $envPath | ForEach-Object {
     if ($_ -match '^\s*#') { return }
     if ($_ -match '^\s*([^=\s]+)\s*=\s*(.*)$') { $cfg[$Matches[1]] = $Matches[2].Trim() }
 }
-$apiKey   = $cfg['EVOLUTION_API_KEY']
-$instance = if ($cfg['EVOLUTION_INSTANCE']) { $cfg['EVOLUTION_INSTANCE'] } else { 'secondbrain' }
-$number   = $cfg['WA_TARGET_NUMBER']
-$evo      = 'http://localhost:8080'
+$token  = $cfg['TELEGRAM_BOT_TOKEN']
+$chatId = $cfg['TELEGRAM_CHAT_ID']
+$tg     = "https://api.telegram.org/bot$token"
 
 Write-Host "==> Container memory:" -ForegroundColor Cyan
 docker stats --no-stream --format "table {{.Name}}`t{{.MemUsage}}`t{{.MemPerc}}"
@@ -26,17 +25,16 @@ Write-Host "`n==> n8n health:" -ForegroundColor Cyan
 try { Invoke-RestMethod "http://localhost:5678/healthz" -TimeoutSec 5 | Out-Null; Write-Host " OK" -ForegroundColor Green }
 catch { Write-Host " n8n not ready: $($_.Exception.Message)" -ForegroundColor Yellow }
 
-Write-Host "`n==> WhatsApp connection state:" -ForegroundColor Cyan
+Write-Host "`n==> Telegram bot identity (getMe):" -ForegroundColor Cyan
 try {
-    Invoke-RestMethod "$evo/instance/connectionState/$instance" -Headers @{ apikey = $apiKey } -TimeoutSec 10 |
-        ConvertTo-Json -Depth 5
-} catch { Write-Host " could not query state: $($_.Exception.Message)" -ForegroundColor Yellow }
+    Invoke-RestMethod "$tg/getMe" -TimeoutSec 10 | ConvertTo-Json -Depth 5
+} catch { Write-Host " could not query getMe: $($_.Exception.Message)" -ForegroundColor Yellow }
 
-Write-Host "`n==> Sending a test WhatsApp message to $number :" -ForegroundColor Cyan
-$body = @{ number = $number; text = "*Second Brain* smoke-test OK"; delay = 1000 } | ConvertTo-Json
+Write-Host "`n==> Sending a test Telegram message to chat $chatId :" -ForegroundColor Cyan
+$body = @{ chat_id = $chatId; text = "<b>Second Brain</b> smoke-test OK"; parse_mode = "HTML" } | ConvertTo-Json
 try {
-    Invoke-RestMethod "$evo/message/sendText/$instance" -Method Post `
-        -Headers @{ apikey = $apiKey; 'Content-Type' = 'application/json' } -Body $body -TimeoutSec 20 |
+    Invoke-RestMethod "$tg/sendMessage" -Method Post `
+        -Headers @{ 'Content-Type' = 'application/json' } -Body $body -TimeoutSec 20 |
         ConvertTo-Json -Depth 5
-    Write-Host "Done. If the message arrived, the local gateway path is healthy." -ForegroundColor Green
+    Write-Host "Done. If the message arrived, the Telegram delivery path is healthy." -ForegroundColor Green
 } catch { Write-Host " send failed: $($_.Exception.Message)" -ForegroundColor Red }

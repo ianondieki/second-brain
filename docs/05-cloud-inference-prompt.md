@@ -23,12 +23,13 @@ engineering behind it.
    FIRST item." This makes the output deterministic and lets a fast/cheap model
    do well — it doesn't have to re-derive priority. One optional secondary line.
 2. **Output discipline.** "Output ONLY the message body, no code fences, no
-   JSON" — keeps the reply WhatsApp-ready. Node 4b (Extract Nudge) still
-   normalizes and strips any stray fences as a belt-and-braces guard before the
-   send.
+   JSON" — keeps the reply send-ready. Node 4b (Extract Nudge) still normalizes,
+   strips any stray fences, and renders `*bold*`/`_italic_` to Telegram HTML as a
+   belt-and-braces guard before the send.
 3. **Phone-first formatting.** Single-asterisk `*bold*`, `_italics_`, emoji
-   bullets, <90 words, blank line between blocks — matches the WhatsApp renderer
-   exactly (double `**asterisks**` do NOT render bold on WhatsApp).
+   bullets, <90 words, blank line between blocks — the Extract Nudge node
+   converts those single asterisks to `<b>` for Telegram (double `**asterisks**`
+   are not the convention here).
 4. **The 3-step persuasion flow** (each label emoji-prefixed, on its own line):
    - `🧊 *HOOK*` — names what went cold + `days_stale` (loss-aversion cue).
    - `🧠 *CONTEXT*` — paraphrases `recent_notes` so re-entry is frictionless.
