@@ -1,0 +1,10 @@
+# Project reminders (reminder/) and the WhatsApp voice adviser (adviser/). Install into the project venv:
+#   python -m venv .venv
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+langgraph>=1.2,<2
+langchain-core>=1.6,<2
+langchain-groq>=1.1,<2
+# adviser/ only: text-to-speech (Microsoft Edge neural voices) and OGG/Opus voice notes without ffmpeg.
+# edge-tts is pinned below 8 because adviser/speech.py swaps one of its internals (its TLS context).
+edge-tts>=7.2,<8
+soundfile>=0.13,<1

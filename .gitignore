@@ -18,3 +18,13 @@ notes/projects/*
 notes/learning/*
 !notes/projects/.gitkeep
 !notes/learning/.gitkeep
+
+# Project reminders: live settings, state, logs, previews
+reminders.json
+.state/
+__pycache__/
+*.pyc
+.venv/
+
+# WhatsApp adviser: the cloudflared binary (download it; ~55 MB)
+tools/*.exe
