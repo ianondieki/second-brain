@@ -16,7 +16,7 @@ import asyncio
 import re
 import smtplib
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from email.message import EmailMessage as MimeMessage
 from email.utils import formatdate, make_msgid, parseaddr
@@ -38,14 +38,21 @@ POSTMARK_ERROR_CODE_HEADER = "X-PM-ApiErrorCode"
 POSTMARK_TRANSIENT_ERROR_CODES = frozenset({100, 101})
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
-MAX_ADDRESS_CHARS = 320  # notification_deliveries.to_address
+MAX_ADDRESS_CHARS = 254  # RFC 5321 path limit (256 octets including the angle brackets)
+MAX_LOCAL_PART_CHARS = 64  # RFC 5321 section 4.5.3.1.1
 MAX_SUBJECT_CHARS = 2000  # Postmark's Subject limit
 MAX_ERROR_CHARS = 500
 
-# One bare addr-spec: no display name, no list separators, no whitespace or control characters.
-_ADDRESS_CHAR = r"""[^@\s,;:<>()\[\]\\"'\x00-\x1f\x7f]"""
-_SINGLE_ADDRESS = re.compile(rf"{_ADDRESS_CHAR}+@{_ADDRESS_CHAR}+")
-_ANY_ADDRESS = re.compile(r"""[^\s@<>()\[\]"',;:]+@[^\s@<>()\[\]"',;:]+""")
+# A recipient is an RFC 5321 Mailbox restricted to what no MIME parser can reinterpret: a dot-atom local part (no
+# quoted strings, no comments) at an LDH domain of two or more labels (IDNA A-labels, xn--..., are LDH). "=?" is refused
+# too: an RFC 2047 encoded-word is valid atext, and a parser decodes =?utf-8?q?victim?=@example.com to a different
+# address from the one checked against email_suppressions.
+_ATEXT = r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]"
+_LOCAL_PART = re.compile(rf"{_ATEXT}+(?:\.{_ATEXT}+)*")
+_LDH_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+_DOMAIN = re.compile(rf"{_LDH_LABEL}(?:\.{_LDH_LABEL})+")
+_ENCODED_WORD_START = "=?"
+_ANY_ADDRESS = re.compile(r"""[^\s@<>()\[\]",;:]+@[^\s@<>()\[\]"',;:]+""")
 _TAG = re.compile(r"[A-Za-z0-9._-]{1,100}")  # fits Postmark Tag and Mailpit's allowed tag characters
 _HEADER_NAME = re.compile(r"[!-9;-~]+")  # RFC 5322 field-name: printable ASCII except ':'
 _LINE_BREAK = re.compile(r"[\r\n\x00]")
@@ -70,6 +77,19 @@ RESERVED_HEADERS = frozenset(
         "x-tags",
     }
 )
+
+
+def is_mailbox(value: str) -> bool:
+    """True when ``value`` is one bare address that every consumer reads the same way (see ``_ATEXT`` above)."""
+    local, at, domain = value.rpartition("@")
+    return (
+        bool(at)
+        and len(value) <= MAX_ADDRESS_CHARS
+        and len(local) <= MAX_LOCAL_PART_CHARS
+        and _ENCODED_WORD_START not in value
+        and _LOCAL_PART.fullmatch(local) is not None
+        and _DOMAIN.fullmatch(domain) is not None
+    )
 
 
 def redact_addresses(text: str, limit: int = MAX_ERROR_CHARS) -> str:
@@ -106,9 +126,10 @@ class EmailMessage:
     headers: Mapping[str, str] = field(default_factory=dict, hash=False)
 
     def __post_init__(self) -> None:
-        if len(self.to) > MAX_ADDRESS_CHARS or not _SINGLE_ADDRESS.fullmatch(self.to):
+        if not is_mailbox(self.to):
             raise ValueError(
-                f"the recipient must be one bare address (local@domain), at most {MAX_ADDRESS_CHARS} chars"
+                "the recipient must be one bare address: a dot-atom local part at an LDH domain, with no display name,"
+                f" quotes, comments or encoded-words, at most {MAX_ADDRESS_CHARS} characters"
             )
         if not self.subject or len(self.subject) > MAX_SUBJECT_CHARS or _LINE_BREAK.search(self.subject):
             raise ValueError(f"the subject must be one non-empty line of at most {MAX_SUBJECT_CHARS} characters")
@@ -255,7 +276,9 @@ class SmtpClient(Protocol):
         self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None, /
     ) -> None: ...
 
-    def send_message(self, msg: MimeMessage, /) -> dict[str, tuple[int, bytes]]: ...
+    def send_message(
+        self, msg: MimeMessage, /, *, from_addr: str, to_addrs: Sequence[str]
+    ) -> dict[str, tuple[int, bytes]]: ...
 
 
 SmtpFactory = Callable[[str, int, float], SmtpClient]
@@ -299,7 +322,8 @@ class SmtpEmailProvider:
         self._host = host
         self._port = port
         self._sender = sender
-        self._domain = parseaddr(sender)[1].rpartition("@")[2] or "localhost"
+        self._envelope_sender = parseaddr(sender)[1]
+        self._domain = self._envelope_sender.rpartition("@")[2] or "localhost"
         self._timeout = timeout
         self._smtp_factory = smtp_factory
 
@@ -326,11 +350,13 @@ class SmtpEmailProvider:
             mime.add_alternative(message.html, subtype="html")
         return mime
 
-    def _deliver(self, mime: MimeMessage) -> None:
+    def _deliver(self, mime: MimeMessage, recipient: str) -> None:
         connect = self._smtp_factory or self._connect
         try:
             with connect(self._host, self._port, self._timeout) as smtp:
-                refused = smtp.send_message(mime)
+                # The envelope is explicit: send_message would otherwise re-derive it from the parsed (and RFC 2047
+                # decoded) headers, which need not be the address that was checked against email_suppressions.
+                refused = smtp.send_message(mime, from_addr=self._envelope_sender, to_addrs=[recipient])
         # Order matters (as in reminder/notify.py): every smtplib exception is also an OSError, so the generic network
         # clause comes last.
         except smtplib.SMTPRecipientsRefused as exc:
@@ -350,7 +376,7 @@ class SmtpEmailProvider:
 
     async def send(self, message: EmailMessage) -> SendResult:
         mime = self._build(message)
-        await asyncio.to_thread(self._deliver, mime)
+        await asyncio.to_thread(self._deliver, mime, message.to)
         return SendResult(provider=self.name, message_id=str(mime["Message-ID"]).strip("<>"))
 
 

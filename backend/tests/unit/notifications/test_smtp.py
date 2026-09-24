@@ -10,6 +10,7 @@ import email
 import email.policy
 import smtplib
 import socket
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from email.message import EmailMessage as MimeMessage
 from types import TracebackType
@@ -31,6 +32,7 @@ class FakeSmtp:
     on_send: BaseException | None = None
     refused: dict[str, tuple[int, bytes]] = field(default_factory=dict)
     sent: list[MimeMessage] = field(default_factory=list)
+    envelopes: list[tuple[str, list[str]]] = field(default_factory=list)
     connections: list[tuple[str, int, float]] = field(default_factory=list)
 
     def connect(self, host: str, port: int, timeout: float) -> FakeSmtp:
@@ -47,10 +49,13 @@ class FakeSmtp:
     ) -> None:
         return None
 
-    def send_message(self, msg: MimeMessage) -> dict[str, tuple[int, bytes]]:
+    def send_message(
+        self, msg: MimeMessage, *, from_addr: str, to_addrs: Sequence[str]
+    ) -> dict[str, tuple[int, bytes]]:
         if self.on_send is not None:
             raise self.on_send
         self.sent.append(msg)
+        self.envelopes.append((from_addr, list(to_addrs)))
         return self.refused
 
 
@@ -88,6 +93,8 @@ async def test_send_builds_a_multipart_message_with_tag_and_headers() -> None:
     assert html_part.get_content().strip() == "<p>Hello</p>"
     assert result == SendResult(provider="smtp", message_id=sent["Message-ID"].strip("<>"))
     assert result.message_id.endswith("@bridge.test")
+    # The envelope is passed explicitly, never re-derived from the (MIME-decoded) headers.
+    assert fake.envelopes == [("no-reply@bridge.test", [ADDRESS])]
 
 
 async def test_a_text_only_message_is_a_single_plain_part_without_tags() -> None:
@@ -211,3 +218,20 @@ async def test_a_closed_port_is_a_transient_failure() -> None:
         with pytest.raises(DeliveryError) as info:
             await smtp.send(message())
     assert info.value.transient is True
+
+
+async def test_the_envelope_is_the_checked_address_even_if_validation_were_bypassed() -> None:
+    # Defence in depth for the RFC 2047 bypass: smtplib would decode an encoded-word To header to victim@example.com.
+    # With to_addrs passed explicitly, RCPT TO is exactly the string that was checked against email_suppressions.
+    encoded = "=?utf-8?q?victim?=@example.com"
+    forged = message()
+    object.__setattr__(forged, "to", encoded)  # EmailMessage itself refuses this address
+    stub = SmtpStub()
+    server = await asyncio.start_server(stub.handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        await SmtpEmailProvider(host="127.0.0.1", port=port, sender=SENDER, timeout=10.0).send(forged)
+
+    [envelope] = stub.envelopes
+    assert envelope == [b"mail from:<no-reply@bridge.test>", f"rcpt to:<{encoded}>".encode()]
+    assert not any(b"victim@example.com" in line for line in envelope)

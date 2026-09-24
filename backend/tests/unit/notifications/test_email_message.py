@@ -44,11 +44,47 @@ def test_defaults_are_text_only_untagged_and_headerless() -> None:
         pytest.param("dev @example.com", id="space"),
         pytest.param("", id="empty"),
         pytest.param("d" * 310 + "@example.com", id="longer-than-320"),
+        # RFC 2047 encoded-words: checked for suppression as written, but a MIME parser decodes them to
+        # victim@example.com. Both the Q and the B forms are refused.
+        pytest.param("=?utf-8?q?victim?=@example.com", id="encoded-word-q"),
+        pytest.param("=?utf-8?b?dmljdGlt?=@example.com", id="encoded-word-b"),
+        pytest.param("dev@=?utf-8?q?example.com?=", id="encoded-word-in-domain"),
+        pytest.param('"dev ops"@example.com', id="quoted-local-part"),
+        pytest.param("dev(comment)@example.com", id="comment"),
+        pytest.param(".dev@example.com", id="leading-dot"),
+        pytest.param("dev.@example.com", id="trailing-dot"),
+        pytest.param("dev..ops@example.com", id="double-dot"),
+        pytest.param("d" * 65 + "@example.com", id="local-part-longer-than-64"),
+        pytest.param("dev@localhost", id="single-label-domain"),
+        pytest.param("dev@-example.com", id="label-starts-with-hyphen"),
+        pytest.param("dev@example-.com", id="label-ends-with-hyphen"),
+        pytest.param("dev@exa_mple.com", id="underscore-in-domain"),
+        pytest.param("dev@example..com", id="empty-label"),
+        pytest.param("dev@[127.0.0.1]", id="address-literal"),
+        pytest.param("dev@exämple.com", id="unicode-domain-not-idna-ascii"),
+        pytest.param("dév@example.com", id="unicode-local-part"),
+        pytest.param("dev@" + "a" * 64 + ".com", id="label-longer-than-63"),
     ],
 )
 def test_the_recipient_must_be_one_bare_address(to: str) -> None:
     with pytest.raises(ValueError, match="recipient"):
         make(to=to)
+
+
+@pytest.mark.parametrize(
+    "to",
+    [
+        "dev@example.com",
+        "o'brien+bridge@example.co.ke",
+        "first.last@sub.example.io",
+        "x_y-z!#$%&*/?^=`{|}~@example.com",
+        "dev@xn--exmple-cua.com",
+        "DEV@EXAMPLE.COM",
+        "d" * 64 + "@" + "a" * 63 + ".ke",
+    ],
+)
+def test_dot_atom_addresses_on_ldh_domains_are_accepted(to: str) -> None:
+    assert make(to=to).to == to
 
 
 @pytest.mark.parametrize("subject", ["", "Line one\nBcc: x@example.com", "Carriage\rreturn", "s" * 2001])
