@@ -63,6 +63,21 @@ def select(tests: list[unittest.TestCase], skip: set[str]) -> tuple[unittest.Tes
     return kept, stale
 
 
+def _escape(text: str) -> str:
+    """Escape a value for a GitHub Actions workflow command (%, CR, LF)."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def annotate(result: unittest.TestResult) -> None:
+    """On GitHub Actions, emit one ``::error`` annotation per failed test so the failure is readable from the
+    run's public annotations without downloading the log."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    for test, trace in [*result.failures, *result.errors]:
+        tail = "\n".join(trace.strip().splitlines()[-4:])
+        print(f"::error title=Legacy test failed::{_escape(test.id())}%0A{_escape(tail)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the legacy tests/ suite (skip list applied off Windows).")
     parser.add_argument("--no-skip", action="store_true", help="run the full suite even off Windows")
@@ -90,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {test_id}", file=sys.stderr)
 
     result = unittest.TextTestRunner(verbosity=args.verbosity).run(kept)
+    annotate(result)
     return 0 if result.wasSuccessful() else 1
 
 

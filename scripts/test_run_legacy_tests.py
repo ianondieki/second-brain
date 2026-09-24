@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import run_legacy_tests as runner
 
@@ -46,6 +50,20 @@ class SkipListTests(unittest.TestCase):
         present = {t.id() for t in runner.iter_tests(suite)}
         missing = set(runner.read_skip_list(runner.SKIP_FILE)) - present
         self.assertEqual(missing, set())
+
+    def test_failures_become_github_annotations_only_on_actions(self) -> None:
+        tests = _dummy_tests("test_a")
+        result = unittest.TestResult()
+        result.failures.append((tests[0], "Traceback\n  line\nAssertionError: 100% wrong"))
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), contextlib.redirect_stdout(out):
+            runner.annotate(result)
+        self.assertIn(f"::error title=Legacy test failed::{tests[0].id()}%0A", out.getvalue())
+        self.assertIn("100%25 wrong", out.getvalue())
+        quiet = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": ""}), contextlib.redirect_stdout(quiet):
+            runner.annotate(result)
+        self.assertEqual(quiet.getvalue(), "")
 
 
 if __name__ == "__main__":
