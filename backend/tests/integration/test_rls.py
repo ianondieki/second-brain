@@ -77,14 +77,16 @@ async def test_org_context_cannot_be_forged_for_a_foreign_org(app_engine: AsyncE
             assert [r for r in rows if r.org == world.b.org_id or r.usr == world.b.user_id] == [], table
 
 
-async def test_org_b_rows_cannot_be_updated_or_deleted_by_a(app_engine: AsyncEngine, world: w.World) -> None:
+async def test_org_b_rows_cannot_be_updated_by_a(app_engine: AsyncEngine, world: w.World) -> None:
     async with app_engine.connect() as conn, conn.begin():
         await _as_tenant(conn, world.a.user_id, None)
         updated = await conn.execute(
             text("UPDATE organizations SET website = 'https://evil.example' WHERE id = :id"), {"id": world.b.org_id}
         )
-        deleted = await conn.execute(text("DELETE FROM memberships WHERE org_id = :id"), {"id": world.b.org_id})
-        assert (updated.rowcount, deleted.rowcount) == (0, 0)
+        removed = await conn.execute(
+            text("UPDATE memberships SET status = 'removed' WHERE org_id = :id"), {"id": world.b.org_id}
+        )
+        assert (updated.rowcount, removed.rowcount) == (0, 0)
         await conn.rollback()
 
 

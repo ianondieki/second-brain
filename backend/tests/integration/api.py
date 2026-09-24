@@ -56,5 +56,5 @@ async def sign_in_as(client: httpx.AsyncClient, app_engine: AsyncEngine, user_id
         if mfa_verified:
             live.row.mfa_verified_at = utcnow()
         await db.commit()
-    client.cookies.set(settings.session_cookie_name, live.token, domain="testserver")
+    client.cookies.set(settings.session_cookie_name, live.token)
     await refresh_csrf(client)

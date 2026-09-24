@@ -42,7 +42,7 @@ def link_token(client: httpx.AsyncClient, to: str) -> str:
 
 
 def email() -> str:
-    return f"user-{uuid4().hex[:10]}@example.test"
+    return f"user-{uuid4().hex[:10]}@example.com"
 
 
 async def signup(client: httpx.AsyncClient, address: str, side: str = "developer") -> httpx.Response:
