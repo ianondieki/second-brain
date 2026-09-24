@@ -29,5 +29,4 @@ editing the **Status** cell of its row to `APPROVED <YYYY-MM-DD>` (optionally wi
 
 | Gate | Decision | Date | Note |
 |---|---|---|---|
-| G0 | — | — | awaiting human review of the Phase 0 documents |
 | G0 | APPROVED | 2026-09-24 | Decisions D-01..D-23 recorded in DECISIONS-NEEDED.md |
