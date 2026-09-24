@@ -666,7 +666,9 @@ async def add_user(conn: AsyncConnection, user_id: UUID) -> None:
     )
 
 
-ADD_MEMBER = "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :user, CAST(:roles AS org_role[]))"
+ADD_MEMBER = (
+    "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :user, CAST(:roles AS org_role[]))"
+)
 INVITE = (
     "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at)"
     " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :token, app_user_id(), now() + interval '7 days')"
@@ -678,7 +680,13 @@ def member_params(org_id: UUID, user_id: UUID, roles: str) -> dict[str, Any]:
 
 
 def invite_params(org_id: UUID, roles: str) -> dict[str, Any]:
-    return {"id": uuid7(), "org": org_id, "email": f"{uuid4().hex}@example.test", "roles": roles, "token": uuid4().bytes}
+    return {
+        "id": uuid7(),
+        "org": org_id,
+        "email": f"{uuid4().hex}@example.test",
+        "roles": roles,
+        "token": uuid4().bytes,
+    }
 
 
 async def test_admins_cannot_mint_or_touch_owners(app_engine: AsyncEngine) -> None:
@@ -909,7 +917,7 @@ async def test_system_event_and_details_need_no_user(app_engine: AsyncEngine) ->
     async with rolled_back(app_engine) as conn:
         await conn.execute(INSERT_EVENT, event)
         await conn.execute(
-            sa.text("INSERT INTO event_details (event_id, details) VALUES (:id, '{\"note\": \"nightly job\"}')"),
+            sa.text('INSERT INTO event_details (event_id, details) VALUES (:id, \'{"note": "nightly job"}\')'),
             {"id": event["id"]},
         )
         # Written, but not readable without a user who may see it.
