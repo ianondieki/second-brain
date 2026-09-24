@@ -8,6 +8,16 @@ Row-Level Security is ENABLED (not FORCED) on every org, user and org_or_user ta
 SECURITY DEFINER helpers (``app_is_member``, ``app_create_organization``, ``audit_events_chain``) run as the owner and
 read ``memberships``/``audit_events`` without recursing into their own policies.
 
+Operating rules that follow from this revision:
+
+- Policies key on ``app.user_id``. ``app.org_id`` only narrows what a member already sees; an org-only context (no
+  user) sees nothing. Every job that touches tenant data must therefore bind the user id of the member it acts for
+  (docs/spec/08: one tenant per job); jobs with no acting user can only append system audit events and details.
+- Audit appends must run at READ COMMITTED. ``audit_events_chain()`` refuses REPEATABLE READ and SERIALIZABLE by
+  design: their snapshot predates the per-chain lock, so the chain head it reads could be stale.
+- Every function pins ``search_path = pg_catalog, public, pg_temp`` (pg_temp last, see FUNCTIONS_SQL), and
+  ``infra/postgres/prepare_db.sql`` revokes TEMPORARY on the database from PUBLIC.
+
 Revision ID: 0001
 Revises:
 Create Date: 2026-09-24
