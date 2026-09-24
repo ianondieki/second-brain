@@ -122,11 +122,11 @@ Checklist updated after every task (done / in progress / remaining).
 | T1.1 Legacy archive + hygiene (REQ-HYG-01..06, REQ-FND-01) | done | `d60a920` git mv into `legacy/` + README; workspace file deleted; root `.env.example` trimmed; README legacy section moved; AC-HYG-01..06 commands exit 0 locally (CI job lands in T1.2) |
 | T1.2 `scripts/run_legacy_tests.py` + CI legacy matrix (REQ-FND-01) | done | CI green on `0cff6ca` (run 36017610734): hygiene, legacy windows-latest (full), legacy ubuntu (skip list, egress-locked). Skip list verified: 6 Linux-only ids (2 ToolTests, 4 TurnTests); the 2 CheckTests pass with the cloudflared stub (D-12, D-13, D-25) |
 | T1.3 Scaffold backend/frontend/infra, Makefile, `pr.yml` (REQ-FND-02, REQ-FND-03) | done | `2050af5` + CI fixes (`4d8649f`, `4d22bef`, `a75147c`): backend, frontend, hygiene, legacy, CodeQL green; gitleaks, npm audit, osv-scanner, Trivy green; e2e waits for the Procrastinate schema (T1.4) |
-| T1.4 Core schema v1, RLS, audit chain, seed (REQ-TEN-01, REQ-AUD-01, REQ-CON-01) | in progress | models + harness `5926835`; migration 0001 with db-migrations agent; RLS/audit/seed tests written |
-| T1.5 Auth: password, magic link, sessions, CSRF, TOTP, roles (REQ-AUTH-01, REQ-TEN-01) | in progress | service, routers, deps written; integration tests written; waiting for T1.4/T1.7 merges |
-| T1.6 `plans.yaml` + entitlement middleware (REQ-BIL-01) | in progress | plans.yaml `4d8649f`; entitlements + unit tests written |
-| T1.7 `EmailProvider`, Mailpit sink, deliveries ledger (REQ-NOT-01) | in progress | impl-integrations agent in worktree |
-| T1.8 Reminder policy/compose port + parity tests, business-day helper (REQ-REM-00) | in progress | impl-backend agent in worktree |
-| T1.9 Signup/login UI + Playwright E2E + axe, dev-setup runbook (REQ-AUTH-01) | remaining | |
+| T1.4 Core schema v1, RLS, audit chain, seed (REQ-TEN-01, REQ-AUD-01, REQ-CON-01) | in progress | revision 0001 fixed after reviewer BLOCKER (definer search_path without pg_temp) and security-reviewer MAJOR (admin could mint owner); re-reviews running |
+| T1.5 Auth: password, magic link, sessions, CSRF, TOTP, roles (REQ-AUTH-01, REQ-TEN-01) | in progress | committed locally; 369 unit tests green; integration tests green on a trial merge with revision 0001 |
+| T1.6 `plans.yaml` + entitlement middleware (REQ-BIL-01) | in progress | plans.yaml, entitlements (402 + upgrade path), free subscriptions committed locally; unit tests green |
+| T1.7 `EmailProvider`, Mailpit sink, deliveries ledger (REQ-NOT-01) | done (merge `28b8af1`) | reviewer PASS after two rounds (encoded-word recipients, transient resume by dedupe key, Postmark only in production, header/surrogate validation); SqlDeliveryStore PostgreSQL test follows revision 0001 |
+| T1.8 Reminder policy/compose port + parity tests, business-day helper (REQ-REM-00) | done (merge `de6548d`) | 48 parity fixtures from `reminder/`, 100% coverage, reviewer mutation run 67/69 killed, survivors fixed in `6d71e30` |
+| T1.9 Signup/login UI + Playwright E2E + axe, dev-setup runbook (REQ-AUTH-01) | in progress | design plan `d766199`; runbook merged `a2fa003`; UI with impl-frontend |
 | Task cards `docs/platform/tasks/` (16), research note, ADR-001 addendum (Next.js 16.3.6), D-24 (MinIO withdrawn) | done | `50f7082`, `44d0a46`, `ccc2354` |
 | ECC code review, security-reviewer, traceability check, Phase 1 report | remaining | |
