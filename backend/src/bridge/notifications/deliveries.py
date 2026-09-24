@@ -14,7 +14,11 @@
    Any other exception from a provider is a bug and propagates (the caller's transaction then drops the row).
 
 The caller owns the transaction: rows are flushed, never committed, on a session the caller has already scoped to a
-tenant (``bridge.db.bind_tenant``). Storage sits behind the narrow ``DeliveryStore`` seam: ``SqlDeliveryStore`` for
+tenant (``bridge.db.bind_tenant``). The provider call therefore runs inside the caller's open transaction, holding the
+row lock taken by ``SqlDeliveryStore.find_by_dedupe_key``, for up to the backoff plus ``max_attempts`` provider
+timeouts. That leaves an at-least-once window: if the COMMIT fails after a successful send, the ledger row rolls back
+and a retry sends the message again. The Phase 3 worker path (REQ-NOT-06) will commit a ``queued`` claim first and send
+afterwards. Storage sits behind the narrow ``DeliveryStore`` seam: ``SqlDeliveryStore`` for
 PostgreSQL and ``InMemoryDeliveryStore`` for unit tests. Logs carry the delivery id and kind, never the address,
 subject or body (docs/spec/08 Observability).
 """
