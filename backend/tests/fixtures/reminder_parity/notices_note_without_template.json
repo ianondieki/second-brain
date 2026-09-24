@@ -1,0 +1,17 @@
+{
+  "case": "note_without_template",
+  "description": "A note without a template name is ignored.",
+  "expected": {
+    "lines": []
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "rejected",
+        "used": "project_checkin"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

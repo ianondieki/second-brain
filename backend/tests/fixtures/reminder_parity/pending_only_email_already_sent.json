@@ -1,0 +1,25 @@
+{
+  "case": "only_email_already_sent",
+  "description": "Limited to email, which is already sent: nothing pending.",
+  "expected": {
+    "pending": []
+  },
+  "input": {
+    "channels": [
+      "email"
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "owner@example.com",
+        "status": "sent"
+      }
+    },
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T09:00:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

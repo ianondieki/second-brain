@@ -1,0 +1,21 @@
+{
+  "case": "reviewing_bad_since",
+  "description": "An unreadable 'since' on a template in review is not news.",
+  "expected": {
+    "lines": []
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "reviewing",
+        "last": "2026-09-21",
+        "since": "21/09/2026",
+        "template": "project_checkin_v2",
+        "used": "project_checkin",
+        "why": "Meta is still reviewing it"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

@@ -1,0 +1,144 @@
+{
+  "case": "nothing_actionable",
+  "description": "Every flagged project is probably finished or not a project: 'No project needs work today'.",
+  "expected": {
+    "actionable": [],
+    "classify": {
+      "flagged": [
+        {
+          "cold": true,
+          "headline": "no work for 9 days",
+          "name": "photos",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 20 days",
+          "name": "done-thing",
+          "risks": []
+        }
+      ],
+      "held": [],
+      "quiet": [
+        "active"
+      ]
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">No project needs work today. Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>No project</b> needs work today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#027a48\">Maybe finished</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #027a48\">The assistant thinks these are finished. If it is right, you can switch off their reminders.</div><div style=\"border:1px solid #a6f4c5;background:#f6fef9;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">done-thing</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 20 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#027a48;margin:8px 0 0\">The assistant looked inside and thinks this is <b>finished</b> (95% sure).</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">What the assistant found</div><div>All tasks ticked.</div></div><div style=\"background:#ffffff;border:1px dashed #a6f4c5;border-left:5px solid #027a48;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#027a48\">What you can do</div><div style=\"margin:3px 0 0\">If you agree, open <b>reminders.json</b> (its full path is at the end of this email) and add <b>&quot;done-thing&quot;</b> to the <b>&quot;done&quot;</b> list, like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;done&quot;: [&quot;done-thing&quot;]</code>. You will not be reminded about it again. If you do not agree, you do not need to do anything.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Clues the assistant checked:</b> <span>CHANGELOG says 1.0</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>final.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/done-thing</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#b54708\">Maybe not a project</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #b54708\">The assistant thinks these folders are not something you are building.</div><div style=\"border:1px solid #fedf89;background:#fffcf5;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">photos</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 9 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#b54708;margin:8px 0 0\">The assistant looked inside and thinks this is <b>not a real project</b> (70% sure).</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">What the assistant found</div><div>A photo dump.</div></div><div style=\"background:#ffffff;border:1px dashed #fedf89;border-left:5px solid #b54708;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#b54708\">What you can do</div><div style=\"margin:3px 0 0\">If you agree, open <b>reminders.json</b> (its full path is at the end of this email) and add <b>&quot;photos&quot;</b> to the <b>&quot;ignore&quot;</b> list, like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;ignore&quot;: [&quot;photos&quot;]</code>. The reminder will stop checking this folder. If you do not agree, you do not need to do anything.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>a.jpg</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/photos</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#3f3f46\">Everything else</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8\">Nothing to do here. This list shows your other folders, so you can see the whole picture.</div><ul style=\"margin:0;padding-left:20px;font-size:14px\"><li style=\"margin:0 0 6px\"><b>Going fine (worked on in the last 3 days):</b> active (yesterday)</li></ul><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant looked inside <b>all 2 listed projects</b>.</li></ul></div></body></html>",
+      "subject": "Project check-in: no project needs work today · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  No project needs work today.\n  Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 0\n  - Maybe finished: 1\n  - Maybe not projects: 1\n  - Going fine: 1\n\n==============================================================\nMAYBE FINISHED\nThe assistant thinks these are finished. If it is right, you can switch off their reminders.\n==============================================================\n\n- done-thing\n   No work for 20 days  |  Not in git\n\n   The assistant looked inside and thinks this is finished (95% sure).\n\n   What the assistant found:\n      All tasks ticked.\n\n   >> WHAT YOU CAN DO:\n      If you agree, open reminders.json (its full path is at the end of this email) and add \"done-thing\" to the \"done\" list, like this: \"done\": [\"done-thing\"]. You will not be reminded about it again. If you do not agree, you do not need to do anything.\n\n   More details:\n      - Clues the assistant checked: CHANGELOG says 1.0\n      - Recently edited files: final.py\n      - Folder: /home/dev/projects/done-thing\n\n==============================================================\nMAYBE NOT A PROJECT\nThe assistant thinks these folders are not something you are building.\n==============================================================\n\n- photos\n   No work for 9 days  |  Not in git\n\n   The assistant looked inside and thinks this is not a real project (70% sure).\n\n   What the assistant found:\n      A photo dump.\n\n   >> WHAT YOU CAN DO:\n      If you agree, open reminders.json (its full path is at the end of this email) and add \"photos\" to the \"ignore\" list, like this: \"ignore\": [\"photos\"]. The reminder will stop checking this folder. If you do not agree, you do not need to do anything.\n\n   More details:\n      - Recently edited files: a.jpg\n      - Folder: /home/dev/projects/photos\n\n==============================================================\nEVERYTHING ELSE\nNothing to do here. This list shows your other folders, so you can see the whole picture.\n==============================================================\n  - Going fine (worked on in the last 3 days): active (yesterday)\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant looked inside all 2 listed projects."
+    },
+    "fallback": {
+      "done-thing": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: final.py.",
+        "next_step": "Open final.py and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "photos": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: a.jpg.",
+        "next_step": "Open a.jpg and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "photos"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 20,
+        "last_work": 1788221700.0,
+        "name": "done-thing",
+        "open_todos": 0,
+        "path": "/home/dev/projects/done-thing",
+        "readme_title": "",
+        "recent_files": [
+          "final.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 9,
+        "last_work": 1789172100.0,
+        "name": "photos",
+        "open_todos": 0,
+        "path": "/home/dev/projects/photos",
+        "readme_title": "",
+        "recent_files": [
+          "a.jpg"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 1,
+        "last_work": 1789863300.0,
+        "name": "active",
+        "open_todos": 0,
+        "path": "/home/dev/projects/active",
+        "readme_title": "",
+        "recent_files": [
+          "active.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {
+      "done-thing": {
+        "confidence": 0.95,
+        "evidence": [
+          "CHANGELOG says 1.0"
+        ],
+        "left_off": "All tasks ticked.",
+        "next_step": "-",
+        "source": "agent",
+        "status": "probably_done",
+        "trace": []
+      },
+      "photos": {
+        "confidence": 0.7,
+        "evidence": [],
+        "left_off": "A photo dump.",
+        "next_step": "-",
+        "source": "agent",
+        "status": "not_a_project",
+        "trace": []
+      }
+    }
+  },
+  "kind": "scenario"
+}

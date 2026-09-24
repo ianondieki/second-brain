@@ -1,0 +1,99 @@
+{
+  "case": "one_cold_not_in_git",
+  "description": "One cold folder without git: fallback wording from files and to-dos.",
+  "expected": {
+    "actionable": [
+      "field-notes"
+    ],
+    "classify": {
+      "flagged": [
+        {
+          "cold": true,
+          "headline": "no work for 5 days",
+          "name": "field-notes",
+          "risks": []
+        }
+      ],
+      "held": [],
+      "quiet": [
+        "quiet-one"
+      ]
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">Start with field-notes: Start the first open to-do item: Sketch the **map** layer</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>1 project</b> needs you today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Pick one below and do its next step. Each step takes about 15 minutes.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#b45309\">1</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#1d4ed8\">Projects that need you</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #1d4ed8\">It has one small next step. You can start now.</div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">field-notes</div><div style=\"color:#71717a;font-size:13px;margin:2px 0 0\">Field notes</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 5 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">4 open to-do items</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last edited: notes/2026-09-16.md, README.md, draw.py.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Start the first open to-do item: Sketch the **map** layer</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>notes/2026-09-16.md, README.md, draw.py, x.py</span></li><li style=\"margin:0 0 4px\"><b>Open to-do items:</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:0 0 2px\">Sketch the **map** layer</li><li style=\"margin:0 0 2px\">Fix `export`</li></ul></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/field-notes</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#3f3f46\">Everything else</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8\">Nothing to do here. This list shows your other folders, so you can see the whole picture.</div><ul style=\"margin:0;padding-left:20px;font-size:14px\"><li style=\"margin:0 0 6px\"><b>Going fine (worked on in the last 3 days):</b> quiet-one (today)</li></ul><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant did not look inside any project this time. The text comes from a quick check of file dates and git.</li></ul></div></body></html>",
+      "subject": "1 project needs you today: field-notes (no work for 5 days) · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  1 project needs you today.\n  Pick one below and do its next step. Each step takes about 15 minutes.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 1\n  - Maybe finished: 0\n  - Maybe not projects: 0\n  - Going fine: 1\n\n==============================================================\nPROJECTS THAT NEED YOU\nIt has one small next step. You can start now.\n==============================================================\n\n- field-notes  (Field notes)\n   No work for 5 days  |  4 open to-do items  |  Not in git\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      Last edited: notes/2026-09-16.md, README.md, draw.py.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Start the first open to-do item: Sketch the **map** layer\n\n   More details:\n      - Recently edited files: notes/2026-09-16.md, README.md, draw.py, x.py\n      - Open to-do items:\n          * Sketch the **map** layer\n          * Fix `export`\n      - Folder: /home/dev/projects/field-notes\n\n==============================================================\nEVERYTHING ELSE\nNothing to do here. This list shows your other folders, so you can see the whole picture.\n==============================================================\n  - Going fine (worked on in the last 3 days): quiet-one (today)\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant did not look inside any project this time. The text comes from a quick check of file dates and git."
+    },
+    "fallback": {
+      "field-notes": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: notes/2026-09-16.md, README.md, draw.py.",
+        "next_step": "Start the first open to-do item: Sketch the **map** layer",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "field-notes"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 11,
+        "git": null,
+        "idle_days": 5,
+        "last_work": 1789517700.0,
+        "name": "field-notes",
+        "open_todos": 4,
+        "path": "/home/dev/projects/field-notes",
+        "readme_title": "Field notes",
+        "recent_files": [
+          "notes/2026-09-16.md",
+          "README.md",
+          "draw.py",
+          "x.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [
+          "Sketch the **map** layer",
+          "Fix `export`"
+        ],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "quiet-one",
+        "open_todos": 0,
+        "path": "/home/dev/projects/quiet-one",
+        "readme_title": "",
+        "recent_files": [
+          "a.txt"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {}
+  },
+  "kind": "scenario"
+}

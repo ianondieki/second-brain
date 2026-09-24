@@ -1,0 +1,173 @@
+{
+  "case": "notices_and_long_lists",
+  "description": "One-day thresholds (singular wording), a heads-up from template_notices, more than 8 changed files, three commits, to-dos and recent files, never-worked project.",
+  "expected": {
+    "actionable": [
+      "big-refactor",
+      "never-touched"
+    ],
+    "classify": {
+      "flagged": [
+        {
+          "cold": true,
+          "headline": "work at risk: 11 changed files not committed for 1 day; no work for 1 day",
+          "name": "big-refactor",
+          "risks": [
+            "11 changed files not committed for 1 day"
+          ]
+        },
+        {
+          "cold": true,
+          "headline": "no work for 1000000 days",
+          "name": "never-touched",
+          "risks": []
+        }
+      ],
+      "held": [],
+      "quiet": [
+        "fresh"
+      ]
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">Start with big-refactor: Commit the moved views.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>2 projects</b> need you today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Pick one below and do its next step. Each step takes about 15 minutes.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#b45309\">2</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Heads-up</div><div style=\"margin:4px 0 0\">On 2026-09-20, the WhatsApp reminder went out in the older layout, <b>&quot;project_checkin&quot;</b>, because the newer one, <b>&quot;project_checkin_v2&quot;</b>, could not be used: Meta rejected it (reason: INVALID_FORMAT). To check it, run <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">python -m reminder --whatsapp-template-status</code> in the second-brain folder.</div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#1d4ed8\">Projects that need you</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #1d4ed8\">The most urgent one is first. Start with number 1, or pick another one.</div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">1</span>big-refactor</div><div style=\"color:#71717a;font-size:13px;margin:2px 0 0\">Big refactor</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last worked on yesterday</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">5 open to-do items</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit yesterday</span></div><div style=\"background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px\"><b>&#9888; Work at risk</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:3px 0 0\">11 changed files not committed for 1 day. This work is not saved in git yet.</li></ul></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Halfway through moving views.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Commit the moved views.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Clues the assistant checked:</b> <span>git status shows 11 changed files</span></li><li style=\"margin:0 0 4px\"><b>Recent commits:</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:0 0 2px\">Split models</li><li style=\"margin:0 0 2px\">Move views</li><li style=\"margin:0 0 2px\">Rename app</li></ul></li><li style=\"margin:0 0 4px\"><b>Changed files not committed:</b> <span>pkg/mod0.py, pkg/mod1.py, pkg/mod2.py, pkg/mod3.py, pkg/mod4.py, pkg/mod5.py, pkg/mod6.py, pkg/mod7.py …</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>pkg/mod0.py, pkg/mod1.py, pkg/mod2.py, pkg/mod3.py, pkg/mod4.py</span></li><li style=\"margin:0 0 4px\"><b>Open to-do items:</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:0 0 2px\">Update imports</li><li style=\"margin:0 0 2px\">Fix tests</li><li style=\"margin:0 0 2px\">Write the changelog</li></ul></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/big-refactor</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">2</span>never-touched</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 1000000 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>No recent activity details were found.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Open the project and write the next step at the top of its README.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/never-touched</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#3f3f46\">Everything else</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8\">Nothing to do here. This list shows your other folders, so you can see the whole picture.</div><ul style=\"margin:0;padding-left:20px;font-size:14px\"><li style=\"margin:0 0 6px\"><b>Going fine (worked on in the last 1 day):</b> fresh (today)</li></ul><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>1 day</b>, or when it has changes that you have not committed or pushed for 1 day.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant looked inside <b>1 of the 2 listed projects</b>. The other one is marked &quot;quick check&quot;.</li></ul></div></body></html>",
+      "subject": "2 projects need you today: big-refactor (work at risk), never-touched (no work for 1000000 days) · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  2 projects need you today.\n  Pick one below and do its next step. Each step takes about 15 minutes.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 2\n  - Maybe finished: 0\n  - Maybe not projects: 0\n  - Going fine: 1\n\nHEADS-UP\n  ! On 2026-09-20, the WhatsApp reminder went out in the older layout, \"project_checkin\", because the newer one, \"project_checkin_v2\", could not be used: Meta rejected it (reason: INVALID_FORMAT). To check it, run python -m reminder --whatsapp-template-status in the second-brain folder.\n\n==============================================================\nPROJECTS THAT NEED YOU\nThe most urgent one is first. Start with number 1, or pick another one.\n==============================================================\n\n1. big-refactor  (Big refactor)\n   Last worked on yesterday  |  5 open to-do items  |  Last commit yesterday\n\n   !! WORK AT RISK:\n      - 11 changed files not committed for 1 day. This work is not saved in git yet.\n\n   Where you left off:\n      Halfway through moving views.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Commit the moved views.\n\n   More details:\n      - Clues the assistant checked: git status shows 11 changed files\n      - Recent commits:\n          * Split models\n          * Move views\n          * Rename app\n      - Changed files not committed: pkg/mod0.py, pkg/mod1.py, pkg/mod2.py, pkg/mod3.py, pkg/mod4.py, pkg/mod5.py, pkg/mod6.py, pkg/mod7.py …\n      - Recently edited files: pkg/mod0.py, pkg/mod1.py, pkg/mod2.py, pkg/mod3.py, pkg/mod4.py\n      - Open to-do items:\n          * Update imports\n          * Fix tests\n          * Write the changelog\n      - Folder: /home/dev/projects/big-refactor\n\n2. never-touched\n   No work for 1000000 days  |  Not in git\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      No recent activity details were found.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Open the project and write the next step at the top of its README.\n\n   More details:\n      - Folder: /home/dev/projects/never-touched\n\n==============================================================\nEVERYTHING ELSE\nNothing to do here. This list shows your other folders, so you can see the whole picture.\n==============================================================\n  - Going fine (worked on in the last 1 day): fresh (today)\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 1 day, or when it has changes that you have not committed or pushed for 1 day.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant looked inside 1 of the 2 listed projects. The other one is marked \"quick check\"."
+    },
+    "fallback": {
+      "big-refactor": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Split models\".",
+        "next_step": "Look over your changes in pkg/mod0.py, pkg/mod1.py and pkg/mod2.py, then commit them.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "never-touched": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "No recent activity details were found.",
+        "next_step": "Open the project and write the next step at the top of its README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "big-refactor"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 1,
+      "cold_after_days": 1,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [
+      "On 2026-09-20, the WhatsApp reminder went out in the older layout, **\"project_checkin\"**, because the newer one, **\"project_checkin_v2\"**, could not be used: Meta rejected it (reason: INVALID_FORMAT). To check it, run `python -m reminder --whatsapp-template-status` in the second-brain folder."
+    ],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 12,
+        "git": {
+          "branch": "main",
+          "has_remote": true,
+          "last_commit": 1789867620.0,
+          "modified": [
+            "pkg/mod0.py",
+            "pkg/mod1.py",
+            "pkg/mod2.py",
+            "pkg/mod3.py",
+            "pkg/mod4.py",
+            "pkg/mod5.py",
+            "pkg/mod6.py",
+            "pkg/mod7.py",
+            "pkg/mod8.py",
+            "pkg/mod9.py",
+            "pkg/mod10.py"
+          ],
+          "modified_newest": 1789841700.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Split models",
+            "Move views",
+            "Rename app"
+          ],
+          "unpushed": 0
+        },
+        "idle_days": 1,
+        "last_work": 1789863300.0,
+        "name": "big-refactor",
+        "open_todos": 5,
+        "path": "/home/dev/projects/big-refactor",
+        "readme_title": "Big refactor",
+        "recent_files": [
+          "pkg/mod0.py",
+          "pkg/mod1.py",
+          "pkg/mod2.py",
+          "pkg/mod3.py",
+          "pkg/mod4.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [
+          "Update imports",
+          "Fix tests",
+          "Write the changelog"
+        ],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "fresh",
+        "open_todos": 0,
+        "path": "/home/dev/projects/fresh",
+        "readme_title": "",
+        "recent_files": [
+          "fresh.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 7,
+        "git": null,
+        "idle_days": 1000000,
+        "last_work": 0.0,
+        "name": "never-touched",
+        "open_todos": 0,
+        "path": "/home/dev/projects/never-touched",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {
+      "big-refactor": {
+        "confidence": 0.66,
+        "evidence": [
+          "git status shows 11 changed files"
+        ],
+        "left_off": "Halfway through moving views.",
+        "next_step": "Commit the moved views.",
+        "source": "agent",
+        "status": "unfinished",
+        "trace": []
+      }
+    }
+  },
+  "kind": "scenario"
+}

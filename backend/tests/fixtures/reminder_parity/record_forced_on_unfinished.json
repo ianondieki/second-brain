@@ -1,0 +1,50 @@
+{
+  "case": "forced_on_unfinished",
+  "description": "A forced run on an unfinished entry records a normal attempt.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 2,
+            "hard_failures": 1,
+            "ref": "wamid.OK",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "whatsapp",
+        "detail": "wamid.OK",
+        "force": true,
+        "now": "2026-09-21T09:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {
+      "whatsapp": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "error": "x",
+        "hard_failures": 1,
+        "status": "failed"
+      }
+    }
+  },
+  "kind": "record"
+}
