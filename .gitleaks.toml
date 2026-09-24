@@ -1,0 +1,15 @@
+# gitleaks configuration (pr.yml scanners job). Default rules plus the repository's documented placeholders.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders and throwaway CI values that are not secrets"
+regexes = [
+  '''CHANGE_ME[A-Z_]*''',
+  '''ci-throwaway-postgres''',
+  '''test-secret-key-0123456789abcdef0123456789''',
+  '''openapi-export-placeholder-not-a-secret-0000''',
+]
+paths = [
+  '''legacy/''',
+]

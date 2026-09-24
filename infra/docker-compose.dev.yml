@@ -1,0 +1,92 @@
+# Local development stack (REQ-FND-02, docs/spec/08). Start with `make dev` from the repo root.
+# Ports bind to 127.0.0.1 only. Values come from infra/.env (copy infra/.env.example) and backend/.env.
+name: bridge
+
+x-backend: &backend
+  build: ../backend
+  env_file: ../backend/.env
+  environment:
+    DATABASE_URL: postgresql+psycopg://bridge_app:${BRIDGE_APP_PASSWORD:?set in infra/.env}@postgres:5432/bridge
+    DATABASE_OWNER_URL: postgresql+psycopg://bridge_owner:${BRIDGE_OWNER_PASSWORD:?set in infra/.env}@postgres:5432/bridge
+    SMTP_HOST: mailpit
+    SMTP_PORT: "1025"
+    EMAIL_PROVIDER: smtp
+  depends_on:
+    postgres:
+      condition: service_healthy
+    mailpit:
+      condition: service_started
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in infra/.env}
+      BRIDGE_OWNER_PASSWORD: ${BRIDGE_OWNER_PASSWORD:?set in infra/.env}
+      BRIDGE_APP_PASSWORD: ${BRIDGE_APP_PASSWORD:?set in infra/.env}
+      TZ: Africa/Nairobi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres:/bridge-sql:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bridge"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
+  s3:
+    # S3-compatible stand-in for AWS S3 (D-24: MinIO's image was withdrawn). Unused until Phase 2 uploads.
+    image: chrislusf/seaweedfs:4.47
+    command: ["server", "-s3", "-dir=/data", "-ip.bind=0.0.0.0"]
+    volumes: [s3data:/data]
+    ports: ["127.0.0.1:8333:8333"]
+
+  clamav:
+    # Attachment scanning from Phase 2; needs ~1.3 GB RAM, so it starts only with `make dev-full`.
+    image: clamav/clamav:1.5.4
+    profiles: [full]
+    mem_limit: 2g
+    ports: ["127.0.0.1:3310:3310"]
+
+  migrate:
+    <<: *backend
+    command: ["sh", "-c", "alembic upgrade head && python -m bridge.seed"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["procrastinate", "--app=bridge.jobs.app.app", "worker"]
+
+  web:
+    build: ../frontend
+    environment:
+      API_ORIGIN: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes:
+  pgdata:
+  s3data:

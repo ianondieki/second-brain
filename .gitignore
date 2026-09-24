@@ -32,3 +32,10 @@ graphify-out/
 
 # The legacy suite creates a literal C: directory when it runs on Linux (docs/spec/02-existing-repo.md)
 /C:/
+
+# Platform build and CI caches
+.uv-cache/
+.pw-browsers/
+.pytest_cache/
+.coverage
+coverage.xml

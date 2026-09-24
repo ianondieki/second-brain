@@ -1,0 +1,6 @@
+# osv-scanner configuration (pr.yml scanners job). Any known vulnerability fails the job; an entry here must name
+# the advisory, why it does not apply, and an expiry date no more than 90 days out.
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2026-12-31
+# reason = "..."

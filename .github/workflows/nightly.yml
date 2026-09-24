@@ -1,0 +1,25 @@
+# Nightly jobs (REQ-FND-03 skeleton; docs/spec/08 Workflows). The evals job is the ONLY place in CI allowed to
+# reach the Anthropic API (AC-SEC-5), capped at USD 5 per run through the llm_calls ledger. D-18: no API spend
+# until launch, so the evals job stays disabled (cassettes only) and is enabled by a variable at Phase 8.
+name: nightly
+
+on:
+  schedule:
+    - cron: "30 0 * * *"   # 03:30 EAT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    name: LLM evals (live, <= USD 5)
+    if: vars.LIVE_EVALS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EGRESS_ALLOWLIST: api.anthropic.com
+    steps:
+      - uses: actions/checkout@v7
+      - name: Evals arrive in Phase 4 (T4.6)
+        run: echo "No eval suite yet (Phase 4). LIVE_EVALS_ENABLED must stay unset until D-18 changes."

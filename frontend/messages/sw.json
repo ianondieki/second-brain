@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Bridge",
+    "workingTitle": "Bridge (jina la muda)",
+    "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi. [[COPY-REVIEW]] [[SW-REVIEW]]"
+  },
+  "home": {
+    "title": "Bridge (jina la muda)",
+    "lead": "Wasanidi huchapisha suluhisho za matatizo halisi. Mashirika huzipata, huzikagua chini ya NDA na kukubaliana hatua inayofuata. [[COPY-REVIEW]] [[SW-REVIEW]]",
+    "signUp": "Fungua akaunti",
+    "logIn": "Ingia"
+  }
+}

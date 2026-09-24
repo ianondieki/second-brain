@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Bridge",
+    "workingTitle": "Bridge (working name)",
+    "tagline": "Local developers and organisations working on real problems. [[COPY-REVIEW]]"
+  },
+  "home": {
+    "title": "Bridge (working name)",
+    "lead": "Developers publish solutions to real problems. Organisations find them, review them under NDA and agree the next step. [[COPY-REVIEW]]",
+    "signUp": "Create an account",
+    "logIn": "Log in"
+  }
+}
