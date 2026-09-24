@@ -28,7 +28,7 @@ no dependency installs. Orchestrator: Fable 5.1 (`max`).
 | Check | Result |
 |---|---|
 | `python docs/platform/checks/check_traceability.py` | PASS: 0 errors, 7 warnings (the intentional earlier-than-spec assertions listed in `PLAN.md` §5: AC-SEC-2/4/5/6, AC-SUB-1/5/7) |
-| Every R01–R53 and R-HYG-01..06 → ≥1 REQ-ID and ≥1 AC | Yes (59/59), links verified in both directions |
+| Every R01–R53 and R-HYG-01..06 → ≥1 REQ-ID and ≥1 AC | Yes (59/59), links verified in both directions; each R-id's Phase equals the latest phase of its linked REQ-IDs/AC clauses |
 | No phase exit depends on a later phase | Yes: every AC in the exit map is built at or before its phase; every built AC is listed at its own phase; nothing asserted later than `docs/spec/11` |
 | AC universe | 101 spec ACs (05: 7, 06: 74, 07: 5, 10: 7, read at run time) + 6 derived AC-HYG = 107 rows incl. 7 split clauses |
 | Markdown table integrity | Every row in every table of the five platform documents has the header's column count |
@@ -43,7 +43,22 @@ no dependency installs. Orchestrator: Fable 5.1 (`max`).
 
 ### Workflow result
 
-(pending at the time of writing; updated when the run completes)
+`verify-requirements` ran 79 agents (9 checkers, 2 refuters per finding): 35 findings raised, 9 confirmed by both
+skeptics, 26 refuted. Every confirmed finding is fixed:
+
+| Confirmed finding | Fix |
+|---|---|
+| BLOCKER AC-HYG-01: the grep over `docs/` could never return 0 (it matched `docs/spec` and `docs/platform`, which describe the defect) | AC-HYG-01..04 now use negated `git grep` over tracked files with `':!legacy' ':!docs/spec' ':!docs/platform'` pathspecs; positive README/`.env.example` assertions kept; AC-HYG-05/06 written as exit-0 shell tests |
+| BLOCKER AC-HYG-02/03/04: same scoping defect, plus README's legacy section names the retired model | Same fix; REQ-HYG-03 code paths now include `README.md` (legacy section moves to `legacy/README.md`) |
+| MAJOR AC-REPO-1 at Phase 2 needs the no-terminal-engagement and Master Enterprise Terms conditions | T2.1 adds the `engagements` skeleton table (fixture-driven until Phase 3); T2.6 adds MET acceptance with hash; REQ-REPO-01 and the AC-REPO-1 test note say so |
+| MAJOR AC-REPO-2 at Phase 2 needs the `INTEREST_CONFIRMED` name switch | Covered by the same `engagements` skeleton fixture; noted on the AC row |
+| MINOR AC-PERS-6 over-asserted "more Microfinance cards" for the platform-engagement pair | Then clause rewritten per pair, matching the spec text |
+| MINOR "EM7 trending line unflagged" (spec Phase 5 exit) had no check | X5-2 added to PLAN.md Phase 5 exit; test listed under REQ-TREND-02 |
+| MINOR R-id Phase column inconsistent with linked REQ/AC phases (R05, R06, R07, R13, R16, R20, R32 and five more) | Legend now defines the R-id Phase as the latest phase of its Release-1 REQ-IDs/AC clauses; 12 rows recomputed; `check_traceability.py` enforces it |
+
+Refuted findings were mostly stricter readings the refuters showed to be satisfied elsewhere (clause rows, re-run links,
+Phase 2 seeds); two refuted notes were still adopted as cheap improvements: 47 counties added to the Phase 1 seed
+(T1.4) and the AC-SEC-5 workflow lint note about `main.yml` joining in Phase 8.
 
 ### REQ statuses
 

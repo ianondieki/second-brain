@@ -124,6 +124,7 @@ class AcRow(TypedDict):
 class RRow(TypedDict):
     req: set[str]
     ac: set[str]
+    phase: Phase
 
 
 class Report:
@@ -330,7 +331,7 @@ def load_acs(table: Table, rep: Report) -> tuple[dict[str, AcRow], list[tuple[st
 def load_r_rows(table: Table, rep: Report) -> dict[str, RRow]:
     """Parse the R-id index table."""
     header, rows = table
-    ci = column_index(header, ["R-id", "REQ-IDs", "ACs"], "R-id table", rep)
+    ci = column_index(header, ["R-id", "REQ-IDs", "ACs", "Phase"], "R-id table", rep)
     seen: dict[str, RRow] = {}
     if ci is None:
         return seen
@@ -347,8 +348,25 @@ def load_r_rows(table: Table, rep: Report) -> dict[str, RRow]:
         if rid in seen:
             rep.error(f"duplicate R-id row {rid} (first copy kept)")
             continue
-        seen[rid] = {"req": set(REQ_ID.findall(row[ci["REQ-IDs"]])), "ac": set(AC_ID.findall(row[ci["ACs"]]))}
+        seen[rid] = {
+            "req": set(REQ_ID.findall(row[ci["REQ-IDs"]])),
+            "ac": set(AC_ID.findall(row[ci["ACs"]])),
+            "phase": phase_of(row[ci["Phase"]]),
+        }
     return seen
+
+
+def expected_r_phase(entry: RRow, reqs: dict[str, ReqRow], acs: dict[str, AcRow]) -> int | None:
+    """Latest build phase among the R-id's Release-1 REQ-IDs and the clauses of its ACs (None if nothing is built)."""
+    phases: list[int] = []
+    for q in entry["req"]:
+        if q in reqs and isinstance(reqs[q]["phase"], int):
+            phases.append(reqs[q]["phase"])
+    for a in entry["ac"]:
+        for aid, row in acs.items():
+            if base(aid) == base(a) and isinstance(row["phase"], int):
+                phases.append(row["phase"])
+    return max(phases) if phases else None
 
 
 def load_exit_map(table: Table, rep: Report) -> dict[int, set[str]]:
@@ -404,6 +422,9 @@ def check_r_rows(seen_r: dict[str, RRow], reqs: dict[str, ReqRow], acs: dict[str
         for a in entry["ac"]:
             if base(a) in ac_bases and base(a) not in reachable:
                 rep.warn(f"{rid}: AC {a} is not linked from any of {rid}'s REQ-IDs (indirect trace)")
+        want = expected_r_phase(entry, reqs, acs)
+        if want is not None and entry["phase"] != want:
+            rep.error(f"{rid}: Phase is {entry['phase']!r} but its latest Release-1 REQ-ID/AC clause is built in phase {want}")
     for rid in seen_r:
         if rid not in EXPECTED_R:
             rep.error(f"unexpected R-id {rid} in the R-id table")
