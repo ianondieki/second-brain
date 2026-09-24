@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 
 from alembic import context
 from sqlalchemy.engine import Connection
@@ -41,7 +42,8 @@ def run_migrations_online() -> None:
     url = os.environ.get("DATABASE_OWNER_URL")
     if not url:
         raise SystemExit("DATABASE_OWNER_URL is not set: migrations must run as the owner role (bridge_owner).")
-    asyncio.run(_run_async(url))
+    # psycopg's async driver needs a selector loop; Windows defaults to the proactor loop.
+    asyncio.run(_run_async(url), loop_factory=asyncio.SelectorEventLoop if sys.platform == "win32" else None)
 
 
 if context.is_offline_mode():

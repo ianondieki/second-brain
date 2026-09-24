@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
+
+import pytest
 
 from tests import egress
 
@@ -14,3 +18,11 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://bridge_app:bridge_ap
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789")
 os.environ.setdefault("DATA_ENCRYPTION_KEY", "dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGVmMDE=")
 os.environ.setdefault("EMAIL_PROVIDER", "fake")
+
+
+@pytest.fixture(scope="session")
+def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
+    """psycopg's async driver needs a selector event loop; Windows defaults to the proactor loop."""
+    if sys.platform == "win32":
+        return asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined,unused-ignore]
+    return asyncio.DefaultEventLoopPolicy()
