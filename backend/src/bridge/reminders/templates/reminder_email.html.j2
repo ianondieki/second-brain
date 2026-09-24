@@ -1,0 +1,136 @@
+{# Daily reminder email, HTML part (REQ-REM-00), ported from reminder/remind.py: compose_email's body_html,
+   _html_card and _html_label, same markup, styles and order. Rendered by bridge/reminders/compose.py with
+   autoescape on: every value is escaped unless it is our own markup (these macros, the marks_html filter, FONT and
+   MONO). Every line break and the indentation after it are removed when the template loads, so the output is one
+   line, as the companion's was: break a line only where no space is wanted, never inside an attribute or a tag. #}
+{% macro label(text, colour) %}
+<div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:{{ colour }}">{{ text }}</div>
+{% endmacro %}
+{% macro card(c, number) %}
+{% set border, bg, colour = TONE_STYLE[c.tone] %}
+<div style="border:1px solid {{ border }};background:{{ bg }};border-radius:10px;padding:16px;margin:0 0 16px">
+  <div style="font-size:19px;font-weight:700;line-height:1.3">
+    {% if number %}
+      <span style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px">{{ number }}</span>
+    {% endif %}
+    {{ c.name }}
+  </div>
+  {% if c.title %}
+    <div style="color:#71717a;font-size:13px;margin:2px 0 0">{{ c.title }}</div>
+  {% endif %}
+  <div style="margin:10px 0 2px">
+    {% for fact in c.facts %}
+      {# Only "No work for N days" is news. On a card listed for work at risk, "Worked on today" is not. #}
+      <span style="display:inline-block;{% if loop.first and c.cold %}background:#fef3c7;color:#92400e;font-weight:700{% else %}background:#f4f4f5;color:#3f3f46{% endif %};border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px">{{ fact }}</span>
+    {% endfor %}
+  </div>
+  {% if c.quick %}
+    <div style="color:#71717a;font-size:13px;margin:0 0 6px">{{ QUICK_NOTE }}</div>
+  {% endif %}
+  {% if c.warnings %}
+    <div style="background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px">
+      <b>&#9888; Work at risk</b>
+      <ul style="margin:2px 0 0;padding-left:18px">
+        {% for w in c.warnings %}
+          <li style="margin:3px 0 0">{{ w }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {% if c.hint %}
+    <div style="color:{{ colour }};margin:8px 0 0">{{ c.hint | marks_html }}</div>
+  {% endif %}
+  <div style="margin:12px 0 0">
+    <div style="font-weight:700;font-size:14px;color:#3f3f46">{{ c.left_label }}</div>
+    <div>{{ c.left_off }}</div>
+  </div>
+  {% if c.next_step %}
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0">
+      {{ label("Your next step · about 15 minutes", "#92400e") }}
+      <div style="font-size:16px;font-weight:700;margin:3px 0 0">{{ c.next_step }}</div>
+    </div>
+  {% endif %}
+  {% if c.action %}
+    <div style="background:#ffffff;border:1px dashed {{ border }};border-left:5px solid {{ colour }};border-radius:6px;padding:10px 14px;margin:14px 0 0">
+      {{ label("What you can do", colour) }}
+      <div style="margin:3px 0 0">{{ c.action | marks_html }}</div>
+    </div>
+  {% endif %}
+  <div style="margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b">
+    <div style="font-weight:700;color:#3f3f46;margin:0 0 4px">More details</div>
+    <ul style="margin:0;padding-left:18px">
+      {% for heading, values in c.details %}
+        {% if values | length == 1 %}
+          <li style="margin:0 0 4px"><b>{{ heading }}:</b> <span{% if heading == "Folder" %} style="font-family:{{ MONO }};font-size:12px"{% endif %}>{{ values[0] }}</span></li>
+        {% else %}
+          <li style="margin:0 0 4px">
+            <b>{{ heading }}:</b>
+            <ul style="margin:2px 0 0;padding-left:18px">
+              {% for v in values %}
+                <li style="margin:0 0 2px">{{ v }}</li>
+              {% endfor %}
+            </ul>
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endmacro %}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project check-in</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{{ preheader }}</div>
+<div style="max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:{{ FONT }};font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word">
+  <h1 style="font-size:23px;margin:0 0 2px">Your daily project check-in</h1>
+  <div style="color:#71717a;font-size:14px;margin:0 0 18px">{{ date_line }}</div>
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px">
+    {{ label("At a glance", "#1d4ed8") }}
+    <div style="font-size:18px;margin:4px 0 2px">{{ lead | marks_html }}</div>
+    <div style="color:#3f3f46;margin:0 0 2px">{{ tip }}</div>
+    <div style="color:#52525b;font-size:13px;margin:0 0 8px">{{ helper }}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px">
+      <tr>
+        {% for count_label, count in counts %}
+          <td style="padding:8px 4px;text-align:center;vertical-align:top;width:25%">
+            <div style="font-size:24px;font-weight:700;color:{% if loop.first and count %}#b45309{% else %}#18181b{% endif %}">{{ count }}</div>
+            <div style="font-size:12px;color:#52525b">{{ count_label }}</div>
+          </td>
+        {% endfor %}
+      </tr>
+    </table>
+  </div>
+  {% if notices %}
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:14px 0 0">
+      {{ label("Heads-up", "#92400e") }}
+      {% for line in notices %}
+        <div style="margin:4px 0 0">{{ line | marks_html }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% for section in sections %}
+    <h2 style="font-size:18px;margin:28px 0 2px;color:{{ section.colour }}">{{ section.title }}</h2>
+    <div style="color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid {{ section.colour }}">{{ section.blurb }}</div>
+    {% for c, number in section.cards %}
+      {{ card(c, number) }}
+    {% endfor %}
+  {% endfor %}
+  {% if other %}
+    <h2 style="font-size:18px;margin:28px 0 2px;color:#3f3f46">Everything else</h2>
+    <div style="color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8">{{ other_blurb }}</div>
+    <ul style="margin:0;padding-left:20px;font-size:14px">
+      {% for row_label, value in other %}
+        <li style="margin:0 0 6px"><b>{{ row_label }}:</b> {{ value }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <h2 style="font-size:15px;margin:28px 0 6px;color:#52525b">How this works</h2>
+  <ul style="margin:0;padding-left:20px;font-size:13px;color:#52525b">
+    {% for line in how %}
+      <li style="margin:0 0 5px">{{ line | marks_html }}</li>
+    {% endfor %}
+  </ul>
+</div>
+</body>
+</html>
