@@ -93,11 +93,11 @@ async def test_a_transient_failure_is_retried_then_sent() -> None:
     assert sleeps.calls == [0.5]
 
 
-async def test_three_transient_failures_leave_the_row_queued() -> None:
+async def test_three_transient_failures_leave_a_keyed_row_queued() -> None:
     store = InMemoryDeliveryStore()
     provider = FakeEmailProvider(failures=[transient("a"), transient("b"), transient("c")])
     sleeps = Sleeps()
-    row = await send(store, provider, sleeps)
+    row = await send(store, provider, sleeps, dedupe_key="em7:user-1:2026-09-24")
 
     assert row.status is DeliveryStatus.QUEUED  # not failed: a later call with the same key may still send it
     assert row.attempts == 3 == MAX_ATTEMPTS
@@ -108,6 +108,23 @@ async def test_three_transient_failures_leave_the_row_queued() -> None:
     assert provider.attempts == 3
     assert provider.outbox == []
     assert sleeps.calls == [0.5, 2.0]  # no sleep after the last attempt
+
+
+async def test_three_transient_failures_end_a_keyless_row_failed() -> None:
+    # Nothing can ever resume a row without a dedupe key, so leaving it queued would strand it.
+    store = InMemoryDeliveryStore()
+    provider = FakeEmailProvider(failures=[transient("a"), transient("b"), transient("c")])
+    sleeps = Sleeps()
+    row = await send(store, provider, sleeps)
+
+    assert row.status is DeliveryStatus.FAILED
+    assert row.attempts == 3 == MAX_ATTEMPTS
+    assert row.last_error == "c"
+    assert row.last_error_transient is True  # failed only because this call ran out of attempts
+    assert row.dedupe_key is None
+    assert row.sent_at is None
+    assert provider.attempts == 3
+    assert sleeps.calls == [0.5, 2.0]
 
 
 async def test_a_permanent_failure_stops_at_once() -> None:
@@ -141,9 +158,12 @@ async def test_a_short_backoff_repeats_its_last_delay() -> None:
 
 
 async def test_max_attempts_one_never_retries() -> None:
-    provider = FakeEmailProvider(failures=[transient()])
-    row = await send(InMemoryDeliveryStore(), provider, max_attempts=1)
-    assert (row.status, row.attempts, provider.attempts) == (DeliveryStatus.QUEUED, 1, 1)
+    provider = FakeEmailProvider(failures=[transient(), transient()])
+    keyless = await send(InMemoryDeliveryStore(), provider, max_attempts=1)
+    keyed = await send(InMemoryDeliveryStore(), provider, max_attempts=1, dedupe_key="em2:e1")
+    assert (keyless.status, keyless.attempts) == (DeliveryStatus.FAILED, 1)
+    assert (keyed.status, keyed.attempts) == (DeliveryStatus.QUEUED, 1)
+    assert provider.attempts == 2
 
 
 KEY = "em7:user-1:2026-09-24"
@@ -321,6 +341,7 @@ async def test_no_log_line_carries_the_address_subject_or_body() -> None:
         await send(store, flaky, dedupe_key=KEY)
         await send(store, flaky, dedupe_key=KEY)
 
+    assert [entry["event"] for entry in logs].count("email.failed") == 1
     assert {entry["event"] for entry in logs} == {
         "email.retry",
         "email.failed",

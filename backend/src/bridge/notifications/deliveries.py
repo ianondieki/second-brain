@@ -9,8 +9,9 @@
 3. Otherwise the row is ``queued`` (newly inserted, or found under the same ``dedupe_key``) and one call makes at most
    ``MAX_ATTEMPTS`` (3) attempts (AC-MAIL-3). A transient ``DeliveryError`` is retried after the backoff; a permanent
    one ends the row ``failed`` at once; success ends it ``sent``. When one call's attempts run out on transient errors,
-   the row stays ``queued`` with ``last_error`` and ``last_error_transient=True``, so a later call with the same
-   ``dedupe_key`` resumes it; ``attempts`` keeps counting across calls. A resuming call must name the same recipient.
+   a row with a ``dedupe_key`` stays ``queued`` with ``last_error`` and ``last_error_transient=True``, so a later call
+   with the same key resumes it; ``attempts`` keeps counting across calls. A resuming call must name the same
+   recipient. A row without a key can never be resumed, so it ends ``failed`` (still ``last_error_transient=True``).
    Any other exception from a provider is a bug and propagates (the caller's transaction then drops the row).
 
 The caller owns the transaction: rows are flushed, never committed, on a session the caller has already scoped to a
@@ -242,6 +243,9 @@ async def send_email(
                 event = "email.failed"
             elif attempt < max_attempts:
                 event = "email.retry"
+            elif delivery.dedupe_key is None:
+                delivery.status = DeliveryStatus.FAILED  # nothing can ever resume a row without a dedupe key
+                event = "email.failed"
             else:
                 event = "email.deferred"  # stays queued: a later call with the same dedupe key resumes it
             await store.save(delivery)
