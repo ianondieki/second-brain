@@ -90,9 +90,14 @@ RLS_TABLES = (
     "event_details",
 )
 
-# Table privileges of bridge_app (API and worker). Anything not listed is not granted.
+# Table privileges of bridge_app (API and worker). Anything not listed is not granted. UPDATE is column-scoped where
+# some columns are never the app's to change (users: staff_role, status, email; organizations: verification, slug,
+# kind, source, public_entity, verified_domain, created_by).
 APP_GRANTS: dict[str, str] = {
-    "users": "SELECT, INSERT, UPDATE",
+    "users": (
+        "SELECT, INSERT, UPDATE (email_verified_at, password_hash, display_name, locale, totp_secret_enc,"
+        " totp_pending_enc, totp_enabled_at, totp_last_counter, totp_recovery_hashes, updated_at)"
+    ),
     "sessions": "SELECT, INSERT, UPDATE, DELETE",
     "login_tokens": "SELECT, INSERT, UPDATE, DELETE",
     "login_attempts": "SELECT, INSERT, DELETE",
@@ -103,8 +108,9 @@ APP_GRANTS: dict[str, str] = {
     "regions": "SELECT",
     "holidays": "SELECT",
     "plans": "SELECT",
-    "organizations": "SELECT, UPDATE",  # INSERT only through app_create_organization()
-    "memberships": "SELECT, INSERT, UPDATE, DELETE",
+    # INSERT only through app_create_organization()
+    "organizations": "SELECT, UPDATE (legal_name, website, regions, registration_no, sector_id, country, updated_at)",
+    "memberships": "SELECT, INSERT, UPDATE",  # members leave by status = 'removed', never DELETE
     "invitations": "SELECT, INSERT, UPDATE",
     "org_niches": "SELECT, INSERT, DELETE",
     "developer_profiles": "SELECT, INSERT, UPDATE",
@@ -112,7 +118,7 @@ APP_GRANTS: dict[str, str] = {
     "consents": "SELECT, INSERT",  # append-only (REQ-CON-01)
     "notification_preferences": "SELECT, INSERT, UPDATE, DELETE",
     "in_app_notifications": "SELECT, INSERT, UPDATE",
-    "subscriptions": "SELECT, INSERT, UPDATE",
+    "subscriptions": "SELECT, INSERT",  # changes go through the billing path (Phase 6)
     "notification_deliveries": "SELECT, INSERT, UPDATE",
     "audit_events": "SELECT, INSERT",  # append-only (REQ-AUD-01)
     "event_details": "SELECT, INSERT",  # UPDATE (erasure) arrives with REQ-SEC-02
@@ -176,7 +182,6 @@ POLICIES: tuple[Policy, ...] = (
     Policy("memberships", "SELECT", f"({_ORG_MEMBER}) OR user_id = app_user_id()"),
     Policy("memberships", "INSERT", check=_ORG_ADMIN_NO_OWNER),
     Policy("memberships", "UPDATE", _ORG_ADMIN_NO_OWNER, _ORG_ADMIN_NO_OWNER),
-    Policy("memberships", "DELETE", _ORG_ADMIN),
     # invitations: owners and admins only; only owners invite owners.
     Policy("invitations", "SELECT", f"{_ORG_ADMIN} AND (app_org_id() IS NULL OR org_id = app_org_id())"),
     Policy("invitations", "INSERT", check=_ORG_ADMIN_NO_OWNER),
@@ -194,7 +199,6 @@ POLICIES: tuple[Policy, ...] = (
     # org_or_user tables: the user's own rows, or rows of an organisation they belong to.
     Policy("subscriptions", "SELECT", _USER_OR_ORG_MEMBER),
     Policy("subscriptions", "INSERT", check=_USER_OR_ORG_ADMIN),
-    Policy("subscriptions", "UPDATE", _USER_OR_ORG_ADMIN, _USER_OR_ORG_ADMIN),
     Policy("notification_deliveries", "SELECT", _USER_OR_ORG_MEMBER),
     Policy("notification_deliveries", "INSERT", check=_USER_OR_ORG_ADMIN),
     Policy("notification_deliveries", "UPDATE", _USER_OR_ORG_ADMIN, _USER_OR_ORG_ADMIN),

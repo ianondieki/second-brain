@@ -36,8 +36,24 @@ TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER}
 ROLES = ("bridge_owner", "bridge_app", "aggregate_worker", "audit_reader")
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 
-# The grant matrix of bridge_app (task card T1.4). Every other privilege on every ORM table must be absent.
+# The grant matrix of bridge_app (task card T1.4 and review). Every other privilege on every ORM table must be absent.
+# UPDATE on users and organizations is column-scoped (APP_COLUMN_UPDATES).
 S, I, U, D = "SELECT", "INSERT", "UPDATE", "DELETE"  # noqa: E741
+APP_COLUMN_UPDATES: dict[str, set[str]] = {
+    "users": {
+        "email_verified_at",
+        "password_hash",
+        "display_name",
+        "locale",
+        "totp_secret_enc",
+        "totp_pending_enc",
+        "totp_enabled_at",
+        "totp_last_counter",
+        "totp_recovery_hashes",
+        "updated_at",
+    },
+    "organizations": {"legal_name", "website", "regions", "registration_no", "sector_id", "country", "updated_at"},
+}
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
     "sessions": {S, I, U, D},
@@ -51,7 +67,7 @@ APP_GRANTS: dict[str, set[str]] = {
     "holidays": {S},
     "plans": {S},
     "organizations": {S, U},
-    "memberships": {S, I, U, D},
+    "memberships": {S, I, U},
     "invitations": {S, I, U},
     "org_niches": {S, I, D},
     "developer_profiles": {S, I, U},
@@ -59,7 +75,7 @@ APP_GRANTS: dict[str, set[str]] = {
     "consents": {S, I},
     "notification_preferences": {S, I, U, D},
     "in_app_notifications": {S, I, U},
-    "subscriptions": {S, I, U},
+    "subscriptions": {S, I},
     "notification_deliveries": {S, I, U},
     "audit_events": {S, I},
     "event_details": {S, I},
@@ -337,10 +353,20 @@ async def test_rls_follows_the_declared_tenancy(owner_engine: AsyncEngine, table
         assert row.policies == 0
 
 
+# Held on the table or on any of its columns (column-scoped UPDATE grants count). DELETE, TRUNCATE and TRIGGER exist
+# only at table level.
+HOLDS_PRIVILEGE = (
+    "CASE WHEN {p} IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')"
+    " THEN has_any_column_privilege({r}, 'public.' || {t}, {p})"
+    " ELSE has_table_privilege({r}, 'public.' || {t}, {p}) END"
+)
+
+
 @pytest.mark.parametrize("table", tenant_tables())
 async def test_every_command_granted_to_the_app_has_a_policy(owner_engine: AsyncEngine, table: str) -> None:
+    holds = "SELECT " + HOLDS_PRIVILEGE.format(r="'bridge_app'", t="CAST(:t AS text)", p="CAST(:p AS text)")
     for privilege in (S, I, U, D):
-        if await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', :t, :p)", t=table, p=privilege):
+        if await scalar(owner_engine, holds, t=table, p=privilege):
             policies = await scalar(
                 owner_engine,
                 "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = :t"
@@ -359,7 +385,7 @@ async def privileges_of(engine: AsyncEngine, role: str) -> dict[str, set[str]]:
         engine,
         "SELECT t.name AS table_name, p.name AS privilege"
         " FROM unnest(CAST(:tables AS text[])) AS t(name) CROSS JOIN unnest(CAST(:privileges AS text[])) AS p(name)"
-        " WHERE has_table_privilege(:role, 'public.' || t.name, p.name)",
+        " WHERE " + HOLDS_PRIVILEGE.format(r="CAST(:role AS name)", t="t.name", p="p.name"),
         tables=sorted(TABLES),
         privileges=list(PRIVILEGES),
         role=role,
@@ -374,6 +400,45 @@ async def test_bridge_app_grants_are_exactly_the_matrix(owner_engine: AsyncEngin
     assert set(APP_GRANTS) == set(TABLES), "every ORM table needs a row in the grant matrix"
     expected = {table: privileges for table, privileges in APP_GRANTS.items() if privileges}
     assert await privileges_of(owner_engine, "bridge_app") == expected
+
+
+async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEngine) -> None:
+    columns = [(name, column.name) for name, table in TABLES.items() for column in table.columns]
+    found = await rows(
+        owner_engine,
+        "SELECT x.t AS table_name, x.c AS column_name"
+        " FROM unnest(CAST(:tables AS text[]), CAST(:columns AS text[])) AS x(t, c)"
+        " WHERE has_column_privilege('bridge_app', 'public.' || x.t, x.c, 'UPDATE')",
+        tables=[table for table, _ in columns],
+        columns=[column for _, column in columns],
+    )
+    updatable: dict[str, set[str]] = {}
+    for row in found:
+        updatable.setdefault(row.table_name, set()).add(row.column_name)
+    expected = {
+        name: APP_COLUMN_UPDATES.get(name, {column.name for column in table.columns})
+        for name, table in TABLES.items()
+        if U in APP_GRANTS[name]
+    }
+    assert updatable == expected
+    for table in APP_COLUMN_UPDATES:  # column-scoped only, never the whole table
+        assert await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', :t, 'UPDATE')", t=table) is False
+    assert not {"staff_role", "status", "email"} & updatable["users"]
+    assert not {"verification", "slug", "kind", "source", "public_entity"} & updatable["organizations"]
+
+
+async def test_bridge_app_cannot_update_protected_columns(app_engine: AsyncEngine) -> None:
+    user_id = uuid7()
+    async with rolled_back(app_engine, user_id) as conn:
+        await add_user(conn, user_id)
+        await conn.execute(sa.text("UPDATE users SET display_name = 'Renamed' WHERE id = :id"), {"id": user_id})
+        for column, value in (("staff_role", "'admin'"), ("status", "'suspended'"), ("email", "'x@example.test'")):
+            await expect_error(
+                conn, f"UPDATE users SET {column} = {value} WHERE id = :id", "permission denied", {"id": user_id}
+            )
+        await expect_error(conn, "UPDATE organizations SET verification = 'e2'", "permission denied")
+        await expect_error(conn, "DELETE FROM memberships", "permission denied")
+        await expect_error(conn, "UPDATE subscriptions SET status = 'active'", "permission denied")
 
 
 async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_engine: AsyncEngine) -> None:
