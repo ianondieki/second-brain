@@ -1,0 +1,20 @@
+# Legacy unittest ids skipped on Linux by scripts/run_legacy_tests.py (Phase 1).
+# Status: UNVERIFIED UNTIL PHASE 1 CI. Derived by reading tests/, not by running on ubuntu.
+# Rule: the file is applied only when sys.platform != 'win32'; on windows-latest the full suite runs.
+#
+# Why each id is Windows-only (see docs/platform/PROGRESS.md, Phase 0 report):
+#   tests.test_graph.ToolTests.test_refuses_outside_secret_and_binary
+#     asserts that "..\app\README.md" resolves back inside the project; backslash is not a
+#     path separator on POSIX, so the read is refused and the assertion fails.
+#   tests.test_graph.ToolTests.test_junction_cannot_lead_outside
+#     runs `cmd /c mklink /J`; on POSIX subprocess raises FileNotFoundError before skipTest.
+#   tests.test_adviser_cli.CheckTests.test_everything_set_says_ready_and_hides_the_owners_number
+#   tests.test_adviser_cli.CheckTests.test_a_secret_of_the_wrong_shape_is_refused_with_its_length
+#     both assert exit code 0 from adviser.__main__.check(), which requires a cloudflared binary
+#     (tools/cloudflared.exe, gitignored) or ADVISER_CLOUDFLARED; absent on CI runners.
+#     NOTE: the same two tests also fail on windows-latest unless CI provides the binary or sets
+#     ADVISER_CLOUDFLARED (see docs/platform/DECISIONS-NEEDED.md D-13).
+tests.test_graph.ToolTests.test_refuses_outside_secret_and_binary
+tests.test_graph.ToolTests.test_junction_cannot_lead_outside
+tests.test_adviser_cli.CheckTests.test_everything_set_says_ready_and_hides_the_owners_number
+tests.test_adviser_cli.CheckTests.test_a_secret_of_the_wrong_shape_is_refused_with_its_length
