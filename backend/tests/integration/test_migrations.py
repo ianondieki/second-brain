@@ -53,6 +53,7 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "updated_at",
     },
     "organizations": {"legal_name", "website", "regions", "registration_no", "sector_id", "country", "updated_at"},
+    "developer_profiles": {"headline", "bio", "county_code", "updated_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -427,6 +428,8 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
         assert await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', :t, 'UPDATE')", t=table) is False
     assert not {"staff_role", "status", "email"} & updatable["users"]
     assert not {"verification", "slug", "kind", "source", "public_entity"} & updatable["organizations"]
+    profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
+    assert not profile_protected & updatable["developer_profiles"]
 
 
 async def test_bridge_app_cannot_update_protected_columns(app_engine: AsyncEngine) -> None:
@@ -437,6 +440,22 @@ async def test_bridge_app_cannot_update_protected_columns(app_engine: AsyncEngin
         for column, value in (("staff_role", "'admin'"), ("status", "'suspended'"), ("email", "'x@example.test'")):
             await expect_error(
                 conn, f"UPDATE users SET {column} = {value} WHERE id = :id", "permission denied", {"id": user_id}
+            )
+        await conn.execute(
+            sa.text("INSERT INTO developer_profiles (user_id, handle) VALUES (:id, :handle)"),
+            {"id": user_id, "handle": f"dev-{uuid4().hex[:12]}"},
+        )
+        by_user = {"id": user_id}
+        await conn.execute(sa.text("UPDATE developer_profiles SET headline = 'Builder' WHERE user_id = :id"), by_user)
+        for assignment in (
+            "verification_level = 'd2'",
+            "handle = 'taken'",
+            "embed_model = 'x'",
+            "embed_version = 'x'",
+            "profile_embedding = NULL",
+        ):
+            await expect_error(
+                conn, f"UPDATE developer_profiles SET {assignment} WHERE user_id = :id", "permission denied", by_user
             )
         await expect_error(conn, "UPDATE organizations SET verification = 'e2'", "permission denied")
         await expect_error(conn, "DELETE FROM memberships", "permission denied")

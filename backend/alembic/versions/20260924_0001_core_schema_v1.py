@@ -102,7 +102,8 @@ RLS_TABLES = (
 
 # Table privileges of bridge_app (API and worker). Anything not listed is not granted. UPDATE is column-scoped where
 # some columns are never the app's to change (users: staff_role, status, email; organizations: verification, slug,
-# kind, source, public_entity, verified_domain, created_by).
+# kind, source, public_entity, verified_domain, created_by; developer_profiles: verification_level, handle and the
+# embedding columns, which verification and the embedding job own).
 APP_GRANTS: dict[str, str] = {
     "users": (
         "SELECT, INSERT, UPDATE (email_verified_at, password_hash, display_name, locale, totp_secret_enc,"
@@ -123,7 +124,8 @@ APP_GRANTS: dict[str, str] = {
     "memberships": "SELECT, INSERT, UPDATE",  # members leave by status = 'removed', never DELETE
     "invitations": "SELECT, INSERT, UPDATE",
     "org_niches": "SELECT, INSERT, DELETE",
-    "developer_profiles": "SELECT, INSERT, UPDATE",
+    # never verification_level, handle, profile_embedding, embed_model, embed_version
+    "developer_profiles": "SELECT, INSERT, UPDATE (headline, bio, county_code, updated_at)",
     "developer_niches": "SELECT, INSERT, UPDATE, DELETE",
     "consents": "SELECT, INSERT",  # append-only (REQ-CON-01)
     "notification_preferences": "SELECT, INSERT, UPDATE, DELETE",
