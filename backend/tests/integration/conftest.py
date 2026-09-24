@@ -47,6 +47,47 @@ def admin_url() -> Iterator[URL]:
         yield make_url(container.get_connection_url())
 
 
+def run_script(connection: sa.Connection, sql: str) -> None:
+    """Run a multi-statement SQL script verbatim on the raw DBAPI cursor.
+
+    ``exec_driver_sql`` hands psycopg an empty parameter tuple, so psycopg parses ``%`` as a placeholder and rejects
+    scripts such as ``roles.sql`` (``format('%I', ...)``); a parameterless ``cursor.execute`` sends the text as is.
+    """
+    cursor = connection.connection.cursor()
+    try:
+        cursor.execute(sql)
+    finally:
+        cursor.close()
+
+
+def create_database(admin_url: URL, name: str) -> URL:
+    """Create the Bridge roles (idempotent) and an empty database prepared like production; return its URL."""
+    admin = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
+    try:
+        with admin.connect() as connection:
+            run_script(connection, ROLES_SQL)
+            connection.exec_driver_sql(f'CREATE DATABASE "{name}" OWNER bridge_owner')
+    finally:
+        admin.dispose()
+    url = admin_url.set(database=name)
+    prepare = sa.create_engine(url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
+    try:
+        with prepare.connect() as connection:
+            run_script(connection, PREPARE_SQL)
+    finally:
+        prepare.dispose()
+    return url
+
+
+def drop_database(admin_url: URL, name: str) -> None:
+    admin = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
+    try:
+        with admin.connect() as connection:
+            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    finally:
+        admin.dispose()
+
+
 def alembic_config() -> Config:
     return Config(str(BACKEND / "alembic.ini"))
 
@@ -67,22 +108,12 @@ def run_alembic(url: URL, action: Callable[[Config], None]) -> None:
 @pytest.fixture(scope="session")
 def database_url(admin_url: URL) -> Iterator[URL]:
     name = f"bridge_test_{uuid4().hex[:12]}"
-    admin = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
-    with admin.connect() as connection:
-        connection.exec_driver_sql(ROLES_SQL)
-        connection.exec_driver_sql(f'CREATE DATABASE "{name}" OWNER bridge_owner')
-    url = admin_url.set(database=name)
-    prepare = sa.create_engine(url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
-    with prepare.connect() as connection:
-        connection.exec_driver_sql(PREPARE_SQL)
-    prepare.dispose()
-    run_alembic(url, lambda config: command.upgrade(config, "head"))
+    url = create_database(admin_url, name)
     try:
+        run_alembic(url, lambda config: command.upgrade(config, "head"))
         yield url
     finally:
-        with admin.connect() as connection:
-            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
-        admin.dispose()
+        drop_database(admin_url, name)
 
 
 def role_engine(url: URL, role: str, **kwargs: Any) -> AsyncEngine:
@@ -94,6 +125,9 @@ def role_engine(url: URL, role: str, **kwargs: Any) -> AsyncEngine:
         cursor = dbapi_connection.cursor()
         cursor.execute(f"SET ROLE {role}")
         cursor.close()
+        # psycopg opened a transaction for the SET; commit it, or the first ROLLBACK would undo the SET ROLE and the
+        # pooled connection would silently run as the superuser (bypassing RLS and grants) from then on.
+        dbapi_connection.commit()
 
     return engine
 
