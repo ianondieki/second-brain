@@ -180,7 +180,7 @@ async def test_the_api_error_code_header_is_used_when_the_body_has_none() -> Non
     ],
 )
 async def test_a_non_ascii_or_non_numeric_error_code_header_is_ignored(header: str) -> None:
-    response = httpx.Response(422, text="not json", headers={"X-PM-ApiErrorCode": header.encode("utf-8")})
+    response = httpx.Response(422, text="not json", headers={b"X-PM-ApiErrorCode": header.encode("utf-8")})
     error = await send_expecting_error(response)
     assert error.transient is False
     assert error.code is None
