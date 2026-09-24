@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from collections.abc import Callable
 
 import pytest
 
@@ -20,9 +21,10 @@ os.environ.setdefault("DATA_ENCRYPTION_KEY", "dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YW
 os.environ.setdefault("EMAIL_PROVIDER", "fake")
 
 
-@pytest.fixture(scope="session")
-def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
+def pytest_asyncio_loop_factories(
+    config: pytest.Config, item: pytest.Item
+) -> dict[str, Callable[[], asyncio.AbstractEventLoop]]:
     """psycopg's async driver needs a selector event loop; Windows defaults to the proactor loop."""
     if sys.platform == "win32":
-        return asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined,unused-ignore]
-    return asyncio.DefaultEventLoopPolicy()
+        return {"selector": asyncio.SelectorEventLoop}
+    return {"default": asyncio.new_event_loop}

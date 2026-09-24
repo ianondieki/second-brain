@@ -39,3 +39,4 @@ graphify-out/
 .pytest_cache/
 .coverage
 coverage.xml
+.hypothesis/
