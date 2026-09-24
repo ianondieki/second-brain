@@ -22,3 +22,14 @@ The build spec for the developer ⇄ enterprise platform is split into topic fil
 | docs/spec/13-open-decisions.md | Writing or checking ADR-001..008 and policy.yaml defaults |
 | docs/spec/14-definition-of-done.md | Before marking a task, requirement or the product done; the E2E scenarios |
 | docs/spec/appendix-a-traceability.md | Mapping a requirement R01–R53 or R-HYG to its sections and acceptance criteria |
+
+## Build workflow (every phase)
+1. Context: query the graphify graph before searching files. Read only the docs/spec/ files the phase needs.
+2. Plan: write a short plan for the phase before coding.
+3. Build: implement in small steps and commit after each.
+4. Test: write tests for every acceptance test ID in the phase. All tests must pass.
+5. UI (if the phase has screens): use the frontend-design skill, then the impeccable skill to polish, then Playwright screenshots at 375px and 1440px widths, fixing anything broken.
+6. Browser bugs: use chrome-devtools for console, network and performance errors.
+7. Review: run ECC's code review on the phase's changes and fix every critical and high issue.
+8. Report: write the phase report and update PROGRESS.md.
+9. Gate: stop at the phase's gate and wait for human approval.
