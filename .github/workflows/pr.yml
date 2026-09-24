@@ -217,7 +217,7 @@ jobs:
         working-directory: backend
         run: |
           uv export --no-hashes --no-emit-project --format requirements.txt > "$RUNNER_TEMP/backend-requirements.txt"
-          uvx --from pip-audit==2.10.1 pip-audit --strict --disable-pip -r "$RUNNER_TEMP/backend-requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit --strict --disable-pip --no-deps -r "$RUNNER_TEMP/backend-requirements.txt"
       - name: npm audit (frontend; high and critical fail)
         if: ${{ !cancelled() }}   # every scanner reports even when an earlier one failed
         working-directory: frontend
