@@ -45,10 +45,10 @@ NOW_DT = datetime(2026, 9, 21, 9, 15, tzinfo=EAT)  # Monday 21 September 2026, 0
 NOW = NOW_DT.timestamp()  # epoch seconds: the same on every machine, whatever its time zone
 TODAY = date(2026, 9, 21)
 CONFIG_FIELDS = ("path", "cold_after_days", "at_risk_after_days", "send_after_hour", "done", "snooze")
-FAKE_ENV = {  # makes both channels "configured" for run(); nothing is ever sent (the workflow is faked)
+FAKE_ENV = {  # both channels "configured" for run(); placeholders only, nothing is sent (the workflow is faked)
     "GMAIL_ADDRESS": "owner@example.com",
-    "GMAIL_APP_PASSWORD": "fixture-only",
-    "WA_ACCESS_TOKEN": "fixture-only",
+    "GMAIL_APP_PASSWORD": "CHANGE_ME",
+    "WA_ACCESS_TOKEN": "CHANGE_ME",
     "WA_PHONE_NUMBER_ID": "100000000000000",
     "WA_TO": "254700000000",
     "WA_TEMPLATE_NAME": "project_checkin",
