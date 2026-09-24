@@ -7,7 +7,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 
 ## Open
 
-None. D-01..D-23 were decided at G0 (2026-09-24). New questions start at D-24.
+### D-24 · S3-compatible storage in the dev compose stack (MinIO image withdrawn)
+- Why: REQ-FND-02 and `docs/spec/08` put MinIO in `infra/docker-compose.dev.yml`. On 2026-09-24 Docker Hub returns "object not found" for `minio/minio` and quay.io requires authentication (`docs/platform/research/phase1-versions.md`). Nothing in Phase 1 stores objects; uploads and evidence start in Phase 2 (T2.3, T2.4). Production uses AWS S3 (ADR-007), so only the local/CI stand-in changes.
+- Options: (a) SeaweedFS (`chrislusf/seaweedfs`, Apache-2.0, S3 API) as the `s3` service; (b) another S3-compatible server (Garage, RustFS, LocalStack); (c) keep a MinIO build from source.
+- Recommended default: (a). The storage code talks plain S3 (boto3/aioboto3 with an endpoint URL), so the choice is reversible.
+- Blocks: nothing in Phase 1 (the service runs but no code uses it); the choice must be final before T2.3.
+- Decision: _pending_ — Phase 1 ships (a) under this default.
+
 
 ## Decided
 

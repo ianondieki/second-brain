@@ -40,3 +40,15 @@ level was flagged as unverified in `docs/spec/00-how-to-run.md`.
 - Ported code carries a `# ported from reminder/<file>` header and a parity test; drift is caught by the test, not by imports.
 - `PRODUCT_NAME`/i18n rename at G5 touches config, one i18n key, email footers and `docs/legal/` placeholders only.
 - Every agent file is reviewable for model + effort; the reviewer rejects PRs from an agent whose effort is unset.
+
+## Addendum 2026-09-24 (Phase 1 kickoff, D-08): frontend versions
+
+Recorded by the orchestrator from the `researcher` note `docs/platform/research/phase1-versions.md` (npm registry
+`dist-tags.latest`, fetched 2026-09-24, https://registry.npmjs.org/next).
+
+- **Next.js 16.3.6**, pinned exactly in `frontend/package.json` (`"next": "16.3.6"`, `"eslint-config-next": "16.3.6"`).
+  Requires Node.js `>=20.9.0` (`engines.node`); CI and local development use Node 22 (Vitest 5 needs `^22.12`).
+- React / React DOM 19.3.0 (Next 16.3.6 peer range `^19.0.0`).
+- TypeScript stays on the 5.x line: `typescript@latest` is 7.0.2, the native (Go) compiler major, and `next build`
+  type-checks through the TypeScript JavaScript API; moving to 7.x needs its own ADR once Next.js documents support.
+- Majors are bumped only through a new ADR (item 4 above).
