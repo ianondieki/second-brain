@@ -163,8 +163,11 @@ class Policy(NamedTuple):
 # Predicates. app_org_id() narrows reads to the organisation a request is scoped to (NULL = all of the user's orgs).
 _ORG_MEMBER = "app_is_member(org_id) AND (app_org_id() IS NULL OR org_id = app_org_id())"
 _ORG_ADMIN = "app_is_member(org_id, '{owner,admin}')"
-# Only owners may grant the owner role or touch an owner's membership; admins manage everyone else.
-_ORG_ADMIN_NO_OWNER = f"{_ORG_ADMIN} AND (NOT (roles && '{{owner}}'::org_role[]) OR app_is_member(org_id, '{{owner}}'))"
+# Protected roles (owner, signatory: control of the organisation and the power to sign) are granted, and memberships
+# holding them changed, by owners only; admins manage everyone else.
+_ORG_ADMIN_UNPROTECTED = (
+    f"{_ORG_ADMIN} AND (NOT (roles && '{{owner,signatory}}'::org_role[]) OR app_is_member(org_id, '{{owner}}'))"
+)
 _SELF = "user_id = app_user_id()"
 _USER_OR_ORG_MEMBER = (
     "user_id = app_user_id() OR (org_id IS NOT NULL AND app_is_member(org_id) "
@@ -197,12 +200,12 @@ POLICIES: tuple[Policy, ...] = (
     Policy("organizations", "UPDATE", "app_is_member(id, '{owner,admin}')", "app_is_member(id, '{owner,admin}')"),
     # memberships: members see their organisation's roster; every user sees their own memberships.
     Policy("memberships", "SELECT", f"({_ORG_MEMBER}) OR user_id = app_user_id()"),
-    Policy("memberships", "INSERT", check=_ORG_ADMIN_NO_OWNER),
-    Policy("memberships", "UPDATE", _ORG_ADMIN_NO_OWNER, _ORG_ADMIN_NO_OWNER),
-    # invitations: owners and admins only; only owners invite owners.
+    Policy("memberships", "INSERT", check=_ORG_ADMIN_UNPROTECTED),
+    Policy("memberships", "UPDATE", _ORG_ADMIN_UNPROTECTED, _ORG_ADMIN_UNPROTECTED),
+    # invitations: owners and admins only; only owners invite owners or signatories.
     Policy("invitations", "SELECT", f"{_ORG_ADMIN} AND (app_org_id() IS NULL OR org_id = app_org_id())"),
-    Policy("invitations", "INSERT", check=_ORG_ADMIN_NO_OWNER),
-    Policy("invitations", "UPDATE", _ORG_ADMIN, _ORG_ADMIN_NO_OWNER),
+    Policy("invitations", "INSERT", check=_ORG_ADMIN_UNPROTECTED),
+    Policy("invitations", "UPDATE", _ORG_ADMIN, _ORG_ADMIN_UNPROTECTED),
     # org_niches
     Policy("org_niches", "SELECT", _ORG_MEMBER),
     Policy("org_niches", "INSERT", check=_ORG_ADMIN),

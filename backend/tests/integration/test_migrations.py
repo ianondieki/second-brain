@@ -692,9 +692,9 @@ def invite_params(org_id: UUID, roles: str) -> dict[str, Any]:
     }
 
 
-async def test_admins_cannot_mint_or_touch_owners(app_engine: AsyncEngine) -> None:
-    """An admin who is not an owner cannot grant the owner role (to themselves or anyone), invite an owner, or
-    change an owner's membership; an owner can do all three."""
+async def test_admins_cannot_grant_or_touch_protected_roles(app_engine: AsyncEngine) -> None:
+    """Protected roles are owner and signatory. An admin who is not an owner cannot grant them (to themselves or
+    anyone), invite with them, or change a membership that holds them; an owner can do all of it."""
     owner, admin, member, newcomer = uuid7(), uuid7(), uuid7(), uuid7()
     org_id = uuid7()
     rls = "row-level security"
@@ -712,36 +712,44 @@ async def test_admins_cannot_mint_or_touch_owners(app_engine: AsyncEngine) -> No
         invitation = invite_params(org_id, "{reviewer}")
         await conn.execute(sa.text(INVITE), invitation)
         own_roles = "UPDATE memberships SET roles = CAST(:roles AS org_role[]) WHERE org_id = :org AND user_id = :user"
-        await expect_error(conn, own_roles, rls, {"roles": "{owner,admin}", "org": org_id, "user": admin})
-        await expect_error(conn, own_roles, rls, {"roles": "{owner}", "org": org_id, "user": member})
-        await expect_error(conn, ADD_MEMBER, rls, member_params(org_id, newcomer, "{owner}"))
-        await expect_error(conn, INVITE, rls, invite_params(org_id, "{admin,owner}"))
-        await expect_error(
-            conn,
-            "UPDATE invitations SET roles = '{owner}' WHERE id = :id",
-            rls,
-            {"id": invitation["id"]},
-        )
+        for protected in ("{owner,admin}", "{admin,signatory}"):  # no self-assignment of owner or signatory
+            await expect_error(conn, own_roles, rls, {"roles": protected, "org": org_id, "user": admin})
+        for protected in ("{owner}", "{viewer,signatory}"):
+            await expect_error(conn, own_roles, rls, {"roles": protected, "org": org_id, "user": member})
+            await expect_error(conn, ADD_MEMBER, rls, member_params(org_id, newcomer, protected))
+            await expect_error(conn, INVITE, rls, invite_params(org_id, protected))
+            await expect_error(
+                conn,
+                "UPDATE invitations SET roles = CAST(:roles AS org_role[]) WHERE id = :id",
+                rls,
+                {"roles": protected, "id": invitation["id"]},
+            )
         # The owner's membership is invisible to the admin's UPDATE: no demotion, no removal.
-        demote = await conn.execute(
-            sa.text("UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :user"),
-            {"org": org_id, "user": owner},
-        )
-        assert demote.rowcount == 0
+        remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :user"
+        assert (await conn.execute(sa.text(remove), {"org": org_id, "user": owner})).rowcount == 0
+
+        await act_as(conn, owner)
+        grant = await conn.execute(sa.text(own_roles), {"roles": "{viewer,signatory}", "org": org_id, "user": member})
+        assert grant.rowcount == 1
+        await conn.execute(sa.text(ADD_MEMBER), member_params(org_id, newcomer, "{owner}"))
+        await conn.execute(sa.text(INVITE), invite_params(org_id, "{owner}"))
+        await conn.execute(sa.text(INVITE), invite_params(org_id, "{signatory}"))
+
+        await act_as(conn, admin)  # a signatory's membership is now out of the admin's reach too
+        assert (await conn.execute(sa.text(remove), {"org": org_id, "user": member})).rowcount == 0
 
         await act_as(conn, owner)
         promote = await conn.execute(sa.text(own_roles), {"roles": "{owner,admin}", "org": org_id, "user": admin})
         assert promote.rowcount == 1
-        await conn.execute(sa.text(ADD_MEMBER), member_params(org_id, newcomer, "{owner}"))
-        await conn.execute(sa.text(INVITE), invite_params(org_id, "{owner}"))
         roles = await conn.execute(
-            sa.text("SELECT user_id, roles::text[] AS roles FROM memberships WHERE org_id = :org"), {"org": org_id}
+            sa.text("SELECT user_id, roles::text[] AS roles, status::text AS status FROM memberships WHERE org_id = :org"),
+            {"org": org_id},
         )
-        assert {row.user_id: row.roles for row in roles} == {
-            owner: ["owner", "admin"],
-            admin: ["owner", "admin"],
-            member: ["viewer"],
-            newcomer: ["owner"],
+        assert {row.user_id: (row.roles, row.status) for row in roles} == {
+            owner: (["owner", "admin"], "active"),
+            admin: (["owner", "admin"], "active"),
+            member: (["viewer", "signatory"], "active"),
+            newcomer: (["owner"], "active"),
         }
 
 
