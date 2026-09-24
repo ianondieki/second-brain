@@ -119,8 +119,8 @@ Checklist updated after every task (done / in progress / remaining).
 | Housekeeping: orchestrator agent → Opus 5.5 `xhigh` (Phases 1–7), Fable 5.1 `max` (Phase 8) (D-04) | done | `.claude/agents/orchestrator.md`, `PLAN.md` §1 |
 | Housekeeping: OAuth moved from T1.5 to T2.12 / REQ-AUTH-02 (D-20) | done | `PLAN.md`, `REQUIREMENTS.md`, `DECISIONS-NEEDED.md` |
 | Local tool check (Docker Desktop, make, uv, Node) | in progress | Node 22 OK; Docker engine stopped, `make` and `uv` missing — waiting for the human before T1.3 |
-| T1.1 Legacy archive + hygiene (REQ-HYG-01..06, REQ-FND-01) | remaining | |
-| T1.2 `scripts/run_legacy_tests.py` + CI legacy matrix (REQ-FND-01) | remaining | |
+| T1.1 Legacy archive + hygiene (REQ-HYG-01..06, REQ-FND-01) | done | `d60a920` git mv into `legacy/` + README; workspace file deleted; root `.env.example` trimmed; README legacy section moved; AC-HYG-01..06 commands exit 0 locally (CI job lands in T1.2) |
+| T1.2 `scripts/run_legacy_tests.py` + CI legacy matrix (REQ-FND-01) | in progress | |
 | T1.3 Scaffold backend/frontend/infra, Makefile, `pr.yml` (REQ-FND-02, REQ-FND-03) | remaining | blocked on local tools |
 | T1.4 Core schema v1, RLS, audit chain, seed (REQ-TEN-01, REQ-AUD-01, REQ-CON-01) | remaining | |
 | T1.5 Auth: password, magic link, sessions, CSRF, TOTP, roles (REQ-AUTH-01, REQ-TEN-01) | remaining | security-reviewer (Fable) required |
