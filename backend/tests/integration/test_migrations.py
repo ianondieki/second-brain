@@ -797,7 +797,9 @@ async def test_admins_cannot_grant_or_touch_protected_roles(app_engine: AsyncEng
         promote = await conn.execute(sa.text(own_roles), {"roles": "{owner,admin}", "org": org_id, "user": admin})
         assert promote.rowcount == 1
         roles = await conn.execute(
-            sa.text("SELECT user_id, roles::text[] AS roles, status::text AS status FROM memberships WHERE org_id = :org"),
+            sa.text(
+                "SELECT user_id, roles::text[] AS roles, status::text AS status FROM memberships WHERE org_id = :org"
+            ),
             {"org": org_id},
         )
         assert {row.user_id: (row.roles, row.status) for row in roles} == {
