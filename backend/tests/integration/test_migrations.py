@@ -576,6 +576,42 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
         await engine.dispose()
 
 
+ADD_PLAN = (
+    'INSERT INTO plans (id, code, side, name, price_kes_minor, "interval", limits, is_default)'
+    " VALUES (:id, :code, 'developer', 'Test plan', :price, 'month', '{}'::jsonb, :is_default)"
+)
+
+
+def plan_params(price: int, is_default: bool) -> dict[str, Any]:
+    return {"id": uuid7(), "code": f"test-{uuid4().hex[:12]}", "price": price, "is_default": is_default}
+
+
+async def test_self_serve_subscriptions_only_to_the_default_plan(owner_engine: AsyncEngine) -> None:
+    user_id = uuid7()
+    subscribe = (
+        "INSERT INTO subscriptions (id, user_id, plan_id, status, current_period_start)"
+        " VALUES (:id, :user, :plan, 'active', now())"
+    )
+    async with rolled_back(owner_engine) as conn:
+        await add_user(conn, user_id)
+        existing = "SELECT id FROM plans WHERE side = 'developer' AND is_default"
+        default_id = (await conn.execute(sa.text(existing))).scalar_one_or_none()
+        if default_id is None:  # the seed may already have one (config/plans.yaml `default: true`)
+            default = plan_params(0, is_default=True)
+            await conn.execute(sa.text(ADD_PLAN), default)
+            default_id = default["id"]
+        paid = plan_params(150_000, is_default=False)
+        await conn.execute(sa.text(ADD_PLAN), paid)
+        await expect_error(conn, ADD_PLAN, "uq_plans_default_side", plan_params(0, is_default=True))  # one per side
+
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await act_as(conn, user_id)
+        await expect_error(conn, subscribe, "row-level security", {"id": uuid7(), "user": user_id, "plan": paid["id"]})
+        await conn.execute(sa.text(subscribe), {"id": uuid7(), "user": user_id, "plan": default_id})
+        mine = sa.text("SELECT plan_id FROM subscriptions WHERE user_id = :user")
+        assert (await conn.execute(mine, {"user": user_id})).scalars().all() == [default_id]
+
+
 async def test_deleting_a_user_removes_their_user_only_deliveries(owner_engine: AsyncEngine) -> None:
     """ON DELETE CASCADE: SET NULL would violate has_recipient_scope and block the deletion (erasure, REQ-SEC-02)."""
     user_id = uuid7()

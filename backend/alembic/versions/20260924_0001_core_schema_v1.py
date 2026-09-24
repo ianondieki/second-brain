@@ -218,7 +218,13 @@ POLICIES: tuple[Policy, ...] = (
     *_user_policies("in_app_notifications", ("SELECT", "INSERT", "UPDATE")),
     # org_or_user tables: the user's own rows, or rows of an organisation they belong to.
     Policy("subscriptions", "SELECT", _USER_OR_ORG_MEMBER),
-    Policy("subscriptions", "INSERT", check=_USER_OR_ORG_ADMIN),
+    # Self-serve subscriptions only to a default (free) plan; paid plans go through the billing path (Phase 6).
+    Policy(
+        "subscriptions",
+        "INSERT",
+        check=f"({_USER_OR_ORG_ADMIN})"
+        " AND EXISTS (SELECT 1 FROM plans p WHERE p.id = subscriptions.plan_id AND p.is_default)",
+    ),
     Policy("notification_deliveries", "SELECT", _USER_OR_ORG_MEMBER),
     Policy("notification_deliveries", "INSERT", check=_USER_OR_ORG_ADMIN),
     Policy("notification_deliveries", "UPDATE", _USER_OR_ORG_ADMIN, _USER_OR_ORG_ADMIN),
@@ -676,12 +682,14 @@ def _create_tables() -> None:
         sa.Column("limits", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("active", sa.Boolean(), server_default="true", nullable=False),
         sa.Column("version", sa.SmallInteger(), server_default="1", nullable=False),
+        sa.Column("is_default", sa.Boolean(), server_default="false", nullable=False),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_plans")),
         sa.UniqueConstraint("code", name=op.f("uq_plans_code")),
     )
+    op.create_index("uq_plans_default_side", "plans", ["side"], unique=True, postgresql_where=sa.text("is_default"))
     op.create_table(
         "regions",
         sa.Column("code", sa.String(length=8), nullable=False),
