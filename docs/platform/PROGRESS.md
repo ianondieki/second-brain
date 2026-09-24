@@ -103,3 +103,8 @@ versions. The rest can wait for the phase that needs them (listed per entry).
 After `G0: APPROVED <date>` in `GATES.md`: `Read CLAUDE.md (and the docs/spec/ files Phase 1 needs: 02, 03, 04, 05,
 08, 10, 11, 12, 14), PROGRESS.md, REQUIREMENTS.md, DECISIONS-NEEDED.md; continue with Phase 1.` Phase 1 starts with
 T1.1 (legacy archive + hygiene) and T1.2 (legacy test runner on both OSes) before any scaffold.
+
+### G0 sign-off
+
+G0 approved 2026-09-24 in `GATES.md`. Decisions D-01..D-23 are recorded in `DECISIONS-NEEDED.md` (Decided table).
+Usage is tracked by the Max plan via `/cost`, with no USD cap (D-01).

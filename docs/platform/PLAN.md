@@ -256,6 +256,7 @@ work is incremental from Phase 1 (`ux-reviewer` from Phase 2) so Phase 7 is cons
 
 ## 7. Budget and cost tracking
 
-Per-phase budget is a G0 input (DECISIONS-NEEDED D-01). After every phase the human pastes `/cost` output into
-`PROGRESS.md`; exceeding the phase budget is a stop-and-ask condition. Cheaper alternative if G0 budget is tight:
-orchestrate Phases 1–7 with Opus 5.5 at `xhigh`, keep Fable for Phase 0, the security reviewer and the Phase 8 audit.
+Budget (DECISIONS-NEEDED D-01, decided at G0 on 2026-09-24): Max subscription, usage tracked via `/cost`, no USD cap.
+After every phase the human pastes `/cost` output into `PROGRESS.md`. Stop and ask if a phase would exhaust the
+weekly usage limit. Orchestrator (D-04): Opus 5.5 at `xhigh` for Phases 1–7; Fable 5.1 for the `security-reviewer`
+and the Phase 8 audit.

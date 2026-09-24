@@ -7,7 +7,7 @@ editing the **Status** cell of its row to `APPROVED <YYYY-MM-DD>` (optionally wi
 
 | Gate | Human provides / approves | Blocks | Inputs recorded in | Status |
 |---|---|---|---|---|
-| G0 | `PLAN.md`, `REQUIREMENTS.md`, ADR-001..008, `THREAT_MODEL.md`; budget per phase; precision@5 target for AC-PERS-4; pre-approved vendor/free-tier list (Postmark, Sentry, Grafana Cloud, Better Stack, healthchecks.io, Cloudflare, TSA, SMS, Langfuse Cloud) so Phase 8 does not stop per vendor | All product code (Phase 1 start) | `DECISIONS-NEEDED.md` D-01, D-02, D-03; `PLAN.md` §7 | PENDING |
+| G0 | `PLAN.md`, `REQUIREMENTS.md`, ADR-001..008, `THREAT_MODEL.md`; budget per phase; precision@5 target for AC-PERS-4; pre-approved vendor/free-tier list (Postmark, Sentry, Grafana Cloud, Better Stack, healthchecks.io, Cloudflare, TSA, SMS, Langfuse Cloud) so Phase 8 does not stop per vendor | All product code (Phase 1 start) | `DECISIONS-NEEDED.md` D-01, D-02, D-03; `PLAN.md` §7 | APPROVED 2026-09-24|
 | G1 | Hosting region confirmation (`af-south-1` default, ADR-007), product domain, SMS vendor account | Phase 1 deploy config (`infra/` values); local development is not blocked | `DECISIONS-NEEDED.md` D-10; ADR-007 addendum | PENDING |
 | G2 | Advocate-reviewed legal templates (ToS, AUP, Master Enterprise Terms, Evaluation NDA, mutual NDA, EOI, term sheet, assignment, licences, development agreement, acceptance certificate, privacy/cookie/takedown/dispute policies, s.106B certificate, org invitation email and suppression policy, UI claim copy), `docs/legal/esign_exclusions.md`, records custodian, reputation-score formula; agents only insert `[[LEGAL-PLACEHOLDER:<id>]]` | Phase 8 exit; `FEATURE_TIER2_ENABLED` / `FEATURE_DEALS_ENABLED` in production | `docs/legal/`, `legal_templates` table; `DECISIONS-NEEDED.md` D-14 | PENDING |
 | G-EVAL | Human labels for the research, scout, ranker and judge gold sets (`docs/spec/09` sizes: research 30, scout 50, judge 20; ranker ≥30 dev/problem pairs) | Phase 4 exit; AC-PERS-4 in Phase 5 | `backend/tests/evals/gold/` (added by the human or pasted for the `test-writer`) | PENDING |
@@ -30,3 +30,4 @@ editing the **Status** cell of its row to `APPROVED <YYYY-MM-DD>` (optionally wi
 | Gate | Decision | Date | Note |
 |---|---|---|---|
 | G0 | — | — | awaiting human review of the Phase 0 documents |
+| G0 | APPROVED | 2026-09-24 | Decisions D-01..D-23 recorded in DECISIONS-NEEDED.md |

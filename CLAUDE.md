@@ -11,8 +11,9 @@ Repository: `ianondieki/second-brain`. Two products live here: the unchanged loc
   `DECISIONS-NEEDED.md`, `GATES.md`, and only the `docs/spec/` files the phase needs (index below). Query the graphify
   graph (`graphify query "<question>"`) before searching files.
 - Phase 0 = documents only under `docs/platform/`, `.claude/agents/` and this file. Phases 1–8 follow `docs/platform/PLAN.md`.
-- The orchestrator is the main session (Fable 5.1, `/effort xhigh`; `max` in Phases 0 and 8). Sub-agents are in
-  `.claude/agents/` and cannot spawn sub-agents. Check effort with `/effort status` (session) and `/tasks` (sub-agents).
+- The orchestrator is the main session: Opus 5.5 `/effort xhigh` for Phases 1–7; Fable 5.1 `max` for Phase 8 (D-04).
+  Sub-agents are in `.claude/agents/` and cannot spawn sub-agents. Check effort with `/effort status` (session) and
+  `/tasks` (sub-agents).
 - Stop and write to `DECISIONS-NEEDED.md` (then continue unblocked work or stop) when: a message would reach a non-test
   recipient; a destructive migration, force-push or history rewrite is needed; any spend or new vendor; a MUST
   requirement would change or two conflict; CI fails after 3 genuine fixes; legal/claims/pricing/brand text is needed
