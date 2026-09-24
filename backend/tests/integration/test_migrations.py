@@ -88,6 +88,7 @@ APP_FUNCTIONS = (
     ("app_org_id()", False),
     ("app_is_member(uuid, org_role[])", True),
     ("app_create_organization(uuid, org_kind, text, citext, text)", True),
+    ("app_event_accepts_details(uuid)", True),
 )
 TRIGGER_FUNCTIONS = (("audit_events_chain()", True), ("audit_block_mutation()", False))
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
@@ -565,10 +566,12 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             member = sa.text("SELECT app_is_member(:id, '{owner}')")
             assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
+            event_id = uuid7()
             await conn.execute(
                 sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'x')"),
-                {"id": uuid7(), "c": f"test:{uuid4().hex}"},
+                {"id": event_id, "c": f"test:{uuid4().hex}"},
             )
+            await conn.execute(sa.text("INSERT INTO event_details (event_id) VALUES (:id)"), {"id": event_id})
     finally:
         await engine.dispose()
 
@@ -891,7 +894,7 @@ async def test_audit_visibility_for_the_app_and_the_reader(owner_engine: AsyncEn
         await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(actor)})
         assert (await conn.execute(count, {"chain": chain})).scalar_one() == 1  # only the actor's own event
         await conn.execute(sa.text(details), {"id": own["id"]})
-        await conn.execute(sa.text(details), {"id": other["id"]})  # writing details is trusted like the event
+        await expect_error(conn, details, "row-level security", {"id": other["id"]})  # another user's event
         visible_details = sa.text("SELECT event_id FROM event_details WHERE event_id IN (:own, :other)")
         found = (await conn.execute(visible_details, {"own": own["id"], "other": other["id"]})).scalars().all()
         assert found == [own["id"]]  # reading them follows the event's visibility
@@ -923,6 +926,25 @@ async def test_system_event_and_details_need_no_user(app_engine: AsyncEngine) ->
         # Written, but not readable without a user who may see it.
         visible = sa.text("SELECT count(*) FROM event_details WHERE event_id = :id")
         assert (await conn.execute(visible, {"id": event["id"]})).scalar_one() == 0
+
+
+async def test_details_attach_only_to_own_or_actorless_events(owner_engine: AsyncEngine) -> None:
+    """app_event_accepts_details(): user A cannot attach details to user B's event (or to a missing event), but can
+    to A's own events and to events that name no actor."""
+    user_a, user_b, chain = uuid7(), uuid7(), f"test:{uuid4().hex}"
+    b_event, a_event = event_params(chain, user_b), event_params(chain, user_a)
+    system_event = event_params(chain, None, actor_kind="system")
+    details = "INSERT INTO event_details (event_id) VALUES (:id)"
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(INSERT_EVENT, b_event)  # written by B's own request earlier
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await act_as(conn, user_a)
+        await conn.execute(INSERT_EVENT, a_event)
+        await conn.execute(INSERT_EVENT, system_event)
+        await expect_error(conn, details, "row-level security", {"id": b_event["id"]})
+        await expect_error(conn, details, "row-level security", {"id": uuid7()})
+        await conn.execute(sa.text(details), {"id": a_event["id"]})
+        await conn.execute(sa.text(details), {"id": system_event["id"]})
 
 
 async def test_events_cannot_name_another_user_as_actor(app_engine: AsyncEngine) -> None:

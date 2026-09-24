@@ -225,7 +225,7 @@ POLICIES: tuple[Policy, ...] = (
     Policy("audit_events", "INSERT", check=_AUDIT_APPEND),
     Policy("audit_events", "SELECT", "true", role="audit_reader"),
     Policy("event_details", "SELECT", _EVENT_VISIBLE),
-    Policy("event_details", "INSERT", check="true"),  # same write trust as the audit_events INSERT
+    Policy("event_details", "INSERT", check="app_event_accepts_details(event_id)"),
 )
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -301,16 +301,32 @@ BEGIN
 END;
 $$;
 
+-- event_details INSERT check: details may be attached to an existing event that names no actor (system events) or
+-- names the current user. SECURITY DEFINER so it sees the event whatever the caller's audit_events visibility.
+CREATE FUNCTION app_event_accepts_details(p_event uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.audit_events e
+         WHERE e.id = p_event
+           AND (e.actor_user_id IS NULL OR e.actor_user_id = public.app_user_id())
+    )
+$$;
+
 REVOKE ALL ON FUNCTION uuid7() FROM PUBLIC;
 REVOKE ALL ON FUNCTION app_user_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION app_org_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION app_is_member(uuid, org_role[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION app_create_organization(uuid, org_kind, text, citext, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app_event_accepts_details(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION uuid7() TO bridge_app;
 GRANT EXECUTE ON FUNCTION app_user_id() TO bridge_app;
 GRANT EXECUTE ON FUNCTION app_org_id() TO bridge_app;
 GRANT EXECUTE ON FUNCTION app_is_member(uuid, org_role[]) TO bridge_app;
 GRANT EXECUTE ON FUNCTION app_create_organization(uuid, org_kind, text, citext, text) TO bridge_app;
+GRANT EXECUTE ON FUNCTION app_event_accepts_details(uuid) TO bridge_app;
 """
 
 # The canonical string hashed into audit_events.event_hash (REQ-AUD-01). bridge.audit.chain recomputes it; any change
@@ -553,6 +569,7 @@ def downgrade() -> None:
         """
         DROP FUNCTION audit_block_mutation();
         DROP FUNCTION audit_events_chain();
+        DROP FUNCTION app_event_accepts_details(uuid);
         DROP FUNCTION app_create_organization(uuid, org_kind, text, citext, text);
         DROP FUNCTION app_is_member(uuid, org_role[]);
         DROP FUNCTION app_org_id();
