@@ -36,6 +36,19 @@ if sudo iptables -L DOCKER-USER -n >/dev/null 2>&1; then
   sudo iptables -I DOCKER-USER 1 -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 fi
 
-# The sandbox user must be able to write caches inside the checkout.
-sudo chmod -R a+rwX "${GITHUB_WORKSPACE:-$PWD}"
+# The sandbox user must reach the checkout and the runner's temp dir (the runner's home is mode 750) and be
+# able to write caches inside the checkout.
+workspace="${GITHUB_WORKSPACE:-$PWD}"
+for target in "$workspace" "${RUNNER_TEMP:-}"; do
+  [ -n "$target" ] || continue
+  dir="$target"
+  while [ "$dir" != "/" ]; do
+    sudo chmod o+x "$dir"
+    dir="$(dirname "$dir")"
+  done
+done
+sudo chmod -R a+rwX "$workspace"
+if [ -n "${RUNNER_TEMP:-}" ]; then
+  sudo chmod -R a+rX "$RUNNER_TEMP"
+fi
 echo "egress lock active for user '$user_name' and for containers"
