@@ -1,0 +1,645 @@
+"""Revision 0001 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01; docs/spec/08 Migrations and Tenancy).
+
+Migration round trip and drift, table classification, RLS coverage generated from the ORM metadata, grants and role
+attributes, the RLS helper functions, the append-only hash-chained audit log and the Procrastinate schema.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import threading
+import time
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from importlib.metadata import version
+from itertools import pairwise
+from typing import Any
+from uuid import UUID, uuid4
+
+import pytest
+import sqlalchemy as sa
+from alembic import command
+from procrastinate.schema import SchemaManager
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import URL
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+
+import bridge.models.all  # noqa: F401  # registers every table
+from bridge.ids import uuid7
+from bridge.models import Base, Tenancy
+from tests.integration.conftest import BACKEND, create_database, drop_database, run_alembic
+
+TABLES = Base.metadata.tables
+TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER}
+ROLES = ("bridge_owner", "bridge_app", "aggregate_worker", "audit_reader")
+PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
+
+# The grant matrix of bridge_app (task card T1.4). Every other privilege on every ORM table must be absent.
+S, I, U, D = "SELECT", "INSERT", "UPDATE", "DELETE"  # noqa: E741
+APP_GRANTS: dict[str, set[str]] = {
+    "users": {S, I, U},
+    "sessions": {S, I, U, D},
+    "login_tokens": {S, I, U, D},
+    "login_attempts": {S, I, D},
+    "api_tokens": {S, I, U},
+    "auth_identities": {S, I, D},
+    "email_suppressions": {S, I},
+    "niches": {S},
+    "regions": {S},
+    "holidays": {S},
+    "plans": {S},
+    "organizations": {S, U},
+    "memberships": {S, I, U, D},
+    "invitations": {S, I, U},
+    "org_niches": {S, I, D},
+    "developer_profiles": {S, I, U},
+    "developer_niches": {S, I, U, D},
+    "consents": {S, I},
+    "notification_preferences": {S, I, U, D},
+    "in_app_notifications": {S, I, U},
+    "subscriptions": {S, I, U},
+    "notification_deliveries": {S, I, U},
+    "audit_events": {S, I},
+    "event_details": {S, I},
+}
+
+# (signature, SECURITY DEFINER?) of the helper functions bridge_app may execute.
+APP_FUNCTIONS = (
+    ("uuid7()", False),
+    ("app_user_id()", False),
+    ("app_org_id()", False),
+    ("app_is_member(uuid, org_role[])", True),
+    ("app_create_organization(uuid, org_kind, text, citext, text)", True),
+)
+TRIGGER_FUNCTIONS = (("audit_events_chain()", True), ("audit_block_mutation()", False))
+
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+ZERO_HASH = bytes(32)
+
+INSERT_EVENT = sa.text(
+    "INSERT INTO audit_events (id, chain_id, actor_kind, actor_user_id, org_id, action, subject_type, subject_id,"
+    " payload, seq, prev_hash, event_hash)"
+    " VALUES (:id, :chain, 'user', :actor, :org, :action, :subject_type, :subject_id, CAST(:payload AS jsonb),"
+    " 999, '\\x00'::bytea, '\\x00'::bytea)"  # seq and hashes sent by a client are overwritten by the trigger
+)
+SELECT_CHAIN = sa.text(
+    "SELECT id, chain_id, seq, occurred_at, actor_kind::text AS actor_kind, actor_user_id, org_id, action,"
+    " subject_type, subject_id, payload::text AS payload_text, prev_hash, event_hash"
+    " FROM audit_events WHERE chain_id = :chain ORDER BY seq"
+)
+
+
+def tenancy(table: sa.Table) -> Tenancy:
+    return Tenancy(table.info["tenancy"])
+
+
+def tenant_tables() -> list[str]:
+    return sorted(name for name, table in TABLES.items() if tenancy(table) in TENANT_KINDS)
+
+
+def event_params(chain: str, actor: UUID | None, **overrides: Any) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "id": uuid7(),
+        "chain": chain,
+        "actor": actor,
+        "org": None,
+        "action": "test.event",
+        "subject_type": "test",
+        "subject_id": uuid7(),
+        "payload": json.dumps({"n": 1, "note": "pipes | inside the payload are fine"}),
+    }
+    params.update(overrides)
+    return params
+
+
+def canonical(row: sa.Row[Any]) -> bytes:
+    """The canonical form hashed by audit_events_chain() (documented in revision 0001)."""
+
+    def text(value: object) -> str:
+        return "" if value is None else str(value)
+
+    fields = [
+        row.prev_hash.hex(),
+        str(row.seq),
+        str(row.id),
+        row.chain_id,
+        str((row.occurred_at - EPOCH) // timedelta(microseconds=1)),
+        row.actor_kind,
+        text(row.actor_user_id),
+        text(row.org_id),
+        row.action,
+        text(row.subject_type),
+        text(row.subject_id),
+        row.payload_text,
+    ]
+    return "|".join(fields).encode("utf-8")
+
+
+def assert_linked_chain(rows: list[sa.Row[Any]]) -> None:
+    assert [row.seq for row in rows] == list(range(1, len(rows) + 1))
+    assert rows[0].prev_hash == ZERO_HASH
+    for previous, row in pairwise(rows):
+        assert row.prev_hash == previous.event_hash
+    for row in rows:
+        assert len(row.event_hash) == 32
+        assert row.event_hash == hashlib.sha256(canonical(row)).digest()
+
+
+@asynccontextmanager
+async def rolled_back(engine: AsyncEngine, user_id: UUID | None = None) -> AsyncIterator[AsyncConnection]:
+    """A connection inside a transaction that is always rolled back (the session database is shared)."""
+    async with engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            if user_id is not None:
+                await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(user_id)})
+            yield conn
+        finally:
+            await transaction.rollback()
+
+
+async def expect_error(conn: AsyncConnection, sql: str, match: str, params: dict[str, Any] | None = None) -> None:
+    """Run ``sql`` in a savepoint, assert it fails with ``match``, and leave the outer transaction usable."""
+    savepoint = await conn.begin_nested()
+    with pytest.raises(sa.exc.DBAPIError, match=match):
+        await conn.execute(sa.text(sql), params or {})
+    await savepoint.rollback()
+
+
+async def scalar(engine: AsyncEngine, sql: str, **params: Any) -> Any:
+    async with engine.connect() as conn:
+        return (await conn.execute(sa.text(sql), params)).scalar_one()
+
+
+async def rows(engine: AsyncEngine, sql: str, **params: Any) -> list[sa.Row[Any]]:
+    async with engine.connect() as conn:
+        return list((await conn.execute(sa.text(sql), params)).all())
+
+
+# --- Migration round trip ----------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def scratch_url(admin_url: URL) -> Iterator[URL]:
+    """A database of its own for the round trip and for tests that must commit (audit rows are undeletable)."""
+    name = f"bridge_mig_{uuid4().hex[:12]}"
+    url = create_database(admin_url, name)
+    try:
+        yield url
+    finally:
+        drop_database(admin_url, name)
+
+
+def leftover_objects(url: URL) -> list[str]:
+    """Objects in schema public that are neither Alembic's version table nor extension members."""
+    queries = {
+        "relation": "SELECT c.relname FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace"
+        " AND c.relname NOT LIKE 'alembic_version%' AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+        " WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')",
+        "type": "SELECT t.typname FROM pg_type t WHERE t.typnamespace = 'public'::regnamespace"
+        " AND t.typtype IN ('e', 'c', 'd') AND (t.typrelid = 0 OR t.typtype = 'c')"
+        " AND t.typname NOT LIKE 'alembic_version%' AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+        " WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')",
+        "function": "SELECT p.proname FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace"
+        " AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+        " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')",
+        "policy": "SELECT policyname FROM pg_policies WHERE schemaname = 'public'",
+    }
+    engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
+    try:
+        with engine.connect() as conn:
+            return [f"{kind} {name}" for kind, sql in queries.items() for (name,) in conn.execute(sa.text(sql))]
+    finally:
+        engine.dispose()
+
+
+def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
+    run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "base"))
+    assert leftover_objects(scratch_url) == []
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
+    run_alembic(scratch_url, command.check)
+
+
+def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> None:
+    """A second writer waits on the chain's advisory lock and links to the first writer's committed event."""
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
+    chain, actor = f"test:{uuid4().hex}", uuid7()
+    engine = sa.create_engine(scratch_url, poolclass=sa.pool.NullPool)
+    errors: list[BaseException] = []
+    pid: list[int] = []
+
+    def second_writer() -> None:
+        try:
+            with engine.begin() as conn:  # commits on exit
+                conn.exec_driver_sql("SET LOCAL ROLE bridge_app")
+                pid.append(conn.execute(sa.text("SELECT pg_backend_pid()")).scalar_one())
+                conn.execute(INSERT_EVENT, event_params(chain, actor))
+        except BaseException as exc:  # reported by the main thread
+            errors.append(exc)
+
+    blocked = sa.text("SELECT count(*) FROM pg_locks WHERE pid = :pid AND locktype = 'advisory' AND NOT granted")
+    try:
+        with engine.begin() as first:  # holds the chain lock until it commits on exit
+            first.exec_driver_sql("SET LOCAL ROLE bridge_app")
+            first.execute(INSERT_EVENT, event_params(chain, actor))
+            thread = threading.Thread(target=second_writer)
+            thread.start()
+            deadline = time.monotonic() + 60
+            waiting = False
+            while not waiting and time.monotonic() < deadline and thread.is_alive():
+                time.sleep(0.1)
+                if pid:
+                    waiting = bool(first.execute(blocked, {"pid": pid[0]}).scalar_one())
+            assert waiting, "the second writer did not wait on the chain's advisory lock"
+        thread.join(timeout=60)
+        assert not thread.is_alive()
+        assert not errors, errors
+        with engine.connect() as conn:
+            assert_linked_chain(list(conn.execute(SELECT_CHAIN, {"chain": chain}).all()))
+    finally:
+        engine.dispose()
+
+
+# --- Harness ------------------------------------------------------------------------------------------------------
+
+
+async def test_role_engines_keep_their_role_across_transactions(
+    app_engine: AsyncEngine,
+    owner_engine: AsyncEngine,
+    aggregate_engine: AsyncEngine,
+    audit_reader_engine: AsyncEngine,
+) -> None:
+    """A rolled-back transaction must not undo an engine's SET ROLE (else tests would run as the superuser)."""
+    engines = {
+        "bridge_app": app_engine,
+        "bridge_owner": owner_engine,
+        "aggregate_worker": aggregate_engine,
+        "audit_reader": audit_reader_engine,
+    }
+    current_user = sa.text("SELECT current_user")
+    for role, engine in engines.items():
+        for _ in range(3):
+            async with rolled_back(engine) as conn:
+                assert (await conn.execute(current_user)).scalar_one() == role
+        async with engine.connect() as conn:
+            assert (await conn.execute(current_user)).scalar_one() == role
+            await conn.commit()
+            assert (await conn.execute(current_user)).scalar_one() == role
+
+
+# --- Classification and RLS coverage (generated from the ORM metadata) --------------------------------------------
+
+
+async def test_every_table_is_declared_with_a_tenancy(owner_engine: AsyncEngine) -> None:
+    found = await rows(
+        owner_engine,
+        "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')",
+    )
+    names = {row.relname for row in found}
+    undeclared = {n for n in names if n != "alembic_version" and not n.startswith("procrastinate_")} - set(TABLES)
+    assert undeclared == set(), f"tables without an ORM model and tenancy: {sorted(undeclared)}"
+    assert set(TABLES) <= names
+    for table in TABLES.values():
+        assert "tenancy" in table.info, f"{table.name} declares no tenancy"
+        tenancy(table)  # a valid Tenancy value
+
+
+@pytest.mark.parametrize("table", sorted(TABLES))
+async def test_rls_follows_the_declared_tenancy(owner_engine: AsyncEngine, table: str) -> None:
+    (row,) = await rows(
+        owner_engine,
+        "SELECT c.relrowsecurity, c.relforcerowsecurity, (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)"
+        " AS policies FROM pg_class c WHERE c.oid = to_regclass(:t)",
+        t=f"public.{table}",
+    )
+    if tenancy(TABLES[table]) in TENANT_KINDS:
+        assert row.relrowsecurity, f"{table}: RLS is not enabled"
+        assert not row.relforcerowsecurity, f"{table}: RLS must be ENABLED, not FORCED (owner helpers bypass it)"
+        assert row.policies >= 1, f"{table}: no policy"
+    else:
+        assert not row.relrowsecurity, f"{table}: global/system tables have no RLS"
+        assert row.policies == 0
+
+
+@pytest.mark.parametrize("table", tenant_tables())
+async def test_every_command_granted_to_the_app_has_a_policy(owner_engine: AsyncEngine, table: str) -> None:
+    for privilege in (S, I, U, D):
+        if await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', :t, :p)", t=table, p=privilege):
+            policies = await scalar(
+                owner_engine,
+                "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = :t"
+                " AND cmd IN (:p, 'ALL') AND 'bridge_app' = ANY (roles)",
+                t=table,
+                p=privilege,
+            )
+            assert policies >= 1, f"bridge_app may {privilege} {table} but no policy covers it"
+
+
+# --- Grants and roles ---------------------------------------------------------------------------------------------
+
+
+async def privileges_of(engine: AsyncEngine, role: str) -> dict[str, set[str]]:
+    found = await rows(
+        engine,
+        "SELECT t.name AS table_name, p.name AS privilege"
+        " FROM unnest(CAST(:tables AS text[])) AS t(name) CROSS JOIN unnest(CAST(:privileges AS text[])) AS p(name)"
+        " WHERE has_table_privilege(:role, 'public.' || t.name, p.name)",
+        tables=sorted(TABLES),
+        privileges=list(PRIVILEGES),
+        role=role,
+    )
+    held: dict[str, set[str]] = {}
+    for row in found:
+        held.setdefault(row.table_name, set()).add(row.privilege)
+    return held
+
+
+async def test_bridge_app_grants_are_exactly_the_matrix(owner_engine: AsyncEngine) -> None:
+    assert set(APP_GRANTS) == set(TABLES), "every ORM table needs a row in the grant matrix"
+    expected = {table: privileges for table, privileges in APP_GRANTS.items() if privileges}
+    assert await privileges_of(owner_engine, "bridge_app") == expected
+
+
+async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_engine: AsyncEngine) -> None:
+    for privilege in ("UPDATE", "DELETE", "TRUNCATE"):
+        assert not await scalar(
+            owner_engine, "SELECT has_table_privilege('bridge_app', 'audit_events', :p)", p=privilege
+        )
+    for privilege in ("UPDATE", "DELETE"):
+        assert not await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', 'consents', :p)", p=privilege)
+
+
+async def test_aggregate_worker_has_no_privilege_on_any_table(owner_engine: AsyncEngine) -> None:
+    assert await privileges_of(owner_engine, "aggregate_worker") == {}
+
+
+async def test_audit_reader_reads_only_the_audit_chain(owner_engine: AsyncEngine) -> None:
+    assert await privileges_of(owner_engine, "audit_reader") == {"audit_events": {S}, "event_details": {S}}
+
+
+async def test_roles_are_neither_superuser_nor_bypassrls(owner_engine: AsyncEngine) -> None:
+    found = await rows(
+        owner_engine,
+        "SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = ANY (:roles)",
+        roles=list(ROLES),
+    )
+    assert {row.rolname for row in found} == set(ROLES)
+    for row in found:
+        assert not row.rolsuper, row.rolname
+        assert not row.rolbypassrls, row.rolname
+
+
+@pytest.mark.parametrize("role", ["bridge_app", "aggregate_worker", "audit_reader"])
+async def test_runtime_roles_own_nothing(owner_engine: AsyncEngine, role: str) -> None:
+    owned = await scalar(
+        owner_engine,
+        "SELECT (SELECT count(*) FROM pg_class WHERE relowner = r.oid)"
+        " + (SELECT count(*) FROM pg_proc WHERE proowner = r.oid)"
+        " + (SELECT count(*) FROM pg_type WHERE typowner = r.oid)"
+        " + (SELECT count(*) FROM pg_namespace WHERE nspowner = r.oid)"
+        " FROM pg_roles r WHERE r.rolname = :role",
+        role=role,
+    )
+    assert owned == 0
+
+
+async def test_every_table_is_owned_by_bridge_owner(owner_engine: AsyncEngine) -> None:
+    owners = await rows(
+        owner_engine,
+        "SELECT DISTINCT pg_get_userbyid(relowner) AS owner FROM pg_class"
+        " WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p', 'S', 'v', 'm')",
+    )
+    assert {row.owner for row in owners} == {"bridge_owner"}
+
+
+@pytest.mark.parametrize(("signature", "definer"), APP_FUNCTIONS + TRIGGER_FUNCTIONS)
+async def test_helper_functions_are_locked_down(owner_engine: AsyncEngine, signature: str, definer: bool) -> None:
+    (row,) = await rows(
+        owner_engine,
+        "SELECT prosecdef, proconfig, pg_get_userbyid(proowner) AS owner FROM pg_proc"
+        " WHERE oid = to_regprocedure(:sig)",
+        sig=signature,
+    )
+    assert row.prosecdef is definer
+    assert row.owner == "bridge_owner"
+    assert "search_path=pg_catalog, public" in (row.proconfig or [])
+    callers = {"bridge_app"} if (signature, definer) in APP_FUNCTIONS else set()
+    for role in ("public", "bridge_app", "aggregate_worker", "audit_reader"):
+        allowed = await scalar(
+            owner_engine, "SELECT has_function_privilege(:r, :sig, 'EXECUTE')", r=role, sig=signature
+        )
+        assert allowed is (role in callers), f"{role} EXECUTE {signature}"
+
+
+async def test_enum_types_match_the_orm(owner_engine: AsyncEngine) -> None:
+    declared: dict[str, list[str]] = {}
+    for table in TABLES.values():
+        for column in table.columns:
+            column_type = column.type
+            if isinstance(column_type, postgresql.ARRAY):
+                column_type = column_type.item_type
+            if isinstance(column_type, sa.Enum) and column_type.name:
+                declared[column_type.name] = list(column_type.enums)
+    found = await rows(
+        owner_engine,
+        "SELECT t.typname, array_agg(e.enumlabel::text ORDER BY e.enumsortorder) AS labels"
+        " FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid"
+        " WHERE t.typnamespace = 'public'::regnamespace AND t.typname NOT LIKE 'procrastinate%' GROUP BY t.typname",
+    )
+    assert {row.typname: list(row.labels) for row in found} == declared
+
+
+# --- RLS helpers --------------------------------------------------------------------------------------------------
+
+
+async def test_app_create_organization_makes_the_caller_owner(app_engine: AsyncEngine) -> None:
+    org_id = uuid7()
+    create = "SELECT app_create_organization(:id, 'company', 'Acme Ltd', CAST(:slug AS citext))"
+    async with rolled_back(app_engine) as conn:
+        await expect_error(conn, create, "app.user_id is not set", {"id": org_id, "slug": f"acme-{uuid4().hex}"})
+
+    user_id = uuid7()
+    async with rolled_back(app_engine, user_id) as conn:
+        await conn.execute(
+            sa.text("INSERT INTO users (id, email, display_name) VALUES (:id, :email, 'Test Owner')"),
+            {"id": user_id, "email": f"{uuid4().hex}@example.test"},
+        )
+        created = (await conn.execute(sa.text(create), {"id": org_id, "slug": f"acme-{uuid4().hex}"})).scalar_one()
+        assert created == org_id
+        org = (
+            await conn.execute(
+                sa.text("SELECT verification::text, source::text, created_by FROM organizations WHERE id = :id"),
+                {"id": org_id},
+            )
+        ).one()
+        assert tuple(org) == ("pending", "self_signup", user_id)
+        membership = (
+            await conn.execute(
+                sa.text("SELECT roles::text[] AS roles, status::text AS status FROM memberships WHERE org_id = :id"),
+                {"id": org_id},
+            )
+        ).one()
+        assert (membership.roles, membership.status) == (["owner", "admin"], "active")
+        member = sa.text("SELECT app_is_member(:id), app_is_member(:id, '{owner}'), app_is_member(:id, '{signatory}')")
+        assert tuple((await conn.execute(member, {"id": org_id})).one()) == (True, True, False)
+        await expect_error(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'sme', 'X', :slug, 'seed')",
+            "permission denied",
+            {"id": uuid7(), "slug": f"x-{uuid4().hex}"},
+        )
+        # Another user in the same transaction: not a member, and RLS hides the organisation and its roster.
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(uuid7())})
+        assert (await conn.execute(member, {"id": org_id})).one()[0] is False
+        for table, column in (("organizations", "id"), ("memberships", "org_id")):
+            visible = sa.text(f"SELECT count(*) FROM {table} WHERE {column} = :id")
+            assert (await conn.execute(visible, {"id": org_id})).scalar_one() == 0
+
+
+# --- Audit chain (REQ-AUD-01) -------------------------------------------------------------------------------------
+
+
+async def test_trigger_chains_seq_prev_hash_and_event_hash(app_engine: AsyncEngine) -> None:
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    async with rolled_back(app_engine, actor) as conn:
+        for n in range(3):
+            payload = json.dumps({"n": n, "amount_kes_minor": 150_000, "note": "a|b"})
+            await conn.execute(INSERT_EVENT, event_params(chain, actor, payload=payload, subject_type=None))
+        chained = list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all())
+    assert len(chained) == 3
+    assert_linked_chain(chained)
+
+
+async def test_multi_row_insert_is_chained_in_order(app_engine: AsyncEngine) -> None:
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    first, second = event_params(chain, actor, action="test.first"), event_params(chain, actor, action="test.second")
+    values = "(:id{n}, :chain, 'user', :actor, NULL, :action{n}, 'test', :subject_id{n}, '{{}}'::jsonb, 0, '', '')"
+    sql = (
+        "INSERT INTO audit_events (id, chain_id, actor_kind, actor_user_id, org_id, action, subject_type, subject_id,"
+        f" payload, seq, prev_hash, event_hash) VALUES {values.format(n=1)}, {values.format(n=2)}"
+    )
+    params = {"chain": chain, "actor": actor}
+    for n, event in ((1, first), (2, second)):
+        params |= {f"id{n}": event["id"], f"action{n}": event["action"], f"subject_id{n}": event["subject_id"]}
+    async with rolled_back(app_engine, actor) as conn:
+        await conn.execute(sa.text(sql), params)
+        chained = list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all())
+    assert [row.action for row in chained] == ["test.first", "test.second"]
+    assert_linked_chain(chained)
+
+
+async def test_separator_in_chain_fields_is_rejected(app_engine: AsyncEngine) -> None:
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    async with rolled_back(app_engine, actor) as conn:
+        for field in ("action", "subject_type"):
+            params = event_params(chain, actor, **{field: "evil|field"})
+            savepoint = await conn.begin_nested()
+            with pytest.raises(sa.exc.DBAPIError, match="may not contain"):
+                await conn.execute(INSERT_EVENT, params)
+            await savepoint.rollback()
+
+
+async def test_app_cannot_update_delete_or_truncate_audit_events(app_engine: AsyncEngine) -> None:
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    async with rolled_back(app_engine, actor) as conn:
+        await conn.execute(INSERT_EVENT, event_params(chain, actor))
+        chain_filter = {"chain": chain}
+        await expect_error(
+            conn, "UPDATE audit_events SET action = 'x' WHERE chain_id = :chain", "permission denied", chain_filter
+        )
+        await expect_error(conn, "DELETE FROM audit_events WHERE chain_id = :chain", "permission denied", chain_filter)
+        await expect_error(conn, "TRUNCATE audit_events", "permission denied")
+        await expect_error(conn, "DELETE FROM event_details", "permission denied")
+        await expect_error(conn, "UPDATE consents SET granted = true", "permission denied")
+        await expect_error(conn, "DELETE FROM consents", "permission denied")
+
+
+async def test_triggers_block_update_delete_truncate_even_for_the_owner(owner_engine: AsyncEngine) -> None:
+    chain = f"test:{uuid4().hex}"
+    params = event_params(chain, None)
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(INSERT_EVENT, params)
+        await conn.execute(
+            sa.text('INSERT INTO event_details (event_id, details) VALUES (:id, \'{"email": "a@example.test"}\')'),
+            {"id": params["id"]},
+        )
+        by_id = {"id": params["id"]}
+        await expect_error(conn, "UPDATE audit_events SET action = 'x' WHERE id = :id", "append-only", by_id)
+        await expect_error(conn, "DELETE FROM audit_events WHERE id = :id", "append-only", by_id)
+        await expect_error(conn, "TRUNCATE audit_events, event_details", "append-only")
+        await expect_error(conn, "DELETE FROM event_details WHERE event_id = :id", "append-only", by_id)
+        await expect_error(conn, "TRUNCATE event_details", "append-only")
+        # event_details stays updatable by the owner: erasure overwrites personal data without touching the chain.
+        await conn.execute(sa.text("UPDATE event_details SET details = '{}' WHERE event_id = :id"), by_id)
+        assert_linked_chain(list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all()))
+
+
+async def test_audit_visibility_for_the_app_and_the_reader(owner_engine: AsyncEngine) -> None:
+    """One transaction, switching roles with SET LOCAL ROLE (the harness session user is a superuser)."""
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    count = sa.text("SELECT count(*) FROM audit_events WHERE chain_id = :chain")
+    details = "INSERT INTO event_details (event_id) VALUES (:id)"
+    own, other = event_params(chain, actor), event_params(chain, uuid7())
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(INSERT_EVENT, own)
+        await conn.execute(INSERT_EVENT, other)
+
+        await conn.execute(sa.text("SET LOCAL ROLE audit_reader"))
+        assert (await conn.execute(count, {"chain": chain})).scalar_one() == 2  # the verifier reads every event
+        await expect_error(conn, details, "permission denied", {"id": own["id"]})
+
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        assert (await conn.execute(count, {"chain": chain})).scalar_one() == 0  # no tenant context: nothing
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(actor)})
+        assert (await conn.execute(count, {"chain": chain})).scalar_one() == 1  # only the actor's own event
+        await expect_error(conn, details, "row-level security", {"id": other["id"]})
+        await conn.execute(sa.text(details), {"id": own["id"]})
+
+        # An organisation's owners and admins see its events, whoever the actor was.
+        org_id = uuid7()
+        await conn.execute(
+            sa.text("INSERT INTO users (id, email, display_name) VALUES (:id, :email, 'Test Admin')"),
+            {"id": actor, "email": f"{uuid4().hex}@example.test"},
+        )
+        await conn.execute(
+            sa.text("SELECT app_create_organization(:id, 'sme', 'Org Ltd', CAST(:slug AS citext))"),
+            {"id": org_id, "slug": f"org-{uuid4().hex}"},
+        )
+        await conn.execute(INSERT_EVENT, event_params(chain, uuid7(), org=org_id))
+        assert (await conn.execute(count, {"chain": chain})).scalar_one() == 2
+
+
+# --- Procrastinate ------------------------------------------------------------------------------------------------
+
+
+def test_vendored_procrastinate_schema_matches_the_installed_package() -> None:
+    assert version("procrastinate") == "3.10.0", "procrastinate changed: add a revision with its migrations"
+    vendored = (BACKEND / "alembic" / "versions" / "sql" / "procrastinate_3.10.0_schema.sql").read_text("utf-8")
+    assert vendored.replace("\r\n", "\n") == SchemaManager.get_schema().replace("\r\n", "\n")
+
+
+async def test_app_can_defer_fetch_and_finish_a_job(app_engine: AsyncEngine) -> None:
+    async with rolled_back(app_engine) as conn:
+        deferred = (
+            await conn.execute(
+                sa.text(
+                    "SELECT procrastinate_defer_jobs_v1(ARRAY[ROW('bridge_test', 'bridge.test', 0, NULL, NULL,"
+                    " '{}'::jsonb, NULL)::procrastinate_job_to_defer_v1])"
+                )
+            )
+        ).scalar_one()
+        worker = (await conn.execute(sa.text("SELECT worker_id FROM procrastinate_register_worker_v1()"))).scalar_one()
+        fetched = (
+            await conn.execute(
+                sa.text("SELECT id FROM procrastinate_fetch_job_v2(ARRAY['bridge_test']::varchar[], :w)"),
+                {"w": worker},
+            )
+        ).scalar_one()
+        assert fetched == deferred[0]
+        await conn.execute(sa.text("SELECT procrastinate_finish_job_v1(:j, 'succeeded', false)"), {"j": fetched})
+        status = sa.text("SELECT status::text FROM procrastinate_jobs WHERE id = :j")
+        assert (await conn.execute(status, {"j": fetched})).scalar_one() == "succeeded"
