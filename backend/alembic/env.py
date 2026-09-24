@@ -21,8 +21,15 @@ config = context.config
 target_metadata = Base.metadata
 
 
+def include_name(name: str | None, type_: str, _parent_names: object) -> bool:
+    """Leave out objects the ORM does not declare: Procrastinate's job tables (vendored SQL in revision 0001)."""
+    return not (type_ == "table" and name is not None and name.startswith("procrastinate_"))
+
+
 def _run(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, compare_type=True, include_name=include_name
+    )
     with context.begin_transaction():
         context.run_migrations()
 
