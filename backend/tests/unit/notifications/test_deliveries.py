@@ -1,7 +1,9 @@
 """REQ-NOT-01: the delivery ledger around every send. Each send is one ``notification_deliveries`` row; at most 3
-attempts with the transient/permanent classification ported from ``reminder/notify.py``; ``email_suppressions`` is
-checked before every send; a ``dedupe_key`` makes a send idempotent. AC-MAIL-3 closes with REQ-NOT-06 (Phase 3)
-against PostgreSQL; here the ledger runs on ``InMemoryDeliveryStore``.
+attempts per call with the transient/permanent classification ported from ``reminder/notify.py``; ``email_suppressions``
+is checked before every send; a ``dedupe_key`` makes a send idempotent. ``sent``, ``failed`` (permanent error) and
+``suppressed`` are terminal; a row whose attempts ran out on transient errors stays ``queued`` and a later call with the
+same dedupe key resumes it. AC-MAIL-3 closes with REQ-NOT-06 (Phase 3) against PostgreSQL; here the ledger runs on
+``InMemoryDeliveryStore``.
 """
 
 from __future__ import annotations
@@ -91,13 +93,13 @@ async def test_a_transient_failure_is_retried_then_sent() -> None:
     assert sleeps.calls == [0.5]
 
 
-async def test_three_transient_failures_give_up_as_failed() -> None:
+async def test_three_transient_failures_leave_the_row_queued() -> None:
     store = InMemoryDeliveryStore()
     provider = FakeEmailProvider(failures=[transient("a"), transient("b"), transient("c")])
     sleeps = Sleeps()
     row = await send(store, provider, sleeps)
 
-    assert row.status is DeliveryStatus.FAILED
+    assert row.status is DeliveryStatus.QUEUED  # not failed: a later call with the same key may still send it
     assert row.attempts == 3 == MAX_ATTEMPTS
     assert row.last_error == "c"
     assert row.last_error_transient is True
@@ -141,7 +143,85 @@ async def test_a_short_backoff_repeats_its_last_delay() -> None:
 async def test_max_attempts_one_never_retries() -> None:
     provider = FakeEmailProvider(failures=[transient()])
     row = await send(InMemoryDeliveryStore(), provider, max_attempts=1)
-    assert (row.status, row.attempts, provider.attempts) == (DeliveryStatus.FAILED, 1, 1)
+    assert (row.status, row.attempts, provider.attempts) == (DeliveryStatus.QUEUED, 1, 1)
+
+
+KEY = "em7:user-1:2026-09-24"
+
+
+async def test_a_later_call_with_the_same_key_resumes_a_queued_row() -> None:
+    store = InMemoryDeliveryStore()
+    provider = FakeEmailProvider(failures=[transient(), transient(), transient()])
+    first = await send(store, provider, dedupe_key=KEY)
+    assert (first.status, first.attempts) == (DeliveryStatus.QUEUED, 3)
+
+    later = await send(store, provider, dedupe_key=KEY)
+    assert later is first
+    assert later.status is DeliveryStatus.SENT
+    assert later.attempts == 4  # attempts keep counting across calls
+    assert later.sent_at == NOW
+    assert later.provider_message_id == "fake-1"
+    assert later.last_error_transient is True  # kept from the earlier failures
+    assert provider.attempts == 4
+    assert len(provider.outbox) == 1
+    assert store.rows == [first]
+
+    again = await send(store, provider, dedupe_key=KEY)  # sent is terminal
+    assert again is first
+    assert provider.attempts == 4
+
+
+async def test_each_resuming_call_makes_at_most_three_attempts() -> None:
+    store, sleeps = InMemoryDeliveryStore(), Sleeps()
+    provider = FakeEmailProvider(failures=[transient(str(n)) for n in range(7)])
+    await send(store, provider, sleeps, dedupe_key=KEY)
+    row = await send(store, provider, sleeps, dedupe_key=KEY)
+
+    assert (row.status, row.attempts, row.last_error) == (DeliveryStatus.QUEUED, 6, "5")
+    assert provider.attempts == 6
+    assert sleeps.calls == [0.5, 2.0, 0.5, 2.0]
+
+
+async def test_a_permanent_failure_while_resuming_is_terminal() -> None:
+    store = InMemoryDeliveryStore()
+    provider = FakeEmailProvider(failures=[transient(), transient(), transient(), permanent()])
+    await send(store, provider, dedupe_key=KEY)
+    row = await send(store, provider, dedupe_key=KEY)
+    assert (row.status, row.attempts, row.last_error_transient) == (DeliveryStatus.FAILED, 4, False)
+
+    again = await send(store, provider, dedupe_key=KEY)
+    assert again is row
+    assert again.status is DeliveryStatus.FAILED
+    assert provider.attempts == 4
+
+
+async def test_resuming_rechecks_suppression() -> None:
+    store, provider = InMemoryDeliveryStore(), FakeEmailProvider(failures=[transient()])
+    first = await send(store, provider, dedupe_key=KEY, max_attempts=1)
+    assert first.status is DeliveryStatus.QUEUED
+
+    store.suppress("DEV@example.com")  # e.g. a bounce webhook in between
+    later = await send(store, provider, dedupe_key=KEY)
+    assert later is first
+    assert later.status is DeliveryStatus.SUPPRESSED
+    assert later.attempts == 1
+    assert provider.attempts == 1
+
+
+async def test_resuming_for_a_different_recipient_is_refused() -> None:
+    store, provider = InMemoryDeliveryStore(), FakeEmailProvider(failures=[transient()])
+    first = await send(store, provider, dedupe_key=KEY, max_attempts=1)
+    with pytest.raises(ValueError, match="different recipient"):
+        await send(store, provider, dedupe_key=KEY, message=message(to="other@example.com"))
+    assert (first.status, first.attempts, provider.attempts) == (DeliveryStatus.QUEUED, 1, 1)
+
+
+async def test_resuming_matches_the_recipient_case_insensitively() -> None:
+    store, provider = InMemoryDeliveryStore(), FakeEmailProvider(failures=[transient()])
+    first = await send(store, provider, dedupe_key=KEY, max_attempts=1)
+    later = await send(store, provider, dedupe_key=KEY, message=message(to="DEV@Example.com"))
+    assert later is first
+    assert later.status is DeliveryStatus.SENT
 
 
 @pytest.mark.parametrize("address", [ADDRESS, "DEV@Example.COM"])
@@ -210,6 +290,7 @@ class RacingStore(InMemoryDeliveryStore):
 
 
 async def test_losing_an_insert_race_returns_the_winner_and_sends_nothing() -> None:
+    # Even a queued winner is left alone: the racing sender may still be sending it. A later call resumes it.
     winner = NotificationDelivery(
         id=uuid7(),
         user_id=USER_ID,
@@ -231,12 +312,24 @@ async def test_no_log_line_carries_the_address_subject_or_body() -> None:
     failing = f"Postmark HTTP 422: Invalid 'To' address: '{ADDRESS}'"
     provider = FakeEmailProvider(failures=[transient(), DeliveryError(failing, code=300)])
     store = InMemoryDeliveryStore(suppressed=["blocked@example.com"])
+    flaky = FakeEmailProvider(failures=[transient()])
     with capture_logs() as logs:
         await send(store, provider)
         await send(store, FakeEmailProvider(), message=message(to="blocked@example.com"))
         await send(store, FakeEmailProvider())
+        await send(store, flaky, dedupe_key=KEY, max_attempts=1)
+        await send(store, flaky, dedupe_key=KEY)
+        await send(store, flaky, dedupe_key=KEY)
 
-    assert {entry["event"] for entry in logs} >= {"email.retry", "email.failed", "email.suppressed", "email.sent"}
+    assert {entry["event"] for entry in logs} == {
+        "email.retry",
+        "email.failed",
+        "email.suppressed",
+        "email.sent",
+        "email.deferred",
+        "email.resumed",
+        "email.duplicate",
+    }
     flat = repr(logs)
     for secret in (ADDRESS, "blocked@example.com", "Your proposal", "Private body text"):
         assert secret not in flat

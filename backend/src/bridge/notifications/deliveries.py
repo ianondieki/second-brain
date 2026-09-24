@@ -1,11 +1,16 @@
 """The delivery ledger around every email (REQ-NOT-01; AC-MAIL-3 closes with REQ-NOT-06 in Phase 3).
 
-``send_email`` records one ``notification_deliveries`` row per message:
+``send_email`` keeps one ``notification_deliveries`` row per message:
 
-1. a ``dedupe_key`` that was already used returns the existing row and sends nothing (idempotent);
-2. an address in ``email_suppressions`` gets a ``suppressed`` row and nothing is sent;
-3. otherwise a ``queued`` row is inserted and at most ``MAX_ATTEMPTS`` (3) attempts are made: a transient
-   ``DeliveryError`` is retried after the backoff, a permanent one stops at once; the row ends ``sent`` or ``failed``.
+1. ``sent``, ``failed`` and ``suppressed`` are terminal: a call with the same ``dedupe_key`` returns the row and sends
+   nothing (idempotent).
+2. An address in ``email_suppressions`` is never sent to: its row ends ``suppressed``. The check runs before every
+   send, including a resumed one.
+3. Otherwise the row is ``queued`` (newly inserted, or found under the same ``dedupe_key``) and one call makes at most
+   ``MAX_ATTEMPTS`` (3) attempts (AC-MAIL-3). A transient ``DeliveryError`` is retried after the backoff; a permanent
+   one ends the row ``failed`` at once; success ends it ``sent``. When one call's attempts run out on transient errors,
+   the row stays ``queued`` with ``last_error`` and ``last_error_transient=True``, so a later call with the same
+   ``dedupe_key`` resumes it; ``attempts`` keeps counting across calls. A resuming call must name the same recipient.
    Any other exception from a provider is a bug and propagates (the caller's transaction then drops the row).
 
 The caller owns the transaction: rows are flushed, never committed, on a session the caller has already scoped to a
@@ -64,8 +69,14 @@ class SqlDeliveryStore:
         self._session = session
 
     async def find_by_dedupe_key(self, dedupe_key: str) -> NotificationDelivery | None:
+        # FOR UPDATE: a concurrent send of the same key waits here until this transaction ends and then reads the row's
+        # final state, so a queued row is never resumed by two senders at once. populate_existing refreshes an instance
+        # this session already holds.
         row: NotificationDelivery | None = await self._session.scalar(
-            select(NotificationDelivery).where(NotificationDelivery.dedupe_key == dedupe_key)
+            select(NotificationDelivery)
+            .where(NotificationDelivery.dedupe_key == dedupe_key)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return row
 
@@ -104,6 +115,10 @@ class InMemoryDeliveryStore:
 
     async def is_suppressed(self, address: str) -> bool:
         return address.casefold() in self._suppressed
+
+    def suppress(self, address: str) -> None:
+        """Add ``address`` to the suppression list (as a bounce or unsubscribe would)."""
+        self._suppressed.add(address.casefold())
 
     async def add(self, delivery: NotificationDelivery) -> bool:
         if delivery.dedupe_key is not None and await self.find_by_dedupe_key(delivery.dedupe_key) is not None:
@@ -167,33 +182,43 @@ async def send_email(
     store: DeliveryStore = SqlDeliveryStore(session) if isinstance(session, AsyncSession) else session
     log = get_logger(__name__)  # per call, so a logger cached under an earlier configuration is never reused
 
-    if dedupe_key is not None:
-        existing = await store.find_by_dedupe_key(dedupe_key)
-        if existing is not None:
-            log.info("email.duplicate", kind=kind, delivery_id=str(existing.id), status=str(existing.status))
-            return existing
+    delivery = await store.find_by_dedupe_key(dedupe_key) if dedupe_key is not None else None
+    if delivery is not None:
+        if delivery.status != DeliveryStatus.QUEUED:  # sent, failed and suppressed are terminal
+            log.info("email.duplicate", kind=kind, delivery_id=str(delivery.id), status=str(delivery.status))
+            return delivery
+        if delivery.to_address.casefold() != message.to.casefold():
+            raise ValueError("this dedupe_key is already recorded for a different recipient")
 
     suppressed = await store.is_suppressed(message.to)
-    delivery = NotificationDelivery(
-        id=uuid7(),
-        user_id=user_id,
-        org_id=org_id,
-        kind=kind,
-        channel=NotificationChannel.EMAIL,
-        to_address=message.to,
-        dedupe_key=dedupe_key,
-        local_date=local_date,
-        status=DeliveryStatus.SUPPRESSED if suppressed else DeliveryStatus.QUEUED,
-        attempts=0,
-        provider=None if suppressed else provider.name,
-    )
-    if not await store.add(delivery):
-        # A concurrent send took the dedupe key between our lookup and our insert: that send owns the message.
-        winner = await store.find_by_dedupe_key(dedupe_key) if dedupe_key is not None else None
-        if winner is None:
-            raise RuntimeError("the delivery store refused an insert without a dedupe-key conflict")
-        log.info("email.duplicate", kind=kind, delivery_id=str(winner.id), status=str(winner.status))
-        return winner
+    if delivery is None:
+        delivery = NotificationDelivery(
+            id=uuid7(),
+            user_id=user_id,
+            org_id=org_id,
+            kind=kind,
+            channel=NotificationChannel.EMAIL,
+            to_address=message.to,
+            dedupe_key=dedupe_key,
+            local_date=local_date,
+            status=DeliveryStatus.SUPPRESSED if suppressed else DeliveryStatus.QUEUED,
+            attempts=0,
+            provider=None if suppressed else provider.name,
+        )
+        if not await store.add(delivery):
+            # A concurrent send inserted the same dedupe key between our lookup and our insert. Its row is left alone,
+            # even when queued (that send may still be under way); a later call resumes it.
+            winner = await store.find_by_dedupe_key(dedupe_key) if dedupe_key is not None else None
+            if winner is None:
+                raise RuntimeError("the delivery store refused an insert without a dedupe-key conflict")
+            log.info("email.duplicate", kind=kind, delivery_id=str(winner.id), status=str(winner.status))
+            return winner
+    elif suppressed:
+        delivery.status = DeliveryStatus.SUPPRESSED
+        await store.save(delivery)
+    else:
+        log.info("email.resumed", kind=kind, delivery_id=str(delivery.id), attempts=delivery.attempts)
+        delivery.provider = provider.name
     if suppressed:
         log.info("email.suppressed", kind=kind, delivery_id=str(delivery.id))
         return delivery
@@ -202,25 +227,29 @@ async def send_email(
     for attempt in range(1, max_attempts + 1):
         if attempt > 1:
             await sleep(delays[min(attempt - 2, len(delays) - 1)])
-        delivery.attempts = attempt
+        delivery.attempts += 1  # counts across calls when a queued row is resumed
         try:
             result = await provider.send(message)
         except DeliveryError as exc:
-            retry = exc.transient and attempt < max_attempts
             delivery.last_error = redact_addresses(str(exc))
             delivery.last_error_transient = exc.transient
-            if not retry:
-                delivery.status = DeliveryStatus.FAILED
+            if not exc.transient:
+                delivery.status = DeliveryStatus.FAILED  # terminal: never resent under this dedupe key
+                event = "email.failed"
+            elif attempt < max_attempts:
+                event = "email.retry"
+            else:
+                event = "email.deferred"  # stays queued: a later call with the same dedupe key resumes it
             await store.save(delivery)
             log.warning(
-                "email.retry" if retry else "email.failed",
+                event,
                 kind=kind,
                 delivery_id=str(delivery.id),
-                attempt=attempt,
+                attempts=delivery.attempts,
                 transient=exc.transient,
                 error=delivery.last_error,
             )
-            if retry:
+            if event == "email.retry":
                 continue
             return delivery
         delivery.status = DeliveryStatus.SENT
@@ -228,6 +257,8 @@ async def send_email(
         delivery.provider_message_id = result.message_id
         delivery.sent_at = clock()
         await store.save(delivery)
-        log.info("email.sent", kind=kind, delivery_id=str(delivery.id), attempt=attempt, provider=result.provider)
+        log.info(
+            "email.sent", kind=kind, delivery_id=str(delivery.id), attempts=delivery.attempts, provider=result.provider
+        )
         return delivery
     raise AssertionError("unreachable: max_attempts is at least 1")
