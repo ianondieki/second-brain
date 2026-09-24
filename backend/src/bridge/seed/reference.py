@@ -115,6 +115,7 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
             interval=spec.interval,
             limits=spec.limits,
             active=True,
+            is_default=spec.default,
         )
         await conn.execute(
             stmt.on_conflict_do_update(
@@ -126,6 +127,7 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
                     "interval": stmt.excluded.interval,
                     "limits": stmt.excluded.limits,
                     "active": stmt.excluded.active,
+                    "is_default": stmt.excluded.is_default,
                 },
             )
         )
