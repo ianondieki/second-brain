@@ -12,11 +12,15 @@ A failed send raises ``DeliveryError(transient, code)``, ported from ``reminder/
 
 from __future__ import annotations
 
+import asyncio
 import re
+import smtplib
 from collections import deque
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from types import MappingProxyType
+from email.message import EmailMessage as MimeMessage
+from email.utils import formatdate, make_msgid, parseaddr
+from types import MappingProxyType, TracebackType
 from typing import Any, Protocol
 
 import httpx
@@ -235,6 +239,117 @@ class PostmarkEmailProvider:
         if not isinstance(message_id, str) or not message_id:
             raise DeliveryError(f"Postmark HTTP {status} accepted the call but returned no MessageID")
         return SendResult(provider=PostmarkEmailProvider.name, message_id=message_id)
+
+
+# ------------------------------------------------------------------------------------------------------------ SMTP
+
+
+class SmtpClient(Protocol):
+    """The part of ``smtplib.SMTP`` the adapter uses (a seam for tests)."""
+
+    def __enter__(self) -> SmtpClient: ...
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None, /
+    ) -> None: ...
+
+    def send_message(self, msg: MimeMessage, /) -> dict[str, tuple[int, bytes]]: ...
+
+
+SmtpFactory = Callable[[str, int, float], SmtpClient]
+
+
+def _smtp_code(exc: BaseException) -> int | None:
+    code = getattr(exc, "smtp_code", None)
+    return code if isinstance(code, int) and code > 0 else None
+
+
+def _smtp_detail(exc: BaseException) -> str:
+    code = _smtp_code(exc)
+    reply = getattr(exc, "smtp_error", None)
+    text = reply.decode("utf-8", "replace") if isinstance(reply, bytes) else str(exc)
+    return redact_addresses(f"SMTP {type(exc).__name__}" + (f" {code}" if code else "") + (f": {text}" if text else ""))
+
+
+def _refusal(refused: Mapping[str, tuple[int, bytes]]) -> tuple[int | None, str]:
+    """The first refused recipient's reply code and a message without the address."""
+    for code, reply in refused.values():
+        text = reply.decode("utf-8", "replace") if isinstance(reply, bytes) else str(reply)
+        return code, redact_addresses(f"SMTP refused the recipient ({code}: {text})")
+    return None, "SMTP refused the recipient"
+
+
+class SmtpEmailProvider:
+    """Plain SMTP without authentication or TLS, for the Mailpit sink in dev and CI (ADR-004). ``Settings`` refuses
+    it in production. ``smtplib`` blocks, so each send runs in a worker thread."""
+
+    name = "smtp"
+
+    def __init__(
+        self,
+        *,
+        host: str,
+        port: int,
+        sender: str,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        smtp_factory: SmtpFactory | None = None,
+    ) -> None:
+        self._host = host
+        self._port = port
+        self._sender = sender
+        self._domain = parseaddr(sender)[1].rpartition("@")[2] or "localhost"
+        self._timeout = timeout
+        self._smtp_factory = smtp_factory
+
+    def __repr__(self) -> str:
+        return f"SmtpEmailProvider(host={self._host!r}, port={self._port})"
+
+    def _connect(self, host: str, port: int, timeout: float) -> SmtpClient:
+        # EHLO with the sender's domain: the default, socket.getfqdn(), can wait on a reverse DNS lookup.
+        return smtplib.SMTP(host, port, local_hostname=self._domain, timeout=timeout)
+
+    def _build(self, message: EmailMessage) -> MimeMessage:
+        mime = MimeMessage()
+        mime["From"] = self._sender
+        mime["To"] = message.to
+        mime["Subject"] = message.subject
+        mime["Date"] = formatdate(usegmt=True)
+        mime["Message-ID"] = make_msgid(domain=self._domain)
+        if message.tag is not None:
+            mime["X-Tags"] = message.tag  # Mailpit tags messages from X-Tags (mailpit.axllent.org/docs/usage/tagging/)
+        for name, value in message.headers.items():
+            mime[name] = value
+        mime.set_content(message.text)
+        if message.html is not None:
+            mime.add_alternative(message.html, subtype="html")
+        return mime
+
+    def _deliver(self, mime: MimeMessage) -> None:
+        connect = self._smtp_factory or self._connect
+        try:
+            with connect(self._host, self._port, self._timeout) as smtp:
+                refused = smtp.send_message(mime)
+        # Order matters (as in reminder/notify.py): every smtplib exception is also an OSError, so the generic network
+        # clause comes last.
+        except smtplib.SMTPRecipientsRefused as exc:
+            code, detail = _refusal(exc.recipients)
+            raise DeliveryError(detail, code=code) from exc
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError) as exc:
+            raise DeliveryError(_smtp_detail(exc), transient=True, code=_smtp_code(exc)) from exc
+        except smtplib.SMTPException as exc:
+            code = _smtp_code(exc)
+            # SMTP 4xx means "try again later" by definition; 5xx (or no code) is permanent.
+            raise DeliveryError(_smtp_detail(exc), transient=code is not None and 400 <= code < 500, code=code) from exc
+        except OSError as exc:  # DNS, no network, connection refused, timeouts
+            raise DeliveryError(f"SMTP unreachable: {type(exc).__name__}", transient=True) from exc
+        if refused:
+            code, detail = _refusal(refused)
+            raise DeliveryError(detail, code=code)
+
+    async def send(self, message: EmailMessage) -> SendResult:
+        mime = self._build(message)
+        await asyncio.to_thread(self._deliver, mime)
+        return SendResult(provider=self.name, message_id=str(mime["Message-ID"]).strip("<>"))
 
 
 # ------------------------------------------------------------------------------------------------------------ Fake
