@@ -206,13 +206,16 @@ POLICIES: tuple[Policy, ...] = (
 )
 
 # ---------------------------------------------------------------------------------------------------------------------
-# SQL functions. search_path is pinned on every function; EXECUTE is revoked from PUBLIC and granted explicitly.
+# SQL functions. Every function pins search_path = pg_catalog, public, pg_temp: pg_temp must be listed, and last,
+# because an unlisted pg_temp is searched FIRST for relations and types, so a caller could shadow uuid, text or bytea
+# with a temporary domain whose CHECK then runs as the owner inside a SECURITY DEFINER function. EXECUTE is revoked
+# from PUBLIC and granted explicitly. (prepare_db.sql also revokes TEMPORARY on the database from PUBLIC.)
 # ---------------------------------------------------------------------------------------------------------------------
 
 FUNCTIONS_SQL = r"""
 CREATE FUNCTION uuid7() RETURNS uuid
     LANGUAGE sql VOLATILE
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$
     -- RFC 9562 UUIDv7: 48-bit Unix milliseconds, version 7, random tail (PostgreSQL 16 has no uuidv7()).
     SELECT encode(
@@ -228,12 +231,12 @@ $$;
 
 CREATE FUNCTION app_user_id() RETURNS uuid
     LANGUAGE sql STABLE SECURITY INVOKER
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT nullif(current_setting('app.user_id', true), '')::uuid $$;
 
 CREATE FUNCTION app_org_id() RETURNS uuid
     LANGUAGE sql STABLE SECURITY INVOKER
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT nullif(current_setting('app.org_id', true), '')::uuid $$;
 
 -- True when the current user (app.user_id) has an active membership of p_org holding any of p_roles (any role when
@@ -241,7 +244,7 @@ AS $$ SELECT nullif(current_setting('app.org_id', true), '')::uuid $$;
 -- policies that call it do not recurse.
 CREATE FUNCTION app_is_member(p_org uuid, p_roles org_role[] DEFAULT NULL) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT EXISTS (
         SELECT 1
@@ -259,7 +262,7 @@ CREATE FUNCTION app_create_organization(
     p_id uuid, p_kind org_kind, p_legal_name text, p_slug citext, p_country text DEFAULT 'KE'
 ) RETURNS uuid
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_user uuid := public.app_user_id();
@@ -307,7 +310,7 @@ GRANT EXECUTE ON FUNCTION app_create_organization(uuid, org_kind, text, citext, 
 AUDIT_SQL = r"""
 CREATE FUNCTION audit_events_chain() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_last_seq bigint;
@@ -362,7 +365,7 @@ COMMENT ON FUNCTION audit_events_chain() IS
 
 CREATE FUNCTION audit_block_mutation() RETURNS trigger
     LANGUAGE plpgsql
-    SET search_path = pg_catalog, public
+    SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
     RAISE EXCEPTION '% on % is not allowed: the audit log is append-only', TG_OP, TG_TABLE_NAME
@@ -416,6 +419,8 @@ BEGIN
          WHERE p.pronamespace = 'public'::regnamespace
            AND p.proname LIKE 'procrastinate\_%'
     LOOP
+        -- The vendored SQL does not pin search_path; pin it like every other function of this revision.
+        EXECUTE format('ALTER FUNCTION %s SET search_path = pg_catalog, public, pg_temp', r.signature);
         EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', r.signature);
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO bridge_app', r.signature);
     END LOOP;

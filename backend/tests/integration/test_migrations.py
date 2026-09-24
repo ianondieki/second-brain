@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 import bridge.models.all  # noqa: F401  # registers every table
 from bridge.ids import uuid7
 from bridge.models import Base, Tenancy
-from tests.integration.conftest import BACKEND, create_database, drop_database, run_alembic
+from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
 
 TABLES = Base.metadata.tables
 TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER}
@@ -74,6 +74,16 @@ APP_FUNCTIONS = (
     ("app_create_organization(uuid, org_kind, text, citext, text)", True),
 )
 TRIGGER_FUNCTIONS = (("audit_events_chain()", True), ("audit_block_mutation()", False))
+PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
+
+# Temporary objects an attacker would plant (one statement each: psycopg sends parameterised queries singly).
+SHADOWING_ATTACK = (
+    "CREATE FUNCTION pg_temp.trap(v anyelement) RETURNS boolean LANGUAGE plpgsql AS"
+    " $$ BEGIN RAISE EXCEPTION USING MESSAGE = concat('hijacked as ', current_user); END $$",
+    "CREATE DOMAIN pg_temp.text AS pg_catalog.text CHECK (pg_temp.trap(VALUE))",
+    "CREATE DOMAIN pg_temp.uuid AS pg_catalog.uuid CHECK (pg_temp.trap(VALUE))",
+    "CREATE DOMAIN pg_temp.bytea AS pg_catalog.bytea CHECK (pg_temp.trap(VALUE))",
+)
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 ZERO_HASH = bytes(32)
@@ -426,13 +436,73 @@ async def test_helper_functions_are_locked_down(owner_engine: AsyncEngine, signa
     )
     assert row.prosecdef is definer
     assert row.owner == "bridge_owner"
-    assert "search_path=pg_catalog, public" in (row.proconfig or [])
+    assert row.proconfig == [PINNED_SEARCH_PATH]
     callers = {"bridge_app"} if (signature, definer) in APP_FUNCTIONS else set()
     for role in ("public", "bridge_app", "aggregate_worker", "audit_reader"):
         allowed = await scalar(
             owner_engine, "SELECT has_function_privilege(:r, :sig, 'EXECUTE')", r=role, sig=signature
         )
         assert allowed is (role in callers), f"{role} EXECUTE {signature}"
+
+
+async def test_every_function_pins_search_path_with_pg_temp_last(owner_engine: AsyncEngine) -> None:
+    """Every function of the revision (helpers, triggers, Procrastinate's), not only the listed helpers."""
+    found = await rows(
+        owner_engine,
+        "SELECT p.oid::regprocedure::text AS signature, p.proconfig FROM pg_proc p"
+        " WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+        " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')",
+    )
+    assert len(found) > len(APP_FUNCTIONS) + len(TRIGGER_FUNCTIONS)  # includes procrastinate_*
+    unpinned = sorted(row.signature for row in found if row.proconfig != [PINNED_SEARCH_PATH])
+    assert unpinned == []
+
+
+@pytest.mark.parametrize("role", ["bridge_app", "aggregate_worker", "audit_reader"])
+async def test_runtime_roles_cannot_create_temporary_objects(owner_engine: AsyncEngine, role: str) -> None:
+    privilege = "SELECT has_database_privilege(:r, current_database(), 'TEMPORARY')"
+    assert await scalar(owner_engine, privilege, r=role) is False
+
+
+async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: URL) -> None:
+    """The attack the pinned search_path stops. bridge_app shadows uuid, text and bytea with temporary domains whose
+    CHECK raises with current_user. With pg_temp unlisted it is searched first for types, so SECURITY DEFINER code
+    (``v_user uuid`` in app_create_organization, ``bytea`` and ``::text`` in the audit trigger) resolved the domains
+    and ran the CHECK as bridge_owner. TEMPORARY is granted inside the rolled-back transaction to show the pinned path
+    holds on its own; a fresh backend makes sure no plan compiled before the domains existed hides a regression."""
+    engine = role_engine(database_url, "bridge_owner", poolclass=sa.pool.NullPool)
+    user_id, org_id = uuid7(), uuid7()
+    try:
+        async with rolled_back(engine) as conn:
+            await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+            await expect_error(conn, "CREATE TEMP TABLE t (x int)", "permission denied to create temporary tables")
+            await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))  # owns the database; the grant is rolled back
+            database = (await conn.execute(sa.text("SELECT current_database()"))).scalar_one()
+            await conn.execute(sa.text(f'GRANT TEMPORARY ON DATABASE "{database}" TO bridge_app'))
+            await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+            await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(user_id)})
+            await conn.execute(
+                sa.text("INSERT INTO users (id, email, display_name) VALUES (:id, :email, 'Victim')"),
+                {"id": user_id, "email": f"{uuid4().hex}@example.test"},
+            )
+            for statement in SHADOWING_ATTACK:
+                await conn.execute(sa.text(statement))
+            # The trap is live: SQL without a pinned path resolves the temporary domain and runs its CHECK.
+            await expect_error(conn, "SELECT CAST('x' AS text)", "hijacked as bridge_app")
+            # Pinned functions never resolve it (before the fix each of these raised "hijacked as bridge_owner").
+            await conn.execute(
+                sa.text("SELECT app_create_organization(:id, 'company', 'Victim Ltd', CAST(:slug AS citext))"),
+                {"id": org_id, "slug": f"victim-{uuid4().hex}"},
+            )
+            member = sa.text("SELECT app_is_member(:id, '{owner}')")
+            assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
+            await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
+            await conn.execute(
+                sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'x')"),
+                {"id": uuid7(), "c": f"test:{uuid4().hex}"},
+            )
+    finally:
+        await engine.dispose()
 
 
 async def test_enum_types_match_the_orm(owner_engine: AsyncEngine) -> None:
