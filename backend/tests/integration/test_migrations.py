@@ -91,7 +91,8 @@ ZERO_HASH = bytes(32)
 INSERT_EVENT = sa.text(
     "INSERT INTO audit_events (id, chain_id, actor_kind, actor_user_id, org_id, action, subject_type, subject_id,"
     " payload, seq, prev_hash, event_hash)"
-    " VALUES (:id, :chain, 'user', :actor, :org, :action, :subject_type, :subject_id, CAST(:payload AS jsonb),"
+    " VALUES (:id, :chain, CAST(:actor_kind AS audit_actor), :actor, :org, :action, :subject_type, :subject_id,"
+    " CAST(:payload AS jsonb),"
     " 999, '\\x00'::bytea, '\\x00'::bytea)"  # seq and hashes sent by a client are overwritten by the trigger
 )
 SELECT_CHAIN = sa.text(
@@ -113,6 +114,7 @@ def event_params(chain: str, actor: UUID | None, **overrides: Any) -> dict[str, 
     params: dict[str, Any] = {
         "id": uuid7(),
         "chain": chain,
+        "actor_kind": "user",
         "actor": actor,
         "org": None,
         "action": "test.event",
@@ -237,7 +239,7 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
 def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> None:
     """A second writer waits on the chain's advisory lock and links to the first writer's committed event."""
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
-    chain, actor = f"test:{uuid4().hex}", uuid7()
+    chain = f"test:{uuid4().hex}"
     engine = sa.create_engine(scratch_url, poolclass=sa.pool.NullPool)
     errors: list[BaseException] = []
     pid: list[int] = []
@@ -247,7 +249,7 @@ def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> Non
             with engine.begin() as conn:  # commits on exit
                 conn.exec_driver_sql("SET LOCAL ROLE bridge_app")
                 pid.append(conn.execute(sa.text("SELECT pg_backend_pid()")).scalar_one())
-                conn.execute(INSERT_EVENT, event_params(chain, actor))
+                conn.execute(INSERT_EVENT, event_params(chain, None, actor_kind="system"))
         except BaseException as exc:  # reported by the main thread
             errors.append(exc)
 
@@ -255,7 +257,7 @@ def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> Non
     try:
         with engine.begin() as first:  # holds the chain lock until it commits on exit
             first.exec_driver_sql("SET LOCAL ROLE bridge_app")
-            first.execute(INSERT_EVENT, event_params(chain, actor))
+            first.execute(INSERT_EVENT, event_params(chain, None, actor_kind="system"))
             thread = threading.Thread(target=second_writer)
             thread.start()
             deadline = time.monotonic() + 60
@@ -388,7 +390,7 @@ async def test_aggregate_worker_has_no_privilege_on_any_table(owner_engine: Asyn
 
 
 async def test_audit_reader_reads_only_the_audit_chain(owner_engine: AsyncEngine) -> None:
-    assert await privileges_of(owner_engine, "audit_reader") == {"audit_events": {S}, "event_details": {S}}
+    assert await privileges_of(owner_engine, "audit_reader") == {"audit_events": {S}}
 
 
 async def test_roles_are_neither_superuser_nor_bypassrls(owner_engine: AsyncEngine) -> None:
@@ -739,14 +741,18 @@ async def test_audit_visibility_for_the_app_and_the_reader(owner_engine: AsyncEn
 
         await conn.execute(sa.text("SET LOCAL ROLE audit_reader"))
         assert (await conn.execute(count, {"chain": chain})).scalar_one() == 2  # the verifier reads every event
+        await expect_error(conn, "SELECT count(*) FROM event_details", "permission denied")  # but no personal data
         await expect_error(conn, details, "permission denied", {"id": own["id"]})
 
         await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
         assert (await conn.execute(count, {"chain": chain})).scalar_one() == 0  # no tenant context: nothing
         await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(actor)})
         assert (await conn.execute(count, {"chain": chain})).scalar_one() == 1  # only the actor's own event
-        await expect_error(conn, details, "row-level security", {"id": other["id"]})
         await conn.execute(sa.text(details), {"id": own["id"]})
+        await conn.execute(sa.text(details), {"id": other["id"]})  # writing details is trusted like the event
+        visible_details = sa.text("SELECT event_id FROM event_details WHERE event_id IN (:own, :other)")
+        found = (await conn.execute(visible_details, {"own": own["id"], "other": other["id"]})).scalars().all()
+        assert found == [own["id"]]  # reading them follows the event's visibility
 
         # An organisation's owners and admins see its events, whoever the actor was.
         org_id = uuid7()
@@ -758,8 +764,37 @@ async def test_audit_visibility_for_the_app_and_the_reader(owner_engine: AsyncEn
             sa.text("SELECT app_create_organization(:id, 'sme', 'Org Ltd', CAST(:slug AS citext))"),
             {"id": org_id, "slug": f"org-{uuid4().hex}"},
         )
-        await conn.execute(INSERT_EVENT, event_params(chain, uuid7(), org=org_id))
+        await conn.execute(INSERT_EVENT, event_params(chain, None, actor_kind="system", org=org_id))
         assert (await conn.execute(count, {"chain": chain})).scalar_one() == 2
+
+
+async def test_system_event_and_details_need_no_user(app_engine: AsyncEngine) -> None:
+    """A job without app.user_id appends a system event and its details in one transaction."""
+    chain = f"test:{uuid4().hex}"
+    event = event_params(chain, None, actor_kind="system")
+    async with rolled_back(app_engine) as conn:
+        await conn.execute(INSERT_EVENT, event)
+        await conn.execute(
+            sa.text("INSERT INTO event_details (event_id, details) VALUES (:id, '{\"note\": \"nightly job\"}')"),
+            {"id": event["id"]},
+        )
+        # Written, but not readable without a user who may see it.
+        visible = sa.text("SELECT count(*) FROM event_details WHERE event_id = :id")
+        assert (await conn.execute(visible, {"id": event["id"]})).scalar_one() == 0
+
+
+async def test_user_events_cannot_be_forged(app_engine: AsyncEngine) -> None:
+    """A user-kind event must name the current user as its actor."""
+    actor, chain = uuid7(), f"test:{uuid4().hex}"
+    async with rolled_back(app_engine, actor) as conn:
+        for forged in (uuid7(), None):
+            savepoint = await conn.begin_nested()
+            with pytest.raises(sa.exc.DBAPIError, match="row-level security"):
+                await conn.execute(INSERT_EVENT, event_params(chain, forged))
+            await savepoint.rollback()
+        await conn.execute(INSERT_EVENT, event_params(chain, actor))
+        chained = list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all())
+    assert [row.actor_user_id for row in chained] == [actor]
 
 
 # --- Procrastinate ------------------------------------------------------------------------------------------------

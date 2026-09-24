@@ -118,7 +118,7 @@ APP_GRANTS: dict[str, str] = {
     "event_details": "SELECT, INSERT",  # UPDATE (erasure) arrives with REQ-SEC-02
 }
 
-AUDIT_READER_GRANTS = ("audit_events", "event_details")
+AUDIT_READER_GRANTS = ("audit_events",)  # the chain verifier never needs event_details (personal data)
 
 
 class Policy(NamedTuple):
@@ -198,13 +198,13 @@ POLICIES: tuple[Policy, ...] = (
     Policy("notification_deliveries", "SELECT", _USER_OR_ORG_MEMBER),
     Policy("notification_deliveries", "INSERT", check=_USER_OR_ORG_ADMIN),
     Policy("notification_deliveries", "UPDATE", _USER_OR_ORG_ADMIN, _USER_OR_ORG_ADMIN),
-    # audit chain: the app appends anything and reads its own or its organisations' events; the verifier reads all.
+    # audit chain: the app appends system/staff events and user events in the current user's own name, and reads its
+    # own or its organisations' events; the verifier reads the chain only (details hold personal data).
     Policy("audit_events", "SELECT", _AUDIT_VISIBLE),
-    Policy("audit_events", "INSERT", check="true"),
+    Policy("audit_events", "INSERT", check="actor_kind <> 'user' OR actor_user_id = app_user_id()"),
     Policy("audit_events", "SELECT", "true", role="audit_reader"),
     Policy("event_details", "SELECT", _EVENT_VISIBLE),
-    Policy("event_details", "INSERT", check=_EVENT_VISIBLE),
-    Policy("event_details", "SELECT", "true", role="audit_reader"),
+    Policy("event_details", "INSERT", check="true"),  # same write trust as the audit_events INSERT
 )
 
 # ---------------------------------------------------------------------------------------------------------------------
