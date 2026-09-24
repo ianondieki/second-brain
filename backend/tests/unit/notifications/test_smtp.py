@@ -97,6 +97,17 @@ async def test_send_builds_a_multipart_message_with_tag_and_headers() -> None:
     assert fake.envelopes == [("no-reply@bridge.test", [ADDRESS])]
 
 
+async def test_non_ascii_subjects_and_header_values_are_encoded_not_refused() -> None:
+    fake = FakeSmtp()
+    await provider(fake).send(
+        message(subject="Karibu \u2014 ombi lako \u2713", headers={"X-Bridge-Note": "caf\u00e9 \u2014 n\u00e8"})
+    )
+    [sent] = fake.sent
+    assert sent["Subject"] == "Karibu \u2014 ombi lako \u2713"
+    assert sent["X-Bridge-Note"] == "caf\u00e9 \u2014 n\u00e8"
+    assert sent.as_bytes().isascii()  # RFC 2047-encoded on the wire
+
+
 async def test_a_text_only_message_is_a_single_plain_part_without_tags() -> None:
     fake = FakeSmtp()
     await provider(fake).send(message())

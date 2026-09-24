@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import re
 import smtplib
+import unicodedata
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -55,7 +56,9 @@ _ENCODED_WORD_START = "=?"
 _ANY_ADDRESS = re.compile(r"""[^\s@<>()\[\]",;:]+@[^\s@<>()\[\]"',;:]+""")
 _TAG = re.compile(r"[A-Za-z0-9._-]{1,100}")  # fits Postmark Tag and Mailpit's allowed tag characters
 _HEADER_NAME = re.compile(r"[!-9;-~]+")  # RFC 5322 field-name: printable ASCII except ':'
-_LINE_BREAK = re.compile(r"[\r\n\x00]")
+# Unicode categories that must never reach a header: controls (incl. CR, LF, VT, FF, NEL, TAB), line and paragraph
+# separators. The email package raises ValueError on some of them at send time; the others split a header visually.
+_NOT_IN_A_LINE = frozenset({"Cc", "Zl", "Zp"})
 
 # Set by the adapters, or able to add recipients: smtplib's send_message takes the envelope from To/Cc/Bcc (or the
 # Resent-* block), which would bypass the per-address suppression check.
@@ -90,6 +93,10 @@ def is_mailbox(value: str) -> bool:
         and _LOCAL_PART.fullmatch(local) is not None
         and _DOMAIN.fullmatch(domain) is not None
     )
+
+
+def _is_one_line(value: str) -> bool:
+    return len(value.splitlines()) <= 1 and not any(unicodedata.category(char) in _NOT_IN_A_LINE for char in value)
 
 
 def redact_addresses(text: str, limit: int = MAX_ERROR_CHARS) -> str:
@@ -131,14 +138,14 @@ class EmailMessage:
                 "the recipient must be one bare address: a dot-atom local part at an LDH domain, with no display name,"
                 f" quotes, comments or encoded-words, at most {MAX_ADDRESS_CHARS} characters"
             )
-        if not self.subject or len(self.subject) > MAX_SUBJECT_CHARS or _LINE_BREAK.search(self.subject):
+        if not self.subject or len(self.subject) > MAX_SUBJECT_CHARS or not _is_one_line(self.subject):
             raise ValueError(f"the subject must be one non-empty line of at most {MAX_SUBJECT_CHARS} characters")
         if not self.text:
             raise ValueError("a plain-text part (text) is required")
         if self.tag is not None and not _TAG.fullmatch(self.tag):
             raise ValueError("a tag is 1-100 characters from A-Z a-z 0-9 . _ -")
         for name, value in self.headers.items():
-            if not _HEADER_NAME.fullmatch(name) or _LINE_BREAK.search(value):
+            if not _HEADER_NAME.fullmatch(name) or not _is_one_line(value):
                 raise ValueError(f"malformed header {name!r}")
             lowered = name.lower()
             if lowered in RESERVED_HEADERS or lowered.startswith("resent-"):

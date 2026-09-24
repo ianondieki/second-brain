@@ -87,10 +87,48 @@ def test_dot_atom_addresses_on_ldh_domains_are_accepted(to: str) -> None:
     assert make(to=to).to == to
 
 
-@pytest.mark.parametrize("subject", ["", "Line one\nBcc: x@example.com", "Carriage\rreturn", "s" * 2001])
-def test_the_subject_is_one_non_empty_line(subject: str) -> None:
+# Everything str.splitlines() breaks on, plus other Unicode Cc (control), Zl and Zp characters: none may reach a
+# header, where the email package would raise ValueError at send time or a reader could see a second line.
+NOT_ONE_LINE = [
+    pytest.param("\n", id="LF"),
+    pytest.param("\r", id="CR"),
+    pytest.param("\r\n", id="CRLF"),
+    pytest.param("\x0b", id="VT"),
+    pytest.param("\x0c", id="FF"),
+    pytest.param("\x1c", id="FS"),
+    pytest.param("\x1d", id="GS"),
+    pytest.param("\x1e", id="RS"),
+    pytest.param("\x85", id="NEL"),
+    pytest.param("\u2028", id="LINE-SEPARATOR"),
+    pytest.param("\u2029", id="PARAGRAPH-SEPARATOR"),
+    pytest.param("\x00", id="NUL"),
+    pytest.param("\t", id="TAB"),
+    pytest.param("\x7f", id="DEL"),
+    pytest.param("\x9b", id="CSI"),
+]
+
+
+@pytest.mark.parametrize("subject", ["", "s" * 2001])
+def test_the_subject_is_non_empty_and_bounded(subject: str) -> None:
     with pytest.raises(ValueError, match="subject"):
         make(subject=subject)
+
+
+@pytest.mark.parametrize("breaker", NOT_ONE_LINE)
+def test_the_subject_is_one_line(breaker: str) -> None:
+    with pytest.raises(ValueError, match="subject"):
+        make(subject=f"Line one{breaker}Bcc: x@example.com")
+
+
+@pytest.mark.parametrize("breaker", NOT_ONE_LINE)
+def test_header_values_are_one_line(breaker: str) -> None:
+    with pytest.raises(ValueError, match="header"):
+        make(headers={"List-Unsubscribe": f"<https://bridge.test/u/1>{breaker}Bcc: x@example.com"})
+
+
+def test_non_ascii_single_line_text_is_accepted() -> None:
+    message = make(subject="Karibu \u2014 ombi lako limepokelewa \u2713", headers={"X-Bridge-Note": "caf\u00e9"})
+    assert message.subject.endswith("\u2713")
 
 
 def test_a_plain_text_part_is_required() -> None:
