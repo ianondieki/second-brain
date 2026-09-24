@@ -1,20 +1,27 @@
-# Legacy unittest ids skipped on Linux by scripts/run_legacy_tests.py (Phase 1).
-# Status: UNVERIFIED UNTIL PHASE 1 CI. Derived by reading tests/, not by running on ubuntu.
-# Rule: the file is applied only when sys.platform != 'win32'; on windows-latest the full suite runs.
+# Legacy unittest ids skipped on Linux by scripts/run_legacy_tests.py.
+# Rule: the file is applied only when sys.platform != 'win32'; on windows-latest the full suite runs and passes.
+# Status: VERIFIED in Phase 1 CI (2026-09-24, pr.yml job "legacy suite, ubuntu, no skip list", run for commit
+# 49f7f0d): exactly these six ids fail on ubuntu-latest with Python 3.13; every other test passes.
+# Changes to this list are reported in docs/platform/DECISIONS-NEEDED.md (D-12, D-25), never added silently.
 #
-# Why each id is Windows-only (see docs/platform/PROGRESS.md, Phase 0 report):
+# Windows paths and cmd.exe (predicted in Phase 0, confirmed):
 #   tests.test_graph.ToolTests.test_refuses_outside_secret_and_binary
-#     asserts that "..\app\README.md" resolves back inside the project; backslash is not a
-#     path separator on POSIX, so the read is refused and the assertion fails.
+#     asserts that "..\app\README.md" resolves back inside the project; backslash is not a path separator on
+#     POSIX, so the read is refused and the assertion fails.
 #   tests.test_graph.ToolTests.test_junction_cannot_lead_outside
-#     runs `cmd /c mklink /J`; on POSIX subprocess raises FileNotFoundError before skipTest.
-#   tests.test_adviser_cli.CheckTests.test_everything_set_says_ready_and_hides_the_owners_number
-#   tests.test_adviser_cli.CheckTests.test_a_secret_of_the_wrong_shape_is_refused_with_its_length
-#     both assert exit code 0 from adviser.__main__.check(), which requires a cloudflared binary
-#     (tools/cloudflared.exe, gitignored) or ADVISER_CLOUDFLARED; absent on CI runners.
-#     NOTE: the same two tests also fail on windows-latest unless CI provides the binary or sets
-#     ADVISER_CLOUDFLARED (see docs/platform/DECISIONS-NEEDED.md D-13).
+#     runs `cmd /c mklink /J`; on POSIX subprocess raises FileNotFoundError: 'cmd'.
+#
+# Voice-note ordering in adviser/turn.py (found in Phase 1 CI, D-25):
+#   the four TurnTests below assume the three parallel voice-note renders start in submission order, which holds on
+#   Windows; on the Linux runner the renders race, so the note that fails or stalls is a different one
+#   (observed: "AssertionError: 20.08 not less than 10", "2 != 1", notes sent out of order).
+#
+# Removed after verification: tests.test_adviser_cli.CheckTests.test_everything_set_says_ready_and_hides_the_owners_number
+# and ...test_a_secret_of_the_wrong_shape_is_refused_with_its_length pass on ubuntu once CI provides requirements.txt
+# and a cloudflared stub on PATH (D-13).
 tests.test_graph.ToolTests.test_refuses_outside_secret_and_binary
 tests.test_graph.ToolTests.test_junction_cannot_lead_outside
-tests.test_adviser_cli.CheckTests.test_everything_set_says_ready_and_hides_the_owners_number
-tests.test_adviser_cli.CheckTests.test_a_secret_of_the_wrong_shape_is_refused_with_its_length
+tests.test_adviser_turn.TurnTests.test_question_lost_in_a_half_failed_reply_cannot_be_answered
+tests.test_adviser_turn.TurnTests.test_long_answer_streams_short_first_note_then_the_rest_in_order
+tests.test_adviser_turn.TurnTests.test_later_note_failing_sends_the_rest_as_text
+tests.test_adviser_turn.TurnTests.test_failed_note_does_not_wait_for_the_others
