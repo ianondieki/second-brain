@@ -419,12 +419,20 @@ class FakeEmailProvider:
 
 
 def provider_from_settings(settings: Settings) -> EmailProvider:
-    """The adapter named by ``EMAIL_PROVIDER``. Fails closed: Postmark needs its token and is never used under
-    ``APP_ENV=test`` (AC-SEC-5); the in-memory fake is refused in staging and production, where mail must go out."""
+    """The adapter named by ``EMAIL_PROVIDER``. Fails closed:
+
+    - Postmark is built only when ``APP_ENV=production`` and needs its token. Dev, test and staging send through
+      Mailpit (smtp) or the fake (ADR-004 decisions 1-2; no real email before gate G7; AC-SEC-5). Staging moves to
+      Postmark only by a later ADR change.
+    - The in-memory fake is refused in staging and production, where mail must not be dropped silently.
+    """
     choice = settings.email_provider
     if choice == "postmark":
-        if settings.app_env == "test":
-            raise ValueError("EMAIL_PROVIDER=postmark is not allowed when APP_ENV=test (AC-SEC-5); use smtp or fake")
+        if settings.app_env != "production":
+            raise ValueError(
+                f"EMAIL_PROVIDER=postmark is allowed only when APP_ENV=production (ADR-004); APP_ENV={settings.app_env}"
+                " must use smtp (Mailpit) or fake"
+            )
         token = settings.postmark_server_token
         if token is None:
             raise ValueError("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")

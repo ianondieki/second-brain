@@ -41,20 +41,31 @@ def test_smtp_is_picked_for_mailpit() -> None:
     assert provider.name == "smtp"
 
 
-def test_postmark_is_picked_with_its_token() -> None:
+def test_postmark_is_picked_in_production_with_its_token() -> None:
     provider = provider_from_settings(
-        settings(app_env="staging", email_provider="postmark", postmark_server_token=SecretStr("pm-test-token"))
+        settings(
+            app_env="production",
+            email_provider="postmark",
+            postmark_server_token=SecretStr("pm-test-token"),
+            public_base_url="https://bridge.test",
+        )
     )
     assert isinstance(provider, PostmarkEmailProvider)
     assert provider.name == "postmark"
 
 
-def test_postmark_is_refused_under_app_env_test() -> None:
-    # AC-SEC-5: nothing run by make check or CI may reach a real provider, even with a token in the environment.
-    with pytest.raises(ValueError, match="APP_ENV=test"):
+@pytest.mark.parametrize("app_env", ["dev", "test", "staging"])
+def test_postmark_is_refused_outside_production(app_env: AppEnv) -> None:
+    # ADR-004 decisions 1-2 and gate G7: dev, test and staging send through Mailpit (smtp) or the fake, even with a
+    # Postmark token in the environment; AC-SEC-5 for test. Staging moves to Postmark only by a later ADR change.
+    with pytest.raises(ValueError, match="only when APP_ENV=production"):
         provider_from_settings(
-            settings(app_env="test", email_provider="postmark", postmark_server_token=SecretStr("pm-test-token"))
+            settings(app_env=app_env, email_provider="postmark", postmark_server_token=SecretStr("pm-test-token"))
         )
+
+
+def test_smtp_is_accepted_in_staging() -> None:
+    assert isinstance(provider_from_settings(settings(app_env="staging", email_provider="smtp")), SmtpEmailProvider)
 
 
 @pytest.mark.parametrize("app_env", ["staging", "production"])
