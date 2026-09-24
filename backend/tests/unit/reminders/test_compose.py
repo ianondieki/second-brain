@@ -74,6 +74,27 @@ def test_text_from_projects_and_agents_is_escaped_everywhere() -> None:
     assert parts.html.endswith("</ul></div></body></html>")
 
 
+def test_an_unfinished_projects_name_and_next_step_are_escaped_in_its_card_and_the_preheader() -> None:
+    # An "unfinished" verdict puts the project on the "Projects that need you" card with the agent's next step, and
+    # makes it the preheader ("Start with {name}: {next step}"): both sinks must escape agent- and folder-made text.
+    name = 'shop <img src=x onerror="alert(1)"> & co'
+    step = 'Open <img src=x onerror="alert(2)"> & "commit"'
+    esc_name = "shop &lt;img src=x onerror=&#34;alert(1)&#34;&gt; &amp; co"
+    esc_step = "Open &lt;img src=x onerror=&#34;alert(2)&#34;&gt; &amp; &#34;commit&#34;"
+    flagged = [Flagged(_project(name), cold=True, risks=[])]
+    verdicts = {name: Verdict(status="unfinished", left_off="Left off.", next_step=step, confidence=0.9)}
+    parts = compose_email(flagged, [], [], [], verdicts, ReminderConfig(path="/cfg.json"), TODAY, NOW)
+
+    assert "<img" not in parts.html
+    assert ">Projects that need you</h2>" in parts.html
+    preheader = '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">'
+    assert f"{preheader}Start with {esc_name}: {esc_step}</div>" in parts.html
+    assert f'<div style="font-size:16px;font-weight:700;margin:3px 0 0">{esc_step}</div>' in parts.html
+    assert f'<div style="font-size:19px;font-weight:700;line-height:1.3">{esc_name}</div>' in parts.html
+    assert f"- {name}  ({HOSTILE})" in parts.text  # the plain-text part keeps both verbatim
+    assert f"      {step}" in parts.text
+
+
 def test_the_template_loads_with_autoescape_and_strict_undefined() -> None:
     env = compose._ENV
     assert env.autoescape is True
