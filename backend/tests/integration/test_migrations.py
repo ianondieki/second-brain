@@ -573,6 +573,23 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
         await engine.dispose()
 
 
+async def test_deleting_a_user_removes_their_user_only_deliveries(owner_engine: AsyncEngine) -> None:
+    """ON DELETE CASCADE: SET NULL would violate has_recipient_scope and block the deletion (erasure, REQ-SEC-02)."""
+    user_id = uuid7()
+    async with rolled_back(owner_engine) as conn:
+        await add_user(conn, user_id)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO notification_deliveries (id, user_id, kind, channel, to_address)"
+                " VALUES (:id, :user, 'em7', 'email', 'x@example.test')"
+            ),
+            {"id": uuid7(), "user": user_id},
+        )
+        await conn.execute(sa.text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        left = sa.text("SELECT count(*) FROM notification_deliveries WHERE user_id = :id")
+        assert (await conn.execute(left, {"id": user_id})).scalar_one() == 0
+
+
 async def test_enum_types_match_the_orm(owner_engine: AsyncEngine) -> None:
     declared: dict[str, list[str]] = {}
     for table in TABLES.values():
