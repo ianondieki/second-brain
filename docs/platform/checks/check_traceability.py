@@ -360,12 +360,15 @@ def expected_r_phase(entry: RRow, reqs: dict[str, ReqRow], acs: dict[str, AcRow]
     """Latest build phase among the R-id's Release-1 REQ-IDs and the clauses of its ACs (None if nothing is built)."""
     phases: list[int] = []
     for q in entry["req"]:
-        if q in reqs and isinstance(reqs[q]["phase"], int):
-            phases.append(reqs[q]["phase"])
+        if q in reqs:
+            req_phase = reqs[q]["phase"]
+            if isinstance(req_phase, int):
+                phases.append(req_phase)
     for a in entry["ac"]:
         for aid, row in acs.items():
-            if base(aid) == base(a) and isinstance(row["phase"], int):
-                phases.append(row["phase"])
+            ac_phase = row["phase"]
+            if base(aid) == base(a) and isinstance(ac_phase, int):
+                phases.append(ac_phase)
     return max(phases) if phases else None
 
 
