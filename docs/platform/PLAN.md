@@ -7,7 +7,7 @@ Progress and phase reports: `docs/platform/PROGRESS.md`.
 ## 1. Ground rules (apply to every phase)
 
 - **Branch**: all work merges into `claude/eloquent-hypatia-aa3577`; `main` is touched only by the human at G8.
-- **One phase per session**; the orchestrator (main session, Fable 5.1, `xhigh`; `max` in Phases 0 and 8) reads `CLAUDE.md`, the spec files the phase needs, `PROGRESS.md`, `REQUIREMENTS.md`, `DECISIONS-NEEDED.md`, then follows the build workflow in `CLAUDE.md` (context → plan → build → test → UI → browser bugs → review → report → gate).
+- **One phase per session**; the orchestrator (main session: Fable 5.1 `max` in Phases 0 and 8; Opus 5.5 `xhigh` in Phases 1–7, D-04) reads `CLAUDE.md`, the spec files the phase needs, `PROGRESS.md`, `REQUIREMENTS.md`, `DECISIONS-NEEDED.md`, then follows the build workflow in `CLAUDE.md` (context → plan → build → test → UI → browser bugs → review → report → gate).
 - **Task cards** `docs/platform/tasks/<REQ-ID>.md` (REQ-IDs, files owned, acceptance criteria, agent, model, effort) are written by the orchestrator before any implementer starts. Overlapping file sets never run concurrently; ≤3 implementers at a time, each in `git worktree add ../sb-wt/<REQ-ID> -b feat/<REQ-ID>-<slug> claude/eloquent-hypatia-aa3577`.
 - **Only `db-migrations`** creates Alembic revisions (one per PR, expand/contract, `alembic check`). `backend/openapi.json` is frozen before frontend and backend work on one feature in parallel.
 - **Every PR**: `make check` green, `reviewer` PASS, `security-reviewer` PASS when it touches `auth/`, `tenancy/`, `billing/`, `provenance/`, `engagements/`; `ux-reviewer` PASS on frontend PRs from Phase 2 on; tests never deleted or skipped to go green; no `--no-verify`.
@@ -43,7 +43,7 @@ REQ-IDs: REQ-HYG-01..06, REQ-FND-01, REQ-FND-02, REQ-FND-03, REQ-AUTH-01, REQ-TE
 | T1.2 `scripts/run_legacy_tests.py` (discover `tests`, drop ids from `docs/platform/tests_skip_linux.txt` when `sys.platform != 'win32'`, non-zero on failure); gitignore the `C:/` dir the suite creates on Linux; CI matrix ubuntu + windows-latest; verify or amend the skip list (DECISIONS-NEEDED D-12, D-13) | REQ-FND-01 | B, T | Runs on both OSes before anything else lands |
 | T1.3 Scaffold `backend/` (uv, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, Procrastinate, structlog), `frontend/` (Next.js pinned per ADR-001, Tailwind, shadcn/ui, next-intl, openapi-typescript), `infra/docker-compose.dev.yml` (Postgres 16 + pgvector, Mailpit, MinIO, ClamAV), `Makefile` (`make dev`, `make check`), `.github/workflows/pr.yml` with scanners (gitleaks, pip-audit, npm audit, osv-scanner, Trivy, CodeQL) and egress-blocked runner, `backend/.env.example`, `frontend/.env.example` | REQ-FND-02, REQ-FND-03 | B, F, I | After T1.2; `make check` must be green on the empty skeleton |
 | T1.4 Core schema v1 (users, auth_identities, sessions, api_tokens, organizations, memberships, invitations, niches, org_niches, developer_niches, developer_profiles, consents, audit_events + event_details, notification_preferences, notification_deliveries, in_app_notifications, plans, subscriptions, holidays, regions) with RLS policies, append-only triggers, separate owner role, `python -m bridge.seed` (niches, plans, holidays, KE + the 47 counties) | REQ-TEN-01, REQ-AUD-01, REQ-CON-01 | M (schema), B | One migration per PR; RLS test generator lands with the first org-scoped table |
-| T1.5 Auth: signup/login (argon2id), magic links, GitHub + Google OAuth (test apps), sessions + CSRF, TOTP enrol/verify, step-up helper; roles + `require_role`; error semantics 404/403 | REQ-AUTH-01, REQ-TEN-01 | B, F, S review | Depends on T1.4 |
+| T1.5 Auth: signup/login (argon2id), magic links, sessions + CSRF, TOTP enrol/verify, step-up helper; roles + `require_role`; error semantics 404/403 (GitHub + Google OAuth moved to T2.12, D-20) | REQ-AUTH-01, REQ-TEN-01 | B, F, S review | Depends on T1.4 |
 | T1.6 `plans.yaml` placeholders + entitlement middleware (402 with upgrade path), subscription rows for free plans | REQ-BIL-01 | B | Depends on T1.4 |
 | T1.7 `EmailProvider` (Postmark adapter, Mailpit sink), `notification_deliveries` ledger, retry classification ported from `reminder/notify.py` | REQ-NOT-01 | I | Independent of T1.5 |
 | T1.8 Port `classify`/`fallback_text`/policy to `bridge/reminders/{policy,compose}.py` with parity tests against `reminder/` fixtures; business-day calendar helper | REQ-REM-00 | B, T | Independent |
@@ -58,7 +58,7 @@ only for deploy config, not for this exit. Demo: `make dev`, sign up as develope
 
 Goal: developers publish tiered proposals with a disclosure record; orgs browse, claim and receive NDA-gated Tier 2.
 Spec to read: `docs/spec/03`, `04`, `05`, `06` (6.1–6.4, 6.12 moderation), `08`, `09`, `10`.
-REQ-IDs: REQ-REPO-01..03, REQ-PROP-01..05, REQ-PROV-01..05, REQ-DIR-01..05, REQ-NOT-02, REQ-LLM-01, REQ-EMB-01, REQ-MOD-01, REQ-BIL-02, REQ-BIL-03, REQ-SEC-01.
+REQ-IDs: REQ-REPO-01..03, REQ-PROP-01..05, REQ-PROV-01..05, REQ-DIR-01..05, REQ-NOT-02, REQ-LLM-01, REQ-EMB-01, REQ-MOD-01, REQ-BIL-02, REQ-BIL-03, REQ-SEC-01, REQ-AUTH-02.
 
 | Task | REQ-IDs | Agent | Order / notes |
 |---|---|---|---|
@@ -72,6 +72,7 @@ REQ-IDs: REQ-REPO-01..03, REQ-PROP-01..05, REQ-PROV-01..05, REQ-DIR-01..05, REQ-
 | T2.8 Browse repo search + filters (Tier-1 only), Schemathesis contract tests for leakage | REQ-REPO-02 | B, T | After T2.3 |
 | T2.9 Originality check (MinHash LSH + bge-m3 bands, ≤10/day) + Tier-2-vs-Tier-2 moderator job; submission assistant behind `tier2_llm_assistant` consent | REQ-PROP-04, REQ-PROP-05 | A | After T2.2/T2.3 |
 | T2.10 Developer verification D1 (`SmsProvider` fake), D2 `ManualReview` KYC bucket + 72 h purge, attestations, delete-retains-evidence | REQ-PROV-04, REQ-PROV-05 | B, I | Parallel |
+| T2.12 GitHub + Google OAuth sign-in and account linking (test apps in `.env`, respx fakes in CI; moved from T1.5 by D-20) | REQ-AUTH-02 | B, F, S review | Parallel; needs the human's OAuth test apps |
 | T2.11 Frontend polish pass (frontend-design → impeccable → Playwright 375/1440 screenshots), `ux-reviewer` on every frontend PR from here | all frontend REQs | F, U | Last |
 
 Exit checks: AC-SEC-1/b, AC-SEC-2, AC-SEC-6, AC-REPO-1, AC-REPO-2, AC-REPO-3, AC-REPO-4/a, AC-REPO-5, AC-REPO-6/a,

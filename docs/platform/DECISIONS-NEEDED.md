@@ -32,7 +32,7 @@ None. D-01..D-23 were decided at G0 (2026-09-24). New questions start at D-24.
 | D-17 · Postmark account (new vendor) | (a) Postmark account before Phase 8 | 2026-09-24 | ADR-004; account needed before Phase 8 |
 | D-18 · Anthropic API key for the nightly evals (spend) | (c) cassettes only until launch, no API spend | 2026-09-24 | This entry; to apply to `PLAN.md` T4.6 and X4-2 before Phase 4 |
 | D-19 · Who performs D2 KYC manual review and E2 entity review in the pilot | (a) I do the manual reviews in the pilot | 2026-09-24 | ADR-002; `docs/runbooks/verification.md` (Phase 2) |
-| D-20 · OAuth test applications | (b) magic-link + password first, OAuth in Phase 2 | 2026-09-24 | This entry; to apply to `PLAN.md` T1.5 at Phase 1 kickoff |
+| D-20 · OAuth test applications | (b) magic-link + password first, OAuth in Phase 2 | 2026-09-24 | Applied at Phase 1 kickoff: `PLAN.md` T1.5 and T2.12; `REQUIREMENTS.md` REQ-AUTH-02 (Phase 2) |
 | D-21 · Provisional directory seed sources for fixtures | (a) agents build the provisional list from the registers in `docs/spec/06` 6.2, source URL and date per row | 2026-09-24 | REQ-DIR-02 (Phase 2) |
 | D-22 · When to stand up staging | (a) staging in Phase 8 | 2026-09-24 | `PLAN.md` Phase 8 (unchanged) |
 | D-23 · Python versions in CI | (a) legacy on 3.13, backend on 3.12 | 2026-09-24 | `PLAN.md` T1.2/T1.3 CI jobs |
