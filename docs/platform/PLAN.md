@@ -160,7 +160,7 @@ REQ-IDs: REQ-BIL-04..08.
 | T6.2 `researcher`: current Daraja STK Push/Query API fields, Paystack webhook/verify, KRA eTIMS requirements, with citations into `docs/platform/research/billing.md` | REQ-BIL-04, REQ-BIL-05, REQ-BIL-07 | Rs | Parallel; never invent API fields |
 | T6.3 Daraja adapter (STK Push, Query confirmation, unguessable callback path, reconciliation jobs), `respx` cassettes | REQ-BIL-04 | I, S review | After T6.2 |
 | T6.4 Paystack hosted checkout + HMAC-SHA512 + verify, tokenised recurring, stored fields only | REQ-BIL-05 | I, S review | After T6.2 |
-| T6.5 Subscription lifecycle (`trialing → active → past_due → downgraded | cancelled`), renewal reminders (`billing.renewal_reminders` 09:00), grace, downgrade effects (scouts pause, quotas hidden, no deletion), one-click cancel, admin refunds | REQ-BIL-06 | B | After T6.1 |
+| T6.5 Subscription lifecycle (`trialing → active → past_due → downgraded \| cancelled`), renewal reminders (`billing.renewal_reminders` 09:00), grace, downgrade effects (scouts pause, quotas hidden, no deletion), one-click cancel, admin refunds | REQ-BIL-06 | B | After T6.1 |
 | T6.6 `InvoiceIssuer` (sequential numbers, VAT rules, eTIMS adapter with Fake), invoice/LPO flow for Enterprise, receipts | REQ-BIL-07 | B, I | After T6.2 |
 | T6.7 Plan & billing UI (Plan & billing menu, upgrade paths from 402, Student verification, Social Impact request, anchor coupon), `plans.yaml` with G3 values if signed | REQ-BIL-08 | F, B | Last |
 
