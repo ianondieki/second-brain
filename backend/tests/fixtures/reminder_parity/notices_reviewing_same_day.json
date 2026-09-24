@@ -1,0 +1,21 @@
+{
+  "case": "reviewing_same_day",
+  "description": "Still in review since today: not news yet.",
+  "expected": {
+    "lines": []
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "reviewing",
+        "last": "2026-09-21",
+        "since": "2026-09-21",
+        "template": "project_checkin_v2",
+        "used": "project_checkin",
+        "why": "Meta is still reviewing it"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

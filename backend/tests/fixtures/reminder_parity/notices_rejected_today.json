@@ -1,0 +1,23 @@
+{
+  "case": "rejected_today",
+  "description": "Anything but 'reviewing' is news at once.",
+  "expected": {
+    "lines": [
+      "On 2026-09-21, the WhatsApp reminder went out in the older layout, **\"project_checkin\"**, because the newer one, **\"project_checkin_v2\"**, could not be used: Meta rejected it (reason: INVALID_FORMAT). To check it, run `python -m reminder --whatsapp-template-status` in the second-brain folder."
+    ]
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "rejected",
+        "last": "2026-09-21",
+        "since": "2026-09-21",
+        "template": "project_checkin_v2",
+        "used": "project_checkin",
+        "why": "Meta rejected it (reason: INVALID_FORMAT)"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

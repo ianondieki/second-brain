@@ -1,0 +1,78 @@
+{
+  "case": "failure_after_success_keeps_ref",
+  "description": "A failure after a success keeps the ref; the next success drops the error.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 2,
+            "error": "SMTP timeout",
+            "hard_failures": 1,
+            "ref": "owner@example.com",
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T10:15:00",
+            "attempts": 3,
+            "hard_failures": 1,
+            "ref": "owner@example.com",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "email",
+        "detail": "SMTP timeout",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "email",
+        "detail": "owner@example.com",
+        "force": false,
+        "now": "2026-09-21T10:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "owner@example.com",
+        "status": "sent"
+      }
+    }
+  },
+  "kind": "record"
+}

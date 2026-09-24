@@ -1,0 +1,41 @@
+{
+  "case": "aware_timestamp",
+  "description": "A timezone-aware 'now' keeps its offset in the stamp.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T09:15:42+03:00",
+            "attempts": 1,
+            "ref": "owner@example.com",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "email",
+        "detail": "owner@example.com",
+        "force": false,
+        "now": "2026-09-21T09:15:42.123456+03:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {}
+  },
+  "kind": "record"
+}
