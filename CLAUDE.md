@@ -57,7 +57,7 @@ The build spec is split into topic files under docs/spec/. Read only the files t
 4. Test: write tests for every acceptance test ID in the phase. All tests must pass.
 5. UI (if the phase has screens): use the frontend-design skill, then the impeccable skill to polish, then Playwright screenshots at 375px and 1440px widths, fixing anything broken.
 6. Browser bugs: use chrome-devtools for console, network and performance errors.
-7. Review: run ECC's code review (`/code-review` if ECC is unavailable) on the phase's changes and fix every critical and high issue; `reviewer` PASS on every PR, `security-reviewer` PASS for `auth/`, `tenancy/`, `billing/`, `provenance/`, `engagements/`, `ux-reviewer` PASS on frontend PRs.
+7. Review: run the ECC plugin's code review (`/ecc:code-review`, or the `ecc:code-reviewer` agent on committed changes; ECC = the installed "Everything Claude Code" plugin; use the built-in `/code-review` if the plugin is not installed) on the phase's changes and fix every critical and high issue; `reviewer` PASS on every PR, `security-reviewer` PASS for `auth/`, `tenancy/`, `billing/`, `provenance/`, `engagements/`, `ux-reviewer` PASS on frontend PRs.
 8. Report: write the phase report and update PROGRESS.md; run `python docs/platform/checks/check_traceability.py`.
 9. Gate: stop at the phase's gate and wait for human approval in GATES.md.
 

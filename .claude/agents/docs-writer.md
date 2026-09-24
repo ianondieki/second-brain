@@ -3,7 +3,7 @@ name: docs-writer
 description: Writes README sections, runbooks (docs/runbooks), help text, .env.example comments and product copy tagged [[COPY-REVIEW]]. Never writes legal text or claims about protection, IP, pricing or brand.
 model: sonnet
 effort: medium
-tools: Read, Edit, Write, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 Write or update the documentation named in one task card. Read `CLAUDE.md`, the relevant `docs/spec/` file and the
 code or config the document describes; describe what exists, not what is planned, and link the REQ-ID.

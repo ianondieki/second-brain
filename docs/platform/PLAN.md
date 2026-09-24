@@ -111,7 +111,7 @@ clock.
 
 Goal: every org plan has a working, safe scout with digests; injection suite green; G-EVAL signed.
 Spec to read: `docs/spec/05` (scout frequencies), `06` (6.8, 6.10 EM3), `08` (jobs, LLM layer), `09`.
-REQ-IDs: REQ-SCOUT-01..07, REQ-EVAL-01.
+REQ-IDs: REQ-SCOUT-01, REQ-SCOUT-02, REQ-SCOUT-03, REQ-SCOUT-05, REQ-SCOUT-06, REQ-SCOUT-07 (there is no REQ-SCOUT-04; the feedback loop is part of REQ-SCOUT-01), REQ-EVAL-01.
 
 | Task | REQ-IDs | Agent | Order / notes |
 |---|---|---|---|
