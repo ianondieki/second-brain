@@ -70,12 +70,18 @@ def create_database(admin_url: URL, name: str) -> URL:
     finally:
         admin.dispose()
     url = admin_url.set(database=name)
-    prepare = sa.create_engine(url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
+    prepared = False
     try:
-        with prepare.connect() as connection:
-            run_script(connection, PREPARE_SQL)
+        prepare = sa.create_engine(url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
+        try:
+            with prepare.connect() as connection:
+                run_script(connection, PREPARE_SQL)
+        finally:
+            prepare.dispose()
+        prepared = True
     finally:
-        prepare.dispose()
+        if not prepared:  # never leave a half-prepared database behind
+            drop_database(admin_url, name)
     return url
 
 

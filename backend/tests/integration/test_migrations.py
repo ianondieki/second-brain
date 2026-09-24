@@ -769,8 +769,8 @@ async def test_multi_row_insert_is_chained_in_order(app_engine: AsyncEngine) -> 
 async def test_separator_in_chain_fields_is_rejected(app_engine: AsyncEngine) -> None:
     actor, chain = uuid7(), f"test:{uuid4().hex}"
     async with rolled_back(app_engine, actor) as conn:
-        for field in ("action", "subject_type"):
-            params = event_params(chain, actor, **{field: "evil|field"})
+        for field in ("chain", "action", "subject_type"):
+            params = event_params(chain, actor) | {field: "evil|field"}
             savepoint = await conn.begin_nested()
             with pytest.raises(sa.exc.DBAPIError, match="may not contain"):
                 await conn.execute(INSERT_EVENT, params)
@@ -828,12 +828,39 @@ async def test_triggers_block_update_delete_truncate_even_for_the_owner(owner_en
         by_id = {"id": params["id"]}
         await expect_error(conn, "UPDATE audit_events SET action = 'x' WHERE id = :id", "append-only", by_id)
         await expect_error(conn, "DELETE FROM audit_events WHERE id = :id", "append-only", by_id)
-        await expect_error(conn, "TRUNCATE audit_events, event_details", "append-only")
+        # TRUNCATE audit_events alone stops at the event_details foreign key before any trigger runs; with both tables
+        # listed, the audit_events trigger fires first and names its own table.
+        await expect_error(
+            conn, "TRUNCATE audit_events, event_details", "TRUNCATE on audit_events is not allowed: the audit log"
+        )
         await expect_error(conn, "DELETE FROM event_details WHERE event_id = :id", "append-only", by_id)
         await expect_error(conn, "TRUNCATE event_details", "append-only")
         # event_details stays updatable by the owner: erasure overwrites personal data without touching the chain.
         await conn.execute(sa.text("UPDATE event_details SET details = '{}' WHERE event_id = :id"), by_id)
         assert_linked_chain(list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all()))
+
+
+# pg_trigger.tgtype bits (src/include/catalog/pg_trigger.h).
+ROW, BEFORE, ON_INSERT, ON_DELETE, ON_UPDATE, ON_TRUNCATE = 1, 2, 4, 8, 16, 32
+AUDIT_TRIGGERS = {
+    ("audit_events", "audit_events_chain"): ("audit_events_chain", ROW | BEFORE | ON_INSERT),
+    ("audit_events", "audit_events_no_update_delete"): ("audit_block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE),
+    ("audit_events", "audit_events_no_truncate"): ("audit_block_mutation", BEFORE | ON_TRUNCATE),
+    ("event_details", "event_details_no_delete"): ("audit_block_mutation", ROW | BEFORE | ON_DELETE),
+    ("event_details", "event_details_no_truncate"): ("audit_block_mutation", BEFORE | ON_TRUNCATE),
+}
+
+
+async def test_audit_triggers_are_installed_and_enabled(owner_engine: AsyncEngine) -> None:
+    """Each table's own triggers, checked in the catalog (a statement can only show the first one that fires)."""
+    found = await rows(
+        owner_engine,
+        "SELECT tgrelid::regclass::text AS table_name, tgname, tgfoid::regproc::text AS function, tgtype, tgenabled"
+        " FROM pg_trigger WHERE NOT tgisinternal"
+        " AND tgrelid IN ('public.audit_events'::regclass, 'public.event_details'::regclass)",
+    )
+    assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == AUDIT_TRIGGERS
+    assert {row.tgenabled for row in found} == {"O"}  # enabled for ordinary sessions, not disabled or replica-only
 
 
 async def test_audit_visibility_for_the_app_and_the_reader(owner_engine: AsyncEngine) -> None:
