@@ -7,16 +7,16 @@ You are the coding agent for the repository `ianondieki/second-brain`. Your job 
 ## 0. How to run this prompt
 
 ### 0.1 Who runs it, and in what order
-1. The human commits this file as `docs/platform/SUPER_PROMPT.md` on the integration branch **`claude/eloquent-hypatia-aa3577`** before the first session; if it is missing, the orchestrator's first Phase 0 action is to write the prompt it was given to that path as its own commit. Agents merge only into that branch. Never touch `main`; the human merges to `main` at gate G8.
+1. The spec lives in `docs/spec/` (one file per topic) and is indexed in the root `CLAUDE.md`, both committed on the integration branch **`claude/eloquent-hypatia-aa3577`** before the first session; read only the `docs/spec/` files the current task needs, as the index says. Agents merge only into that branch. Never touch `main`; the human merges to `main` at gate G8.
 2. The **orchestrator must be the main Claude Code session** (sub-agents cannot spawn sub-agents):
    ```
    cd second-brain && git checkout claude/eloquent-hypatia-aa3577
    claude --model claude-fable-5-1
    /effort xhigh          # use max for Phase 0
    ```
-   First message: `Read docs/platform/SUPER_PROMPT.md. Execute Phase 0 only. Stop at gate G0.`
+   First message: `Read CLAUDE.md and the docs/spec/ files it lists. Execute Phase 0 only. Stop at gate G0.`
 3. **Phase 0 runs in default permission mode** (Plan mode is read-only and cannot write the artefacts) and may only create or edit files under `docs/platform/**`, `.claude/agents/**` and the root `CLAUDE.md`: `PLAN.md`, `REQUIREMENTS.md`, ADR-001..008, `THREAT_MODEL.md`, `GATES.md`, `DECISIONS-NEEDED.md`, `tests_skip_linux.txt`. No product code, no dependency installs. The human edits and approves by writing `G0: APPROVED <date>` in `docs/platform/GATES.md`.
-4. **One phase per session.** The source of truth, read at session start and updated at session end, is `SUPER_PROMPT.md`, `PLAN.md`, `REQUIREMENTS.md`, `PROGRESS.md`, `DECISIONS-NEEDED.md`, `GATES.md`, `adr/` and `CLAUDE.md`; those files are the memory, not the chat. Each phase ends with a phase report in `PROGRESS.md` (REQ statuses, demo steps, test counts, risks) and a recorded scripted demo; the orchestrator then stops and the human pastes `/cost` output into `PROGRESS.md`. The next session starts with: `Read SUPER_PROMPT.md, PROGRESS.md, REQUIREMENTS.md, DECISIONS-NEEDED.md; continue with the next phase.`
+4. **One phase per session.** The source of truth, read at session start and updated at session end, is `CLAUDE.md` with the `docs/spec/` files it indexes, `PLAN.md`, `REQUIREMENTS.md`, `PROGRESS.md`, `DECISIONS-NEEDED.md`, `GATES.md`, `adr/` and `CLAUDE.md`; those files are the memory, not the chat. Each phase ends with a phase report in `PROGRESS.md` (REQ statuses, demo steps, test counts, risks) and a recorded scripted demo; the orchestrator then stops and the human pastes `/cost` output into `PROGRESS.md`. The next session starts with: `Read CLAUDE.md (and the docs/spec/ files the next phase needs), PROGRESS.md, REQUIREMENTS.md, DECISIONS-NEEDED.md; continue with the next phase.`
 5. **Secrets**: sandbox/test credentials only (Daraja sandbox, Paystack test keys, Mailpit sink) in an untracked `.env`; no secrets in git; `.env.example` documents every variable. The app reads secrets from the environment and fails closed if they are missing.
 6. **Human gates block progress** (`docs/spec/12-agent-operating-rules.md` (12.4)); when to stop and ask is in `docs/spec/12-agent-operating-rules.md` (12.5).
 
