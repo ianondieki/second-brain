@@ -17,7 +17,20 @@ from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Protocol
+from typing import Any, Protocol
+
+import httpx
+from pydantic import SecretStr
+
+# Postmark Email API, read 2026-09-24: https://postmarkapp.com/developer/api/email-api ("Send a single email": request
+# and response fields) and https://postmarkapp.com/developer/api/overview ("HTTP response codes", "API error codes").
+POSTMARK_API_URL = "https://api.postmarkapp.com"
+POSTMARK_AUTH_HEADER = "X-Postmark-Server-Token"
+POSTMARK_ERROR_CODE_HEADER = "X-PM-ApiErrorCode"
+# ErrorCode 100 (HTTP 503, offline for maintenance) and 101 (HTTP 500, unexpected error) clear up on their own. Every
+# sending code (300 invalid request, 406 inactive recipient, 10 bad token, ...) needs a person, so it is permanent.
+POSTMARK_TRANSIENT_ERROR_CODES = frozenset({100, 101})
+DEFAULT_TIMEOUT_SECONDS = 30.0
 
 MAX_ADDRESS_CHARS = 320  # notification_deliveries.to_address
 MAX_SUBJECT_CHARS = 2000  # Postmark's Subject limit
@@ -119,6 +132,109 @@ class EmailProvider(Protocol):
     def name(self) -> str: ...
 
     async def send(self, message: EmailMessage) -> SendResult: ...
+
+
+# --------------------------------------------------------------------------------------------------------- Postmark
+
+
+def _json_object(response: httpx.Response) -> dict[str, Any] | None:
+    try:
+        body = response.json()
+    except ValueError:  # empty, HTML or otherwise not JSON
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _postmark_error_code(response: httpx.Response, body: Mapping[str, Any] | None) -> int | None:
+    value = body.get("ErrorCode") if body is not None else None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    header = response.headers.get(POSTMARK_ERROR_CODE_HEADER, "").strip()
+    return int(header) if header.isdigit() else None
+
+
+class PostmarkEmailProvider:
+    """Postmark Email API (ADR-004). ``message_stream`` picks the transactional or the broadcast stream. Opens and
+    links are never tracked: link tracking rewrites every link to a Postmark domain, and emails must link only to the
+    platform (AC-MAIL-5)."""
+
+    name = "postmark"
+
+    def __init__(
+        self,
+        *,
+        server_token: SecretStr,
+        sender: str,
+        message_stream: str = "outbound",
+        base_url: str = POSTMARK_API_URL,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        if not server_token.get_secret_value().strip():
+            raise ValueError("POSTMARK_SERVER_TOKEN is required for the Postmark adapter")
+        self._token = server_token
+        self._sender = sender
+        self._stream = message_stream
+        self._url = f"{base_url.rstrip('/')}/email"
+        self._timeout = timeout
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"PostmarkEmailProvider(url={self._url!r}, stream={self._stream!r})"
+
+    def _payload(self, message: EmailMessage) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "From": self._sender,
+            "To": message.to,
+            "Subject": message.subject,
+            "TextBody": message.text,
+        }
+        if message.html is not None:
+            payload["HtmlBody"] = message.html
+        if message.tag is not None:
+            payload["Tag"] = message.tag
+        if message.headers:
+            payload["Headers"] = [{"Name": name, "Value": value} for name, value in message.headers.items()]
+        payload["MessageStream"] = self._stream
+        payload["TrackOpens"] = False
+        payload["TrackLinks"] = "None"
+        return payload
+
+    async def send(self, message: EmailMessage) -> SendResult:
+        payload = self._payload(message)
+        headers = {"Accept": "application/json", POSTMARK_AUTH_HEADER: self._token.get_secret_value()}
+        try:
+            if self._client is not None:
+                response = await self._client.post(self._url, json=payload, headers=headers, timeout=self._timeout)
+            else:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.post(self._url, json=payload, headers=headers)
+        except httpx.RequestError as exc:  # no network, DNS, TLS, timeouts, dropped connections
+            detail = redact_addresses(f"Postmark unreachable: {type(exc).__name__}: {exc}")
+            raise DeliveryError(detail, transient=True) from exc
+        return self._result(response)
+
+    @staticmethod
+    def _result(response: httpx.Response) -> SendResult:
+        status = response.status_code
+        body = _json_object(response)
+        code = _postmark_error_code(response, body)
+        reason = str(body.get("Message") or "") if body is not None else ""
+        detail = redact_addresses(
+            f"Postmark HTTP {status}" + (f", code {code}" if code else "") + (f": {reason}" if reason else "")
+        )
+        if not response.is_success:
+            # 429 and 5xx clear up on their own; other 4xx (token, sender, recipient, payload) need a person.
+            transient = status == 429 or status >= 500 or code in POSTMARK_TRANSIENT_ERROR_CODES
+            raise DeliveryError(detail, transient=transient, code=code)
+        if body is None:  # ported: a success status with a body that is not JSON (a proxy or portal page)
+            raise DeliveryError(f"Postmark HTTP {status} with an unreadable body", transient=True)
+        if code:
+            raise DeliveryError(detail, transient=code in POSTMARK_TRANSIENT_ERROR_CODES, code=code)
+        message_id = body.get("MessageID")
+        if not isinstance(message_id, str) or not message_id:
+            raise DeliveryError(f"Postmark HTTP {status} accepted the call but returned no MessageID")
+        return SendResult(provider=PostmarkEmailProvider.name, message_id=message_id)
 
 
 # ------------------------------------------------------------------------------------------------------------ Fake
