@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, LargeBinary, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, LargeBinary, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,7 +25,15 @@ AUDIT = {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "us
 
 class AuditEvent(IdMixin, Base):
     __tablename__ = "audit_events"
-    __table_args__ = (UniqueConstraint("chain_id", "seq"), UniqueConstraint("chain_id", "prev_hash"), AUDIT)
+    __table_args__ = (
+        UniqueConstraint("chain_id", "seq"),
+        UniqueConstraint("chain_id", "prev_hash"),
+        # Non-empty fields keep the hashed canonical form unambiguous (the trigger also rejects '|').
+        CheckConstraint("chain_id <> ''", name="chain_id_not_empty"),
+        CheckConstraint("action <> ''", name="action_not_empty"),
+        CheckConstraint("subject_type IS NULL OR subject_type <> ''", name="subject_type_not_empty"),
+        AUDIT,
+    )
 
     chain_id: Mapped[str] = mapped_column(String(64), server_default="global")
     seq: Mapped[int] = mapped_column(BigInteger)

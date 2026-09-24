@@ -7,3 +7,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ALTER SCHEMA public OWNER TO bridge_owner;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO bridge_app, aggregate_worker, audit_reader;
+-- No temporary objects for anyone but the owner: a temporary domain or table could shadow names that functions
+-- resolve (defence in depth; every function also pins search_path with pg_temp last).
+DO $$
+BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END
+$$;

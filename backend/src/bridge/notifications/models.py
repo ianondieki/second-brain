@@ -37,7 +37,8 @@ class NotificationDelivery(IdMixin, TimestampsMixin, Base):
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "user_id"}},
     )
 
-    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    # CASCADE, not SET NULL: a user-only delivery would violate has_recipient_scope and block deleting the user.
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     org_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(40))
     channel: Mapped[NotificationChannel] = mapped_column(pg_enum(NotificationChannel, "notification_channel"))
