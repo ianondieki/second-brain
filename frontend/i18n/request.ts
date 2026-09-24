@@ -18,6 +18,6 @@ export default getRequestConfig(async () => {
   const locale = cookieLocale ?? headerLocale ?? defaultLocale;
   return {
     locale,
-    messages: (await import(`../messages/${locale}.json`)).default,
+    messages: (await import(`../locales/${locale}.json`)).default,
   };
 });
