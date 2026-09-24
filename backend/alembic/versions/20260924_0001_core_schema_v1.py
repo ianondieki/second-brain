@@ -17,6 +17,11 @@ Operating rules that follow from this revision:
   design: their snapshot predates the per-chain lock, so the chain head it reads could be stale.
 - Every function pins ``search_path = pg_catalog, public, pg_temp`` (pg_temp last, see FUNCTIONS_SQL), and
   ``infra/postgres/prepare_db.sql`` revokes TEMPORARY on the database from PUBLIC.
+- This revision was edited in place during review, before its first merge. A database migrated with an earlier
+  0001 (for example an existing dev volume) must be recreated (``docker compose --env-file infra/.env -f
+  infra/docker-compose.dev.yml --profile full down -v``, then ``make dev``):
+  ``alembic upgrade head`` sees 0001 as applied and never re-applies an edited revision. From the first merge on,
+  0001 is frozen and every change is a new revision.
 
 Revision ID: 0001
 Revises:
