@@ -1,0 +1,7 @@
+# Reviewed gitleaks findings that are test fixtures, not secrets (pr.yml scanners job).
+# Legacy suite (tests/ must stay unchanged): fake credentials used to test redaction and the adviser check.
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_adviser_cli.py:generic-api-key:111
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:private-key:144
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:jwt:163
+# Backend unit-test settings (a fixed, public test key).
+2050af54fdf1e4314755427042f35bd45250ddd3:backend/tests/conftest.py:generic-api-key:15

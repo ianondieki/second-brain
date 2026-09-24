@@ -9,6 +9,7 @@ regexes = [
   '''ci-throwaway-postgres''',
   '''test-secret-key-0123456789abcdef0123456789''',
   '''openapi-export-placeholder-not-a-secret-0000''',
+  '''dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGVmMDE=''',
 ]
 paths = [
   '''legacy/''',
