@@ -184,7 +184,9 @@ def _postmark_error_code(response: httpx.Response, body: Mapping[str, Any] | Non
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     header = response.headers.get(POSTMARK_ERROR_CODE_HEADER, "").strip()
-    return int(header) if header.isdigit() else None
+    # isascii() first: str.isdigit() is also true for Arabic-Indic or superscript digits, which int() misreads or
+    # rejects with ValueError.
+    return int(header) if header.isascii() and header.isdigit() else None
 
 
 class PostmarkEmailProvider:

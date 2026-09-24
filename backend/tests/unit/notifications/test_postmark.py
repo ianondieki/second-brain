@@ -171,6 +171,22 @@ async def test_the_api_error_code_header_is_used_when_the_body_has_none() -> Non
 
 
 @pytest.mark.parametrize(
+    "header",
+    [
+        pytest.param("٤٠٦", id="arabic-indic-406"),  # str.isdigit() is True and int() would give 406
+        pytest.param("²", id="superscript-two"),  # str.isdigit() is True but int() raises ValueError
+        pytest.param("4O6", id="letter-o"),
+        pytest.param("", id="empty"),
+    ],
+)
+async def test_a_non_ascii_or_non_numeric_error_code_header_is_ignored(header: str) -> None:
+    response = httpx.Response(422, text="not json", headers={"X-PM-ApiErrorCode": header.encode("utf-8")})
+    error = await send_expecting_error(response)
+    assert error.transient is False
+    assert error.code is None
+
+
+@pytest.mark.parametrize(
     "error",
     [
         pytest.param(httpx.ConnectError("connection refused"), id="connect-error"),
