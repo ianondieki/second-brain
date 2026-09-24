@@ -57,8 +57,9 @@ _ANY_ADDRESS = re.compile(r"""[^\s@<>()\[\]",;:]+@[^\s@<>()\[\]"',;:]+""")
 _TAG = re.compile(r"[A-Za-z0-9._-]{1,100}")  # fits Postmark Tag and Mailpit's allowed tag characters
 _HEADER_NAME = re.compile(r"[!-9;-~]+")  # RFC 5322 field-name: printable ASCII except ':'
 # Unicode categories that must never reach a header: controls (incl. CR, LF, VT, FF, NEL, TAB), line and paragraph
-# separators. The email package raises ValueError on some of them at send time; the others split a header visually.
-_NOT_IN_A_LINE = frozenset({"Cc", "Zl", "Zp"})
+# separators, and lone surrogates (Cs). The email package raises ValueError on some controls at send time, a lone
+# surrogate raises UnicodeEncodeError in every adapter, and the rest split a header visually.
+_NOT_IN_A_LINE = frozenset({"Cc", "Zl", "Zp", "Cs"})
 
 # Set by the adapters, or able to add recipients: smtplib's send_message takes the envelope from To/Cc/Bcc (or the
 # Resent-* block), which would bypass the per-address suppression check.
@@ -97,6 +98,15 @@ def is_mailbox(value: str) -> bool:
 
 def _is_one_line(value: str) -> bool:
     return len(value.splitlines()) <= 1 and not any(unicodedata.category(char) in _NOT_IN_A_LINE for char in value)
+
+
+def _is_utf8_encodable(value: str) -> bool:
+    """False for text holding a lone surrogate, which no adapter can encode (UnicodeEncodeError at send time)."""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def redact_addresses(text: str, limit: int = MAX_ERROR_CHARS) -> str:
@@ -142,6 +152,10 @@ class EmailMessage:
             raise ValueError(f"the subject must be one non-empty line of at most {MAX_SUBJECT_CHARS} characters")
         if not self.text:
             raise ValueError("a plain-text part (text) is required")
+        if not _is_utf8_encodable(self.text):
+            raise ValueError("the plain-text part (text) is not valid Unicode (lone surrogate)")
+        if self.html is not None and not _is_utf8_encodable(self.html):
+            raise ValueError("the html part is not valid Unicode (lone surrogate)")
         if self.tag is not None and not _TAG.fullmatch(self.tag):
             raise ValueError("a tag is 1-100 characters from A-Z a-z 0-9 . _ -")
         for name, value in self.headers.items():

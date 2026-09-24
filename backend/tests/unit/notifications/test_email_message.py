@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from bridge.notifications.email import DeliveryError, EmailMessage, redact_addresses
+from bridge.notifications.email import DeliveryError, EmailMessage, is_mailbox, redact_addresses
 
 
 def make(**overrides: Any) -> EmailMessage:
@@ -124,6 +124,26 @@ def test_the_subject_is_one_line(breaker: str) -> None:
 def test_header_values_are_one_line(breaker: str) -> None:
     with pytest.raises(ValueError, match="header"):
         make(headers={"List-Unsubscribe": f"<https://bridge.test/u/1>{breaker}Bcc: x@example.com"})
+
+
+@pytest.mark.parametrize("surrogate", [pytest.param("\ud800", id="high"), pytest.param("\udfff", id="low")])
+@pytest.mark.parametrize(
+    ("field", "match"),
+    [("subject", "subject"), ("headers", "header"), ("text", "text"), ("html", "html")],
+)
+def test_lone_surrogates_are_refused_everywhere(field: str, match: str, surrogate: str) -> None:
+    # A lone surrogate cannot be encoded as UTF-8: the adapters would raise UnicodeEncodeError at send time.
+    value = f"Hello {surrogate} there"
+    overrides: dict[str, Any] = {"headers": {"X-Bridge-Note": value}} if field == "headers" else {field: value}
+    with pytest.raises(ValueError, match=match):
+        make(**overrides)
+
+
+def test_is_mailbox_is_public_for_other_modules() -> None:
+    # Auth signup validates addresses with the same rule, imported from bridge.notifications.email.
+    assert is_mailbox("dev@example.com")
+    assert not is_mailbox("=?utf-8?q?victim?=@example.com")
+    assert not is_mailbox("Dev <dev@example.com>")
 
 
 def test_non_ascii_single_line_text_is_accepted() -> None:
