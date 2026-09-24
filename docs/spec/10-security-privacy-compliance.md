@@ -1,0 +1,23 @@
+## 10. Security, privacy & Kenyan compliance
+
+**Pre-launch legal gate** (`docs/legal/LAUNCH_GATE.md`; `FEATURE_TIER2_ENABLED` and `FEATURE_DEALS_ENABLED` default **false** in production until signed off):
+1. A Kenyan advocate reviews every template (ToS, AUP, Master Enterprise Terms, Evaluation NDA, mutual NDA, EOI, term sheet, assignment, licences, development agreement, acceptance certificate, privacy/cookie/takedown/dispute policies, s.106B certificate, org invitation email and suppression policy, all UI claim copy). Agents write placeholders headed `DRAFT — NOT LEGAL ADVICE — MUST BE REVIEWED BY A KENYAN ADVOCATE BEFORE USE`, stored in `legal_templates`, referenced by hash in every acceptance.
+2. **ODPC registration** as data controller/processor; certificate number in footer and privacy notice.
+3. **DPIA (DPA s.31)** covering KYC/biometrics via vendor and manual ID-image review (`docs/spec/06-feature-modules.md#64-authorship-provenance--watermarking-the-honest-watermark` item 8), profiling/recommendations, staff access-log monitoring and watermarking, AI sub-processors, cross-border transfers.
+4. **DPAs** with every sub-processor (AWS, Anthropic, Voyage if used, Postmark, Meta, Paystack, Safaricom Daraja, KYC vendor) and a public `/subprocessors` page with location and retention terms.
+5. Designated **DPO** (s.24); breach runbook (ODPC within 72 h, s.43); retention schedule (drafts 12 months after closure; registered versions, proofs, audit logs proposal life + 6 years; sessions 30 days; LLM traces 30 days); lawful-basis table in `docs/legal/lawful_basis.md`.
+6. Operator registered, KRA PIN, VAT registration at threshold; eTIMS, Consumer Protection Act subscription terms (plus a published refund policy) and no custody of funds per `docs/spec/05-subscriptions-billing.md` and `docs/spec/04-principles.md` (4.8).
+
+**Data protection implementation:** consent capture with versioned text, separate consents for marketing, reminders, WhatsApp, profiling, GitHub/history import; self-service export (JSON + certificate PDFs, ≤72 h), rectification, erasure with legal-hold and evidence exceptions explained, profiling opt-out; no solely-automated decision with legal effect (s.35); `docs/spec/04-principles.md` (4.5) minimisation and no-training rules; cross-border transfer basis documented (af-south-1, US model providers); the advocate confirms data-localisation rules before government orgs onboard; viewer-logging notice at NDA acceptance and repo-signal notice at GitHub install recorded in `lawful_basis.md`. TLS everywhere; AES-256 at rest; per-proposal KMS envelope keys for Tier 2; MFA for org seats and D2+; ops break-glass on Tier 2 is logged and notifies the owner.
+
+**Sector rules:** `public_entity` → procurement-route stage and EOI copy addendum; regulated finance (CBK/SASRA/IRA) → optional vendor due-diligence stage; proposals touching children's data (schools) → `processes_children_data` flag triggers a s.33 notice to both parties. **Competition safeguards:** strict tenant isolation of matches/EOIs/terms; other orgs' interest shown to the developer only as an optional count; exclusivity rules per `docs/spec/06-feature-modules.md#69-kuccps-style-engagement-tracker-state-machine-single-source-of-truth` stage 7; Master Enterprise Terms prohibit demanding unpaid work or unpaid exclusivity (Competition Act 2010 buyer-power provisions).
+
+| AC | Criterion |
+|---|---|
+| AC-SEC-1 | Parametrised RLS test: for every org-scoped table a member of org A reads 0 rows of org B; developer A reads 0 of developer B's drafts and Tier-2 rows; an org without a grant reads 0 `proposal_confidential` rows; `aggregate_worker` reads 0 rows of every org-scoped table; a cross-tenant API access returns 404. |
+| AC-SEC-2 | With `FEATURE_TIER2_ENABLED=false`, every Tier-2 endpoint returns 403 regardless of NDA state. |
+| AC-SEC-3 | A DSR export completes within 72 h in the SLA job and contains all personal fields and certificates; an erasure pseudonymises personal fields outside legal hold. |
+| AC-SEC-4 | `gitleaks`, `pip-audit`, `npm audit`, Trivy and CodeQL run on every PR and block on high/critical. |
+| AC-SEC-5 | No path in `pr.yml`, `main.yml` or `make check` performs a real network call to an LLM, email, WhatsApp or payment provider (egress-blocked test runner); only the `nightly.yml` evals job may reach `api.anthropic.com`. |
+| AC-SEC-6 | Without a live purpose-specific consent (`tier2_llm_assistant` / `tier2_llm_moderation`), no Tier-2 field ever appears in `llm_calls` inputs for that purpose (assertion on every task fixture). |
+| AC-SEC-7 | With `FEATURE_DEALS_ENABLED=false`, entering `NDA_PENDING` or any later stage, any `SignatureProvider` call and any payment record return 403. |
