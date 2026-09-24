@@ -302,7 +302,8 @@ GRANT EXECUTE ON FUNCTION app_create_organization(uuid, org_kind, text, citext, 
 #   2  seq::text                                      decimal, 1-based per chain_id
 #   3  id::text                                       lower-case hyphenated UUID
 #   4  chain_id                                       as stored
-#   5  (extract(epoch from occurred_at) * 1000000)::bigint::text   integer microseconds since the Unix epoch
+#   5  (extract(epoch from occurred_at) * 1000000)::bigint::text   integer microseconds since the Unix epoch;
+#                                                     occurred_at is clock_timestamp() read under the chain lock
 #   6  actor_kind::text                               enum label
 #   7  coalesce(actor_user_id::text, '')
 #   8  coalesce(org_id::text, '')
@@ -311,8 +312,9 @@ GRANT EXECUTE ON FUNCTION app_create_organization(uuid, org_kind, text, citext, 
 #   11 coalesce(subject_id::text, '')
 #   12 payload::text                                  PostgreSQL's jsonb text form; verifiers must read payload::text
 #                                                     from the database rather than re-serialise the JSON
-# event_hash = sha256(convert_to(<canonical>, 'UTF8')). chain_id, action and subject_type may not contain '|', so the
-# split is unambiguous (payload, the only free-form field, is last).
+# event_hash = sha256(convert_to(<canonical>, 'UTF8')). chain_id, action and subject_type may not contain '|' (the
+# trigger rejects it) or be empty (CHECK constraints), so the split is unambiguous (payload, the only free-form field,
+# is last). Other characters, such as the ':' of per-scope chain ids ("org:<uuid>", "user:<uuid>"), are fine.
 AUDIT_SQL = r"""
 CREATE FUNCTION audit_events_chain() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
@@ -322,6 +324,12 @@ DECLARE
     v_last_seq bigint;
     v_last_hash bytea;
 BEGIN
+    -- Under REPEATABLE READ or SERIALIZABLE the snapshot predates the lock, so the head read below could be stale.
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'audit_events: appends must run at READ COMMITTED isolation, not %',
+            upper(current_setting('transaction_isolation'))
+            USING ERRCODE = 'invalid_transaction_state';
+    END IF;
     IF NEW.id IS NULL OR NEW.chain_id IS NULL THEN
         RAISE EXCEPTION 'audit_events: id and chain_id are required' USING ERRCODE = 'not_null_violation';
     END IF;
@@ -346,7 +354,7 @@ BEGIN
         NEW.seq := v_last_seq + 1;
         NEW.prev_hash := v_last_hash;
     END IF;
-    NEW.occurred_at := now();
+    NEW.occurred_at := clock_timestamp();  -- taken under the lock, so occurred_at follows seq within a chain
     NEW.event_hash := sha256(convert_to(concat_ws('|',
         encode(NEW.prev_hash, 'hex'),
         NEW.seq::text,
@@ -556,6 +564,11 @@ def _create_tables() -> None:
         sa.Column("prev_hash", sa.LargeBinary(), nullable=False),
         sa.Column("event_hash", sa.LargeBinary(), nullable=False),
         sa.Column("id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint("chain_id <> ''", name=op.f("ck_audit_events_chain_id_not_empty")),
+        sa.CheckConstraint("action <> ''", name=op.f("ck_audit_events_action_not_empty")),
+        sa.CheckConstraint(
+            "subject_type IS NULL OR subject_type <> ''", name=op.f("ck_audit_events_subject_type_not_empty")
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_audit_events")),
         sa.UniqueConstraint("chain_id", "prev_hash", name=op.f("uq_audit_events_chain_id_prev_hash")),
         sa.UniqueConstraint("chain_id", "seq", name=op.f("uq_audit_events_chain_id_seq")),

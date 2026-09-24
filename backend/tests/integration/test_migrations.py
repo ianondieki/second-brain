@@ -170,6 +170,7 @@ def assert_linked_chain(rows: list[sa.Row[Any]]) -> None:
     assert rows[0].prev_hash == ZERO_HASH
     for previous, row in pairwise(rows):
         assert row.prev_hash == previous.event_hash
+        assert row.occurred_at >= previous.occurred_at  # clock_timestamp() under the lock follows seq
     for row in rows:
         assert len(row.event_hash) == 32
         assert row.event_hash == hashlib.sha256(canonical(row)).digest()
@@ -757,6 +758,30 @@ async def test_separator_in_chain_fields_is_rejected(app_engine: AsyncEngine) ->
             with pytest.raises(sa.exc.DBAPIError, match="may not contain"):
                 await conn.execute(INSERT_EVENT, params)
             await savepoint.rollback()
+
+
+async def test_empty_chain_fields_are_rejected_and_scoped_chain_ids_accepted(app_engine: AsyncEngine) -> None:
+    actor = uuid7()
+    async with rolled_back(app_engine, actor) as conn:
+        for overrides in ({"chain": ""}, {"action": ""}, {"subject_type": ""}):
+            params = event_params(f"test:{uuid4().hex}", actor) | overrides
+            savepoint = await conn.begin_nested()
+            with pytest.raises(sa.exc.DBAPIError, match="violates check constraint"):
+                await conn.execute(INSERT_EVENT, params)
+            await savepoint.rollback()
+        for chain in (f"org:{uuid7()}", f"user:{uuid7()}"):  # the app's per-scope chain ids
+            await conn.execute(INSERT_EVENT, event_params(chain, actor))
+            await conn.execute(INSERT_EVENT, event_params(chain, actor))
+            assert_linked_chain(list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all()))
+
+
+async def test_appends_outside_read_committed_are_refused(app_engine: AsyncEngine) -> None:
+    """Under REPEATABLE READ the head read after the lock could be stale, so the trigger refuses by design."""
+    for level in ("REPEATABLE READ", "SERIALIZABLE"):
+        async with rolled_back(app_engine) as conn:
+            await conn.execute(sa.text(f"SET TRANSACTION ISOLATION LEVEL {level}"))
+            with pytest.raises(sa.exc.DBAPIError, match=f"must run at READ COMMITTED isolation, not {level}"):
+                await conn.execute(INSERT_EVENT, event_params(f"test:{uuid4().hex}", None, actor_kind="system"))
 
 
 async def test_app_cannot_update_delete_or_truncate_audit_events(app_engine: AsyncEngine) -> None:
