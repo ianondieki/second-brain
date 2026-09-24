@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     step_up_max_age_hours: int = 12
     login_attempts_per_minute: int = 5
 
-    # Email (ADR-004): Postmark in staging/production, Mailpit over SMTP in dev and CI, fake in unit tests.
+    # Email (ADR-004): Mailpit over SMTP in dev, CI and staging; Postmark only in production (after G7, sender-domain
+    # DNS); fake in unit tests. bridge.notifications.email.provider_from_settings enforces this.
     email_provider: Literal["smtp", "postmark", "fake"] = "smtp"
     email_from: str = "Bridge <no-reply@bridge.localhost>"
     smtp_host: str = "localhost"
