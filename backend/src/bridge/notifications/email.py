@@ -26,6 +26,8 @@ from typing import Any, Protocol
 import httpx
 from pydantic import SecretStr
 
+from bridge.config import Settings
+
 # Postmark Email API, read 2026-09-24: https://postmarkapp.com/developer/api/email-api ("Send a single email": request
 # and response fields) and https://postmarkapp.com/developer/api/overview ("HTTP response codes", "API error codes").
 POSTMARK_API_URL = "https://api.postmarkapp.com"
@@ -376,3 +378,26 @@ class FakeEmailProvider:
             raise self._failures.popleft()
         self.outbox.append(message)
         return SendResult(provider=self.name, message_id=f"fake-{len(self.outbox)}")
+
+
+# ------------------------------------------------------------------------------------------------------- Selection
+
+
+def provider_from_settings(settings: Settings) -> EmailProvider:
+    """The adapter named by ``EMAIL_PROVIDER``. Fails closed: Postmark needs its token and is never used under
+    ``APP_ENV=test`` (AC-SEC-5); the in-memory fake is refused in staging and production, where mail must go out."""
+    choice = settings.email_provider
+    if choice == "postmark":
+        if settings.app_env == "test":
+            raise ValueError("EMAIL_PROVIDER=postmark is not allowed when APP_ENV=test (AC-SEC-5); use smtp or fake")
+        token = settings.postmark_server_token
+        if token is None:
+            raise ValueError("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        return PostmarkEmailProvider(
+            server_token=token, sender=settings.email_from, message_stream=settings.postmark_message_stream
+        )
+    if choice == "smtp":
+        return SmtpEmailProvider(host=settings.smtp_host, port=settings.smtp_port, sender=settings.email_from)
+    if settings.app_env in ("staging", "production"):
+        raise ValueError(f"EMAIL_PROVIDER=fake is not allowed when APP_ENV={settings.app_env}")
+    return FakeEmailProvider()
