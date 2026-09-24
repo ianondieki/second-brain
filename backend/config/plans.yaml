@@ -1,0 +1,163 @@
+# Plans and entitlements (REQ-BIL-01; docs/spec/05). PLACEHOLDER prices and limits until gate G3 (GATES.md):
+# the human replaces them; code never hard-codes a price or a limit. Amounts are KES minor units (cents), VAT
+# handled at invoicing (Phase 6). `null` means unlimited. There is no per-submission or per-tag fee: within the
+# caps below, tagging a claimed org is never gated behind another paid feature (docs/spec/05).
+version: 1
+currency: KES
+status: placeholder-until-G3
+
+upgrade_paths:
+  developer: dev_pro_monthly
+  org: org_starter
+
+plans:
+  # ---------------------------------------------------------------- developer side
+  - code: dev_free
+    side: developer
+    name: Free
+    price_kes_minor: 0
+    interval: none
+    default: true
+    limits:
+      active_proposals: 3
+      tags_per_proposal: 5
+      liked_niches: {min: 3, max: 5}
+      followed_niches: 1
+      trending_digest: weekly
+      disclosure_certificate_per_version: true
+      tracker: true
+      daily_email_reminders: true
+      recommendations_with_explanations: false
+      viewer_analytics: false
+      whatsapp_reminders: false
+      llm_monthly_cap_usd: 0.50
+  - code: dev_pro_monthly
+    side: developer
+    name: Pro (monthly)
+    price_kes_minor: 49900
+    interval: month
+    limits: &dev_pro_limits
+      active_proposals: null
+      tags_per_proposal: 20
+      liked_niches: {min: 3, max: 5}
+      followed_niches: 5
+      trending_digest: weekly
+      disclosure_certificate_per_version: true
+      tracker: true
+      daily_email_reminders: true
+      recommendations_with_explanations: true
+      viewer_analytics: true
+      whatsapp_reminders: release-2
+      llm_monthly_cap_usd: 2.00
+  - code: dev_pro_yearly
+    side: developer
+    name: Pro (yearly)
+    price_kes_minor: 499000
+    interval: year
+    limits: *dev_pro_limits
+  - code: dev_student
+    side: developer
+    name: Student
+    price_kes_minor: 0
+    interval: none
+    eligibility: verified Kenyan university or TVET email
+    trial_months: 12
+    limits: *dev_pro_limits
+
+  # ---------------------------------------------------------------- organisation side
+  - code: org_claimed
+    side: org
+    name: Claimed (Free)
+    price_kes_minor: 0
+    interval: none
+    default: true
+    limits:
+      seats: 2
+      scout_agents: 1
+      scout_frequencies: [weekly]
+      scout_digest: top_3
+      full_unlocks_per_month: 5   # untagged proposals only; proposals tagged to the org never count
+      problem_briefs: 1
+      progress_digest: weekly
+      tracker: true
+      csv_export: false
+      pipeline_analytics: false
+      llm_monthly_cap_usd: 2.00
+  - code: org_starter
+    side: org
+    name: Starter
+    price_kes_minor: 1500000
+    interval: month
+    limits:
+      seats: 5
+      scout_agents: 1
+      scout_frequencies: [weekly]
+      scout_digest: full
+      full_unlocks_per_month: 25
+      problem_briefs: 5
+      progress_digest: daily
+      tracker: true
+      csv_export: false
+      pipeline_analytics: false
+      llm_monthly_cap_usd: 10.00
+  - code: org_growth
+    side: org
+    name: Growth
+    price_kes_minor: 4500000
+    interval: month
+    limits:
+      seats: 20
+      scout_agents: 5
+      scout_frequencies: [daily, weekly, on_new]
+      scout_digest: full
+      full_unlocks_per_month: null
+      problem_briefs: null
+      progress_digest: daily
+      tracker: true
+      csv_export: true
+      pipeline_analytics: coming-soon   # Release 2
+      llm_monthly_cap_usd: 40.00
+  - code: org_enterprise
+    side: org
+    name: Enterprise / Government
+    price_kes_minor: 0
+    interval: month
+    custom_pricing: true   # invoice or LPO, net-30; SSO is Release 2; custom NDA template
+    limits:
+      seats: null
+      scout_agents: 5
+      scout_frequencies: [daily, weekly, on_new]
+      scout_digest: full
+      full_unlocks_per_month: null
+      problem_briefs: null
+      progress_digest: daily
+      tracker: true
+      csv_export: true
+      pipeline_analytics: coming-soon
+      llm_monthly_cap_usd: 100.00
+  - code: org_social_impact
+    side: org
+    name: Social Impact
+    price_kes_minor: 0
+    interval: month
+    discount_of: [org_starter, org_growth]
+    discount_pct: {min: 50, max: 100}
+    requires_admin_approval: true   # verified NGOs/PBOs, public schools/universities/TVETs, county governments
+    limits:
+      seats: 5
+      scout_agents: 1
+      scout_frequencies: [weekly]
+      scout_digest: full
+      full_unlocks_per_month: 25
+      problem_briefs: 5
+      progress_digest: daily
+      tracker: true
+      csv_export: false
+      pipeline_analytics: false
+      llm_monthly_cap_usd: 10.00
+
+coupons:
+  - code: anchor_growth_90d
+    plan: org_growth
+    free_days: 90
+    note: anchor orgs in wedge niches (docs/spec/05)
