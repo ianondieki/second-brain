@@ -29,3 +29,6 @@ __pycache__/
 # WhatsApp adviser: the cloudflared binary (download it; ~55 MB)
 tools/*.exe
 graphify-out/
+
+# The legacy suite creates a literal C: directory when it runs on Linux (docs/spec/02-existing-repo.md)
+/C:/

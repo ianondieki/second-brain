@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Hygiene checks AC-HYG-01..06 (REQ-HYG-01..06), exactly as written in docs/platform/REQUIREMENTS.md §4.
 # Used by the pr.yml `hygiene` job; runs locally from the repo root in any POSIX shell (Git Bash on Windows).
+# Search strings are split ("EVOLUTION""_") so this file never matches its own greps.
 # Each check reports PASS/FAIL; the script exits 1 if any check fails. `! cmd` is not used bare because
 # `set -e` ignores inverted commands; every negated grep is an explicit `if`.
 set -uo pipefail
@@ -26,14 +27,14 @@ check AC-HYG-01 "no Telegram in kept end-user docs" \
   absent -niE "telegram" -- README.md docs ':!docs/spec' ':!docs/platform' ':!legacy'
 check AC-HYG-01 "README names WhatsApp" count_is -ge 1 grep -ciE 'whatsapp' README.md
 check AC-HYG-01 "README names email" count_is -ge 1 grep -ciE '\bemail\b' README.md
-check AC-HYG-02 "no EVOLUTION_ variables" \
-  absent -n "EVOLUTION_" -- ':!legacy' ':!docs/spec' ':!docs/platform'
+check AC-HYG-02 "no stale Evolution API variables" \
+  absent -n "EVOLUTION""_" -- ':!legacy' ':!docs/spec' ':!docs/platform'
 check AC-HYG-03 "no retired Groq model" \
-  absent -n "llama-3.3-70b-versatile" -- ':!legacy' ':!docs/spec' ':!docs/platform'
+  absent -n "llama-3.3-70b-""versatile" -- ':!legacy' ':!docs/spec' ':!docs/platform'
 check AC-HYG-03 "GROQ_MODEL example is openai/gpt-oss-20b" \
   count_is -eq 1 env_line '^GROQ_MODEL=openai/gpt-oss-20b\r?$'
-check AC-HYG-04 "no Africa/Lagos" \
-  absent -n "Africa/Lagos" -- ':!legacy' ':!docs/spec' ':!docs/platform'
+check AC-HYG-04 "no Lagos timezone" \
+  absent -n "Africa/""Lagos" -- ':!legacy' ':!docs/spec' ':!docs/platform'
 check AC-HYG-04 "TZ example is Africa/Nairobi" count_is -eq 1 env_line '^TZ=Africa/Nairobi\r?$'
 check AC-HYG-05 "exactly one docs/10-* file" count_is -eq 1 sh -c 'ls docs/10-*.md | wc -l'
 check AC-HYG-05 "it is docs/10-project-reminders.md" test -f docs/10-project-reminders.md

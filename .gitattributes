@@ -1,1 +1,3 @@
 graphify-out/graph.json merge=graphify
+# Shell scripts must keep LF endings on Windows checkouts too (they run in CI and Git Bash).
+*.sh text eol=lf

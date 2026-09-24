@@ -1,0 +1,97 @@
+# PR and integration-branch CI (REQ-FND-01, REQ-FND-03). Spec: docs/spec/08 "Testing & CI".
+# Test steps on Linux run inside the egress lock (infra/ci/egress-lock.sh): no job in this file may reach an
+# LLM, email, WhatsApp or payment provider (AC-SEC-5). Only nightly.yml's evals job may reach api.anthropic.com.
+name: pr
+
+on:
+  pull_request:
+    branches: [claude/eloquent-hypatia-aa3577]
+  push:
+    branches: [claude/eloquent-hypatia-aa3577]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: hygiene (AC-HYG-01..06)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Hygiene checks
+        run: bash scripts/check_hygiene.sh
+
+  legacy:
+    name: legacy suite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"   # D-23: the local companion runs on 3.13
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install the companion's dependencies
+        run: python -m pip install -r requirements.txt
+      - name: cloudflared stub on PATH (D-13)
+        shell: bash
+        # adviser.__main__.check() only tests that a cloudflared file exists (shutil.which / os.path.isfile).
+        # The tests pass it an explicit env dict, so ADVISER_CLOUDFLARED is not read; a stub on PATH is.
+        run: |
+          stub_dir="$RUNNER_TEMP/cloudflared-stub"
+          mkdir -p "$stub_dir"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            : > "$stub_dir/cloudflared.exe"
+          else
+            printf '#!/bin/sh\nexit 0\n' > "$stub_dir/cloudflared"
+            chmod +x "$stub_dir/cloudflared"
+          fi
+          echo "$stub_dir" >> "$GITHUB_PATH"
+      - name: Runner self-tests
+        run: python -m unittest discover -s scripts -t scripts
+      - name: Egress lock (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          bash infra/ci/egress-lock.sh
+          infra/ci/sandboxed.sh python infra/ci/egress_probe.py
+      - name: Legacy suite, full (Windows, AC-REM-4/a)
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tests -t .
+      - name: Legacy suite, skip list applied (Linux, AC-REM-4/a)
+        if: runner.os == 'Linux'
+        run: infra/ci/sandboxed.sh python scripts/run_legacy_tests.py
+
+  legacy-linux-full:
+    # D-12: the full suite on ubuntu without the skip list, non-blocking, so the list matches reality.
+    name: legacy suite, ubuntu, no skip list (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: cloudflared stub on PATH (D-13)
+        run: |
+          mkdir -p "$RUNNER_TEMP/cloudflared-stub"
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/cloudflared-stub/cloudflared"
+          chmod +x "$RUNNER_TEMP/cloudflared-stub/cloudflared"
+          echo "$RUNNER_TEMP/cloudflared-stub" >> "$GITHUB_PATH"
+      - run: bash infra/ci/egress-lock.sh
+      - name: Legacy suite without the skip list
+        run: infra/ci/sandboxed.sh python scripts/run_legacy_tests.py --no-skip --verbose
