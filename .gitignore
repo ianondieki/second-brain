@@ -13,11 +13,11 @@ redis_data/
 Thumbs.db
 desktop.ini
 
-# Personal vault content (keep only templates in git)
-notes/projects/*
-notes/learning/*
-!notes/projects/.gitkeep
-!notes/learning/.gitkeep
+# Personal vault content (keep only templates in git; archived under legacy/)
+legacy/notes/projects/*
+legacy/notes/learning/*
+!legacy/notes/projects/.gitkeep
+!legacy/notes/learning/.gitkeep
 
 # Project reminders: live settings, state, logs, previews
 reminders.json
