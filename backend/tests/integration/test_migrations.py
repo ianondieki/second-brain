@@ -570,6 +570,85 @@ async def test_app_create_organization_makes_the_caller_owner(app_engine: AsyncE
             assert (await conn.execute(visible, {"id": org_id})).scalar_one() == 0
 
 
+async def act_as(conn: AsyncConnection, user_id: UUID) -> None:
+    await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(user_id)})
+
+
+async def add_user(conn: AsyncConnection, user_id: UUID) -> None:
+    await conn.execute(
+        sa.text("INSERT INTO users (id, email, display_name) VALUES (:id, :email, 'Test User')"),
+        {"id": user_id, "email": f"{uuid4().hex}@example.test"},
+    )
+
+
+ADD_MEMBER = "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :user, CAST(:roles AS org_role[]))"
+INVITE = (
+    "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at)"
+    " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :token, app_user_id(), now() + interval '7 days')"
+)
+
+
+def member_params(org_id: UUID, user_id: UUID, roles: str) -> dict[str, Any]:
+    return {"id": uuid7(), "org": org_id, "user": user_id, "roles": roles}
+
+
+def invite_params(org_id: UUID, roles: str) -> dict[str, Any]:
+    return {"id": uuid7(), "org": org_id, "email": f"{uuid4().hex}@example.test", "roles": roles, "token": uuid4().bytes}
+
+
+async def test_admins_cannot_mint_or_touch_owners(app_engine: AsyncEngine) -> None:
+    """An admin who is not an owner cannot grant the owner role (to themselves or anyone), invite an owner, or
+    change an owner's membership; an owner can do all three."""
+    owner, admin, member, newcomer = uuid7(), uuid7(), uuid7(), uuid7()
+    org_id = uuid7()
+    rls = "row-level security"
+    async with rolled_back(app_engine, owner) as conn:
+        for user_id in (owner, admin, member, newcomer):
+            await add_user(conn, user_id)
+        await conn.execute(
+            sa.text("SELECT app_create_organization(:id, 'sme', 'Roles Ltd', CAST(:slug AS citext))"),
+            {"id": org_id, "slug": f"roles-{uuid4().hex}"},
+        )
+        await conn.execute(sa.text(ADD_MEMBER), member_params(org_id, admin, "{admin}"))
+
+        await act_as(conn, admin)
+        await conn.execute(sa.text(ADD_MEMBER), member_params(org_id, member, "{viewer}"))  # admins manage others
+        invitation = invite_params(org_id, "{reviewer}")
+        await conn.execute(sa.text(INVITE), invitation)
+        own_roles = "UPDATE memberships SET roles = CAST(:roles AS org_role[]) WHERE org_id = :org AND user_id = :user"
+        await expect_error(conn, own_roles, rls, {"roles": "{owner,admin}", "org": org_id, "user": admin})
+        await expect_error(conn, own_roles, rls, {"roles": "{owner}", "org": org_id, "user": member})
+        await expect_error(conn, ADD_MEMBER, rls, member_params(org_id, newcomer, "{owner}"))
+        await expect_error(conn, INVITE, rls, invite_params(org_id, "{admin,owner}"))
+        await expect_error(
+            conn,
+            "UPDATE invitations SET roles = '{owner}' WHERE id = :id",
+            rls,
+            {"id": invitation["id"]},
+        )
+        # The owner's membership is invisible to the admin's UPDATE: no demotion, no removal.
+        demote = await conn.execute(
+            sa.text("UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :user"),
+            {"org": org_id, "user": owner},
+        )
+        assert demote.rowcount == 0
+
+        await act_as(conn, owner)
+        promote = await conn.execute(sa.text(own_roles), {"roles": "{owner,admin}", "org": org_id, "user": admin})
+        assert promote.rowcount == 1
+        await conn.execute(sa.text(ADD_MEMBER), member_params(org_id, newcomer, "{owner}"))
+        await conn.execute(sa.text(INVITE), invite_params(org_id, "{owner}"))
+        roles = await conn.execute(
+            sa.text("SELECT user_id, roles::text[] AS roles FROM memberships WHERE org_id = :org"), {"org": org_id}
+        )
+        assert {row.user_id: row.roles for row in roles} == {
+            owner: ["owner", "admin"],
+            admin: ["owner", "admin"],
+            member: ["viewer"],
+            newcomer: ["owner"],
+        }
+
+
 # --- Audit chain (REQ-AUD-01) -------------------------------------------------------------------------------------
 
 
