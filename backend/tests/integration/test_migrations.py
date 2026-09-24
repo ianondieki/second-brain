@@ -925,18 +925,24 @@ async def test_system_event_and_details_need_no_user(app_engine: AsyncEngine) ->
         assert (await conn.execute(visible, {"id": event["id"]})).scalar_one() == 0
 
 
-async def test_user_events_cannot_be_forged(app_engine: AsyncEngine) -> None:
-    """A user-kind event must name the current user as its actor."""
-    actor, chain = uuid7(), f"test:{uuid4().hex}"
+async def test_events_cannot_name_another_user_as_actor(app_engine: AsyncEngine) -> None:
+    """User events name the current user; system events name nobody; staff events name nobody or the current user.
+    No kind of event may name another user."""
+    actor, other, chain = uuid7(), uuid7(), f"test:{uuid4().hex}"
+    refused = [("user", other), ("user", None), ("staff", other), ("system", other), ("system", actor)]
+    accepted = [("user", actor), ("staff", actor), ("staff", None), ("system", None)]
     async with rolled_back(app_engine, actor) as conn:
-        for forged in (uuid7(), None):
+        for kind, named in refused:
             savepoint = await conn.begin_nested()
             with pytest.raises(sa.exc.DBAPIError, match="row-level security"):
-                await conn.execute(INSERT_EVENT, event_params(chain, forged))
+                await conn.execute(INSERT_EVENT, event_params(chain, named, actor_kind=kind))
             await savepoint.rollback()
-        await conn.execute(INSERT_EVENT, event_params(chain, actor))
+        for kind, named in accepted:
+            await conn.execute(INSERT_EVENT, event_params(chain, named, actor_kind=kind))
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))  # read the whole chain back
         chained = list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all())
-    assert [row.actor_user_id for row in chained] == [actor]
+    assert [(row.actor_kind, row.actor_user_id) for row in chained] == accepted
+    assert_linked_chain(chained)
 
 
 # --- Procrastinate ------------------------------------------------------------------------------------------------

@@ -172,6 +172,13 @@ _USER_OR_ORG_MEMBER = (
 )
 _USER_OR_ORG_ADMIN = "user_id = app_user_id() OR (org_id IS NOT NULL AND app_is_member(org_id, '{owner,admin}'))"
 _AUDIT_VISIBLE = "actor_user_id = app_user_id() OR (org_id IS NOT NULL AND app_is_member(org_id, '{owner,admin}'))"
+# No event may name another user as its actor: user events name the current user, system events name nobody, staff
+# events name nobody or the current (staff) user.
+_AUDIT_APPEND = (
+    "(actor_user_id IS NULL OR actor_user_id = app_user_id())"
+    " AND (actor_kind <> 'system' OR actor_user_id IS NULL)"
+    " AND (actor_kind <> 'user' OR actor_user_id = app_user_id())"
+)
 _EVENT_VISIBLE = "EXISTS (SELECT 1 FROM audit_events e WHERE e.id = event_details.event_id)"
 
 
@@ -212,10 +219,10 @@ POLICIES: tuple[Policy, ...] = (
     Policy("notification_deliveries", "SELECT", _USER_OR_ORG_MEMBER),
     Policy("notification_deliveries", "INSERT", check=_USER_OR_ORG_ADMIN),
     Policy("notification_deliveries", "UPDATE", _USER_OR_ORG_ADMIN, _USER_OR_ORG_ADMIN),
-    # audit chain: the app appends system/staff events and user events in the current user's own name, and reads its
-    # own or its organisations' events; the verifier reads the chain only (details hold personal data).
+    # audit chain: the app appends events that name no other user, and reads its own or its organisations' events;
+    # the verifier reads the chain only (details hold personal data).
     Policy("audit_events", "SELECT", _AUDIT_VISIBLE),
-    Policy("audit_events", "INSERT", check="actor_kind <> 'user' OR actor_user_id = app_user_id()"),
+    Policy("audit_events", "INSERT", check=_AUDIT_APPEND),
     Policy("audit_events", "SELECT", "true", role="audit_reader"),
     Policy("event_details", "SELECT", _EVENT_VISIBLE),
     Policy("event_details", "INSERT", check="true"),  # same write trust as the audit_events INSERT
