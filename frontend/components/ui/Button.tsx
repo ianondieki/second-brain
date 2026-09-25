@@ -12,11 +12,11 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   // The one primary action per screen (docs/spec/07 AC-UX-2): full width at 360 px, natural width from 640 px.
   primary:
-    "w-full px-6 sm:w-auto bg-jacaranda text-white hover:bg-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))] " +
+    "w-full px-6 sm:w-auto bg-jacaranda text-on-accent hover:bg-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))] " +
     "aria-disabled:bg-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]",
   secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-jacaranda-wash",
   link:
-    "min-h-11 px-0 font-medium text-jacaranda underline decoration-1 hover:decoration-2 " +
+    "min-h-11 min-w-11 px-0 font-medium text-jacaranda underline decoration-1 hover:decoration-2 " +
     "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]",
 };
 

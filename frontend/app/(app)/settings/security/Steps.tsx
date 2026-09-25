@@ -43,8 +43,8 @@ export function Steps({ label, doneLabel, steps, current, done = current - 1, cu
               aria-hidden="true"
               className={cn(
                 "relative flex size-8 items-center justify-center rounded-full text-sm font-semibold",
-                isCurrent && "bg-jacaranda text-white",
-                isDone && "bg-ok text-white",
+                isCurrent && "bg-jacaranda text-on-accent",
+                isDone && "bg-ok text-on-ok",
                 !isCurrent && !isDone && "border border-ink-soft bg-paper text-ink-soft",
               )}
             >

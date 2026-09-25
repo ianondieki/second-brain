@@ -14,6 +14,8 @@
   --ok: #1f6b47; /* success, always with an icon and words, 6.0:1 */
   --error: #a8241b; /* errors, always with an icon and words, 6.6:1 */
   --field: #ffffff; /* text inputs, so fields read as fields on paper */
+  --on-accent: #ffffff; /* text and icons on --jacaranda (8.2:1) */
+  --on-ok: #ffffff; /* text and icons on --ok (6.6:1) */
   --focus-ring: 2px solid var(--jacaranda);
   --focus-offset: 2px;
   color-scheme: light;
@@ -29,6 +31,8 @@
   --color-ok: var(--ok);
   --color-error: var(--error);
   --color-field: var(--field);
+  --color-on-accent: var(--on-accent);
+  --color-on-ok: var(--on-ok);
 }
 
 @theme {

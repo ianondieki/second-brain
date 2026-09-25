@@ -11,7 +11,7 @@ export async function TopBar({ homeHref = "/", children }: { homeHref?: string; 
         href="#main"
         className={
           "sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-4 focus:z-10 focus:rounded-control " +
-          "focus:bg-field focus:px-4 focus:py-2 focus:font-semibold focus:text-jacaranda"
+          "focus:bg-field focus:px-4 focus:py-2.5 focus:min-h-11 focus:font-semibold focus:text-jacaranda"
         }
       >
         {t("skipToContent")}

@@ -13,6 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
+  // The browser chrome colour cannot read a CSS variable: keep this equal to --paper in app/globals.css.
   themeColor: "#f5f7f3",
   colorScheme: "light",
 };
