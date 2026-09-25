@@ -105,6 +105,20 @@ describe("api client CSRF handling", () => {
     expect(seen[0].csrf).toBe("tok-1");
   });
 
+  it("reads the cookie on every request, so rotated cookies (after mfa/verify) are used at once", async () => {
+    setCsrfCookie("before-rotation");
+    const verify = `${BASE}/api/auth/mfa/verify`;
+    const { fetchMock, seen } = fakeApi({
+      [`POST ${verify}`]: [() => json(200, { mfa_required: false, user: {} })],
+      [`POST ${BASE}/api/auth/logout`]: [() => new Response(null, { status: 204 })],
+    });
+    const client = createApiClient({ baseUrl: BASE, fetch: fetchMock });
+    await client.POST("/api/auth/mfa/verify", { body: { code: "123456" } });
+    setCsrfCookie("after-rotation"); // what the verify response's Set-Cookie does in a browser
+    await client.POST("/api/auth/logout");
+    expect(seen.map((r) => r.csrf)).toEqual(["before-rotation", "after-rotation"]);
+  });
+
   it("fetches a token first when the cookie is missing", async () => {
     const { fetchMock, seen } = fakeApi({
       [`GET ${CSRF_URL}`]: [() => json(200, { csrf_token: "tok-new" })],

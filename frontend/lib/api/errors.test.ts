@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 
 import { settle } from "./call";
-import { apiErrorCode, errorKey, fieldForError, KNOWN_ERROR_CODES } from "./errors";
+import { apiErrorCode, apiErrorUpgrade, errorKey, fieldForError, KNOWN_ERROR_CODES } from "./errors";
 
 describe("errorKey", () => {
   it("maps a known API code to its own key, never to the server's text", () => {
@@ -24,6 +24,13 @@ describe("errorKey", () => {
     expect(errorKey(invalidEmail)).toBe("invalid_email");
     expect(errorKey({ detail: [{ loc: ["body", "code"], msg: "too short", type: "x" }] })).toBe("invalid_code");
     expect(errorKey({ detail: [{ loc: ["body", "token"], msg: "too short", type: "x" }] })).toBe("generic");
+    expect(errorKey({ detail: [{ loc: ["body", "new_password"], msg: "too short", type: "x" }] })).toBe("weak_password");
+  });
+
+  it("knows the codes added by the auth review", () => {
+    for (const code of ["consent_text_changed", "current_password_required", "recent_sign_in_required"]) {
+      expect(errorKey({ detail: { code, message: "server text" } })).toBe(code);
+    }
   });
 
   it("has an English message for every key it can return", () => {
@@ -40,8 +47,25 @@ describe("fieldForError", () => {
     expect(fieldForError("terms_not_accepted")).toBe("terms");
     expect(fieldForError("org_details_required")).toBe("orgName");
     expect(fieldForError("invalid_code")).toBe("code");
+    expect(fieldForError("current_password_required")).toBe("currentPassword");
     expect(fieldForError("invalid_credentials")).toBeUndefined();
     expect(fieldForError("generic")).toBeUndefined();
+  });
+});
+
+describe("apiErrorUpgrade", () => {
+  it("reads the next plan from a 402 body", () => {
+    const body = {
+      detail: { code: "plan_limit", message: "x", upgrade: { plan: "org_team", url: "/billing/upgrade?plan=org_team" } },
+    };
+    expect(apiErrorUpgrade(body)).toEqual({ plan: "org_team", url: "/billing/upgrade?plan=org_team" });
+  });
+
+  it("returns null at the top of the plan ladder (upgrade: null) and for other bodies", () => {
+    expect(apiErrorUpgrade({ detail: { code: "plan_limit", message: "x", upgrade: null } })).toBeNull();
+    expect(apiErrorUpgrade({ detail: { code: "forbidden", message: "x" } })).toBeNull();
+    expect(apiErrorUpgrade({ detail: [{ loc: ["body"], msg: "x", type: "x" }] })).toBeNull();
+    expect(apiErrorUpgrade(undefined)).toBeNull();
   });
 });
 

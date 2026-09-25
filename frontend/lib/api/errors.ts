@@ -2,7 +2,7 @@
  * Maps API error bodies to i18n keys under `errors.*`. The server's `detail.message` is never shown for a known
  * code: the wording lives in locales/*.json so it can be translated and reviewed ([[COPY-REVIEW]]).
  *
- * Error bodies: `{"detail": {"code", "message"}}` for ApiError (backend/src/bridge/errors.py), and
+ * Error bodies (ApiErrorBody in the OpenAPI): `{"detail": {"code", "message", ...extra}}`, or
  * `{"detail": [{"loc", "msg", "type"}]}` for request validation (FastAPI 422).
  */
 
@@ -10,6 +10,7 @@ export const KNOWN_ERROR_CODES = [
   "invalid_email",
   "terms_not_accepted",
   "org_details_required",
+  "consent_text_changed",
   "weak_password",
   "invalid_credentials",
   "email_unverified",
@@ -19,6 +20,8 @@ export const KNOWN_ERROR_CODES = [
   "totp_already_enabled",
   "no_pending_enrolment",
   "mfa_mandatory_for_role",
+  "current_password_required",
+  "recent_sign_in_required",
   "csrf_failed",
   "unauthenticated",
   "mfa_required",
@@ -30,7 +33,7 @@ export type KnownErrorCode = (typeof KNOWN_ERROR_CODES)[number];
 export type ErrorKey = KnownErrorCode | "generic" | "network";
 
 /** Form fields a code belongs to, so the message can sit next to the field as well as in the summary. */
-export type ErrorField = "email" | "password" | "terms" | "orgName" | "code";
+export type ErrorField = "email" | "password" | "terms" | "orgName" | "code" | "currentPassword";
 
 const KNOWN = new Set<string>(KNOWN_ERROR_CODES);
 
@@ -38,17 +41,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** The machine code of an API error body, or undefined when the body has none. */
-export function apiErrorCode(error: unknown): string | undefined {
+function detailOf(error: unknown): Record<string, unknown> | undefined {
   if (!isRecord(error)) return undefined;
   const detail = error.detail;
-  if (isRecord(detail) && !Array.isArray(detail) && typeof detail.code === "string") return detail.code;
-  if (Array.isArray(detail)) {
-    // Request validation: an invalid email or password field maps to the same code the service would return.
-    for (const item of detail) {
+  return isRecord(detail) && !Array.isArray(detail) ? detail : undefined;
+}
+
+/** The machine code of an API error body, or undefined when the body has none. */
+export function apiErrorCode(error: unknown): string | undefined {
+  const detail = detailOf(error);
+  if (detail && typeof detail.code === "string") return detail.code;
+  const list = isRecord(error) ? error.detail : undefined;
+  if (Array.isArray(list)) {
+    // Request validation: an invalid email, password or code field maps to the code the service would return.
+    for (const item of list) {
       const loc = isRecord(item) && Array.isArray(item.loc) ? item.loc : [];
       if (loc.includes("email")) return "invalid_email";
-      if (loc.includes("password")) return "weak_password";
+      if (loc.includes("password") || loc.includes("new_password")) return "weak_password";
       if (loc.includes("code")) return "invalid_code";
     }
     return "validation";
@@ -66,12 +75,23 @@ export function errorKey(error: unknown): ErrorKey {
   return isKnownErrorCode(code) ? code : "generic";
 }
 
+/**
+ * The upgrade path of a 402 plan-limit body (`detail.upgrade.url`), or null: at the top of the plan ladder the API
+ * sends `upgrade: null`, and other bodies have none.
+ */
+export function apiErrorUpgrade(error: unknown): { plan: string; url: string } | null {
+  const upgrade = detailOf(error)?.upgrade;
+  if (!isRecord(upgrade) || typeof upgrade.plan !== "string" || typeof upgrade.url !== "string") return null;
+  return { plan: upgrade.plan, url: upgrade.url };
+}
+
 const FIELD_OF: Partial<Record<KnownErrorCode, ErrorField>> = {
   invalid_email: "email",
   weak_password: "password",
   terms_not_accepted: "terms",
   org_details_required: "orgName",
   invalid_code: "code",
+  current_password_required: "currentPassword",
 };
 
 export function fieldForError(key: ErrorKey): ErrorField | undefined {

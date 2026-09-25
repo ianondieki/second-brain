@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { homeFor, isMfaPending, needsMfaSetup } from "./routing";
+import { destinationFor, homeFor, isMfaPending, isPending, needsMfaSetup } from "./routing";
 import { checkEmail, validateLogin, validateSignup, type SignupValues } from "./validation";
 
 const developer: SignupValues = {
@@ -65,6 +65,16 @@ describe("routing helpers", () => {
     expect(isMfaPending({ required: true, enrolled: true, verified: false })).toBe(true);
     expect(isMfaPending({ required: true, enrolled: true, verified: true })).toBe(false);
     expect(isMfaPending({ required: false, enrolled: false, verified: false })).toBe(false);
+  });
+
+  it("sends a session that still owes its second factor to /auth/mfa", () => {
+    const owed = { required: true, enrolled: true, verified: false };
+    const done = { required: true, enrolled: true, verified: true };
+    expect(isPending({ side: "pending", mfa: owed })).toBe(true);
+    expect(destinationFor({ side: "pending", mfa: owed })).toBe("/auth/mfa");
+    expect(destinationFor({ side: "org", mfa: done })).toBe("/org");
+    expect(destinationFor({ side: "staff", mfa: done })).toBe("/dev");
+    expect(destinationFor({ side: "developer", mfa: { required: false, enrolled: false, verified: false } })).toBe("/dev");
   });
 
   it("flags roles that need two-step sign-in but lack it", () => {
