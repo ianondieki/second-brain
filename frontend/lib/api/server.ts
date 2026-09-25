@@ -5,7 +5,7 @@ import createClient from "openapi-fetch";
 import { signupConsents, type ShownConsents } from "@/lib/auth/consents";
 import { homeFor, isPending, type Me } from "@/lib/auth/routing";
 
-import { pickCookie, SESSION_COOKIES } from "./cookies";
+import { cookieSecure, sessionCookieHeader } from "./cookies";
 import type { paths } from "./schema";
 
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
@@ -16,12 +16,12 @@ const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
 /** The signed-in person for this request, or null when there is no live session. Forwards only the session cookie. */
 export async function getMe(): Promise<Me | null> {
   const store = await cookies();
-  // Forwarded under the name it arrived with: the API reads the name that matches its COOKIE_SECURE setting.
-  const session = pickCookie(SESSION_COOKIES, (name) => store.get(name)?.value);
-  if (!session) return null;
+  // COOKIE_SECURE must match the API's setting (frontend/.env.example); it picks the one session cookie name.
+  const cookie = sessionCookieHeader((name) => store.get(name)?.value, cookieSecure(process.env.COOKIE_SECURE));
+  if (!cookie) return null;
   // Bounded: a hung API must end in the route's error page, not a page that never renders.
   const { data, response } = await serverApi().GET("/api/auth/me", {
-    headers: { cookie: `${session.name}=${session.value}` },
+    headers: { cookie },
     signal: AbortSignal.timeout(5000),
   });
   if (response.status === 401) return null;
