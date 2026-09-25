@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { SignOutButton } from "@/components/SignOutButton";
 import { requirePendingMfa } from "@/lib/api/server";
 
 import { MfaForm } from "./MfaForm";
@@ -15,9 +16,9 @@ export default async function MfaPage() {
   await requirePendingMfa();
   const t = await getTranslations("mfa");
   return (
-    <AuthShell>
+    // No phone and no recovery codes: "Sign out" is the way out of a half-finished sign-in.
+    <AuthShell topBarAction={<SignOutButton />}>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <p className="mt-3 text-ink-soft">{t("lead")}</p>
       <MfaForm />
     </AuthShell>
   );

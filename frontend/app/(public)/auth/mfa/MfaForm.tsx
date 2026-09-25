@@ -67,7 +67,8 @@ export function MfaForm() {
   }
 
   return (
-    <Form onSubmit={submit} className="mt-8 flex flex-col gap-6">
+    <Form onSubmit={submit} className="flex flex-col gap-6">
+      <p className="mt-3 mb-2 text-ink-soft">{useRecovery ? t("mfa.recoveryLead") : t("mfa.lead")}</p>
       {serverError ? <Alert ref={summaryRef}>{t(`errors.${serverError}`)}</Alert> : null}
       {useRecovery ? (
         <TextField

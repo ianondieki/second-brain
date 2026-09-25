@@ -12,14 +12,16 @@ export interface AuthShellProps {
    * panel also shows below the actions on phones. Form screens keep the panel to 1024 px and up.
    */
   landing?: boolean;
+  /** One control on the right of the top bar (for example "Sign out" on the second-factor page). */
+  topBarAction?: ReactNode;
 }
 
 /** Signed-out screens: top bar, one left-aligned column (max 28 rem for forms), and the side panel on desktop. */
-export async function AuthShell({ children, landing = false }: AuthShellProps) {
+export async function AuthShell({ children, landing = false, topBarAction }: AuthShellProps) {
   const t = await getTranslations("panel");
   return (
     <>
-      <TopBar />
+      <TopBar>{topBarAction}</TopBar>
       <div
         className={
           "mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 content-start gap-12 px-4 pt-8 pb-16 sm:px-6 " +

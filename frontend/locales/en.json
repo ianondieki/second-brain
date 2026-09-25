@@ -125,9 +125,10 @@
   "mfa": {
     "title": "Enter your code",
     "lead": "Open your authenticator app and enter the current 6‑digit code.",
+    "recoveryLead": "Enter one of the recovery codes you saved when you turned on two-step sign-in.",
     "code": "6-digit code",
     "recovery": "Recovery code",
-    "recoveryHint": "One of the codes you saved when you turned on two-step sign-in, like k7mq-x2pd.",
+    "recoveryHint": "Each code looks like k7mq-x2pd and works once.",
     "useRecovery": "Use a recovery code",
     "useApp": "Use a code from my app",
     "submit": "Continue",

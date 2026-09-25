@@ -125,9 +125,10 @@
   "mfa": {
     "title": "Weka msimbo wako",
     "lead": "Fungua programu yako ya uthibitishaji na uweke msimbo wa sasa wa tarakimu 6.",
+    "recoveryLead": "Weka mojawapo ya misimbo ya kurejesha uliyohifadhi ulipowasha kuingia kwa hatua mbili.",
     "code": "Msimbo wa tarakimu 6",
     "recovery": "Msimbo wa kurejesha",
-    "recoveryHint": "Mojawapo ya misimbo uliyohifadhi ulipowasha kuingia kwa hatua mbili, kama k7mq-x2pd.",
+    "recoveryHint": "Kila msimbo unafanana na k7mq-x2pd na hufanya kazi mara moja.",
     "useRecovery": "Tumia msimbo wa kurejesha",
     "useApp": "Tumia msimbo kutoka kwenye programu yangu",
     "submit": "Endelea",
