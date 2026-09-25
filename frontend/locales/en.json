@@ -114,9 +114,13 @@
     "failedLead": "Links work once and expire after {minutes} minutes. Enter your email to ask for a new one.",
     "submit": "Email me a new link",
     "submitting": "Sending link…",
+    "interruptedTitle": "Signing in did not finish",
+    "interruptedBody": "The connection dropped before your link could be checked. Check your connection, then try again.",
+    "tryAgain": "Try again",
     "noPasswordTitle": "You are signed in",
     "noPasswordBody": "Your account has no password, for example because this link was opened in a different browser from the one used to sign up. You can keep signing in with emailed links, or set a password now.",
-    "noPasswordAction": "Set a password"
+    "noPasswordAction": "Set a password",
+    "noPasswordLater": "Continue without a password"
   },
   "mfa": {
     "title": "Enter your code",

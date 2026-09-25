@@ -1,26 +1,44 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink, textLinkClass } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
-import { LINK_MINUTES } from "@/lib/auth/routing";
+import { destinationFor, LINK_MINUTES } from "@/lib/auth/routing";
 import { continueAfterSignIn, rememberEmail } from "@/lib/auth/session";
 import { checkEmail } from "@/lib/auth/validation";
 
-/** Reads the token from the fragment (never sent to servers or in Referer), then forgets it. */
-function takeTokenFromFragment(): string | null {
+/** A copy of a history state value with every occurrence of the token removed (the router may keep URLs there). */
+export function scrubToken(value: unknown, token: string): unknown {
+  if (typeof value === "string") return value.split(`#token=${token}`).join("").split(token).join("");
+  if (Array.isArray(value)) return value.map((item) => scrubToken(item, token));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrubToken(item, token)]));
+  }
+  return value;
+}
+
+/**
+ * Reads the token from the fragment (never sent to servers or in Referer), then removes it from the address bar and
+ * from the history entry, so Back, bookmarks and shoulder-surfers do not see it.
+ */
+export function takeTokenFromFragment(): string | null {
   const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
-  window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+  const state = token ? scrubToken(window.history.state, token) : window.history.state;
+  window.history.replaceState(state, "", window.location.pathname + window.location.search);
   return token;
 }
+
+/** Failures that say nothing about the link itself: keep the token and offer to try again. */
+const RETRYABLE = new Set<ErrorKey>(["network", "csrf_failed"]);
 
 /**
  * Magic and verification links land here: `/auth/link#token=...`. The token is spent once (POST
@@ -30,33 +48,53 @@ export function LinkSignIn() {
   const t = useTranslations();
   const router = useRouter();
   const started = useRef(false);
+  const token = useRef<string | null>(null);
   const [failed, setFailed] = useState<ErrorKey | null>(null);
+  const [interrupted, setInterrupted] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [noPassword, setNoPassword] = useState(false);
+  const [home, setHome] = useState("/dev");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<ErrorKey | null>(null);
 
   const signIn = useCallback(async () => {
-    const token = takeTokenFromFragment();
-    if (!token) {
+    // Taken from the address bar once; kept in memory so "Try again" can use it after a dropped connection.
+    token.current ??= takeTokenFromFragment();
+    const current = token.current;
+    if (!current) {
       setFailed("invalid_or_expired_link");
       return;
     }
-    const outcome = await settle(api.POST("/api/auth/magic-link/consume", { body: { token } }));
+    const outcome = await settle(api.POST("/api/auth/magic-link/consume", { body: { token: current } }));
+    setRetrying(false);
     if (outcome.ok) {
+      token.current = null;
       // Signed in, but the account has no password (for example: the link was opened in a different browser from
       // the one that signed up, so the password chosen there was not kept). Say so calmly, with one way forward.
       if (!outcome.data.mfa_required && !outcome.data.user.password_set) {
+        const me = await settle(api.GET("/api/auth/me"));
+        if (me.ok) setHome(destinationFor(me.data));
         setNoPassword(true);
         return;
       }
       await continueAfterSignIn(router, outcome.data.mfa_required);
       return;
     }
+    if (RETRYABLE.has(outcome.key)) {
+      setInterrupted(true);
+      return;
+    }
+    token.current = null;
     // A validation error (malformed token) means the same thing to the person as an expired link.
     setFailed(outcome.key === "generic" && outcome.status === 422 ? "invalid_or_expired_link" : outcome.key);
   }, [router]);
+
+  async function tryAgain() {
+    setRetrying(true);
+    await signIn();
+  }
 
   useEffect(() => {
     // Once per page load, even under React's development double-invocation: a token only works once.
@@ -91,10 +129,29 @@ export function LinkSignIn() {
       <>
         <h1 className="text-xl text-ink lg:text-2xl">{t("link.noPasswordTitle")}</h1>
         <p className="mt-3 text-ink-soft">{t("link.noPasswordBody")}</p>
-        <div className="mt-8">
+        <div className="mt-8 flex flex-col items-start gap-4">
           <ButtonLink href="/settings/security#password" variant="primary">
             {t("link.noPasswordAction")}
           </ButtonLink>
+          <Link href={home} className={textLinkClass}>
+            {t("link.noPasswordLater")}
+          </Link>
+        </div>
+      </>
+    );
+  }
+
+  if (interrupted) {
+    return (
+      <>
+        <h1 className="text-xl text-ink lg:text-2xl">{t("link.interruptedTitle")}</h1>
+        <p role="status" className="mt-3 text-ink-soft">
+          {t("link.interruptedBody")}
+        </p>
+        <div className="mt-8">
+          <Button variant="primary" busy={retrying} onClick={tryAgain}>
+            {retrying ? t("link.working") : t("link.tryAgain")}
+          </Button>
         </div>
       </>
     );

@@ -114,9 +114,13 @@
     "failedLead": "Viungo hufanya kazi mara moja na huisha baada ya dakika {minutes}. Weka barua pepe yako ili uombe kipya.",
     "submit": "Nitumie kiungo kipya",
     "submitting": "Inatuma kiungo…",
+    "interruptedTitle": "Kuingia hakukukamilika",
+    "interruptedBody": "Muunganisho ulikatika kabla kiungo chako hakijakaguliwa. Angalia muunganisho wako, kisha ujaribu tena.",
+    "tryAgain": "Jaribu tena",
     "noPasswordTitle": "Umeingia",
     "noPasswordBody": "Akaunti yako haina nenosiri, kwa mfano kwa sababu kiungo hiki kilifunguliwa kwenye kivinjari tofauti na kile kilichotumika kujisajili. Unaweza kuendelea kuingia kwa viungo vya barua pepe, au uweke nenosiri sasa.",
-    "noPasswordAction": "Weka nenosiri"
+    "noPasswordAction": "Weka nenosiri",
+    "noPasswordLater": "Endelea bila nenosiri"
   },
   "mfa": {
     "title": "Weka msimbo wako",
