@@ -9,6 +9,7 @@ COPY src ./src
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY config ./config
+COPY seed ./seed
 RUN uv sync --frozen --no-dev && useradd --system --uid 10001 bridge
 USER bridge
 ENV PATH="/app/.venv/bin:$PATH"

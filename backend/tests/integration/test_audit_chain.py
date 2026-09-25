@@ -17,9 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from bridge.audit.chain import verify_chain
 from bridge.ids import uuid7
 
+JSON_TEXT = st.characters(codec="utf-8", exclude_characters="\x00")  # utf-8 codec excludes lone surrogates
 payloads = st.dictionaries(
     st.text(alphabet="abcdefghij_", min_size=1, max_size=8),
-    st.one_of(st.integers(-(10**6), 10**6), st.booleans(), st.text(max_size=12), st.none()),
+    # Postgres text and jsonb cannot hold NUL or lone surrogates; audit payloads are ids, enums and digests anyway.
+    st.one_of(st.integers(-(10**6), 10**6), st.booleans(), st.text(JSON_TEXT, max_size=12), st.none()),
     max_size=4,
 )
 events = st.lists(st.tuples(st.sampled_from(["a.created", "b.updated", "c.signed"]), payloads), min_size=1, max_size=6)
