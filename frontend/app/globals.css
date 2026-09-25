@@ -1,24 +1,147 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens (docs/platform/design/phase1-auth-ui.md). Brand, palette and radii are placeholders until G5:
+ * changing them is a token swap here, not a redesign. Contrast ratios are against --paper.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f5f7f3; /* page background: cool, faintly green-grey paper */
+  --ink: #16232f; /* text and icons, 14.8:1 */
+  --ink-soft: #4a5866; /* secondary text and input borders, 6.8:1 */
+  --jacaranda: #5b3e96; /* the one accent: primary buttons, focus ring, the bridge line, 7.6:1 */
+  --jacaranda-wash: #ece6f6; /* selected radio row, info notice, the side panel */
+  --line: #c9d1c8; /* hairlines and dividers */
+  --ok: #1f6b47; /* success, always with an icon and words, 6.0:1 */
+  --error: #a8241b; /* errors, always with an icon and words, 6.6:1 */
+  --field: #ffffff; /* text inputs, so fields read as fields on paper */
+  --focus-ring: 2px solid var(--jacaranda);
+  --focus-offset: 2px;
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-jacaranda: var(--jacaranda);
+  --color-jacaranda-wash: var(--jacaranda-wash);
+  --color-line: var(--line);
+  --color-ok: var(--ok);
+  --color-error: var(--error);
+  --color-field: var(--field);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@theme {
+  /* One system font stack (docs/spec/07 item 5: no web fonts). */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+
+  /* Radii: controls and the one side panel; nothing else is rounded. */
+  --radius-control: 10px;
+  --radius-panel: 16px;
+
+  /* Type scale: 1.25 ratio on a 16 px base (14 / 16 / 20 / 25 / 31 / 39). */
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.5625rem;
+  --text-xl--line-height: 1.25;
+  --text-2xl: 1.9375rem;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 2.4375rem;
+  --text-3xl--line-height: 1.15;
+}
+
+@layer base {
+  html {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+  }
+
+  ::selection {
+    background: var(--jacaranda-wash);
+    color: var(--ink);
+  }
+
+  input,
+  select,
+  textarea {
+    caret-color: var(--jacaranda);
+  }
+
+  input::placeholder {
+    color: var(--ink-soft);
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+/* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
+@utility code-figures {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+/*
+ * The bridge line draws itself once on the landing page (the only motion in Phase 1). The resting state is the
+ * drawn line, so it stays visible if the animation never runs; reduced motion shows it drawn.
+ */
+@keyframes bridge-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.bridge-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: bridge-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .bridge-draw {
+    animation: none !important;
+  }
 }
