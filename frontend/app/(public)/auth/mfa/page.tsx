@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
 import { SignOutButton } from "@/components/SignOutButton";
 import { requirePendingMfa } from "@/lib/api/server";
 
@@ -19,7 +20,9 @@ export default async function MfaPage() {
     // No phone and no recovery codes: "Sign out" is the way out of a half-finished sign-in.
     <AuthShell topBarAction={<SignOutButton />}>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <MfaForm />
+      <IntlScope namespaces={["mfa", "validation", "errors"]}>
+        <MfaForm />
+      </IntlScope>
     </AuthShell>
   );
 }

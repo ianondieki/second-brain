@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
 import { getSignupConsents } from "@/lib/api/server";
 
 import { SignupForm } from "./SignupForm";
@@ -17,7 +18,9 @@ export default async function SignupPage() {
     <AuthShell>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
       <p className="mt-3 text-ink-soft">{t("lead")}</p>
-      <SignupForm initialConsents={consents} />
+      <IntlScope namespaces={["signup", "fields", "validation", "errors", "orgKind"]}>
+        <SignupForm initialConsents={consents} />
+      </IntlScope>
     </AuthShell>
   );
 }

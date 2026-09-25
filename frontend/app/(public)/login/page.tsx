@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
 
 import { LoginForm } from "./LoginForm";
 
@@ -16,7 +17,9 @@ export default async function LoginPage() {
     <AuthShell>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
       <p className="mt-3 text-ink-soft">{t("lead")}</p>
-      <LoginForm />
+      <IntlScope namespaces={["login", "fields", "validation", "errors"]}>
+        <LoginForm />
+      </IntlScope>
     </AuthShell>
   );
 }

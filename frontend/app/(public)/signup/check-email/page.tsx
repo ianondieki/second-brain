@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
 
 import { CheckEmail } from "./CheckEmail";
 
@@ -17,7 +18,9 @@ export default async function CheckEmailPage({ searchParams }: PageProps<"/signu
   return (
     <AuthShell>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <CheckEmail kind={kind} />
+      <IntlScope namespaces={["checkEmail", "errors"]}>
+        <CheckEmail kind={kind} />
+      </IntlScope>
     </AuthShell>
   );
 }

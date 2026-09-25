@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { pickMessages } from "@/components/IntlScope";
+
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -23,7 +25,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={locale} className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-paper text-ink">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={await pickMessages(["shell", "errorPage"])}>{children}</NextIntlClientProvider>
       </body>
     </html>
   );

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
 
 import { LinkSignIn } from "./LinkSignIn";
 
@@ -13,7 +14,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function LinkPage() {
   return (
     <AuthShell>
-      <LinkSignIn />
+      <IntlScope namespaces={["link", "fields", "validation", "errors"]}>
+        <LinkSignIn />
+      </IntlScope>
     </AuthShell>
   );
 }
