@@ -6,6 +6,7 @@ runs with a default key. Every variable is documented in ``backend/.env.example`
 
 from __future__ import annotations
 
+import base64
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -26,6 +27,8 @@ class Settings(BaseSettings):
     product_name: str = "Bridge (working name)"
     public_base_url: str = "http://localhost:3000"
     log_level: str = "INFO"
+    # Proxies whose X-Forwarded-For is trusted for the client IP (login throttling). Comma-separated IPs or CIDRs.
+    trusted_proxies: str = "127.0.0.1"
 
     # PostgreSQL. The API and worker connect as the RLS-bound app role; migrations use the owner role.
     database_url: SecretStr
@@ -68,6 +71,11 @@ class Settings(BaseSettings):
             value: SecretStr = getattr(self, name)
             if len(value.get_secret_value()) < MIN_SECRET_CHARS:
                 problems.append(f"{name.upper()} must be at least {MIN_SECRET_CHARS} characters")
+        try:
+            if len(base64.b64decode(self.data_encryption_key.get_secret_value(), validate=True)) != 32:
+                problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
+        except ValueError:
+            problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
         if self.app_env == "production":

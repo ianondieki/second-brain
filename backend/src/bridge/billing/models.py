@@ -19,7 +19,11 @@ LIVE = "status IN ('trialing', 'active', 'past_due')"
 
 class Plan(IdMixin, TimestampsMixin, Base):
     __tablename__ = "plans"
-    __table_args__ = ({"info": {"tenancy": Tenancy.GLOBAL}},)
+    __table_args__ = (
+        # At most one default plan per side: the free plan a user or organisation may subscribe to self-serve.
+        Index("uq_plans_default_side", "side", unique=True, postgresql_where=text("is_default")),
+        {"info": {"tenancy": Tenancy.GLOBAL}},
+    )
 
     code: Mapped[str] = mapped_column(String(40), unique=True)
     side: Mapped[PlanSide] = mapped_column(pg_enum(PlanSide, "plan_side"))
@@ -29,6 +33,8 @@ class Plan(IdMixin, TimestampsMixin, Base):
     limits: Mapped[dict[str, Any]] = mapped_column(JSONB)
     active: Mapped[bool] = mapped_column(Boolean, server_default="true")
     version: Mapped[int] = mapped_column(SmallInteger, server_default="1")
+    # Set by the seed from config/plans.yaml (`default: true`); the only plans bridge_app may subscribe to directly.
+    is_default: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
 
 class Subscription(IdMixin, TimestampsMixin, Base):

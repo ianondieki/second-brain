@@ -1,0 +1,333 @@
+{
+  "case": "thresholds_and_sort_order",
+  "description": "Risk just under the threshold, modified_newest unknown, unknown index/unpushed, name ties, never worked on, more than three projects in the subject, and featured rotation skipping recently featured ones.",
+  "expected": {
+    "actionable": [
+      "b-risk-lastwork",
+      "young-change-cold",
+      "delta",
+      "Echo",
+      "unknown-index",
+      "never-worked"
+    ],
+    "classify": {
+      "flagged": [
+        {
+          "cold": true,
+          "headline": "work at risk: 4 changed files not committed for 5 days; no work for 5 days",
+          "name": "b-risk-lastwork",
+          "risks": [
+            "4 changed files not committed for 5 days"
+          ]
+        },
+        {
+          "cold": true,
+          "headline": "no work for 4 days",
+          "name": "young-change-cold",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 7 days",
+          "name": "delta",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 7 days",
+          "name": "Echo",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 9 days",
+          "name": "unknown-index",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 1000000 days",
+          "name": "never-worked",
+          "risks": []
+        }
+      ],
+      "held": [],
+      "quiet": [
+        "a-risk-young",
+        "unpushed-zero"
+      ]
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">Start with b-risk-lastwork: Look over your changes in x.py, y.py and z.py, then commit them.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>6 projects</b> need you today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Pick one below and do its next step. Each step takes about 15 minutes.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#b45309\">6</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">2</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#1d4ed8\">Projects that need you</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #1d4ed8\">The most urgent one is first. Start with number 1, or pick another one.</div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">1</span>b-risk-lastwork</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 5 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 5 days ago</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px\"><b>&#9888; Work at risk</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:3px 0 0\">4 changed files not committed for 5 days. This work is not saved in git yet.</li></ul></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>No recent activity details were found.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Look over your changes in x.py, y.py and z.py, then commit them.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Changed files not committed:</b> <span>x.py, y.py, z.py, w.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/b-risk-lastwork</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">2</span>young-change-cold</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 4 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">1 open to-do item</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 6 days ago</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>No recent activity details were found.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Start the first open to-do item: Write tests</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Changed files not committed:</b> <span>m.py, n.py</span></li><li style=\"margin:0 0 4px\"><b>Open to-do items:</b> <span>Write tests</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/young-change-cold</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">3</span>delta</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 7 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last edited: delta.py, util.py.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Open delta.py and write the next step at the top of the README.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>delta.py, util.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/delta</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">4</span>Echo</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 7 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last edited: echo.py.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Open echo.py and write the next step at the top of the README.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>echo.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/Echo</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">5</span>unknown-index</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 9 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 9 days ago</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last commit: &quot;Fix the build&quot;.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Open core.c and write the next step at the top of the README.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recent commits:</b> <span>Fix the build</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>core.c</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/unknown-index</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">6</span>never-worked</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 1000000 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>No recent activity details were found.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Open the project and write the next step at the top of its README.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/never-worked</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#3f3f46\">Everything else</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8\">Nothing to do here. This list shows your other folders, so you can see the whole picture.</div><ul style=\"margin:0;padding-left:20px;font-size:14px\"><li style=\"margin:0 0 6px\"><b>Going fine (worked on in the last 3 days):</b> a-risk-young (today), unpushed-zero (yesterday)</li></ul><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant did not look inside any project this time. The text comes from a quick check of file dates and git.</li></ul></div></body></html>",
+      "subject": "6 projects need you today: b-risk-lastwork (work at risk), young-change-cold (no work for 4 days), delta (no work for 7 days) and 3 more · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  6 projects need you today.\n  Pick one below and do its next step. Each step takes about 15 minutes.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 6\n  - Maybe finished: 0\n  - Maybe not projects: 0\n  - Going fine: 2\n\n==============================================================\nPROJECTS THAT NEED YOU\nThe most urgent one is first. Start with number 1, or pick another one.\n==============================================================\n\n1. b-risk-lastwork\n   No work for 5 days  |  Last commit 5 days ago\n   (Quick check only: the assistant did not look inside this project.)\n\n   !! WORK AT RISK:\n      - 4 changed files not committed for 5 days. This work is not saved in git yet.\n\n   Where you left off:\n      No recent activity details were found.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Look over your changes in x.py, y.py and z.py, then commit them.\n\n   More details:\n      - Changed files not committed: x.py, y.py, z.py, w.py\n      - Folder: /home/dev/projects/b-risk-lastwork\n\n2. young-change-cold\n   No work for 4 days  |  1 open to-do item  |  Last commit 6 days ago\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      No recent activity details were found.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Start the first open to-do item: Write tests\n\n   More details:\n      - Changed files not committed: m.py, n.py\n      - Open to-do items: Write tests\n      - Folder: /home/dev/projects/young-change-cold\n\n3. delta\n   No work for 7 days  |  Not in git\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      Last edited: delta.py, util.py.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Open delta.py and write the next step at the top of the README.\n\n   More details:\n      - Recently edited files: delta.py, util.py\n      - Folder: /home/dev/projects/delta\n\n4. Echo\n   No work for 7 days  |  Not in git\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      Last edited: echo.py.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Open echo.py and write the next step at the top of the README.\n\n   More details:\n      - Recently edited files: echo.py\n      - Folder: /home/dev/projects/Echo\n\n5. unknown-index\n   No work for 9 days  |  Last commit 9 days ago\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      Last commit: \"Fix the build\".\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Open core.c and write the next step at the top of the README.\n\n   More details:\n      - Recent commits: Fix the build\n      - Recently edited files: core.c\n      - Folder: /home/dev/projects/unknown-index\n\n6. never-worked\n   No work for 1000000 days  |  Not in git\n   (Quick check only: the assistant did not look inside this project.)\n\n   Where you left off:\n      No recent activity details were found.\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Open the project and write the next step at the top of its README.\n\n   More details:\n      - Folder: /home/dev/projects/never-worked\n\n==============================================================\nEVERYTHING ELSE\nNothing to do here. This list shows your other folders, so you can see the whole picture.\n==============================================================\n  - Going fine (worked on in the last 3 days): a-risk-young (today), unpushed-zero (yesterday)\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant did not look inside any project this time. The text comes from a quick check of file dates and git."
+    },
+    "fallback": {
+      "Echo": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: echo.py.",
+        "next_step": "Open echo.py and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "b-risk-lastwork": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "No recent activity details were found.",
+        "next_step": "Look over your changes in x.py, y.py and z.py, then commit them.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "delta": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: delta.py, util.py.",
+        "next_step": "Open delta.py and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "never-worked": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "No recent activity details were found.",
+        "next_step": "Open the project and write the next step at the top of its README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "unknown-index": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Fix the build\".",
+        "next_step": "Open core.c and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "young-change-cold": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "No recent activity details were found.",
+        "next_step": "Start the first open to-do item: Write tests",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "young-change-cold"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {
+      "b-risk-lastwork": "2026-09-20",
+      "delta": "2026-09-19",
+      "gone-project": "2026-06-01"
+    },
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 7,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789928100.0,
+          "modified": [
+            "a.py",
+            "b.py"
+          ],
+          "modified_newest": 1789720740.0,
+          "modified_partial": false,
+          "recent_commits": [],
+          "unpushed": null
+        },
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "a-risk-young",
+        "open_todos": 0,
+        "path": "/home/dev/projects/a-risk-young",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 7,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789496100.0,
+          "modified": [
+            "x.py",
+            "y.py",
+            "z.py",
+            "w.py"
+          ],
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [],
+          "unpushed": null
+        },
+        "idle_days": 5,
+        "last_work": 1789517700.0,
+        "name": "b-risk-lastwork",
+        "open_todos": 0,
+        "path": "/home/dev/projects/b-risk-lastwork",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 7,
+        "last_work": 1789344900.0,
+        "name": "Echo",
+        "open_todos": 0,
+        "path": "/home/dev/projects/Echo",
+        "readme_title": "",
+        "recent_files": [
+          "echo.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 9,
+        "git": null,
+        "idle_days": 7,
+        "last_work": 1789344900.0,
+        "name": "delta",
+        "open_todos": 0,
+        "path": "/home/dev/projects/delta",
+        "readme_title": "",
+        "recent_files": [
+          "delta.py",
+          "util.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789150500.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Fix the build"
+          ],
+          "unpushed": null
+        },
+        "idle_days": 9,
+        "last_work": 1789172100.0,
+        "name": "unknown-index",
+        "open_todos": 0,
+        "path": "/home/dev/projects/unknown-index",
+        "readme_title": "",
+        "recent_files": [
+          "core.c"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 7,
+        "git": {
+          "branch": "main",
+          "has_remote": true,
+          "last_commit": 1789841700.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [],
+          "unpushed": 0
+        },
+        "idle_days": 1,
+        "last_work": 1789863300.0,
+        "name": "unpushed-zero",
+        "open_todos": 0,
+        "path": "/home/dev/projects/unpushed-zero",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 7,
+        "git": null,
+        "idle_days": 1000000,
+        "last_work": 0.0,
+        "name": "never-worked",
+        "open_todos": 0,
+        "path": "/home/dev/projects/never-worked",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 7,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789452900.0,
+          "modified": [
+            "m.py",
+            "n.py"
+          ],
+          "modified_newest": 1789884900.0,
+          "modified_partial": false,
+          "recent_commits": [],
+          "unpushed": null
+        },
+        "idle_days": 4,
+        "last_work": 1789604100.0,
+        "name": "young-change-cold",
+        "open_todos": 1,
+        "path": "/home/dev/projects/young-change-cold",
+        "readme_title": "",
+        "recent_files": [],
+        "skipped_copy_of": null,
+        "todo_samples": [
+          "Write tests"
+        ],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {}
+  },
+  "kind": "scenario"
+}

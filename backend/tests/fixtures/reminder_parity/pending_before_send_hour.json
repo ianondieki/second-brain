@@ -1,0 +1,19 @@
+{
+  "case": "before_send_hour",
+  "description": "Before send_after_hour nothing is pending.",
+  "expected": {
+    "pending": []
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {},
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T07:59:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

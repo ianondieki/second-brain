@@ -17,7 +17,7 @@ from fastapi import Depends
 from bridge.auth.deps import CurrentSession, Db
 from bridge.auth.sessions import LiveSession
 from bridge.db import bind_tenant
-from bridge.errors import forbidden, not_found
+from bridge.errors import ApiError, forbidden, not_found
 from bridge.models.enums import MFA_REQUIRED_ORG_ROLES, OrgRole
 from bridge.tenancy.service import membership_of
 
@@ -40,7 +40,7 @@ def org_member(*required: OrgRole) -> Callable[..., Awaitable[OrgContext]]:
             if live.user.totp_enabled_at is None:
                 raise forbidden("mfa_enrolment_required", "Turn on two-step sign-in to use this organisation.")
             if live.row.mfa_verified_at is None:
-                raise forbidden("mfa_required", "Enter the code from your authenticator app.")
+                raise ApiError(401, "mfa_required", "Enter the code from your authenticator app.")
         if required and not roles & set(required):
             raise forbidden()
         return OrgContext(org_id, roles, live)

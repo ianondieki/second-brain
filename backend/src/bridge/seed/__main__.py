@@ -1,15 +1,14 @@
 """Idempotent reference-data seed: ``python -m bridge.seed`` (docs/spec/08 Migrations; X1-3).
 
-Runs as the owner role (``DATABASE_OWNER_URL``) and upserts: regions (KE + 47 counties), niches (two-level ISIC
-taxonomy), holidays (2026-2027 as observed), plans (``config/plans.yaml``). Running it twice leaves the same rows.
-It never creates organisations (the directory seed arrives in Phase 2); outside ``APP_ENV`` test/staging it would
-refuse to set any organisation above ``unclaimed``.
+Runs as the owner role (``DATABASE_OWNER_URL`` from the environment or ``backend/.env``) and upserts regions (KE + 47
+counties), niches (two-level ISIC taxonomy), holidays (2026-2027 as observed) and plans (``config/plans.yaml``).
+Running it twice leaves the same rows. It creates no organisations; the directory seed (Phase 2, G6) will refuse to
+set any organisation above ``unclaimed`` outside ``APP_ENV`` test/staging.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -28,12 +27,12 @@ async def run(url: str) -> dict[str, int]:
 
 
 def main() -> int:
-    url = os.environ.get("DATABASE_OWNER_URL")
-    if not url:
+    owner_url = get_settings().database_owner_url
+    if owner_url is None:
         print("DATABASE_OWNER_URL is not set: the seed runs as the owner role (bridge_owner).", file=sys.stderr)
         return 2
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    counts = asyncio.run(run(url), loop_factory=loop_factory)
+    counts = asyncio.run(run(owner_url.get_secret_value()), loop_factory=loop_factory)
     for table in SEED_TABLES:
         print(f"seed: {table} = {counts[table]} rows")
     return 0

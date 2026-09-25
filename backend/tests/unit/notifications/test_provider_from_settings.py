@@ -22,7 +22,7 @@ def settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "database_url": SecretStr("postgresql+psycopg://u:p@localhost/db"),
         "secret_key": SecretStr(GOOD),
-        "data_encryption_key": SecretStr(GOOD),
+        "data_encryption_key": SecretStr("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
         "_env_file": None,
     }
     values.update(overrides)

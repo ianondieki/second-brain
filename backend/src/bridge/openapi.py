@@ -16,6 +16,7 @@ from bridge.config import BACKEND_DIR, Settings
 from bridge.main import create_app
 
 OPENAPI_PATH = BACKEND_DIR / "openapi.json"
+_ZERO_KEY = SecretStr("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")  # 32 zero bytes: shape-valid, never a real key
 _PLACEHOLDER = SecretStr("openapi-export-placeholder-not-a-secret-0000")
 
 
@@ -24,7 +25,7 @@ def render() -> str:
         app_env="test",
         database_url=SecretStr("postgresql+psycopg://openapi@localhost/openapi"),
         secret_key=_PLACEHOLDER,
-        data_encryption_key=_PLACEHOLDER,
+        data_encryption_key=_ZERO_KEY,
     )
     schema = create_app(settings).openapi()
     return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

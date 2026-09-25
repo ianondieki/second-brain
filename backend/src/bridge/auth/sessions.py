@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge import clock
 from bridge.auth.crypto import new_token, token_hash
 from bridge.auth.models import Session, User
-from bridge.clock import utcnow
 from bridge.models.enums import UserStatus
 
 TOUCH_EVERY = timedelta(minutes=5)
@@ -21,12 +21,13 @@ class LiveSession:
     token: str
     row: Session
     user: User
+    touched: bool = False  # last_seen_at moved; the dependency commits it
 
 
 async def create(
     db: AsyncSession, user: User, *, ttl: timedelta, mfa_pending: bool, user_agent: str | None
 ) -> LiveSession:
-    now = utcnow()
+    now = clock.utcnow()
     token = new_token()
     row = Session(
         user_id=user.id,
@@ -44,7 +45,7 @@ async def create(
 
 async def lookup(db: AsyncSession, token: str) -> LiveSession | None:
     """The live session for a cookie token, or None (unknown, revoked, expired or suspended user)."""
-    now = utcnow()
+    now = clock.utcnow()
     result = await db.execute(
         select(Session, User)
         .join(User, User.id == Session.user_id)
@@ -56,24 +57,25 @@ async def lookup(db: AsyncSession, token: str) -> LiveSession | None:
     row, user = found
     if user.status != UserStatus.ACTIVE:
         return None
-    if now - row.last_seen_at > TOUCH_EVERY:
+    touched = now - row.last_seen_at > TOUCH_EVERY
+    if touched:
         row.last_seen_at = now
-    return LiveSession(token, row, user)
+    return LiveSession(token, row, user, touched)
 
 
 async def revoke(db: AsyncSession, row: Session) -> None:
-    row.revoked_at = utcnow()
+    row.revoked_at = clock.utcnow()
 
 
 async def revoke_all(db: AsyncSession, user_id: object, *, except_id: object | None = None) -> None:
     stmt = update(Session).where(Session.user_id == user_id, Session.revoked_at.is_(None))
     if except_id is not None:
         stmt = stmt.where(Session.id != except_id)
-    await db.execute(stmt.values(revoked_at=utcnow()))
+    await db.execute(stmt.values(revoked_at=clock.utcnow()))
 
 
 def mfa_fresh(row: Session, max_age: timedelta, now: datetime | None = None) -> bool:
     """True when the session completed MFA within ``max_age`` (the step-up rule, ADR-002: 12 h)."""
     if row.mfa_verified_at is None:
         return False
-    return (now or utcnow()) - row.mfa_verified_at <= max_age
+    return (now or clock.utcnow()) - row.mfa_verified_at <= max_age

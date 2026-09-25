@@ -34,3 +34,12 @@ def account_exists(product: str, login_url: str) -> Wording:
         f"Someone tried to create a {product} account with this email address, which already has one.\n\n"
         f"To sign in, go to {login_url}. If this was not you, you can ignore this email.",
     )
+
+
+def security_notice(product: str, what: str) -> Wording:
+    """Sent after a password or two-step sign-in change, so a hijacked session cannot change them silently."""
+    return Wording(
+        f"Security change on your {product} account",
+        f"{what}\n\nIf this was you, no action is needed. If it was not, sign in with an emailed link, set a new "
+        "password and contact support.",
+    )

@@ -7,9 +7,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge import clock
 from bridge.billing import plans
 from bridge.billing.models import Plan, Subscription
-from bridge.clock import utcnow
 from bridge.config import Settings
 from bridge.models.enums import PlanSide, SubscriptionStatus
 
@@ -30,7 +30,7 @@ async def start_free_subscription(
         org_id=org_id,
         plan_id=plan_id,
         status=SubscriptionStatus.ACTIVE,
-        current_period_start=utcnow(),
+        current_period_start=clock.utcnow(),
     )
     db.add(subscription)
     await db.flush()

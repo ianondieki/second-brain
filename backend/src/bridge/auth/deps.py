@@ -32,6 +32,7 @@ EmailDep = Annotated[EmailProvider, Depends(get_email_provider)]
 
 
 def client_ip(request: Request) -> str:
+    """The client address; X-Forwarded-For is honoured only from TRUSTED_PROXIES (ProxyHeadersMiddleware, main.py)."""
     return request.client.host if request.client else "unknown"
 
 
@@ -40,8 +41,11 @@ async def optional_session(request: Request, db: Db, settings: SettingsDep) -> s
     if not token:
         return None
     live = await sessions.lookup(db, token)
-    if live is not None:
-        await bind_tenant(db, user_id=live.user.id)
+    if live is None:
+        return None
+    if live.touched:
+        await db.commit()  # keep last_seen_at even on read-only requests
+    await bind_tenant(db, user_id=live.user.id)
     return live
 
 
@@ -62,16 +66,35 @@ async def current_session(
     return live
 
 
+def ensure_step_up(live: sessions.LiveSession, settings: Settings) -> None:
+    """Sensitive actions (signing, endorsements, payment confirmations, access-policy and role changes) need a second
+    factor within the last ``STEP_UP_MAX_AGE_HOURS`` (ADR-002: 12 h). Called inside handlers after the org
+    dependency, so a non-member still gets 404 first."""
+    if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
+        raise ApiError(403, "step_up_required", "Confirm with your authenticator code to continue.")
+
+
 async def step_up_session(
     live: Annotated[sessions.LiveSession, Depends(current_session)], settings: SettingsDep
 ) -> sessions.LiveSession:
-    """Sensitive actions (signing, endorsements, payment confirmations, access-policy and role changes) need a
-    second factor within the last ``STEP_UP_MAX_AGE_HOURS`` (ADR-002: 12 h)."""
-    if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
-        raise ApiError(403, "step_up_required", "Confirm with your authenticator code to continue.")
+    ensure_step_up(live, settings)
+    return live
+
+
+async def staff_session(
+    live: Annotated[sessions.LiveSession, Depends(current_session)],
+) -> sessions.LiveSession:
+    """Platform staff (docs/spec/03): TOTP is mandatory, and the session must have passed it. Used by /admin routes."""
+    if live.user.staff_role is None:
+        raise ApiError(404, "not_found", "Not found.")
+    if live.user.totp_enabled_at is None:
+        raise ApiError(403, "mfa_enrolment_required", "Turn on two-step sign-in to use staff tools.")
+    if live.row.mfa_verified_at is None:
+        raise ApiError(401, "mfa_required", "Enter the code from your authenticator app.")
     return live
 
 
 CurrentSession = Annotated[sessions.LiveSession, Depends(current_session)]
 PendingSession = Annotated[sessions.LiveSession, Depends(session_allow_mfa_pending)]
 StepUpSession = Annotated[sessions.LiveSession, Depends(step_up_session)]
+StaffSession = Annotated[sessions.LiveSession, Depends(staff_session)]

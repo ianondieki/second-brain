@@ -23,7 +23,8 @@ _SET_TENANT = text("select set_config('app.user_id', :user_id, true), set_config
 
 
 def create_engine(url: str, **kwargs: Any) -> AsyncEngine:
-    return create_async_engine(url, pool_pre_ping=True, **kwargs)
+    # hide_parameters: DB errors never echo bound values (emails, password hashes) into logs.
+    return create_async_engine(url, pool_pre_ping=True, hide_parameters=True, **kwargs)
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

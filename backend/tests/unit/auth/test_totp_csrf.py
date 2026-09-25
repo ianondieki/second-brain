@@ -39,11 +39,12 @@ def test_recovery_codes_work_once() -> None:
     codes = totp.new_recovery_codes()
     assert len(codes) == 10
     assert len(set(codes)) == 10
-    stored = [totp.recovery_hash(c) for c in codes]
-    remaining = totp.use_recovery_code(stored, codes[3].upper())
+    stored = [totp.recovery_hash(c, "key") for c in codes]
+    assert totp.recovery_hash(codes[0], "other-key") != stored[0]
+    remaining = totp.use_recovery_code(stored, codes[3].upper(), "key")
     assert remaining is not None
     assert len(remaining) == 9
-    assert totp.use_recovery_code(remaining, codes[3]) is None
+    assert totp.use_recovery_code(remaining, codes[3], "key") is None
 
 
 def test_csrf_token_is_bound_to_the_session() -> None:

@@ -1,0 +1,23 @@
+{
+  "case": "reviewing_overran",
+  "description": "In review for REVIEW_GRACE_DAYS (2) days: now it is news.",
+  "expected": {
+    "lines": [
+      "On 2026-09-20, the WhatsApp reminder went out in the older layout, **\"project_checkin\"**, because the newer one, **\"project_checkin_v2\"**, could not be used: Meta is still reviewing it. To check it, run `python -m reminder --whatsapp-template-status` in the second-brain folder."
+    ]
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "reviewing",
+        "last": "2026-09-20",
+        "since": "2026-09-19",
+        "template": "project_checkin_v2",
+        "used": "project_checkin",
+        "why": "Meta is still reviewing it"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

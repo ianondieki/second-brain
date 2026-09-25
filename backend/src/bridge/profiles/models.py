@@ -29,6 +29,9 @@ class DeveloperProfile(TimestampsMixin, Base):
     country: Mapped[str] = mapped_column(String(2), server_default="KE")
     county_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
     profile_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    # docs/spec/08 Embeddings: the model and version that produced the vector, stored per row (re-embed on change).
+    embed_model: Mapped[str | None] = mapped_column(String(80))
+    embed_version: Mapped[str | None] = mapped_column(String(40))
 
 
 class DeveloperNiche(Base):

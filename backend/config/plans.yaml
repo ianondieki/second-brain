@@ -6,13 +6,10 @@ version: 1
 currency: KES
 status: placeholder-until-G3
 
-upgrade_paths:
-  developer: dev_pro_monthly
-  org: org_starter
-
 plans:
   # ---------------------------------------------------------------- developer side
   - code: dev_free
+    upgrade_to: dev_pro_monthly   # the plan a 402 points to; null at the top
     side: developer
     name: Free
     price_kes_minor: 0
@@ -32,6 +29,7 @@ plans:
       whatsapp_reminders: false
       llm_monthly_cap_usd: 0.50
   - code: dev_pro_monthly
+    upgrade_to: null   # the plan a 402 points to; null at the top
     side: developer
     name: Pro (monthly)
     price_kes_minor: 49900
@@ -50,12 +48,14 @@ plans:
       whatsapp_reminders: release-2
       llm_monthly_cap_usd: 2.00
   - code: dev_pro_yearly
+    upgrade_to: null   # the plan a 402 points to; null at the top
     side: developer
     name: Pro (yearly)
     price_kes_minor: 499000
     interval: year
     limits: *dev_pro_limits
   - code: dev_student
+    upgrade_to: null   # the plan a 402 points to; null at the top
     side: developer
     name: Student
     price_kes_minor: 0
@@ -66,6 +66,7 @@ plans:
 
   # ---------------------------------------------------------------- organisation side
   - code: org_claimed
+    upgrade_to: org_starter   # the plan a 402 points to; null at the top
     side: org
     name: Claimed (Free)
     price_kes_minor: 0
@@ -84,6 +85,7 @@ plans:
       pipeline_analytics: false
       llm_monthly_cap_usd: 2.00
   - code: org_starter
+    upgrade_to: org_growth   # the plan a 402 points to; null at the top
     side: org
     name: Starter
     price_kes_minor: 1500000
@@ -101,6 +103,7 @@ plans:
       pipeline_analytics: false
       llm_monthly_cap_usd: 10.00
   - code: org_growth
+    upgrade_to: org_enterprise   # the plan a 402 points to; null at the top
     side: org
     name: Growth
     price_kes_minor: 4500000
@@ -118,6 +121,7 @@ plans:
       pipeline_analytics: coming-soon   # Release 2
       llm_monthly_cap_usd: 40.00
   - code: org_enterprise
+    upgrade_to: null   # the plan a 402 points to; null at the top
     side: org
     name: Enterprise / Government
     price_kes_minor: 0
@@ -136,6 +140,7 @@ plans:
       pipeline_analytics: coming-soon
       llm_monthly_cap_usd: 100.00
   - code: org_social_impact
+    upgrade_to: null   # the plan a 402 points to; null at the top
     side: org
     name: Social Impact
     price_kes_minor: 0

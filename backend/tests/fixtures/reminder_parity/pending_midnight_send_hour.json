@@ -1,0 +1,22 @@
+{
+  "case": "midnight_send_hour",
+  "description": "send_after_hour 0: pending from midnight.",
+  "expected": {
+    "pending": [
+      "email",
+      "whatsapp"
+    ]
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {},
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T00:05:00",
+    "send_after_hour": 0
+  },
+  "kind": "pending"
+}

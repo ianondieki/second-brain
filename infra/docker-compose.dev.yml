@@ -11,6 +11,7 @@ x-backend: &backend
     SMTP_HOST: mailpit
     SMTP_PORT: "1025"
     EMAIL_PROVIDER: smtp
+    TRUSTED_PROXIES: 127.0.0.1,172.16.0.0/12   # the web container forwards X-Forwarded-For
   depends_on:
     postgres:
       condition: service_healthy
@@ -79,7 +80,10 @@ services:
     command: ["procrastinate", "--app=bridge.jobs.app.app", "worker"]
 
   web:
-    build: ../frontend
+    build:
+      context: ../frontend
+      args:
+        API_ORIGIN: http://api:8000   # baked into the rewrites at build time
     environment:
       API_ORIGIN: http://api:8000
     depends_on:

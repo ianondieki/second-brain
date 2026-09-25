@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from argon2.low_level import Type
@@ -43,3 +45,12 @@ def verify_password(password_hash: str | None, password: str) -> bool:
 
 def needs_rehash(password_hash: str) -> bool:
     return _hasher.check_needs_rehash(password_hash)
+
+
+async def hash_password_async(password: str) -> str:
+    """argon2id costs ~100 ms and 64 MiB: run it off the event loop so one signup cannot stall every request."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password_hash: str | None, password: str) -> bool:
+    return await asyncio.to_thread(verify_password, password_hash, password)

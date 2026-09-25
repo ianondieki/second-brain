@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -79,6 +79,17 @@ async def seed_niches(conn: AsyncConnection, rows: list[dict[str, Any]]) -> None
 
 
 async def seed_holidays(conn: AsyncConnection, rows: list[dict[str, Any]], country: str = "KE") -> None:
+    # Seeded rows carry a source_url; a corrected date or name in reference.yaml replaces the old row.
+    # Rows added by an admin (no source_url) are left alone.
+    listed = {(date.fromisoformat(str(r.get("observed") or r["date"])), str(r["name"])) for r in rows}
+    existing = await conn.execute(
+        select(Holiday.id, Holiday.observed_on, Holiday.name).where(
+            Holiday.country == country, Holiday.source_url.is_not(None)
+        )
+    )
+    stale = [hid for hid, observed, name in existing.all() if (observed, name) not in listed]
+    if stale:
+        await conn.execute(delete(Holiday).where(Holiday.id.in_(stale)))
     for row in rows:
         on = date.fromisoformat(str(row["date"]))
         observed = date.fromisoformat(str(row.get("observed") or row["date"]))
@@ -105,6 +116,10 @@ async def seed_holidays(conn: AsyncConnection, rows: list[dict[str, Any]], count
 
 async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
     catalog = plans.load(settings.plans_file)
+    # Clear defaults first so moving the default to another plan never trips uq_plans_default_side mid-way,
+    # and retire plans that are no longer in the file (rows stay for existing subscriptions).
+    await conn.execute(update(Plan).values(is_default=False))
+    await conn.execute(update(Plan).where(Plan.code.not_in(list(catalog.plans))).values(active=False))
     for spec in catalog.plans.values():
         stmt = insert(Plan).values(
             id=uuid7(),
@@ -115,6 +130,7 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
             interval=spec.interval,
             limits=spec.limits,
             active=True,
+            is_default=spec.default,
         )
         await conn.execute(
             stmt.on_conflict_do_update(
@@ -126,6 +142,7 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
                     "interval": stmt.excluded.interval,
                     "limits": stmt.excluded.limits,
                     "active": stmt.excluded.active,
+                    "is_default": stmt.excluded.is_default,
                 },
             )
         )

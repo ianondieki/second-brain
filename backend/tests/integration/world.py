@@ -65,7 +65,7 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         await _insert(
             conn,
             "INSERT INTO organizations (id, kind, legal_name, slug, source) "
-            "VALUES (:id, 'company', :name, :slug, 'seed')",
+            "VALUES (:id, 'company', :name, :slug, 'self_signup')",
             id=org_id,
             name=f"Org {label.upper()}",
             slug=f"org-{label}-{tag}",
