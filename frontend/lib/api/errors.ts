@@ -82,16 +82,30 @@ export function errorKey(error: unknown): ErrorKey {
 
 /**
  * The upgrade path of a 402 plan-limit body (`detail.upgrade.url`), or null: at the top of the plan ladder the API
- * sends `upgrade: null`, and other bodies have none. Only a same-origin path is accepted ("/billing/..."): an
- * absolute or protocol-relative URL ("https://...", "//evil.example") would turn the upgrade link into an open
- * redirect.
+ * sends `upgrade: null`, and other bodies have none. Only a same-origin path is accepted ("/billing/..."): anything
+ * that resolves to another host would turn the upgrade link into an open redirect.
  */
 export function apiErrorUpgrade(error: unknown): { plan: string; url: string } | null {
   const upgrade = detailOf(error)?.upgrade;
   if (!isRecord(upgrade) || typeof upgrade.plan !== "string" || typeof upgrade.url !== "string") return null;
-  const { url } = upgrade;
-  if (!url.startsWith("/") || url.startsWith("//") || url.includes("\\")) return null;
-  return { plan: upgrade.plan, url };
+  const url = sameOriginPath(upgrade.url);
+  return url ? { plan: upgrade.plan, url } : null;
+}
+
+// Any control character or whitespace, and backslashes: the URL parser drops tab, CR and LF and treats "\\" as
+// "/", so "/\t/evil.example" or "/\\evil.example" would resolve to another host.
+const UNSAFE_IN_PATH = /[\u0000-\u0020\u007f-\u00a0\s\\]/;
+const SERVER_BASE = "https://bridge.invalid"; // any fixed origin works where there is no window
+
+/** `url` when it is a path on this site (same origin once resolved), otherwise null. */
+export function sameOriginPath(url: string): string | null {
+  if (!url.startsWith("/") || url.startsWith("//") || UNSAFE_IN_PATH.test(url)) return null;
+  const base = typeof window === "undefined" ? SERVER_BASE : window.location.origin;
+  try {
+    return new URL(url, base).origin === new URL(base).origin ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 const FIELD_OF: Partial<Record<KnownErrorCode, ErrorField>> = {

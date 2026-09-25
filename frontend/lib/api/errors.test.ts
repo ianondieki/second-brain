@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 
 import { settle } from "./call";
-import { apiErrorCode, apiErrorUpgrade, errorKey, fieldForError, KNOWN_ERROR_CODES } from "./errors";
+import { apiErrorCode, apiErrorUpgrade, errorKey, fieldForError, KNOWN_ERROR_CODES, sameOriginPath } from "./errors";
 
 describe("errorKey", () => {
   it("maps a known API code to its own key, never to the server's text", () => {
@@ -82,6 +82,26 @@ describe("apiErrorUpgrade", () => {
     expect(apiErrorUpgrade(body("javascript:alert(1)"))).toBeNull();
     expect(apiErrorUpgrade(body("billing/upgrade"))).toBeNull();
     expect(apiErrorUpgrade(body("/\\evil.example"))).toBeNull();
+  });
+
+  it.each([
+    ["tab", "/\t/evil.example"],
+    ["carriage return", "/\r/evil.example"],
+    ["line feed", "/\n/evil.example"],
+    ["space", "/ /evil.example"],
+    ["NUL", "/\u0000/evil.example"],
+  ])("rejects a path with a %s that the URL parser would strip into //evil.example", (_name, url) => {
+    // The parser really does resolve these to the other host; the check must not rely on the raw prefix.
+    if (url !== "/ /evil.example" && !url.includes("\u0000")) {
+      expect(new URL(url, "https://bridge.example").host).toBe("evil.example");
+    }
+    expect(sameOriginPath(url)).toBeNull();
+    const body = { detail: { code: "plan_limit", message: "x", upgrade: { plan: "p", url } } };
+    expect(apiErrorUpgrade(body)).toBeNull();
+  });
+
+  it("keeps ordinary same-origin paths with a query and fragment", () => {
+    expect(sameOriginPath("/billing/upgrade?plan=org_team#compare")).toBe("/billing/upgrade?plan=org_team#compare");
   });
 });
 
