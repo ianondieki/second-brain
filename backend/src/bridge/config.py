@@ -40,9 +40,6 @@ class Settings(BaseSettings):
     recovery_code_pepper: SecretStr = Field(description="HMAC key for TOTP recovery codes; never rotated")
 
     # Sessions and auth (docs/spec/08 Auth; retention docs/spec/10: sessions 30 days).
-    # __Host- prefix: the browser only accepts them with Secure, Path=/ and no Domain (no cookie tossing).
-    session_cookie_name: str = "__Host-bridge_session"
-    csrf_cookie_name: str = "__Host-bridge_csrf"
     cookie_secure: bool = True
     session_ttl_days: int = 30
     magic_link_ttl_minutes: int = 15
@@ -66,12 +63,27 @@ class Settings(BaseSettings):
     plans_file: Path = BACKEND_DIR / "config" / "plans.yaml"
     consents_file: Path = BACKEND_DIR / "config" / "consents.yaml"
 
+    # Cookie names are fixed (the web app reads the same names). With Secure cookies they carry the __Host- prefix:
+    # Secure, Path=/ and no Domain, so a sibling subdomain cannot plant them. Browsers refuse the prefix without
+    # Secure, so plain-http setups (COOKIE_SECURE=false) get the bare names.
+    @property
+    def session_cookie_name(self) -> str:
+        return self._cookie("bridge_session")
+
+    @property
+    def csrf_cookie_name(self) -> str:
+        return self._cookie("bridge_csrf")
+
+    @property
+    def signup_cookie_name(self) -> str:
+        return self._cookie("bridge_signup")
+
+    def _cookie(self, name: str) -> str:
+        return f"__Host-{name}" if self.cookie_secure else name
+
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:
         problems: list[str] = []
-        for cookie in (self.session_cookie_name, self.csrf_cookie_name):
-            if cookie.startswith(("__Host-", "__Secure-")) and not self.cookie_secure:
-                problems.append(f"{cookie} needs COOKIE_SECURE=true (browsers reject prefixed cookies otherwise)")
         for name in ("secret_key", "data_encryption_key", "recovery_code_pepper"):
             value: SecretStr = getattr(self, name)
             if len(value.get_secret_value()) < MIN_SECRET_CHARS:

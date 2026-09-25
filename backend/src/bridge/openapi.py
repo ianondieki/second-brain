@@ -21,12 +21,9 @@ _PLACEHOLDER = SecretStr("openapi-export-placeholder-not-a-secret-0000")
 
 
 def render() -> str:
-    """The same document on every machine: no .env file, cookie names from the code defaults."""
-    defaults = Settings.model_fields
+    """The same document on every machine: no .env file, Secure (__Host-) cookie names."""
     settings = Settings(
         _env_file=None,
-        session_cookie_name=defaults["session_cookie_name"].default,
-        csrf_cookie_name=defaults["csrf_cookie_name"].default,
         cookie_secure=True,
         app_env="test",
         database_url=SecretStr("postgresql+psycopg://openapi@localhost/openapi"),
