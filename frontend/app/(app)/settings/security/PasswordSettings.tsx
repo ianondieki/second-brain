@@ -83,7 +83,7 @@ export function PasswordSettings({ email }: { email: string }) {
   }
 
   return (
-    <section aria-labelledby="password-heading" className="mt-12 border-t border-line pt-8">
+    <section id="password" aria-labelledby="password-heading" className="mt-12 scroll-mt-8 border-t border-line pt-8">
       <h2 id="password-heading" className="text-lg text-ink">
         {t("title")}
       </h2>

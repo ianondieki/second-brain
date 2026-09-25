@@ -89,11 +89,11 @@
   "checkEmail": {
     "title": "Check your email",
     "signup": "Open the link we sent to <b>{email}</b> within {minutes} minutes to confirm your address and sign in.",
-    "login": "If <b>{email}</b> has an account, open the link we sent it within {minutes} minutes to sign in.",
+    "login": "If <b>{email}</b> has an account, look there for a sign-in link. Each link works once, within {minutes} minutes.",
     "noEmail": "Open the link we sent you within {minutes} minutes to continue.",
     "resend": "Send the link again",
     "resending": "Sending…",
-    "resent": "We sent another link. If it has not arrived in a few minutes, check your spam folder.",
+    "resent": "Request received. If another link can be sent, it arrives within a few minutes. Check your spam folder too.",
     "backToLogin": "Back to log in"
   },
   "login": {
@@ -109,9 +109,12 @@
     "title": "Signing you in",
     "working": "Checking your link…",
     "failedTitle": "This link no longer works",
-    "failedLead": "Links work once and expire after {minutes} minutes. Enter your email and we will send a new one.",
+    "failedLead": "Links work once and expire after {minutes} minutes. Enter your email to ask for a new one.",
     "submit": "Email me a new link",
-    "submitting": "Sending link…"
+    "submitting": "Sending link…",
+    "noPasswordTitle": "You are signed in",
+    "noPasswordBody": "Your account has no password, for example because this link was opened in a different browser from the one used to sign up. You can keep signing in with emailed links, or set a password now.",
+    "noPasswordAction": "Set a password"
   },
   "mfa": {
     "title": "Enter your code",
@@ -195,10 +198,11 @@
     "invalid_email": "Enter an email address like name@example.com.",
     "terms_not_accepted": "Accept the terms of service to create an account.",
     "org_details_required": "Enter your organisation’s name and type.",
+    "consents_version_required": "The optional choices were out of date. Check them again, then create your account.",
     "consent_text_changed": "The wording of the optional choices has changed. Check them again, then create your account.",
     "weak_password": "Use a password of at least 12 characters that is not your email address.",
     "invalid_credentials": "That email and password do not match an account. Check them, or email yourself a sign-in link.",
-    "email_unverified": "Confirm your email address first. We have sent you a new link.",
+    "email_unverified": "Confirm your email address first: open the link in the email we sent when you signed up, or choose “Email me a sign-in link”.",
     "too_many_attempts": "Too many attempts. Wait a minute, then try again.",
     "invalid_or_expired_link": "This link has expired or was already used. Ask for a new one.",
     "invalid_code": "That code did not work. Enter the newest code from your authenticator app.",

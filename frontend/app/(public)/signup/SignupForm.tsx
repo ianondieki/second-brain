@@ -140,8 +140,10 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
     }
     setBusy(false);
     setServerError(outcome.key);
-    // New wording: show it (unticked) so the person decides again; without it, offer the retry instead.
-    if (outcome.key === "consent_text_changed" && !(await reloadConsents())) setShown(null);
+    // Stale or missing wording: show the current text (unticked) so the person decides again; if it cannot be
+    // loaded, offer the retry instead.
+    const staleConsents = outcome.key === "consent_text_changed" || outcome.key === "consents_version_required";
+    if (staleConsents && !(await reloadConsents())) setShown(null);
     const errorField = fieldForError(outcome.key);
     const field = errorField ? SERVER_FIELD[errorField] : undefined;
     if (field) setErrors((current) => ({ ...current, [field]: t(`errors.${outcome.key}`) }));

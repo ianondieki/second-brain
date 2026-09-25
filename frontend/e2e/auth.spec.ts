@@ -132,6 +132,42 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   await expect(page).toHaveURL(/\/dev$/);
 });
 
+test("a link opened in another browser signs in without the password and offers to set one", async ({
+  page,
+  browser,
+  request,
+}) => {
+  const email = uniqueEmail("elsewhere");
+  await page.goto("/signup");
+  await page.getByRole("radio", { name: /^As a developer/ }).check();
+  await page.getByLabel("Your name").fill("Njeri Mwangi");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("checkbox", { name: /I accept the terms of service/ }).check();
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/signup\/check-email$/);
+
+  // A second browser: the signup binding cookie is absent, so the API does not keep the password chosen above.
+  const elsewhere = await browser.newContext();
+  const other = await elsewhere.newPage();
+  await other.goto(pathOf(await waitForSignInLink(request, email)));
+  await expect(other.getByRole("heading", { name: "You are signed in" })).toBeVisible();
+  await expect(other.locator("[data-primary]")).toHaveText("Set a password");
+  await checkScreen(other);
+
+  await other.getByRole("link", { name: "Set a password" }).click();
+  await expect(other).toHaveURL(/\/settings\/security#password$/);
+  const passwordSection = other.getByRole("region", { name: "Password" });
+  await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
+  await passwordSection.getByRole("button", { name: "Save password" }).click();
+  await expect(passwordSection.getByRole("status")).toContainText("Password saved.");
+
+  await signOut(other);
+  await logIn(other, email, NEW_PASSWORD);
+  await expect(other).toHaveURL(/\/dev$/);
+  await elsewhere.close();
+});
+
 test("an organisation owner turns on two-step sign-in and needs a code at the next login", async ({
   page,
   request,

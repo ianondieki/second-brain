@@ -10,6 +10,7 @@ export const KNOWN_ERROR_CODES = [
   "invalid_email",
   "terms_not_accepted",
   "org_details_required",
+  "consents_version_required",
   "consent_text_changed",
   "weak_password",
   "invalid_credentials",

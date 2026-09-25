@@ -63,6 +63,14 @@ describe("locale files", () => {
     }
   });
 
+  it("never promise an email for requests the API may throttle silently (resend, sign-in link, unverified login)", () => {
+    const promise = /we (have )?sent (you )?(another|a new)|we will send|we are sending|tumekutumia kiungo kipya|tutakutumia kipya/i;
+    for (const key of ["checkEmail.resent", "checkEmail.login", "link.failedLead", "errors.email_unverified"]) {
+      expect(EN[key], key).not.toMatch(promise);
+      expect(SW[key], key).not.toMatch(promise);
+    }
+  });
+
   it("never use a straight apostrophe right before an ICU brace (it would escape it)", () => {
     for (const [key, value] of [...visible(EN), ...visible(SW)]) expect(value, key).not.toMatch(/'[{}]/);
   });

@@ -89,11 +89,11 @@
   "checkEmail": {
     "title": "Angalia barua pepe yako",
     "signup": "Fungua kiungo tulichotuma kwa <b>{email}</b> ndani ya dakika {minutes} ili kuthibitisha anwani yako na kuingia.",
-    "login": "Ikiwa <b>{email}</b> ina akaunti, fungua kiungo tulichoituma ndani ya dakika {minutes} ili kuingia.",
+    "login": "Ikiwa <b>{email}</b> ina akaunti, tafuta kiungo cha kuingia huko. Kila kiungo hufanya kazi mara moja, ndani ya dakika {minutes}.",
     "noEmail": "Fungua kiungo tulichokutumia ndani ya dakika {minutes} ili kuendelea.",
     "resend": "Tuma kiungo tena",
     "resending": "Inatuma…",
-    "resent": "Tumetuma kiungo kingine. Kisipofika baada ya dakika chache, angalia folda ya barua taka.",
+    "resent": "Ombi limepokelewa. Ikiwa kiungo kingine kinaweza kutumwa, kitafika ndani ya dakika chache. Angalia pia folda ya barua taka.",
     "backToLogin": "Rudi kwenye kuingia"
   },
   "login": {
@@ -109,9 +109,12 @@
     "title": "Tunakuingiza",
     "working": "Tunakagua kiungo chako…",
     "failedTitle": "Kiungo hiki hakifanyi kazi tena",
-    "failedLead": "Viungo hufanya kazi mara moja na huisha baada ya dakika {minutes}. Weka barua pepe yako na tutakutumia kipya.",
+    "failedLead": "Viungo hufanya kazi mara moja na huisha baada ya dakika {minutes}. Weka barua pepe yako ili uombe kipya.",
     "submit": "Nitumie kiungo kipya",
-    "submitting": "Inatuma kiungo…"
+    "submitting": "Inatuma kiungo…",
+    "noPasswordTitle": "Umeingia",
+    "noPasswordBody": "Akaunti yako haina nenosiri, kwa mfano kwa sababu kiungo hiki kilifunguliwa kwenye kivinjari tofauti na kile kilichotumika kujisajili. Unaweza kuendelea kuingia kwa viungo vya barua pepe, au uweke nenosiri sasa.",
+    "noPasswordAction": "Weka nenosiri"
   },
   "mfa": {
     "title": "Weka msimbo wako",
@@ -195,10 +198,11 @@
     "invalid_email": "Weka anwani ya barua pepe kama jina@mfano.com.",
     "terms_not_accepted": "Kubali masharti ya huduma ili kufungua akaunti.",
     "org_details_required": "Weka jina na aina ya shirika lako.",
+    "consents_version_required": "Machaguo ya hiari yalikuwa yamepitwa na wakati. Yaangalie tena, kisha ufungue akaunti yako.",
     "consent_text_changed": "Maneno ya machaguo ya hiari yamebadilika. Yaangalie tena, kisha ufungue akaunti yako.",
     "weak_password": "Tumia nenosiri lenye angalau herufi 12 ambalo si anwani yako ya barua pepe.",
     "invalid_credentials": "Barua pepe na nenosiri hilo havilingani na akaunti yoyote. Viangalie, au jitumie kiungo cha kuingia.",
-    "email_unverified": "Thibitisha anwani yako ya barua pepe kwanza. Tumekutumia kiungo kipya.",
+    "email_unverified": "Thibitisha anwani yako ya barua pepe kwanza: fungua kiungo kwenye barua pepe tuliyotuma ulipojisajili, au chagua “Nitumie kiungo cha kuingia kwa barua pepe”.",
     "too_many_attempts": "Majaribio mengi mno. Subiri dakika moja, kisha ujaribu tena.",
     "invalid_or_expired_link": "Kiungo hiki kimeisha muda au kimeshatumika. Omba kipya.",
     "invalid_code": "Msimbo huo haukufanya kazi. Weka msimbo mpya zaidi kutoka kwenye programu yako ya uthibitishaji.",

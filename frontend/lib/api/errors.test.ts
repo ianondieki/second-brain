@@ -28,7 +28,13 @@ describe("errorKey", () => {
   });
 
   it("knows the codes added by the auth review", () => {
-    for (const code of ["consent_text_changed", "current_password_required", "recent_sign_in_required"]) {
+    const codes = [
+      "consents_version_required",
+      "consent_text_changed",
+      "current_password_required",
+      "recent_sign_in_required",
+    ];
+    for (const code of codes) {
       expect(errorKey({ detail: { code, message: "server text" } })).toBe(code);
     }
   });

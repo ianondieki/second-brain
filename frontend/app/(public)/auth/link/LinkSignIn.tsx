@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -30,6 +30,7 @@ export function LinkSignIn() {
   const router = useRouter();
   const started = useRef(false);
   const [failed, setFailed] = useState<ErrorKey | null>(null);
+  const [noPassword, setNoPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
@@ -43,6 +44,12 @@ export function LinkSignIn() {
     }
     const outcome = await settle(api.POST("/api/auth/magic-link/consume", { body: { token } }));
     if (outcome.ok) {
+      // Signed in, but the account has no password (for example: the link was opened in a different browser from
+      // the one that signed up, so the password chosen there was not kept). Say so calmly, with one way forward.
+      if (!outcome.data.mfa_required && !outcome.data.user.password_set) {
+        setNoPassword(true);
+        return;
+      }
       await continueAfterSignIn(router, outcome.data.mfa_required);
       return;
     }
@@ -76,6 +83,20 @@ export function LinkSignIn() {
     }
     setSending(false);
     setSendError(outcome.key);
+  }
+
+  if (noPassword) {
+    return (
+      <>
+        <h1 className="text-xl text-ink lg:text-2xl">{t("link.noPasswordTitle")}</h1>
+        <p className="mt-3 text-ink-soft">{t("link.noPasswordBody")}</p>
+        <div className="mt-8">
+          <ButtonLink href="/settings/security#password" variant="primary">
+            {t("link.noPasswordAction")}
+          </ButtonLink>
+        </div>
+      </>
+    );
   }
 
   if (!failed) {
