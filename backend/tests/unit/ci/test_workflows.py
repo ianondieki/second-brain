@@ -97,6 +97,25 @@ def test_sarif_gate_blocks_high_and_passes_low(tmp_path: Path) -> None:
     assert (high.returncode, low.returncode) == (1, 0)
 
 
+def test_sarif_gate_resolves_rule_indexes_and_fails_closed(tmp_path: Path) -> None:
+    import json
+    import subprocess
+    import sys
+
+    rules = [{"id": "py/low", "properties": {"security-severity": "3.0"}}]
+    extension = {"rules": [{"id": "py/high", "properties": {"security-severity": "9.1"}}]}
+    by_index = {"rule": {"index": 0, "toolComponent": {"index": 0}}, "locations": [{}]}
+    unresolved = {"locations": [{}]}
+    gate = REPO / "infra" / "ci" / "sarif_gate.py"
+    outcomes = []
+    for result in (by_index, unresolved, {"ruleId": "py/low", "locations": [{}]}):
+        run = {"tool": {"driver": {"rules": rules}, "extensions": [extension]}, "results": [result]}
+        path = tmp_path / f"r{len(outcomes)}.sarif"
+        path.write_text(json.dumps({"runs": [run]}), encoding="utf-8")
+        outcomes.append(subprocess.run([sys.executable, str(gate), str(path), "7.0"], capture_output=True).returncode)
+    assert outcomes == [1, 1, 0]  # extension rule by index blocks; an unresolvable result blocks; a low one passes
+
+
 # ---------------------------------------------------------------- AC-SEC-5
 
 
