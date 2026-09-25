@@ -804,6 +804,8 @@ export interface components {
             id: string;
             /** Locale */
             locale: string;
+            /** Password Set */
+            password_set: boolean;
             staff_role: components["schemas"]["StaffRole"] | null;
             /** Totp Enabled */
             totp_enabled: boolean;

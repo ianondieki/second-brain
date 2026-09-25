@@ -141,6 +141,8 @@ async def set_member_roles(user_id: UUID, body: RolesUpdate, db: Db, settings: S
     if membership is None:
         raise not_found()
     roles = sorted(set(body.roles))
+    # Serialise concurrent role changes in this organisation, so two owners cannot demote each other at once.
+    await db.execute(select(Organization.id).where(Organization.id == ctx.org_id).with_for_update())
     if OrgRole.OWNER in membership.roles and OrgRole.OWNER not in roles:
         others = await db.execute(
             select(func.count())

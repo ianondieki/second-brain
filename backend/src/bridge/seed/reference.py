@@ -79,12 +79,13 @@ async def seed_niches(conn: AsyncConnection, rows: list[dict[str, Any]]) -> None
 
 
 async def seed_holidays(conn: AsyncConnection, rows: list[dict[str, Any]], country: str = "KE") -> None:
-    # Seeded rows carry a source_url; a corrected date or name in reference.yaml replaces the old row.
-    # Rows added by an admin (no source_url) are left alone.
+    # A corrected date or name in reference.yaml replaces the old row. Only rows citing one of the file's sources are
+    # seed-owned; rows an admin added (no source, or a source the file does not cite) are left alone.
     listed = {(date.fromisoformat(str(r.get("observed") or r["date"])), str(r["name"])) for r in rows}
+    sources = sorted({str(r["source_url"]) for r in rows if r.get("source_url")})
     existing = await conn.execute(
         select(Holiday.id, Holiday.observed_on, Holiday.name).where(
-            Holiday.country == country, Holiday.source_url.is_not(None)
+            Holiday.country == country, Holiday.source_url.in_(sources)
         )
     )
     stale = [hid for hid, observed, name in existing.all() if (observed, name) not in listed]

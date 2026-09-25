@@ -16,12 +16,14 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 import bridge.clock
 from bridge.auth import totp
 from bridge.config import get_settings
+from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
 
@@ -73,6 +75,7 @@ async def signup(
         "side": side,
         "accept_terms": True,
         "consents": {"marketing": True},
+        "consents_version": consents_version(get_settings()),
     }
     if side == "org":
         body["org"] = {"legal_name": "Org (fixture)", "kind": "company"}
@@ -211,13 +214,13 @@ async def test_the_second_step_rotates_the_session_and_hides_orgs_until_then(cli
     await client.post("/api/auth/logout")
     await refresh_csrf(client)
     await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
-    pending_cookie = client.cookies.get("bridge_session")
+    pending_cookie = client.cookies.get(get_settings().session_cookie_name)
     await refresh_csrf(client)
     me = (await client.get("/api/auth/me")).json()
     assert me["side"] == "pending"
     assert me["memberships"] == []
     await client.post("/api/auth/mfa/verify", json={"code": totp.code_at(secret, now_counter() + 1)})
-    assert client.cookies.get("bridge_session") != pending_cookie
+    assert client.cookies.get(get_settings().session_cookie_name) != pending_cookie
 
 
 # ------------------------------------------------------------------ roles, step-up and generated 404s
@@ -267,21 +270,34 @@ async def test_role_changes_need_a_fresh_second_factor(client: httpx.AsyncClient
     assert stale.json()["detail"]["code"] == "step_up_required"
 
 
-async def test_every_org_route_answers_404_to_a_non_member(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
-    """Generated from the app's routes: any path with {org_id}, any method, with and without a fresh step-up."""
-    org_id, _ = await _org_owner(client)
-    await verified(other, email(), side="org")
-    await enrol(other)  # a fresh second factor, so step-up cannot mask the membership check
-    app = other.app  # type: ignore[attr-defined]
-    for route in app.routes:
-        path = getattr(route, "path", "")
+async def _sweep_org_routes(stranger: httpx.AsyncClient, org_id: str) -> None:
+    # From the OpenAPI document: FastAPI includes routers lazily, so app.routes does not list their paths.
+    paths: dict[str, dict[str, object]] = stranger.app.openapi()["paths"]  # type: ignore[attr-defined]
+    swept = 0
+    for path, operations in paths.items():
         if "{org_id}" not in path:
             continue
         url = path.replace("{org_id}", org_id).replace("{user_id}", str(uuid4()))
-        for method in sorted(getattr(route, "methods", set()) - {"HEAD"}):
+        for method in sorted(m.upper() for m in operations):
             body = {"roles": ["viewer"]} if method == "PUT" else {}
-            response = await other.request(method, url, json=body if method in {"PUT", "PATCH", "POST"} else None)
+            response = await stranger.request(method, url, json=body if method in {"PUT", "PATCH", "POST"} else None)
             assert response.status_code == 404, (method, path, response.text)
+            swept += 1
+    assert swept >= 5  # the generator found the org routes
+
+
+async def test_every_org_route_answers_404_to_a_non_member(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    """Generated from the app's routes: any path with {org_id}, any method. First as a plain developer with no second
+    factor (the membership check must answer before any MFA or step-up check), then as another org's owner with a
+    fresh second factor (so step-up cannot mask the membership check)."""
+    org_id, _ = await _org_owner(client)
+    await verified(other, email())
+    await _sweep_org_routes(other, org_id)
+    await other.post("/api/auth/logout")
+    await refresh_csrf(other)
+    await verified(other, email(), side="org")
+    await enrol(other)
+    await _sweep_org_routes(other, org_id)
 
 
 async def test_invalid_org_updates_are_422_not_500(client: httpx.AsyncClient) -> None:
@@ -379,3 +395,142 @@ async def test_org_members_see_org_entitlements_not_developer_ones(client: httpx
     assert (await client.get("/api/me/entitlements")).status_code == 404
     org = (await client.get(f"/api/orgs/{org_id}/entitlements")).json()
     assert org["plan"] == "org_claimed"
+
+
+# ------------------------------------------------------------------ round 3: email floods, password binding, secrets
+
+
+def _verify_mails(client: httpx.AsyncClient, to: str) -> int:
+    return len([m for m in outbox(client).outbox if m.to == to and "/auth/link#token=" in m.text])
+
+
+async def test_logins_to_an_unverified_account_do_not_flood_its_inbox(client: httpx.AsyncClient) -> None:
+    address = email()
+    await signup(client, address)
+    for n in range(20):  # right password, one login per IP: the per-address email cap still applies
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": address, "password": PASSWORD},
+            headers={"X-Forwarded-For": f"203.0.113.{n + 1}"},
+        )
+        assert response.status_code == 403
+    assert _verify_mails(client, address) <= 1 + 6  # the signup email, then at most EMAIL_ACCOUNT_LIMIT resends
+
+
+async def test_logins_from_one_browser_resend_at_most_three_links(client: httpx.AsyncClient) -> None:
+    address = email()
+    await signup(client, address)
+    for _ in range(5):
+        await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
+    assert _verify_mails(client, address) == 1 + 3
+
+
+async def test_a_fourth_signup_from_one_ip_sends_no_email(client: httpx.AsyncClient) -> None:
+    address = email()
+    for _ in range(4):
+        assert (await signup(client, address)).status_code == 202
+    assert _verify_mails(client, address) == 3
+
+
+async def test_a_resent_link_opened_in_the_signup_browser_keeps_the_password(client: httpx.AsyncClient) -> None:
+    address = email()
+    await signup(client, address)
+    assert (await client.post("/api/auth/verify-email/resend", json={"email": address})).status_code == 202
+    consumed = await client.post("/api/auth/magic-link/consume", json={"token": last_link(client, address)})
+    assert consumed.status_code == 200
+    assert consumed.json()["user"]["password_set"] is True
+    await refresh_csrf(client)
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    assert (await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})).status_code == 200
+
+
+async def test_a_link_opened_in_another_browser_reports_the_cleared_password(
+    client: httpx.AsyncClient, other: httpx.AsyncClient
+) -> None:
+    address = email()
+    await signup(other, address)
+    consumed = await client.post("/api/auth/magic-link/consume", json={"token": last_link(other, address)})
+    assert consumed.json()["user"]["password_set"] is False
+
+
+async def test_using_one_link_spends_the_others(client: httpx.AsyncClient) -> None:
+    address = email()
+    await verified(client, address)
+    await client.post("/api/auth/magic-link", json={"email": address})
+    first = last_link(client, address)
+    await client.post("/api/auth/magic-link", json={"email": address})
+    second = last_link(client, address)
+    assert (await client.post("/api/auth/magic-link/consume", json={"token": second})).status_code == 200
+    await refresh_csrf(client)  # the new session carries its own CSRF binding
+    assert (await client.post("/api/auth/magic-link/consume", json={"token": first})).status_code == 400
+
+
+async def test_consents_need_the_version_they_were_shown(client: httpx.AsyncClient) -> None:
+    body = {
+        "email": email(),
+        "password": PASSWORD,
+        "display_name": "Test User",
+        "side": "developer",
+        "accept_terms": True,
+        "consents": {"marketing": True},
+    }
+    response = await client.post("/api/auth/signup", json=body)
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "consents_version_required"
+
+
+async def test_a_wrong_current_password_is_refused_and_throttled(client: httpx.AsyncClient) -> None:
+    await verified(client, email())
+    codes = []
+    for _ in range(6):
+        response = await client.post(
+            "/api/auth/password", json={"current_password": "not my password at all", "new_password": "x" * 16}
+        )
+        codes.append((response.status_code, response.json()["detail"]["code"]))
+    assert codes[0] == (403, "current_password_required")
+    assert codes[-1] == (429, "too_many_attempts")
+
+
+async def test_a_password_less_account_needs_a_recent_sign_in(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    address = email()
+    await signup(other, address)  # set in another browser: cleared when the link is opened here
+    await client.post("/api/auth/magic-link/consume", json={"token": last_link(other, address)})
+    await refresh_csrf(client)
+    later = datetime.now(UTC) + timedelta(minutes=16)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    response = await client.post("/api/auth/password", json={"new_password": "a brand new password"})
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "recent_sign_in_required"
+
+
+async def test_the_pending_second_step_hides_staff_status(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    address = email()
+    await verified(client, address)
+    await enrol(client)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET staff_role = 'support' WHERE email = :e"), {"e": address})
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
+    await refresh_csrf(client)
+    me = (await client.get("/api/auth/me")).json()
+    assert me["side"] == "pending"
+    assert me["user"]["staff_role"] is None
+
+
+async def test_recovery_codes_survive_a_secret_key_rotation(client: httpx.AsyncClient, app_engine: AsyncEngine) -> None:
+    address = email()
+    await verified(client, address)
+    started = await client.post("/api/auth/totp/enrol", json={"password": PASSWORD})
+    confirmed = await client.post(
+        "/api/auth/totp/confirm", json={"code": totp.code_at(started.json()["secret"], now_counter())}
+    )
+    code = confirmed.json()["recovery_codes"][0]
+    rotated = get_settings().model_copy(update={"secret_key": SecretStr("rotated-secret-key-" + "9" * 40)})
+    async with make_client(app_engine, settings=rotated) as fresh:
+        assert (await fresh.post("/api/auth/login", json={"email": address, "password": PASSWORD})).status_code == 200
+        await refresh_csrf(fresh)
+        assert (await fresh.post("/api/auth/mfa/verify", json={"code": code})).status_code == 200

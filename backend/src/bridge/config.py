@@ -37,10 +37,12 @@ class Settings(BaseSettings):
     # Secrets (required; never defaulted).
     secret_key: SecretStr = Field(description="HMAC key for CSRF tokens and magic-link digests")
     data_encryption_key: SecretStr = Field(description="Base64 32-byte AES-GCM key for TOTP secrets at rest")
+    recovery_code_pepper: SecretStr = Field(description="HMAC key for TOTP recovery codes; never rotated")
 
     # Sessions and auth (docs/spec/08 Auth; retention docs/spec/10: sessions 30 days).
-    session_cookie_name: str = "bridge_session"
-    csrf_cookie_name: str = "bridge_csrf"
+    # __Host- prefix: the browser only accepts them with Secure, Path=/ and no Domain (no cookie tossing).
+    session_cookie_name: str = "__Host-bridge_session"
+    csrf_cookie_name: str = "__Host-bridge_csrf"
     cookie_secure: bool = True
     session_ttl_days: int = 30
     magic_link_ttl_minutes: int = 15
@@ -67,7 +69,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:
         problems: list[str] = []
-        for name in ("secret_key", "data_encryption_key"):
+        for name in ("secret_key", "data_encryption_key", "recovery_code_pepper"):
             value: SecretStr = getattr(self, name)
             if len(value.get_secret_value()) < MIN_SECRET_CHARS:
                 problems.append(f"{name.upper()} must be at least {MIN_SECRET_CHARS} characters")

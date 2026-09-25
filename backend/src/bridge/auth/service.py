@@ -35,6 +35,7 @@ from bridge.config import Settings
 from bridge.db import bind_tenant
 from bridge.engagements.calendar import local_date
 from bridge.ids import uuid7
+from bridge.logging import get_logger
 from bridge.models.enums import MFA_REQUIRED_ORG_ROLES, LoginTokenPurpose, MembershipStatus, PlanSide, UserStatus
 from bridge.notifications.email import is_mailbox
 from bridge.profiles.consents import consents_version, record_decisions, terms_version
@@ -46,6 +47,8 @@ SIGNUP_LIMIT = 3  # per (address, IP) in SIGNUP_WINDOW; also bounds "you already
 SIGNUP_WINDOW = timedelta(minutes=15)
 MAGIC_LIMIT = 3
 MAGIC_WINDOW = timedelta(minutes=15)
+EMAIL_ACCOUNT_LIMIT = 6  # emails to one address in a window from any IPs (bounds distributed mail bombing)
+EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 
 
@@ -53,13 +56,13 @@ class AuthError(Exception):
     """A refused auth action; ``code`` is the stable API error code. ``pending`` emails still go out."""
 
     def __init__(
-        self, code: str, status: int = 400, pending: list[PendingEmail] | None = None, verify_token: str | None = None
+        self, code: str, status: int = 400, pending: list[PendingEmail] | None = None, binding: str | None = None
     ) -> None:
         super().__init__(code)
         self.code = code
         self.status = status
         self.pending = pending or []
-        self.verify_token = verify_token  # bind to this browser: it just proved the password
+        self.binding = binding  # this browser just proved the password: bind verification to it
 
 
 @dataclass(slots=True)
@@ -71,7 +74,23 @@ class LoginOutcome:
 @dataclass(slots=True)
 class SignupOutcome:
     pending: list[PendingEmail] = field(default_factory=list)
-    verify_token: str | None = None  # bound to the signing-up browser by the router's bridge_signup cookie
+    binding: str | None = None  # the router sets it as the __Host-bridge_signup cookie
+
+
+log = get_logger("bridge.auth.service")
+
+
+async def _allow_email(db: AsyncSession, settings: Settings, purpose: str, email: str, ip: str) -> bool:
+    """Throttle an action that sends email; record it when allowed. A drop is silent to the caller but logged."""
+    limit, window = (SIGNUP_LIMIT, SIGNUP_WINDOW) if purpose == "signup" else (MAGIC_LIMIT, MAGIC_WINDOW)
+    keys = throttle.keys(settings.secret_key.get_secret_value(), purpose, email, ip)
+    if await throttle.blocked(
+        db, keys, pair_limit=limit, window=window, account_limit=EMAIL_ACCOUNT_LIMIT, ip_limit=EMAIL_IP_LIMIT
+    ):
+        log.info("auth.email_throttled", purpose=purpose)
+        return False
+    throttle.record(db, keys, succeeded=True)
+    return True
 
 
 def normalise_email(email: str) -> str:
@@ -87,14 +106,22 @@ def _link(settings: Settings, token: str) -> str:
     return f"{settings.public_base_url.rstrip('/')}/auth/link#token={token}"
 
 
-async def _issue_link(db: AsyncSession, settings: Settings, user: User, purpose: LoginTokenPurpose) -> str:
-    """A fresh single-use token; earlier unused tokens of the same purpose stop working."""
-    now = clock.utcnow()
+async def _spend_links(db: AsyncSession, user_id: UUID) -> None:
     await db.execute(
         update(LoginToken)
-        .where(LoginToken.user_id == user.id, LoginToken.purpose == purpose, LoginToken.used_at.is_(None))
-        .values(used_at=now)
+        .where(LoginToken.user_id == user_id, LoginToken.used_at.is_(None))
+        .values(used_at=clock.utcnow())
     )
+
+
+def _binding(settings: Settings, user: User) -> str | None:
+    return signup_binding(settings, user.id, user.password_hash) if user.password_hash else None
+
+
+async def _issue_link(db: AsyncSession, settings: Settings, user: User, purpose: LoginTokenPurpose) -> str:
+    """A fresh single-use token. Earlier links stay valid until one is used or the password is replaced, so a
+    stranger asking for a link cannot void the owner's."""
+    now = clock.utcnow()
     token = new_token()
     db.add(
         LoginToken(
@@ -126,6 +153,8 @@ def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None
         raise AuthError("terms_not_accepted", 422)
     if req.side == "org" and req.org is None:
         raise AuthError("org_details_required", 422)
+    if req.consents and req.consents_version is None:
+        raise AuthError("consents_version_required", 422)
     if req.consents_version is not None and req.consents_version != consents_version(settings):
         raise AuthError("consent_text_changed", 409)
     try:
@@ -139,13 +168,18 @@ def _verify_email(settings: Settings, user: User, token: str) -> PendingEmail:
     return PendingEmail(user.id, user.email, wording, "auth.verify_email")
 
 
-async def _existing_account(db: AsyncSession, settings: Settings, user: User, password_hash: str) -> SignupOutcome:
+async def _existing_account(
+    db: AsyncSession, settings: Settings, user: User, password_hash: str, ip: str
+) -> SignupOutcome:
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
-        # Unverified: this signup's password replaces the stored one and earlier links stop working.
+        # Unverified: this signup's password replaces the stored one and every earlier link stops working.
         user.password_hash = password_hash
+        await _spend_links(db, user.id)
+        if not await _allow_email(db, settings, "magic", user.email, ip):
+            return SignupOutcome(binding=_binding(settings, user))
         token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-        return SignupOutcome([_verify_email(settings, user, token)], token)
+        return SignupOutcome([_verify_email(settings, user, token)], _binding(settings, user))
     login_url = f"{settings.public_base_url.rstrip('/')}/login"
     wording = emails.account_exists(settings.product_name, login_url)
     dedupe = f"auth.account_exists:{user.id}:{local_date(clock.utcnow()).isoformat()}"  # at most one a day
@@ -156,15 +190,13 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
     """Create an unverified account (developer, or organisation owner) and return the verification email to send."""
     email = normalise_email(req.email)
     _validate_signup(settings, req, email)
-    keys = throttle.keys(settings.secret_key.get_secret_value(), "signup", email, ip)
-    if await throttle.blocked(db, keys, pair_limit=SIGNUP_LIMIT, window=SIGNUP_WINDOW):
+    if not await _allow_email(db, settings, "signup", email, ip):
         return SignupOutcome()  # silent: same answer, no email (stops email bombing through signup)
-    throttle.record(db, keys, succeeded=True)
     password_hash = await passwords.hash_password_async(req.password)  # on every path: timing reveals nothing
 
     existing = await _user_by_email(db, email)
     if existing is not None:
-        return await _existing_account(db, settings, existing, password_hash)
+        return await _existing_account(db, settings, existing, password_hash, ip)
 
     user = User(
         id=uuid7(), email=email, password_hash=password_hash, display_name=req.display_name.strip(), locale=req.locale
@@ -178,7 +210,7 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
         existing = await _user_by_email(db, email)
         if existing is None:
             raise
-        return await _existing_account(db, settings, existing, password_hash)
+        return await _existing_account(db, settings, existing, password_hash, ip)
     await bind_tenant(db, user_id=user.id)
 
     org_id: UUID | None = None
@@ -208,16 +240,14 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
         },
     )
     token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-    return SignupOutcome([_verify_email(settings, user, token)], token)
+    return SignupOutcome([_verify_email(settings, user, token)], _binding(settings, user))
 
 
 async def request_magic_link(db: AsyncSession, settings: Settings, email: str, ip: str) -> list[PendingEmail]:
     """A sign-in link (or a verification link for an unverified account). Silent when throttled or unknown."""
     email = normalise_email(email)
-    keys = throttle.keys(settings.secret_key.get_secret_value(), "magic", email, ip)
-    if await throttle.blocked(db, keys, pair_limit=MAGIC_LIMIT, window=MAGIC_WINDOW):
+    if not await _allow_email(db, settings, "magic", email, ip):
         return []
-    throttle.record(db, keys, succeeded=True)
     user = await _user_by_email(db, email)
     if user is None or user.status != UserStatus.ACTIVE:
         return []
@@ -254,13 +284,13 @@ async def consume_link(
         raise AuthError("invalid_or_expired_link", 400)
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
-        bound = row.purpose == LoginTokenPurpose.VERIFY_EMAIL and hmac.compare_digest(
-            signup_cookie or "", signup_binding(settings, token)
-        )
+        expected = _binding(settings, user)
+        bound = expected is not None and hmac.compare_digest(signup_cookie or "", expected)
         if not bound:
             user.password_hash = None  # a password set before verification from another browser is not trusted
         user.email_verified_at = now
         await sessions.revoke_all(db, user.id)
+    await _spend_links(db, user.id)  # one link used: the account's other outstanding links stop working
     outcome = await _start_session(db, settings, user, user_agent)
     await audit(
         db,
@@ -286,8 +316,11 @@ async def login(
         raise AuthError("invalid_credentials", 401)
     if user.email_verified_at is None:
         await bind_tenant(db, user_id=user.id)
-        token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-        raise AuthError("email_unverified", 403, pending=[_verify_email(settings, user, token)], verify_token=token)
+        pending: list[PendingEmail] = []
+        if await _allow_email(db, settings, "magic", user.email, ip):  # a resend, under the magic-link limits
+            token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
+            pending = [_verify_email(settings, user, token)]
+        raise AuthError("email_unverified", 403, pending=pending, binding=_binding(settings, user))
     if user.password_hash and passwords.needs_rehash(user.password_hash):
         user.password_hash = await passwords.hash_password_async(password)
     outcome = await _start_session(db, settings, user, user_agent)
@@ -318,7 +351,7 @@ def check_second_factor(settings: Settings, user: User, code: str) -> bool:
         return False
     if is_recovery_code(code):
         remaining = totp.use_recovery_code(
-            list(user.totp_recovery_hashes), code, settings.secret_key.get_secret_value()
+            list(user.totp_recovery_hashes), code, settings.recovery_code_pepper.get_secret_value()
         )
         if remaining is None:
             return False
@@ -363,10 +396,18 @@ async def complete_mfa(
     return live
 
 
-async def _require_reauth(settings: Settings, user: User, live: sessions.LiveSession, password: str | None) -> None:
-    """Credential changes need the current password, or (for a password-less account) a sign-in within 15 minutes."""
+async def _require_reauth(
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
+) -> None:
+    """Credential changes need the current password (throttled like a login, so a stolen session cannot guess it),
+    or, for a password-less account, a sign-in within 15 minutes."""
     if user.password_hash:
-        if not password or not await passwords.verify_password_async(user.password_hash, password):
+        keys = throttle.keys(settings.secret_key.get_secret_value(), "reauth", str(user.id), "session")
+        if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
+            raise AuthError("too_many_attempts", 429)
+        ok = bool(password) and await passwords.verify_password_async(user.password_hash, password or "")
+        throttle.record(db, keys, succeeded=ok)
+        if not ok:
             raise AuthError("current_password_required", 403)
     elif clock.utcnow() - live.row.created_at > REAUTH_WINDOW:
         raise AuthError("recent_sign_in_required", 403)
@@ -382,7 +423,7 @@ async def set_password(
     db: AsyncSession, settings: Settings, live: sessions.LiveSession, current: str | None, new: str
 ) -> list[PendingEmail]:
     user = await lock_user(db, live.user.id)
-    await _require_reauth(settings, user, live, current)
+    await _require_reauth(db, settings, user, live, current)
     try:
         passwords.check_policy(new, email=user.email)
     except passwords.PasswordPolicyError as exc:
@@ -399,7 +440,7 @@ async def begin_totp_enrolment(
     user = await lock_user(db, live.user.id)
     if user.totp_enabled_at is not None:
         raise AuthError("totp_already_enabled", 409)
-    await _require_reauth(settings, user, live, password)
+    await _require_reauth(db, settings, user, live, password)
     secret = totp.new_secret()
     user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
@@ -415,7 +456,7 @@ async def confirm_totp_enrolment(
     if not check.ok:
         raise AuthError("invalid_code", 401)
     codes = totp.new_recovery_codes()
-    key = settings.secret_key.get_secret_value()
+    key = settings.recovery_code_pepper.get_secret_value()
     now = clock.utcnow()
     user.totp_secret_enc, user.totp_pending_enc = user.totp_pending_enc, None
     user.totp_enabled_at = now

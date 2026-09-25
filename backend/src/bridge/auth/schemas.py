@@ -71,6 +71,7 @@ class UserOut(BaseModel):
     display_name: str
     locale: str
     email_verified: bool
+    password_set: bool  # False after a verification link cleared a password set in another browser
     staff_role: StaffRole | None
     totp_enabled: bool
 

@@ -2,7 +2,7 @@ import createClient from "openapi-fetch";
 
 import type { components, paths } from "./schema";
 
-export const CSRF_COOKIE = "bridge_csrf";
+export const CSRF_COOKIE = "__Host-bridge_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 export const CSRF_PATH = "/api/auth/csrf";
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);

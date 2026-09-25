@@ -18,6 +18,7 @@ def make(**overrides: Any) -> Settings:
         "database_url": SecretStr("postgresql+psycopg://u:p@localhost/db"),
         "secret_key": SecretStr(GOOD),
         "data_encryption_key": SecretStr(GOOD_KEY),
+        "recovery_code_pepper": SecretStr(GOOD),
         "_env_file": None,
     }
     values.update(overrides)
@@ -28,7 +29,7 @@ def test_valid_settings_load() -> None:
     assert make().app_env in {"dev", "test"}
 
 
-@pytest.mark.parametrize("name", ["secret_key", "data_encryption_key"])
+@pytest.mark.parametrize("name", ["secret_key", "data_encryption_key", "recovery_code_pepper"])
 def test_short_secret_is_refused(name: str) -> None:
     with pytest.raises(ValidationError, match=name.upper()):
         make(**{name: SecretStr("short")})

@@ -17,5 +17,6 @@ data_key="$(openssl rand -base64 32)"
 sed -e "s|^APP_ENV=.*|APP_ENV=test|" \
     -e "s|^SECRET_KEY=.*|SECRET_KEY=${secret_key}|" \
     -e "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=${data_key}|" \
+    -e "s|^RECOVERY_CODE_PEPPER=.*|RECOVERY_CODE_PEPPER=$(rand_hex 32)|" \
     backend/.env.example > backend/.env
 echo "wrote infra/.env and backend/.env with random throwaway values"

@@ -44,18 +44,20 @@ def clear_session(response: Response, settings: Settings) -> None:
     set_csrf(response, settings, None)
 
 
-SIGNUP_COOKIE = "bridge_signup"
+SIGNUP_COOKIE = "__Host-bridge_signup"  # __Host-: Secure, Path=/, no Domain (cannot be planted)
 
 
-def signup_binding(settings: Settings, verify_token: str) -> str:
-    """Ties a verification link to the browser that signed up (pre-hijacking defence, security review of T1.5)."""
+def signup_binding(settings: Settings, user_id: object, password_hash: str) -> str:
+    """Ties verification to the browser that set the current password (pre-hijacking defence, security review of
+    T1.5). Bound to the password hash, so any link for the account (signup, resend, login) opened in that browser
+    keeps the password, and a later signup that replaces the password invalidates older bindings."""
     key = settings.secret_key.get_secret_value().encode("utf-8")
-    return hmac.new(key, f"signup|{verify_token}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(key, f"signup|{user_id}|{password_hash}".encode(), hashlib.sha256).hexdigest()
 
 
-def set_signup_binding(response: Response, settings: Settings, verify_token: str | None) -> None:
-    """Always set (a random value when there is no new account), so the cookie reveals nothing about the address."""
-    value = signup_binding(settings, verify_token) if verify_token else secrets.token_hex(32)
+def set_signup_binding(response: Response, settings: Settings, binding: str | None) -> None:
+    """Always set (a random value when there is no binding), so the cookie reveals nothing about the address."""
+    value = binding or secrets.token_hex(32)
     response.set_cookie(
         SIGNUP_COOKIE,
         value,
@@ -63,5 +65,5 @@ def set_signup_binding(response: Response, settings: Settings, verify_token: str
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
-        path="/api/auth",
+        path="/",
     )
