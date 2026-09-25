@@ -113,3 +113,89 @@ async def test_the_verifier_finds_a_tampered_row(
         problems = await verify_chain(conn, chain_id)
     assert [p.seq for p in problems] == [2]
     assert "event_hash" in problems[0].reason
+
+
+maybe_uuid = st.one_of(st.none(), st.uuids(version=4))
+rich_events = st.lists(
+    st.fixed_dictionaries(
+        {
+            "action": st.sampled_from(["a.created", "b.updated", "c.signed"]),
+            "payload": payloads,
+            "actor": maybe_uuid,
+            "org": maybe_uuid,
+            "subject_type": st.one_of(st.none(), st.sampled_from(["user", "org", "proposal"])),
+            "subject": maybe_uuid,
+        }
+    ),
+    min_size=2,
+    max_size=6,
+)
+# Tail deletion and a full re-hash of every later row are not detectable from the chain alone (residual in
+# THREAT_MODEL.md; external anchoring arrives with provenance). Everything else must be found.
+EDITS = {
+    "action": "action = 'x.forged'",
+    "payload": "payload = payload || '{\"forged\": true}'::jsonb",
+    "actor": "actor_user_id = gen_random_uuid()",
+    "org": "org_id = gen_random_uuid()",
+    "subject_type": "subject_type = 'forged'",
+    "subject": "subject_id = gen_random_uuid()",
+    "time": "occurred_at = occurred_at + interval '1 second'",
+    "relink": "prev_hash = sha256(prev_hash)",
+}
+tampering = st.one_of(
+    st.tuples(st.just("edit"), st.sampled_from(sorted(EDITS))), st.tuples(st.just("delete"), st.none())
+)
+
+
+async def append_rich(engine: AsyncEngine, chain_id: str, event: dict[str, object]) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO audit_events (id, chain_id, seq, actor_kind, actor_user_id, org_id, action, subject_type, "
+                "subject_id, payload, prev_hash, event_hash) VALUES (:id, :chain, 0, CAST(:kind AS audit_actor), "
+                ":actor, :org, :action, :subject_type, :subject, CAST(:payload AS jsonb), ''::bytea, ''::bytea)"
+            ),
+            {
+                "id": uuid7(),
+                "chain": chain_id,
+                "kind": "user" if event["actor"] else "system",
+                "actor": event["actor"],
+                "org": event["org"],
+                "action": event["action"],
+                "subject_type": event["subject_type"],
+                "subject": event["subject"],
+                "payload": json.dumps(event["payload"]),
+            },
+        )
+
+
+@settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(sequence=rich_events, tamper=tampering, pick=st.integers(min_value=0, max_value=10**6))
+async def test_any_tampering_is_found(
+    owner_engine: AsyncEngine,
+    superuser_engine: AsyncEngine,
+    audit_reader_engine: AsyncEngine,
+    sequence: list[dict[str, object]],
+    tamper: tuple[str, str | None],
+    pick: int,
+) -> None:
+    """Random chains with actors, organisations and subjects verify; then a superuser with the triggers disabled edits
+    any field of any row, relinks a row, or deletes a row before the tail, and the verifier reports it."""
+    chain_id = f"tamper-{uuid4().hex[:10]}"
+    for event in sequence:
+        await append_rich(owner_engine, chain_id, event)
+    async with audit_reader_engine.connect() as conn:
+        assert await verify_chain(conn, chain_id) == []
+    kind, field = tamper
+    if kind == "edit":
+        seq = 1 + pick % len(sequence)
+        statement = f"UPDATE audit_events SET {EDITS[str(field)]} WHERE chain_id = :c AND seq = :s"
+    else:
+        seq = 1 + pick % (len(sequence) - 1)  # not the tail
+        statement = "DELETE FROM audit_events WHERE chain_id = :c AND seq = :s"
+    async with superuser_engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE audit_events DISABLE TRIGGER USER"))
+        await conn.execute(text(statement), {"c": chain_id, "s": seq})
+        await conn.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
+    async with audit_reader_engine.connect() as conn:
+        assert await verify_chain(conn, chain_id) != []
