@@ -6,7 +6,9 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS build
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js resolves rewrites at build time, so the API address is a build argument (compose passes http://api:8000).
+ARG API_ORIGIN=http://api:8000
+ENV NEXT_TELEMETRY_DISABLED=1 API_ORIGIN=${API_ORIGIN}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

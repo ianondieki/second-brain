@@ -3,6 +3,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 // The API is same-origin: /api/* is rewritten to FastAPI (docs/spec/08 Frontend), so session and CSRF cookies
 // stay first-party. API_ORIGIN is the backend's address as seen from the Next.js server.
+// Rewrites are resolved at build time: set API_ORIGIN when running `next build` (the Dockerfile takes it as an ARG).
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {

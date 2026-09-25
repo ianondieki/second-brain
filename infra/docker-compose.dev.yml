@@ -79,7 +79,10 @@ services:
     command: ["procrastinate", "--app=bridge.jobs.app.app", "worker"]
 
   web:
-    build: ../frontend
+    build:
+      context: ../frontend
+      args:
+        API_ORIGIN: http://api:8000   # baked into the rewrites at build time
     environment:
       API_ORIGIN: http://api:8000
     depends_on:
