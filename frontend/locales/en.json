@@ -19,7 +19,7 @@
     "developer": "Developer",
     "organisation": "Organisation",
     "publish": "Developers publish a solution to a real problem, with timestamped evidence of what they submitted and when.",
-    "review": "Verified people at organisations that accepted our NDA can read the full details, and every view is logged.",
+    "review": "Full details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass.",
     "track": "Both sides follow one shared tracker, from the first look to an agreed next step."
   },
   "landing": {

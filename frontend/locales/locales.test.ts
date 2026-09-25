@@ -92,6 +92,24 @@ describe("locale files", () => {
     }
   });
 
+  // docs/spec/04 principle 2: access and logging claims use the approved phrasing word for word.
+  const APPROVED_ACCESS =
+    "shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass";
+  const APPROVED_LOGGING = "every view is logged and watermarked to the viewer";
+
+  it("describe who can read the details in the approved phrasing", () => {
+    expect(EN["panel.review"]).toContain(APPROVED_ACCESS);
+  });
+
+  it("mention logging only in the approved phrasing", () => {
+    for (const [key, value] of visible(EN)) {
+      if (!/\blogged\b|\blogging\b/i.test(value)) continue;
+      const approved = value.includes(APPROVED_ACCESS) || value.includes(APPROVED_LOGGING);
+      expect(approved, `${key}: ${value}`).toBe(true);
+      expect(value.replace(APPROVED_ACCESS, "").replace(APPROVED_LOGGING, ""), key).not.toMatch(/\blogged\b/i);
+    }
+  });
+
   it("never use a straight apostrophe right before an ICU brace (it would escape it)", () => {
     for (const [key, value] of [...visible(EN), ...visible(SW)]) expect(value, key).not.toMatch(/'[{}]/);
   });
