@@ -19,8 +19,10 @@ export async function getMe(): Promise<Me | null> {
   // Forwarded under the name it arrived with: the API reads the name that matches its COOKIE_SECURE setting.
   const session = pickCookie(SESSION_COOKIES, (name) => store.get(name)?.value);
   if (!session) return null;
+  // Bounded: a hung API must end in the route's error page, not a page that never renders.
   const { data, response } = await serverApi().GET("/api/auth/me", {
     headers: { cookie: `${session.name}=${session.value}` },
+    signal: AbortSignal.timeout(5000),
   });
   if (response.status === 401) return null;
   if (!data) throw new Error(`GET /api/auth/me answered ${response.status}`);
