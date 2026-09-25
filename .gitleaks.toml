@@ -11,6 +11,7 @@ regexes = [
   '''openapi-export-placeholder-not-a-secret-0000''',
   '''test-recovery-pepper-0123456789abcdef012345''',
   '''dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGVmMDE=''',
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',  # RFC 6238 Appendix B test vector (base32 of "12345678901234567890")
 ]
 paths = [
   '''legacy/''',
