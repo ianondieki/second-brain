@@ -13,5 +13,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+// Messages are precompiled at build time, so the browser gets the format-only runtime instead of the ICU parser
+// (docs/spec/07 item 5: at most 150 KB of gzipped JS per route).
+const withNextIntl = createNextIntlPlugin({
+  requestConfig: "./i18n/request.ts",
+  experimental: { messages: { path: "./locales", format: "json", locales: "infer", precompile: true } },
+});
 export default withNextIntl(nextConfig);
