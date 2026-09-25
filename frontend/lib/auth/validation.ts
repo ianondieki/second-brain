@@ -36,8 +36,9 @@ type MissingKinds = Exclude<OrgKind, (typeof ORG_KINDS)[number]>;
 const allKindsListed: MissingKinds extends never ? true : false = true;
 void allKindsListed;
 
-export const PASSWORD_MIN = 12; // backend passwords.MIN_LENGTH
-export const PASSWORD_MAX = 128;
+import { PASSWORD_MAX, PASSWORD_MIN } from "./password";
+
+export { PASSWORD_MAX, PASSWORD_MIN };
 
 // A light shape check only; the server decides (it also refuses addresses it cannot email safely).
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;

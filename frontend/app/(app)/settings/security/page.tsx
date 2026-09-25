@@ -5,22 +5,35 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
+import { PasswordSettings } from "./PasswordSettings";
 import { SecuritySettings } from "./SecuritySettings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("security");
-  return { title: t("title") };
+  return { title: t("pageTitle") };
 }
 
+/** Sign-in security: two-step sign-in first (the page's one primary action), then the password. */
 export default async function SecurityPage() {
   const me = await requireMe();
   const t = await getTranslations("security");
   const home = homeFor(me.side);
   return (
     <SignedInShell homeHref={home}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <p className="mt-3 text-ink-soft">{t("lead")}</p>
-      <SecuritySettings enrolled={me.mfa.enrolled} required={me.mfa.required} homeHref={home} />
+      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
+      <section aria-labelledby="two-step-heading" className="mt-8">
+        <h2 id="two-step-heading" className="text-lg text-ink">
+          {t("title")}
+        </h2>
+        <p className="mt-2 text-ink-soft">{t("lead")}</p>
+        <SecuritySettings
+          enrolled={me.mfa.enrolled}
+          required={me.mfa.required}
+          homeHref={home}
+          email={me.user.email}
+        />
+      </section>
+      <PasswordSettings email={me.user.email} />
     </SignedInShell>
   );
 }

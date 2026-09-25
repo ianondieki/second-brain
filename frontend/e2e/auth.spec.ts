@@ -8,6 +8,7 @@ import { totp } from "./support/totp";
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
 
 const PASSWORD = "jacaranda season in nairobi";
+const NEW_PASSWORD = "long rains over the rift valley";
 
 function uniqueEmail(label: string) {
   return `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@example.test`;
@@ -31,10 +32,10 @@ async function checkScreen(page: Page) {
   expect(overflow, "horizontal scroll").toBeLessThanOrEqual(0);
 }
 
-async function logIn(page: Page, email: string) {
+async function logIn(page: Page, email: string, password: string = PASSWORD) {
   await page.goto("/login");
   await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Log in", exact: true }).click();
 }
 
@@ -78,7 +79,7 @@ test("a wrong password is refused with a message by the form", async ({ page }) 
   );
 });
 
-test("a developer signs up, confirms by email link, signs out and logs in with a password", async ({
+test("a developer signs up, confirms by email link, logs in with a password and changes it", async ({
   page,
   request,
 }) => {
@@ -94,7 +95,10 @@ test("a developer signs up, confirms by email link, signs out and logs in with a
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await expect(page.getByLabel("Organisation name")).toHaveCount(0);
-  for (const consent of await page.getByRole("group", { name: /Optional/ }).getByRole("checkbox").all()) {
+  // The four optional consents carry the server's wording (GET /api/consents) and start unticked.
+  const consents = page.getByRole("group", { name: /Optional/ }).getByRole("checkbox");
+  await expect(consents).toHaveCount(4);
+  for (const consent of await consents.all()) {
     await expect(consent).not.toBeChecked();
   }
   await page.getByRole("checkbox", { name: /I accept the terms of service/ }).check();
@@ -113,6 +117,18 @@ test("a developer signs up, confirms by email link, signs out and logs in with a
 
   await signOut(page);
   await logIn(page, email);
+  await expect(page).toHaveURL(/\/dev$/);
+
+  await page.goto("/settings/security");
+  const passwordSection = page.getByRole("region", { name: "Password" });
+  await passwordSection.getByLabel("Current password", { exact: true }).fill(PASSWORD);
+  await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
+  await passwordSection.getByRole("button", { name: "Save password" }).click();
+  await expect(passwordSection.getByRole("status")).toContainText("Password saved.");
+  await checkScreen(page);
+
+  await signOut(page);
+  await logIn(page, email, NEW_PASSWORD);
   await expect(page).toHaveURL(/\/dev$/);
 });
 
@@ -145,7 +161,12 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   await expect(page.getByRole("list", { name: "Setup steps" }).locator("[aria-current=step]")).toHaveCount(1);
   await checkScreen(page);
 
-  await page.getByRole("button", { name: "Turn on two-step sign-in" }).click();
+  // Enrolment asks for the current password first.
+  const twoStep = page.getByRole("region", { name: "Two-step sign-in" });
+  await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
+  await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible();
+  await twoStep.getByLabel("Current password", { exact: true }).fill(PASSWORD);
+  await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   const key = (await page.getByTestId("totp-key").innerText()).replace(/\s+/g, "");
   expect(key).toMatch(/^[A-Z2-7]{16,}$/);
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
