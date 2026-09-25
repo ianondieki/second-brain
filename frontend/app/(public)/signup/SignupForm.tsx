@@ -15,6 +15,7 @@ import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import { fieldForError, type ErrorKey } from "@/lib/api/errors";
+import { consentDecisions, signupConsents, type ShownConsents, type SignupConsent } from "@/lib/auth/consents";
 import { rememberEmail } from "@/lib/auth/session";
 import {
   ORG_KINDS,
@@ -25,15 +26,6 @@ import {
   type SignupSide,
   type SignupValues,
 } from "@/lib/auth/validation";
-
-const CONSENTS = ["marketing", "reminders", "whatsapp", "profiling"] as const;
-type Consent = (typeof CONSENTS)[number];
-const CONSENT_LABEL = {
-  marketing: "consentMarketing",
-  reminders: "consentReminders",
-  whatsapp: "consentWhatsapp",
-  profiling: "consentProfiling",
-} as const satisfies Record<Consent, string>;
 
 /** Where focus goes for each field when it is the first one with an error. */
 const FOCUS_ID: Record<SignupField, string> = {
@@ -53,7 +45,12 @@ const SERVER_FIELD: Partial<Record<string, SignupField>> = {
   orgName: "orgName",
 };
 
-export function SignupForm() {
+/**
+ * Signup. The optional consents are the server's exact wording from GET /api/consents (English is the recorded
+ * source of truth), sent back with their version; if the wording could not be loaded the form offers a retry and
+ * does not submit.
+ */
+export function SignupForm({ initialConsents }: { initialConsents: ShownConsents | null }) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -68,12 +65,9 @@ export function SignupForm() {
     orgKind: "",
     terms: false,
   });
-  const [consents, setConsents] = useState<Record<Consent, boolean>>({
-    marketing: false,
-    reminders: false,
-    whatsapp: false,
-    profiling: false,
-  });
+  const [shown, setShown] = useState<ShownConsents | null>(initialConsents);
+  const [loadingConsents, setLoadingConsents] = useState(false);
+  const [ticked, setTicked] = useState<Partial<Record<SignupConsent, boolean>>>({});
   const [errors, setErrors] = useState<Partial<Record<SignupField, string>>>({});
   const [serverError, setServerError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
@@ -87,6 +81,17 @@ export function SignupForm() {
         return next;
       });
     }
+  }
+
+  /** Fetches the current consent wording again; every box starts unticked because the wording may have changed. */
+  async function reloadConsents(): Promise<boolean> {
+    setLoadingConsents(true);
+    const outcome = await settle(api.GET("/api/consents"));
+    setLoadingConsents(false);
+    if (!outcome.ok) return false;
+    setShown(signupConsents(outcome.data));
+    setTicked({});
+    return true;
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -106,6 +111,10 @@ export function SignupForm() {
       document.getElementById(FOCUS_ID[first])?.focus();
       return;
     }
+    if (!shown) {
+      document.getElementById("consents-retry")?.focus();
+      return;
+    }
 
     setBusy(true);
     const side = values.side as SignupSide;
@@ -117,7 +126,8 @@ export function SignupForm() {
           email: values.email.trim(),
           password: values.password,
           org: side === "org" ? { legal_name: values.orgName.trim(), kind: values.orgKind as OrgKind } : null,
-          consents: { ...consents },
+          consents: consentDecisions(shown, ticked),
+          consents_version: shown.version,
           locale,
           accept_terms: values.terms,
         },
@@ -130,6 +140,8 @@ export function SignupForm() {
     }
     setBusy(false);
     setServerError(outcome.key);
+    // New wording: show it (unticked) so the person decides again; without it, offer the retry instead.
+    if (outcome.key === "consent_text_changed" && !(await reloadConsents())) setShown(null);
     const errorField = fieldForError(outcome.key);
     const field = errorField ? SERVER_FIELD[errorField] : undefined;
     if (field) setErrors((current) => ({ ...current, [field]: t(`errors.${outcome.key}`) }));
@@ -233,16 +245,25 @@ export function SignupForm() {
           <p id="consents-hint" className="mt-1 mb-1 text-sm text-ink-soft">
             {t("signup.consentsHint")}
           </p>
-          {CONSENTS.map((purpose) => (
-            <Checkbox
-              key={purpose}
-              id={`consent-${purpose}`}
-              name={`consent_${purpose}`}
-              label={t(`signup.${CONSENT_LABEL[purpose]}`)}
-              checked={consents[purpose]}
-              onChange={(event) => setConsents((current) => ({ ...current, [purpose]: event.target.checked }))}
-            />
-          ))}
+          {shown ? (
+            shown.items.map(({ purpose, text }) => (
+              <Checkbox
+                key={purpose}
+                id={`consent-${purpose}`}
+                name={`consent_${purpose}`}
+                label={text}
+                checked={ticked[purpose] === true}
+                onChange={(event) => setTicked((current) => ({ ...current, [purpose]: event.target.checked }))}
+              />
+            ))
+          ) : (
+            <div className="mt-2 flex flex-col items-start gap-3">
+              <Alert>{t("signup.consentsFailed")}</Alert>
+              <Button id="consents-retry" variant="secondary" busy={loadingConsents} onClick={reloadConsents}>
+                {loadingConsents ? t("signup.consentsRetrying") : t("signup.consentsRetry")}
+              </Button>
+            </div>
+          )}
         </fieldset>
       </div>
 
