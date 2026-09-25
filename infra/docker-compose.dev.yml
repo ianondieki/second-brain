@@ -88,6 +88,8 @@ services:
         API_ORIGIN: http://api:8000   # baked into the rewrites at build time
     environment:
       API_ORIGIN: http://api:8000
+      # Which session cookie name the web server reads; must equal the API's COOKIE_SECURE (backend/.env).
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     depends_on:
       api:
         condition: service_healthy

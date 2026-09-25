@@ -5,3 +5,5 @@ cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:private-key:144
 cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:jwt:163
 # Backend unit-test settings (a fixed, public test key).
 2050af54fdf1e4314755427042f35bd45250ddd3:backend/tests/conftest.py:generic-api-key:15
+# Web client cookie tests: a made-up session token (replaced by an obviously fake value in aed5c52).
+86547801bcf674b5de90397dc63c64fc8d2f67a9:frontend/lib/api/cookies.test.ts:generic-api-key:6
