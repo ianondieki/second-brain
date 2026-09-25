@@ -1,20 +1,29 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-export default async function Home() {
-  const t = await getTranslations("home");
+import { AuthShell } from "@/components/AuthShell";
+import { ButtonLink, textLinkClass } from "@/components/ui/Button";
+
+export default async function Landing() {
+  const t = await getTranslations("landing");
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center gap-6 px-4 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
-      <p className="text-lg leading-8">{t("lead")}</p>
-      <div className="flex flex-wrap gap-3">
-        <Link className="rounded-md bg-foreground px-4 py-2 font-medium text-background" href="/signup">
+    <AuthShell landing>
+      <h1 className="text-2xl text-ink lg:text-3xl">{t("title")}</h1>
+      <p className="mt-4 max-w-[60ch] text-lg text-ink-soft">{t("lead")}</p>
+      <div className="mt-8 flex flex-col items-start gap-4">
+        <ButtonLink href="/signup" variant="primary">
           {t("signUp")}
-        </Link>
-        <Link className="rounded-md border px-4 py-2 font-medium" href="/login">
-          {t("logIn")}
-        </Link>
+        </ButtonLink>
+        <p className="text-ink">
+          {t.rich("haveAccount", {
+            login: (chunks) => (
+              <Link href="/login" className={textLinkClass}>
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
       </div>
-    </main>
+    </AuthShell>
   );
 }
