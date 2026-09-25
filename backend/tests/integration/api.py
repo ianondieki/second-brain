@@ -13,16 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.auth import sessions
 from bridge.auth.models import User
 from bridge.clock import utcnow
-from bridge.config import get_settings
+from bridge.config import Settings, get_settings
 from bridge.db import bind_tenant, create_session_factory
 from bridge.main import create_app
 from bridge.notifications.email import FakeEmailProvider
 
 
 @asynccontextmanager
-async def make_client(app_engine: AsyncEngine) -> AsyncIterator[httpx.AsyncClient]:
+async def make_client(app_engine: AsyncEngine, settings: Settings | None = None) -> AsyncIterator[httpx.AsyncClient]:
     """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and a fake email outbox."""
-    settings = get_settings()
+    settings = settings or get_settings()
     app = create_app(settings)
     app.state.engine = app_engine
     app.state.session_factory = create_session_factory(app_engine)

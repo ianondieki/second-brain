@@ -81,10 +81,25 @@ async def test_developer_signup_verify_and_me(client: httpx.AsyncClient) -> None
 
 async def test_signup_does_not_reveal_existing_accounts(client: httpx.AsyncClient) -> None:
     address = email()
-    first, second = await signup(client, address), await signup(client, address)
+    first = await signup(client, address)
+    await client.post("/api/auth/magic-link/consume", json={"token": link_token(client, address)})
+    await refresh_csrf(client)
+    second = await signup(client, address)  # the address is now a verified account
     assert (first.status_code, first.json()) == (second.status_code, second.json())
     subjects = [m.subject for m in outbox(client).outbox if m.to == address]
     assert any("already have" in s for s in subjects)
+
+
+async def test_a_repeat_signup_of_an_unverified_address_replaces_its_link(client: httpx.AsyncClient) -> None:
+    address = email()
+    await signup(client, address)
+    first_link = link_token(client, address)
+    await signup(client, address)
+    second_link = link_token(client, address)
+    assert first_link != second_link
+    stale = await client.post("/api/auth/magic-link/consume", json={"token": first_link})
+    assert stale.status_code == 400
+    assert (await client.post("/api/auth/magic-link/consume", json={"token": second_link})).status_code == 200
 
 
 async def test_links_work_once(client: httpx.AsyncClient) -> None:
@@ -101,9 +116,12 @@ async def test_links_work_once(client: httpx.AsyncClient) -> None:
 async def test_password_login_and_unverified_accounts(client: httpx.AsyncClient) -> None:
     address = email()
     await signup(client, address)
+    signup_link = link_token(client, address)
     unverified = await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
     assert unverified.status_code == 403
     assert unverified.json()["detail"]["code"] == "email_unverified"
+    # The login attempt (right password) emailed a fresh link bound to this browser; the signup link is spent.
+    assert link_token(client, address) != signup_link
     await client.post("/api/auth/magic-link/consume", json={"token": link_token(client, address)})
     await refresh_csrf(client)
     wrong = await client.post("/api/auth/login", json={"email": address, "password": "not the password at all"})
@@ -148,7 +166,7 @@ async def test_session_cookie_flags(client: httpx.AsyncClient) -> None:
 
 
 async def enrol_totp(client: httpx.AsyncClient) -> str:
-    enrol = await client.post("/api/auth/totp/enrol")
+    enrol = await client.post("/api/auth/totp/enrol", json={"password": PASSWORD})
     assert enrol.status_code == 200, enrol.text
     secret = str(enrol.json()["secret"])
     confirm = await client.post("/api/auth/totp/confirm", json={"code": totp.code_at(secret, _now_counter())})
@@ -179,7 +197,7 @@ async def test_org_owner_must_enrol_totp_and_then_sign_in_with_it(client: httpx.
 
     secret = await enrol_totp(client)
     assert (await client.get(f"/api/orgs/{org_id}")).status_code == 200
-    assert (await client.get("/api/me/entitlements")).status_code == 200
+    assert (await client.get(f"/api/orgs/{org_id}/entitlements")).status_code == 200
 
     await client.post("/api/auth/logout")
     await refresh_csrf(client)
@@ -192,6 +210,7 @@ async def test_org_owner_must_enrol_totp_and_then_sign_in_with_it(client: httpx.
     counter = _now_counter() + 1  # the enrolment used the current window; replay of it would be refused
     verified = await client.post("/api/auth/mfa/verify", json={"code": totp.code_at(secret, counter)})
     assert verified.status_code == 200, verified.text
+    await refresh_csrf(client)  # the second step rotates the session, and with it the CSRF binding
     assert (await client.get(f"/api/orgs/{org_id}")).status_code == 200
     replay = await client.post("/api/auth/step-up", json={"code": totp.code_at(secret, counter)})
     assert replay.status_code == 401
