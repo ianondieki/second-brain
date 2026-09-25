@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:
         problems: list[str] = []
+        for cookie in (self.session_cookie_name, self.csrf_cookie_name):
+            if cookie.startswith(("__Host-", "__Secure-")) and not self.cookie_secure:
+                problems.append(f"{cookie} needs COOKIE_SECURE=true (browsers reject prefixed cookies otherwise)")
         for name in ("secret_key", "data_encryption_key", "recovery_code_pepper"):
             value: SecretStr = getattr(self, name)
             if len(value.get_secret_value()) < MIN_SECRET_CHARS:

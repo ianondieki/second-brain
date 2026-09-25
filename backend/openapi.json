@@ -939,7 +939,7 @@
       },
       "session": {
         "in": "cookie",
-        "name": "bridge_session",
+        "name": "__Host-bridge_session",
         "type": "apiKey"
       }
     }
