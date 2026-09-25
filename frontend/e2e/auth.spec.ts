@@ -80,6 +80,14 @@ test("landing, login and an unusable link meet the page rules", async ({ page })
   await checkScreen(page);
 });
 
+test("pages carry the security headers", async ({ request }) => {
+  const response = await request.get("/login");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(response.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
+});
+
 test("before JavaScript runs, submitting the login form never puts credentials in the URL", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();

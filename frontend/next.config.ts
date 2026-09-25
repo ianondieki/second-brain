@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
+import { SECURITY_HEADERS } from "./security-headers";
+
 // The API is same-origin: /api/* is rewritten to FastAPI (docs/spec/08 Frontend), so session and CSRF cookies
 // stay first-party. API_ORIGIN is the backend's address as seen from the Next.js server.
 // Rewrites are resolved at build time: set API_ORIGIN when running `next build` (the Dockerfile takes it as an ARG).
@@ -11,6 +13,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
+  },
+  async headers() {
+    return [{ source: "/:path*", headers: [...SECURITY_HEADERS] }];
   },
 };
 
