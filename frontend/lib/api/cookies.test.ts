@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readCsrfCookie } from "./client";
 import { cookieSecure, CSRF_COOKIES, pickCookie, sessionCookieHeader } from "./cookies";
 
-const TOKEN = "Zk3v_9QmT0-pXw7yLr2sH8nB4cD6eF1gJ5aK0uV2oIq"; // 43 characters, like secrets.token_urlsafe(32)
+const TOKEN = "session-".padEnd(43, "x"); // fake, 43 characters like secrets.token_urlsafe(32)
 const OTHER = "AttackerTokenAttackerTokenAttackerToken0000";
 
 function jar(values: Record<string, string>) {
