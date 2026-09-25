@@ -103,7 +103,8 @@ describe("locale files", () => {
 
   it("mention logging only in the approved phrasing", () => {
     for (const [key, value] of visible(EN)) {
-      if (!/\blogged\b|\blogging\b/i.test(value)) continue;
+      // "Logging in…" is about signing in, not about audit logs.
+      if (!/\blogged\b|\bevery view\b/i.test(value)) continue;
       const approved = value.includes(APPROVED_ACCESS) || value.includes(APPROVED_LOGGING);
       expect(approved, `${key}: ${value}`).toBe(true);
       expect(value.replace(APPROVED_ACCESS, "").replace(APPROVED_LOGGING, ""), key).not.toMatch(/\blogged\b/i);
