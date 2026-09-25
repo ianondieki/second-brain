@@ -27,13 +27,24 @@ export function scrubToken(value: unknown, token: string): unknown {
 }
 
 /**
- * Reads the token from the fragment (never sent to servers or in Referer), then removes it from the address bar and
- * from the history entry, so Back, bookmarks and shoulder-surfers do not see it.
+ * Reads the token from the fragment (never sent to servers or in Referer), then removes it from the address bar, the
+ * history entry and the Next.js router, so Back, bookmarks and shoulder-surfers do not see it and no later router
+ * update (refresh, server action, dev reload) writes it back.
  */
 export function takeTokenFromFragment(): string | null {
   const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+  const clean = window.location.pathname + window.location.search;
+  // At once: the address bar and the history entry (Next's own state is kept, minus the token).
   const state = token ? scrubToken(window.history.state, token) : window.history.state;
-  window.history.replaceState(state, "", window.location.pathname + window.location.search);
+  window.history.replaceState(state, "", clean);
+  // The router keeps its own copy of the URL. Next syncs it on a replaceState that is not its own (no `__NA` in the
+  // state), but installs that hook in an effect of the app router, which runs after this component's effects on
+  // first load. So repeat the replace once effects have settled, the way Next documents (state null, new path).
+  window.setTimeout(() => {
+    if (window.location.pathname + window.location.search === clean && !window.location.hash) {
+      window.history.replaceState(null, "", clean);
+    }
+  }, 0);
   return token;
 }
 

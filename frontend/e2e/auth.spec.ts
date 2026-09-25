@@ -188,6 +188,11 @@ test("a link opened in another browser signs in without the password and offers 
   await other.goto(pathOf(await waitForSignInLink(request, email)));
   await expect(other.getByRole("heading", { name: "You are signed in" })).toBeVisible(SERVER_STEP);
   expect(new URL(other.url()).hash, "the #token fragment is scrubbed").toBe("");
+  // A later router update must not write the token back from Next's own copy of the URL.
+  // window.next.router is Next's debugging handle on the app router (next/dist/client/components).
+  await other.evaluate(() => (window as { next?: { router?: { refresh(): void } } }).next?.router?.refresh());
+  await other.waitForLoadState("networkidle");
+  expect(new URL(other.url()).hash, "the #token stays gone after router.refresh()").toBe("");
   await expect(other.locator("[data-primary]")).toHaveText("Set a password");
   await expect(other.getByRole("link", { name: "Continue without a password" })).toHaveAttribute("href", "/dev");
   await checkScreen(other);
