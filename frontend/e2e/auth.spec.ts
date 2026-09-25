@@ -80,6 +80,23 @@ test("landing, login and an unusable link meet the page rules", async ({ page })
   await checkScreen(page);
 });
 
+test("the link page loads no script from outside /_next/static (nothing else can read #token)", async ({ page }) => {
+  // The fragment stays in performance.getEntriesByType("navigation")[0].name, so no third-party or telemetry script
+  // may run on /auth/link.
+  const scripts: string[] = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "script") scripts.push(request.url());
+  });
+  await page.goto("/auth/link#token=not-a-real-token-but-long-enough-to-check");
+  await expect(page.getByRole("heading", { name: "This link no longer works" })).toBeVisible(SERVER_STEP);
+  await page.waitForLoadState("networkidle");
+  const origin = new URL(page.url()).origin;
+  expect(scripts.length).toBeGreaterThan(0);
+  for (const url of scripts) expect(url.startsWith(`${origin}/_next/static/`), url).toBe(true);
+  const sources = await page.evaluate(() => Array.from(document.scripts, (script) => script.src).filter(Boolean));
+  for (const src of sources) expect(src.startsWith(`${origin}/_next/static/`), src).toBe(true);
+});
+
 test("pages carry the security headers", async ({ request }) => {
   const response = await request.get("/login");
   expect(response.headers()["x-frame-options"]).toBe("DENY");
