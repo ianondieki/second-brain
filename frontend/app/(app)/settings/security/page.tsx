@@ -31,9 +31,10 @@ export default async function SecurityPage() {
           required={me.mfa.required}
           homeHref={home}
           email={me.user.email}
+          passwordSet={me.user.password_set}
         />
       </section>
-      <PasswordSettings email={me.user.email} />
+      <PasswordSettings email={me.user.email} passwordSet={me.user.password_set} />
     </SignedInShell>
   );
 }

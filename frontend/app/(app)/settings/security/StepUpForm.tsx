@@ -4,11 +4,12 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Form, SubmitButton } from "@/components/ui/Form";
-import { Alert } from "@/components/ui/Alert";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
+
+import { ErrorNotice } from "./ErrorNotice";
 
 // Loaded only when turning two-step sign-in off asks for a fresh code (403 step_up_required).
 
@@ -44,12 +45,16 @@ export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Prom
       else setError(outcome.key);
       return;
     }
-    await onConfirmed();
+    try {
+      await onConfirmed();
+    } finally {
+      setBusy(false); // whatever onConfirmed decides, the form must not stay stuck on "Turning off…"
+    }
   }
 
   return (
     <Form onSubmit={confirm} className="flex w-full flex-col items-start gap-4">
-      {error ? <Alert>{te(error)}</Alert> : null}
+      <ErrorNotice error={error} />
       <p className="text-ink">{t("stepUp")}</p>
       <OtpInput
         id="totp-code"

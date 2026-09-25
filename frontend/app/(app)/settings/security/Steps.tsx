@@ -15,18 +15,20 @@ export interface StepsProps {
   steps: Step[];
   /** 1-based index of the current step (aria-current="step"). */
   current: number;
+  /** How many steps are finished (default: all before the current one). */
+  done?: number;
   /** Receives the current step's heading, so a phase change can move focus to it. */
   currentHeadingRef?: Ref<HTMLHeadingElement>;
 }
 
 /** The setup stepper (docs/spec/07 item 6): an ordered list, the current step marked with aria-current="step". */
-export function Steps({ label, doneLabel, steps, current, currentHeadingRef }: StepsProps) {
+export function Steps({ label, doneLabel, steps, current, done = current - 1, currentHeadingRef }: StepsProps) {
   return (
     <ol aria-label={label} className="flex flex-col">
       {steps.map((step, index) => {
         const n = index + 1;
         const isCurrent = n === current;
-        const isDone = n < current;
+        const isDone = n <= done && !isCurrent;
         return (
           <li
             key={step.title}

@@ -7,15 +7,15 @@ import { encode } from "uqr";
 
 import { QrCode } from "@/components/QrCode";
 import { Form, SubmitButton } from "@/components/ui/Form";
-import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { CheckIcon, InfoIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/icons";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
+import { ErrorNotice } from "./ErrorNotice";
 import { Steps } from "./Steps";
 
 // Loaded only after POST /api/auth/totp/enrol succeeds (next/dynamic in SecuritySettings), with the QR encoder, so
@@ -71,6 +71,8 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
   const [busy, setBusy] = useState(false);
 
   const current = codes ? 3 : codeFocused ? 2 : 1;
+  // Steps 1 and 2 count as done only once the code is confirmed, not because the code field has focus.
+  const done = codes ? 2 : 0;
 
   // Arriving here (and reaching the codes) moves focus to the current step, so screen readers follow the change.
   useEffect(() => {
@@ -120,7 +122,7 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
     <p role="status" className="min-h-6 text-sm font-medium text-ink-soft">
       {notice ? (
         <span className={cn("inline-flex items-center gap-1.5", notice === "copyFailed" ? "text-error" : "text-ok")}>
-          {notice === "copyFailed" ? <InfoIcon className="size-5" /> : <CheckIcon className="size-5" />}
+          {notice === "copyFailed" ? <AlertIcon className="size-5" /> : <CheckIcon className="size-5" />}
           {t(notice)}
         </span>
       ) : null}
@@ -211,11 +213,12 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
 
   return (
     <div className="flex flex-col gap-6">
-      {error ? <Alert>{te(error)}</Alert> : null}
+      <ErrorNotice error={error} />
       <Steps
         label={t("stepsLabel")}
         doneLabel={t("stepDone")}
         current={current}
+        done={done}
         currentHeadingRef={heading}
         steps={[
           { title: t("step1"), body: codes ? null : setupBody },

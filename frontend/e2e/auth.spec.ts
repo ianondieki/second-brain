@@ -241,7 +241,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   const twoStep = page.getByRole("region", { name: "Two-step sign-in" });
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible(SERVER_STEP);
-  await twoStep.getByLabel("Current password", { exact: true }).fill(PASSWORD);
+  await twoStep.getByLabel("Confirm with your current password", { exact: true }).fill(PASSWORD);
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(page.getByTestId("totp-key")).toBeVisible(SERVER_STEP);
   const key = (await page.getByTestId("totp-key").innerText()).replace(/\s+/g, "");

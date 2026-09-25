@@ -13,7 +13,8 @@ import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
-import { EnrolmentSteps, loadEnrolmentSteps, SignInAgain, StepUpForm } from "./lazy";
+import { ErrorNotice } from "./ErrorNotice";
+import { EnrolmentSteps, loadEnrolmentSteps, StepUpForm } from "./lazy";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
@@ -25,9 +26,11 @@ export interface SecuritySettingsProps {
   homeHref: string;
   /** For "Email me a sign-in link" when an account without a password must sign in again first. */
   email: string;
+  /** False when the account has no password: enrolment then needs no password (a fresh sign-in instead). */
+  passwordSet: boolean;
 }
 
-export function SecuritySettings({ enrolled, required, homeHref, email }: SecuritySettingsProps) {
+export function SecuritySettings({ enrolled, required, homeHref, email, passwordSet }: SecuritySettingsProps) {
   const t = useTranslations("security");
   const tf = useTranslations("fields");
   const te = useTranslations("errors");
@@ -48,7 +51,8 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setError(null);
     setPasswordError(undefined);
     setJustTurnedOff(false);
-    const steps = loadEnrolmentSteps(); // fetch the next screen's code while the server works
+    // Fetch the next screen's code while the server works; a failed fetch surfaces later through React.lazy.
+    const steps = loadEnrolmentSteps().catch(() => undefined);
     const outcome = await settle(api.POST("/api/auth/totp/enrol", { body: { password: password || null } }));
     if (!outcome.ok) {
       setBusy(false);
@@ -62,7 +66,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
       }
       return;
     }
-    await steps.catch(() => undefined);
+    await steps;
     setBusy(false);
     setPassword("");
     setPhase({ name: "setup", secret: outcome.data.secret, otpauthUri: outcome.data.otpauth_uri });
@@ -87,16 +91,9 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setError(outcome.key);
   }
 
-  const errorBlock = (
-    <>
-      {error ? <Alert>{te(error)}</Alert> : null}
-      {error === "recent_sign_in_required" ? (
-        <Suspense fallback={null}>
-          <SignInAgain email={email} />
-        </Suspense>
-      ) : null}
-    </>
-  );
+  const errorBlock = <ErrorNotice error={error} email={email} />;
+  // Asked for when the account has a password, or when the API says one was set since this page loaded.
+  const askPassword = passwordSet || passwordError !== undefined;
 
   if (phase.name === "on") {
     return (
@@ -153,23 +150,24 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
         steps={[{ title: t("step1") }, { title: t("step2") }, { title: t("step3") }]}
       />
       <Form onSubmit={start} className="flex flex-col gap-5">
-        <PasswordField
-          id="enrol-password"
-          name="password"
-          label={t("currentPassword")}
-          hint={t("currentPasswordHint")}
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => {
-            setPassword(event.target.value);
-            setPasswordError(undefined);
-          }}
-          error={passwordError}
-          showLabel={tf("showPassword")}
-          hideLabel={tf("hidePassword")}
-          showName={tf("showPasswordName")}
-          hideName={tf("hidePasswordName")}
-        />
+        {askPassword ? (
+          <PasswordField
+            id="enrol-password"
+            name="password"
+            label={t("currentPassword")}
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setPasswordError(undefined);
+            }}
+            error={passwordError}
+            showLabel={tf("showPassword")}
+            hideLabel={tf("hidePassword")}
+            showName={tf("showPasswordName")}
+            hideName={tf("hidePasswordName")}
+          />
+        ) : null}
         <div>
           <SubmitButton variant="primary" busy={busy}>
             {busy ? t("starting") : t("start")}

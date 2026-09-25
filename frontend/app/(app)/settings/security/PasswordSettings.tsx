@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Suspense, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
@@ -11,14 +11,14 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/auth/password";
 
-import { SignInAgain } from "./lazy";
+import { ErrorNotice } from "./ErrorNotice";
 
 /**
  * Set or change the password (POST /api/auth/password). Needed, for example, after a verification link opened in
  * another browser cleared a password set at signup. The current password is required when one is set; an account
  * without one needs a sign-in in the last 15 minutes.
  */
-export function PasswordSettings({ email }: { email: string }) {
+export function PasswordSettings({ email, passwordSet }: { email: string; passwordSet: boolean }) {
   const t = useTranslations("password");
   const tf = useTranslations("fields");
   const tv = useTranslations("validation");
@@ -32,6 +32,8 @@ export function PasswordSettings({ email }: { email: string }) {
   const [error, setError] = useState<ErrorKey | null>(null);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The account has a password (from the API, or since one was saved here): changing it needs the current one.
+  const [hasPassword, setHasPassword] = useState(passwordSet);
 
   const toggle = {
     showLabel: tf("showPassword"),
@@ -66,9 +68,11 @@ export function PasswordSettings({ email }: { email: string }) {
       setCurrent("");
       setNext("");
       setSaved(true);
+      setHasPassword(true);
       return;
     }
     if (outcome.key === "current_password_required") {
+      setHasPassword(true);
       setCurrentError(te("current_password_required"));
       document.getElementById("password-current")?.focus();
       return;
@@ -90,26 +94,22 @@ export function PasswordSettings({ email }: { email: string }) {
       <p className="mt-2 text-ink-soft">{t("lead")}</p>
       <Form onSubmit={save} className="mt-6 flex flex-col gap-5">
         {saved ? <Alert tone="ok">{t("saved")}</Alert> : null}
-        {error ? <Alert ref={summaryRef}>{te(error)}</Alert> : null}
-        {error === "recent_sign_in_required" ? (
-          <Suspense fallback={null}>
-            <SignInAgain email={email} />
-          </Suspense>
+        <ErrorNotice error={error} email={email} alertRef={summaryRef} />
+        {hasPassword ? (
+          <PasswordField
+            id="password-current"
+            name="current_password"
+            label={t("current")}
+            autoComplete="current-password"
+            value={current}
+            onChange={(event) => {
+              setCurrent(event.target.value);
+              setCurrentError(undefined);
+            }}
+            error={currentError}
+            {...toggle}
+          />
         ) : null}
-        <PasswordField
-          id="password-current"
-          name="current_password"
-          label={t("current")}
-          hint={t("currentHint")}
-          autoComplete="current-password"
-          value={current}
-          onChange={(event) => {
-            setCurrent(event.target.value);
-            setCurrentError(undefined);
-          }}
-          error={currentError}
-          {...toggle}
-        />
         <PasswordField
           id="new-password"
           name="new_password"
