@@ -4,30 +4,46 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 
 import { Button } from "./ui/Button";
+import { AlertIcon } from "./ui/icons";
 
-/** Ends the session (POST /api/auth/logout), goes to the login page and drops the router's cached screens. */
+/**
+ * Ends the session (POST /api/auth/logout). Only 204 (ended) or 401 (already gone) count as signed out; anything
+ * else, including a network failure, keeps the person here with a warning that they may still be signed in.
+ */
 export function SignOutButton() {
   const t = useTranslations("shell");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function signOut() {
     setBusy(true);
-    try {
-      await api.POST("/api/auth/logout");
-    } catch {
-      // Offline or already expired: the person asked to leave, so leave anyway.
+    setFailed(false);
+    const outcome = await settle(api.POST("/api/auth/logout"));
+    if (outcome.ok || outcome.status === 401) {
+      router.replace("/login");
+      router.refresh();
+      return;
     }
-    router.replace("/login");
-    router.refresh();
+    setBusy(false);
+    setFailed(true);
   }
 
   return (
-    <Button variant="link" busy={busy} onClick={signOut}>
-      {busy ? t("signingOut") : t("signOut")}
-    </Button>
+    <div className="flex flex-col items-end">
+      <Button variant="link" busy={busy} onClick={signOut}>
+        {busy ? t("signingOut") : failed ? t("signOutRetry") : t("signOut")}
+      </Button>
+      {failed ? (
+        <p role="alert" className="mb-2 flex max-w-[18rem] items-start gap-1.5 text-right text-sm font-medium text-error">
+          <AlertIcon className="mt-px size-5 shrink-0" />
+          <span>{t("signOutFailed")}</span>
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -12,7 +12,9 @@
     "workingName": "Bridge (working name)",
     "skipToContent": "Skip to content",
     "signOut": "Sign out",
-    "signingOut": "Signing out…"
+    "signingOut": "Signing out…",
+    "signOutFailed": "Sign-out did not finish, so you may still be signed in.",
+    "signOutRetry": "Try signing out again"
   },
   "panel": {
     "title": "How it works",

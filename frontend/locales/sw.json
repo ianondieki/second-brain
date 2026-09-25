@@ -12,7 +12,9 @@
     "workingName": "Bridge (jina la muda)",
     "skipToContent": "Ruka hadi maudhui",
     "signOut": "Toka",
-    "signingOut": "Unatoka…"
+    "signingOut": "Unatoka…",
+    "signOutFailed": "Kutoka hakukukamilika, kwa hivyo huenda bado umeingia.",
+    "signOutRetry": "Jaribu kutoka tena"
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
