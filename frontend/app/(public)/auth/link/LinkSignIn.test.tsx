@@ -64,6 +64,7 @@ describe("LinkSignIn", () => {
   });
 
   it("offers to set a password, and a way home, when the account has none", async () => {
+    window.sessionStorage.setItem("bridge.pendingEmail", "wanjiru@example.com");
     mocks.post.mockResolvedValue(ok({ mfa_required: false, user: user(false) }));
     mocks.get.mockResolvedValue(
       ok({ side: "org", mfa: { required: true, enrolled: false, verified: false }, memberships: [], user: user(false) }),
@@ -77,6 +78,8 @@ describe("LinkSignIn", () => {
       expect(screen.getByRole("link", { name: "Continue without a password" }).getAttribute("href")).toBe("/org"),
     );
     expect(mocks.replace).not.toHaveBeenCalled();
+    // The link signed the person in: the address kept for "Send the link again" is dropped.
+    expect(window.sessionStorage.getItem("bridge.pendingEmail")).toBeNull();
   });
 });
 

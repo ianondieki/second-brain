@@ -13,7 +13,7 @@ import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 import { destinationFor, LINK_MINUTES } from "@/lib/auth/routing";
-import { continueAfterSignIn, rememberEmail } from "@/lib/auth/session";
+import { continueAfterSignIn, forgetEmail, rememberEmail } from "@/lib/auth/session";
 import { checkEmail } from "@/lib/auth/validation";
 
 /** A copy of a history state value with every occurrence of the token removed (the router may keep URLs there). */
@@ -82,6 +82,7 @@ export function LinkSignIn() {
     setRetrying(false);
     if (outcome.ok) {
       token.current = null;
+      forgetEmail(); // the link has signed the person in; "Send the link again" has no further use
       // Signed in, but the account has no password (for example: the link was opened in a different browser from
       // the one that signed up, so the password chosen there was not kept). Say so calmly, with one way forward.
       if (!outcome.data.mfa_required && !outcome.data.user.password_set) {

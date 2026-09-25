@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
+import { forgetEmail } from "@/lib/auth/session";
 
 import { Button } from "./ui/Button";
 import { AlertIcon } from "./ui/icons";
@@ -25,6 +26,7 @@ export function SignOutButton() {
     setFailed(false);
     const outcome = await settle(api.POST("/api/auth/logout"));
     if (outcome.ok || outcome.status === 401) {
+      forgetEmail(); // the next person on this device should not see this address offered back
       router.replace("/login");
       router.refresh();
       return;

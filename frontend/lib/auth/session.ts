@@ -39,6 +39,15 @@ export function rememberEmail(email: string): void {
   }
 }
 
+/** Drops the remembered address: on sign-out, and once a link has signed the person in (it has done its job). */
+export function forgetEmail(): void {
+  try {
+    window.sessionStorage.removeItem(PENDING_EMAIL);
+  } catch {
+    // Storage unavailable: nothing was stored either.
+  }
+}
+
 function readRememberedEmail(): string | null {
   try {
     return window.sessionStorage.getItem(PENDING_EMAIL);

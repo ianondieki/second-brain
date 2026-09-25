@@ -23,21 +23,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SignOutButton", () => {
-  it.each([204, 401])("goes to /login when logout answers %i", async (status) => {
+  it.each([204, 401])("goes to /login and forgets the remembered email when logout answers %i", async (status) => {
+    window.sessionStorage.setItem("bridge.pendingEmail", "wanjiru@example.com");
     mocks.post.mockResolvedValue(answer(status));
     renderWithIntl(<SignOutButton />);
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
+    expect(window.sessionStorage.getItem("bridge.pendingEmail")).toBeNull();
     expect(mocks.post).toHaveBeenCalledWith("/api/auth/logout");
   });
 
   it.each([403, 500])("stays and warns when logout answers %i", async (status) => {
+    window.sessionStorage.setItem("bridge.pendingEmail", "wanjiru@example.com");
     mocks.post.mockResolvedValue(answer(status));
     renderWithIntl(<SignOutButton />);
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect((await screen.findByRole("alert")).textContent).toContain("you may still be signed in");
     expect(screen.getByRole("button", { name: "Try signing out again" })).toBeTruthy();
     expect(mocks.replace).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem("bridge.pendingEmail")).toBe("wanjiru@example.com");
   });
 
   it("stays and warns when the network fails, and the retry can succeed", async () => {
