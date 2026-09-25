@@ -63,11 +63,32 @@ describe("locale files", () => {
     }
   });
 
-  it("never promise an email for requests the API may throttle silently (resend, sign-in link, unverified login)", () => {
-    const promise = /we (have )?sent (you )?(another|a new)|we will send|we are sending|tumekutumia kiungo kipya|tutakutumia kipya/i;
-    for (const key of ["checkEmail.resent", "checkEmail.login", "link.failedLead", "errors.email_unverified"]) {
-      expect(EN[key], key).not.toMatch(promise);
-      expect(SW[key], key).not.toMatch(promise);
+  // A verified address gets only an "account exists" notice and throttled requests get nothing, so no screen may
+  // say an email was, or will be, sent.
+  const EMAIL_KEYS = [
+    "signup.lead",
+    "checkEmail.signup",
+    "checkEmail.login",
+    "checkEmail.noEmail",
+    "checkEmail.resent",
+    "link.failedLead",
+    "errors.email_unverified",
+  ];
+  const PROMISE_EN = /\bwe (have )?sent\b|\bwe (will|'ll) (email|send)\b|\bwe emailed\b|\bwe are sending\b/i;
+  const PROMISE_SW = /\btumekutumia\b|\btulichotuma\b|\btulichokutumia\b|\btutakutumia\b|\btuliyotuma\b/i;
+
+  it("never promise that an email was or will be sent (throttled and existing-account requests get none)", () => {
+    for (const key of EMAIL_KEYS) {
+      expect(EN[key], key).not.toMatch(PROMISE_EN);
+      expect(SW[key], key).not.toMatch(PROMISE_SW);
+    }
+    for (const [key, value] of visible(EN)) expect(value, key).not.toMatch(PROMISE_EN);
+    for (const [key, value] of visible(SW)) expect(value, key).not.toMatch(PROMISE_SW);
+  });
+
+  it("word email outcomes conditionally", () => {
+    for (const key of ["checkEmail.signup", "checkEmail.login", "checkEmail.noEmail", "checkEmail.resent"]) {
+      expect(EN[key], key).toMatch(/^If\b|\bIf another\b/);
     }
   });
 
