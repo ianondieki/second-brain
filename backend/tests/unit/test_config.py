@@ -43,6 +43,12 @@ def test_missing_secret_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
 
+def test_prefixed_cookie_names_need_secure_cookies() -> None:
+    with pytest.raises(ValidationError, match="COOKIE_SECURE"):
+        make(cookie_secure=False, session_cookie_name="__Host-bridge_session")
+    assert make(cookie_secure=False, session_cookie_name="bridge_session", csrf_cookie_name="bridge_csrf")
+
+
 def test_postmark_needs_its_token() -> None:
     with pytest.raises(ValidationError, match="POSTMARK_SERVER_TOKEN"):
         make(email_provider="postmark")

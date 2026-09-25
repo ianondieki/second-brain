@@ -22,3 +22,9 @@ def test_every_purpose_has_text_and_a_version() -> None:
 def test_the_tier2_llm_purposes_are_separate() -> None:
     texts = load_texts(get_settings().consents_file)
     assert texts[ConsentPurpose.TIER2_LLM_ASSISTANT].text != texts[ConsentPurpose.TIER2_LLM_MODERATION].text
+
+
+def test_texts_carry_no_review_markers() -> None:
+    """Texts are shown verbatim and hashed as shown, so review markers live in YAML comments only."""
+    for shown in load_texts(get_settings().consents_file).values():
+        assert "[[" not in shown.text, shown.purpose

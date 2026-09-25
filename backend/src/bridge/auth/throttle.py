@@ -59,5 +59,10 @@ async def blocked(
     return await _count(db, LoginAttempt.ip_digest == k.ip, window=window) >= ip_limit
 
 
+async def account_count(db: AsyncSession, k: Keys, *, window: timedelta) -> int:
+    """Attempts for this account (any IP) in the window."""
+    return await _count(db, LoginAttempt.email_digest == k.email, window=window)
+
+
 def record(db: AsyncSession, k: Keys, *, succeeded: bool) -> None:
     db.add(LoginAttempt(email_digest=k.email, ip_digest=k.ip, succeeded=succeeded))

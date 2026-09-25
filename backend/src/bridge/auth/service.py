@@ -48,6 +48,7 @@ SIGNUP_WINDOW = timedelta(minutes=15)
 MAGIC_LIMIT = 3
 MAGIC_WINDOW = timedelta(minutes=15)
 EMAIL_ACCOUNT_LIMIT = 6  # emails to one address in a window from any IPs (bounds distributed mail bombing)
+EMAIL_DAILY_LIMIT = 20  # emails to one address a day, whatever the source
 EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 
@@ -84,8 +85,11 @@ async def _allow_email(db: AsyncSession, settings: Settings, purpose: str, email
     """Throttle an action that sends email; record it when allowed. A drop is silent to the caller but logged."""
     limit, window = (SIGNUP_LIMIT, SIGNUP_WINDOW) if purpose == "signup" else (MAGIC_LIMIT, MAGIC_WINDOW)
     keys = throttle.keys(settings.secret_key.get_secret_value(), purpose, email, ip)
-    if await throttle.blocked(
-        db, keys, pair_limit=limit, window=window, account_limit=EMAIL_ACCOUNT_LIMIT, ip_limit=EMAIL_IP_LIMIT
+    if (
+        await throttle.blocked(
+            db, keys, pair_limit=limit, window=window, account_limit=EMAIL_ACCOUNT_LIMIT, ip_limit=EMAIL_IP_LIMIT
+        )
+        or await throttle.account_count(db, keys, window=timedelta(days=1)) >= EMAIL_DAILY_LIMIT
     ):
         log.info("auth.email_throttled", purpose=purpose)
         return False
@@ -173,11 +177,12 @@ async def _existing_account(
 ) -> SignupOutcome:
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
-        # Unverified: this signup's password replaces the stored one and every earlier link stops working.
-        user.password_hash = password_hash
-        await _spend_links(db, user.id)
+        # Unverified: this signup's password replaces the stored one, unless throttled (then nothing changes).
+        # Earlier links stay valid, so a stranger's signup cannot void the owner's link; any link keeps the
+        # password only in the browser that set it (the binding covers the current password hash).
         if not await _allow_email(db, settings, "magic", user.email, ip):
-            return SignupOutcome(binding=_binding(settings, user))
+            return SignupOutcome()
+        user.password_hash = password_hash
         token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
         return SignupOutcome([_verify_email(settings, user, token)], _binding(settings, user))
     login_url = f"{settings.public_base_url.rstrip('/')}/login"

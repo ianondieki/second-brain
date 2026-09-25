@@ -1,28 +1,31 @@
 # Consent purposes and their versioned text (REQ-CON-01; docs/spec/10 "separate consents"). Each decision stores
 # the version and the SHA-256 of the exact text shown. Changing a text means a new version. Wording is draft
 # product copy for the G2 legal review ([[COPY-REVIEW]]); it makes no claim about protection or law.
-version: "2026-09-24.1"
+# 2026-09-25.1: review markers moved out of the texts (users saw them); wording otherwise unchanged.
+version: "2026-09-25.1"
 # Version of the terms of service text a signup accepts ([[LEGAL-PLACEHOLDER:tos]] until G2); recorded in the audit event.
 terms_version: "placeholder-0"
+# Every text below is [[COPY-REVIEW]] draft copy. The marker stays in this comment, never in a text: texts are shown
+# to users verbatim and hashed as shown.
 purposes:
   marketing:
-    text: "Send me occasional product news by email. You can stop at any time. [[COPY-REVIEW]]"
+    text: "Send me occasional product news by email. You can stop at any time."
     default: false
   reminders:
-    text: "Send me reminders about my proposals and engagements by email. [[COPY-REVIEW]]"
+    text: "Send me reminders about my proposals and engagements by email."
     default: false
   whatsapp:
-    text: "Send me reminders on WhatsApp (available later). [[COPY-REVIEW]]"
+    text: "Send me reminders on WhatsApp (available later)."
     default: false
   profiling:
-    text: "Use my niches and activity to recommend problems and proposals, with an explanation for each. [[COPY-REVIEW]]"
+    text: "Use my niches and activity to recommend problems and proposals, with an explanation for each."
     default: false
   github_import:
-    text: "Read the GitHub repositories I link to show progress on my milestones (available later). [[COPY-REVIEW]]"
+    text: "Read the GitHub repositories I link to show progress on my milestones (available later)."
     default: false
   tier2_llm_assistant:
-    text: "Let the writing assistant read my confidential (Tier 2) text to suggest improvements. [[COPY-REVIEW]]"
+    text: "Let the writing assistant read my confidential (Tier 2) text to suggest improvements."
     default: false
   tier2_llm_moderation:
-    text: "Let automated moderation read my confidential (Tier 2) text before it is shown to organisations. [[COPY-REVIEW]]"
+    text: "Let automated moderation read my confidential (Tier 2) text before it is shown to organisations."
     default: false

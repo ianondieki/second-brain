@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from bridge.audit.chain import verify_chain
+from bridge.audit.chain import event_hash, load_chain, verify_chain
 from bridge.ids import uuid7
 
 JSON_TEXT = st.characters(codec="utf-8", exclude_characters="\x00")  # utf-8 codec excludes lone surrogates
@@ -198,4 +198,38 @@ async def test_any_tampering_is_found(
         await conn.execute(text(statement), {"c": chain_id, "s": seq})
         await conn.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
     async with audit_reader_engine.connect() as conn:
-        assert await verify_chain(conn, chain_id) != []
+        problems = await verify_chain(conn, chain_id)
+    assert problems != []
+    if kind == "delete":  # the next row's number gives the gap away, whatever else is checked
+        assert any(p.seq == seq + 1 and p.reason.startswith("expected seq") for p in problems)
+
+
+@settings(max_examples=15, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(sequence=rich_events, pick=st.integers(min_value=0, max_value=10**6))
+async def test_an_edited_row_with_a_recomputed_hash_breaks_the_next_link(
+    owner_engine: AsyncEngine,
+    superuser_engine: AsyncEngine,
+    audit_reader_engine: AsyncEngine,
+    sequence: list[dict[str, object]],
+    pick: int,
+) -> None:
+    """The classic forgery: edit a row and recompute its (unkeyed, documented) hash. Only the link check on the next
+    row can find it, so this pins that check."""
+    chain_id = f"rehash-{uuid4().hex[:10]}"
+    for event in sequence:
+        await append_rich(owner_engine, chain_id, event)
+    seq = 1 + pick % (len(sequence) - 1)  # a row that has a successor
+    async with superuser_engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE audit_events DISABLE TRIGGER USER"))
+        await conn.execute(
+            text("UPDATE audit_events SET action = 'x.forged' WHERE chain_id = :c AND seq = :s"),
+            {"c": chain_id, "s": seq},
+        )
+        edited = next(r for r in await load_chain(conn, chain_id) if r.seq == seq)
+        await conn.execute(
+            text("UPDATE audit_events SET event_hash = :h WHERE id = :id"), {"h": event_hash(edited), "id": edited.id}
+        )
+        await conn.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
+    async with audit_reader_engine.connect() as conn:
+        problems = await verify_chain(conn, chain_id)
+    assert [(p.seq, p.reason) for p in problems] == [(seq + 1, "prev_hash does not link to the previous event")]
