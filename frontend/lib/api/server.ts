@@ -5,21 +5,22 @@ import createClient from "openapi-fetch";
 import { signupConsents, type ShownConsents } from "@/lib/auth/consents";
 import { homeFor, isPending, type Me } from "@/lib/auth/routing";
 
+import { pickCookie, SESSION_COOKIES } from "./cookies";
 import type { paths } from "./schema";
 
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
-// __Host- prefix: Secure, Path=/, no Domain, so the cookie cannot be planted from a sibling domain.
-export const SESSION_COOKIE = "__Host-bridge_session";
 
 const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
 
 /** The signed-in person for this request, or null when there is no live session. Forwards only the session cookie. */
 export async function getMe(): Promise<Me | null> {
-  const session = (await cookies()).get(SESSION_COOKIE)?.value;
+  const store = await cookies();
+  // Forwarded under the name it arrived with: the API reads the name that matches its COOKIE_SECURE setting.
+  const session = pickCookie(SESSION_COOKIES, (name) => store.get(name)?.value);
   if (!session) return null;
   const { data, response } = await serverApi().GET("/api/auth/me", {
-    headers: { cookie: `${SESSION_COOKIE}=${session}` },
+    headers: { cookie: `${session.name}=${session.value}` },
   });
   if (response.status === 401) return null;
   if (!data) throw new Error(`GET /api/auth/me answered ${response.status}`);

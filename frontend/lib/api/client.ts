@@ -1,8 +1,10 @@
 import createClient from "openapi-fetch";
 
+import { CSRF_COOKIES, pickCookie } from "./cookies";
 import type { components, paths } from "./schema";
 
-export const CSRF_COOKIE = "__Host-bridge_csrf";
+/** The CSRF cookie's name with Secure cookies; `bridge_csrf` on a plain-http dev stack (see ./cookies). */
+export const CSRF_COOKIE = CSRF_COOKIES[0];
 export const CSRF_HEADER = "X-CSRF-Token";
 export const CSRF_PATH = "/api/auth/csrf";
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -21,6 +23,11 @@ export function readCookie(name: string, source: string = typeof document === "u
   return undefined;
 }
 
+/** The CSRF token from whichever cookie name the API uses (the __Host- prefixed one first). */
+export function readCsrfCookie(source?: string): string | undefined {
+  return pickCookie(CSRF_COOKIES, (name) => readCookie(name, source))?.value;
+}
+
 let inFlight: Promise<string | undefined> | null = null;
 
 async function fetchCsrf(fetchImpl: Fetch, url: string): Promise<string | undefined> {
@@ -29,10 +36,10 @@ async function fetchCsrf(fetchImpl: Fetch, url: string): Promise<string | undefi
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) return readCookie(CSRF_COOKIE);
+  if (!response.ok) return readCsrfCookie();
   const body = (await response.json()) as Partial<CsrfResponse>;
   // The response also sets the cookie; the body carries the same value, so it works before the cookie is readable.
-  return body.csrf_token ?? readCookie(CSRF_COOKIE);
+  return body.csrf_token ?? readCsrfCookie();
 }
 
 export interface EnsureCsrfOptions {
@@ -43,12 +50,12 @@ export interface EnsureCsrfOptions {
 }
 
 /**
- * Returns the CSRF token for the next state-changing request: the `__Host-bridge_csrf` cookie when present, else one
+ * Returns the CSRF token for the next state-changing request: the CSRF cookie when present (either name), else one
  * GET /api/auth/csrf. Concurrent callers share a single request.
  */
 export function ensureCsrf({ fetch: fetchImpl = defaultFetch, url = CSRF_PATH, force = false }: EnsureCsrfOptions = {}) {
   if (!force) {
-    const existing = readCookie(CSRF_COOKIE);
+    const existing = readCsrfCookie();
     if (existing) return Promise.resolve<string | undefined>(existing);
   }
   inFlight ??= fetchCsrf(fetchImpl, url).finally(() => {

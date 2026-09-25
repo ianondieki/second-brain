@@ -68,6 +68,13 @@ describe("readCookie", () => {
 });
 
 describe("ensureCsrf", () => {
+  it("uses the plain-http dev cookie name too, without a request", async () => {
+    jar = "bridge_csrf=from-dev-cookie";
+    const { fetchMock } = fakeApi({});
+    await expect(ensureCsrf({ fetch: fetchMock, url: CSRF_URL })).resolves.toBe("from-dev-cookie");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("uses the cookie when it is present, without a request", async () => {
     setCsrfCookie("from-cookie");
     const { fetchMock } = fakeApi({});
