@@ -81,20 +81,6 @@ async def step_up_session(
     return live
 
 
-async def staff_session(
-    live: Annotated[sessions.LiveSession, Depends(current_session)],
-) -> sessions.LiveSession:
-    """Platform staff (docs/spec/03): TOTP is mandatory, and the session must have passed it. Used by /admin routes."""
-    if live.user.staff_role is None:
-        raise ApiError(404, "not_found", "Not found.")
-    if live.user.totp_enabled_at is None:
-        raise ApiError(403, "mfa_enrolment_required", "Turn on two-step sign-in to use staff tools.")
-    if live.row.mfa_verified_at is None:
-        raise ApiError(401, "mfa_required", "Enter the code from your authenticator app.")
-    return live
-
-
 CurrentSession = Annotated[sessions.LiveSession, Depends(current_session)]
 PendingSession = Annotated[sessions.LiveSession, Depends(session_allow_mfa_pending)]
 StepUpSession = Annotated[sessions.LiveSession, Depends(step_up_session)]
-StaffSession = Annotated[sessions.LiveSession, Depends(staff_session)]

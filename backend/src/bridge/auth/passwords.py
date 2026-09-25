@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -47,10 +48,14 @@ def needs_rehash(password_hash: str) -> bool:
     return _hasher.check_needs_rehash(password_hash)
 
 
+# argon2id costs ~100 ms and 64 MiB: at most four run at once per process (256 MiB), off the event loop, so a
+# flood of signups or logins queues instead of exhausting memory. A dedicated pool is loop-independent.
+_ARGON2_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="argon2")
+
+
 async def hash_password_async(password: str) -> str:
-    """argon2id costs ~100 ms and 64 MiB: run it off the event loop so one signup cannot stall every request."""
-    return await asyncio.to_thread(hash_password, password)
+    return await asyncio.get_running_loop().run_in_executor(_ARGON2_POOL, hash_password, password)
 
 
 async def verify_password_async(password_hash: str | None, password: str) -> bool:
-    return await asyncio.to_thread(verify_password, password_hash, password)
+    return await asyncio.get_running_loop().run_in_executor(_ARGON2_POOL, verify_password, password_hash, password)

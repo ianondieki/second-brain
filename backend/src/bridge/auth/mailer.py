@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.auth.emails import Wording
@@ -44,5 +45,8 @@ async def deliver(
                     db, provider, message=message, kind=item.kind, user_id=item.user_id, dedupe_key=item.dedupe_key
                 )
                 await db.commit()
-        except Exception:  # a background task has no caller to report to: log and continue with the next email
-            log.exception("auth.email_not_recorded", kind=item.kind)
+        except DBAPIError as exc:  # DB messages can carry addresses (DETAIL: Key (email)=...): log the constraint only
+            constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            log.error("auth.email_not_recorded", kind=item.kind, constraint=constraint)
+        except Exception as exc:  # a background task has no caller to report to: log the type and continue
+            log.error("auth.email_not_recorded", kind=item.kind, error_type=type(exc).__name__)

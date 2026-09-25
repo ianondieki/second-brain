@@ -39,6 +39,7 @@ MESSAGES = {
     "invalid_email": "Enter a standard email address, such as name@example.com.",
     "terms_not_accepted": "Accept the terms to create an account.",
     "org_details_required": "Enter your organisation's name and type.",
+    "consents_version_required": "Reload the page to see the current consent wording.",
     "consent_text_changed": "The consent wording has changed. Reload the page and choose again.",
     "weak_password": "Use a password of at least 12 characters that is not your email address.",
     "invalid_credentials": "That email and password do not match an account.",
@@ -70,6 +71,7 @@ def user_out(user: User) -> UserOut:
         display_name=user.display_name,
         locale=user.locale,
         email_verified=user.email_verified_at is not None,
+        password_set=user.password_hash is not None,
         staff_role=user.staff_role,
         totp_enabled=user.totp_enabled_at is not None,
     )
@@ -97,7 +99,7 @@ async def signup(
         await db.rollback()
         raise _fail(exc) from exc
     await db.commit()
-    set_signup_binding(response, settings, outcome.verify_token)
+    set_signup_binding(response, settings, outcome.binding)
     _send_later(tasks, request, email, outcome.pending)
     return AcceptedResponse()
 
@@ -133,7 +135,7 @@ async def consume(
         raise _fail(exc) from exc
     await db.commit()
     set_session(response, settings, outcome.session.token)
-    response.delete_cookie(SIGNUP_COOKIE, path="/api/auth", secure=settings.cookie_secure, httponly=True)
+    response.delete_cookie(SIGNUP_COOKIE, path="/", secure=settings.cookie_secure, httponly=True)
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 
@@ -154,7 +156,7 @@ async def login(
     except service.AuthError as exc:
         await db.commit()  # keep the throttle ledger entry and any fresh verification link even on failure
         _send_later(tasks, request, email, exc.pending)
-        if exc.verify_token is None:
+        if exc.binding is None:
             raise _fail(exc) from exc
         # Unverified account, right password: the new verification link is bound to this browser.
         failure = JSONResponse(
@@ -162,7 +164,7 @@ async def login(
             content={"detail": {"code": exc.code, "message": MESSAGES[exc.code]}},
             background=tasks,
         )
-        set_signup_binding(failure, settings, exc.verify_token)
+        set_signup_binding(failure, settings, exc.binding)
         return failure
     await db.commit()
     set_session(response, settings, outcome.session.token)
@@ -215,7 +217,9 @@ async def me(live: PendingSession, db: Db) -> MeResponse:
         verified=not live.row.mfa_pending and live.row.mfa_verified_at is not None,
     )
     if live.row.mfa_pending:
-        return MeResponse(user=user_out(user), memberships=[], mfa=mfa, side="pending")
+        # Before the second factor: no organisations, roles or staff status.
+        pending = user_out(user).model_copy(update={"staff_role": None})
+        return MeResponse(user=pending, memberships=[], mfa=mfa, side="pending")
     memberships = await my_memberships(db, user.id)
     if user.staff_role:
         side = "staff"
@@ -246,6 +250,7 @@ async def set_password(
     try:
         pending = await service.set_password(db, settings, live, body.current_password, body.new_password)
     except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)
@@ -256,6 +261,7 @@ async def totp_enrol(body: TotpEnrolRequest, live: CurrentSession, db: Db, setti
     try:
         secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password)
     except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
     await db.commit()
     return TotpEnrolResponse(secret=secret, otpauth_uri=uri)

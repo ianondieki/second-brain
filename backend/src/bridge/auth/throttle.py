@@ -40,15 +40,23 @@ async def _count(db: AsyncSession, *conditions: object, window: timedelta) -> in
     return int((await db.execute(stmt)).scalar_one())
 
 
-async def blocked(db: AsyncSession, k: Keys, *, pair_limit: int, window: timedelta = WINDOW) -> bool:
+async def blocked(
+    db: AsyncSession,
+    k: Keys,
+    *,
+    pair_limit: int,
+    window: timedelta = WINDOW,
+    account_limit: int = PER_ACCOUNT_ANY_IP,
+    ip_limit: int = PER_IP_ANY_ACCOUNT,
+) -> bool:
     if (
         await _count(db, LoginAttempt.email_digest == k.email, LoginAttempt.ip_digest == k.ip, window=window)
         >= pair_limit
     ):
         return True
-    if await _count(db, LoginAttempt.email_digest == k.email, window=window) >= PER_ACCOUNT_ANY_IP:
+    if await _count(db, LoginAttempt.email_digest == k.email, window=window) >= account_limit:
         return True
-    return await _count(db, LoginAttempt.ip_digest == k.ip, window=window) >= PER_IP_ANY_ACCOUNT
+    return await _count(db, LoginAttempt.ip_digest == k.ip, window=window) >= ip_limit
 
 
 def record(db: AsyncSession, k: Keys, *, succeeded: bool) -> None:

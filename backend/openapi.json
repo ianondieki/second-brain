@@ -898,6 +898,10 @@
             "title": "Locale",
             "type": "string"
           },
+          "password_set": {
+            "title": "Password Set",
+            "type": "boolean"
+          },
           "staff_role": {
             "anyOf": [
               {
@@ -919,6 +923,7 @@
           "display_name",
           "locale",
           "email_verified",
+          "password_set",
           "staff_role",
           "totp_enabled"
         ],

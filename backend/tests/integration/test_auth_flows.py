@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.auth import totp
 from bridge.config import get_settings
+from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
 
@@ -53,6 +54,7 @@ async def signup(client: httpx.AsyncClient, address: str, side: str = "developer
         "side": side,
         "accept_terms": True,
         "consents": {"marketing": False, "reminders": True},
+        "consents_version": consents_version(get_settings()),
     }
     if side == "org":
         body["org"] = {"legal_name": "Telco A (fixture)", "kind": "company"}
@@ -158,7 +160,9 @@ async def test_session_cookie_flags(client: httpx.AsyncClient) -> None:
     address = email()
     await signup(client, address)
     response = await client.post("/api/auth/magic-link/consume", json={"token": link_token(client, address)})
-    cookie = next(h for h in response.headers.get_list("set-cookie") if h.startswith("bridge_session="))
+    cookie = next(
+        h for h in response.headers.get_list("set-cookie") if h.startswith(f"{get_settings().session_cookie_name}=")
+    )
     lowered = cookie.lower()
     assert "httponly" in lowered
     assert "secure" in lowered
