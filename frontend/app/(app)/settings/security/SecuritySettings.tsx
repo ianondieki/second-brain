@@ -15,6 +15,7 @@ import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
 import { EnrolmentSteps, loadEnrolmentSteps, StepUpForm } from "./lazy";
+import { usePasswordState } from "./PasswordState";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
@@ -26,11 +27,9 @@ export interface SecuritySettingsProps {
   homeHref: string;
   /** For "Email me a sign-in link" when an account without a password must sign in again first. */
   email: string;
-  /** False when the account has no password: enrolment then needs no password (a fresh sign-in instead). */
-  passwordSet: boolean;
 }
 
-export function SecuritySettings({ enrolled, required, homeHref, email, passwordSet }: SecuritySettingsProps) {
+export function SecuritySettings({ enrolled, required, homeHref, email }: SecuritySettingsProps) {
   const t = useTranslations("security");
   const tf = useTranslations("fields");
   const te = useTranslations("errors");
@@ -42,6 +41,8 @@ export function SecuritySettings({ enrolled, required, homeHref, email, password
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [stepUp, setStepUp] = useState(false);
+  // Without a password, enrolment needs a fresh sign-in instead; the flag is shared with the Password section.
+  const { hasPassword, markPasswordSet } = usePasswordState();
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
   async function start(event: FormEvent<HTMLFormElement>) {
@@ -59,6 +60,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, password
       if (outcome.key === "totp_already_enabled") {
         setPhase({ name: "on" });
       } else if (outcome.key === "current_password_required") {
+        markPasswordSet(); // the account has a password after all: keep asking for it
         setPasswordError(te("current_password_required"));
         document.getElementById("enrol-password")?.focus();
       } else {
@@ -92,8 +94,6 @@ export function SecuritySettings({ enrolled, required, homeHref, email, password
   }
 
   const errorBlock = <ErrorNotice error={error} email={email} />;
-  // Asked for when the account has a password, or when the API says one was set since this page loaded.
-  const askPassword = passwordSet || passwordError !== undefined;
 
   if (phase.name === "on") {
     return (
@@ -150,7 +150,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, password
         steps={[{ title: t("step1") }, { title: t("step2") }, { title: t("step3") }]}
       />
       <Form onSubmit={start} className="flex flex-col gap-5">
-        {askPassword ? (
+        {hasPassword ? (
           <PasswordField
             id="enrol-password"
             name="password"

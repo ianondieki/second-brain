@@ -12,13 +12,14 @@ import type { ErrorKey } from "@/lib/api/errors";
 import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/auth/password";
 
 import { ErrorNotice } from "./ErrorNotice";
+import { usePasswordState } from "./PasswordState";
 
 /**
  * Set or change the password (POST /api/auth/password). Needed, for example, after a verification link opened in
  * another browser cleared a password set at signup. The current password is required when one is set; an account
  * without one needs a sign-in in the last 15 minutes.
  */
-export function PasswordSettings({ email, passwordSet }: { email: string; passwordSet: boolean }) {
+export function PasswordSettings({ email }: { email: string }) {
   const t = useTranslations("password");
   const tf = useTranslations("fields");
   const tv = useTranslations("validation");
@@ -33,7 +34,7 @@ export function PasswordSettings({ email, passwordSet }: { email: string; passwo
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   // The account has a password (from the API, or since one was saved here): changing it needs the current one.
-  const [hasPassword, setHasPassword] = useState(passwordSet);
+  const { hasPassword, markPasswordSet } = usePasswordState();
 
   const toggle = {
     showLabel: tf("showPassword"),
@@ -68,11 +69,11 @@ export function PasswordSettings({ email, passwordSet }: { email: string; passwo
       setCurrent("");
       setNext("");
       setSaved(true);
-      setHasPassword(true);
+      markPasswordSet();
       return;
     }
     if (outcome.key === "current_password_required") {
-      setHasPassword(true);
+      markPasswordSet();
       setCurrentError(te("current_password_required"));
       document.getElementById("password-current")?.focus();
       return;
