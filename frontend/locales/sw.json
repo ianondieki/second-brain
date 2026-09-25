@@ -220,12 +220,13 @@
     "unauthenticated": "Kipindi chako kimeisha. Ingia tena.",
     "mfa_required": "Weka msimbo kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
     "step_up_required": "Thibitisha kwa msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
-    "generic": "Kuna tatizo upande wetu. Jaribu tena baada ya muda mfupi.",
+    "validation": "Baadhi ya maelezo hayakukubaliwa. Angalia fomu, kisha ujaribu tena.",
+    "generic": "Kuna tatizo. Jaribu tena baada ya muda mfupi.",
     "network": "Hatukuweza kufikia seva. Angalia muunganisho wako, kisha ujaribu tena."
   },
   "errorPage": {
     "title": "Ukurasa huu haukupakia",
-    "body": "Hatukuweza kufikia seva. Angalia muunganisho wako, kisha ujaribu tena.",
+    "body": "Kuna tatizo wakati wa kupakia ukurasa huu. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena"
   }
 }

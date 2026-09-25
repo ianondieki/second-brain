@@ -30,8 +30,11 @@ export const KNOWN_ERROR_CODES = [
 ] as const;
 
 export type KnownErrorCode = (typeof KNOWN_ERROR_CODES)[number];
-/** Keys under `errors.*` in locales/en.json and locales/sw.json. */
-export type ErrorKey = KnownErrorCode | "generic" | "network";
+/**
+ * Keys under `errors.*` in locales/en.json and locales/sw.json. "validation" is a 422 whose fields map to no known
+ * code; "generic" is anything else unknown.
+ */
+export type ErrorKey = KnownErrorCode | "validation" | "generic" | "network";
 
 /** Form fields a code belongs to, so the message can sit next to the field as well as in the summary. */
 export type ErrorField = "email" | "password" | "terms" | "orgName" | "code" | "currentPassword";
@@ -70,9 +73,10 @@ export function isKnownErrorCode(code: string | undefined): code is KnownErrorCo
   return code !== undefined && KNOWN.has(code);
 }
 
-/** The `errors.*` key to show for an API error body. Unknown codes get the generic message. */
+/** The `errors.*` key to show for an API error body. Unmapped validation errors and unknown codes get their own. */
 export function errorKey(error: unknown): ErrorKey {
   const code = apiErrorCode(error);
+  if (code === "validation") return "validation";
   return isKnownErrorCode(code) ? code : "generic";
 }
 
@@ -96,5 +100,5 @@ const FIELD_OF: Partial<Record<KnownErrorCode, ErrorField>> = {
 };
 
 export function fieldForError(key: ErrorKey): ErrorField | undefined {
-  return key === "generic" || key === "network" ? undefined : FIELD_OF[key];
+  return key === "generic" || key === "network" || key === "validation" ? undefined : FIELD_OF[key];
 }

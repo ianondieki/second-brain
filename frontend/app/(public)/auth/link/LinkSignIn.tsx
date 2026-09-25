@@ -88,7 +88,7 @@ export function LinkSignIn() {
     }
     token.current = null;
     // A validation error (malformed token) means the same thing to the person as an expired link.
-    setFailed(outcome.key === "generic" && outcome.status === 422 ? "invalid_or_expired_link" : outcome.key);
+    setFailed(outcome.key === "validation" ? "invalid_or_expired_link" : outcome.key);
   }, [router]);
 
   async function tryAgain() {

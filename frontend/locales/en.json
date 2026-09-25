@@ -220,12 +220,13 @@
     "unauthenticated": "Your session has ended. Log in again.",
     "mfa_required": "Enter the code from your authenticator app to continue.",
     "step_up_required": "Confirm with the current code from your authenticator app to continue.",
-    "generic": "Something went wrong on our side. Try again in a moment.",
+    "validation": "Some of the details were not accepted. Check the form, then try again.",
+    "generic": "Something went wrong. Try again in a moment.",
     "network": "We could not reach the server. Check your connection, then try again."
   },
   "errorPage": {
     "title": "This page did not load",
-    "body": "We could not reach the server. Check your connection, then try again.",
+    "body": "Something went wrong while loading this page. Try again in a moment.",
     "retry": "Try again"
   }
 }

@@ -23,7 +23,7 @@ describe("errorKey", () => {
     expect(apiErrorCode(invalidEmail)).toBe("invalid_email");
     expect(errorKey(invalidEmail)).toBe("invalid_email");
     expect(errorKey({ detail: [{ loc: ["body", "code"], msg: "too short", type: "x" }] })).toBe("invalid_code");
-    expect(errorKey({ detail: [{ loc: ["body", "token"], msg: "too short", type: "x" }] })).toBe("generic");
+    expect(errorKey({ detail: [{ loc: ["body", "token"], msg: "too short", type: "x" }] })).toBe("validation");
     expect(errorKey({ detail: [{ loc: ["body", "new_password"], msg: "too short", type: "x" }] })).toBe("weak_password");
   });
 
@@ -40,7 +40,7 @@ describe("errorKey", () => {
   });
 
   it("has an English message for every key it can return", () => {
-    for (const key of [...KNOWN_ERROR_CODES, "generic", "network"] as const) {
+    for (const key of [...KNOWN_ERROR_CODES, "validation", "generic", "network"] as const) {
       expect(en.errors[key], key).toBeTruthy();
     }
   });
