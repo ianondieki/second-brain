@@ -18,7 +18,10 @@ export interface RadioGroupProps<V extends string> {
   error?: ReactNode;
 }
 
-/** A fieldset of full-width radio rows (at least 56 px tall); the selected row takes the jacaranda wash. */
+/**
+ * A fieldset of full-width radio rows (at least 56 px tall); the selected row takes the jacaranda wash. An error is
+ * announced through the fieldset's aria-describedby (aria-invalid is not valid on a radio).
+ */
 export function RadioGroup<V extends string>({ id, name, legend, options, value, onChange, error }: RadioGroupProps<V>) {
   const errorId = error ? `${id}-error` : undefined;
   return (
@@ -47,7 +50,6 @@ export function RadioGroup<V extends string>({ id, name, legend, options, value,
               checked={value === option.value}
               onChange={() => onChange(option.value)}
               aria-describedby={hintId}
-              aria-invalid={error ? true : undefined}
               className="mt-0.5 size-5 shrink-0 cursor-pointer accent-jacaranda focus-visible:outline-none"
             />
             <span className="flex flex-col">
