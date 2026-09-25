@@ -9,7 +9,8 @@ import type { paths } from "./schema";
 
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
-export const SESSION_COOKIE = "bridge_session";
+// __Host- prefix: Secure, Path=/, no Domain, so the cookie cannot be planted from a sibling domain.
+export const SESSION_COOKIE = "__Host-bridge_session";
 
 const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
 

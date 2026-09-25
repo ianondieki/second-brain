@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CSRF_HEADER, createApiClient, ensureCsrf, isCsrfFailure, readCookie } from "./client";
+import { CSRF_COOKIE, CSRF_HEADER, createApiClient, ensureCsrf, isCsrfFailure, readCookie } from "./client";
 
 const BASE = "http://api.test";
 const CSRF_URL = `${BASE}/api/auth/csrf`;
@@ -9,13 +9,20 @@ function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+// A __Host- cookie must be Secure, which jsdom's http test page would refuse to store, so these tests stand in for
+// document.cookie with exactly what a browser page would read.
+let jar = "";
 function setCsrfCookie(value: string) {
-  document.cookie = `bridge_csrf=${value}; path=/`;
+  jar = `${CSRF_COOKIE}=${value}`;
 }
 
 function clearCsrfCookie() {
-  document.cookie = "bridge_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  jar = "";
 }
+
+beforeEach(() => {
+  Object.defineProperty(document, "cookie", { configurable: true, get: () => jar, set: () => {} });
+});
 
 interface Seen {
   method: string;
@@ -48,11 +55,15 @@ afterEach(() => clearCsrfCookie());
 
 describe("readCookie", () => {
   it("finds a cookie among others and decodes it", () => {
-    expect(readCookie("bridge_csrf", "a=1; bridge_csrf=abc%3D.def; b=2")).toBe("abc=.def");
+    expect(readCookie("__Host-bridge_csrf", "a=1; __Host-bridge_csrf=abc%3D.def; b=2")).toBe("abc=.def");
   });
 
   it("returns undefined when the cookie is absent", () => {
-    expect(readCookie("bridge_csrf", "a=1")).toBeUndefined();
+    expect(readCookie("__Host-bridge_csrf", "a=1")).toBeUndefined();
+  });
+
+  it("uses the __Host- prefixed name the API sets", () => {
+    expect(CSRF_COOKIE).toBe("__Host-bridge_csrf");
   });
 });
 

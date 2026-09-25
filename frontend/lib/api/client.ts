@@ -43,7 +43,7 @@ export interface EnsureCsrfOptions {
 }
 
 /**
- * Returns the CSRF token for the next state-changing request: the `bridge_csrf` cookie when present, otherwise one
+ * Returns the CSRF token for the next state-changing request: the `__Host-bridge_csrf` cookie when present, else one
  * GET /api/auth/csrf. Concurrent callers share a single request.
  */
 export function ensureCsrf({ fetch: fetchImpl = defaultFetch, url = CSRF_PATH, force = false }: EnsureCsrfOptions = {}) {
