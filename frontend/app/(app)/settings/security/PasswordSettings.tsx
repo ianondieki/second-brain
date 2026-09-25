@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 import { Suspense, useRef, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -88,7 +88,7 @@ export function PasswordSettings({ email }: { email: string }) {
         {t("title")}
       </h2>
       <p className="mt-2 text-ink-soft">{t("lead")}</p>
-      <form noValidate onSubmit={save} className="mt-6 flex flex-col gap-5">
+      <Form onSubmit={save} className="mt-6 flex flex-col gap-5">
         {saved ? <Alert tone="ok">{t("saved")}</Alert> : null}
         {error ? <Alert ref={summaryRef}>{te(error)}</Alert> : null}
         {error === "recent_sign_in_required" ? (
@@ -126,11 +126,11 @@ export function PasswordSettings({ email }: { email: string }) {
           {...toggle}
         />
         <div>
-          <Button type="submit" variant="secondary" busy={busy}>
+          <SubmitButton variant="secondary" busy={busy}>
             {busy ? t("saving") : t("save")}
-          </Button>
+          </SubmitButton>
         </div>
-      </form>
+      </Form>
     </section>
   );
 }

@@ -37,8 +37,14 @@ async function checkScreen(page: Page) {
   expect(overflow, "horizontal scroll").toBeLessThanOrEqual(0);
 }
 
+/** Forms stay inert until React hydrates (components/ui/Form.tsx); wait for that before typing and submitting. */
+async function hydrated(page: Page) {
+  await page.locator('form[data-hydrated="true"]').first().waitFor(SERVER_STEP);
+}
+
 async function logIn(page: Page, email: string, password: string = PASSWORD) {
   await page.goto("/login");
+  await hydrated(page);
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Log in", exact: true }).click();
@@ -63,6 +69,7 @@ test("landing, login and an unusable link meet the page rules", async ({ page })
   await checkScreen(page);
 
   await page.goto("/login");
+  await hydrated(page);
   await checkScreen(page);
   await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page.getByText("Enter your email address.")).toBeVisible();
@@ -73,8 +80,27 @@ test("landing, login and an unusable link meet the page rules", async ({ page })
   await checkScreen(page);
 });
 
+test("before JavaScript runs, submitting the login form never puts credentials in the URL", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await expect(page.locator("form")).toHaveAttribute("method", "post");
+  await expect(page.getByRole("button", { name: "Log in", exact: true })).toBeDisabled();
+  await page.getByLabel("Email address").fill("someone@example.com");
+  await page.getByLabel("Password", { exact: true }).fill("my secret passphrase here");
+  await page.getByLabel("Password", { exact: true }).press("Enter"); // implicit submission
+  await page.getByRole("button", { name: "Log in", exact: true }).click({ force: true });
+  await page.waitForTimeout(500);
+  const url = new URL(page.url());
+  expect(url.search).not.toContain("password=");
+  expect(url.search).not.toContain("email=");
+  expect(url.pathname).toBe("/login");
+  await context.close();
+});
+
 test("a wrong password is refused with a message by the form", async ({ page }) => {
   await page.goto("/login");
+  await hydrated(page);
   await page.getByLabel("Email address").fill(uniqueEmail("nobody"));
   await page.getByLabel("Password", { exact: true }).fill("not the right password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
@@ -94,6 +120,7 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   await page.goto("/");
   await page.getByRole("link", { name: "Create an account" }).click();
   await expect(page).toHaveURL(/\/signup$/);
+  await hydrated(page);
   await checkScreen(page);
 
   await page.getByRole("radio", { name: /^As a developer/ }).check();
@@ -126,6 +153,7 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   await expect(page).toHaveURL(/\/dev$/, SERVER_STEP);
 
   await page.goto("/settings/security");
+  await hydrated(page);
   const passwordSection = page.getByRole("region", { name: "Password" });
   await passwordSection.getByLabel("Current password", { exact: true }).fill(PASSWORD);
   await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
@@ -145,6 +173,7 @@ test("a link opened in another browser signs in without the password and offers 
 }) => {
   const email = uniqueEmail("elsewhere");
   await page.goto("/signup");
+  await hydrated(page);
   await page.getByRole("radio", { name: /^As a developer/ }).check();
   await page.getByLabel("Your name").fill("Njeri Mwangi");
   await page.getByLabel("Email address").fill(email);
@@ -163,6 +192,7 @@ test("a link opened in another browser signs in without the password and offers 
 
   await other.getByRole("link", { name: "Set a password" }).click();
   await expect(other).toHaveURL(/\/settings\/security#password$/);
+  await hydrated(other);
   const passwordSection = other.getByRole("region", { name: "Password" });
   await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
   await passwordSection.getByRole("button", { name: "Save password" }).click();
@@ -181,6 +211,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   const email = uniqueEmail("org");
 
   await page.goto("/signup");
+  await hydrated(page);
   await page.getByRole("radio", { name: /^For an organisation/ }).check();
   await page.getByLabel("Your name").fill("Achieng Otieno");
   await page.getByLabel("Email address").fill(email);
@@ -200,6 +231,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
 
   await turnOn.click();
   await expect(page).toHaveURL(/\/settings\/security$/);
+  await hydrated(page);
   await expect(page.getByRole("list", { name: "Setup steps" }).locator("[aria-current=step]")).toHaveCount(1);
   await checkScreen(page);
 
@@ -227,6 +259,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   await signOut(page);
   await logIn(page, email);
   await expect(page).toHaveURL(/\/auth\/mfa$/, SERVER_STEP);
+  await hydrated(page);
   await checkScreen(page);
 
   // The enrolment code's window cannot be replayed, so use the next 30-second window (the server allows +1).

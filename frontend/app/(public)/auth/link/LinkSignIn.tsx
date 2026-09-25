@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -118,7 +119,7 @@ export function LinkSignIn() {
           ? t("link.failedLead", { minutes: LINK_MINUTES })
           : t(`errors.${failed}`)}
       </p>
-      <form noValidate onSubmit={requestNewLink} className="mt-8 flex flex-col gap-6">
+      <Form onSubmit={requestNewLink} className="mt-8 flex flex-col gap-6">
         {sendError ? <Alert>{t(`errors.${sendError}`)}</Alert> : null}
         <TextField
           id="email"
@@ -136,11 +137,11 @@ export function LinkSignIn() {
           error={emailError}
         />
         <div>
-          <Button type="submit" variant="primary" busy={sending}>
+          <SubmitButton variant="primary" busy={sending}>
             {sending ? t("link.submitting") : t("link.submit")}
-          </Button>
+          </SubmitButton>
         </div>
-      </form>
+      </Form>
     </>
   );
 }

@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -48,7 +48,7 @@ export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Prom
   }
 
   return (
-    <form noValidate onSubmit={confirm} className="flex w-full flex-col items-start gap-4">
+    <Form onSubmit={confirm} className="flex w-full flex-col items-start gap-4">
       {error ? <Alert>{te(error)}</Alert> : null}
       <p className="text-ink">{t("stepUp")}</p>
       <OtpInput
@@ -62,9 +62,9 @@ export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Prom
         }}
         error={codeError}
       />
-      <Button type="submit" variant="secondary" busy={busy}>
+      <SubmitButton variant="secondary" busy={busy}>
         {busy ? busyLabel : t("stepUpSubmit")}
-      </Button>
-    </form>
+      </SubmitButton>
+    </Form>
   );
 }

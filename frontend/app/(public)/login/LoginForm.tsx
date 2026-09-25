@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { PasswordField } from "@/components/ui/PasswordField";
@@ -83,7 +84,7 @@ export function LoginForm() {
   }
 
   return (
-    <form noValidate onSubmit={logIn} className="mt-8 flex flex-col gap-6">
+    <Form onSubmit={logIn} className="mt-8 flex flex-col gap-6">
       {serverError ? <Alert ref={summaryRef}>{t(`errors.${serverError}`)}</Alert> : null}
 
       <TextField
@@ -114,9 +115,9 @@ export function LoginForm() {
       />
 
       <div className="flex flex-col items-start gap-2">
-        <Button type="submit" variant="primary" busy={busy === "login"}>
+        <SubmitButton variant="primary" busy={busy === "login"}>
           {busy === "login" ? t("login.submitting") : t("login.submit")}
-        </Button>
+        </SubmitButton>
         <Button variant="link" busy={busy === "link"} onClick={emailLink}>
           {busy === "link" ? t("login.magicLinkSending") : t("login.magicLink")}
         </Button>
@@ -131,6 +132,6 @@ export function LoginForm() {
           ),
         })}
       </p>
-    </form>
+    </Form>
   );
 }

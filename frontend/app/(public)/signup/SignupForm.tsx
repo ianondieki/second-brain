@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -151,7 +152,7 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
   }
 
   return (
-    <form noValidate onSubmit={submit} className="mt-8 flex flex-col gap-6">
+    <Form onSubmit={submit} className="mt-8 flex flex-col gap-6">
       {serverError ? <Alert ref={summaryRef}>{t(`errors.${serverError}`)}</Alert> : null}
 
       <RadioGroup<SignupSide>
@@ -288,9 +289,9 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
       </div>
 
       <div className="flex flex-col items-start gap-4">
-        <Button type="submit" variant="primary" busy={busy}>
+        <SubmitButton variant="primary" busy={busy}>
           {busy ? t("signup.submitting") : t("signup.submit")}
-        </Button>
+        </SubmitButton>
         <p className="text-ink">
           {t.rich("signup.haveAccount", {
             login: (chunks) => (
@@ -301,6 +302,6 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
           })}
         </p>
       </div>
-    </form>
+    </Form>
   );
 }

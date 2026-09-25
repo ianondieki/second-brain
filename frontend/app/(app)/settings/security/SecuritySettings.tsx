@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Suspense, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/icons";
@@ -151,7 +152,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
         current={1}
         steps={[{ title: t("step1") }, { title: t("step2") }, { title: t("step3") }]}
       />
-      <form noValidate onSubmit={start} className="flex flex-col gap-5">
+      <Form onSubmit={start} className="flex flex-col gap-5">
         <PasswordField
           id="enrol-password"
           name="password"
@@ -170,11 +171,11 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
           hideName={tf("hidePasswordName")}
         />
         <div>
-          <Button type="submit" variant="primary" busy={busy}>
+          <SubmitButton variant="primary" busy={busy}>
             {busy ? t("starting") : t("start")}
-          </Button>
+          </SubmitButton>
         </div>
-      </form>
+      </Form>
     </div>
   );
 }

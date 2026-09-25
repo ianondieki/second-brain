@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
 
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { OtpInput } from "@/components/ui/OtpInput";
@@ -66,7 +67,7 @@ export function MfaForm() {
   }
 
   return (
-    <form noValidate onSubmit={submit} className="mt-8 flex flex-col gap-6">
+    <Form onSubmit={submit} className="mt-8 flex flex-col gap-6">
       {serverError ? <Alert ref={summaryRef}>{t(`errors.${serverError}`)}</Alert> : null}
       {useRecovery ? (
         <TextField
@@ -99,13 +100,13 @@ export function MfaForm() {
         />
       )}
       <div className="flex flex-col items-start gap-2">
-        <Button type="submit" variant="primary" busy={busy}>
+        <SubmitButton variant="primary" busy={busy}>
           {busy ? t("mfa.submitting") : t("mfa.submit")}
-        </Button>
+        </SubmitButton>
         <Button variant="link" onClick={switchMode} aria-controls={fieldId}>
           {useRecovery ? t("mfa.useApp") : t("mfa.useRecovery")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

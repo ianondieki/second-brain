@@ -6,6 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "
 import { encode } from "uqr";
 
 import { QrCode } from "@/components/QrCode";
+import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -152,7 +153,7 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
   );
 
   const confirmBody = (
-    <form noValidate onSubmit={confirm} className="flex flex-col items-start gap-5">
+    <Form onSubmit={confirm} className="flex flex-col items-start gap-5">
       <OtpInput
         id="totp-code"
         name="code"
@@ -165,10 +166,10 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
         onFocus={() => setCodeFocused(true)}
         error={codeError}
       />
-      <Button type="submit" variant="primary" busy={busy}>
+      <SubmitButton variant="primary" busy={busy}>
         {busy ? t("confirming") : t("confirm")}
-      </Button>
-    </form>
+      </SubmitButton>
+    </Form>
   );
 
   const codesBody = codes ? (
