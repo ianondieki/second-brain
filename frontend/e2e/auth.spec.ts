@@ -8,10 +8,15 @@ import { totp } from "./support/totp";
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
 
 const PASSWORD = "jacaranda season in nairobi";
+// Steps that wait on the API (argon2id hashing, email, session rotation) get more than the 5 s default: shared CI
+// runners and Docker Desktop port forwarding both add seconds of latency at times.
+const SERVER_STEP = { timeout: 20_000 };
 const NEW_PASSWORD = "long rains over the rift valley";
 
+// example.com is reserved for documentation (RFC 2606) and the stack sends to Mailpit only. Not .test: the API's
+// email validation refuses special-use domains.
 function uniqueEmail(label: string) {
-  return `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+  return `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
 /**
@@ -41,7 +46,7 @@ async function logIn(page: Page, email: string, password: string = PASSWORD) {
 
 async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
 }
 
 test("signed-out visits to signed-in pages go to the login page", async ({ page }) => {
@@ -76,6 +81,7 @@ test("a wrong password is refused with a message by the form", async ({ page }) 
   // Scoped to main: Next.js also renders a route announcer with role="alert".
   await expect(page.locator("main").getByRole("alert")).toContainText(
     "That email and password do not match an account.",
+    SERVER_STEP,
   );
 });
 
@@ -104,32 +110,32 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   await page.getByRole("checkbox", { name: /I accept the terms of service/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/signup\/check-email$/);
+  await expect(page).toHaveURL(/\/signup\/check-email$/, SERVER_STEP);
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
   await checkScreen(page);
 
   await page.goto(pathOf(await waitForSignInLink(request, email)));
-  await expect(page).toHaveURL(/\/dev$/);
+  await expect(page).toHaveURL(/\/dev$/, SERVER_STEP);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Wanjiru Kamau");
   await expect(page.getByText("Two-step sign-in is off.")).toBeVisible();
   await checkScreen(page);
 
   await signOut(page);
   await logIn(page, email);
-  await expect(page).toHaveURL(/\/dev$/);
+  await expect(page).toHaveURL(/\/dev$/, SERVER_STEP);
 
   await page.goto("/settings/security");
   const passwordSection = page.getByRole("region", { name: "Password" });
   await passwordSection.getByLabel("Current password", { exact: true }).fill(PASSWORD);
   await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
   await passwordSection.getByRole("button", { name: "Save password" }).click();
-  await expect(passwordSection.getByRole("status")).toContainText("Password saved.");
+  await expect(passwordSection.getByRole("status")).toContainText("Password saved.", SERVER_STEP);
   await checkScreen(page);
 
   await signOut(page);
   await logIn(page, email, NEW_PASSWORD);
-  await expect(page).toHaveURL(/\/dev$/);
+  await expect(page).toHaveURL(/\/dev$/, SERVER_STEP);
 });
 
 test("a link opened in another browser signs in without the password and offers to set one", async ({
@@ -145,13 +151,13 @@ test("a link opened in another browser signs in without the password and offers 
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("checkbox", { name: /I accept the terms of service/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/signup\/check-email$/);
+  await expect(page).toHaveURL(/\/signup\/check-email$/, SERVER_STEP);
 
   // A second browser: the signup binding cookie is absent, so the API does not keep the password chosen above.
   const elsewhere = await browser.newContext();
   const other = await elsewhere.newPage();
   await other.goto(pathOf(await waitForSignInLink(request, email)));
-  await expect(other.getByRole("heading", { name: "You are signed in" })).toBeVisible();
+  await expect(other.getByRole("heading", { name: "You are signed in" })).toBeVisible(SERVER_STEP);
   await expect(other.locator("[data-primary]")).toHaveText("Set a password");
   await checkScreen(other);
 
@@ -160,11 +166,11 @@ test("a link opened in another browser signs in without the password and offers 
   const passwordSection = other.getByRole("region", { name: "Password" });
   await passwordSection.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
   await passwordSection.getByRole("button", { name: "Save password" }).click();
-  await expect(passwordSection.getByRole("status")).toContainText("Password saved.");
+  await expect(passwordSection.getByRole("status")).toContainText("Password saved.", SERVER_STEP);
 
   await signOut(other);
   await logIn(other, email, NEW_PASSWORD);
-  await expect(other).toHaveURL(/\/dev$/);
+  await expect(other).toHaveURL(/\/dev$/, SERVER_STEP);
   await elsewhere.close();
 });
 
@@ -184,10 +190,10 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   await page.getByRole("checkbox", { name: /I accept the terms of service/ }).check();
   await checkScreen(page);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/signup\/check-email$/);
+  await expect(page).toHaveURL(/\/signup\/check-email$/, SERVER_STEP);
 
   await page.goto(pathOf(await waitForSignInLink(request, email)));
-  await expect(page).toHaveURL(/\/org$/);
+  await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
   const turnOn = page.getByRole("link", { name: "Turn on two-step sign-in" });
   await expect(turnOn).toHaveAttribute("data-primary", "");
   await checkScreen(page);
@@ -200,9 +206,10 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   // Enrolment asks for the current password first.
   const twoStep = page.getByRole("region", { name: "Two-step sign-in" });
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
-  await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible();
+  await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible(SERVER_STEP);
   await twoStep.getByLabel("Current password", { exact: true }).fill(PASSWORD);
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
+  await expect(page.getByTestId("totp-key")).toBeVisible(SERVER_STEP);
   const key = (await page.getByTestId("totp-key").innerText()).replace(/\s+/g, "");
   expect(key).toMatch(/^[A-Z2-7]{16,}$/);
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
@@ -210,21 +217,21 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
 
   await page.getByLabel("Code from your app").fill(totp(key));
   await page.getByRole("button", { name: "Confirm code" }).click();
-  await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10);
+  await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10, SERVER_STEP);
   await checkScreen(page);
 
   await page.getByRole("button", { name: "I have saved my codes" }).click();
-  await expect(page).toHaveURL(/\/org$/);
+  await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
   await expect(page.getByText("Two-step sign-in is on.")).toBeVisible();
 
   await signOut(page);
   await logIn(page, email);
-  await expect(page).toHaveURL(/\/auth\/mfa$/);
+  await expect(page).toHaveURL(/\/auth\/mfa$/, SERVER_STEP);
   await checkScreen(page);
 
   // The enrolment code's window cannot be replayed, so use the next 30-second window (the server allows +1).
   await page.getByLabel("6-digit code").fill(totp(key, { offset: 1 }));
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page).toHaveURL(/\/org$/);
+  await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
   await expect(page.getByText("Two-step sign-in is on.")).toBeVisible();
 });
