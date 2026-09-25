@@ -187,7 +187,9 @@ test("a link opened in another browser signs in without the password and offers 
   const other = await elsewhere.newPage();
   await other.goto(pathOf(await waitForSignInLink(request, email)));
   await expect(other.getByRole("heading", { name: "You are signed in" })).toBeVisible(SERVER_STEP);
+  expect(new URL(other.url()).hash, "the #token fragment is scrubbed").toBe("");
   await expect(other.locator("[data-primary]")).toHaveText("Set a password");
+  await expect(other.getByRole("link", { name: "Continue without a password" })).toHaveAttribute("href", "/dev");
   await checkScreen(other);
 
   await other.getByRole("link", { name: "Set a password" }).click();
