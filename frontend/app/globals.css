@@ -65,6 +65,8 @@
     font-family: var(--font-sans);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* A control that takes focus is scrolled fully into view with its focus ring, not flush with the edge. */
+    scroll-padding-block: 1.5rem;
   }
 
   body {
