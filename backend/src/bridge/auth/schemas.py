@@ -24,6 +24,8 @@ class SignupRequest(BaseModel):
     side: Literal["developer", "org"]
     org: OrgSignup | None = None
     consents: dict[ConsentPurpose, bool] = Field(default_factory=dict)
+    # The consents.yaml version whose texts the form showed; a stale form gets 409 consent_text_changed.
+    consents_version: str | None = None
     locale: Literal["en", "sw"] = "en"
     accept_terms: bool
 
@@ -83,7 +85,7 @@ class MeResponse(BaseModel):
     user: UserOut
     memberships: list[MembershipOut]
     mfa: MfaState
-    side: Literal["developer", "org", "staff"]
+    side: Literal["developer", "org", "staff", "pending"]  # pending: second factor not given yet
 
 
 class SessionResponse(BaseModel):
@@ -102,3 +104,18 @@ class RecoveryCodesResponse(BaseModel):
 
 class CsrfResponse(BaseModel):
     csrf_token: str
+
+
+class SetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str | None = Field(default=None, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+class TotpEnrolRequest(BaseModel):
+    """Enrolment is a privilege change: the current password is required when the account has one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    password: str | None = Field(default=None, max_length=256)

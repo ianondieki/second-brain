@@ -2,6 +2,8 @@
 # the version and the SHA-256 of the exact text shown. Changing a text means a new version. Wording is draft
 # product copy for the G2 legal review ([[COPY-REVIEW]]); it makes no claim about protection or law.
 version: "2026-09-24.1"
+# Version of the terms of service text a signup accepts ([[LEGAL-PLACEHOLDER:tos]] until G2); recorded in the audit event.
+terms_version: "placeholder-0"
 purposes:
   marketing:
     text: "Send me occasional product news by email. You can stop at any time. [[COPY-REVIEW]]"

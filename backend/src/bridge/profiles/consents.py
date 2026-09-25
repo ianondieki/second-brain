@@ -47,6 +47,20 @@ def load_texts(path: Path) -> dict[ConsentPurpose, ConsentText]:
     return texts
 
 
+@lru_cache(maxsize=4)
+def _file_meta(path: Path) -> dict[str, str]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return {"version": str(data["version"]), "terms_version": str(data.get("terms_version", ""))}
+
+
+def consents_version(settings: Settings) -> str:
+    return _file_meta(settings.consents_file)["version"]
+
+
+def terms_version(settings: Settings) -> str:
+    return _file_meta(settings.consents_file)["terms_version"]
+
+
 async def record_decisions(
     db: AsyncSession, settings: Settings, *, user_id: UUID, decisions: Mapping[ConsentPurpose, bool], source: str
 ) -> None:

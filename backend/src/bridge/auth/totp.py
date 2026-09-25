@@ -58,14 +58,15 @@ def new_recovery_codes() -> list[str]:
     return codes
 
 
-def recovery_hash(code: str) -> str:
+def recovery_hash(code: str, key: str) -> str:
+    """HMAC-SHA256 under ``SECRET_KEY``: the codes carry ~40 bits, so a bare hash would fall to an offline search."""
     normalised = code.strip().lower().replace("-", "").replace(" ", "")
-    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
+    return hmac.new(key.encode("utf-8"), f"recovery|{normalised}".encode(), hashlib.sha256).hexdigest()
 
 
-def use_recovery_code(stored: list[str], code: str) -> list[str] | None:
+def use_recovery_code(stored: list[str], code: str, key: str) -> list[str] | None:
     """Return the remaining hashes after spending ``code``, or None when it is not a valid unused code."""
-    wanted = recovery_hash(code)
+    wanted = recovery_hash(code, key)
     for index, candidate in enumerate(stored):
         if hmac.compare_digest(candidate, wanted):
             return stored[:index] + stored[index + 1 :]
