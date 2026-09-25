@@ -182,7 +182,7 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
           aria-labelledby="codes-label"
           data-testid="recovery-codes"
           className={
-            "code-figures mt-2 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-4 gap-y-1.5 " +
+            "code-figures mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 " + // ten codes: five even rows
             "border border-line bg-field px-4 py-3 text-base font-semibold text-ink sm:text-lg"
           }
         >

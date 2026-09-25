@@ -109,7 +109,7 @@
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
 @utility code-figures {
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
 }
 
 /*
