@@ -2,7 +2,11 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button } from "./ui/Button";
+// Every route in a group downloads its error boundary, so this stays small: a plain button with the primary
+// button's look (components/ui/Button.tsx) instead of importing the Button module and next/link with it.
+const PRIMARY =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-control bg-jacaranda px-6 text-base " +
+  "font-semibold text-on-accent sm:w-auto hover:bg-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
 
 /**
  * A page that failed to render (error.tsx of a route group): a neutral sentence, since the cause is not known here
@@ -16,9 +20,9 @@ export function ErrorScreen({ retry }: { retry: () => void }) {
         <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
         <p className="mt-3 text-ink-soft">{t("body")}</p>
         <div className="mt-8">
-          <Button variant="primary" onClick={() => retry()}>
+          <button type="button" data-primary="" className={PRIMARY} onClick={() => retry()}>
             {t("retry")}
-          </Button>
+          </button>
         </div>
       </div>
     </main>
