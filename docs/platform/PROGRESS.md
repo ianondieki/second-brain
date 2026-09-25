@@ -109,10 +109,11 @@ T1.1 (legacy archive + hygiene) and T1.2 (legacy test runner on both OSes) befor
 G0 approved 2026-09-24 in `GATES.md`. Decisions D-01..D-23 are recorded in `DECISIONS-NEEDED.md` (Decided table).
 Usage is tracked by the Max plan via `/cost`, with no USD cap (D-01).
 
-## Phase 1 — Hygiene & foundation (in progress)
+## Phase 1 — Hygiene & foundation (2026-09-24 → 2026-09-25)
 
 Started 2026-09-24. Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`.
-Checklist updated after every task (done / in progress / remaining).
+Commits `4541267..HEAD` on top of `fb6131d` (165 commits, 155 non-merge). Every task is done; the phase waits for the
+human's approval of this report.
 
 | Item | Status | Notes |
 |---|---|---|
@@ -127,6 +128,108 @@ Checklist updated after every task (done / in progress / remaining).
 | T1.6 `plans.yaml` + entitlement middleware (REQ-BIL-01) | done (`62f3e35`, `af1b348`) | 402 offers the next plan up (null at the top); catalogue validated; seed retires plans and moves the default (`test_seed_sync.py`); same review rounds as T1.5 |
 | T1.7 `EmailProvider`, Mailpit sink, deliveries ledger (REQ-NOT-01) | done (merges `28b8af1`, `a78eaa9`) | reviewer PASS; SqlDeliveryStore PostgreSQL tests (races, suppression, resume, RLS) merged |
 | T1.8 Reminder policy/compose port + parity tests, business-day helper (REQ-REM-00) | done (merge `de6548d`) | 48 parity fixtures from `reminder/`, 100% coverage, reviewer mutation run 67/69 killed, survivors fixed in `6d71e30` |
-| T1.9 Signup/login UI + Playwright E2E + axe, dev-setup runbook (REQ-AUTH-01) | in progress | design plan `d766199`; runbook merged `a2fa003`; UI with impl-frontend on `feat/REQ-AUTH-01-auth-ui`, adapting to the round-3 API (`password_set`, `__Host-` cookies, `consents_version`) |
+| T1.9 Signup/login UI + Playwright E2E + axe, dev-setup runbook (REQ-AUTH-01) | done (PR #10, merge `63bc78d`) | reviewer PASS (3 rounds, mutation-checked), security-reviewer PASS (2 rounds), ux-reviewer PASS (2 rounds); impeccable polish `126d39a`; CI green on `b0877bf` (22 Playwright tests) |
 | Task cards `docs/platform/tasks/` (16), research note, ADR-001 addendum (Next.js 16.3.6), D-24 (MinIO withdrawn) | done | `50f7082`, `44d0a46`, `ccc2354` |
-| ECC code review, security-reviewer, traceability check, Phase 1 report | in progress | ECC `ecc:code-reviewer` APPROVE (0 findings; its one low-confidence note fixed in `15562b0`); security-reviewer PASS; traceability PASS; report after T1.9 |
+| ECC code review, security-reviewer, traceability check, Phase 1 report | done | ECC `ecc:code-reviewer` APPROVE (0 findings; its one low-confidence note fixed in `15562b0`); security-reviewer PASS on every `auth/`, `tenancy/`, `billing/` change and on the web client; traceability PASS; report below |
+
+### Exit checks (`PLAN.md` Phase 1)
+
+| Check | Result | Evidence |
+|---|---|---|
+| AC-HYG-01..06 | PASS | `pr.yml` hygiene job (`scripts/check_hygiene.sh`), green on every run since `0cff6ca` |
+| AC-SEC-1/a (RLS generator + cross-tenant 404) | PASS | `backend/tests/integration/test_rls.py` (parametrised from table metadata); `test_auth_security.py::test_every_org_route_answers_404_to_a_non_member` sweeps every `{org_id}` route from the OpenAPI document, first as a developer with no second factor, then as another org's owner with a fresh one |
+| AC-SEC-4 (scanners block on high/critical) | PASS | `pr.yml` scanners job (gitleaks, pip-audit, npm audit, osv-scanner, Trivy; images pinned by digest) and `codeql.yml` with `infra/ci/sarif_gate.py` (fails closed on unresolved rules); `backend/tests/unit/ci/test_workflows.py` asserts no `continue-on-error` |
+| AC-SEC-5 (no real provider calls; egress-blocked runner) | PASS | `infra/ci/egress-lock.sh` + `egress_probe.py` in CI; `backend/tests/egress.py` guard in pytest; workflow lint allows `api.anthropic.com` only in the `nightly.yml` evals job |
+| AC-REM-4/a (legacy suite unchanged and green) | PASS | CI: windows-latest full suite 313 tests OK; ubuntu 307 tests OK with the 6-id skip list (D-25); `reminder/`, `adviser/`, `tests/` untouched |
+| X1-1 signup/login E2E on the compose stack | PASS | `pr.yml` "Playwright against the compose stack": 22 tests at 360 px and desktop (developer and org signup, link and password login, TOTP enrolment, recovery codes, `/auth/mfa`, no-password journey, JavaScript-disabled submit, security headers, axe) |
+| X1-2 `make check` green on ubuntu and windows | PASS | CI (ubuntu) runs the same targets as jobs, green on `b0877bf`; windows-latest runs the full legacy suite; locally on Windows 10: `make check-legacy check-frontend check-backend` on `63bc78d` all exit 0 (legacy 313 OK, 2 self-skipped; Vitest 105; ruff, format, mypy --strict, OpenAPI drift, pytest 579). `check-e2e` needs the compose stack and ran in CI |
+| X1-3 `python -m bridge.seed` idempotent | PASS | `test_seed.py` (seed twice, same counts) and `test_seed_sync.py::test_the_seed_command_runs_twice_with_the_same_counts` (the CLI) |
+| Traceability | PASS | `python docs/platform/checks/check_traceability.py`: 0 errors, 7 warnings (the planned earlier-than-spec assertions) |
+
+### What was built
+
+- **Hygiene (T1.1–T1.2):** n8n/Docker material archived under `legacy/`; README and docs fixed; root `.env.example` trimmed; `scripts/run_legacy_tests.py` with `tests_skip_linux.txt`; legacy suite blocking on windows-latest (full) and ubuntu (skip list), plus an informational full ubuntu run.
+- **Platform skeleton (T1.3):** `backend/` (FastAPI, SQLAlchemy async, Alembic, Procrastinate, structlog, uv), `frontend/` (Next.js 16.3.6, React 19, Tailwind 4, next-intl, openapi-typescript), `infra/docker-compose.dev.yml` (Postgres 16 + pgvector, Mailpit, SeaweedFS as the S3 stand-in per D-24, ClamAV under a profile, api, worker, web, migrate), `Makefile`, `pr.yml`, `codeql.yml`, `nightly.yml`.
+- **Core schema v1 (T1.4):** one frozen revision with RLS on every org-scoped table, four database roles, SECURITY DEFINER helpers with pinned `search_path`, column-scoped grants, append-only hash-chained `audit_events` with per-scope chains and an independent verifier; reference seed (47 counties, 2026–2027 holidays, 16 niches, plans).
+- **Auth (T1.5):** argon2id in a bounded 4-thread pool, magic links in the URL fragment, server-side sessions, CSRF double-submit bound to the session, TOTP with a replay counter and peppered recovery codes, step-up (12 h), mandatory TOTP for org owner/admin/signatory/reviewer and staff, pre-hijacking defence (browser binding cookie), one email throttle (3 per address and IP and 6 per address per 15 minutes, 20 a day), `__Host-` cookies, proxy-aware client IPs.
+- **Billing foundation (T1.6):** `backend/config/plans.yaml` placeholders (until G3), a validated catalogue with an upgrade ladder, entitlement checks returning 402 with the next plan, free subscriptions at signup.
+- **Email (T1.7):** `EmailProvider` (Postmark adapter, SMTP/Mailpit sink, Fake), `notification_deliveries` ledger with dedupe, retries and suppressions.
+- **Reminders port (T1.8):** `bridge/reminders/{policy,compose}.py` with 48 parity fixtures generated from `reminder/`; business-day helper.
+- **Auth screens (T1.9):** landing, signup, login, check-email, `/auth/link`, `/auth/mfa`, `/settings/security`, `/dev`, `/org`; English only until G5 (the Swahili file stays in sync); security headers; forms that never submit natively before hydration; `docs/runbooks/dev-setup.md`.
+
+### Review results
+
+- **reviewer (Opus):** PASS on every merged task. Auth, tenancy and billing took four rounds (a generated 404 sweep that could not fail, an unverified-login email flood, a password cleared on resend, recovery codes tied to the rotating key, audit property-test gaps, a stale OpenAPI file). T1.9 took three (copy that promised emails, a shortened access claim, sign-out ignoring failures, an untested fragment scrub, a password field that disappeared while typing). The reviewer mutation-checked the key tests.
+- **security-reviewer (Fable):** PASS on T1.4 (after a BLOCKER, definer functions without a pinned `search_path`, and a MAJOR, an admin could mint an owner), on auth, tenancy and billing (round 3), and on the T1.9 web client (after a MAJOR, cookie-header injection on the server-side `/me` call).
+- **ux-reviewer:** PASS on T1.9 after a BLOCKER (credentials in the URL when a form was submitted before hydration) and Swahili being served before G5. axe: 0 violations on 22 scenes at 360 and 1280 px; Lighthouse accessibility and best practices 100.
+- **ECC code review** (`ecc:code-reviewer`, `fb6131d..HEAD`): APPROVE with 0 findings; its one low-confidence note (SARIF rule resolution) was fixed anyway in `15562b0`.
+- **impeccable polish:** one refinement (recovery codes in five even rows, tighter code tracking); design detector clean.
+- **chrome-devtools:** no console errors and no failed requests on landing, signup, link sign-in, `/dev` and `/settings/security`; `/login` LCP 596 ms and CLS 0 on an idle machine (a first trace taken while the API was hashing a password showed 4.2 s of render delay).
+- Every finding is recorded in `THREAT_MODEL.md` with the test that verifies it.
+
+### REQ statuses
+
+| Status | Count | Phase 1 REQ-IDs |
+|---|---|---|
+| DONE | 15 | REQ-HYG-01..06, REQ-FND-01..03, REQ-AUTH-01, REQ-TEN-01, REQ-CON-01, REQ-BIL-01, REQ-NOT-01, REQ-REM-00 |
+| IN-PROGRESS | 1 | REQ-AUD-01 (chain, triggers and verifier done; the hourly RFC 3161 anchor and nightly Merkle root arrive with provenance in Phase 3) |
+
+AC rows DONE: AC-HYG-01..06, AC-SEC-1/a, AC-SEC-4, AC-SEC-5, AC-REM-4/a. R-HYG-01..06 DONE.
+
+### Demo steps
+
+1. `make dev` (the first run builds the images; see `docs/runbooks/dev-setup.md`), then open http://localhost:3000.
+2. Sign up as a developer; open the link from Mailpit (http://localhost:8025); you land on `/dev`.
+3. In a second browser profile, sign up as an organisation; set up two-step sign-in on `/settings/security` (QR, code, recovery codes); log out and back in: `/auth/mfa` asks for the code.
+4. RLS output: `cd backend && uv run pytest tests/integration/test_rls.py -q` (needs `TEST_DATABASE_ADMIN_URL`, or Docker for a throwaway Postgres).
+5. `python docs/platform/checks/check_traceability.py` → PASS.
+
+### Test counts
+
+| Suite | Count | Where |
+|---|---|---|
+| Backend pytest (unit + integration: migrations, RLS, Hypothesis audit chain, auth security, seed) | 579 passed | CI on `b0877bf`; locally on Windows on `63bc78d` |
+| Frontend Vitest | 105 passed (16 files) | CI |
+| Playwright E2E + axe (360 px and desktop) | 22 passed | CI compose stack |
+| Legacy suite | 313 OK on windows-latest; 307 OK on ubuntu (6 Linux-only ids skipped, D-25) | CI |
+| Legacy runner tests | 10 (`scripts/test_run_legacy_tests.py`) | CI |
+
+### Deviations
+
+- **Commit size:** 25 of 155 non-merge commits exceed about 300 changed lines, excluding generated and lock files (the initial scaffolds, the schema revision, the seed data, the first auth and UI drops, and two large regression-test commits). The review-fix commits stayed within the limit. No history was rewritten.
+- **MinIO → SeaweedFS** in the dev stack (D-24, open): the MinIO image was withdrawn; nothing in Phase 1 uses S3.
+- **OAuth** moved from T1.5 to T2.12 / REQ-AUTH-02 (D-20).
+- **Cookie names** are fixed in code (`__Host-bridge_{session,csrf,signup}` with Secure cookies, bare names without) instead of being settings. The web server reads `COOKIE_SECURE` from `infra/.env` and the API from `backend/.env`; a mismatch fails closed (signed-in pages redirect to `/login`).
+- **Consent texts** moved to version `2026-09-25.1` because users could see the review markers; the wording is unchanged.
+- **gitleaks allow-list** now holds the public RFC 6238 test vector and one reviewed test-token fingerprint (`.gitleaksignore`).
+
+### Open decisions (see `DECISIONS-NEEDED.md`)
+
+D-24 (S3 stand-in; SeaweedFS applied as the default; must be final before T2.3) and D-25 (four adviser TurnTests on the Linux skip list; option (a) applied). G1 inputs (region, domain, SMS vendor) are needed only for deploy config.
+
+### Follow-ups (not blocking; picked up in Phase 2 unless the human says otherwise)
+
+1. `/login` and `/signup` sit at the 150 KB JS budget line (150,378 gzipped bytes of scripts on `/signup`): send CSP and Permissions-Policy on page responses only (not on `/_next/static`), drop 14.4 kB of legacy polyfills with a modern browserslist target, and state whether the budget means KB or KiB.
+2. E2E with parallel local workers can time out on argon2 hashing in the single API process (CI is green); pin `workers: 1` or a longer server step for local runs.
+3. Password forms: add a hidden `autocomplete="username"` field so password managers save the right account (Chrome hint on `/settings/security`).
+4. The Password section stays visible during two-step enrolment (visual noise; the labels are already distinct).
+5. The staff dependency (staff role + enrolled TOTP) ships with the first `/admin` route.
+6. The report-only CSP has no report endpoint yet; the enforced nonce CSP and HSTS arrive with Caddy in Phase 8 (REQ-SEC-03).
+
+### Risks
+
+1. One legacy test, `test_two_threads_cannot_speak_the_same_check_in`, failed once locally under load; CI is stable.
+2. This machine intercepts TLS: uv needs `UV_NATIVE_TLS=1`, and Playwright's bundled Chromium lagged Playwright 1.63, so local runs used system Chrome (`channel: "chrome"`).
+3. The recorded residuals are in `THREAT_MODEL.md` §1 (the per-address email budget can delay a real magic link for up to a day; the web server's cookie mode must match the API's; audit tail deletion is detectable only once anchors exist in Phase 3).
+
+### Cost
+
+`/cost` (pasted by the human): _pending_
+
+### Next session
+
+After the human approves Phase 1: `Read CLAUDE.md, PROGRESS.md, REQUIREMENTS.md, DECISIONS-NEEDED.md, GATES.md and the docs/spec files Phase 2 needs; execute Phase 2.` Phase 2 needs D-24 decided before T2.3, and the G6 directory seed inputs.
+
+### Phase 1 sign-off
+
+_Awaiting the human's approval._
