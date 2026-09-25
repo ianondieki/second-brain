@@ -58,6 +58,11 @@ describe("readCookie", () => {
     expect(readCookie("__Host-bridge_csrf", "a=1; __Host-bridge_csrf=abc%3D.def; b=2")).toBe("abc=.def");
   });
 
+  it("treats a cookie that cannot be decoded as absent instead of throwing", () => {
+    expect(readCookie("bridge_csrf", "bridge_csrf=%E0%A4%A")).toBeUndefined();
+    expect(readCookie("__Host-bridge_csrf", "__Host-bridge_csrf=%zz; other=1")).toBeUndefined();
+  });
+
   it("returns undefined when the cookie is absent", () => {
     expect(readCookie("__Host-bridge_csrf", "a=1")).toBeUndefined();
   });
@@ -68,6 +73,13 @@ describe("readCookie", () => {
 });
 
 describe("ensureCsrf", () => {
+  it("fetches a fresh token when the cookie is malformed (self-heals instead of failing the login)", async () => {
+    jar = "__Host-bridge_csrf=%E0%A4%A";
+    const { fetchMock, seen } = fakeApi({ [`GET ${CSRF_URL}`]: [() => json(200, { csrf_token: "fresh" })] });
+    await expect(ensureCsrf({ fetch: fetchMock, url: CSRF_URL })).resolves.toBe("fresh");
+    expect(seen.map((r) => r.method)).toEqual(["GET"]);
+  });
+
   it("uses the plain-http dev cookie name too, without a request", async () => {
     jar = "bridge_csrf=from-dev-cookie";
     const { fetchMock } = fakeApi({});

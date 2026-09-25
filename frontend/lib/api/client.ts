@@ -18,7 +18,13 @@ const defaultFetch: Fetch = (input, init) => globalThis.fetch(input, init);
 export function readCookie(name: string, source: string = typeof document === "undefined" ? "" : document.cookie) {
   for (const part of source.split(";")) {
     const [key, ...rest] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(rest.join("="));
+    } catch {
+      // A malformed cookie (for example "%E0%A4%A") counts as absent, so ensureCsrf fetches a fresh token.
+      return undefined;
+    }
   }
   return undefined;
 }
