@@ -73,6 +73,16 @@ describe("apiErrorUpgrade", () => {
     expect(apiErrorUpgrade({ detail: [{ loc: ["body"], msg: "x", type: "x" }] })).toBeNull();
     expect(apiErrorUpgrade(undefined)).toBeNull();
   });
+
+  it("accepts only a same-origin path, never an absolute or protocol-relative URL", () => {
+    const body = (url: string) => ({ detail: { code: "plan_limit", message: "x", upgrade: { plan: "p", url } } });
+    expect(apiErrorUpgrade(body("/billing/upgrade?plan=p"))).toEqual({ plan: "p", url: "/billing/upgrade?plan=p" });
+    expect(apiErrorUpgrade(body("//evil.example/pay"))).toBeNull();
+    expect(apiErrorUpgrade(body("https://evil.example/pay"))).toBeNull();
+    expect(apiErrorUpgrade(body("javascript:alert(1)"))).toBeNull();
+    expect(apiErrorUpgrade(body("billing/upgrade"))).toBeNull();
+    expect(apiErrorUpgrade(body("/\\evil.example"))).toBeNull();
+  });
 });
 
 describe("settle", () => {

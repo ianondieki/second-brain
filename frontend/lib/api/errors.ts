@@ -82,12 +82,16 @@ export function errorKey(error: unknown): ErrorKey {
 
 /**
  * The upgrade path of a 402 plan-limit body (`detail.upgrade.url`), or null: at the top of the plan ladder the API
- * sends `upgrade: null`, and other bodies have none.
+ * sends `upgrade: null`, and other bodies have none. Only a same-origin path is accepted ("/billing/..."): an
+ * absolute or protocol-relative URL ("https://...", "//evil.example") would turn the upgrade link into an open
+ * redirect.
  */
 export function apiErrorUpgrade(error: unknown): { plan: string; url: string } | null {
   const upgrade = detailOf(error)?.upgrade;
   if (!isRecord(upgrade) || typeof upgrade.plan !== "string" || typeof upgrade.url !== "string") return null;
-  return { plan: upgrade.plan, url: upgrade.url };
+  const { url } = upgrade;
+  if (!url.startsWith("/") || url.startsWith("//") || url.includes("\\")) return null;
+  return { plan: upgrade.plan, url };
 }
 
 const FIELD_OF: Partial<Record<KnownErrorCode, ErrorField>> = {
