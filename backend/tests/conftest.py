@@ -19,6 +19,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://bridge_app:bridge_ap
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789")
 os.environ.setdefault("DATA_ENCRYPTION_KEY", "dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGVmMDE=")
 os.environ.setdefault("EMAIL_PROVIDER", "fake")
+os.environ.setdefault("RECOVERY_CODE_PEPPER", "test-recovery-pepper-0123456789abcdef012345")
 
 
 def pytest_asyncio_loop_factories(

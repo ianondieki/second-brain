@@ -26,6 +26,7 @@ def render() -> str:
         database_url=SecretStr("postgresql+psycopg://openapi@localhost/openapi"),
         secret_key=_PLACEHOLDER,
         data_encryption_key=_ZERO_KEY,
+        recovery_code_pepper=_PLACEHOLDER,
     )
     schema = create_app(settings).openapi()
     return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

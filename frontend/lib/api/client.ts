@@ -2,7 +2,7 @@ import createClient, { type Middleware } from "openapi-fetch";
 
 import type { paths } from "./schema";
 
-export const CSRF_COOKIE = "bridge_csrf";
+export const CSRF_COOKIE = "__Host-bridge_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
