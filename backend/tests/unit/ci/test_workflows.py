@@ -104,10 +104,10 @@ def test_sarif_gate_resolves_rule_indexes_and_fails_closed(tmp_path: Path) -> No
 
     rules = [{"id": "py/low", "properties": {"security-severity": "3.0"}}]
     extension = {"rules": [{"id": "py/high", "properties": {"security-severity": "9.1"}}]}
-    by_index = {"rule": {"index": 0, "toolComponent": {"index": 0}}, "locations": [{}]}
-    unresolved = {"locations": [{}]}
+    by_index: dict[str, object] = {"rule": {"index": 0, "toolComponent": {"index": 0}}, "locations": [{}]}
+    unresolved: dict[str, object] = {"locations": [{}]}
     gate = REPO / "infra" / "ci" / "sarif_gate.py"
-    outcomes = []
+    outcomes: list[int] = []
     for result in (by_index, unresolved, {"ruleId": "py/low", "locations": [{}]}):
         run = {"tool": {"driver": {"rules": rules}, "extensions": [extension]}, "results": [result]}
         path = tmp_path / f"r{len(outcomes)}.sarif"
