@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, Response
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from bridge import __version__
 from bridge.api import health
@@ -16,6 +19,7 @@ from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
+from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
 from bridge.tenancy.router import router as orgs_router
 
@@ -83,4 +87,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(orgs_router)
     app.include_router(me_router)
+    app.include_router(consents_router)
+    # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+        schema.setdefault("components", {})["securitySchemes"] = {
+            "session": {"type": "apiKey", "in": "cookie", "name": settings.session_cookie_name},
+            "csrf": {"type": "apiKey", "in": "header", "name": csrf.HEADER},
+        }
+        schema["security"] = [{"session": [], "csrf": []}]
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]
     return app

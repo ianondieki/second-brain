@@ -10,13 +10,14 @@ from pydantic import SecretStr, ValidationError
 from bridge.config import Settings
 
 GOOD = "x" * 32
+GOOD_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="  # base64 of 32 bytes
 
 
 def make(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "database_url": SecretStr("postgresql+psycopg://u:p@localhost/db"),
         "secret_key": SecretStr(GOOD),
-        "data_encryption_key": SecretStr(GOOD),
+        "data_encryption_key": SecretStr(GOOD_KEY),
         "_env_file": None,
     }
     values.update(overrides)
@@ -36,7 +37,9 @@ def test_short_secret_is_refused(name: str) -> None:
 def test_missing_secret_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SECRET_KEY", raising=False)
     with pytest.raises(ValidationError):
-        Settings(database_url=SecretStr("postgresql+psycopg://x"), data_encryption_key=SecretStr(GOOD), _env_file=None)
+        Settings(
+            database_url=SecretStr("postgresql+psycopg://x"), data_encryption_key=SecretStr(GOOD_KEY), _env_file=None
+        )
 
 
 def test_postmark_needs_its_token() -> None:
@@ -57,3 +60,8 @@ def test_feature_flags_default_off() -> None:
     settings = make()
     assert settings.feature_tier2_enabled is False
     assert settings.feature_deals_enabled is False
+
+
+def test_data_key_must_decode_to_32_bytes() -> None:
+    with pytest.raises(ValidationError, match="base64 of exactly 32 bytes"):
+        make(data_encryption_key=SecretStr("this is not base64 but it is long enough!!"))

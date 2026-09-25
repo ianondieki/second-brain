@@ -13,9 +13,9 @@ from datetime import timedelta
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge import clock
 from bridge.auth.crypto import keyed_digest
 from bridge.auth.models import LoginAttempt
-from bridge.clock import utcnow
 
 WINDOW = timedelta(minutes=1)
 PER_ACCOUNT_ANY_IP = 20
@@ -35,7 +35,7 @@ def keys(secret: str, purpose: str, email: str, ip: str) -> Keys:
 
 
 async def _count(db: AsyncSession, *conditions: object, window: timedelta) -> int:
-    since = utcnow() - window
+    since = clock.utcnow() - window
     stmt = select(func.count()).select_from(LoginAttempt).where(and_(LoginAttempt.created_at > since, *conditions))  # type: ignore[arg-type]
     return int((await db.execute(stmt)).scalar_one())
 
