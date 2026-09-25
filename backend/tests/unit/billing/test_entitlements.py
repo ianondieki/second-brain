@@ -75,7 +75,6 @@ def test_features_need_an_explicit_true() -> None:
 
 def test_duplicate_plan_codes_are_rejected() -> None:
     raw = {
-        "upgrade_paths": {"developer": "a", "org": "b"},
         "plans": [
             {
                 "code": "a",

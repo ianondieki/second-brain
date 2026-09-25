@@ -1,8 +1,8 @@
 """Server-side entitlements (REQ-BIL-01; docs/spec/05 "enforced server-side on every gated action").
 
 A gated action asks for the subject's ``Entitlements`` and calls ``check_count`` or ``require_feature``; over the
-plan limit the API answers **402** with the upgrade path and the action creates nothing. Proposals, tags and unlocks
-(Phase 2) call these helpers; ``GET /api/me/entitlements`` shows the caller their limits.
+plan limit the API answers **402** with the next plan up (``upgrade``; null at the top of the ladder) and the action
+creates nothing. Proposals, tags and unlocks (Phase 2) call these helpers.
 """
 
 from __future__ import annotations
@@ -43,22 +43,26 @@ class Entitlements:
         return self.limits.get(key) is True
 
 
+def _upgrade_body(settings: Settings, ent: Entitlements) -> dict[str, str] | None:
+    target = plans.load(settings.plans_file).upgrade_for(ent.plan_code)
+    if target is None:
+        return None
+    return {"plan": target.code, "url": f"/billing/upgrade?plan={target.code}"}
+
+
 class PlanLimitExceeded(ApiError):
-    def __init__(self, ent: Entitlements, key: str, *, limit: int | None, used: int | None, upgrade: str) -> None:
+    def __init__(self, settings: Settings, ent: Entitlements, key: str, *, limit: int | None, used: int | None) -> None:
+        upgrade = _upgrade_body(settings, ent)
         super().__init__(
             402,
             "plan_limit",
-            "This needs a higher plan.",
+            "This needs a higher plan." if upgrade else "This is beyond your plan. Contact us to raise the limit.",
             limit_key=key,
             limit=limit,
             used=used,
             plan=ent.plan_code,
-            upgrade={"plan": upgrade, "url": f"/billing/upgrade?plan={upgrade}"},
+            upgrade=upgrade,
         )
-
-
-def _catalog(settings: Settings) -> plans.Catalog:
-    return plans.load(settings.plans_file)
 
 
 async def _live_plan_code(db: AsyncSession, *, user_id: UUID | None, org_id: UUID | None) -> str | None:
@@ -78,7 +82,7 @@ async def for_subject(
     if (user_id is None) == (org_id is None):
         raise ValueError("pass exactly one of user_id and org_id")
     side = PlanSide.DEVELOPER if user_id else PlanSide.ORG
-    catalog = _catalog(settings)
+    catalog = plans.load(settings.plans_file)
     code = await _live_plan_code(db, user_id=user_id, org_id=org_id)
     spec = catalog.plans.get(code) if code else None
     if spec is None or spec.side != side:
@@ -90,11 +94,9 @@ def check_count(settings: Settings, ent: Entitlements, key: str, *, used: int) -
     """Raise 402 when one more item would exceed the cap ``key`` (``used`` = items that already count)."""
     cap = ent.limit(key)
     if cap is not None and used >= cap:
-        upgrade = _catalog(settings).upgrade_for(ent.side).code
-        raise PlanLimitExceeded(ent, key, limit=cap, used=used, upgrade=upgrade)
+        raise PlanLimitExceeded(settings, ent, key, limit=cap, used=used)
 
 
 def require_feature(settings: Settings, ent: Entitlements, key: str) -> None:
     if not ent.allows(key):
-        upgrade = _catalog(settings).upgrade_for(ent.side).code
-        raise PlanLimitExceeded(ent, key, limit=None, used=None, upgrade=upgrade)
+        raise PlanLimitExceeded(settings, ent, key, limit=None, used=None)
