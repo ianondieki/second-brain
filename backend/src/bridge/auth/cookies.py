@@ -45,9 +45,7 @@ def clear_session(response: Response, settings: Settings) -> None:
 
 
 def signup_cookie_name(settings: Settings) -> str:
-    """__Host-: Secure, Path=/, no Domain (cannot be planted). Without Secure cookies (plain-http dev) browsers
-    refuse the prefix, so the name follows COOKIE_SECURE like the session and CSRF names must."""
-    return "__Host-bridge_signup" if settings.cookie_secure else "bridge_signup"
+    return settings.signup_cookie_name
 
 
 def signup_binding(settings: Settings, user_id: object, password_hash: str) -> str:

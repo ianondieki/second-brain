@@ -43,10 +43,18 @@ def test_missing_secret_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
 
-def test_prefixed_cookie_names_need_secure_cookies() -> None:
-    with pytest.raises(ValidationError, match="COOKIE_SECURE"):
-        make(cookie_secure=False, session_cookie_name="__Host-bridge_session")
-    assert make(cookie_secure=False, session_cookie_name="bridge_session", csrf_cookie_name="bridge_csrf")
+def test_cookie_names_follow_cookie_secure() -> None:
+    secure, plain = make(cookie_secure=True), make(cookie_secure=False)
+    assert (secure.session_cookie_name, secure.csrf_cookie_name, secure.signup_cookie_name) == (
+        "__Host-bridge_session",
+        "__Host-bridge_csrf",
+        "__Host-bridge_signup",
+    )
+    assert (plain.session_cookie_name, plain.csrf_cookie_name, plain.signup_cookie_name) == (
+        "bridge_session",
+        "bridge_csrf",
+        "bridge_signup",
+    )
 
 
 def test_postmark_needs_its_token() -> None:
