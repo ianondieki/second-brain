@@ -92,16 +92,19 @@ async def test_signup_does_not_reveal_existing_accounts(client: httpx.AsyncClien
     assert any("already have" in s for s in subjects)
 
 
-async def test_a_repeat_signup_of_an_unverified_address_replaces_its_link(client: httpx.AsyncClient) -> None:
+async def test_a_repeat_signup_sends_a_new_link_and_using_one_spends_the_other(client: httpx.AsyncClient) -> None:
+    """Earlier links stay valid after a repeat signup (a stranger's signup must not void the owner's link, round-3
+    review); the first link used spends every other outstanding link."""
     address = email()
     await signup(client, address)
     first_link = link_token(client, address)
     await signup(client, address)
     second_link = link_token(client, address)
     assert first_link != second_link
+    assert (await client.post("/api/auth/magic-link/consume", json={"token": second_link})).status_code == 200
+    await refresh_csrf(client)
     stale = await client.post("/api/auth/magic-link/consume", json={"token": first_link})
     assert stale.status_code == 400
-    assert (await client.post("/api/auth/magic-link/consume", json={"token": second_link})).status_code == 200
 
 
 async def test_links_work_once(client: httpx.AsyncClient) -> None:

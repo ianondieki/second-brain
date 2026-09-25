@@ -61,7 +61,7 @@ def set_signup_binding(response: Response, settings: Settings, binding: str | No
     response.set_cookie(
         SIGNUP_COOKIE,
         value,
-        max_age=settings.magic_link_ttl_minutes * 60,
+        max_age=settings.session_ttl_days * 86400,  # outlives any resend; the value reveals nothing
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",

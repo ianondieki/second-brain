@@ -534,3 +534,57 @@ async def test_recovery_codes_survive_a_secret_key_rotation(client: httpx.AsyncC
         assert (await fresh.post("/api/auth/login", json={"email": address, "password": PASSWORD})).status_code == 200
         await refresh_csrf(fresh)
         assert (await fresh.post("/api/auth/mfa/verify", json={"code": code})).status_code == 200
+
+
+async def test_a_resend_after_the_first_link_expired_still_keeps_the_password(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    address = email()
+    await signup(client, address)
+    later = datetime.now(UTC) + timedelta(hours=2)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    assert (await client.post("/api/auth/verify-email/resend", json={"email": address})).status_code == 202
+    consumed = await client.post("/api/auth/magic-link/consume", json={"token": last_link(client, address)})
+    assert consumed.json()["user"]["password_set"] is True
+
+
+async def test_a_strangers_repeat_signup_does_not_void_the_owners_link(
+    client: httpx.AsyncClient, other: httpx.AsyncClient
+) -> None:
+    address = email()
+    await signup(client, address)
+    owners_link = last_link(client, address)
+    await signup(other, address, password="a stranger's password")
+    consumed = await client.post("/api/auth/magic-link/consume", json={"token": owners_link})
+    assert consumed.status_code == 200
+    assert consumed.json()["user"]["password_set"] is False  # the stranger's password never survives
+    await refresh_csrf(other)
+    stolen = await other.post("/api/auth/login", json={"email": address, "password": "a stranger's password"})
+    assert stolen.status_code == 401
+
+
+async def test_a_throttled_repeat_signup_changes_nothing(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    address = email()
+    await signup(client, address)
+    for n in range(8):  # rotating IPs until the address's email budget is used up
+        await signup(other, address, password=f"stranger password {n}", headers={"X-Forwarded-For": f"192.0.2.{n + 1}"})
+    await signup(other, address, password="the last stranger password", headers={"X-Forwarded-For": "192.0.2.99"})
+    await refresh_csrf(other)
+    login = await other.post("/api/auth/login", json={"email": address, "password": "the last stranger password"})
+    assert login.status_code == 401  # the throttled signup did not replace the password
+
+
+async def test_an_address_gets_at_most_twenty_auth_emails_a_day(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    address = email()
+    await verified(client, address)
+    start = datetime.now(UTC)
+    for n in range(30):  # a fresh IP and a fresh 15-minute window each time, all within one day
+        moment = start + timedelta(minutes=16 * n)
+        monkeypatch.setattr(bridge.clock, "utcnow", lambda moment=moment: moment)
+        await client.post(
+            "/api/auth/magic-link", json={"email": address}, headers={"X-Forwarded-For": f"198.51.100.{n + 1}"}
+        )
+    links = [m for m in outbox(client).outbox if m.to == address and "/auth/link#token=" in m.text]
+    assert len(links) == 1 + 20  # the signup link (counted under "signup"), then the daily cap of 20 links
