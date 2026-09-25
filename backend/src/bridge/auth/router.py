@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from bridge.auth import service
-from bridge.auth.cookies import SIGNUP_COOKIE, clear_session, set_csrf, set_session, set_signup_binding
+from bridge.auth.cookies import clear_session, set_csrf, set_session, set_signup_binding, signup_cookie_name
 from bridge.auth.deps import CurrentSession, Db, EmailDep, PendingSession, SettingsDep, StepUpSession, client_ip
 from bridge.auth.mailer import PendingEmail, deliver
 from bridge.auth.models import User
@@ -129,13 +129,17 @@ async def consume(
 ) -> SessionResponse:
     try:
         outcome = await service.consume_link(
-            db, settings, body.token, request.headers.get("user-agent"), request.cookies.get(SIGNUP_COOKIE)
+            db,
+            settings,
+            body.token,
+            request.headers.get("user-agent"),
+            request.cookies.get(signup_cookie_name(settings)),
         )
     except service.AuthError as exc:
         raise _fail(exc) from exc
     await db.commit()
     set_session(response, settings, outcome.session.token)
-    response.delete_cookie(SIGNUP_COOKIE, path="/", secure=settings.cookie_secure, httponly=True)
+    response.delete_cookie(signup_cookie_name(settings), path="/", secure=settings.cookie_secure, httponly=True)
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 

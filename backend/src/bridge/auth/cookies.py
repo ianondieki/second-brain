@@ -44,7 +44,10 @@ def clear_session(response: Response, settings: Settings) -> None:
     set_csrf(response, settings, None)
 
 
-SIGNUP_COOKIE = "__Host-bridge_signup"  # __Host-: Secure, Path=/, no Domain (cannot be planted)
+def signup_cookie_name(settings: Settings) -> str:
+    """__Host-: Secure, Path=/, no Domain (cannot be planted). Without Secure cookies (plain-http dev) browsers
+    refuse the prefix, so the name follows COOKIE_SECURE like the session and CSRF names must."""
+    return "__Host-bridge_signup" if settings.cookie_secure else "bridge_signup"
 
 
 def signup_binding(settings: Settings, user_id: object, password_hash: str) -> str:
@@ -59,7 +62,7 @@ def set_signup_binding(response: Response, settings: Settings, binding: str | No
     """Always set (a random value when there is no binding), so the cookie reveals nothing about the address."""
     value = binding or secrets.token_hex(32)
     response.set_cookie(
-        SIGNUP_COOKIE,
+        signup_cookie_name(settings),
         value,
         max_age=settings.session_ttl_days * 86400,  # outlives any resend; the value reveals nothing
         httponly=True,

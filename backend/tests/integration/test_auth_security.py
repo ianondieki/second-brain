@@ -540,7 +540,10 @@ async def test_a_resend_after_the_first_link_expired_still_keeps_the_password(
     client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     address = email()
-    await signup(client, address)
+    response = await signup(client, address)
+    binding = next(h for h in response.headers.get_list("set-cookie") if h.startswith("__Host-bridge_signup="))
+    max_age = int(re.search(r"Max-Age=(\d+)", binding, re.IGNORECASE).group(1))  # type: ignore[union-attr]
+    assert max_age >= get_settings().session_ttl_days * 86400  # the cookie jar expires on wall-clock time
     later = datetime.now(UTC) + timedelta(hours=2)
     monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
     assert (await client.post("/api/auth/verify-email/resend", json={"email": address})).status_code == 202
@@ -566,8 +569,11 @@ async def test_a_strangers_repeat_signup_does_not_void_the_owners_link(
 async def test_a_throttled_repeat_signup_changes_nothing(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
     address = email()
     await signup(client, address)
-    for n in range(8):  # rotating IPs until the address's email budget is used up
-        await signup(other, address, password=f"stranger password {n}", headers={"X-Forwarded-For": f"192.0.2.{n + 1}"})
+    for n in range(6):  # resends from rotating IPs use up the address's email budget (6 per 15 minutes)
+        await other.post(
+            "/api/auth/verify-email/resend", json={"email": address}, headers={"X-Forwarded-For": f"192.0.2.{n + 1}"}
+        )
+    # The signup budget is not used up, so only the email throttle can stop this re-signup.
     await signup(other, address, password="the last stranger password", headers={"X-Forwarded-For": "192.0.2.99"})
     await refresh_csrf(other)
     login = await other.post("/api/auth/login", json={"email": address, "password": "the last stranger password"})
