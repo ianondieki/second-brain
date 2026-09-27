@@ -60,6 +60,7 @@ for (const route of routes) {
   }
   const verdict = result.bytes <= BUDGET_BYTES ? "ok" : "OVER";
   over ||= verdict === "OVER";
-  console.log(`${route}: ${result.bytes} bytes of gzipped JS in ${result.scripts} scripts (budget ${BUDGET_BYTES}): ${verdict}`);
+  const summary = `${result.bytes} bytes of gzipped JS in ${result.scripts} scripts (budget ${BUDGET_BYTES})`;
+  console.log(`${route}: ${summary}: ${verdict}`);
 }
 process.exit(over ? 1 : 0);
