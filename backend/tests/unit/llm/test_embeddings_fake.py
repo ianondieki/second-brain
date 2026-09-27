@@ -4,8 +4,10 @@ behind its DPA flag, and the EMBEDDER setting."""
 
 from __future__ import annotations
 
+import asyncio
 import math
 import sys
+import time
 import types
 from pathlib import Path
 from typing import Any
@@ -14,7 +16,6 @@ import pytest
 
 from bridge.llm import embeddings
 from bridge.llm.embeddings import (
-    BGE_M3_MODEL,
     EMBED_DIM,
     FAKE_MODEL,
     BgeM3Embedder,
@@ -29,6 +30,11 @@ from bridge.llm.embeddings import (
     vector_with_similarity,
 )
 from tests.unit.llm.helpers import real_registry, settings
+
+
+def bge(**options: Any) -> BgeM3Embedder:
+    policy = real_registry().embeddings
+    return BgeM3Embedder(model_id=policy.model, version=policy.version, **options)
 
 
 def norm(vector: list[float]) -> float:
@@ -106,6 +112,8 @@ def stand_in(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     seen: dict[str, Any] = {}
 
     def factory(source: str, **kwargs: Any) -> _Model:
+        seen["loads"] = seen.get("loads", 0) + 1
+        time.sleep(0.02)  # widen the window in which two first calls could both load
         seen["model"] = _Model(source, **kwargs)
         return seen["model"]  # type: ignore[no-any-return]
 
@@ -125,7 +133,7 @@ def stand_in(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 async def test_bge_m3_loads_local_weights_only_and_quantises(stand_in: dict[str, Any]) -> None:
-    embedder = BgeM3Embedder(model_path=Path("/models/bge-m3"), precision="int8", batch_size=8)
+    embedder = bge(model_path=Path("/models/bge-m3"), precision="int8", batch_size=8)
     assert "model" not in stand_in  # nothing loads at construction
     [vector] = await embedder.embed(["Habari ya asubuhi"])
     model = stand_in["model"]
@@ -134,24 +142,25 @@ async def test_bge_m3_loads_local_weights_only_and_quantises(stand_in: dict[str,
     assert stand_in["quantized"] == ({"Linear"}, "qint8")
     assert model.encoded[0][1] == {"batch_size": 8, "normalize_embeddings": True}
     assert vector[0] == 1.0
-    assert (embedder.model, embedder.version, embedder.dim) == (BGE_M3_MODEL, "1-int8", EMBED_DIM)
+    policy = real_registry().embeddings
+    assert (embedder.model, embedder.version, embedder.dim) == (policy.model, f"{policy.version}-int8", EMBED_DIM)
     await embedder.embed(["again"])
     assert len(model.encoded) == 2  # loaded once
 
 
 async def test_bge_m3_fp16_and_default_source(stand_in: dict[str, Any]) -> None:
-    embedder = BgeM3Embedder(precision="fp16")
+    embedder = bge(precision="fp16")
     await embedder.embed(["x"])
     assert stand_in["model"].halved
-    assert stand_in["model"].source == BGE_M3_MODEL
+    assert stand_in["model"].source == real_registry().embeddings.model
     assert "quantized" not in stand_in
-    await BgeM3Embedder(precision="fp32").embed(["y"])
+    await bge(precision="fp32").embed(["y"])
 
 
 async def test_bge_m3_without_the_library_or_weights_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)
     with pytest.raises(EmbedderUnavailable, match="once bge-m3 is approved"):
-        await BgeM3Embedder().embed(["x"])
+        await bge().embed(["x"])
 
     def missing(source: str, **kwargs: Any) -> None:
         raise OSError("not cached")
@@ -160,7 +169,7 @@ async def test_bge_m3_without_the_library_or_weights_is_unavailable(monkeypatch:
     st.SentenceTransformer = missing  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "sentence_transformers", st)
     with pytest.raises(EmbedderUnavailable, match="not available locally"):
-        await BgeM3Embedder().embed(["x"])
+        await bge().embed(["x"])
 
 
 async def test_voyage_is_off_without_a_dpa() -> None:
@@ -176,7 +185,8 @@ def test_embedder_setting() -> None:
     assert isinstance(embedder_from_settings(settings(), policy), FakeEmbedder)
     real = embedder_from_settings(settings(embedder="bge-m3"), policy)
     assert isinstance(real, BgeM3Embedder)
-    assert real.version == f"{embeddings.BGE_M3_VERSION}-{policy.precision}"
+    assert real.model == policy.model
+    assert real.version == f"{policy.version}-{policy.precision}"
     production = settings().model_copy(update={"app_env": "production"})  # the validator already refuses this
     with pytest.raises(ValueError, match="not allowed in production"):
         embedder_from_settings(production, policy)
@@ -189,3 +199,9 @@ def test_the_lock_carries_no_ml_stack() -> None:
     heavy = {"torch", "triton", "sentence-transformers", "transformers", "scikit-learn", "safetensors"}
     assert not names & heavy
     assert not [name for name in names if name.startswith("nvidia-")]
+
+
+async def test_bge_m3_loads_once_under_concurrent_first_calls(stand_in: dict[str, Any]) -> None:
+    embedder = bge()
+    await asyncio.gather(*(embedder.embed([f"text {i}"]) for i in range(6)))
+    assert stand_in["loads"] == 1

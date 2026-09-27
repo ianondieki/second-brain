@@ -22,7 +22,9 @@ transport:
   timeout_seconds: 120
   max_retries: 2                # the SDK's own retries of 429, 5xx and dropped connections (no tokens billed)
 
-embeddings:                     # REQ-EMB-01: self-hosted BAAI/bge-m3 on the worker (bridge/llm/embeddings.py)
+embeddings:                     # REQ-EMB-01: self-hosted on the worker (bridge/llm/embeddings.py)
+  model: BAAI/bge-m3            # 1024 dimensions, multilingual incl. Swahili (ADR-005 decision 6); stored as embed_model
+  version: "1"                  # bump with any change to the weights or encode settings: triggers the re-embed job
   precision: int8               # fp32 | fp16 | int8 (ADR-007 sizing assumes int8 on CPU); part of embed_version
   batch_size: 16                # texts per encode call
   reembed_batch_size: 64        # rows per re-embed batch (bridge/jobs/reembed.py)

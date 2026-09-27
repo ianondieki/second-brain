@@ -1,6 +1,7 @@
 """Embeddings (REQ-EMB-01; ADR-005 decision 6; docs/spec/08 Embeddings). Anthropic has no embeddings endpoint.
 
-- ``BgeM3Embedder``: self-hosted ``BAAI/bge-m3`` (1024 dimensions, multilingual incl. Swahili) through
+- ``BgeM3Embedder``: self-hosted bge-m3 (model id and version in ``ai/models.yaml``; 1024 dimensions,
+  multilingual incl. Swahili) through
   sentence-transformers on the worker, fp16 or int8. sentence-transformers is not a dependency (not in uv.lock):
   it is imported lazily, and the worker image installs it from the CPU-only torch index only after the human
   approves bge-m3 (weights and image size; Docker has 4 GB). The weights are loaded with
@@ -19,6 +20,7 @@ import asyncio
 import hashlib
 import math
 import re
+import threading
 import unicodedata
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -28,8 +30,6 @@ from bridge.config import Settings
 from bridge.llm.registry import EmbeddingPolicy
 
 EMBED_DIM = 1024
-BGE_M3_MODEL = "BAAI/bge-m3"
-BGE_M3_VERSION = "1"  # bump with any change to the weights or the encode settings; the precision is appended
 FAKE_MODEL = "fake-shake256"
 FAKE_VERSION = "1"
 
@@ -119,29 +119,39 @@ class FakeEmbedder:
 
 
 class BgeM3Embedder:
-    """``BAAI/bge-m3`` on the worker. ``model_path`` is a local directory with the weights (default: the Hugging Face
-    cache); nothing is downloaded. The model loads on first use, in a worker thread like every encode."""
+    """bge-m3 on the worker; ``model_id`` and ``version`` come from ``ai/models.yaml``. ``model_path`` is a local
+    directory with the weights (default: the Hugging Face cache); nothing is downloaded. The model loads once, on
+    first use and under a lock (encodes run in worker threads, so two first calls could otherwise load twice)."""
 
-    model = BGE_M3_MODEL
     dim = EMBED_DIM
 
     def __init__(
         self,
         *,
+        model_id: str,
+        version: str,
         model_path: Path | None = None,
         precision: Precision = "int8",
         batch_size: int = 16,
         device: str = "cpu",
     ) -> None:
-        self._source = str(model_path) if model_path is not None else BGE_M3_MODEL
+        self._model_id = model_id
+        self._version = version
+        self._source = str(model_path) if model_path is not None else model_id
         self._precision = precision
         self._batch_size = batch_size
         self._device = device
         self._loaded: Any = None
+        self._load_lock = threading.Lock()
+
+    @property
+    def model(self) -> str:
+        return self._model_id
 
     @property
     def version(self) -> str:
-        return f"{BGE_M3_VERSION}-{self._precision}"
+        """``embed_version``: the registry version plus the precision (int8 and fp16 vectors differ slightly)."""
+        return f"{self._version}-{self._precision}"
 
     def _load(self) -> Any:
         try:
@@ -163,10 +173,14 @@ class BgeM3Embedder:
             loaded = torch.quantization.quantize_dynamic(loaded, {torch.nn.Linear}, dtype=torch.qint8)
         return loaded
 
+    def _model_once(self) -> Any:
+        with self._load_lock:
+            if self._loaded is None:
+                self._loaded = self._load()
+            return self._loaded
+
     def _encode(self, texts: list[str]) -> list[Vector]:
-        if self._loaded is None:
-            self._loaded = self._load()
-        rows = self._loaded.encode(texts, batch_size=self._batch_size, normalize_embeddings=True)
+        rows = self._model_once().encode(texts, batch_size=self._batch_size, normalize_embeddings=True)
         return [unit([float(x) for x in row], self.dim) for row in rows]
 
     async def embed(self, texts: Sequence[str]) -> list[Vector]:
@@ -193,7 +207,11 @@ def embedder_from_settings(settings: Settings, policy: EmbeddingPolicy) -> Embed
     """``EMBEDDER=bge-m3`` builds the real embedder (loaded on first use); ``fake`` is refused in production."""
     if settings.embedder == "bge-m3":
         return BgeM3Embedder(
-            model_path=settings.embedder_model_path, precision=policy.precision, batch_size=policy.batch_size
+            model_id=policy.model,
+            version=policy.version,
+            model_path=settings.embedder_model_path,
+            precision=policy.precision,
+            batch_size=policy.batch_size,
         )
     if settings.app_env == "production":
         raise ValueError("EMBEDDER=fake is not allowed in production (REQ-EMB-01)")

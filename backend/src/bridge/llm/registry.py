@@ -96,6 +96,8 @@ class TransportPolicy:
 
 @dataclass(frozen=True, slots=True)
 class EmbeddingPolicy:
+    model: str
+    version: str
     precision: Literal["fp32", "fp16", "int8"]
     batch_size: int
     reembed_batch_size: int
@@ -170,6 +172,12 @@ def _decimal(value: Any, where: str) -> Decimal:
     if number < 0:
         raise ValueError(f"{where} must be zero or more")
     return number
+
+
+def _text(value: Any, where: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{where} must be a non-empty string")
+    return value
 
 
 def _positive_int(value: Any, where: str) -> int:
@@ -273,6 +281,8 @@ def parse(data: Mapping[str, Any]) -> Registry:
             max_retries=int(_decimal(data["transport"]["max_retries"], "transport.max_retries")),
         ),
         embeddings=EmbeddingPolicy(
+            model=_text(embed["model"], "embeddings.model"),
+            version=_text(embed["version"], "embeddings.version"),
             precision=embed["precision"],
             batch_size=_positive_int(embed["batch_size"], "embeddings.batch_size"),
             reembed_batch_size=_positive_int(embed["reembed_batch_size"], "embeddings.reembed_batch_size"),
