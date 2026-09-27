@@ -1,13 +1,19 @@
-"""Admin-editable reference data: the Kenyan holiday calendar (REQ-BD-01, used by REQ-REM-00's business-day helper)."""
+"""Admin-editable reference data and the staff moderation queue: the Kenyan holiday calendar (REQ-BD-01, used by
+REQ-REM-00's business-day helper) and ``moderation_cases`` (REQ-MOD-01, REQ-ADM-01; docs/spec/06 6.12)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from typing import Any
+from uuid import UUID
 
-from sqlalchemy import Boolean, Date, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy
+from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy, TimestampsMixin
+from bridge.models.enums import ModerationCaseStatus, ModerationSource
+from bridge.models.types import pg_enum
 
 
 class Holiday(IdMixin, CreatedMixin, Base):
@@ -22,3 +28,33 @@ class Holiday(IdMixin, CreatedMixin, Base):
     name: Mapped[str] = mapped_column(String(120))
     provisional: Mapped[bool] = mapped_column(Boolean, server_default="false")
     source_url: Mapped[str | None] = mapped_column(String(500))
+
+
+class ModerationCase(IdMixin, TimestampsMixin, Base):
+    """One item in the moderation queue (Tenancy STAFF): staff admin/moderator read and decide it; the app files it
+    (regex holds, the Tier-1 pre-screen, user reports, claim disputes, the Tier-2 similarity job). ``classifier``
+    holds the pre-screen output over Tier-1 fields only. Changing a subject's ``moderation_state`` is a separate
+    step through ``app_moderate_proposal`` / ``app_moderate_problem``."""
+
+    __tablename__ = "moderation_cases"
+    # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
+    # RETURNING for server defaults.
+    __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
+    __table_args__ = (
+        Index("ix_moderation_cases_subject", "subject_type", "subject_id"),
+        Index("ix_moderation_cases_status_created_at", "status", "created_at"),
+        {"info": {"tenancy": Tenancy.STAFF}},
+    )
+
+    subject_type: Mapped[str] = mapped_column(String(40))  # proposal, problem, org_claim, message, user, ...
+    subject_id: Mapped[UUID] = mapped_column()
+    reasons: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    source: Mapped[ModerationSource] = mapped_column(pg_enum(ModerationSource, "moderation_source"))
+    status: Mapped[ModerationCaseStatus] = mapped_column(
+        pg_enum(ModerationCaseStatus, "moderation_case_status"), server_default=ModerationCaseStatus.OPEN.value
+    )
+    classifier: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    reporter_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    assigned_to: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

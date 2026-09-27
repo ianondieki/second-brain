@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,6 +35,9 @@ class User(IdMixin, TimestampsMixin, Base):
     totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     totp_last_counter: Mapped[int | None] = mapped_column()
     totp_recovery_hashes: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    # Per-subject salt (revision 0002): owner refs SHA-256(subject_salt || user_id) in manifests and salted digests in
+    # audit payloads (docs/spec/06 6.4). Set once by the database; never updatable by the app.
+    subject_salt: Mapped[bytes] = mapped_column(LargeBinary, server_default=text("gen_random_bytes(32)"))
 
 
 class AuthIdentity(IdMixin, CreatedMixin, Base):
