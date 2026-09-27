@@ -1,8 +1,8 @@
 import { lazy } from "react";
 
 // Parts of /settings/security that appear only after an action or an error load on demand, keeping the route under
-// the 150 KiB gzipped JS budget (docs/spec/07 item 5). React.lazy, not next/dynamic: it adds no runtime, and none of
-// these parts render on the server.
+// the JS budget (docs/spec/07 item 5: 150 KB, i.e. 150,000 bytes, of gzipped JS; `npm run budget`). React.lazy, not
+// next/dynamic: it adds no runtime, and none of these parts render on the server.
 
 export const loadEnrolmentSteps = () => import("./EnrolmentSteps");
 

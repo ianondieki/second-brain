@@ -18,8 +18,8 @@ import type { ErrorKey } from "@/lib/api/errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { Steps } from "./Steps";
 
-// Loaded only after POST /api/auth/totp/enrol succeeds (next/dynamic in SecuritySettings), with the QR encoder, so
-// none of this is in the page's first download (docs/spec/07 item 5: 150 KiB of gzipped JS per route).
+// Loaded only after POST /api/auth/totp/enrol succeeds (React.lazy, see lazy.ts), with the QR encoder, so none of
+// this is in the page's first download (docs/spec/07 item 5: 150 KB, i.e. 150,000 bytes, of gzipped JS per route).
 
 type Notice = "keyCopied" | "codesCopied" | "copyFailed" | null;
 

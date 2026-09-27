@@ -118,6 +118,29 @@ cd backend && uv run pytest
 Without `TEST_DATABASE_ADMIN_URL`, the same tests start a throwaway pgvector container through testcontainers
 instead (slower, but needs no local Postgres).
 
+### JS budget per route
+
+`docs/spec/07` item 5 allows at most **150 KB of gzipped JavaScript per route, where 1 KB = 1,000 bytes: 150,000
+bytes**. This is the stricter reading of "KB" (150 KiB would be 153,600 bytes), so a route within it is within either
+reading. Counted: the gzip-compressed bodies of the scripts a first visit downloads (the route's `<script src>`
+files). Not counted: response headers, which depend on the protocol, and chunks that load later on demand. Measure
+against a production build, such as the `make dev` web container on port 3000:
+
+```bash
+cd frontend && npm run budget -- / /signup /login   # exits 1 when a route is over; BUDGET_BASE_URL overrides the URL
+```
+
+In Git Bash, prefix the command with `MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (routes
+without the leading slash, such as `signup`, also work). Lighthouse's script "transfer size" includes response
+headers, so a Lighthouse CI assertion (`resource-summary:script:size`, in bytes; REQ-UX-05) reads a little higher
+over HTTP/1.1.
+
+Browser targets are pinned in `frontend/package.json` (`browserslist`: Chrome, Edge and Firefox 111+, Safari
+16.4+, the Next.js default). The build already emits modern JavaScript for them: a newer target does not shrink any
+route. The polyfills that Lighthouse's "Legacy JavaScript" audit flags come from Next.js's own polyfill module (about
+0.6 KB gzipped), which no browserslist setting removes; the audit's savings estimate models core-js sizes, not the
+bytes actually sent.
+
 ## 4. Rules that surprise newcomers
 
 - Tests can never reach the internet. `backend/tests/egress.py` fences unit/integration tests locally, and CI runs
