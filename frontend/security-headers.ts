@@ -40,6 +40,14 @@ export const PAGE_HEADERS: ReadonlyArray<Header> = [
   { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
 ];
 
+/**
+ * next.config.ts experimental.caseSensitiveRoutes. Next.js matches header, rewrite and redirect sources without
+ * regard to case by default, so the lookahead below would also exempt "/_NEXT/static/x.js", an HTML 404 page, from
+ * the page headers (framable). Build assets are served only at their exact-case paths, so exact-case matching loses
+ * nothing; it also stops "/API/..." from reaching the API through the /api rewrite (the API's paths are lower case).
+ */
+export const CASE_SENSITIVE_ROUTES = true;
+
 /** The rules next.config.ts headers() returns (path-to-regexp sources, as Next.js matches them). */
 export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> = [
   { source: "/:path*", headers: [NOSNIFF] },

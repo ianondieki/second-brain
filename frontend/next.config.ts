@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
-import { HEADER_RULES } from "./security-headers";
+import { CASE_SENSITIVE_ROUTES, HEADER_RULES } from "./security-headers";
 
 // The API is same-origin: /api/* is rewritten to FastAPI (docs/spec/08 Frontend), so session and CSRF cookies
 // stay first-party. API_ORIGIN is the backend's address as seen from the Next.js server.
@@ -11,6 +11,8 @@ const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Exact-case matching of the header and rewrite sources below (see security-headers.ts).
+  experimental: { caseSensitiveRoutes: CASE_SENSITIVE_ROUTES },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
   },
