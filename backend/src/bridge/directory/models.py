@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, LargeBinary, SmallInteger, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, LargeBinary, SmallInteger, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,11 +59,21 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
     Readable by the claimant, the organisation's owners and admins, and staff admin/moderator. The app writes the
     claimant's progress; approval runs only through ``app_approve_claim_e1`` (automatic E1) and ``app_decide_claim``
     (staff admin), which set ``organizations.verification`` and create the claimant's membership. The OTP is compared
-    in SQL by ``app_confirm_claim_otp``; ``otp_verified_at`` is never the app's to set.
+    in SQL by ``app_confirm_claim_otp``; ``otp_verified_at`` is never the app's to set. The OTP columns change only
+    through the definer functions: ``otp_attempts`` counts every attempt and is never reset, and a new code comes from
+    ``app_reissue_claim_otp`` (at most 5 reissues, then manual review). One open claim per claimant and organisation,
+    and one new claim per claimant and organisation per 24 hours (trigger).
     """
 
     __tablename__ = "org_claims"
     __table_args__ = (
+        Index(
+            "uq_org_claims_open_claimant_org",
+            "org_id",
+            "claimant_user_id",
+            unique=True,
+            postgresql_where=text("status IN ('otp_sent', 'dns_pending', 'pending_review', 'disputed')"),
+        ),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "claimant_user_id"}},
     )
 
@@ -76,6 +86,7 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
     otp_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     otp_attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    otp_reissues: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     otp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dns_token: Mapped[str | None] = mapped_column(String(64))
     dns_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

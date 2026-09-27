@@ -233,10 +233,10 @@ APP_GRANTS: dict[str, str] = {
     "document_views": "SELECT, INSERT, UPDATE (duration_bucket)",
     "signal_events": "INSERT",  # read only by aggregate_worker
     "moderation_cases": "SELECT, INSERT, UPDATE (status, reasons, assigned_to, decided_by, decided_at, updated_at)",
+    # The OTP columns change only through app_reissue_claim_otp() and app_confirm_claim_otp() (attempts never reset).
     "org_claims": (
-        "SELECT, INSERT, UPDATE (otp_hash, otp_expires_at, otp_attempts, dns_token, dns_verified_at,"
-        " registration_no, cr12_date, kra_pin, sector_register, public_entity_requested, document_keys, status,"
-        " updated_at)"
+        "SELECT, INSERT, UPDATE (dns_token, dns_verified_at, registration_no, cr12_date, kra_pin, sector_register,"
+        " public_entity_requested, document_keys, status, updated_at)"
     ),
     "directory_invitations": "SELECT, INSERT, UPDATE (status, reason, approved_by, sent_at, updated_at)",
     "phone_verifications": "SELECT, INSERT",  # confirmed only through app_confirm_phone_otp()
@@ -588,7 +588,8 @@ POLICIES: tuple[Policy, ...] = (
     Policy(
         "org_claims",
         "INSERT",
-        check=f"claimant_user_id = app_user_id() AND {_OPEN_CLAIM} AND otp_attempts = 0"
+        check=f"claimant_user_id = app_user_id() AND {_OPEN_CLAIM} AND otp_attempts = 0 AND otp_reissues = 0"
+        " AND (otp_expires_at IS NULL OR otp_expires_at <= now() + interval '1 hour')"
         " AND otp_verified_at IS NULL AND dns_verified_at IS NULL AND reviewed_by IS NULL AND decided_at IS NULL"
         " AND CAST(split_part(CAST(email_address AS text), '@', 2) AS citext) = domain",
     ),
@@ -948,8 +949,10 @@ BEGIN
 END;
 $$;
 
--- E1 domain-email OTP: compares the stored hash of the claimant's open claim (at most 5 attempts, until expiry) and on
--- a match sets otp_verified_at, which the app cannot set. Returns whether this call matched; commit either way.
+-- E1 domain-email OTP: compares the stored hash of the claimant's open claim (until expiry) and on a match sets
+-- otp_verified_at, which the app cannot set. otp_attempts counts every attempt on the claim and is never reset; the
+-- claim's budget is 5 attempts per code issued (the first plus at most 5 reissues, so at most 30). Returns whether
+-- this call matched; commit either way.
 CREATE FUNCTION app_confirm_claim_otp(p_claim uuid, p_otp_hash bytea) RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -968,7 +971,7 @@ BEGIN
     END IF;
     IF v_claim.status NOT IN ('otp_sent', 'dns_pending') OR v_claim.otp_verified_at IS NOT NULL
        OR v_claim.otp_hash IS NULL OR v_claim.otp_expires_at IS NULL OR v_claim.otp_expires_at <= now()
-       OR v_claim.otp_attempts >= 5 THEN
+       OR v_claim.otp_attempts >= 5 * (1 + v_claim.otp_reissues) THEN
         RETURN false;
     END IF;
     v_match := p_otp_hash IS NOT NULL AND v_claim.otp_hash = p_otp_hash;
@@ -978,6 +981,48 @@ BEGIN
            updated_at = now()
      WHERE id = p_claim;
     RETURN v_match;
+END;
+$$;
+
+-- A new email code for the claimant's open claim that is still waiting for one: replaces the hash and expiry (at most
+-- an hour ahead) and counts the reissue; the attempt count carries on. After 5 reissues no code is issued: the claim
+-- moves to manual review (pending_review) and the function returns false. A fresh claim on the same organisation is
+-- only possible after the 24-hour cooldown of org_claims_guard(), so a new claim cannot reset the limits either.
+CREATE FUNCTION app_reissue_claim_otp(p_claim uuid, p_otp_hash bytea, p_expires_at timestamptz) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_claim public.org_claims%ROWTYPE;
+BEGIN
+    SELECT * INTO v_claim
+      FROM public.org_claims
+     WHERE id = p_claim AND claimant_user_id = public.app_user_id()
+       FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'app_reissue_claim_otp: no such claim for the current user'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_claim.status NOT IN ('otp_sent', 'dns_pending') OR v_claim.otp_verified_at IS NOT NULL THEN
+        RAISE EXCEPTION 'app_reissue_claim_otp: the claim is not waiting for an email code'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF p_otp_hash IS NULL OR octet_length(p_otp_hash) <> 32 OR p_expires_at IS NULL OR p_expires_at <= now()
+       OR p_expires_at > now() + interval '1 hour' THEN
+        RAISE EXCEPTION 'app_reissue_claim_otp: a 32-byte code digest and an expiry within the next hour are required'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF v_claim.otp_reissues >= 5 THEN
+        UPDATE public.org_claims SET status = 'pending_review', updated_at = now() WHERE id = p_claim;
+        RETURN false;
+    END IF;
+    UPDATE public.org_claims
+       SET otp_hash = p_otp_hash,
+           otp_expires_at = p_expires_at,
+           otp_reissues = otp_reissues + 1,
+           updated_at = now()
+     WHERE id = p_claim;
+    RETURN true;
 END;
 $$;
 
@@ -1426,8 +1471,29 @@ BEGIN
 END;
 $$;
 
+-- One claim per claimant and organisation per 24 hours, whatever became of the earlier one: withdrawing and claiming
+-- again cannot reset the OTP attempt and reissue limits. (One open claim per claimant and organisation is also a
+-- partial unique index.) SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
+CREATE FUNCTION org_claims_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM public.org_claims c
+         WHERE c.org_id = NEW.org_id AND c.claimant_user_id = NEW.claimant_user_id
+           AND c.created_at > now() - interval '24 hours'
+    ) THEN
+        RAISE EXCEPTION 'org_claims: one claim per claimant and organisation per 24 hours'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_confidential_guard() FROM PUBLIC;
@@ -1448,6 +1514,9 @@ CREATE TRIGGER proposals_guard
 CREATE TRIGGER tags_guard
     BEFORE UPDATE ON tags
     FOR EACH ROW EXECUTE FUNCTION tags_guard();
+CREATE TRIGGER org_claims_guard
+    BEFORE INSERT ON org_claims
+    FOR EACH ROW EXECUTE FUNCTION org_claims_guard();
 """
 
 APPEND_ONLY_TABLES = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
@@ -1473,6 +1542,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_delist_org(uuid)": ("bridge_app",),
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
+    "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),
     "app_audit_chain_heads()": ("provenance_worker",),
 }
@@ -1485,6 +1555,7 @@ TRIGGER_FUNCTIONS = (
     "provenance_records_guard()",
     "proposals_guard()",
     "tags_guard()",
+    "org_claims_guard()",
 )
 
 
@@ -2001,6 +2072,7 @@ def _create_tables() -> None:
         sa.Column("otp_hash", sa.LargeBinary(), nullable=True),
         sa.Column("otp_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("otp_attempts", sa.SmallInteger(), server_default="0", nullable=False),
+        sa.Column("otp_reissues", sa.SmallInteger(), server_default="0", nullable=False),
         sa.Column("otp_verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("dns_token", sa.String(length=64), nullable=True),
         sa.Column("dns_verified_at", sa.DateTime(timezone=True), nullable=True),
@@ -2027,6 +2099,13 @@ def _create_tables() -> None:
     )
     op.create_index(op.f("ix_org_claims_claimant_user_id"), "org_claims", ["claimant_user_id"], unique=False)
     op.create_index(op.f("ix_org_claims_org_id"), "org_claims", ["org_id"], unique=False)
+    op.create_index(
+        "uq_org_claims_open_claimant_org",
+        "org_claims",
+        ["org_id", "claimant_user_id"],
+        unique=True,
+        postgresql_where=sa.text("status IN ('otp_sent', 'dns_pending', 'pending_review', 'disputed')"),
+    )
     op.create_table(
         "problems",
         sa.Column("source", _enum("problem_source"), nullable=False),

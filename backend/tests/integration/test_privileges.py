@@ -570,6 +570,83 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         assert await run(conn, "SELECT app_is_member(:id)", id=verified) is False
 
 
+async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The app cannot touch the OTP columns. app_reissue_claim_otp() replaces the code but keeps the cumulative
+    attempt count (budget: 5 attempts per code issued); after 5 reissues the claim goes to manual review. A new claim
+    cannot reset the limits: one open claim per claimant and organisation, one new claim per 24 hours."""
+    right, wrong = otp
+    fresh = hashlib.sha256(b"111111").digest()
+    confirm = "SELECT app_confirm_claim_otp(:id, :h)"
+    reissue = "SELECT app_reissue_claim_otp(:id, :h, now() + interval '10 minutes')"
+    counters = "SELECT otp_attempts, otp_reissues, status::text AS status FROM org_claims WHERE id = :id"
+    async with as_app(owner_engine) as conn:
+        org = await add_org(conn, official_domains="{capped.example.test}")
+        other_org = await add_org(conn)
+        claimant = await w.add_user(conn, _email("otp-claimant"), "Claimant")
+        stranger = await w.add_user(conn, _email("otp-stranger"), "Stranger")
+        await act(conn, claimant)
+        claim = await _claim(conn, org, claimant, "capped.example.test", "e1", right)
+        for column in ("otp_attempts = 0", "otp_reissues = 0", "otp_hash = NULL", "otp_expires_at = now()"):
+            await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "permission denied", id=claim)
+
+        for _ in range(5):
+            assert await run(conn, confirm, id=claim, h=wrong) is False
+        assert await run(conn, confirm, id=claim, h=right) is False  # the first code's 5 attempts are spent
+        assert await run(conn, reissue, id=claim, h=fresh) is True
+        assert tuple((await conn.execute(text(counters), {"id": claim})).one()) == (5, 1, "otp_sent")  # kept
+        assert await run(conn, confirm, id=claim, h=right) is False  # the old code is gone
+        assert await run(conn, confirm, id=claim, h=fresh) is True
+        assert tuple((await conn.execute(text(counters), {"id": claim})).one()) == (7, 1, "otp_sent")
+        await expect(conn, reissue, "not waiting for an email code", id=claim, h=fresh)  # already verified
+
+        capped = await _claim(conn, other_org, claimant, "other.example.test", "e1", right)
+        for expiry in ("now() + interval '2 hours'", "now() - interval '1 minute'"):
+            await expect(
+                conn,
+                f"SELECT app_reissue_claim_otp(:id, :h, {expiry})",
+                "an expiry within the next hour",
+                id=capped,
+                h=fresh,
+            )
+        await expect(conn, reissue, "32-byte code digest", id=capped, h=b"short")
+        for _ in range(5):
+            assert await run(conn, reissue, id=capped, h=fresh) is True
+        assert await run(conn, reissue, id=capped, h=fresh) is False  # the sixth: no code, manual review instead
+        assert tuple((await conn.execute(text(counters), {"id": capped})).one()) == (0, 5, "pending_review")
+        await act(conn, stranger)
+        await expect(conn, reissue, "no such claim for the current user", id=capped, h=fresh)
+
+        await act(conn, claimant)
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=capped)
+        await expect(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'other.example.test', 'info@other.example.test', 'e1', 'otp_sent')",
+            "one claim per claimant and organisation per 24 hours",
+            id=uuid7(),
+            org=other_org,
+            u=claimant,
+        )
+        # After the cooldown a new claim is possible, but never a second open one.
+        await as_owner(conn)
+        await run(
+            conn,
+            "UPDATE org_claims SET created_at = now() - interval '2 days', status = 'pending_review' WHERE id = :id",
+            id=capped,
+        )
+        await act(conn, claimant)
+        again = uuid7()
+        new_claim = (
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'other.example.test', 'info@other.example.test', 'e1', 'otp_sent')"
+        )
+        await expect(conn, new_claim, "uq_org_claims_open_claimant_org", id=again, org=other_org, u=claimant)
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=capped)
+        await run(conn, new_claim, id=again, org=other_org, u=claimant)
+
+
 async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held_tags(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:

@@ -138,10 +138,7 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     },
     "document_views": {"duration_bucket"},
     "moderation_cases": {"status", "reasons", "assigned_to", "decided_by", "decided_at", "updated_at"},
-    "org_claims": {
-        "otp_hash",
-        "otp_expires_at",
-        "otp_attempts",
+    "org_claims": {  # never the OTP columns: app_reissue_claim_otp() and app_confirm_claim_otp() own them
         "dns_token",
         "dns_verified_at",
         "registration_no",
@@ -280,6 +277,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
     "proposals_guard()": (True, set()),
+    "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
+    "org_claims_guard()": (True, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -701,10 +700,9 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
     assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
-    assert (
-        not {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
-        & (updatable["org_claims"])
-    )
+    claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
+    claim_protected |= {"otp_hash", "otp_expires_at", "otp_attempts", "otp_reissues"}
+    assert not claim_protected & updatable["org_claims"]
     profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
     assert not profile_protected & updatable["developer_profiles"]
 
@@ -1353,6 +1351,10 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             "UPDATE provenance_records SET status = 'timestamped'",
             "UPDATE attestations SET created_it = true",
             "UPDATE tags SET closed_at = NULL",
+            "UPDATE org_claims SET otp_attempts = 0",
+            "UPDATE org_claims SET otp_reissues = 0",
+            "UPDATE org_claims SET otp_hash = NULL",
+            "UPDATE org_claims SET otp_expires_at = now()",
             "DELETE FROM nda_acceptances",
             "INSERT INTO provenance_keys (key_id, public_key) VALUES ('k', '\\x00')",
             "SELECT 1 FROM proposal_confidential",
@@ -1592,6 +1594,7 @@ V2_TRIGGERS = {
     ),
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
