@@ -149,15 +149,20 @@ class BudgetGuard:
         global_spent = await self._ledger.global_spent_usd(since=day_start(now))
         if global_spent + estimate_usd > global_cap:
             raise LLMBudgetExceeded("global", spent_usd=global_spent, cap_usd=global_cap)
+        snap = await self.snapshot(ctx)
+        if snap.spent_usd is not None and snap.cap_usd is not None and snap.spent_usd + estimate_usd > snap.cap_usd:
+            raise LLMBudgetExceeded("tenant", spent_usd=snap.spent_usd, cap_usd=snap.cap_usd)
+        return snap
+
+    async def snapshot(self, ctx: CallContext) -> Snapshot:
+        """The subject's spend this month and its cap, without checking anything."""
         if ctx.org_id is None and ctx.user_id is None:
             return Snapshot(None, None)
         cap = await self._caps.monthly_cap_usd(org_id=ctx.org_id, user_id=ctx.user_id)
         if cap is None:
             return Snapshot(None, None)
-        spent = await self._ledger.tenant_spent_usd(org_id=ctx.org_id, user_id=ctx.user_id, since=month_start(now))
-        if spent + estimate_usd > cap:
-            raise LLMBudgetExceeded("tenant", spent_usd=spent, cap_usd=cap)
-        return Snapshot(spent, cap)
+        since = month_start(self._now())
+        return Snapshot(await self._ledger.tenant_spent_usd(org_id=ctx.org_id, user_id=ctx.user_id, since=since), cap)
 
     async def after(self, ctx: CallContext, snapshot: Snapshot, cost_usd: Decimal) -> BudgetStatus:
         """The subject's month after an attempt that cost ``cost_usd``; tells the listener about a soft-cap crossing."""
