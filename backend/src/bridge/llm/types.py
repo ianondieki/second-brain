@@ -123,7 +123,6 @@ class LLMOutput(BaseModel):
     )
 
 
-
 @dataclass(frozen=True, slots=True)
 class TokenUsage:
     """Tokens billed for one or more attempts. ``cache_creation_1h_input_tokens`` is the part of
