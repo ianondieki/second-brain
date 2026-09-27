@@ -7,11 +7,12 @@ runs with a default key. Every variable is documented in ``backend/.env.example`
 from __future__ import annotations
 
 import base64
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -63,6 +64,18 @@ class Settings(BaseSettings):
     plans_file: Path = BACKEND_DIR / "config" / "plans.yaml"
     consents_file: Path = BACKEND_DIR / "config" / "consents.yaml"
 
+    # Runtime LLMs (ADR-005; bridge/llm). The app starts without a key; the adapter refuses at call time. No test
+    # and no make check step reaches the provider (AC-SEC-5; D-18: no paid calls).
+    anthropic_api_key: SecretStr | None = None
+    llm_kill_switch: bool = False  # LLM_KILL_SWITCH=1 refuses every call with LLMKillSwitch
+    # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
+    llm_global_daily_cap_usd: Decimal = Decimal("0")
+    llm_models_file: Path = BACKEND_DIR / "ai" / "models.yaml"
+
+    # Embeddings (ADR-005 decision 6). bge-m3 runs on the worker from local weights only (never downloaded by code).
+    embedder: Literal["fake", "bge-m3"] = "fake"
+    embedder_model_path: Path | None = None
+
     # Cookie names are fixed (the web app reads the same names). With Secure cookies they carry the __Host- prefix:
     # Secure, Path=/ and no Domain, so a sibling subdomain cannot plant them. Browsers refuse the prefix without
     # Secure, so plain-http setups (COOKIE_SECURE=false) get the bare names.
@@ -81,6 +94,12 @@ class Settings(BaseSettings):
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
 
+    @field_validator("anthropic_api_key", mode="before")
+    @classmethod
+    def _blank_key_is_none(cls, value: object) -> object:
+        """``ANTHROPIC_API_KEY=`` (blank, as in ``.env.example``) means no key."""
+        return None if isinstance(value, str) and not value.strip() else value
+
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:
         problems: list[str] = []
@@ -95,7 +114,11 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        if self.llm_global_daily_cap_usd < 0:
+            problems.append("LLM_GLOBAL_DAILY_CAP_USD must be zero or more")
         if self.app_env == "production":
+            if self.embedder == "fake":
+                problems.append("production embeds with a real model only (EMBEDDER=bge-m3)")
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
             if not self.public_base_url.startswith("https://"):

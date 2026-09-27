@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -80,3 +81,48 @@ def test_feature_flags_default_off() -> None:
 def test_data_key_must_decode_to_32_bytes() -> None:
     with pytest.raises(ValidationError, match="base64 of exactly 32 bytes"):
         make(data_encryption_key=SecretStr("this is not base64 but it is long enough!!"))
+
+
+def test_llm_settings_start_without_an_anthropic_key() -> None:
+    """REQ-LLM-01: dev and test start with no key; the adapter refuses at call time instead."""
+    settings = make()
+    assert settings.anthropic_api_key is None
+    assert settings.llm_kill_switch is False
+    assert settings.llm_global_daily_cap_usd == Decimal("0")
+    assert settings.llm_models_file.name == "models.yaml"
+    assert settings.embedder == "fake"
+
+
+def test_kill_switch_reads_one_as_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_KILL_SWITCH", "1")
+    monkeypatch.setenv("LLM_GLOBAL_DAILY_CAP_USD", "5.00")
+    settings = make()
+    assert settings.llm_kill_switch is True
+    assert settings.llm_global_daily_cap_usd == Decimal("5.00")
+
+
+def test_negative_global_cap_is_refused() -> None:
+    with pytest.raises(ValidationError, match="LLM_GLOBAL_DAILY_CAP_USD"):
+        make(llm_global_daily_cap_usd=Decimal("-1"))
+
+
+def test_production_refuses_the_fake_embedder() -> None:
+    """REQ-EMB-01: production fails closed without a real embedder."""
+    with pytest.raises(ValidationError, match="EMBEDDER=bge-m3"):
+        make(app_env="production", email_provider="postmark", postmark_server_token=SecretStr("pm"), embedder="fake")
+
+
+def test_production_accepts_bge_m3() -> None:
+    settings = make(
+        app_env="production",
+        email_provider="postmark",
+        postmark_server_token=SecretStr("pm"),
+        public_base_url="https://bridge.example",
+        embedder="bge-m3",
+    )
+    assert settings.embedder == "bge-m3"
+
+
+def test_blank_anthropic_key_means_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "  ")
+    assert make().anthropic_api_key is None
