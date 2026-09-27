@@ -1,0 +1,24 @@
+# Banned claims copy-lint (REQ-PROV-02, AC-IP-4; docs/spec/04 principle 2, ADR-003 item 6).
+# Read by scripts/copy_lint.py, which scans i18n strings, email and page templates, config copy and frontend source.
+# Matching is case-insensitive, on word boundaries; spaces and hyphens (incl. Unicode dashes) are interchangeable.
+# Approved phrasing instead: "timestamped evidence of what you submitted and when"; "every view is logged and
+# watermarked to the viewer".
+
+[banned]
+theft-proof
+theft-proofed
+cannot be stolen
+can't be stolen
+can not be stolen
+protected idea
+protected ideas
+patented
+
+[cooccurrence]
+# In these i18n namespaces (and in EM2 email templates), a message that says "approve"/"approved" must also carry a
+# non-binding qualifier in the same message. Other namespaces (moderation holds, admin-approved invitations, EM8
+# verification results) are exempt.
+namespaces: engagement., tracker., email.em2.
+templates: em2
+terms: approve, approved, approves, approval
+qualifiers: non-binding, not a contract or a commitment to buy
