@@ -209,3 +209,81 @@ describe("api client CSRF handling", () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+// createApiClient answers like openapi-fetch (whose types it uses), so settle() and every screen read it unchanged.
+describe("api client requests and answers", () => {
+  const ME = `${BASE}/api/auth/me`;
+
+  function recording(answer: () => Response) {
+    const requests: Request[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(String(input), init);
+      requests.push(request);
+      return answer();
+    });
+    return { client: createApiClient({ baseUrl: `${BASE}/`, fetch: fetchMock }), requests };
+  }
+
+  it("sends a JSON body with its content type, and a GET with neither", async () => {
+    setCsrfCookie("tok");
+    const post = recording(() => json(200, { mfa_required: false, user: {} }));
+    await post.client.POST("/api/auth/login", { body: { email: "a@example.test", password: "a long password" } });
+    expect(post.requests[0].url).toBe(`${BASE}/api/auth/login`);
+    expect(post.requests[0].headers.get("Content-Type")).toBe("application/json");
+    expect(await post.requests[0].json()).toEqual({ email: "a@example.test", password: "a long password" });
+    expect(post.requests[0].credentials).toBe("same-origin");
+
+    const get = recording(() => json(401, { detail: { code: "unauthenticated", message: "x" } }));
+    await get.client.GET("/api/auth/me");
+    expect(get.requests[0].url).toBe(ME);
+    expect(get.requests[0].method).toBe("GET");
+    expect(get.requests[0].headers.get("Content-Type")).toBeNull();
+    expect(get.requests[0].body).toBeNull();
+  });
+
+  it("passes request headers and an abort signal through", async () => {
+    const { client, requests } = recording(() => json(200, {}));
+    const controller = new AbortController();
+    await client.GET("/api/auth/me", { headers: { Accept: "application/json" }, signal: controller.signal });
+    expect(requests[0].headers.get("Accept")).toBe("application/json");
+    controller.abort();
+    expect(requests[0].signal.aborted).toBe(true);
+  });
+
+  it("returns parsed data when ok", async () => {
+    const { client } = recording(() => json(200, { csrf_token: "t" }));
+    const { data, error, response } = await client.GET("/api/auth/me");
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ csrf_token: "t" });
+    expect(error).toBeUndefined();
+  });
+
+  it("returns neither data nor error for an empty answer (204, Content-Length 0, an empty body)", async () => {
+    setCsrfCookie("tok");
+    for (const answer of [
+      () => new Response(null, { status: 204 }),
+      () => new Response("", { status: 200, headers: { "Content-Length": "0" } }),
+      () => new Response("", { status: 200 }),
+    ]) {
+      const { data, error, response } = await recording(answer).client.POST("/api/auth/logout");
+      expect(response.ok).toBe(true);
+      expect(data).toBeUndefined();
+      expect(error).toBeUndefined();
+    }
+    const failed = await recording(() => new Response(null, { status: 503 })).client.GET("/api/auth/me");
+    expect(failed.response.status).toBe(503);
+    expect(failed.error).toBeUndefined();
+    expect(failed.data).toBeUndefined();
+  });
+
+  it("returns the error body parsed as JSON, or as text when it is not JSON", async () => {
+    const detail = { detail: { code: "rate_limited", message: "x" } };
+    const asJson = await recording(() => json(429, detail)).client.GET("/api/auth/me");
+    expect(asJson.error).toEqual(detail);
+    expect(asJson.data).toBeUndefined();
+
+    const asText = await recording(() => new Response("Bad gateway", { status: 502 })).client.GET("/api/auth/me");
+    expect(asText.error).toBe("Bad gateway");
+    expect(asText.response.status).toBe(502);
+  });
+});
