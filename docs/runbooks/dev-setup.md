@@ -100,6 +100,10 @@ make check-legacy     # the unchanged local-companion suite, via scripts/run_leg
 make check-e2e        # Playwright smoke; needs the stack running (`make dev` first)
 ```
 
+Locally, Playwright runs one worker (`frontend/playwright.config.ts`): signups and logins hash passwords with
+argon2id in the API's single process, and parallel workers time out waiting for it. CI keeps Playwright's default
+worker count. To try more workers locally: `cd frontend && npm run e2e -- --workers=2`.
+
 After changing an API route or schema, regenerate the OpenAPI document and the frontend's generated types:
 
 ```bash
