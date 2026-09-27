@@ -1376,6 +1376,35 @@ BEGIN
 END;
 $$;
 
+-- current_version_id must be a registered version of the proposal and draft_version_id a draft one (the composite
+-- foreign keys already keep both inside the proposal). Checked when either is set or changed, so register the version
+-- first and point current_version_id at it afterwards. SECURITY DEFINER: reads proposal_versions whatever the
+-- caller's visibility.
+CREATE FUNCTION proposals_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.current_version_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.current_version_id IS DISTINCT FROM OLD.current_version_id)
+       AND NOT EXISTS (
+           SELECT 1 FROM public.proposal_versions v
+            WHERE v.id = NEW.current_version_id AND v.proposal_id = NEW.id AND v.status = 'registered') THEN
+        RAISE EXCEPTION 'proposals: current_version_id must be a registered version of the proposal'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.draft_version_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.draft_version_id IS DISTINCT FROM OLD.draft_version_id)
+       AND NOT EXISTS (
+           SELECT 1 FROM public.proposal_versions v
+            WHERE v.id = NEW.draft_version_id AND v.proposal_id = NEW.id AND v.status = 'draft') THEN
+        RAISE EXCEPTION 'proposals: draft_version_id must be a draft version of the proposal'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- A tag is open while closed_at IS NULL (uq_tags_open_developer_org: one open tag per developer and organisation).
 -- Moving to withdrawn, expired or released closes it. A closed tag never reopens: closed_at keeps its value and the
 -- status can only move to another closing status.
@@ -1397,6 +1426,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
@@ -1412,6 +1442,9 @@ CREATE TRIGGER proposal_confidential_guard
 CREATE TRIGGER provenance_records_guard
     BEFORE UPDATE OR DELETE ON provenance_records
     FOR EACH ROW EXECUTE FUNCTION provenance_records_guard();
+CREATE TRIGGER proposals_guard
+    BEFORE INSERT OR UPDATE ON proposals
+    FOR EACH ROW EXECUTE FUNCTION proposals_guard();
 CREATE TRIGGER tags_guard
     BEFORE UPDATE ON tags
     FOR EACH ROW EXECUTE FUNCTION tags_guard();
@@ -1450,6 +1483,7 @@ TRIGGER_FUNCTIONS = (
     "proposal_versions_guard()",
     "proposal_confidential_guard()",
     "provenance_records_guard()",
+    "proposals_guard()",
     "tags_guard()",
 )
 

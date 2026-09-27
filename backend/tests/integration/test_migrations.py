@@ -279,6 +279,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
+    "proposals_guard()": (True, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -1429,6 +1430,61 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
         await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
 
 
+NEW_VERSION = (
+    "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
+    " summary, owner_handle) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S', 'h')"
+)
+
+
+async def test_proposal_version_pointers_follow_the_version_status(owner_engine: AsyncEngine) -> None:
+    """current_version_id is always a registered version of the proposal and draft_version_id a draft one (trigger,
+    for every role; the composite foreign keys keep both inside the proposal)."""
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, proposal, registered = await _registered_proposal(conn)
+        problem = await w.add_problem(conn, owner, niche)
+        _other, other_draft = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        draft = uuid7()
+        await conn.execute(sa.text(NEW_VERSION), {"id": draft, "p": proposal, "n": 2, "niche": niche})
+        point = "UPDATE proposals SET {column} = :v WHERE id = :id"
+        current, pending = point.format(column="current_version_id"), point.format(column="draft_version_id")
+        await expect_error(conn, current, "registered version of the proposal", {"id": proposal, "v": draft})
+        await expect_error(conn, pending, "draft version of the proposal", {"id": proposal, "v": registered})
+        # Another proposal's version: refused by the trigger (before the composite foreign key would refuse it).
+        await expect_error(conn, current, "registered version of the proposal", {"id": proposal, "v": other_draft})
+        await conn.execute(sa.text(pending), {"id": proposal, "v": draft})
+        # Register the draft first, then point current_version_id at it (the app's order).
+        await conn.execute(
+            sa.text("INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :p)"),
+            {"v": draft, "p": problem},
+        )
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :v"
+            ),
+            {"v": draft, "c": uuid4().hex[:16]},
+        )
+        await conn.execute(
+            sa.text("UPDATE proposals SET current_version_id = :v, draft_version_id = NULL WHERE id = :id"),
+            {"id": proposal, "v": draft},
+        )
+        # An unchanged pointer is not re-checked: a stale draft_version_id never blocks unrelated edits.
+        third = uuid7()
+        await conn.execute(sa.text(NEW_VERSION), {"id": third, "p": proposal, "n": 3, "niche": niche})
+        await conn.execute(sa.text(pending), {"id": proposal, "v": third})
+        await conn.execute(
+            sa.text("INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :p)"),
+            {"v": third, "p": problem},
+        )
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :v"
+            ),
+            {"v": third, "c": uuid4().hex[:16]},
+        )
+        await conn.execute(sa.text("UPDATE proposals SET title = 'Renamed' WHERE id = :id"), {"id": proposal})
+        await expect_error(conn, pending, "draft version of the proposal", {"id": proposal, "v": registered})
+
+
 async def test_tier2_of_a_registered_version_is_frozen_except_the_manifest(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
         owner, niche, _proposal, version = await _registered_proposal(conn)
@@ -1535,6 +1591,7 @@ V2_TRIGGERS = {
         ROW | BEFORE | ON_DELETE | ON_UPDATE,
     ),
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
+    ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
