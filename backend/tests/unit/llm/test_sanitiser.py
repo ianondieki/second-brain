@@ -14,9 +14,11 @@ from bridge.llm.sanitiser import (
     FRAMING_RULES,
     TRUNCATION_MARK,
     frame,
+    is_ignorable,
     new_nonce,
     nonce_instruction,
     sanitise,
+    strip_links,
 )
 from bridge.llm.types import Tier
 
@@ -160,6 +162,49 @@ def test_invariants_hold_for_any_text(text: str, cap: int) -> None:
     assert "<" not in once.text
     assert ">" not in once.text
     assert not any(unicodedata.category(c) in {"Cf", "Cs"} for c in once.text)
+    assert not any(is_ignorable(c) for c in once.text)
     assert not any(unicodedata.category(c) == "Cc" and c not in "\n\t" for c in once.text)
     twice = sanitise(once.text, max_chars=cap, base64_run_chars=B64)
     assert twice.text == once.text  # idempotent
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("See [docs](https://en.wikipedia.org/wiki/Foo_(bar)) now", "See docs now"),
+        ("[a [b] c](https://x.test/y)", "a [b] c"),
+        ("[![alt text](https://img.test/p.png)](https://link.test)", "alt text"),
+        ("Read [the brief][ref] today.\n\n[ref]:\n  https://evil.example/brief", "Read the brief today."),
+        ("Collapsed [ref][] link", "Collapsed ref link"),
+        ("[unclosed](https://x.test", "[unclosed](https://x.test"),
+        ("Just [brackets] here", "Just [brackets] here"),
+        ("!Bang [and](u)", "!Bang and"),
+    ],
+)
+def test_links_with_balanced_brackets_and_next_line_definitions(raw: str, expected: str) -> None:
+    assert clean(raw) == expected
+
+
+def test_link_scanning_is_linear_on_pathological_input() -> None:
+    assert strip_links("[" * 5000) == "[" * 5000
+    assert clean("[](" * 1500)  # finishes quickly; nothing to assert beyond not hanging
+
+
+def test_mime_wrapped_base64_is_removed_but_prose_is_not() -> None:
+    line = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAx"  # 72 characters
+    wrapped = "\n".join([line] * 4)
+    result = sanitise(f"Payload:\n{wrapped}\nend", max_chars=CAP, base64_run_chars=B64)
+    assert result.text == "Payload:\n[encoded data removed]\nend"
+    assert "base64" in result.removed
+    prose = " ".join(["Solar cold rooms help fish traders in Kisumu keep stock fresh"] * 10)
+    assert clean(prose) == prose
+
+
+IGNORABLE = [0x3164, 0x034F, 0x115F, 0x1160, 0x2800, 0xFFA0, 0x17B4, 0x180E, 0x2064, 0x1D173]
+
+
+@pytest.mark.parametrize("code", IGNORABLE)
+def test_default_ignorable_code_points_are_removed(code: int) -> None:
+    result = sanitise(f"pay{chr(code)}load", max_chars=CAP, base64_run_chars=B64)
+    assert result.text == "payload"
+    assert "invisible" in result.removed

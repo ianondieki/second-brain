@@ -17,6 +17,7 @@ budget:
 sanitiser:
   max_field_chars: 4000         # default length cap per untrusted field; a task or a field may lower it
   base64_run_chars: 200         # runs of base64-like characters longer than this are removed (docs/spec/08)
+  base64_segment_chars: 20      # whitespace-separated pieces this long count as one run (MIME-wrapped blocks)
 
 transport:
   timeout_seconds: 120

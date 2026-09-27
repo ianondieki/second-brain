@@ -136,7 +136,12 @@ def prepare(
                 blocks.append(TextBlock(part.text))
                 continue
             cap = min(part.max_chars or spec.max_field_chars, spec.max_field_chars)
-            clean = sanitise(part.value, max_chars=cap, base64_run_chars=policy.base64_run_chars)
+            clean = sanitise(
+                part.value,
+                max_chars=cap,
+                base64_run_chars=policy.base64_run_chars,
+                base64_segment_chars=policy.base64_segment_chars,
+            )
             blocks.append(TextBlock(frame(part.name, part.tier, clean.text, nonce)))
             records.append(field_record(part, clean.text, clean.removed))
         if index in breakpoints:
