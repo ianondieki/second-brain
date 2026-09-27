@@ -148,3 +148,24 @@ async def test_withdrawn_consent_blocks_again(task: str) -> None:
     with pytest.raises(ConsentRequired):
         await r.service.complete(task, fixture(task), Verdict, ctx=CTX)
     assert tape.requests == []
+
+
+@pytest.mark.parametrize("task", TASKS)
+async def test_an_echoed_key_never_reaches_errors_ledger_dead_letters_or_feedback(task: str) -> None:
+    """The model answers with a key made of (Tier-2 or injected) text: schema feedback keeps only error types and
+    declared field names, so the text never reaches the exception, the ledger, the dead letter or the retry turn."""
+    echo = json.dumps({"injection_suspected": False, "verdict": "clean", "reason": "r", CANARY: 1})
+    adapter = FakeAdapter([echo, echo])
+    r = rig(adapter)
+    messages = [
+        Message.system(f"Fixture prompt for {task}."),
+        Message.user("Input:", InputField("teaser.summary", TIER1_TEXT)),
+    ]
+    with pytest.raises(LLMSchemaError) as info:
+        await r.service.complete(task, messages, Verdict, ctx=CTX)
+    feedback = adapter.requests[1].messages[-1].blocks[-1].text
+    assert "(extra key): extra_forbidden" in feedback
+    places = [str(info.value), feedback, *(e.error or "" for e in r.ledger.entries)]
+    places += [letter.detail for letter in r.dead_letters.letters]
+    assert r.dead_letters.letters
+    assert not [text for text in places if CANARY in text]

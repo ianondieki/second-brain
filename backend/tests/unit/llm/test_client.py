@@ -185,8 +185,8 @@ async def test_schema_failure_retries_once_with_the_error() -> None:
     assert result.parsed.verdict == "clean"
     retry = tape.requests[1].json()["messages"][-1]["content"][-1]["text"]
     assert "did not match the required JSON schema" in retry
-    assert "verdict" in retry
-    assert "reason" in retry
+    assert "verdict: literal_error" in retry
+    assert "reason: missing" in retry
     assert statuses(r.ledger.entries) == [CallStatus.SCHEMA_ERROR, CallStatus.OK]
     assert "verdict" in (r.ledger.entries[0].error or "")
 

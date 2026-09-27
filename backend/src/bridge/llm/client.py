@@ -136,9 +136,35 @@ class _Call:
     trace_id: str
 
 
-def _schema_errors(exc: ValidationError) -> str:
-    errors = exc.errors(include_input=False, include_url=False)[:MAX_FEEDBACK_ERRORS]
-    return "; ".join(f"{'.'.join(str(p) for p in e['loc']) or '(root)'}: {e['msg']}" for e in errors)
+def declared_fields(output_schema: Mapping[str, Any]) -> frozenset[str]:
+    """Every property name the output schema declares (nested models included)."""
+    names: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, Mapping):
+            properties = node.get("properties")
+            if isinstance(properties, Mapping):
+                names.update(str(key) for key in properties)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(output_schema)
+    return frozenset(names)
+
+
+def schema_errors(exc: ValidationError, output_schema: Mapping[str, Any]) -> str:
+    """Why the output failed, built only from pydantic error types and field names the schema declares. Messages
+    and unknown keys are dropped: both can echo the model's output (which may quote Tier-2 or injected text)."""
+    declared = declared_fields(output_schema)
+    errors = exc.errors(include_input=False, include_url=False, include_context=False)[:MAX_FEEDBACK_ERRORS]
+    parts = []
+    for error in errors:
+        loc = ".".join(str(p) if isinstance(p, int) or p in declared else "(extra key)" for p in error["loc"])
+        parts.append(f"{loc or '(root)'}: {error['type']}")
+    return "; ".join(parts)
 
 
 class LLMService:
@@ -414,7 +440,7 @@ class LLMService:
             try:
                 parsed = schema.model_validate_json(response.text)
             except ValidationError as exc:
-                problems = _schema_errors(exc)
+                problems = schema_errors(exc, output_schema)
                 await self._record(call, CallStatus.SCHEMA_ERROR, error=problems, **recorded)
                 if retried_schema:
                     raise await self._fail(
@@ -592,7 +618,8 @@ class LLMService:
             try:
                 parsed = schema.model_validate_json(response.text)
             except ValidationError as exc:
-                failure = (LLMSchemaError, CallStatus.SCHEMA_ERROR, f"output failed the schema: {_schema_errors(exc)}")
+                problems = schema_errors(exc, schema.model_json_schema())
+                failure = (LLMSchemaError, CallStatus.SCHEMA_ERROR, f"output failed the schema: {problems}")
         if failure is not None or parsed is None:
             error, status, detail = failure or (LLMSchemaError, CallStatus.SCHEMA_ERROR, "no output")
             await self._record(call, status, error=detail, **recorded)
