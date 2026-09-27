@@ -36,7 +36,17 @@ Tenancy classes added to ``bridge.models.base.Tenancy`` (the generated RLS tests
 Privileged changes run only through the SECURITY DEFINER functions below, which check their caller in SQL: moderation
 decisions and holds, claim approval (E1 automatic, E1/E2 by staff admin), delisting, D1 confirmation (the OTP hash is
 compared in SQL), D2 decisions (staff admin), the KYC image purge bookkeeping, the invitation opt-out and the global
-LLM spend. ``bridge_app`` holds no UPDATE on ``verification``, ``verification_level`` or ``moderation_state``.
+LLM spend, reissuing a claim's email code, closing a tag, and the audit chain heads for the hourly anchor (EXECUTE for
+``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``, ``verification_level``,
+``moderation_state``, ``tags.closed_at`` or the claim OTP columns.
+
+Consistency rules by trigger and index: ``proposals.current_version_id`` is a registered version of the proposal and
+``draft_version_id`` a draft one. A tag is open while ``closed_at`` IS NULL (one open tag per developer and
+organisation, the database form of "one open engagement or held tag"); withdrawn, expired and released tags are
+closed, ``app_close_tag`` closes one otherwise (Phase 3: when its engagement ends), and nothing reopens a tag. A
+claim's ``otp_attempts`` is cumulative and never reset: its budget is 5 attempts per code issued, with at most 5
+reissues (``app_reissue_claim_otp``), after which the claim goes to manual review; one open claim per claimant and
+organisation, and one new claim per claimant and organisation per 24 hours.
 
 Evidence is immutable by trigger (AC-IP-2): a registered ``proposal_versions`` row refuses UPDATE and DELETE except
 filling its still-empty ``content_hash``, ``prev_version_hash`` and ``manifest_version``; its ``proposal_confidential``
