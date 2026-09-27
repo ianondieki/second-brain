@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
 
+import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { PasswordField } from "@/components/ui/PasswordField";
@@ -94,6 +95,7 @@ export function PasswordSettings({ email }: { email: string }) {
       </h2>
       <p className="mt-2 text-ink-soft">{t("lead")}</p>
       <Form onSubmit={save} className="mt-6 flex flex-col gap-5">
+        <AccountUsername email={email} />
         {saved ? <Alert tone="ok">{t("saved")}</Alert> : null}
         <ErrorNotice error={error} email={email} alertRef={summaryRef} />
         {hasPassword ? (

@@ -24,6 +24,11 @@ function page(passwordSet: boolean, children: ReactNode) {
   return renderWithIntl(<PasswordStateProvider initial={passwordSet}>{children}</PasswordStateProvider>);
 }
 
+/** The `autocomplete="username"` fields in the form that holds this password field. */
+function usernameFields(passwordField: HTMLElement) {
+  return [...passwordField.closest("form")!.querySelectorAll<HTMLInputElement>('input[autocomplete="username"]')];
+}
+
 const ENROL_FIELD = "Confirm with your current password";
 const twoStep = <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" />;
 
@@ -43,6 +48,14 @@ describe("PasswordSettings", () => {
     expect(screen.getByLabelText("New password", { selector: "input" })).toBeTruthy();
   });
 
+  it("names the account for password managers with a hidden username field", () => {
+    page(true, <PasswordSettings email="a@example.com" />);
+    const usernames = usernameFields(screen.getByLabelText("New password", { selector: "input" }));
+    expect(usernames).toHaveLength(1);
+    expect(usernames[0].value).toBe("a@example.com");
+    expect(usernames[0].hidden).toBe(true); // never focused or announced
+  });
+
   it("links to the login page when the session has ended", async () => {
     mocks.post.mockResolvedValue(answer(401, "unauthenticated"));
     page(false, <PasswordSettings email="a@example.com" />);
@@ -51,6 +64,21 @@ describe("PasswordSettings", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save password" }));
     expect((await screen.findByRole("link", { name: "Log in again" })).getAttribute("href")).toBe("/login");
+  });
+});
+
+describe("two-step setup with a password on file", () => {
+  it("names the account beside the password field, so a password manager fills the right one", () => {
+    page(true, twoStep);
+    const usernames = usernameFields(screen.getByLabelText(ENROL_FIELD, { selector: "input" }));
+    expect(usernames).toHaveLength(1);
+    expect(usernames[0].value).toBe("a@example.com");
+    expect(usernames[0].hidden).toBe(true);
+  });
+
+  it("has no username field while it asks for no password", () => {
+    page(false, twoStep);
+    expect(document.querySelector('input[autocomplete="username"]')).toBeNull();
   });
 });
 

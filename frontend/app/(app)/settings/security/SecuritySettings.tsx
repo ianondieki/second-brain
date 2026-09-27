@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Suspense, useState, type FormEvent } from "react";
 
+import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
@@ -25,7 +26,10 @@ export interface SecuritySettingsProps {
   /** The person's role makes two-step sign-in mandatory: it cannot be turned off here. */
   required: boolean;
   homeHref: string;
-  /** For "Email me a sign-in link" when an account without a password must sign in again first. */
+  /**
+   * The account's email: the hidden username beside the password field (for password managers), and the address for
+   * "Email me a sign-in link" when an account without a password must sign in again first.
+   */
   email: string;
 }
 
@@ -151,22 +155,25 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
       />
       <Form onSubmit={start} className="flex flex-col gap-5">
         {hasPassword ? (
-          <PasswordField
-            id="enrol-password"
-            name="password"
-            label={t("currentPassword")}
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setPasswordError(undefined);
-            }}
-            error={passwordError}
-            showLabel={tf("showPassword")}
-            hideLabel={tf("hidePassword")}
-            showName={tf("showPasswordName")}
-            hideName={tf("hidePasswordName")}
-          />
+          <>
+            <AccountUsername email={email} />
+            <PasswordField
+              id="enrol-password"
+              name="password"
+              label={t("currentPassword")}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(undefined);
+              }}
+              error={passwordError}
+              showLabel={tf("showPassword")}
+              hideLabel={tf("hidePassword")}
+              showName={tf("showPasswordName")}
+              hideName={tf("hidePasswordName")}
+            />
+          </>
         ) : null}
         <div>
           <SubmitButton variant="primary" busy={busy}>
