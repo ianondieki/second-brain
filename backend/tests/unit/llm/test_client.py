@@ -295,6 +295,10 @@ async def test_tools_are_refused_unless_the_task_allows_them() -> None:
         )
     with pytest.raises(LLMConfigError, match="unnamed"):
         await rig(FakeAdapter(), reg=reg).service.complete(TASK, screen(), Verdict, ctx=CTX, tools=[{}])
+    custom = {"type": "custom", "name": "lookup", "input_schema": {"type": "object"}, "strict": True}
+    adapter = FakeAdapter([OK])
+    await rig(adapter, reg=reg).service.complete(TASK, screen(), Verdict, ctx=CTX, tools=[custom])
+    assert adapter.requests[0].tools == (custom,)
 
 
 class NoFlag(BaseModel):

@@ -61,10 +61,12 @@ def check_tools(spec: TaskSpec, tools: Sequence[Mapping[str, Any]] | None) -> tu
     """Only tools listed in the task's ``allowed_tools`` (scouts, explainers and reporters have none); a custom tool
     must be ``strict``. ``tool_choice`` is never set anywhere."""
     for tool in tools or ():
-        kind = str(tool.get("type") or tool.get("name") or "")
+        tool_type = str(tool.get("type") or "")
+        server = SERVER_TOOL_MARK in tool_type
+        kind = tool_type if server else str(tool.get("name") or "")  # server tools by type, custom tools by name
         if kind not in spec.allowed_tools:
             raise LLMConfigError(f"task {spec.name} may not use tool {kind or '(unnamed)'}")
-        if SERVER_TOOL_MARK not in str(tool.get("type", "")) and tool.get("strict") is not True:
+        if not server and tool.get("strict") is not True:
             raise LLMConfigError(f"custom tool {kind} must set strict: true")
     return tuple(tools or ())
 
