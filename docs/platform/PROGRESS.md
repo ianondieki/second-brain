@@ -224,7 +224,7 @@ D-24 (S3 stand-in; SeaweedFS applied as the default; must be final before T2.3) 
 
 ### Cost
 
-`/cost` (pasted by the human): _pending_
+Max subscription (D-01); no USD cost.
 
 ### Next session
 
@@ -232,4 +232,4 @@ After the human approves Phase 1: `Read CLAUDE.md, PROGRESS.md, REQUIREMENTS.md,
 
 ### Phase 1 sign-off
 
-_Awaiting the human's approval._
+Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) decided the same day (`DECISIONS-NEEDED.md`).

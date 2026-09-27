@@ -30,3 +30,4 @@ editing the **Status** cell of its row to `APPROVED <YYYY-MM-DD>` (optionally wi
 | Gate | Decision | Date | Note |
 |---|---|---|---|
 | G0 | APPROVED | 2026-09-24 | Decisions D-01..D-23 recorded in DECISIONS-NEEDED.md |
+| Phase 1 | APPROVED | 2026-09-27 | Report da8495f; D-24 (a), D-25 (a) |
