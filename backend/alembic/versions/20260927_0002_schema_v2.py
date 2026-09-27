@@ -1168,6 +1168,18 @@ BEGIN
 END;
 $$;
 
+-- Chain heads for the hourly RFC 3161 anchor (provenance.anchor_chain_heads, REQ-AUD-01): the last event of every
+-- audit chain. Only chain ids, sequence numbers and hashes leave the function (no actor, payload or details).
+-- EXECUTE is provenance_worker's only, the role that writes chain_anchors.
+CREATE FUNCTION app_audit_chain_heads() RETURNS TABLE (chain_id text, seq bigint, event_hash bytea)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT DISTINCT ON (e.chain_id) CAST(e.chain_id AS text), e.seq, e.event_hash
+      FROM public.audit_events e
+     ORDER BY e.chain_id, e.seq DESC
+$$;
+
 -- The platform-wide LLM spend since p_since, for the global daily cap (docs/spec/09); an aggregate only.
 CREATE FUNCTION app_llm_spend_usd(p_since timestamptz) RETURNS numeric
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -1371,6 +1383,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_delist_org(uuid)": ("bridge_app",),
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
+    "app_audit_chain_heads()": ("provenance_worker",),
 }
 # Revision 0001 helpers the Tier-2 roles' policies call (revoked again on downgrade).
 FUNCTION_GRANTS_0001: dict[str, tuple[str, ...]] = {"app_user_id()": TIER2_ROLES}

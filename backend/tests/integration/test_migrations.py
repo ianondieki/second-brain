@@ -276,6 +276,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_delist_org(uuid)": (True, {"bridge_app"}),
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
+    "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),

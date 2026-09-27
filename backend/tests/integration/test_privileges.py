@@ -663,6 +663,39 @@ async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncE
         assert await run(conn, opted, id=e0) is True
 
 
+async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(owner_engine: AsyncEngine) -> None:
+    """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash) of every audit chain from
+    app_audit_chain_heads(); provenance_worker cannot read audit_events itself, and no other role may call it."""
+    chains = [f"test:{uuid4().hex}" for _ in range(2)]
+    async with as_app(owner_engine) as conn:
+        for chain, count in zip(chains, (1, 3), strict=True):
+            for _ in range(count):
+                await run(
+                    conn,
+                    "INSERT INTO audit_events (id, chain_id, actor_kind, action)"
+                    " VALUES (:id, :c, 'system', 'test.head')",
+                    id=uuid7(),
+                    c=chain,
+                )
+        last = await conn.execute(
+            text(
+                "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events"
+                " WHERE chain_id = ANY (:c) ORDER BY chain_id, seq DESC"
+            ),
+            {"c": chains},
+        )
+        expected = {row.chain_id: (row.seq, row.event_hash) for row in last.all()}
+        assert {chain: seq for chain, (seq, _) in expected.items()} == {chains[0]: 1, chains[1]: 3}
+        heads = "SELECT chain_id, seq, event_hash FROM app_audit_chain_heads() WHERE chain_id = ANY (:c)"
+        for role in ("bridge_app", "audit_reader", "aggregate_worker", "tier2_reader", "dsr_exporter"):
+            await conn.execute(text(f"SET LOCAL ROLE {role}"))
+            await expect(conn, heads, "permission denied", c=chains)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        found = (await conn.execute(text(heads), {"c": chains})).all()
+        assert {row.chain_id: (row.seq, row.event_hash) for row in found} == expected
+        await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
+
+
 async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
     async with as_app(owner_engine) as conn:
         user = await w.add_user(conn, _email("llm"), "LLM")
