@@ -49,7 +49,10 @@ models:
 # (tier1_only | tier2_llm_assistant | tier2_llm_moderation; a Tier-2 field needs the matching live consent),
 # fallback_model + fallback_effort (the one retry after a refusal; null = straight to the human queue; ADR-005's
 # "at most one retry" allows zero, and D-29 proposes fallbacks within the docs/spec/09 allocation only),
-# allowed_tools (server tools the task may use; default none), max_field_chars (optional lower cap).
+# allowed_tools (server tools the task may use; default none), max_field_chars (optional lower cap),
+# json_schema_format (default true: native output_config.format; false puts the schema in the system prompt and
+# still validates the reply, for citation calls in Phase 5 research: verify compatibility with the provider docs
+# before any live call).
 tasks:
   moderation_prescreen:         # injection/spam/moderation classifier at submission, Tier 1 only (REQ-MOD-01)
     model: claude-haiku-4-5

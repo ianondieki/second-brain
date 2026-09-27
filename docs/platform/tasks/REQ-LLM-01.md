@@ -12,3 +12,8 @@
 ## Acceptance criteria and tests
 
 AC-SEC-6 (`unit/llm/test_no_tier2_in_llm_calls.py`), unit tests for retries, caps, the kill switch and the sanitiser. AC-SCOUT-4 is Phase 4.
+
+## Notes and deferrals (T2.2 review)
+
+- **ModelPool and TokenPacer: deferred to T4.3** (scout pipeline, the first high-volume caller). The companion's `ModelPool` rotates across several models, which the one-model-per-task allocation of `docs/spec/09` does not allow (refusal fallbacks are D-29); its cooldown and the `TokenPacer` per-minute pacing are ported with T4.3, when concurrent batch and synchronous scout calls first meet provider rate limits. Until then the SDK's own retries (`transport.max_retries`) handle 429s.
+- **Citations and structured outputs:** the task registry key `json_schema_format` (default `true`) lets a task drop `output_config.format` and carry the schema in the system prompt instead, for citation calls (Phase 5 research). Whether citations and native JSON-schema output can be combined, and how each behaves on the registered models, **must be verified against the current provider documentation before any live call** (D-18: no paid calls until then); the cassettes are synthetic and prove only our parsing.

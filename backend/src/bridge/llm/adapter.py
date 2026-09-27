@@ -42,6 +42,7 @@ class ModelRequest:
     messages: tuple[WireMessage, ...]
     output_schema: Mapping[str, Any]
     tools: tuple[Mapping[str, Any], ...] = ()
+    native_format: bool = True  # False: the schema is in the prompt, not output_config.format (citation calls)
 
     @property
     def cache_writes(self) -> bool:

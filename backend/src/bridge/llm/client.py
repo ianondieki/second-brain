@@ -343,7 +343,14 @@ class LLMService:
         first_effort = resolve_effort(spec, self._registry.model(spec.model), effort)
         call = _Call(spec, ctx, ctx.trace_id or uuid7().hex)
         await self._refuse_early(call, messages)
-        prepared = prepare(spec, messages, policy=self._registry.sanitiser, nonce=self._nonce, breakpoints=breakpoints)
+        prepared = prepare(
+            spec,
+            messages,
+            policy=self._registry.sanitiser,
+            nonce=self._nonce,
+            breakpoints=breakpoints,
+            schema_in_prompt=None if spec.json_schema_format else output_schema,
+        )
         return await self._attempts(call, prepared, schema, output_schema, tool_defs, first_effort)
 
     async def _attempts[OutputT: LLMOutput](
@@ -361,7 +368,9 @@ class LLMService:
         usage, cost_total, attempt = TokenUsage(), Decimal(0), 0
         while True:
             attempt += 1
-            request = ModelRequest(model, max_tokens, effort, prepared.system, conversation, output_schema, tools)
+            request = ModelRequest(
+                model, max_tokens, effort, prepared.system, conversation, output_schema, tools, spec.json_schema_format
+            )
             estimate = self._registry.estimate_usd(
                 model,
                 input_chars=request.text_chars,
@@ -518,9 +527,16 @@ class LLMService:
                 policy=self._registry.sanitiser,
                 nonce=self._nonce,
                 breakpoints=points[item.custom_id],
+                schema_in_prompt=None if spec.json_schema_format else output_schema,
             )
             requests[item.custom_id] = ModelRequest(
-                spec.model, spec.max_tokens, spec.effort, prepared.system, prepared.messages, output_schema
+                spec.model,
+                spec.max_tokens,
+                spec.effort,
+                prepared.system,
+                prepared.messages,
+                output_schema,
+                native_format=spec.json_schema_format,
             )
             inputs[item.custom_id] = prepared.ledger_inputs
         estimate = sum(

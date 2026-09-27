@@ -8,6 +8,7 @@ fields only the name, tier, length and what the sanitiser removed (never the val
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast
@@ -18,6 +19,7 @@ from bridge.llm.registry import EFFORTS, Effort, ModelSpec, SanitiserPolicy, Tas
 from bridge.llm.sanitiser import FRAMING_RULES, frame, nonce_instruction, sanitise
 from bridge.llm.types import InputField, Instruction, LLMOutput, Message, Tier
 
+SCHEMA_INSTRUCTION = "Reply with one JSON object only, with no other text, matching this JSON schema:"
 MAX_CACHE_BREAKPOINTS = 4  # the Messages API allows four cache_control blocks per request
 SERVER_TOOL_MARK = "_"  # server tool types are versioned (web_search_20260209); custom tools have no type
 
@@ -118,12 +120,15 @@ def prepare(
     policy: SanitiserPolicy,
     nonce: str,
     breakpoints: frozenset[int],
+    schema_in_prompt: Mapping[str, Any] | None = None,
 ) -> Prepared:
     """Sanitise and frame every field; the system prompt gets the framing rules (cacheable) and a per-call nonce
     line after the breakpoint. Call only after ``check_tier2`` passed."""
     head = messages[0] if messages[0].role == "system" else None
     system_text = "\n\n".join(p.text for p in head.parts if isinstance(p, Instruction)) if head else ""
     rules = f"{system_text}\n\n{FRAMING_RULES}" if system_text else FRAMING_RULES
+    if schema_in_prompt is not None:  # tasks with json_schema_format: false (static per task, so still cacheable)
+        rules += f"\n\n{SCHEMA_INSTRUCTION}\n{json.dumps(schema_in_prompt, sort_keys=True)}"
     system = (TextBlock(rules, cache=head is not None and 0 in breakpoints), TextBlock(nonce_instruction(nonce)))
     wire: list[WireMessage] = []
     records: list[dict[str, Any]] = []

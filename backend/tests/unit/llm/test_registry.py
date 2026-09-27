@@ -66,6 +66,7 @@ def test_every_task_defaults_to_confidential_and_has_no_tools() -> None:
     reg = registry.parse(data)
     assert reg.task("moderation_prescreen").confidential is True
     assert all(task.allowed_tools == () for task in reg.tasks.values())  # explainers and classifiers have no tools
+    assert all(task.json_schema_format for task in reg.tasks.values())  # native JSON-schema output by default
 
 
 def test_unknown_task_is_a_config_error() -> None:
@@ -104,6 +105,7 @@ def test_unknown_task_is_a_config_error() -> None:
             "without fallback_model",
         ),
         (lambda d: d["tasks"]["moderation_prescreen"].update(allowed_tools="web"), "allowed_tools"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(json_schema_format="no"), "json_schema_format"),
         (lambda d: d["budget"].update(soft_cap_ratio=1.5), "soft_cap_ratio"),
         (lambda d: d["embeddings"].update(precision="int4"), "embeddings.precision"),
         (lambda d: d["embeddings"].update(batch_size=0), "embeddings.batch_size"),

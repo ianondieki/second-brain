@@ -402,3 +402,22 @@ async def test_one_nonce_per_service_instance() -> None:
     assert nonce_lines[0] != nonce_lines[2]
     framed = [req.messages[0].blocks[1].text for req in first.requests]
     assert framed[0] == framed[1]  # the framed block is byte-identical, so it can be cached
+
+
+async def test_a_task_can_put_the_schema_in_the_prompt_for_citation_calls() -> None:
+    """json_schema_format: false (Phase 5 research, citations): no output_config.format; the schema is in the system
+    prompt and the reply is still validated."""
+    reg = registry_with(originality_explainer={"json_schema_format": False})
+    tape = player("messages_with_citations")
+    result = await rig(tape.adapter(), reg=reg).service.complete("originality_explainer", screen(), Verdict, ctx=CTX)
+    body = tape.requests[0].json()
+    assert "format" not in body["output_config"]
+    assert body["output_config"]["effort"] == "medium"
+    assert "Reply with one JSON object only" in body["system"][0]["text"]
+    assert '"injection_suspected"' in body["system"][0]["text"]
+    assert result.parsed.reason == "Cited."
+    assert len(result.citations) == 2
+    haiku = registry_with(moderation_prescreen={"json_schema_format": False})
+    tape = player("messages_verdict_ok")
+    await rig(tape.adapter(), reg=haiku).service.complete(TASK, screen(), Verdict, ctx=CTX)
+    assert "output_config" not in tape.requests[0].json()  # no format and no effort: nothing to send

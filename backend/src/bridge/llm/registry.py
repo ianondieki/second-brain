@@ -74,6 +74,7 @@ class TaskSpec:
     fallback_effort: Effort | None
     allowed_tools: tuple[str, ...]
     max_field_chars: int
+    json_schema_format: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +184,7 @@ _TASK_KEYS = {
     "fallback_effort",
     "allowed_tools",
     "max_field_chars",
+    "json_schema_format",
 }
 _PRICE_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
 
@@ -194,6 +196,12 @@ def _decimal(value: Any, where: str) -> Decimal:
     if number < 0:
         raise ValueError(f"{where} must be zero or more")
     return number
+
+
+def _flag(value: Any, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{where} must be true or false")
+    return value
 
 
 def _text(value: Any, where: str) -> str:
@@ -267,6 +275,7 @@ def _task(name: str, raw: Mapping[str, Any], models: Mapping[str, ModelSpec], de
         fallback_effort=fallback_effort,
         allowed_tools=tuple(tools),
         max_field_chars=min(cap, default_cap),
+        json_schema_format=_flag(raw.get("json_schema_format", True), f"{name}.json_schema_format"),
     )
 
 

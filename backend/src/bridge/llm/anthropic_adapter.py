@@ -41,9 +41,12 @@ def _block(block: TextBlock) -> dict[str, Any]:
 
 def to_params(request: ModelRequest) -> dict[str, Any]:
     """The Messages API body for ``request`` (also the ``params`` of a batch item)."""
-    output_config: dict[str, Any] = {
-        "format": {"type": "json_schema", "schema": anthropic.transform_schema(dict(request.output_schema))}
-    }
+    output_config: dict[str, Any] = {}
+    if request.native_format:
+        output_config["format"] = {
+            "type": "json_schema",
+            "schema": anthropic.transform_schema(dict(request.output_schema)),
+        }
     if request.effort is not None:
         output_config["effort"] = request.effort
     params: dict[str, Any] = {
@@ -51,8 +54,9 @@ def to_params(request: ModelRequest) -> dict[str, Any]:
         "max_tokens": request.max_tokens,
         "system": [_block(b) for b in request.system],
         "messages": [{"role": m.role, "content": [_block(b) for b in m.blocks]} for m in request.messages],
-        "output_config": output_config,
     }
+    if output_config:
+        params["output_config"] = output_config
     if request.tools:
         params["tools"] = [dict(tool) for tool in request.tools]
     return params
