@@ -49,6 +49,7 @@ def test_postmark_is_picked_in_production_with_its_token() -> None:
             email_provider="postmark",
             postmark_server_token=SecretStr("pm-test-token"),
             public_base_url="https://bridge.test",
+            embedder="bge-m3",  # production refuses the fake embedder (REQ-EMB-01)
         )
     )
     assert isinstance(provider, PostmarkEmailProvider)
