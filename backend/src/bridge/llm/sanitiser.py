@@ -10,7 +10,8 @@ reference definitions removed even with the URL on the next line; base64-like ru
 across whitespace between long segments (MIME-wrapped blocks); leftover angle brackets turned into single guillemets;
 blank-line runs collapsed; the result cut to the field's length cap.
 
-``frame`` wraps sanitised text in a ``<submission nonce="..." ...>`` block. The nonce is random per call, and the
+``frame`` wraps sanitised text in a ``<submission nonce="..." ...>`` block. The nonce is random (64 bits) per
+``LLMService`` instance (a request or a job run; see ``bridge.llm.client``), and the
 system prompt says a block ends only at a closing tag with the same nonce; the sanitiser removes every tag, so text
 cannot forge one.
 """
@@ -213,6 +214,7 @@ def nonce_instruction(nonce: str) -> str:
 
 
 def new_nonce() -> str:
+    """64 random bits, hex."""
     return secrets.token_hex(8)
 
 

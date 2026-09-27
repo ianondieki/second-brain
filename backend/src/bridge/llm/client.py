@@ -11,6 +11,12 @@ subject's monthly cap), the adapter call and one ledger row. Retry rules (ADR-00
   ``LLMCallFailed`` is raised. Provider errors (network, HTTP) are recorded and raised as ``LLMProviderError``;
   the job runner decides whether to retry those.
 
+Nonce scope: one random nonce (64 bits) per ``LLMService`` instance, i.e. per request or job run, shared by
+its calls and batch items. A per-call nonce would change every framed block, so a cached prefix holding framed
+text (a scout's org profile) could never hit the prompt cache. The trade-off: within one run, text that learns
+the nonce (a model answer echoing it, replayed as input) could name it; the sanitiser still strips every tag,
+so a block cannot be closed or opened from inside, and the nonce is never shown to an author.
+
 Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger; a failed batch item is
 dead-lettered and reported, not retried (the caller may resubmit it).
 """
@@ -192,7 +198,7 @@ class LLMService:
         self._consents = consents
         self._dead_letters = dead_letters or InMemoryDeadLetters()
         self._human_queue = human_queue or InMemoryHumanQueue()
-        self._nonce = nonce
+        self._nonce = nonce()  # one per service instance: see the module docstring
         self._now = now or (lambda: clock.utcnow())
         self._monotonic = monotonic
         self._budget = BudgetGuard(
@@ -337,9 +343,7 @@ class LLMService:
         first_effort = resolve_effort(spec, self._registry.model(spec.model), effort)
         call = _Call(spec, ctx, ctx.trace_id or uuid7().hex)
         await self._refuse_early(call, messages)
-        prepared = prepare(
-            spec, messages, policy=self._registry.sanitiser, nonce=self._nonce(), breakpoints=breakpoints
-        )
+        prepared = prepare(spec, messages, policy=self._registry.sanitiser, nonce=self._nonce, breakpoints=breakpoints)
         return await self._attempts(call, prepared, schema, output_schema, tool_defs, first_effort)
 
     async def _attempts[OutputT: LLMOutput](
@@ -506,7 +510,7 @@ class LLMService:
                 spec,
                 item.messages,
                 policy=self._registry.sanitiser,
-                nonce=self._nonce(),
+                nonce=self._nonce,
                 breakpoints=points[item.custom_id],
             )
             requests[item.custom_id] = ModelRequest(

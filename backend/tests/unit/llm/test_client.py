@@ -29,7 +29,7 @@ from bridge.llm.errors import (
 )
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.ledger import CallStatus
-from bridge.llm.sanitiser import FRAMING_RULES
+from bridge.llm.sanitiser import FRAMING_RULES, new_nonce
 from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message, TokenUsage
 from tests.unit.llm.helpers import ORG, USER, real_registry, settings
 from tests.unit.llm.rig import NONCE, registry_with, rig, screen
@@ -387,3 +387,18 @@ async def test_scripted_model_response_passes_through() -> None:
     )
     result = await rig(FakeAdapter([response])).service.complete(TASK, screen(), Verdict, ctx=CTX)
     assert result.parsed.verdict == "hold"
+
+
+async def test_one_nonce_per_service_instance() -> None:
+    """Calls of one service (a request or a job) share a random nonce, so cached framed prefixes stay stable; another
+    instance draws a new one."""
+    first, second = FakeAdapter([OK, OK]), FakeAdapter([OK])
+    service_a = rig(first, nonce=new_nonce).service
+    await service_a.complete(TASK, screen(), Verdict, ctx=CTX)
+    await service_a.complete(TASK, screen(), Verdict, ctx=CTX)
+    await rig(second, nonce=new_nonce).service.complete(TASK, screen(), Verdict, ctx=CTX)
+    nonce_lines = [req.system[1].text for req in [*first.requests, *second.requests]]
+    assert nonce_lines[0] == nonce_lines[1]
+    assert nonce_lines[0] != nonce_lines[2]
+    framed = [req.messages[0].blocks[1].text for req in first.requests]
+    assert framed[0] == framed[1]  # the framed block is byte-identical, so it can be cached
