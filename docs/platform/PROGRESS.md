@@ -233,3 +233,38 @@ After the human approves Phase 1: `Read CLAUDE.md, PROGRESS.md, REQUIREMENTS.md,
 ### Phase 1 sign-off
 
 Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) decided the same day (`DECISIONS-NEEDED.md`).
+
+## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
+
+Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`, on top of `40f1adc`. Decisions applied:
+D-18 (no paid API calls: LLM fakes and synthetic cassettes only), D-20 (OAuth is T2.12), D-21 (provisional directory
+from public organisational data only, source URL and date per row), D-24 (SeaweedFS is the S3 stand-in). Task cards:
+`docs/platform/tasks/` (26 new Phase 2 cards; the T2.1 schema design is in `REQ-REPO-01.md`). Frontend screens are
+batched F1–F4 after their APIs, then T2.11 polishes.
+
+Checklist (updated after every task; commit and push after each):
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 2 plan: task cards, this checklist, D-26 (OAuth test apps) | done | |
+| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | todo | impl-frontend; item 5 ships with the first `/admin` route |
+| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | todo | db-migrations; security-reviewer |
+| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | todo | impl-ai; fakes and synthetic cassettes only |
+| Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | todo | |
+| Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | todo | researcher |
+| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | todo | security-reviewer |
+| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | todo | |
+| T2.6b Claims E1/E2, admin claim queue, MET acceptance (REQ-DIR-03, REQ-ADM-01) | todo | security-reviewer |
+| T2.3 Proposals: editor API, sanitiser, holds, moderation queue, attachments (REQ-PROP-01/02, REQ-MOD-01, REQ-BIL-02) | todo | |
+| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | todo | |
+| T2.12 GitHub + Google OAuth (REQ-AUTH-02) | todo | respx fakes; real apps need D-26; security-reviewer |
+| T2.5 Tier-2 access: predicate, NDA, grants, unlocks, renders, access log, flag (REQ-REPO-01, REQ-PROV-03, REQ-BIL-03, REQ-SEC-01) | todo | security-reviewer |
+| T2.7 Pitch to company: tags, held tags, 409, cooldown, EM1, tag privacy (REQ-PROP-03, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02) | todo | |
+| T2.6c Invitations + suppression, delisting (REQ-DIR-04) | todo | |
+| T2.6d Problem Briefs (REQ-DIR-05) | todo | |
+| T2.8 Browse repo search + Schemathesis (REQ-REPO-02) | todo | |
+| T2.9 Originality check, Tier-2 similarity job, submission assistant (REQ-PROP-04/05) | todo | |
+| F1–F4 screens (directory, claims, wizard, pitch, Browse, Tier-2 view, `/verify`, verification, admin queues, OAuth) | todo | ux-reviewer on every frontend merge |
+| T2.11 Frontend polish (frontend-design → impeccable → Playwright 375/1440, chrome-devtools) | todo | |
+| Exit: X2-1 OpenAPI drift, X2-2 coverage ≥95% on `provenance/`, `auth/`, `tenancy/`, every Phase 2 AC | todo | |
+| ECC code review, security-reviewer (Fable) phase pass, traceability, Phase 2 report | todo | |

@@ -16,3 +16,12 @@ AC-SEC-1/a (cross-tenant API 404); X1-1 signup/login E2E on the compose stack; u
 ## Notes
 
 Signup always answers 202 "check your email" (no account enumeration); the verification link signs the user in.
+
+## Phase 2 follow-ups (from the Phase 1 report; picked up in Phase 2)
+
+1. JS budget: send CSP and Permissions-Policy on page responses only (not on `/_next/static`), drop legacy polyfills with a modern browserslist target, and state in `docs/runbooks/dev-setup.md` and the budget test whether 150 KB means KB (1000) or KiB.
+2. Local E2E: pin `workers: 1` (or a longer web-server step) for local runs so argon2 hashing in the single API process does not time out; CI unchanged.
+3. Password forms: a hidden `autocomplete="username"` field so password managers save the right account.
+4. `/settings/security`: hide the Password section while two-step enrolment is in progress.
+5. The staff dependency (staff role + enrolled and verified TOTP; 404 for non-staff) ships with the first `/admin` route (REQ-ADM-01, T2.3/T2.6b).
+Item 6 (enforced CSP, HSTS) stays in Phase 8 (REQ-SEC-03).

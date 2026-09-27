@@ -7,7 +7,15 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 
 ## Open
 
-None.
+### D-26 · GitHub and Google OAuth test applications (T2.12, REQ-AUTH-02)
+- Why: D-20 moved OAuth to Phase 2. No OAuth variables are in `backend/.env` (checked 2026-09-27). T2.12 is built and tested in CI with respx fakes of the provider endpoints, so nothing in Phase 2 is blocked; only a manual sign-in against the real providers needs the test apps. Creating them needs your GitHub and Google accounts (agents never sign up for services).
+- What I need (test apps only, never production):
+  1. **GitHub OAuth App** (github.com → Settings → Developer settings → OAuth Apps → New OAuth App): Application name `Bridge (dev)`; Homepage URL `http://localhost:3000`; Authorization callback URL `http://localhost:3000/api/auth/oauth/github/callback`. Put `GITHUB_CLIENT_ID=` and `GITHUB_CLIENT_SECRET=` (generate a client secret) in `backend/.env`. Scopes requested by the app: `read:user user:email` only.
+  2. **Google OAuth client** (console.cloud.google.com → APIs & Services → Credentials → Create credentials → OAuth client ID, type "Web application"; the consent screen in "Testing" mode with your address as a test user): Authorised JavaScript origin `http://localhost:3000`; Authorised redirect URI `http://localhost:3000/api/auth/oauth/google/callback`. Put `GOOGLE_CLIENT_ID=` and `GOOGLE_CLIENT_SECRET=` in `backend/.env`. Scopes: `openid email profile` only.
+- Options: (a) create both test apps and add the four values to `backend/.env` (untracked); (b) GitHub only for now; (c) leave OAuth untested against real providers until Phase 8 staging (CI fakes only).
+- Recommended default: (a) when convenient; (c) applies until then. The buttons stay hidden while the variables are unset (fail closed).
+- Blocks: nothing in CI; the manual OAuth demo step only.
+- Decision:
 
 ## Decided
 
