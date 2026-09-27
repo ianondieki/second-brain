@@ -8,7 +8,7 @@ LEGACY_PY ?= python
 UV = uv
 
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
-        check-legacy check-e2e test-integration e2e
+        check-legacy check-e2e test-integration e2e budget
 
 help:
 	@echo "dev             start the seeded local stack (Postgres+pgvector, Mailpit, S3 stand-in, api, worker, web)"
@@ -19,6 +19,7 @@ help:
 	@echo "check-frontend  eslint, tsc, vitest, API types drift"
 	@echo "check-legacy    the unchanged local-companion suite (scripts/run_legacy_tests.py)"
 	@echo "check-e2e       Playwright smoke against the running stack (make dev first)"
+	@echo "budget          gzipped JS per route against a running production web app (make dev first; not in check)"
 	@echo "openapi         regenerate backend/openapi.json;  api-types  regenerate frontend/lib/api/schema.d.ts"
 
 dev:
@@ -57,3 +58,8 @@ check-legacy:
 
 check-e2e:
 	cd frontend && npm run e2e
+
+# docs/spec/07 item 5: at most 150,000 bytes of gzipped JS per route (frontend/scripts/js-budget.mjs). Measures the
+# default routes; BUDGET_BASE_URL and BUDGET_COOKIE (frontend/.env.example) come from the shell.
+budget:
+	cd frontend && npm run budget
