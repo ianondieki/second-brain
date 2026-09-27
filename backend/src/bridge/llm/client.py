@@ -11,28 +11,34 @@ subject's monthly cap), the adapter call and one ledger row. Retry rules (ADR-00
   ``LLMCallFailed`` is raised. Provider errors (network, HTTP) are recorded and raised as ``LLMProviderError``;
   the job runner decides whether to retry those.
 
+Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger; a failed batch item is
+dead-lettered and reported, not retried (the caller may resubmit it).
 """
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Protocol
+from uuid import UUID
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from bridge import clock
 from bridge.config import Settings
 from bridge.ids import uuid7
-from bridge.llm.adapter import ModelAdapter, ModelRequest, ModelResponse
+from bridge.llm.adapter import BatchItemError, BatchState, ModelAdapter, ModelRequest, ModelResponse
 from bridge.llm.budget import BudgetGuard, BudgetListener, CapProvider, Snapshot
 from bridge.llm.errors import (
     ConsentRequired,
     LLMBlocked,
     LLMCallFailed,
+    LLMConfigError,
+    LLMError,
     LLMKillSwitch,
     LLMProviderError,
     LLMRefused,
@@ -71,6 +77,34 @@ from bridge.logging import get_logger
 log = get_logger("bridge.llm")
 FINISHED = frozenset({"end_turn", "stop_sequence"})
 MAX_FEEDBACK_ERRORS = 5
+CUSTOM_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+BATCH_TRANSIENT = frozenset({"expired", "canceled", "api_error", "overloaded_error", "rate_limit_error"})
+
+
+@dataclass(frozen=True, slots=True)
+class BatchItem:
+    """One request of a batch; ``custom_id`` is 1-64 characters from A-Z a-z 0-9 _ -."""
+
+    custom_id: str
+    messages: Sequence[Message]
+
+
+class BatchHandle(BaseModel):
+    """What a job stores between ``batch_submit`` and ``batch_poll`` (JSON-serialisable)."""
+
+    batch_id: str
+    task: str
+    model: str
+    trace_id: str
+    org_id: UUID | None
+    user_id: UUID | None
+    inputs: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class BatchPoll[OutputT: LLMOutput]:
+    state: BatchState
+    results: dict[str, Result[OutputT] | LLMError] = field(default_factory=dict)
 
 
 class LLMClient(Protocol):
@@ -85,6 +119,14 @@ class LLMClient(Protocol):
         effort: str | None = None,
         cache_breakpoints: Sequence[int] | None = None,
     ) -> Result[OutputT]: ...
+
+    async def batch_submit(
+        self, task: str, items: Sequence[BatchItem], schema: type[LLMOutput], *, ctx: CallContext
+    ) -> BatchHandle: ...
+
+    async def batch_poll[OutputT: LLMOutput](
+        self, handle: BatchHandle, schema: type[OutputT]
+    ) -> BatchPoll[OutputT]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,3 +447,165 @@ class LLMService:
                 trace_id=call.trace_id,
                 budget=budget,
             )
+
+    # ------------------------------------------------------------------------------------------------- batches
+
+    async def batch_submit(
+        self,
+        task: str,
+        items: Sequence[BatchItem],
+        schema: type[LLMOutput],
+        *,
+        ctx: CallContext,
+        cache_breakpoints: Sequence[int] | None = None,
+    ) -> BatchHandle:
+        """Submit ``items`` of one task and one tenant to the Batch API (only ``batchable`` tasks)."""
+        spec = self._registry.task(task)
+        if not spec.batchable:
+            raise LLMConfigError(f"task {task} is not batchable (ai/models.yaml)")
+        output_schema = check_schema(schema)
+        ids = [item.custom_id for item in items]
+        if not ids or len(set(ids)) != len(ids) or not all(CUSTOM_ID.fullmatch(i) for i in ids):
+            raise LLMConfigError("a batch needs items with unique custom ids of 1-64 characters from A-Z a-z 0-9 _ -")
+        points: dict[str, frozenset[int]] = {}
+        for item in items:
+            check_messages(item.messages)
+            points[item.custom_id] = check_breakpoints(cache_breakpoints, len(item.messages))
+        call = _Call(spec, ctx, ctx.trace_id or uuid7().hex)
+        await self._refuse_early(call, [m for item in items for m in item.messages])
+        requests: dict[str, ModelRequest] = {}
+        inputs: dict[str, dict[str, Any]] = {}
+        for item in items:
+            prepared = prepare(
+                spec,
+                item.messages,
+                policy=self._registry.sanitiser,
+                nonce=self._nonce(),
+                breakpoints=points[item.custom_id],
+            )
+            requests[item.custom_id] = ModelRequest(
+                spec.model, spec.max_tokens, spec.effort, prepared.system, prepared.messages, output_schema
+            )
+            inputs[item.custom_id] = prepared.ledger_inputs
+        estimate = sum(
+            (
+                self._registry.estimate_usd(spec.model, input_chars=r.text_chars, max_tokens=r.max_tokens, batch=True)
+                for r in requests.values()
+            ),
+            Decimal(0),
+        )
+        await self._check_budget(call, estimate, 0, {"batch_items": inputs})
+        try:
+            batch_id = await self._adapter.batch_create(requests)
+        except (LLMProviderError, LLMUnavailable) as exc:
+            await self._record(
+                call,
+                CallStatus.PROVIDER_ERROR,
+                attempt=0,
+                inputs={"batch_items": inputs},
+                model=spec.model,
+                error=str(exc),
+            )
+            raise
+        log.info("llm.batch_submitted", task=task, items=len(requests), trace_id=call.trace_id)
+        return BatchHandle(
+            batch_id=batch_id,
+            task=task,
+            model=spec.model,
+            trace_id=call.trace_id,
+            org_id=ctx.org_id,
+            user_id=ctx.user_id,
+            inputs=inputs,
+        )
+
+    async def batch_poll[OutputT: LLMOutput](self, handle: BatchHandle, schema: type[OutputT]) -> BatchPoll[OutputT]:
+        """The batch's state; once it has ended, one outcome per item (each recorded at the batch price)."""
+        spec = self._registry.task(handle.task)
+        check_schema(schema)
+        ctx = CallContext(org_id=handle.org_id, user_id=handle.user_id, trace_id=handle.trace_id)
+        call = _Call(spec, ctx, handle.trace_id)
+        state = await self._adapter.batch_state(handle.batch_id)
+        if state is not BatchState.ENDED:
+            return BatchPoll(state)
+        raw = await self._adapter.batch_results(handle.batch_id)
+        snapshot = await self._budget.snapshot(ctx)
+        outcomes: dict[str, Result[OutputT] | LLMError] = {}
+        total = Decimal(0)
+        for custom_id, item in raw.items():
+            inputs = handle.inputs.get(custom_id, {})
+            if isinstance(item, BatchItemError):
+                detail = f"batch item {item.kind} ({item.detail})"
+                await self._record(
+                    call,
+                    CallStatus.PROVIDER_ERROR,
+                    attempt=1,
+                    inputs=inputs,
+                    model=handle.model,
+                    error=detail,
+                    batch_id=handle.batch_id,
+                )
+                transient = item.kind in BATCH_TRANSIENT or item.detail in BATCH_TRANSIENT
+                outcomes[custom_id] = LLMProviderError(detail, transient=transient)
+                continue
+            cost = self._registry.cost_usd(handle.model, item.usage, batch=True)
+            total += cost
+            outcomes[custom_id] = await self._batch_outcome(call, handle, item, schema, cost, inputs)
+        budget = await self._budget.after(ctx, snapshot, total)
+        final = {k: replace(v, budget=budget) if isinstance(v, Result) else v for k, v in outcomes.items()}
+        return BatchPoll(state, final)
+
+    async def _batch_outcome[OutputT: LLMOutput](
+        self,
+        call: _Call,
+        handle: BatchHandle,
+        response: ModelResponse,
+        schema: type[OutputT],
+        cost: Decimal,
+        inputs: Mapping[str, Any],
+    ) -> Result[OutputT] | LLMError:
+        model = handle.model
+        recorded: dict[str, Any] = {
+            "attempt": 1,
+            "inputs": inputs,
+            "model": model,
+            "response": response,
+            "cost": cost,
+            "batch_id": handle.batch_id,
+        }
+        failure: tuple[type[LLMCallFailed], CallStatus, str] | None = None
+        parsed: OutputT | None = None
+        if response.stop_reason == "refusal":
+            event = RefusalEvent(
+                call.spec.name, call.trace_id, call.ctx.org_id, call.ctx.user_id, model, response.refusal_category, None
+            )
+            await self._human_queue.refusal(event)
+            failure = (LLMRefused, CallStatus.REFUSAL, "the model refused")
+        elif response.stop_reason == "max_tokens":
+            failure = (LLMTruncated, CallStatus.MAX_TOKENS, "output cut at max_tokens")
+        elif response.stop_reason not in FINISHED:
+            failure = (
+                LLMUnsupportedStop,
+                CallStatus.UNSUPPORTED_STOP,
+                f"unsupported stop reason {response.stop_reason}",
+            )
+        else:
+            try:
+                parsed = schema.model_validate_json(response.text)
+            except ValidationError as exc:
+                failure = (LLMSchemaError, CallStatus.SCHEMA_ERROR, f"output failed the schema: {_schema_errors(exc)}")
+        if failure is not None or parsed is None:
+            error, status, detail = failure or (LLMSchemaError, CallStatus.SCHEMA_ERROR, "no output")
+            await self._record(call, status, error=detail, **recorded)
+            return await self._fail(call, error, status, model=model, attempts=1, detail=detail, inputs=inputs)
+        output = None if call.spec.confidential else parsed.model_dump(mode="json")
+        await self._record(call, CallStatus.OK, output=output, **recorded)
+        return Result(
+            parsed=parsed,
+            stop_reason=response.stop_reason,
+            usage=response.usage,
+            citations=response.citations,
+            model=model,
+            cost_usd=cost,
+            attempts=1,
+            trace_id=call.trace_id,
+        )
