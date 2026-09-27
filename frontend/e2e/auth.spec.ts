@@ -269,11 +269,14 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
 
   // Enrolment asks for the current password first.
   const twoStep = page.getByRole("region", { name: "Two-step sign-in" });
+  const passwordSection = page.getByRole("region", { name: "Password" });
+  await expect(passwordSection).toBeVisible();
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible(SERVER_STEP);
   await twoStep.getByLabel("Confirm with your current password", { exact: true }).fill(PASSWORD);
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(page.getByTestId("totp-key")).toBeVisible(SERVER_STEP);
+  await expect(passwordSection).toBeHidden(); // one task at a time while the setup steps are shown
   const key = (await page.getByTestId("totp-key").innerText()).replace(/\s+/g, "");
   expect(key).toMatch(/^[A-Z2-7]{16,}$/);
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();

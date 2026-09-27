@@ -46,7 +46,20 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [stepUp, setStepUp] = useState(false);
   // Without a password, enrolment needs a fresh sign-in instead; the flag is shared with the Password section.
-  const { hasPassword, markPasswordSet } = usePasswordState();
+  const { hasPassword, markPasswordSet, setEnrolling } = usePasswordState();
+
+  /** The setup steps hide the Password section; it comes back when they end (cancelled, restarted or left). */
+  function show(next: Phase) {
+    setPhase(next);
+    setEnrolling(next.name === "setup");
+  }
+
+  /** Back to the start, focus on the button that began setup. The server's pending key is replaced next time. */
+  function cancel() {
+    setError(null);
+    show({ name: "intro" });
+    requestAnimationFrame(() => document.getElementById("two-step-start")?.focus());
+  }
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
   async function start(event: FormEvent<HTMLFormElement>) {
@@ -62,7 +75,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     if (!outcome.ok) {
       setBusy(false);
       if (outcome.key === "totp_already_enabled") {
-        setPhase({ name: "on" });
+        show({ name: "on" });
       } else if (outcome.key === "current_password_required") {
         markPasswordSet(); // the account has a password after all: keep asking for it
         setPasswordError(te("current_password_required"));
@@ -75,7 +88,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     await steps;
     setBusy(false);
     setPassword("");
-    setPhase({ name: "setup", secret: outcome.data.secret, otpauthUri: outcome.data.otpauth_uri });
+    show({ name: "setup", secret: outcome.data.secret, otpauthUri: outcome.data.otpauth_uri });
   }
 
   async function turnOff() {
@@ -87,7 +100,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     if (outcome.ok) {
       setStepUp(false);
       setJustTurnedOff(true);
-      setPhase({ name: "intro" });
+      show({ name: "intro" });
       return;
     }
     if (outcome.key === "step_up_required") {
@@ -135,8 +148,9 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
             homeHref={homeHref}
             onRestart={(key) => {
               setError(key);
-              setPhase({ name: "intro" });
+              show({ name: "intro" });
             }}
+            onCancel={cancel}
           />
         </Suspense>
       </div>
@@ -176,7 +190,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
           </>
         ) : null}
         <div>
-          <SubmitButton variant="primary" busy={busy}>
+          <SubmitButton id="two-step-start" variant="primary" busy={busy}>
             {busy ? t("starting") : t("start")}
           </SubmitButton>
         </div>

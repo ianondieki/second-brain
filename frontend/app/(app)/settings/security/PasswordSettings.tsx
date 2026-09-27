@@ -35,7 +35,8 @@ export function PasswordSettings({ email }: { email: string }) {
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   // The account has a password (from the API, or since one was saved here): changing it needs the current one.
-  const { hasPassword, markPasswordSet } = usePasswordState();
+  // While two-step setup is on screen this section is hidden, not unmounted, so anything typed here is kept.
+  const { hasPassword, markPasswordSet, enrolling } = usePasswordState();
 
   const toggle = {
     showLabel: tf("showPassword"),
@@ -89,7 +90,12 @@ export function PasswordSettings({ email }: { email: string }) {
   }
 
   return (
-    <section id="password" aria-labelledby="password-heading" className="mt-12 scroll-mt-8 border-t border-line pt-8">
+    <section
+      id="password"
+      aria-labelledby="password-heading"
+      hidden={enrolling}
+      className="mt-12 scroll-mt-8 border-t border-line pt-8"
+    >
       <h2 id="password-heading" className="text-lg text-ink">
         {t("title")}
       </h2>

@@ -51,10 +51,12 @@ export interface EnrolmentStepsProps {
   homeHref: string;
   /** The server lost the pending enrolment (no_pending_enrolment): go back to the start. */
   onRestart: (error: ErrorKey) => void;
+  /** "Cancel setup" before the code is confirmed: go back to the start. */
+  onCancel: () => void;
 }
 
 /** Steps 1-3 after enrolment starts: QR and key, confirm a code, then the ten recovery codes shown once. */
-export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: EnrolmentStepsProps) {
+export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCancel }: EnrolmentStepsProps) {
   const t = useTranslations("security");
   const tv = useTranslations("validation");
   const te = useTranslations("errors");
@@ -226,6 +228,15 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart }: Enro
           { title: t("step3"), body: codesBody },
         ]}
       />
+      {codes ? null : (
+        // Once the code is confirmed, two-step sign-in is on: nothing is left to cancel. While a code is being
+        // checked, cancelling could hide a success, so the button waits (busy ignores presses).
+        <div>
+          <Button variant="link" busy={busy} onClick={onCancel}>
+            {t("cancelSetup")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -157,6 +157,7 @@
     "code": "Code from your app",
     "confirm": "Confirm code",
     "confirming": "Checking…",
+    "cancelSetup": "Cancel setup",
     "codesLead": "Each code signs you in once if you lose your phone. Keep them somewhere safe, such as a password manager: we will not show them again.",
     "codesLabel": "Your recovery codes",
     "copyCodes": "Copy codes",

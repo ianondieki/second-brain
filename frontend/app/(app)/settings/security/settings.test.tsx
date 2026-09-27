@@ -20,6 +20,21 @@ function answer(status: number, code?: string) {
   return { data: undefined, error, response: new Response(body, { status }) };
 }
 
+function ok(data: unknown) {
+  return { data, error: undefined, response: new Response(JSON.stringify(data), { status: 200 }) };
+}
+
+const ENROLMENT = {
+  secret: "JBSWY3DPEHPK3PXPJBSWY3DP",
+  otpauth_uri: "otpauth://totp/Bridge:a%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DP&issuer=Bridge",
+};
+const RECOVERY_CODES = Array.from({ length: 10 }, (_, i) => `code-${i}`);
+
+/** Answers each API path with the given result; the rest with 204. */
+function answerWith(answers: Record<string, unknown>) {
+  mocks.post.mockImplementation((path: string) => answers[path] ?? answer(204));
+}
+
 function page(passwordSet: boolean, children: ReactNode) {
   return renderWithIntl(<PasswordStateProvider initial={passwordSet}>{children}</PasswordStateProvider>);
 }
@@ -116,6 +131,95 @@ describe("two-step setup without a password on file (password_set false)", () =>
     });
     fireEvent.click(screen.getByRole("button", { name: "Save password" }));
     expect(await screen.findByLabelText(ENROL_FIELD, { selector: "input" })).toBeTruthy();
+  });
+});
+
+describe("the Password section during two-step setup", () => {
+  const passwordSection = () => screen.queryByRole("region", { name: "Password" });
+
+  function securityPage() {
+    page(
+      true,
+      <>
+        {twoStep}
+        <PasswordSettings email="a@example.com" />
+      </>,
+    );
+  }
+
+  async function startSetup() {
+    fireEvent.change(screen.getByLabelText(ENROL_FIELD, { selector: "input" }), { target: { value: "jacaranda" } });
+    fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
+    await screen.findByTestId("totp-key");
+  }
+
+  it("steps aside while the setup steps are shown and comes back, as typed, when setup is cancelled", async () => {
+    answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
+    securityPage();
+    expect(passwordSection()).not.toBeNull();
+    fireEvent.change(screen.getByLabelText("New password", { selector: "input" }), {
+      target: { value: "typed before setup" },
+    });
+
+    await startSetup();
+    expect(passwordSection()).toBeNull();
+    expect(document.getElementById("password")!.hidden).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    expect(passwordSection()).not.toBeNull();
+    expect(screen.queryByTestId("totp-key")).toBeNull();
+    expect(screen.getByLabelText<HTMLInputElement>("New password", { selector: "input" }).value).toBe(
+      "typed before setup",
+    );
+    // Focus returns to the button that started setup, not to the top of the page.
+    const start = screen.getByRole("button", { name: "Turn on two-step sign-in" });
+    await waitFor(() => expect(document.activeElement).toBe(start));
+  });
+
+  it("stays hidden through the recovery codes, which cannot be cancelled; Done ends setup", async () => {
+    answerWith({
+      "/api/auth/totp/enrol": ok(ENROLMENT),
+      "/api/auth/totp/confirm": ok({ recovery_codes: RECOVERY_CODES }),
+    });
+    securityPage();
+    await startSetup();
+
+    fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
+    await screen.findByTestId("recovery-codes");
+    expect(passwordSection()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel setup" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "I have saved my codes" }));
+    expect(mocks.push).toHaveBeenCalledWith("/org");
+  });
+
+  it("comes back when the server has lost the pending setup and it starts again", async () => {
+    answerWith({
+      "/api/auth/totp/enrol": ok(ENROLMENT),
+      "/api/auth/totp/confirm": answer(409, "no_pending_enrolment"),
+    });
+    securityPage();
+    await startSetup();
+
+    fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
+    await screen.findByRole("button", { name: "Turn on two-step sign-in" });
+    expect(passwordSection()).not.toBeNull();
+  });
+
+  it("ignores Cancel while a code is being checked, so a confirmed setup is never hidden", async () => {
+    answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT), "/api/auth/totp/confirm": new Promise(() => {}) });
+    securityPage();
+    await startSetup();
+
+    fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
+    const cancel = screen.getByRole("button", { name: "Cancel setup" });
+    await waitFor(() => expect(cancel.getAttribute("aria-disabled")).toBe("true"));
+    fireEvent.click(cancel);
+    expect(screen.getByTestId("totp-key")).toBeTruthy();
+    expect(passwordSection()).toBeNull();
   });
 });
 
