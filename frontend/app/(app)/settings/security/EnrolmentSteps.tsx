@@ -217,6 +217,10 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCanc
     <div className="flex flex-col gap-6">
       <ErrorNotice error={error} />
       <Steps
+        // The recovery codes are a new stage, not a moved one: a new list replaces the setup list, focus goes to its
+        // current heading, and step 3 does not slide up into the space steps 1-2 leave (a 0.94 layout shift at
+        // 360 px when a slow confirmation answered).
+        key={codes ? "codes" : "setup"}
         label={t("stepsLabel")}
         doneLabel={t("stepDone")}
         current={current}
