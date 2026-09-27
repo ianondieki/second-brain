@@ -5,19 +5,22 @@ Fails (exit 1) when user-facing copy makes a claim the product must never make (
 namespaces (or an EM2 template) says "approve"/"approved" without a non-binding qualifier. Rules live in
 ``copy/banned_claims.txt``.
 
-Scope, under ``backend/`` and ``frontend/`` (dependency, build and test directories and ``*.test.*``/``*.spec.*``
-files excluded, since tests hold negative fixtures):
+Scope, under ``backend/`` and ``frontend/`` (dependency caches anywhere, top-level test and build directories, and
+``*.test.*``/``*.spec.*`` files are excluded, since tests hold negative fixtures):
 
-- i18n catalogues: every ``*.json`` in a ``locales/`` or ``messages/`` directory, checked message by message (ICU
-  ``select``/``plural`` branches separately); at least one catalogue must exist (fail closed);
-- every file under a ``templates/`` directory (email and page templates, any suffix);
+- i18n catalogues: every ``*.json`` (message by message, ICU ``select``/``plural`` branches separately) and ``*.po``
+  under a ``locales/``, ``locale/``, ``messages/`` or ``i18n/`` directory; at least one must exist (fail closed);
+- every file under a ``templates/``, ``emails/`` or ``email_templates/`` directory (any suffix);
 - backend ``config/`` and ``seed/`` YAML, recursively (consent texts, legal placeholders, seed copy);
-- string literals in backend Python (``ast``: adjacent literals are already joined; comments and docstrings are
+- string literals in backend Python under ``src/`` and ``alembic/`` (``ast``: adjacent literals are already joined; comments and docstrings are
   not copy and are skipped);
 - frontend source and static copy under ``app/``, ``components/``, ``lib/`` and ``public/``.
 
-Text is matched as a whole (a phrase may wrap across lines) after HTML-entity decoding, NFKC, removal of invisible
-format characters (soft hyphen, zero-width), markup tags and Unicode dashes. Stdlib only; run from anywhere:
+Text is matched as a whole (a phrase may wrap onto the next line, never across a blank line or a block element)
+after HTML-entity decoding, NFKC, removal of invisible format characters and combining marks, blank fillers and
+Cyrillic/Greek lookalikes folded to Latin, and Unicode dashes folded; markup is matched both as written (attribute
+copy) and with tags removed. Deliberate evasions beyond these (other homoglyph scripts, images of text) are a known
+limit: the lint catches mistakes, human review catches intent. Stdlib only; run from anywhere:
 ``python scripts/copy_lint.py`` (CI: the pr.yml hygiene job; locally: ``make check-copy``).
 """
 
@@ -40,16 +43,30 @@ RULES_FILE = Path("copy") / "banned_claims.txt"
 
 _DASHES = re.compile("[֊־᐀᠆‐-―−⸺⸻⹀〜゠﹘]")
 _APOSTROPHES = re.compile("[‘’ʼ＇]")
-_TAG = re.compile(r"<[^<>]*>")
+# A tag starts with a letter after "<" or "</" (so "a < b" comparisons and "=>" arrows are not tags). Block tags
+# become a paragraph break, so words in neighbouring elements never join into one phrase; inline tags vanish.
+_TAG = re.compile(r"</?([A-Za-z][\w:-]*)\b[^<>]*>")
+_BLOCK_TAGS = {
+    "p", "div", "br", "hr", "li", "ul", "ol", "tr", "td", "th", "table", "section", "article", "header", "footer",
+    "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "title", "mj-text", "mj-section", "mj-column",
+}
 _TEMPLATE_COMMENT = re.compile(r"\{#.*?#\}|<!--.*?-->", re.S)
-_SEP = r"[\s\-]*"
+# Spaces, tabs and hyphens, possibly absent, and at most one line break (a wrapped line), never a blank line.
+_SEP = r"[ \t\-]*(?:\n[ \t\-]*)?"
+# Blank fillers used as separators, and Cyrillic/Greek letters that look like Latin ones (deliberate evasions).
+_FILLERS = re.compile("[ᅟᅠ⠀ㅤﾠ]")
+_CONFUSABLES = str.maketrans("аеорсхуіѕјԁкмтнвгΑΒΕΗΙΚΜΝΟΡΤΧΥοαερτ", "aeopcxyisjdkmthbrABEHIKMNOPTXYoaept")
 MARKUP_SUFFIXES = {".html", ".htm", ".j2", ".jinja", ".mjml", ".tsx", ".jsx", ".md", ".mdx", ".svg", ".xml"}
 FRONTEND_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".md", ".mdx", ".html", ".htm", ".json", ".txt", ".svg"}
-SKIP_DIRS = {
-    "node_modules", ".venv", "venv", ".git", ".next", "dist", "build", "coverage", "__pycache__", ".mypy_cache",
-    ".ruff_cache", ".pytest_cache", ".hypothesis", "tests", "__tests__", "test", "e2e", "playwright-report",
-    "test-results",
+# Skipped at any depth: dependency and tool caches. Skipped only directly under backend/ or frontend/: test and
+# build output directories (a route segment such as app/(dev)/build/ is still copy).
+SKIP_ANYWHERE = {
+    "node_modules", ".venv", "venv", ".git", ".next", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+    ".hypothesis", "__tests__",
 }
+SKIP_TOP = {"tests", "test", "e2e", "dist", "build", "coverage", "playwright-report", "test-results"}
+CATALOGUE_DIRS = {"locales", "locale", "messages", "i18n"}
+TEMPLATE_DIRS = {"templates", "emails", "email_templates"}
 TEST_MARKERS = (".test.", ".spec.")
 ICU_COMPLEX = {"select", "plural", "selectordinal"}
 MAX_VARIANTS = 256
@@ -73,14 +90,23 @@ class Violation:
         return f"{self.where}: {self.message}"
 
 
+def _strip_tag(match: re.Match[str]) -> str:
+    newlines = match.group(0).count("\n")
+    if match.group(1).casefold() in _BLOCK_TAGS:
+        return "\x1e" + "\n" * newlines  # a record separator: no phrase separator crosses it
+    return "\n" * newlines
+
+
 def normalise(text: str, *, markup: bool = False) -> str:
-    """Decode entities, NFKC, drop invisible format characters (and tags for markup), fold dashes and case.
+    """Decode entities; NFKC; drop invisible format characters and combining marks; blank fillers become spaces;
+    Latin lookalikes become Latin; tags are removed for markup; dashes and case are folded.
 
     Newlines inside a removed tag are kept, so line numbers of later matches stay right."""
-    text = unicodedata.normalize("NFKC", html.unescape(text))
-    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+    text = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", html.unescape(text)))
+    text = "".join(ch for ch in text if unicodedata.category(ch) not in {"Cf", "Mn"})
+    text = _FILLERS.sub(" ", unicodedata.normalize("NFKC", text)).translate(_CONFUSABLES)
     if markup:
-        text = _TAG.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+        text = _TAG.sub(_strip_tag, text)
     return _APOSTROPHES.sub("'", _DASHES.sub("-", text)).casefold()
 
 
@@ -211,10 +237,20 @@ def _flatten(node: object, prefix: str = "") -> Iterator[tuple[str, str]]:
         yield prefix, node
 
 
+def _hits(rules: Rules, text: str, *, markup: bool) -> list[tuple[int, str]]:
+    """(line index, hit) of banned phrases, from the text as written and, for markup, with tags removed, so copy in
+    attributes (alt, title, aria-label, meta content) and copy split by inline tags are both seen. One hit per line."""
+    seen: dict[int, str] = {}
+    for norm in [normalise(text)] + ([normalise(text, markup=True)] if markup else []):
+        for offset, hit in banned_hits(rules, norm):
+            seen.setdefault(norm.count("\n", 0, offset), hit)
+    return sorted(seen.items())
+
+
 def scan_catalogue(rules: Rules, path: Path, rel: str) -> list[Violation]:
     found: list[Violation] = []
     for key, message in _flatten(json.loads(path.read_text(encoding="utf-8"))):
-        for _, hit in banned_hits(rules, normalise(message, markup=True)):
+        for _, hit in _hits(rules, message, markup=True):
             found.append(Violation(f"{rel} [{key}]", f"banned claim {hit!r}"))
         if in_namespace(key, rules.namespaces) and any(
             lacks_qualifier(rules, normalise(variant, markup=True)) for variant in icu_variants(message)
@@ -223,17 +259,17 @@ def scan_catalogue(rules: Rules, path: Path, rel: str) -> list[Violation]:
     return found
 
 
-def _line_hits(rules: Rules, norm: str, rel: str, first_line: int = 1) -> list[Violation]:
+def _line_hits(rules: Rules, text: str, rel: str, *, markup: bool, first_line: int = 1) -> list[Violation]:
     return [
-        Violation(f"{rel}:{first_line + norm.count(chr(10), 0, offset)}", f"banned claim {hit!r}")
-        for offset, hit in banned_hits(rules, norm)
+        Violation(f"{rel}:{first_line + line}", f"banned claim {hit!r}")
+        for line, hit in _hits(rules, text, markup=markup)
     ]
 
 
 def scan_text(rules: Rules, path: Path, rel: str, *, template: bool = False) -> list[Violation]:
     text = path.read_text(encoding="utf-8", errors="replace")
     markup = path.suffix.casefold() in MARKUP_SUFFIXES
-    found = _line_hits(rules, normalise(text, markup=markup), rel)
+    found = _line_hits(rules, text, rel, markup=markup)
     if template and path.name.casefold().startswith(rules.template_prefixes):
         body = normalise(_TEMPLATE_COMMENT.sub("", text), markup=markup)
         if lacks_qualifier(rules, body):
@@ -258,7 +294,7 @@ def scan_python(rules: Rules, path: Path, rel: str) -> list[Violation]:
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return _line_hits(rules, normalise(source, markup=True), rel)
+        return _line_hits(rules, source, rel, markup=True)
     skip = _docstrings(tree)
     found: list[Violation] = []
     for node in ast.walk(tree):
@@ -272,32 +308,36 @@ def scan_python(rules: Rules, path: Path, rel: str) -> list[Violation]:
             text = node.value
         else:
             continue
-        found.extend(_line_hits(rules, normalise(text, markup=True), rel, node.lineno))
+        found.extend(_line_hits(rules, text, rel, markup=True, first_line=node.lineno))
     return found
 
 
 def _walk(base: Path) -> Iterator[Path]:
     for folder, dirs, files in os.walk(base):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        top = Path(folder) == base
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_ANYWHERE and not (top and d in SKIP_TOP))
         for name in sorted(files):
             if not any(marker in name for marker in TEST_MARKERS):
                 yield Path(folder) / name
 
 
 def targets(root: Path) -> Iterator[tuple[str, Path]]:
-    """(kind, path) for every file the lint reads; kind is catalogue, template, python or text."""
+    """(kind, path) for every file the lint reads; kind is catalogue, po, template, python or text."""
     for side in ("backend", "frontend"):
         base = root / side
         if not base.is_dir():
             continue
         for path in _walk(base):
             parts = path.relative_to(base).parts
+            folders = set(parts[:-1])
             suffix = path.suffix.casefold()
-            if suffix == ".json" and parts[-2:-1] and parts[-2] in {"locales", "messages"}:
+            if folders & CATALOGUE_DIRS and suffix == ".json":
                 yield "catalogue", path
-            elif "templates" in parts[:-1]:
+            elif folders & CATALOGUE_DIRS and suffix == ".po":
+                yield "po", path
+            elif folders & TEMPLATE_DIRS:
                 yield "template", path
-            elif side == "backend" and parts[0] == "src" and suffix == ".py":
+            elif side == "backend" and parts[0] in {"src", "alembic"} and suffix == ".py":
                 yield "python", path
             elif side == "backend" and parts[0] in {"config", "seed"} and suffix in {".yaml", ".yml"}:
                 yield "text", path
@@ -315,6 +355,9 @@ def lint(root: Path, rules_path: Path | None = None) -> list[Violation]:
         if kind == "catalogue":
             catalogues += 1
             violations.extend(scan_catalogue(rules, path, rel))
+        elif kind == "po":
+            catalogues += 1
+            violations.extend(scan_text(rules, path, rel))
         elif kind == "python":
             violations.extend(scan_python(rules, path, rel))
         else:
