@@ -270,6 +270,69 @@ class ApproveNeedsANonBindingQualifier(LintTree):
         self.assertEqual(self.violations(), [])
 
 
+class SpecMinimumAndRoundTwo(LintTree):
+    """Hard-coded spec minimum (docs/spec/04 principle 2), independent of the rules file, and review round 2."""
+
+    def test_the_spec_phrases_are_banned_whatever_the_rules_file_says(self) -> None:
+        for phrase in ("theft-proof", "cannot be stolen", "protected idea", "patented"):
+            with self.subTest(phrase=phrase):
+                self.locale({"landing": {"t": f"Here: {phrase}."}})
+                self.assertEqual(len(self.violations()), 1)
+
+    def test_approve_and_approved_need_the_qualifier_whatever_the_rules_file_says(self) -> None:
+        for label in ("Approve", "Approved", "They approved it", "Approving now"):
+            with self.subTest(label=label):
+                self.locale({"tracker": {"action": label}})
+                self.assertEqual(len(self.violations()), 1)
+
+    def test_attribute_copy_is_scanned(self) -> None:
+        self.write("backend/src/bridge/notifications/templates/em1.html.j2", '<img alt="Theft-proof certificate">\n')
+        self.write("backend/src/bridge/notifications/templates/meta.html", '<meta content="Your idea is theft-proof">\n')
+        self.write("frontend/components/Banner.tsx", '<Banner title="Your idea is patented" />\n')
+        self.write("frontend/components/Button.tsx", '<button aria-label="Make your idea theft-proof" />\n')
+        self.assertEqual(len(self.violations()), 4, self.violations())
+
+    def test_comparisons_are_not_tags(self) -> None:
+        self.write(
+            "backend/src/bridge/notifications/templates/em1.txt.j2",
+            "{% if saved_count < 1 %}Your idea is theft-proof.{% endif %}\n{% if sent_count > 5 %}ok{% endif %}\n",
+        )
+        self.write("frontend/components/Cmp.tsx", "const ok = a < b; const t = 'patented'; const f = () => 1;\n")
+        self.assertEqual(len(self.violations()), 2, self.violations())
+
+    def test_block_elements_and_blank_lines_do_not_join_words(self) -> None:
+        self.write(
+            "backend/src/bridge/notifications/templates/em1.html.j2",
+            "<h3>How your data is protected</h3><p>Ideas you register are timestamped.</p>\n",
+        )
+        self.write(
+            "backend/src/bridge/notifications/templates/em1.txt.j2",
+            "What to do if you suspect theft\n\nProof of authorship: {{ receipt_id }}\n",
+        )
+        self.assertEqual(self.violations(), [])
+
+    def test_more_catalogue_and_template_locations_are_scanned(self) -> None:
+        self.write("backend/src/bridge/notifications/locales/en/email.json", json.dumps({"s": "theft-proof"}))
+        self.write("frontend/messages/en.json", json.dumps({"s": "patented"}))
+        self.write("backend/src/bridge/locale/sw/LC_MESSAGES/bridge.po", 'msgid "x"\nmsgstr "theft-proof"\n')
+        self.write("backend/src/bridge/notifications/emails/welcome.html", "<p>protected ideas</p>")
+        self.write("backend/alembic/versions/0099_x.py", 'BODY = "cannot be stolen"\n')
+        self.write("frontend/app/(dev)/build/page.tsx", "export default () => <p>Theft-proof builds</p>;\n")
+        self.assertEqual(len(self.violations()), 6, self.violations())
+
+    def test_the_em2_rule_ignores_non_template_files(self) -> None:
+        self.write("frontend/lib/em2.ts", "export const subjectKey = 'email.em2.subject'; // approved\n")
+        self.write("frontend/lib/em2.txt", "approved\n")
+        self.assertEqual(self.violations(), [])
+
+    def test_deliberate_evasions_are_folded(self) -> None:
+        texts = ["théft-proof", "theft️-proof", "theftㅤproof", "theft⠀proof", "thеft-proof"]
+        for text in texts:
+            with self.subTest(text=text):
+                self.locale({"landing": {"t": text}})
+                self.assertEqual(len(self.violations()), 1)
+
+
 class RulesFile(unittest.TestCase):
     def test_a_line_outside_a_section_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
