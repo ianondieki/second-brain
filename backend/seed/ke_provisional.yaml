@@ -1,0 +1,953 @@
+# Provisional directory seed (REQ-DIR-02, D-21). Public organisational data only; E0 (unclaimed) rows;
+# loadable only when APP_ENV is dev or test; G6 approves the production list.
+# Every row is cited in docs/platform/research/phase2-directory-sources.md (source register, URL, date).
+# `county` uses the ISO 3166-2:KE code from backend/seed/reference.yaml (NOT the First-Schedule
+# county_code) -- do not assume KE-0N aligns with any other numbering. `official_domains: []` means no
+# domain was confirmed on an official source actually fetched (see the research note's open questions);
+# it does NOT mean the org has no domain, only that automatic E1 domain-match must not be offered.
+version: 1
+status: provisional-until-G6
+orgs:
+  # --- Telecom licensees (networks-telecommunications) — AC-DIR-6 requires the first three ---
+  - slug: safaricom-plc
+    legal_name: Safaricom PLC
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: [safaricom.co.ke]
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: airtel-networks-kenya
+    legal_name: Airtel Networks Kenya Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: [airtelkenya.com]
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: telkom-kenya
+    legal_name: Telkom Kenya Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: [telkom.co.ke]
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: jamii-telecommunications
+    legal_name: Jamii Telecommunications Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: wananchi-telecom
+    legal_name: Wananchi Telecom Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), International Gateway Operators"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: liquid-telecommunications-kenya
+    legal_name: Liquid Telecommunications Kenya Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), International Gateway Operators / Network Facilities Provider Tier Two"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: poa-internet-kenya
+    legal_name: Poa Internet Kenya Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier Three"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  - slug: mawingu-networks
+    legal_name: Mawingu Networks Limited
+    kind: company
+    niches: [networks-telecommunications]
+    county: KE-20
+    official_domains: []
+    public_entity: false
+    source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier Three"
+    source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
+    source_retrieved_on: 2026-09-27
+
+  # --- Microfinance banks (microfinance-saccos) ---
+  - slug: caritas-microfinance-bank
+    legal_name: Caritas Microfinance Bank Limited
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: [caritas-mfb.co.ke]
+    public_entity: false
+    source_register: "Central Bank of Kenya -- Directory of Licenced Microfinance Banks (February 2026)"
+    source_url: "https://www.centralbank.go.ke/wp-content/uploads/2026/02/Directory-of-Licenced-Microfinance-Banks-Feb-2026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: faulu-microfinance-bank
+    legal_name: Faulu Microfinance Bank Limited
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: [faulukenya.com]
+    public_entity: false
+    source_register: "Central Bank of Kenya -- Directory of Licenced Microfinance Banks (February 2026)"
+    source_url: "https://www.centralbank.go.ke/wp-content/uploads/2026/02/Directory-of-Licenced-Microfinance-Banks-Feb-2026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: kenya-women-microfinance-bank
+    legal_name: Kenya Women Microfinance Bank PLC
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: [kwftbank.com]
+    public_entity: false
+    source_register: "Central Bank of Kenya -- Directory of Licenced Microfinance Banks (February 2026)"
+    source_url: "https://www.centralbank.go.ke/wp-content/uploads/2026/02/Directory-of-Licenced-Microfinance-Banks-Feb-2026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: smep-microfinance-bank
+    legal_name: SMEP Microfinance Bank Limited
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: [smep.co.ke]
+    public_entity: false
+    source_register: "Central Bank of Kenya -- Directory of Licenced Microfinance Banks (February 2026)"
+    source_url: "https://www.centralbank.go.ke/wp-content/uploads/2026/02/Directory-of-Licenced-Microfinance-Banks-Feb-2026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: muungano-microfinance-bank
+    legal_name: Muungano Microfinance Bank PLC
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-29
+    official_domains: []
+    public_entity: false
+    source_register: "Central Bank of Kenya -- Directory of Licenced Microfinance Banks (February 2026)"
+    source_url: "https://www.centralbank.go.ke/wp-content/uploads/2026/02/Directory-of-Licenced-Microfinance-Banks-Feb-2026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  # --- Deposit-taking SACCOs (microfinance-saccos) ---
+  - slug: afya-sacco-society
+    legal_name: Afya Sacco Society Ltd
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "SACCO Societies Regulatory Authority (SASRA) -- List of Licensed and Authorised Sacco Societies in Kenya, FY ending 31 December 2026, Schedule I"
+    source_url: "https://gaa.go.ke/sites/default/files/2026-02/SASRA--LIST%20OF%20LICENSED%20AND%20AUTHORISED%20SACCO%20SOCIETIES%20IN%20KENYA%20FOR%20THE%20FINANCIAL%20YEAR%20ENDING%2031ST%20DECEMBER%202026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: harambee-sacco-society
+    legal_name: Harambee DT Sacco Society Ltd
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "SACCO Societies Regulatory Authority (SASRA) -- List of Licensed and Authorised Sacco Societies in Kenya, FY ending 31 December 2026, Schedule I"
+    source_url: "https://gaa.go.ke/sites/default/files/2026-02/SASRA--LIST%20OF%20LICENSED%20AND%20AUTHORISED%20SACCO%20SOCIETIES%20IN%20KENYA%20FOR%20THE%20FINANCIAL%20YEAR%20ENDING%2031ST%20DECEMBER%202026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: hazina-sacco-society
+    legal_name: Hazina Sacco Society Ltd
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "SACCO Societies Regulatory Authority (SASRA) -- List of Licensed and Authorised Sacco Societies in Kenya, FY ending 31 December 2026, Schedule I"
+    source_url: "https://gaa.go.ke/sites/default/files/2026-02/SASRA--LIST%20OF%20LICENSED%20AND%20AUTHORISED%20SACCO%20SOCIETIES%20IN%20KENYA%20FOR%20THE%20FINANCIAL%20YEAR%20ENDING%2031ST%20DECEMBER%202026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: imarika-sacco-society
+    legal_name: Imarika Sacco Society Ltd
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-14
+    official_domains: []
+    public_entity: false
+    source_register: "SACCO Societies Regulatory Authority (SASRA) -- List of Licensed and Authorised Sacco Societies in Kenya, FY ending 31 December 2026, Schedule I"
+    source_url: "https://gaa.go.ke/sites/default/files/2026-02/SASRA--LIST%20OF%20LICENSED%20AND%20AUTHORISED%20SACCO%20SOCIETIES%20IN%20KENYA%20FOR%20THE%20FINANCIAL%20YEAR%20ENDING%2031ST%20DECEMBER%202026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: egerton-university-sacco-society
+    legal_name: Egerton University Sacco Society Ltd
+    kind: sacco_mfi
+    niches: [microfinance-saccos]
+    county: KE-31
+    official_domains: []
+    public_entity: false
+    source_register: "SACCO Societies Regulatory Authority (SASRA) -- List of Licensed and Authorised Sacco Societies in Kenya, FY ending 31 December 2026, Schedule I"
+    source_url: "https://gaa.go.ke/sites/default/files/2026-02/SASRA--LIST%20OF%20LICENSED%20AND%20AUTHORISED%20SACCO%20SOCIETIES%20IN%20KENYA%20FOR%20THE%20FINANCIAL%20YEAR%20ENDING%2031ST%20DECEMBER%202026.pdf"
+    source_retrieved_on: 2026-09-27
+
+  # --- Higher education: public universities (higher-education) ---
+  - slug: university-of-nairobi
+    legal_name: University of Nairobi
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-30
+    official_domains: []
+    public_entity: true
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Public Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: kenyatta-university
+    legal_name: Kenyatta University
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-30
+    official_domains: []
+    public_entity: true
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Public Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: moi-university
+    legal_name: Moi University
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-44
+    official_domains: []
+    public_entity: true
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Public Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: egerton-university
+    legal_name: Egerton University
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-31
+    official_domains: []
+    public_entity: true
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Public Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: jomo-kenyatta-university-of-agriculture-and-technology
+    legal_name: Jomo Kenyatta University of Agriculture and Technology
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-13
+    official_domains: []
+    public_entity: true
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Public Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  # --- Higher education: private universities (higher-education) ---
+  - slug: strathmore-university
+    legal_name: Strathmore University
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Private Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: catholic-university-of-eastern-africa
+    legal_name: Catholic University of Eastern Africa
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-30
+    official_domains: []
+    public_entity: false
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Private Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  - slug: kabarak-university
+    legal_name: Kabarak University
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-31
+    official_domains: []
+    public_entity: false
+    source_register: "Commission for University Education -- list of universities authorised to operate in Kenya (published August 2022, data as at December 2020), Private Chartered Universities"
+    source_url: "https://www.cue.or.ke/documents/Accredited_Universities_Kenya_August_2022.pdf"
+    source_retrieved_on: 2026-09-27
+
+  # --- Higher education: TVET institutions (higher-education) ---
+  - slug: coastland-professional-training-college
+    legal_name: Coastland Professional Training College
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-28
+    official_domains: []
+    public_entity: false
+    source_register: "TVET Authority (TVETA) -- Register of Accredited TVET Institutions"
+    source_url: "https://www.tveta.go.ke/accredited-tvet-institutions/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: marengoni-community-technical-college
+    legal_name: Marengoni Community Technical College
+    kind: university_tvet
+    niches: [higher-education]
+    county: KE-10
+    official_domains: []
+    public_entity: false
+    source_register: "TVET Authority (TVETA) -- Register of Accredited TVET Institutions"
+    source_url: "https://www.tveta.go.ke/accredited-tvet-institutions/"
+    source_retrieved_on: 2026-09-27
+
+  # --- National government (national-government) ---
+  - slug: ministry-of-interior-and-national-administration
+    legal_name: Ministry of Interior and National Administration
+    kind: national_govt
+    niches: [national-government]
+    county: KE-30
+    official_domains: []
+    public_entity: true
+    source_register: "Office of the President -- Ministries directory"
+    source_url: "https://www.president.go.ke/ministries-ke/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: national-treasury-and-economic-planning
+    legal_name: The National Treasury
+    kind: national_govt
+    niches: [national-government]
+    county: KE-30
+    official_domains: [treasury.go.ke]
+    public_entity: true
+    source_register: "The National Treasury -- official website"
+    source_url: "https://www.treasury.go.ke/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: ministry-of-health
+    legal_name: Ministry of Health
+    kind: national_govt
+    niches: [national-government]
+    county: KE-30
+    official_domains: [health.go.ke]
+    public_entity: true
+    source_register: "Ministry of Health -- official website"
+    source_url: "https://www.health.go.ke/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: ministry-of-education
+    legal_name: Ministry of Education
+    kind: national_govt
+    niches: [national-government]
+    county: KE-30
+    official_domains: [education.go.ke]
+    public_entity: true
+    source_register: "Ministry of Education -- official website"
+    source_url: "https://www.education.go.ke/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: ministry-of-agriculture-and-livestock-development
+    legal_name: Ministry of Agriculture and Livestock Development
+    kind: national_govt
+    niches: [national-government]
+    county: KE-30
+    official_domains: [kilimo.go.ke]
+    public_entity: true
+    source_register: "Ministry of Agriculture and Livestock Development -- official website"
+    source_url: "https://www.kilimo.go.ke/"
+    source_retrieved_on: 2026-09-27
+
+  # --- County governments (county-government), all 47 ---
+  - slug: county-government-mombasa
+    legal_name: County Government of Mombasa
+    kind: county_govt
+    niches: [county-government]
+    county: KE-28
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kwale
+    legal_name: County Government of Kwale
+    kind: county_govt
+    niches: [county-government]
+    county: KE-19
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kilifi
+    legal_name: County Government of Kilifi
+    kind: county_govt
+    niches: [county-government]
+    county: KE-14
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-tana-river
+    legal_name: County Government of Tana River
+    kind: county_govt
+    niches: [county-government]
+    county: KE-40
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-lamu
+    legal_name: County Government of Lamu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-21
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-taita-taveta
+    legal_name: County Government of Taita/Taveta
+    kind: county_govt
+    niches: [county-government]
+    county: KE-39
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-garissa
+    legal_name: County Government of Garissa
+    kind: county_govt
+    niches: [county-government]
+    county: KE-07
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-wajir
+    legal_name: County Government of Wajir
+    kind: county_govt
+    niches: [county-government]
+    county: KE-46
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-mandera
+    legal_name: County Government of Mandera
+    kind: county_govt
+    niches: [county-government]
+    county: KE-24
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-marsabit
+    legal_name: County Government of Marsabit
+    kind: county_govt
+    niches: [county-government]
+    county: KE-25
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-isiolo
+    legal_name: County Government of Isiolo
+    kind: county_govt
+    niches: [county-government]
+    county: KE-09
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-meru
+    legal_name: County Government of Meru
+    kind: county_govt
+    niches: [county-government]
+    county: KE-26
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-tharaka-nithi
+    legal_name: County Government of Tharaka-Nithi
+    kind: county_govt
+    niches: [county-government]
+    county: KE-41
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-embu
+    legal_name: County Government of Embu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-06
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kitui
+    legal_name: County Government of Kitui
+    kind: county_govt
+    niches: [county-government]
+    county: KE-18
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-machakos
+    legal_name: County Government of Machakos
+    kind: county_govt
+    niches: [county-government]
+    county: KE-22
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-makueni
+    legal_name: County Government of Makueni
+    kind: county_govt
+    niches: [county-government]
+    county: KE-23
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nyandarua
+    legal_name: County Government of Nyandarua
+    kind: county_govt
+    niches: [county-government]
+    county: KE-35
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nyeri
+    legal_name: County Government of Nyeri
+    kind: county_govt
+    niches: [county-government]
+    county: KE-36
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kirinyaga
+    legal_name: County Government of Kirinyaga
+    kind: county_govt
+    niches: [county-government]
+    county: KE-15
+    official_domains: [kirinyaga.go.ke]
+    public_entity: true
+    source_register: "County Government of Kirinyaga -- official website"
+    source_url: "https://kirinyaga.go.ke/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-muranga
+    legal_name: County Government of Murang'a
+    kind: county_govt
+    niches: [county-government]
+    county: KE-29
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kiambu
+    legal_name: County Government of Kiambu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-13
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-turkana
+    legal_name: County Government of Turkana
+    kind: county_govt
+    niches: [county-government]
+    county: KE-43
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-west-pokot
+    legal_name: County Government of West Pokot
+    kind: county_govt
+    niches: [county-government]
+    county: KE-47
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-samburu
+    legal_name: County Government of Samburu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-37
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-trans-nzoia
+    legal_name: County Government of Trans Nzoia
+    kind: county_govt
+    niches: [county-government]
+    county: KE-42
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-uasin-gishu
+    legal_name: County Government of Uasin Gishu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-44
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-elgeyo-marakwet
+    legal_name: County Government of Elgeyo/Marakwet
+    kind: county_govt
+    niches: [county-government]
+    county: KE-05
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nandi
+    legal_name: County Government of Nandi
+    kind: county_govt
+    niches: [county-government]
+    county: KE-32
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-baringo
+    legal_name: County Government of Baringo
+    kind: county_govt
+    niches: [county-government]
+    county: KE-01
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-laikipia
+    legal_name: County Government of Laikipia
+    kind: county_govt
+    niches: [county-government]
+    county: KE-20
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nakuru
+    legal_name: County Government of Nakuru
+    kind: county_govt
+    niches: [county-government]
+    county: KE-31
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-narok
+    legal_name: County Government of Narok
+    kind: county_govt
+    niches: [county-government]
+    county: KE-33
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kajiado
+    legal_name: County Government of Kajiado
+    kind: county_govt
+    niches: [county-government]
+    county: KE-10
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kericho
+    legal_name: County Government of Kericho
+    kind: county_govt
+    niches: [county-government]
+    county: KE-12
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-bomet
+    legal_name: County Government of Bomet
+    kind: county_govt
+    niches: [county-government]
+    county: KE-02
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kakamega
+    legal_name: County Government of Kakamega
+    kind: county_govt
+    niches: [county-government]
+    county: KE-11
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-vihiga
+    legal_name: County Government of Vihiga
+    kind: county_govt
+    niches: [county-government]
+    county: KE-45
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-bungoma
+    legal_name: County Government of Bungoma
+    kind: county_govt
+    niches: [county-government]
+    county: KE-03
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-busia
+    legal_name: County Government of Busia
+    kind: county_govt
+    niches: [county-government]
+    county: KE-04
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-siaya
+    legal_name: County Government of Siaya
+    kind: county_govt
+    niches: [county-government]
+    county: KE-38
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kisumu
+    legal_name: County Government of Kisumu
+    kind: county_govt
+    niches: [county-government]
+    county: KE-17
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-homa-bay
+    legal_name: County Government of Homa Bay
+    kind: county_govt
+    niches: [county-government]
+    county: KE-08
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-migori
+    legal_name: County Government of Migori
+    kind: county_govt
+    niches: [county-government]
+    county: KE-27
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-kisii
+    legal_name: County Government of Kisii
+    kind: county_govt
+    niches: [county-government]
+    county: KE-16
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nyamira
+    legal_name: County Government of Nyamira
+    kind: county_govt
+    niches: [county-government]
+    county: KE-34
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  - slug: county-government-nairobi-city
+    legal_name: County Government of Nairobi City
+    kind: county_govt
+    niches: [county-government]
+    county: KE-30
+    official_domains: []
+    public_entity: true
+    source_register: "Council of Governors -- Current Governors (list of the 47 county governments)"
+    source_url: "https://cog.go.ke/current-governors/"
+    source_retrieved_on: 2026-09-27
+
+  # --- Social/NGO (social-ngo) ---
+  - slug: amref-health-africa-in-kenya
+    legal_name: Amref Health Africa in Kenya
+    kind: ngo_pbo
+    niches: [social-ngo]
+    county: null
+    official_domains: []
+    public_entity: false
+    source_register: "Public Benefit Organizations Regulatory Authority (PBORA) -- public register of PBOs (formerly registered as African Medical and Research Foundation (AMREF))"
+    source_url: "https://www.pbora.go.ke/pbos"
+    source_retrieved_on: 2026-09-27
+
+  - slug: action-aid-kenya
+    legal_name: Action-Aid Kenya
+    kind: ngo_pbo
+    niches: [social-ngo]
+    county: null
+    official_domains: []
+    public_entity: false
+    source_register: "Public Benefit Organizations Regulatory Authority (PBORA) -- public register of PBOs"
+    source_url: "https://www.pbora.go.ke/pbos"
+    source_retrieved_on: 2026-09-27
+
+  - slug: action-africa-help-kenya
+    legal_name: Action Africa Help Kenya
+    kind: ngo_pbo
+    niches: [social-ngo]
+    county: null
+    official_domains: []
+    public_entity: false
+    source_register: "Public Benefit Organizations Regulatory Authority (PBORA) -- public register of PBOs"
+    source_url: "https://www.pbora.go.ke/pbos"
+    source_retrieved_on: 2026-09-27
+
+  - slug: action-for-children-kenya
+    legal_name: Action For Children Kenya
+    kind: ngo_pbo
+    niches: [social-ngo]
+    county: null
+    official_domains: []
+    public_entity: false
+    source_register: "Public Benefit Organizations Regulatory Authority (PBORA) -- public register of PBOs"
+    source_url: "https://www.pbora.go.ke/pbos"
+    source_retrieved_on: 2026-09-27
+
+  - slug: academia-health-and-agricultural-development-initiative
+    legal_name: Academia Health and Agricultural Development Initiative (AHADI)
+    kind: ngo_pbo
+    niches: [social-ngo]
+    county: null
+    official_domains: []
+    public_entity: false
+    source_register: "Public Benefit Organizations Regulatory Authority (PBORA) -- public register of PBOs"
+    source_url: "https://www.pbora.go.ke/pbos"
+    source_retrieved_on: 2026-09-27
