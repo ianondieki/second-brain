@@ -20,6 +20,8 @@ import { usePasswordState } from "./PasswordState";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
+/** An info line at the start: two-step sign-in was just turned off, or its setup was cancelled. */
+type Notice = "off" | "cancelled" | null;
 
 export interface SecuritySettingsProps {
   enrolled: boolean;
@@ -38,7 +40,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
   const te = useTranslations("errors");
 
   const [phase, setPhase] = useState<Phase>(enrolled ? { name: "on" } : { name: "intro" });
-  const [justTurnedOff, setJustTurnedOff] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
   const [password, setPassword] = useState("");
@@ -53,11 +55,15 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setEnrolling(next.name === "setup");
   }
 
-  /** Back to the start, focus on the button that began setup. The server's pending key is replaced next time. */
-  function cancel() {
-    setError(null);
+  /**
+   * Back to the start (setup cancelled, or the server lost it), with focus where setup begins again: the password
+   * field when the account has one, else the start button. The server's pending key is replaced on the next start.
+   */
+  function backToStart(nextError: ErrorKey | null, nextNotice: Notice) {
+    setError(nextError);
+    setNotice(nextNotice);
     show({ name: "intro" });
-    requestAnimationFrame(() => document.getElementById("two-step-start")?.focus());
+    requestAnimationFrame(() => document.getElementById(hasPassword ? "enrol-password" : "two-step-start")?.focus());
   }
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
@@ -67,7 +73,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setBusy(true);
     setError(null);
     setPasswordError(undefined);
-    setJustTurnedOff(false);
+    setNotice(null);
     // Fetch the next screen's code while the server works; a failed fetch surfaces later through React.lazy.
     const steps = loadEnrolmentSteps().catch(() => undefined);
     const outcome = await settle(api.POST("/api/auth/totp/enrol", { body: { password: password || null } }));
@@ -98,7 +104,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setBusy(false);
     if (outcome.ok) {
       setStepUp(false);
-      setJustTurnedOff(true);
+      setNotice("off");
       show({ name: "intro" });
       return;
     }
@@ -145,11 +151,8 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
             secret={phase.secret}
             otpauthUri={phase.otpauthUri}
             homeHref={homeHref}
-            onRestart={(key) => {
-              setError(key);
-              show({ name: "intro" });
-            }}
-            onCancel={cancel}
+            onRestart={(key) => backToStart(key, null)}
+            onCancel={() => backToStart(null, "cancelled")}
           />
         </Suspense>
       </div>
@@ -158,7 +161,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
 
   return (
     <div className="mt-8 flex flex-col gap-6">
-      {justTurnedOff ? <Alert tone="info">{t("off")}</Alert> : null}
+      {notice ? <Alert tone="info">{t(notice)}</Alert> : null}
       {errorBlock}
       <Steps
         label={t("stepsLabel")}

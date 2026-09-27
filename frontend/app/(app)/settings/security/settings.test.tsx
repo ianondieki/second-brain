@@ -45,6 +45,7 @@ function usernameFields(passwordField: HTMLElement) {
 }
 
 const ENROL_FIELD = "Confirm with your current password";
+const CANCELLED = "Setup cancelled. If you added Bridge to your authenticator app, delete that entry.";
 const twoStep = <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" />;
 
 beforeEach(() => {
@@ -171,7 +172,30 @@ describe("the Password section during two-step setup", () => {
     expect(screen.getByLabelText<HTMLInputElement>("New password", { selector: "input" }).value).toBe(
       "typed before setup",
     );
-    // Focus returns to the button that started setup, not to the top of the page.
+    // Focus goes where setup starts again (the password it asks for), not to the top of the page.
+    const field = screen.getByLabelText(ENROL_FIELD, { selector: "input" });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+  });
+
+  it("says setup was cancelled and what to tidy up, with still one primary action", async () => {
+    answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
+    const { container } = page(true, twoStep);
+    await startSetup();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    expect(screen.getByRole("status").textContent).toBe(CANCELLED);
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
+
+    // Starting again clears it.
+    await startSetup();
+    expect(screen.queryByText(CANCELLED)).toBeNull();
+  });
+
+  it("puts focus on the start button after cancelling when the account has no password", async () => {
+    answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
+    page(false, twoStep);
+    fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
+    await screen.findByTestId("totp-key");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
     const start = screen.getByRole("button", { name: "Turn on two-step sign-in" });
     await waitFor(() => expect(document.activeElement).toBe(start));
   });
@@ -206,6 +230,11 @@ describe("the Password section during two-step setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
     await screen.findByRole("button", { name: "Turn on two-step sign-in" });
     expect(passwordSection()).not.toBeNull();
+    expect(screen.getByRole("alert")).toBeTruthy(); // the error says why; no "cancelled" line
+    expect(screen.queryByText(CANCELLED)).toBeNull();
+    // Focus is not left on the page body: it goes where setup starts again.
+    const field = screen.getByLabelText(ENROL_FIELD, { selector: "input" });
+    await waitFor(() => expect(document.activeElement).toBe(field));
   });
 
   it("ignores Cancel while a code is being checked, so a confirmed setup is never hidden", async () => {
