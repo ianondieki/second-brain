@@ -8,7 +8,7 @@ change behaviour.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -143,10 +143,31 @@ class Registry:
             total *= self.batch_price_ratio
         return total.quantize(COST_QUANTUM, rounding=ROUND_HALF_UP)
 
-    def estimate_usd(self, model_id: str, *, input_chars: int, max_tokens: int, batch: bool = False) -> Decimal:
-        """A pre-call upper estimate: every requested output token plus the input at ``chars_per_token``."""
+    def estimate_usd(
+        self,
+        model_id: str,
+        *,
+        input_chars: int,
+        max_tokens: int,
+        batch: bool = False,
+        cache_writes: bool = False,
+        tool_fees_usd: Decimal = Decimal(0),
+    ) -> Decimal:
+        """A pre-call upper bound: every requested output token, the input at ``chars_per_token`` priced at the
+        highest cache-write rate when the request sets cache breakpoints (the whole prefix may be written), plus
+        ``tool_fees_usd`` (see ``tool_fees_usd``)."""
+        p = self.model(model_id).prices
         input_tokens = math.ceil(input_chars / self.budget.chars_per_token)
-        return self.cost_usd(model_id, TokenUsage(input_tokens=input_tokens, output_tokens=max_tokens), batch=batch)
+        input_rate = max(p.input, p.cache_write_5m, p.cache_write_1h) if cache_writes else p.input
+        total = (input_tokens * input_rate + max_tokens * p.output) / MILLION
+        if batch:
+            total *= self.batch_price_ratio
+        return (total + tool_fees_usd).quantize(COST_QUANTUM, rounding=ROUND_HALF_UP)
+
+    def tool_fees_usd(self, tools: Sequence[Mapping[str, Any]]) -> Decimal:
+        """Hook for per-use server-tool fees (web search and fetch, Phase 3 research): 0 while no registered task
+        allows tools. When one does, price its tools here (from a YAML fee table) so the pre-call bound covers them."""
+        return Decimal(0)
 
 
 # ------------------------------------------------------------------------------------------------------- parsing

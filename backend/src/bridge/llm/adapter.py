@@ -44,6 +44,11 @@ class ModelRequest:
     tools: tuple[Mapping[str, Any], ...] = ()
 
     @property
+    def cache_writes(self) -> bool:
+        """True when any block carries a prompt-cache breakpoint (the call may write the cache)."""
+        return any(b.cache for b in self.system) or any(b.cache for m in self.messages for b in m.blocks)
+
+    @property
     def text_chars(self) -> int:
         """Characters of prompt text (for the pre-call estimate)."""
         return sum(len(b.text) for b in self.system) + sum(len(b.text) for m in self.messages for b in m.blocks)

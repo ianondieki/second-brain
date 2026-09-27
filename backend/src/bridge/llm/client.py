@@ -362,7 +362,13 @@ class LLMService:
         while True:
             attempt += 1
             request = ModelRequest(model, max_tokens, effort, prepared.system, conversation, output_schema, tools)
-            estimate = self._registry.estimate_usd(model, input_chars=request.text_chars, max_tokens=max_tokens)
+            estimate = self._registry.estimate_usd(
+                model,
+                input_chars=request.text_chars,
+                max_tokens=max_tokens,
+                cache_writes=request.cache_writes,
+                tool_fees_usd=self._registry.tool_fees_usd(tools),
+            )
             snapshot = await self._check_budget(call, estimate, attempt, inputs)
             started = self._monotonic()
             try:
@@ -519,7 +525,13 @@ class LLMService:
             inputs[item.custom_id] = prepared.ledger_inputs
         estimate = sum(
             (
-                self._registry.estimate_usd(spec.model, input_chars=r.text_chars, max_tokens=r.max_tokens, batch=True)
+                self._registry.estimate_usd(
+                    spec.model,
+                    input_chars=r.text_chars,
+                    max_tokens=r.max_tokens,
+                    batch=True,
+                    cache_writes=r.cache_writes,
+                )
                 for r in requests.values()
             ),
             Decimal(0),

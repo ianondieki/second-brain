@@ -169,6 +169,12 @@ def test_cost_counts_every_token_kind() -> None:
     # the estimate charges every requested output token and input at chars_per_token
     per_token = reg.budget.chars_per_token
     assert reg.estimate_usd(model_id, input_chars=per_token * 1000, max_tokens=1000) == Decimal("0.006000")
+    # with cache breakpoints the input is priced at the highest cache-write rate (2 USD/M here): an upper bound
+    assert reg.estimate_usd(model_id, input_chars=per_token * 1000, max_tokens=1000, cache_writes=True) == Decimal(
+        "0.007000"
+    )
+    assert reg.estimate_usd(model_id, input_chars=0, max_tokens=0, tool_fees_usd=Decimal("0.01")) == Decimal("0.010000")
+    assert reg.tool_fees_usd([{"type": "web_search_20260209"}]) == 0  # hook: no task allows tools yet
 
 
 def test_load_is_cached() -> None:
