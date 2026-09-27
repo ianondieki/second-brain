@@ -64,8 +64,9 @@ class Settings(BaseSettings):
     plans_file: Path = BACKEND_DIR / "config" / "plans.yaml"
     consents_file: Path = BACKEND_DIR / "config" / "consents.yaml"
 
-    # Runtime LLMs (ADR-005; bridge/llm). The app starts without a key; the adapter refuses at call time. No test
-    # and no make check step reaches the provider (AC-SEC-5; D-18: no paid calls).
+    # Runtime LLMs (ADR-005; bridge/llm). Dev and test start without a key (the adapter refuses at call time);
+    # production refuses to start without one unless LLM_KILL_SWITCH=1. No test and no make check step reaches
+    # the provider (AC-SEC-5; D-18: no paid calls).
     anthropic_api_key: SecretStr | None = None
     llm_kill_switch: bool = False  # LLM_KILL_SWITCH=1 refuses every call with LLMKillSwitch
     # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
@@ -119,6 +120,8 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             if self.embedder == "fake":
                 problems.append("production embeds with a real model only (EMBEDDER=bge-m3)")
+            if self.anthropic_api_key is None and not self.llm_kill_switch:
+                problems.append("ANTHROPIC_API_KEY is required in production unless LLM_KILL_SWITCH=1")
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
             if not self.public_base_url.startswith("https://"):

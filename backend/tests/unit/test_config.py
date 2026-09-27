@@ -112,15 +112,25 @@ def test_production_refuses_the_fake_embedder() -> None:
         make(app_env="production", email_provider="postmark", postmark_server_token=SecretStr("pm"), embedder="fake")
 
 
-def test_production_accepts_bge_m3() -> None:
-    settings = make(
-        app_env="production",
-        email_provider="postmark",
-        postmark_server_token=SecretStr("pm"),
-        public_base_url="https://bridge.example",
-        embedder="bge-m3",
-    )
+PRODUCTION: dict[str, Any] = {
+    "app_env": "production",
+    "email_provider": "postmark",
+    "postmark_server_token": SecretStr("pm"),
+    "public_base_url": "https://bridge.example",
+    "embedder": "bge-m3",
+}
+
+
+def test_production_accepts_bge_m3_and_a_key() -> None:
+    settings = make(**PRODUCTION, anthropic_api_key=SecretStr("test-anthropic-key-not-real"))
     assert settings.embedder == "bge-m3"
+
+
+def test_production_needs_an_anthropic_key_unless_the_kill_switch_is_on() -> None:
+    """REQ-LLM-01: production fails closed at start-up without a key; the kill switch is the only way to run keyless."""
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY is required in production"):
+        make(**PRODUCTION)
+    assert make(**PRODUCTION, llm_kill_switch=True).anthropic_api_key is None
 
 
 def test_blank_anthropic_key_means_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
