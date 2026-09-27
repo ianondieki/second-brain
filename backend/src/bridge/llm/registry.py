@@ -24,6 +24,7 @@ from bridge.models.enums import ConsentPurpose
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 EFFORTS: frozenset[str] = frozenset({"low", "medium", "high", "xhigh", "max"})
+PRECISIONS: frozenset[str] = frozenset({"fp32", "fp16", "int8"})
 MILLION = Decimal(1_000_000)
 COST_QUANTUM = Decimal("0.000001")  # llm_calls.cost_usd is numeric(12,6)
 
@@ -93,6 +94,13 @@ class TransportPolicy:
     max_retries: int
 
 
+@dataclass(frozen=True, slots=True)
+class EmbeddingPolicy:
+    precision: Literal["fp32", "fp16", "int8"]
+    batch_size: int
+    reembed_batch_size: int
+
+
 @dataclass(frozen=True)
 class Registry:
     models: Mapping[str, ModelSpec]
@@ -101,6 +109,7 @@ class Registry:
     budget: BudgetPolicy
     sanitiser: SanitiserPolicy
     transport: TransportPolicy
+    embeddings: EmbeddingPolicy
     pricing_status: str
 
     def task(self, name: str) -> TaskSpec:
@@ -247,6 +256,9 @@ def parse(data: Mapping[str, Any]) -> Registry:
     if not 0 < batch_ratio <= 1:
         raise ValueError("batch_price_ratio must be in (0, 1]")
     tasks = {str(name): _task(str(name), raw, models, sanitiser.max_field_chars) for name, raw in data["tasks"].items()}
+    embed = data["embeddings"]
+    if embed["precision"] not in PRECISIONS:
+        raise ValueError(f"embeddings.precision must be one of {sorted(PRECISIONS)}")
     return Registry(
         models=models,
         tasks=tasks,
@@ -259,6 +271,11 @@ def parse(data: Mapping[str, Any]) -> Registry:
         transport=TransportPolicy(
             timeout_seconds=float(_decimal(data["transport"]["timeout_seconds"], "transport.timeout_seconds")),
             max_retries=int(_decimal(data["transport"]["max_retries"], "transport.max_retries")),
+        ),
+        embeddings=EmbeddingPolicy(
+            precision=embed["precision"],
+            batch_size=_positive_int(embed["batch_size"], "embeddings.batch_size"),
+            reembed_batch_size=_positive_int(embed["reembed_batch_size"], "embeddings.reembed_batch_size"),
         ),
         pricing_status=str(data.get("pricing_status", "")),
     )

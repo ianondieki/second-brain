@@ -93,6 +93,8 @@ def test_unknown_task_is_a_config_error() -> None:
         ),
         (lambda d: d["tasks"]["moderation_prescreen"].update(allowed_tools="web"), "allowed_tools"),
         (lambda d: d["budget"].update(soft_cap_ratio=1.5), "soft_cap_ratio"),
+        (lambda d: d["embeddings"].update(precision="int4"), "embeddings.precision"),
+        (lambda d: d["embeddings"].update(batch_size=0), "embeddings.batch_size"),
         (lambda d: d.update(batch_price_ratio=0), "batch_price_ratio"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].pop("output"), "prices need"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=-1), "zero or more"),
