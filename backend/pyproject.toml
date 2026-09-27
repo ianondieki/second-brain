@@ -25,6 +25,13 @@ dependencies = [
     "anthropic>=1.8.0",
 ]
 
+[project.optional-dependencies]
+# Self-hosted BAAI/bge-m3 on the worker (REQ-EMB-01; ADR-005). Not installed by `uv sync` or in CI; the worker image
+# adds it with `uv sync --extra embeddings` once the weights and the image size are approved.
+embeddings = [
+    "sentence-transformers>=6.1.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.1",
@@ -71,6 +78,11 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The optional `embeddings` extra (REQ-EMB-01): imported lazily by BgeM3Embedder, not installed in CI.
+module = ["sentence_transformers.*", "torch.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
