@@ -60,6 +60,7 @@ class NdaTemplate(IdMixin, CreatedMixin, Base):
             ["legal_template_id", "sha256"],
             ["legal_templates.id", "legal_templates.sha256"],
             name="fk_nda_templates_legal_template",
+            onupdate="CASCADE",  # the NDA's hash follows its body until an acceptance pins it
         ),
         GLOBAL,
     )

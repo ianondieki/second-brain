@@ -1629,6 +1629,7 @@ def _create_tables() -> None:
             ["legal_template_id", "sha256"],
             ["legal_templates.id", "legal_templates.sha256"],
             name="fk_nda_templates_legal_template",
+            onupdate="CASCADE",  # the NDA's hash follows its body until an acceptance pins it (NO ACTION)
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_nda_templates")),
         sa.UniqueConstraint("id", "sha256", name=op.f("uq_nda_templates_id_sha256")),

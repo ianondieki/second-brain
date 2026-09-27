@@ -1,0 +1,37 @@
+# Legal and NDA templates loaded by `python -m bridge.seed` (REQ-REPO-01, REQ-DIR-03; docs/spec/06 6.1, 6.9).
+#
+# PLACEHOLDERS ONLY. The wording of every instrument is written and approved by a Kenyan advocate (gate G2). Until
+# then each body is the DRAFT header followed by one [[LEGAL-PLACEHOLDER:<id>]] marker per entry in `placeholders`,
+# and is_placeholder stays true. Never write legal wording in this file.
+#
+# body   = header + "\n\n" + one marker line per placeholder id + "\n"
+# sha256 = SHA-256 of the UTF-8 body (the database checks it).
+# A version is immutable once accepted: acceptances reference (template id, sha256), so the seed fails if the body of
+# an accepted version changes. Publish a new version instead.
+header: "DRAFT — NOT LEGAL ADVICE — MUST BE REVIEWED BY A KENYAN ADVOCATE BEFORE USE"
+
+legal_templates:
+  - kind: master_enterprise_terms
+    version: v1
+    placeholders: [master-enterprise-terms-v1]
+  - kind: evaluation_nda
+    version: v1
+    placeholders: [evaluation-nda-v1]
+  - kind: mutual_nda
+    version: v1
+    placeholders: [mutual-nda-v1]
+  - kind: tos
+    version: v1
+    placeholders: [terms-of-service-v1]
+  - kind: aup
+    version: v1
+    placeholders: [acceptable-use-policy-v1]
+
+# Each NDA version points at the legal template that holds its body (and so shares its hash).
+nda_templates:
+  - kind: evaluation
+    version: v1
+    legal: {kind: evaluation_nda, version: v1}
+  - kind: mutual
+    version: v1
+    legal: {kind: mutual_nda, version: v1}
