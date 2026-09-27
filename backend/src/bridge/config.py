@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     postmark_server_token: SecretStr | None = None
     postmark_message_stream: str = "outbound"
 
+    # OAuth sign-in (REQ-AUTH-02, ADR-002; test apps per D-26). A provider is enabled only when both its client id and
+    # secret are set; otherwise its routes answer 404 and the web app hides its button (fail closed).
+    github_client_id: SecretStr | None = None
+    github_client_secret: SecretStr | None = None
+    google_client_id: SecretStr | None = None
+    google_client_secret: SecretStr | None = None
+
     # Feature flags (docs/spec/10: default false until the legal gate).
     feature_tier2_enabled: bool = False
     feature_deals_enabled: bool = False
@@ -78,6 +85,11 @@ class Settings(BaseSettings):
     def signup_cookie_name(self) -> str:
         return self._cookie("bridge_signup")
 
+    @property
+    def oauth_cookie_name(self) -> str:
+        """The short-lived OAuth flow cookie (state, nonce, PKCE verifier; bridge.auth.oauth)."""
+        return self._cookie("bridge_oauth")
+
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
 
@@ -95,6 +107,12 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        for provider in ("github", "google"):
+            pair = [getattr(self, f"{provider}_client_{part}") for part in ("id", "secret")]
+            if len({_is_set(value) for value in pair}) == 2:
+                # Half a configuration is a mistake, not a choice: refuse to start rather than guess.
+                name = provider.upper()
+                problems.append(f"{name}_CLIENT_ID and {name}_CLIENT_SECRET must be set together (or both left empty)")
         if self.app_env == "production":
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
@@ -105,6 +123,10 @@ class Settings(BaseSettings):
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+
+def _is_set(value: SecretStr | None) -> bool:
+    return value is not None and bool(value.get_secret_value().strip())
 
 
 @lru_cache(maxsize=1)
