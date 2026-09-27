@@ -23,7 +23,10 @@ def tier2(name: str = "confidential.method", owner: UUID = OWNER) -> InputField:
 
 
 def msgs(*fields: InputField) -> list[Message]:
-    return [Message.system("You help."), Message.user("Review:", InputField("teaser.summary", "public"), *fields)]
+    return [
+        Message.system("You help."),
+        Message.user(Instruction("Review:"), InputField("teaser.summary", "public"), *fields),
+    ]
 
 
 async def test_tier1_fields_always_pass() -> None:
@@ -85,11 +88,16 @@ def test_input_field_validation() -> None:
 
 
 def test_messages_keep_untrusted_fields_in_user_turns() -> None:
-    with pytest.raises(ValueError, match="user turns"):
+    with pytest.raises(ValueError, match="system turn"):
         Message("system", (InputField("x", "y"),))
     with pytest.raises(ValueError, match="at least one part"):
         Message("user", ())
     with pytest.raises(ValueError, match="needs text"):
         Instruction("  ")
-    assert Message.assistant("ok").parts == (Instruction("ok"),)
-    assert Message.user("a", InputField("x", "y")).fields == (InputField("x", "y"),)
+    for role in ("user", "assistant"):
+        with pytest.raises(TypeError, match="never bare strings"):
+            Message(role, ("untrusted text passed as a plain string",))  # type: ignore[arg-type]
+    assert Message.system("You help.").parts == (Instruction("You help."),)
+    assert Message.user(Instruction("a"), InputField("x", "y")).fields == (InputField("x", "y"),)
+    replay = InputField("history.answer", "earlier answer", tier=Tier.TIER2, owner_id=OWNER)
+    assert Message.assistant(replay).fields == (replay,)  # untrusted replays are fields, never instructions

@@ -19,7 +19,7 @@ from bridge.llm.guard import StaticConsents
 from bridge.llm.ledger import InMemoryLedger
 from bridge.llm.registry import Registry
 from bridge.llm.sinks import InMemoryDeadLetters, InMemoryHumanQueue
-from bridge.llm.types import InputField, Message
+from bridge.llm.types import InputField, Instruction, Message
 from tests.unit.llm.helpers import NOW, real_registry, settings
 
 NONCE = "0123456789abcdef"
@@ -75,7 +75,7 @@ def registry_with(**task_changes: dict[str, Any]) -> Registry:
 def screen(summary: str = "<b>Solar</b> kiosks for [markets](https://evil.example)") -> list[Message]:
     return [
         Message.system("You screen teasers for policy issues."),
-        Message.user("Screen this teaser:", InputField("teaser.summary", summary)),
+        Message.user(Instruction("Screen this teaser:"), InputField("teaser.summary", summary)),
     ]
 
 

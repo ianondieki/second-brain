@@ -1,12 +1,14 @@
 """Provider-neutral types of the LLM layer (REQ-LLM-01; docs/spec/08 LLM layer).
 
-Callers build ``Message``s from two kinds of part:
+Callers build ``Message``s from two kinds of part, always named explicitly (a bare string is refused in user and
+assistant turns, so untrusted text never passes as trusted by accident):
 
-- ``Instruction``: trusted prompt text written in code. Never put user input in an instruction.
-- ``InputField``: untrusted text (anything a user, an organisation or the web wrote), tagged ``Tier.TIER1`` or
-  ``Tier.TIER2``. Fields are sanitised, wrapped in ``<submission nonce=...>`` blocks and checked by the Tier-2 guard
-  (AC-SEC-6): a Tier-2 field reaches a model only for a task whose purpose is consent-covered and whose owner holds a
-  live consent for that purpose.
+- ``Instruction``: trusted prompt text written in code. Never put user input or model output in an instruction.
+- ``InputField``: untrusted text (anything a user, an organisation, the web or an earlier model answer wrote), tagged
+  ``Tier.TIER1`` or ``Tier.TIER2``. Fields may sit in user and assistant turns (replaying an earlier answer that quoted
+  Tier-2 text is a Tier-2 field with its owner), never in the system turn. Every field is checked by the Tier-2 guard
+  (AC-SEC-6: a Tier-2 field reaches a model only for a task whose purpose is consent-covered and whose owner holds a
+  live consent for that purpose), sanitised and wrapped in a ``<submission nonce=...>`` block.
 
 Every output schema subclasses ``LLMOutput``, so it carries ``injection_suspected: bool`` (docs/spec/09).
 """
@@ -73,7 +75,7 @@ Role = Literal["system", "user", "assistant"]
 
 @dataclass(frozen=True, slots=True)
 class Message:
-    """One turn. System and assistant turns hold instructions only; untrusted fields go in user turns."""
+    """One turn of ``Instruction`` and ``InputField`` parts; the system turn holds instructions only."""
 
     role: Role
     parts: tuple[Part, ...]
@@ -81,20 +83,25 @@ class Message:
     def __post_init__(self) -> None:
         if not self.parts:
             raise ValueError("a message needs at least one part")
-        if self.role != "user" and any(isinstance(part, InputField) for part in self.parts):
-            raise ValueError(f"untrusted fields belong in user turns, not {self.role} turns")
+        if not all(isinstance(part, Instruction | InputField) for part in self.parts):
+            raise TypeError("message parts are Instruction (trusted) or InputField (untrusted), never bare strings")
+        if self.role == "system" and any(isinstance(part, InputField) for part in self.parts):
+            raise ValueError("the system turn holds trusted instructions only; untrusted fields go in other turns")
 
     @classmethod
     def system(cls, *parts: str | Instruction) -> Message:
+        """A system prompt is a code constant, so strings are accepted here as trusted instructions."""
         return cls("system", tuple(Instruction(p) if isinstance(p, str) else p for p in parts))
 
     @classmethod
-    def user(cls, *parts: str | Part) -> Message:
-        return cls("user", tuple(Instruction(p) if isinstance(p, str) else p for p in parts))
+    def user(cls, *parts: Part) -> Message:
+        return cls("user", tuple(parts))
 
     @classmethod
-    def assistant(cls, *parts: str | Instruction) -> Message:
-        return cls("assistant", tuple(Instruction(p) if isinstance(p, str) else p for p in parts))
+    def assistant(cls, *parts: Part) -> Message:
+        """An earlier answer replayed in the conversation is untrusted: pass it as an ``InputField`` (with its tier
+        and owner); only text written in code may be an ``Instruction``."""
+        return cls("assistant", tuple(parts))
 
     @property
     def fields(self) -> tuple[InputField, ...]:

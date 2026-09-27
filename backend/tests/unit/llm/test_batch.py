@@ -25,7 +25,7 @@ from bridge.llm.errors import (
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.ledger import CallStatus
 from bridge.llm.registry import Registry
-from bridge.llm.types import CallContext, InputField, Message, Result, Tier, TokenUsage
+from bridge.llm.types import CallContext, InputField, Instruction, Message, Result, Tier, TokenUsage
 from tests.unit.llm.helpers import ORG, OWNER, settings
 from tests.unit.llm.rig import NONCE, registry_with, rig, screen
 from tests.unit.llm.schemas import Verdict, player
@@ -53,7 +53,7 @@ async def test_only_batchable_tasks_and_valid_ids() -> None:
         with pytest.raises(LLMConfigError, match="custom ids"):
             await r.service.batch_submit(TASK, bad, Verdict, ctx=CTX)
     with pytest.raises(LLMConfigError, match="last message"):
-        await r.service.batch_submit(TASK, [BatchItem("a", [Message.assistant("x")])], Verdict, ctx=CTX)
+        await r.service.batch_submit(TASK, [BatchItem("a", [Message.assistant(Instruction("x"))])], Verdict, ctx=CTX)
 
 
 async def test_submit_poll_and_read_every_outcome() -> None:
@@ -108,7 +108,7 @@ async def test_batch_is_guarded_like_a_call() -> None:
     r = rig(adapter, reg=batchable())
     secret = InputField("confidential.method", "SECRET", tier=Tier.TIER2, owner_id=OWNER)
     with pytest.raises(Tier2NotAllowed):
-        await r.service.batch_submit(TASK, [BatchItem("a", [Message.user("x", secret)])], Verdict, ctx=CTX)
+        await r.service.batch_submit(TASK, [BatchItem("a", [Message.user(Instruction("x"), secret)])], Verdict, ctx=CTX)
     assert "SECRET" not in json.dumps([e.inputs for e in r.ledger.entries])
     r = rig(adapter, reg=batchable(), cfg=settings(llm_global_daily_cap_usd=Decimal(0)))
     with pytest.raises(LLMBudgetExceeded):

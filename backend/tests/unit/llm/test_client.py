@@ -30,7 +30,7 @@ from bridge.llm.errors import (
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.ledger import CallStatus
 from bridge.llm.sanitiser import FRAMING_RULES
-from bridge.llm.types import CallContext, InputField, LLMOutput, Message, TokenUsage
+from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message, TokenUsage
 from tests.unit.llm.helpers import ORG, USER, real_registry, settings
 from tests.unit.llm.rig import NONCE, registry_with, rig, screen
 from tests.unit.llm.schemas import Verdict, player
@@ -324,8 +324,8 @@ async def test_every_schema_needs_injection_suspected(schema: Any) -> None:
     ("messages", "match"),
     [
         ([], "at least one message"),
-        ([Message.user("a"), Message.system("b"), Message.user("c")], "first message"),
-        ([Message.user("a"), Message.assistant("b")], "last message"),
+        ([Message.user(Instruction("a")), Message.system("b"), Message.user(Instruction("c"))], "first message"),
+        ([Message.user(Instruction("a")), Message.assistant(Instruction("b"))], "last message"),
     ],
 )
 async def test_message_order_is_checked(messages: list[Message], match: str) -> None:
@@ -336,13 +336,13 @@ async def test_message_order_is_checked(messages: list[Message], match: str) -> 
 async def test_cache_breakpoints() -> None:
     adapter = FakeAdapter([OK, OK])
     r = rig(adapter)
-    conversation = [*screen(), Message.assistant("Noted."), Message.user("Now answer.")]
+    conversation = [*screen(), Message.assistant(Instruction("Noted.")), Message.user(Instruction("Now answer."))]
     await r.service.complete(TASK, conversation, Verdict, ctx=CTX, cache_breakpoints=[0, 1])
     request = adapter.requests[0]
     assert [b.cache for b in request.system] == [True, False]  # the nonce line stays after the breakpoint
     assert [b.cache for b in request.messages[0].blocks] == [False, True]
     assert not any(b.cache for m in request.messages[1:] for b in m.blocks)
-    await r.service.complete(TASK, [Message.user("no system")], Verdict, ctx=CTX, cache_breakpoints=[0])
+    await r.service.complete(TASK, [Message.user(Instruction("no system"))], Verdict, ctx=CTX, cache_breakpoints=[0])
     no_system = adapter.requests[1]
     assert no_system.system[0].text == FRAMING_RULES
     assert not no_system.system[0].cache
@@ -372,7 +372,7 @@ async def test_field_caps_and_long_input() -> None:
     adapter = FakeAdapter([OK])
     r = rig(adapter)
     field = InputField("teaser.summary", "word " * 500, max_chars=40)
-    await r.service.complete(TASK, [Message.user("Screen:", field)], Verdict, ctx=CTX)
+    await r.service.complete(TASK, [Message.user(Instruction("Screen:"), field)], Verdict, ctx=CTX)
     recorded = r.ledger.entries[0].inputs["fields"][0]
     assert recorded["chars"] <= 40
     assert "truncated" in recorded["removed"]

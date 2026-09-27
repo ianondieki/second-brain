@@ -21,7 +21,7 @@ from bridge.llm.fakes import FakeAdapter
 from bridge.llm.guard import StaticConsents
 from bridge.llm.ledger import CallStatus
 from bridge.llm.registry import Purpose
-from bridge.llm.types import CallContext, InputField, Message, Tier
+from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from tests.unit.llm.helpers import OWNER, real_registry
 from tests.unit.llm.rig import Rig, registry_with, rig
@@ -39,7 +39,7 @@ def fixture(task: str) -> list[Message]:
     return [
         Message.system(f"Fixture prompt for {task}."),
         Message.user(
-            "Input:",
+            Instruction("Input:"),
             InputField("teaser.summary", TIER1_TEXT),
             InputField("confidential.method", f"The method is {CANARY}.", tier=Tier.TIER2, owner_id=OWNER),
         ),
@@ -103,7 +103,7 @@ async def test_tier1_fields_run_for_every_task(task: str) -> None:
     r = rig(tape.adapter(), caps=StaticCaps())
     messages = [
         Message.system(f"Fixture prompt for {task}."),
-        Message.user("Input:", InputField("teaser.summary", TIER1_TEXT)),
+        Message.user(Instruction("Input:"), InputField("teaser.summary", TIER1_TEXT)),
     ]
     result = await r.service.complete(task, messages, Verdict, ctx=CTX)
     assert result.parsed.verdict == "clean"
@@ -159,7 +159,7 @@ async def test_an_echoed_key_never_reaches_errors_ledger_dead_letters_or_feedbac
     r = rig(adapter)
     messages = [
         Message.system(f"Fixture prompt for {task}."),
-        Message.user("Input:", InputField("teaser.summary", TIER1_TEXT)),
+        Message.user(Instruction("Input:"), InputField("teaser.summary", TIER1_TEXT)),
     ]
     with pytest.raises(LLMSchemaError) as info:
         await r.service.complete(task, messages, Verdict, ctx=CTX)
@@ -169,3 +169,41 @@ async def test_an_echoed_key_never_reaches_errors_ledger_dead_letters_or_feedbac
     places += [letter.detail for letter in r.dead_letters.letters]
     assert r.dead_letters.letters
     assert not [text for text in places if CANARY in text]
+
+
+def replay(task: str) -> list[Message]:
+    """The reviewer's replay case: an assistant turn repeats an earlier answer that quoted the owner's Tier-2 text."""
+    earlier = InputField("history.answer", f"Earlier answer: {CANARY}.", tier=Tier.TIER2, owner_id=OWNER)
+    return [
+        Message.system(f"Fixture prompt for {task}."),
+        Message.user(Instruction("Improve my teaser:"), InputField("teaser.summary", TIER1_TEXT)),
+        Message.assistant(earlier),
+        Message.user(Instruction("Shorter, please.")),
+    ]
+
+
+@pytest.mark.parametrize("task", TASKS)
+async def test_a_replayed_assistant_turn_is_guarded_like_a_user_field(
+    task: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    purpose = real_registry().task(task).purpose.consent
+    tape = player()
+    r = rig(tape.adapter(), consents=everything_but(purpose))
+    with pytest.raises((Tier2NotAllowed, ConsentRequired)):
+        await r.service.complete(task, replay(task), Verdict, ctx=CTX)
+    assert tape.requests == []
+    assert leaks(r, sent(tape), capsys.readouterr().out) == []
+
+
+@pytest.mark.parametrize("task", CONSENT_TASKS)
+async def test_a_consented_replay_is_framed_in_the_assistant_turn(task: str) -> None:
+    purpose = real_registry().task(task).purpose.consent
+    assert purpose is not None
+    tape = player("messages_verdict_ok")
+    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose)}))
+    await r.service.complete(task, replay(task), Verdict, ctx=CTX)
+    assistant = tape.requests[0].json()["messages"][1]
+    assert assistant["role"] == "assistant"
+    assert assistant["content"][0]["text"].startswith('<submission nonce="')
+    assert 'field="history.answer" tier="tier2">' in assistant["content"][0]["text"]
+    assert CANARY not in repr(r.ledger.entries)

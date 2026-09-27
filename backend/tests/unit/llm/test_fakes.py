@@ -12,7 +12,7 @@ from bridge.llm.client import BatchItem
 from bridge.llm.errors import LLMBudgetExceeded, LLMProviderError, Tier2NotAllowed
 from bridge.llm.fakes import FakeAdapter, FakeLLMClient
 from bridge.llm.ledger import CallStatus
-from bridge.llm.types import CallContext, InputField, Message, Result, Tier
+from bridge.llm.types import CallContext, InputField, Instruction, Message, Result, Tier
 from tests.unit.llm.helpers import ORG, OWNER, settings
 from tests.unit.llm.rig import registry_with, screen
 from tests.unit.llm.schemas import Verdict
@@ -55,7 +55,7 @@ async def test_the_fake_still_guards_tier2_and_caps() -> None:
     fake = FakeLLMClient([OK])
     secret = InputField("confidential.method", "SECRET", tier=Tier.TIER2, owner_id=OWNER)
     with pytest.raises(Tier2NotAllowed):
-        await fake.complete(TASK, [Message.user("x", secret)], Verdict, ctx=CTX)
+        await fake.complete(TASK, [Message.user(Instruction("x"), secret)], Verdict, ctx=CTX)
     capped = FakeLLMClient([OK], caps=StaticCaps(default=Decimal(0)), settings=settings())
     with pytest.raises(LLMBudgetExceeded):
         await capped.complete(TASK, screen(), Verdict, ctx=CTX)
