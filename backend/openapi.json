@@ -57,6 +57,14 @@
         "title": "ApiErrorDetail",
         "type": "object"
       },
+      "AuthProvider": {
+        "enum": [
+          "github",
+          "google"
+        ],
+        "title": "AuthProvider",
+        "type": "string"
+      },
       "CodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -231,6 +239,30 @@
         "title": "EntitlementsOut",
         "type": "object"
       },
+      "IdentityOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "linked_at": {
+            "format": "date-time",
+            "title": "Linked At",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/AuthProvider"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "linked_at"
+        ],
+        "title": "IdentityOut",
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -383,6 +415,144 @@
           "roles"
         ],
         "title": "MyOrgOut",
+        "type": "object"
+      },
+      "OAuthProvidersResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/AuthProvider"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "OAuthProvidersResponse",
+        "type": "object"
+      },
+      "OAuthSignup": {
+        "additionalProperties": false,
+        "description": "The signup form's choices for an OAuth signup (the address comes from the provider): replayed at the callback\nonly if no account exists yet. Sealed in the flow cookie meanwhile.",
+        "properties": {
+          "accept_terms": {
+            "title": "Accept Terms",
+            "type": "boolean"
+          },
+          "consents": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/ConsentPurpose"
+            },
+            "title": "Consents",
+            "type": "object"
+          },
+          "consents_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consents Version"
+          },
+          "locale": {
+            "default": "en",
+            "enum": [
+              "en",
+              "sw"
+            ],
+            "title": "Locale",
+            "type": "string"
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgSignup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side": {
+            "enum": [
+              "developer",
+              "org"
+            ],
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "accept_terms"
+        ],
+        "title": "OAuthSignup",
+        "type": "object"
+      },
+      "OAuthStartRequest": {
+        "additionalProperties": false,
+        "description": "``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s\nchoices; ``link``: add the provider to the signed-in account (fresh second factor or recent sign-in).",
+        "properties": {
+          "intent": {
+            "default": "login",
+            "enum": [
+              "login",
+              "signup",
+              "link"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "return_to": {
+            "anyOf": [
+              {
+                "enum": [
+                  "/dev",
+                  "/org",
+                  "/settings/security"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return To"
+          },
+          "signup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthSignup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "OAuthStartRequest",
+        "type": "object"
+      },
+      "OAuthStartResponse": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url"
+        ],
+        "title": "OAuthStartResponse",
         "type": "object"
       },
       "OrgEntitlementsOut": {
@@ -1052,6 +1222,113 @@
         ]
       }
     },
+    "/api/auth/identities/{identity_id}": {
+      "delete": {
+        "description": "Unlink a provider (the same proof as linking). 409 last_sign_in_method when nothing else could sign in.",
+        "operationId": "unlink_identity_api_auth_identities__identity_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Identity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unlink Identity",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "login_api_auth_login_post",
@@ -1689,6 +1966,385 @@
           }
         },
         "summary": "Mfa Verify",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/oauth/providers": {
+      "get": {
+        "description": "The OAuth providers this deployment has credentials for; the web app shows only their buttons.",
+        "operationId": "oauth_providers_api_auth_oauth_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthProvidersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Oauth Providers",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/oauth/{provider}/callback": {
+      "get": {
+        "description": "The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow\ncookie. Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,\noauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,\nconsents_version_required. Success: the return path (or /auth/mfa), /signup/check-email, or\n/settings/security?linked=PROVIDER.",
+        "operationId": "oauth_callback_api_auth_oauth__provider__callback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "To a fixed page of the web app; errors as ?oauth_error=CODE&provider=NAME"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Oauth Callback",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/oauth/{provider}/start": {
+      "post": {
+        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) or a sign-in within 15 minutes; ``signup`` needs the accepted terms.",
+        "operationId": "oauth_start_api_auth_oauth__provider__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Oauth Start",
         "tags": [
           "auth"
         ]
@@ -2874,6 +3530,112 @@
           }
         },
         "summary": "My Entitlements",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/identities": {
+      "get": {
+        "description": "The providers linked to the signed-in account (provider tokens are never stored).",
+        "operationId": "my_identities_api_me_identities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityOut"
+                  },
+                  "title": "Response My Identities Api Me Identities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Identities",
         "tags": [
           "me"
         ]
