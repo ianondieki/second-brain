@@ -17,6 +17,17 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in CI; the manual OAuth demo step only.
 - Decision:
 
+### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
+- Why: ADR-005 decision 3 allows "at most one retry on the next allowed model" after `stop_reason == "refusal"`. The `docs/spec/09` table allocates exactly one model to each Phase 2 task and lists `claude-opus-5-5` only for the moderator pre-checklist and the eval judge, so any fallback model would be outside the allocation. `backend/ai/models.yaml` therefore ships `fallback_model: null` for all four Phase 2 tasks: a refusal is logged, goes to the human queue and the dead-letter queue, with no retry. `tests/unit/llm/test_registry.py` fails if a fallback is outside the spec 09 allocation of its task.
+- Proposal (needs your approval and a `docs/spec/09` change, since it widens the allocation):
+  1. `moderation_prescreen` and `over_disclosure_check` (Haiku 4.5): fall back to `claude-sonnet-5`, effort `low` (Tier-1 text only; a refusal on a classifier is most likely a false positive).
+  2. `originality_explainer` (Sonnet 5): fall back to `claude-opus-5-5`, effort `medium` (Tier-1 text only; low volume).
+  3. `submission_assistant` (Sonnet 5, Tier-2 text under per-use consent): no fallback; the owner sees "the assistant could not help with this text" and the refusal goes to the human queue.
+- Options: (a) keep no fallbacks (refusal → human queue only); (b) approve the proposal above and amend the `docs/spec/09` allocation; (c) approve only item 1 (classifiers).
+- Recommended default: (a) until you decide; the registry and its test already enforce it. Choosing (b) or (c) is a YAML edit plus the spec 09 table and `SPEC_09_ALLOCATION` in the registry test.
+- Blocks: nothing; refusals are rare and already reach the human queue.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
