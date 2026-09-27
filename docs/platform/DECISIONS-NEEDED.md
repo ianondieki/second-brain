@@ -17,6 +17,30 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in CI; the manual OAuth demo step only.
 - Decision:
 
+### D-28 · What the 150 KB JS budget counts: unit, and whether response headers count (REQ-UX-05, AC-UX-3)
+- Why: `docs/spec/07` item 5 says "≤150 KB JS gzipped per route", and AC-UX-3 checks it with Lighthouse. The Phase 1 follow-up branch reads it as 150,000 bytes of gzip-compressed script **bodies** on first load (`npm run budget`, `make budget`; `docs/runbooks/dev-setup.md`). Lighthouse's script "transfer size" also counts **response headers**. Headers depend on the protocol: about 0.4 KB per script over the local HTTP/1.1 server (after page-only security headers; about 0.8 KB before), a few bytes each once HTTP/2 or HTTP/3 compresses them (HPACK or QPACK) behind Caddy and Cloudflare in production (Phase 8). By the Lighthouse reading, over local HTTP/1.1, two routes are over. By the body reading, every route passes.
+- Measured 2026-09-27 (production build, `next start`, HTTP/1.1; signed-in route with an org-owner test session). The body cuts on this branch: openapi-fetch's runtime left the browser bundle (its types stay), and the password field reads its own show/hide labels. A custom `global-error` saved nothing; the error styles are in Next's router bundle.
+
+  | Route | Bodies before (`515227f`) | Bodies now | Bodies + HTTP/1.1 headers now | 150 KiB = 153,600 B |
+  |---|---|---|---|---|
+  | `/`, `/legal/terms` | 141,327 | 141,327 | 144,624 | within |
+  | `/login` | 148,775 | 146,315 | 149,612 | within |
+  | `/signup` | 150,378 | 147,658 | **150,955** | within |
+  | `/signup/check-email` | 146,774 | 144,733 | 148,030 | within |
+  | `/auth/link` | not measured | 146,431 | 149,728 | within |
+  | `/org` | 146,453 | 144,411 | 147,708 | within |
+  | `/settings/security` | 150,051 | 147,976 | **151,653** | within |
+
+  At the Phase 1 end (`00fc8f2`), every script also carried the page headers: `/signup` was 150,378 bytes of bodies, 157,741 with headers. The remaining first load is about 130 KB of Next.js and React runtime; the app's own code is 6–10 KB per route.
+- Options:
+  (a) **Bodies only**, 1 KB = 1,000 bytes (this branch). The T7.4 Lighthouse job reports transfer size for information, and the pass/fail check is `npm run budget` until an HTTP/2 target exists. From staging (D-22) or Phase 8 on, Lighthouse's own number is asserted against the HTTP/2 edge.
+  (b) **Lighthouse transfer size including headers, measured on local HTTP/1.1.** `/signup` and `/settings/security` must lose about 1–2 KB more in T7.4. Candidates: server-rendered strings instead of client-side `useTranslations` in the auth forms (the use-intl client runtime is about 2.9 KB); fewer client components per route.
+  (c) **Lighthouse transfer size including headers, measured against the production-like HTTP/2 edge** (staging or Phase 8). This is expected to be the bodies plus under 1 KB (not measured here). Until that edge exists, (a) applies.
+  (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 151,653 with headers).
+- Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 2 KB of headroom on the heaviest routes for Phase 2 screens.
+- Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |

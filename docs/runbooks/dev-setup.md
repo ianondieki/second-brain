@@ -128,16 +128,24 @@ instead (slower, but needs no local Postgres).
 bytes**. This is the stricter reading of "KB" (150 KiB would be 153,600 bytes), so a route within it is within either
 reading. Counted: the gzip-compressed bodies of the scripts a first visit downloads (the route's `<script src>`
 files). Not counted: response headers, which depend on the protocol, and chunks that load later on demand. Measure
-against a production build, such as the `make dev` web container on port 3000:
+against a production build, such as the `make dev` web container on port 3000 (not part of `make check`):
 
 ```bash
-cd frontend && npm run budget -- / /signup /login   # exits 1 when a route is over; BUDGET_BASE_URL overrides the URL
+make budget                                         # /, /login, /signup, /settings/security
+cd frontend && npm run budget -- /signup/check-email /org --allow-skip   # named routes
 ```
 
-In Git Bash, prefix the command with `MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (routes
-without the leading slash, such as `signup`, also work). Lighthouse's script "transfer size" includes response
-headers, so a Lighthouse CI assertion (`resource-summary:script:size`, in bytes; REQ-UX-05) reads a little higher
-over HTTP/1.1.
+Set `BUDGET_COOKIE` to a test account's session cookie (for example `__Host-bridge_session=<token>`, copied from the
+browser's storage panel after logging in) so signed-in routes are measured. Without it they redirect, which fails the
+run unless `--allow-skip`. `BUDGET_BASE_URL` points elsewhere (http or https); both are in `frontend/.env.example`.
+The run fails when a route is over, answers with an error, or is skipped. In Git Bash, prefix named routes with
+`MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (`signup`, without the slash, also works).
+
+**Open: whether response headers count (DECISIONS-NEEDED D-28).** Lighthouse's script "transfer size", the
+instrument of AC-UX-3, includes response headers. The script prints that figure too ("with HTTP/1.1 response
+headers"). By that reading, over the local HTTP/1.1 server, `/signup` (150,955 bytes) and `/settings/security`
+(151,653) are over 150,000 on 2026-09-27, while their bodies are 147,658 and 147,976. Behind HTTP/2 in production
+the headers shrink to a few bytes per script. Until the human decides D-28, the bodies count.
 
 Browser targets are pinned in `frontend/package.json` (`browserslist`: Chrome, Edge and Firefox 111+, Safari
 16.4+, the Next.js default). The build already emits modern JavaScript for them: a newer target does not shrink any
