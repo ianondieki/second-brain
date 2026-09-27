@@ -27,10 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge import clock
 from bridge.audit.service import record as audit
 from bridge.auth import emails, passwords, sessions, throttle, totp
-from bridge.auth.cookies import signup_binding
+from bridge.auth.cookies import identity_binding, signup_binding
 from bridge.auth.crypto import decode_key, decrypt, encrypt, new_token, token_hash
 from bridge.auth.mailer import PendingEmail
-from bridge.auth.models import LoginToken, User
+from bridge.auth.models import AuthIdentity, LoginToken, User
 from bridge.auth.schemas import OrgSignup, SignupRequest
 from bridge.billing.service import start_free_subscription
 from bridge.config import Settings
@@ -329,6 +329,21 @@ async def start_session(db: AsyncSession, settings: Settings, user: User, user_a
     return LoginOutcome(live, mfa_required=mfa)
 
 
+def _same(presented: str, expected: str) -> bool:
+    """Constant-time comparison that also accepts non-ASCII input (a planted cookie) without raising."""
+    return hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
+
+
+async def _drop_unbound_identities(db: AsyncSession, settings: Settings, user_id: UUID, signup_cookie: str) -> None:
+    """OAuth identities attached before the address was verified (an OAuth signup whose provider had not verified the
+    address, REQ-AUTH-02) survive only when the link is opened in the browser that attached them; elsewhere they
+    could be an attacker's account waiting for the owner to verify (pre-hijacking)."""
+    identities = (await db.execute(select(AuthIdentity).where(AuthIdentity.user_id == user_id))).scalars().all()
+    for identity in identities:
+        if not _same(signup_cookie, identity_binding(settings, user_id, identity.id)):
+            await db.delete(identity)
+
+
 async def consume_link(
     db: AsyncSession, settings: Settings, token: str, user_agent: str | None, signup_cookie: str | None
 ) -> LoginOutcome:
@@ -346,9 +361,10 @@ async def consume_link(
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
         expected = _binding(settings, user)
-        bound = expected is not None and hmac.compare_digest(signup_cookie or "", expected)
+        bound = expected is not None and _same(signup_cookie or "", expected)
         if not bound:
             user.password_hash = None  # a password set before verification from another browser is not trusted
+        await _drop_unbound_identities(db, settings, user.id, signup_cookie or "")
         user.email_verified_at = now
         await sessions.revoke_all(db, user.id)
     await _spend_links(db, user.id)  # one link used: the account's other outstanding links stop working
