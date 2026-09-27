@@ -278,9 +278,9 @@ async def _create(
 
 def _stale_consents(settings: Settings, flow: oauth.Flow) -> str | None:
     """The error code when the consent wording changed after the form was shown (within the 10 minutes)."""
+    assert flow.signup is not None  # begin() requires the choices for a signup flow
     try:
-        if flow.signup is not None:
-            _check_consents(settings, flow.signup)
+        _check_consents(settings, flow.signup)
     except service.AuthError as exc:
         return exc.code
     return None

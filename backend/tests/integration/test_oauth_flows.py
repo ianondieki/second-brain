@@ -772,3 +772,76 @@ async def test_an_address_taken_during_the_flow_creates_nothing(
     response = await round_trip(client, person(verified=verified), intent="signup", **signup_body())
     assert landing(response)[0] == page
     assert not signed_in(response)
+
+
+async def test_a_callback_without_state_is_refused(client: httpx.AsyncClient) -> None:
+    await start(client, "github", "login")
+    response = await client.get("/api/auth/oauth/github/callback", params={"code": "c"})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+
+
+async def test_a_suspended_account_is_not_reached_through_its_address(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = email()
+    await email_account(client, address)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET status = 'suspended' WHERE email = :e"), {"e": address})
+    response = await round_trip(other, person(address), provider="google", intent="login")
+    assert landing(response) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    assert await identity_rows(owner_engine, address) == []
+
+
+async def test_a_throttled_resend_to_an_unverified_identity_sends_nothing(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    who = person(verified=False)
+    await round_trip(client, who, intent="signup", **signup_body())
+    sent = len([m for m in outbox(client).outbox if m.to == who.email])
+
+    async def throttled(*_args: object) -> bool:
+        return False
+
+    monkeypatch.setattr(service, "allow_email", throttled)
+    response = await round_trip(client, who, intent="login")
+    assert landing(response) == ("/signup/check-email", {})
+    assert len([m for m in outbox(client).outbox if m.to == who.email]) == sent
+
+
+def hide_identities(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a concurrent request that attached the identity after this request looked it up."""
+
+    async def not_found(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr(identities, "_identity", not_found)
+
+
+@pytest.mark.parametrize("intent", ["link", "login", "signup"])
+async def test_an_identity_attached_concurrently_is_not_attached_twice(
+    client: httpx.AsyncClient,
+    other: httpx.AsyncClient,
+    owner_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    taken = person()
+    await round_trip(client, taken, intent="signup", **signup_body())  # the identity belongs to this account
+    address = email()
+    if intent != "signup":
+        await email_account(other, address)
+    hide_identities(monkeypatch)
+    raced = Person(taken.subject, address)  # the same provider account, now with another verified address
+    body = signup_body() if intent == "signup" else {}
+    response = await round_trip(other, raced, intent=intent, **body)
+    expected = {
+        "link": ("/settings/security", {"oauth_error": "identity_in_use", "provider": "github"}),
+        "login": ("/login", {"oauth_error": "oauth_failed", "provider": "github"}),
+        "signup": ("/signup", {"oauth_error": "oauth_failed", "provider": "github"}),
+    }
+    assert landing(response) == expected[intent]
+    assert await identity_rows(owner_engine, taken.email) == ["github"]
+    assert await identity_rows(owner_engine, address) == []
+    async with owner_engine.connect() as conn:  # a signup that lost the race leaves no half-made account
+        users = await conn.scalar(text("SELECT count(*) FROM users WHERE email = :e"), {"e": address})
+    assert users == (0 if intent == "signup" else 1)
