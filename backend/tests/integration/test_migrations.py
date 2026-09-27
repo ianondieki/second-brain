@@ -277,6 +277,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
+    "app_close_tag(uuid)": (True, {"bridge_app"}),
+    "tags_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -697,6 +699,7 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
+    assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
     assert (
         not {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
         & (updatable["org_claims"])
@@ -1348,6 +1351,7 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             "UPDATE engagements SET state = 'CLOSED'",
             "UPDATE provenance_records SET status = 'timestamped'",
             "UPDATE attestations SET created_it = true",
+            "UPDATE tags SET closed_at = NULL",
             "DELETE FROM nda_acceptances",
             "INSERT INTO provenance_keys (key_id, public_key) VALUES ('k', '\\x00')",
             "SELECT 1 FROM proposal_confidential",
@@ -1530,6 +1534,7 @@ V2_TRIGGERS = {
         "provenance_records_guard",
         ROW | BEFORE | ON_DELETE | ON_UPDATE,
     ),
+    ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)

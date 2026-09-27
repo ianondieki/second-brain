@@ -663,6 +663,83 @@ async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncE
         assert await run(conn, opted, id=e0) is True
 
 
+TAG = (
+    "INSERT INTO tags (id, proposal_id, org_id, developer_id, status)"
+    " VALUES (:id, :p, :org, :dev, CAST(:status AS tag_status))"
+)
+
+
+async def test_one_open_tag_per_developer_and_org_and_a_closed_tag_never_reopens(owner_engine: AsyncEngine) -> None:
+    """ "One open engagement or held tag per (developer, org)" (docs/spec/06 6.3) is uq_tags_open_developer_org over
+    closed_at IS NULL. Withdrawing closes a tag; app_close_tag closes one without changing its status (the developer,
+    or a member of the organisation for a delivered tag: Phase 3 closes tags when the engagement ends); the app never
+    sets closed_at itself and nothing reopens a tag."""
+    async with as_app(owner_engine) as conn:
+        unclaimed = await add_org(conn)
+        e1 = await add_org(conn, verification="e1")
+        e2 = await add_org(conn, verification="e2")
+        developer = await w.add_user(conn, _email("tagger"), "Developer")
+        stranger = await w.add_user(conn, _email("tag-stranger"), "Stranger")
+        members = {org: await w.add_user(conn, _email("tag-member"), "Member") for org in (e1, e2)}
+        for org, member in members.items():
+            await run(
+                conn,
+                "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{reviewer}')",
+                id=uuid7(),
+                org=org,
+                u=member,
+            )
+        niche = uuid7()
+        await run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Tags')", id=niche, s=f"t-{niche.hex}")
+        problem = await w.add_problem(conn, developer, niche)
+        proposal, _ = await w.add_proposal(conn, developer, niche, problem)
+        closed = "SELECT closed_at IS NOT NULL FROM tags WHERE id = :id"
+
+        await act(conn, developer)
+        first = uuid7()
+        await run(conn, TAG, id=first, p=proposal, org=unclaimed, dev=developer, status="held_unclaimed")
+        again = {"p": proposal, "org": unclaimed, "dev": developer, "status": "held_unclaimed"}
+        await expect(conn, TAG, "uq_tags_open_developer_org", id=uuid7(), **again)
+        await expect(conn, "UPDATE tags SET closed_at = now() WHERE id = :id", "permission denied", id=first)
+        await run(conn, "UPDATE tags SET status = 'withdrawn' WHERE id = :id", id=first)
+        assert await run(conn, closed, id=first) is True  # withdrawing closed it
+        await run(conn, TAG, id=uuid7(), **again)  # so the organisation can be tagged again
+
+        await as_owner(conn)  # the trigger holds for every role
+        await expect(conn, "UPDATE tags SET closed_at = NULL WHERE id = :id", "never reopens", id=first)
+        await expect(conn, "UPDATE tags SET status = 'held_unclaimed' WHERE id = :id", "never reopens", id=first)
+        await run(conn, "UPDATE tags SET status = 'released' WHERE id = :id", id=first)  # closing to closing is fine
+        await expect(
+            conn,
+            "INSERT INTO tags (id, proposal_id, org_id, developer_id, status) VALUES (:id, :p, :org, :dev, 'expired')",
+            "ck_tags_closing_statuses_are_closed",
+            id=uuid7(),
+            p=proposal,
+            org=e1,
+            dev=developer,
+        )
+
+        await act(conn, developer)
+        delivered, held = uuid7(), uuid7()
+        await run(conn, TAG, id=delivered, p=proposal, org=e2, dev=developer, status="delivered")
+        await run(conn, TAG, id=held, p=proposal, org=e1, dev=developer, status="held_pending_verification")
+        close = "SELECT app_close_tag(:id)"
+        for caller in (stranger, members[e1], None):  # a held tag is not the organisation's to close
+            await act(conn, caller)
+            await expect(conn, close, "the developer or a member of the tagged organisation", id=delivered)
+            await expect(conn, close, "the developer or a member of the tagged organisation", id=held)
+        await act(conn, members[e2])  # the organisation's side ends it (e.g. a decline in Phase 3)
+        assert await run(conn, close, id=delivered) is True
+        assert await run(conn, close, id=delivered) is False  # already closed
+        await act(conn, developer)
+        assert await run(conn, "SELECT status::text FROM tags WHERE id = :id", id=delivered) == "delivered"
+        assert await run(conn, closed, id=delivered) is True
+        await run(conn, TAG, id=uuid7(), p=proposal, org=e2, dev=developer, status="delivered")  # tag again
+        assert await run(conn, close, id=held) is True  # the developer closes their own held tag
+        await act(conn, members[e1])
+        assert await run(conn, "SELECT app_held_tag_count(:id)", id=e1) == 0  # closed tags are not counted
+
+
 async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(owner_engine: AsyncEngine) -> None:
     """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash) of every audit chain from
     app_audit_chain_heads(); provenance_worker cannot read audit_events itself, and no other role may call it."""

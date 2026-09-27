@@ -64,7 +64,8 @@ SEARCH_TSV = (
     " || setweight(to_tsvector('simple'::regconfig, coalesce(summary, '')), 'B')"
     " || setweight(to_tsvector('simple'::regconfig, coalesce(impact_claims, '')), 'C')"
 )
-OPEN_TAGS = "status IN ('held_unclaimed', 'held_pending_verification', 'delivered')"
+OPEN_TAGS = "closed_at IS NULL"
+CLOSING_TAG_STATUSES = "'withdrawn', 'expired', 'released'"
 LIVE_GRANTS = "status IN ('requested', 'active')"
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # docs/spec/06 6.1: attachments <= 20 MB
 
@@ -298,11 +299,18 @@ class OriginalityCheck(IdMixin, CreatedMixin, Base):
 class Tag(IdMixin, TimestampsMixin, Base):
     """A "Pitch to company" tag of one organisation on one proposal. Readable by the developer, and by the
     organisation's members only once ``delivered``; an E1 organisation sees only a count (``app_held_tag_count``).
-    One open tag per (developer, organisation)."""
+
+    A tag is open while ``closed_at`` is NULL: one open tag per (developer, organisation), the DB form of "one open
+    engagement or held tag" (docs/spec/06 6.3). Withdrawn, expired and released tags are closed (the trigger sets
+    ``closed_at``); ``app_close_tag`` closes one without changing its status (Phase 3: when its engagement ends). The
+    app never sets ``closed_at`` itself, and nothing reopens a tag."""
 
     __tablename__ = "tags"
     __table_args__ = (
         Index("uq_tags_open_developer_org", "developer_id", "org_id", unique=True, postgresql_where=text(OPEN_TAGS)),
+        CheckConstraint(
+            f"status NOT IN ({CLOSING_TAG_STATUSES}) OR closed_at IS NOT NULL", name="closing_statuses_are_closed"
+        ),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "developer_id"}},
     )
 
@@ -311,6 +319,7 @@ class Tag(IdMixin, TimestampsMixin, Base):
     developer_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     status: Mapped[TagStatus] = mapped_column(pg_enum(TagStatus, "tag_status"))
     sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class DisclosureGrant(IdMixin, TimestampsMixin, Base):

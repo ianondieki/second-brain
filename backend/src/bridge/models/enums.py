@@ -274,7 +274,10 @@ class TagStatus(StrEnum):
     RELEASED = "released"
 
 
+# Statuses an open tag can have. Whether a tag is open is ``tags.closed_at IS NULL`` (revision 0002): a delivered tag
+# closes when its engagement ends, and the closing statuses below always close it.
 OPEN_TAG_STATUSES = (TagStatus.HELD_UNCLAIMED, TagStatus.HELD_PENDING_VERIFICATION, TagStatus.DELIVERED)
+CLOSING_TAG_STATUSES = (TagStatus.WITHDRAWN, TagStatus.EXPIRED, TagStatus.RELEASED)
 
 
 class EngagementOrigin(StrEnum):

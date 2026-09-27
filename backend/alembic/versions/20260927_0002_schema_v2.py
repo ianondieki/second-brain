@@ -523,13 +523,14 @@ POLICIES: tuple[Policy, ...] = (
         " AND images_purged_at IS NULL",
     ),
     # --- org_or_user tables ---
-    # Tags: the developer; the organisation's members only once delivered. The status must match the organisation's
-    # verification (E2 delivered, E1 held_pending_verification, E0 held_unclaimed); the developer may only withdraw.
+    # Tags: the developer; the organisation's members only once delivered. A new tag is open and its status must
+    # match the organisation's verification (E2 delivered, E1 held_pending_verification, E0 held_unclaimed); the
+    # developer may only withdraw (which closes the tag, tags_guard()); closing otherwise is app_close_tag()'s.
     Policy("tags", "SELECT", f"developer_id = app_user_id() OR (status = 'delivered' AND {_ORG_MEMBER})"),
     Policy(
         "tags",
         "INSERT",
-        check="developer_id = app_user_id() AND "
+        check="developer_id = app_user_id() AND closed_at IS NULL AND "
         + _PROPOSAL_OWNED.format(t="tags")
         + " AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = tags.org_id AND o.delisted_at IS NULL"
         " AND ((o.verification = 'e2' AND tags.status = 'delivered')"
@@ -731,7 +732,8 @@ AS $$
                WHEN public.app_is_member(p_org) THEN (
                    SELECT count(*)::integer
                      FROM public.tags t
-                    WHERE t.org_id = p_org AND t.status IN ('held_unclaimed', 'held_pending_verification'))
+                    WHERE t.org_id = p_org AND t.closed_at IS NULL
+                      AND t.status IN ('held_unclaimed', 'held_pending_verification'))
                ELSE 0
            END
 $$;
@@ -1037,7 +1039,7 @@ BEGIN
                updated_at = now();
         UPDATE public.tags
            SET status = 'held_pending_verification', updated_at = now()
-         WHERE org_id = v_org.id AND status = 'held_unclaimed';
+         WHERE org_id = v_org.id AND status = 'held_unclaimed' AND closed_at IS NULL;
     END IF;
     UPDATE public.org_claims
        SET status = v_status,
@@ -1087,7 +1089,7 @@ BEGIN
              WHERE id = v_org.id;
             UPDATE public.tags
                SET status = 'held_pending_verification', updated_at = now()
-             WHERE org_id = v_org.id AND status = 'held_unclaimed';
+             WHERE org_id = v_org.id AND status = 'held_unclaimed' AND closed_at IS NULL;
         ELSE
             IF NOT EXISTS (
                 SELECT 1
@@ -1109,7 +1111,8 @@ BEGIN
              WHERE id = v_org.id;
             UPDATE public.tags
                SET status = 'delivered', updated_at = now()
-             WHERE org_id = v_org.id AND status IN ('held_unclaimed', 'held_pending_verification');
+             WHERE org_id = v_org.id AND status IN ('held_unclaimed', 'held_pending_verification')
+               AND closed_at IS NULL;
         END IF;
         INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
         VALUES (public.uuid7(), v_org.id, v_claim.claimant_user_id, '{owner,admin}', 'active')
@@ -1147,7 +1150,7 @@ BEGIN
     END IF;
     UPDATE public.tags
        SET status = 'released', updated_at = now()
-     WHERE org_id = p_org AND status = 'held_unclaimed';
+     WHERE org_id = p_org AND status = 'held_unclaimed' AND closed_at IS NULL;
 END;
 $$;
 
@@ -1165,6 +1168,35 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_opt_out_org_invitations: no such invitation' USING ERRCODE = 'no_data_found';
     END IF;
+END;
+$$;
+
+-- Closes an open tag (docs/spec/06 6.3: one open engagement or held tag per developer and organisation) without
+-- changing its status: the developer, or for a delivered tag a member of the organisation who may act on it (the
+-- Phase 3 state machine closes tags when their engagement ends, e.g. DECLINED). Returns whether this call closed it.
+-- Nothing reopens a tag (tags_guard()); closed_at is not in the app's UPDATE grant.
+CREATE FUNCTION app_close_tag(p_tag uuid) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_tag public.tags%ROWTYPE;
+BEGIN
+    SELECT * INTO v_tag FROM public.tags WHERE id = p_tag FOR UPDATE;
+    IF NOT FOUND OR public.app_user_id() IS NULL OR NOT coalesce(
+        v_tag.developer_id = public.app_user_id()
+        OR (v_tag.status = 'delivered'
+            AND public.app_is_member(v_tag.org_id, '{owner,admin,signatory,reviewer}')),
+        false
+    ) THEN
+        RAISE EXCEPTION 'app_close_tag: the developer or a member of the tagged organisation only'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_tag.closed_at IS NOT NULL THEN
+        RETURN false;
+    END IF;
+    UPDATE public.tags SET closed_at = now(), updated_at = now() WHERE id = p_tag;
+    RETURN true;
 END;
 $$;
 
@@ -1344,6 +1376,28 @@ BEGIN
 END;
 $$;
 
+-- A tag is open while closed_at IS NULL (uq_tags_open_developer_org: one open tag per developer and organisation).
+-- Moving to withdrawn, expired or released closes it. A closed tag never reopens: closed_at keeps its value and the
+-- status can only move to another closing status.
+CREATE FUNCTION tags_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF OLD.closed_at IS NOT NULL AND (
+        NEW.closed_at IS DISTINCT FROM OLD.closed_at
+        OR (NEW.status IS DISTINCT FROM OLD.status AND NEW.status NOT IN ('withdrawn', 'expired', 'released'))
+    ) THEN
+        RAISE EXCEPTION 'tags: a closed tag never reopens' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status IN ('withdrawn', 'expired', 'released') AND NEW.closed_at IS NULL THEN
+        NEW.closed_at := now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_confidential_guard() FROM PUBLIC;
@@ -1358,6 +1412,9 @@ CREATE TRIGGER proposal_confidential_guard
 CREATE TRIGGER provenance_records_guard
     BEFORE UPDATE OR DELETE ON provenance_records
     FOR EACH ROW EXECUTE FUNCTION provenance_records_guard();
+CREATE TRIGGER tags_guard
+    BEFORE UPDATE ON tags
+    FOR EACH ROW EXECUTE FUNCTION tags_guard();
 """
 
 APPEND_ONLY_TABLES = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
@@ -1383,6 +1440,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_delist_org(uuid)": ("bridge_app",),
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
+    "app_close_tag(uuid)": ("bridge_app",),
     "app_audit_chain_heads()": ("provenance_worker",),
 }
 # Revision 0001 helpers the Tier-2 roles' policies call (revoked again on downgrade).
@@ -1392,6 +1450,7 @@ TRIGGER_FUNCTIONS = (
     "proposal_versions_guard()",
     "proposal_confidential_guard()",
     "provenance_records_guard()",
+    "tags_guard()",
 )
 
 
@@ -2040,9 +2099,14 @@ def _create_tables() -> None:
         sa.Column("developer_id", sa.Uuid(), nullable=False),
         sa.Column("status", _enum("tag_status"), nullable=False),
         sa.Column("sla_due_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint(
+            "status NOT IN ('withdrawn', 'expired', 'released') OR closed_at IS NOT NULL",
+            name=op.f("ck_tags_closing_statuses_are_closed"),
+        ),
         sa.ForeignKeyConstraint(["developer_id"], ["users.id"], name=op.f("fk_tags_developer_id_users")),
         sa.ForeignKeyConstraint(["org_id"], ["organizations.id"], name=op.f("fk_tags_org_id_organizations")),
         sa.ForeignKeyConstraint(["proposal_id"], ["proposals.id"], name=op.f("fk_tags_proposal_id_proposals")),
@@ -2056,7 +2120,7 @@ def _create_tables() -> None:
         "tags",
         ["developer_id", "org_id"],
         unique=True,
-        postgresql_where=sa.text("status IN ('held_unclaimed', 'held_pending_verification', 'delivered')"),
+        postgresql_where=sa.text("closed_at IS NULL"),
     )
     op.create_table(
         "attestations",
