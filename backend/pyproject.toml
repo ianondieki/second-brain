@@ -86,3 +86,5 @@ filterwarnings = ["error::DeprecationWarning:bridge.*"]
 [tool.coverage.run]
 source = ["bridge"]
 branch = true
+# SQLAlchemy's asyncio layer runs through greenlets; without this, lines after an awaited query go unrecorded.
+concurrency = ["greenlet", "thread"]
