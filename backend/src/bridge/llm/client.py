@@ -425,7 +425,7 @@ class LLMService:
                         attempts=attempt,
                         detail=f"output failed the schema: {problems}",
                         inputs=inputs,
-                    ) from exc
+                    ) from None  # the ValidationError quotes the model's output
                 retried_schema = True
                 conversation = with_feedback(
                     conversation,

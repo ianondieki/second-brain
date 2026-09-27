@@ -71,6 +71,7 @@ class CassettePlayer:
     def __init__(self, interactions: Iterable[Interaction]) -> None:
         self._queue: deque[Interaction] = deque(interactions)
         self.requests: list[RecordedRequest] = []
+        self.errors: list[CassetteError] = []  # kept here: the adapter raises provider errors from None
 
     @classmethod
     def from_files(cls, *paths: Path) -> CassettePlayer:
@@ -83,13 +84,18 @@ class CassettePlayer:
     def handler(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(RecordedRequest(request.method, request.url.path, request.content))
         if not self._queue:
-            raise CassetteError(f"cassette exhausted at {request.method} {request.url.path}")
+            return self._fail(f"cassette exhausted at {request.method} {request.url.path}")
         expected = self._queue.popleft()
         if (expected.method, expected.path) != (request.method, request.url.path):
-            raise CassetteError(
+            return self._fail(
                 f"cassette expected {expected.method} {expected.path}, got {request.method} {request.url.path}"
             )
         return httpx2.Response(expected.status, content=expected.body, headers={"content-type": expected.content_type})
+
+    def _fail(self, message: str) -> httpx2.Response:
+        error = CassetteError(message)
+        self.errors.append(error)
+        raise error
 
     def adapter(self) -> AnthropicAdapter:
         """An ``AnthropicAdapter`` whose only transport is this cassette (no SDK retries)."""

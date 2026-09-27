@@ -152,12 +152,14 @@ async def test_cassette_mismatch_and_exhaustion_fail_loudly() -> None:
     tape = player("batch_nightly")  # expects POST /v1/messages/batches first
     with pytest.raises(LLMProviderError) as info:
         await tape.adapter().create(request())
-    assert isinstance(info.value.__cause__, anthropic.APIConnectionError)
-    assert isinstance(info.value.__cause__.__cause__, CassetteError)
+    assert info.value.__cause__ is None  # raised from None: no SDK error (or body) in the chain
+    assert info.value.__suppress_context__
+    assert "expected POST /v1/messages/batches" in str(tape.errors[0])
     empty = CassettePlayer([])
     with pytest.raises(LLMProviderError):
         await empty.adapter().create(request())
     assert empty.exhausted
+    assert "exhausted" in str(empty.errors[0])
 
 
 async def test_no_key_fails_closed_at_call_time() -> None:

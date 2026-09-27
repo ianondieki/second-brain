@@ -6,9 +6,10 @@ Wire rules (docs/spec/08 LLM layer): structured output through the native JSON-s
 forced ``tool_choice`` is refused by newer models); prompt-cache breakpoints as ``cache_control`` on text blocks.
 
 Fail closed: without ``ANTHROPIC_API_KEY`` the adapter still builds (the app starts in dev and test), and every call
-raises ``LLMUnavailable`` before any client exists. The key is passed explicitly, so the SDK never falls back to
-environment or profile credentials; the base URL is fixed. Tests inject an ``httpx2`` client over a synthetic
-cassette (``bridge.llm.cassettes``); the egress guard stops anything else (AC-SEC-5; D-18: no paid calls).
+raises ``LLMUnavailable`` before any client exists. Provider errors are raised ``from None``: the SDK's exception
+may quote the provider's body, and a traceback must never carry it. The key is passed explicitly, so the SDK never
+falls back to environment or profile credentials; the base URL is fixed. Tests inject an ``httpx2`` client over a
+synthetic cassette (``bridge.llm.cassettes``); the egress guard stops anything else (AC-SEC-5; D-18: no paid calls).
 """
 
 from __future__ import annotations
@@ -140,7 +141,7 @@ class AnthropicAdapter:
         try:
             message = await client.messages.create(**to_params(request))
         except anthropic.AnthropicError as exc:
-            raise _provider_error(exc) from exc
+            raise _provider_error(exc) from None  # the SDK error may quote the provider body
         return from_message(message)
 
     async def batch_create(self, requests: Mapping[str, ModelRequest]) -> str:
@@ -149,7 +150,7 @@ class AnthropicAdapter:
         try:
             batch = await client.messages.batches.create(requests=cast(Any, items))
         except anthropic.AnthropicError as exc:
-            raise _provider_error(exc) from exc
+            raise _provider_error(exc) from None  # the SDK error may quote the provider body
         return batch.id
 
     async def batch_state(self, batch_id: str) -> BatchState:
@@ -157,7 +158,7 @@ class AnthropicAdapter:
         try:
             batch = await client.messages.batches.retrieve(batch_id)
         except anthropic.AnthropicError as exc:
-            raise _provider_error(exc) from exc
+            raise _provider_error(exc) from None  # the SDK error may quote the provider body
         return BatchState(batch.processing_status)
 
     async def batch_results(self, batch_id: str) -> dict[str, ModelResponse | BatchItemError]:
@@ -173,7 +174,7 @@ class AnthropicAdapter:
                 else:
                     results[line.custom_id] = BatchItemError(outcome.type, outcome.type)
         except anthropic.AnthropicError as exc:
-            raise _provider_error(exc) from exc
+            raise _provider_error(exc) from None  # the SDK error may quote the provider body
         return results
 
 
