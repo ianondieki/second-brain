@@ -108,10 +108,6 @@ export function LoginForm() {
         value={values.password}
         onChange={(event) => set("password", event.target.value)}
         error={errors.password}
-        showLabel={t("fields.showPassword")}
-        hideLabel={t("fields.hidePassword")}
-        showName={t("fields.showPasswordName")}
-        hideName={t("fields.hidePasswordName")}
       />
 
       <div className="flex flex-col items-start gap-2">

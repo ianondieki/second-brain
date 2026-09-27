@@ -35,7 +35,6 @@ export interface SecuritySettingsProps {
 
 export function SecuritySettings({ enrolled, required, homeHref, email }: SecuritySettingsProps) {
   const t = useTranslations("security");
-  const tf = useTranslations("fields");
   const te = useTranslations("errors");
 
   const [phase, setPhase] = useState<Phase>(enrolled ? { name: "on" } : { name: "intro" });
@@ -182,10 +181,6 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
                 setPasswordError(undefined);
               }}
               error={passwordError}
-              showLabel={tf("showPassword")}
-              hideLabel={tf("hidePassword")}
-              showName={tf("showPasswordName")}
-              hideName={tf("hidePasswordName")}
             />
           </>
         ) : null}

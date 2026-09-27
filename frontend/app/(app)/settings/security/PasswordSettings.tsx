@@ -22,7 +22,6 @@ import { usePasswordState } from "./PasswordState";
  */
 export function PasswordSettings({ email }: { email: string }) {
   const t = useTranslations("password");
-  const tf = useTranslations("fields");
   const tv = useTranslations("validation");
   const ts = useTranslations("signup");
   const te = useTranslations("errors");
@@ -37,13 +36,6 @@ export function PasswordSettings({ email }: { email: string }) {
   // The account has a password (from the API, or since one was saved here): changing it needs the current one.
   // While two-step setup is on screen this section is hidden, not unmounted, so anything typed here is kept.
   const { hasPassword, markPasswordSet, enrolling } = usePasswordState();
-
-  const toggle = {
-    showLabel: tf("showPassword"),
-    hideLabel: tf("hidePassword"),
-    showName: tf("showPasswordName"),
-    hideName: tf("hidePasswordName"),
-  };
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,7 +108,6 @@ export function PasswordSettings({ email }: { email: string }) {
               setCurrentError(undefined);
             }}
             error={currentError}
-            {...toggle}
           />
         ) : null}
         <PasswordField
@@ -132,7 +123,6 @@ export function PasswordSettings({ email }: { email: string }) {
             setNextError(undefined);
           }}
           error={nextError}
-          {...toggle}
         />
         <div>
           <SubmitButton variant="secondary" busy={busy}>
