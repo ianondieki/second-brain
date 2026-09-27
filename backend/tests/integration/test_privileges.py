@@ -452,9 +452,10 @@ async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(
         await expect(conn, "SELECT app_moderate_proposal(:id, 'clear')", "staff admin or moderator only", id=proposal)
         await run(conn, "SELECT app_hold_proposal(:id)", id=proposal)
         assert await run(conn, state, id=proposal) == "held"
-        await act(conn, stranger)
-        await expect(conn, "SELECT app_hold_proposal(:id)", "owner or staff only", id=proposal)
-        await expect(conn, "SELECT app_hold_problem(:id)", "owner or staff only", id=problem)
+        for caller in (stranger, None):  # None: no app.user_id at all (the NULL-safe checks)
+            await act(conn, caller)
+            await expect(conn, "SELECT app_hold_proposal(:id)", "owner or staff only", id=proposal)
+            await expect(conn, "SELECT app_hold_problem(:id)", "owner or staff only", id=problem)
         await act(conn, moderator)
         await run(conn, "SELECT app_moderate_proposal(:id, 'clear')", id=proposal)
         assert await run(conn, state, id=proposal) == "clear"

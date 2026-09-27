@@ -891,7 +891,8 @@ END;
 $$;
 
 -- Raising a hold (clear -> held) is the only moderation change the owner's side may make (REQ-PROP-02: a flagged teaser
--- is held until a moderator approves it). Owner or staff only; held and rejected stay as they are.
+-- is held until a moderator approves it). Owner or staff only; held and rejected stay as they are. The checks are
+-- NULL-safe: without app.user_id a plain comparison would be NULL, which IF treats as false, and skip the RAISE.
 CREATE FUNCTION app_hold_proposal(p_proposal uuid) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -900,7 +901,8 @@ DECLARE
     v_owner uuid;
 BEGIN
     SELECT owner_id INTO v_owner FROM public.proposals WHERE id = p_proposal FOR UPDATE;
-    IF v_owner IS NULL OR (v_owner <> public.app_user_id() AND NOT public.app_is_staff('{admin,moderator}')) THEN
+    IF v_owner IS NULL OR public.app_user_id() IS NULL
+       OR (v_owner IS DISTINCT FROM public.app_user_id() AND NOT public.app_is_staff('{admin,moderator}')) THEN
         RAISE EXCEPTION 'app_hold_proposal: owner or staff only' USING ERRCODE = 'insufficient_privilege';
     END IF;
     UPDATE public.proposals
@@ -917,11 +919,12 @@ DECLARE
     v_problem public.problems%ROWTYPE;
 BEGIN
     SELECT * INTO v_problem FROM public.problems WHERE id = p_problem FOR UPDATE;
-    IF NOT FOUND OR NOT (
+    IF NOT FOUND OR public.app_user_id() IS NULL OR NOT coalesce(
         (v_problem.org_id IS NULL AND v_problem.created_by = public.app_user_id())
         OR (v_problem.org_id IS NOT NULL
             AND public.app_is_member(v_problem.org_id, '{owner,admin,signatory,reviewer}'))
-        OR public.app_is_staff('{admin,moderator}')
+        OR public.app_is_staff('{admin,moderator}'),
+        false
     ) THEN
         RAISE EXCEPTION 'app_hold_problem: owner or staff only' USING ERRCODE = 'insufficient_privilege';
     END IF;
