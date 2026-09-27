@@ -51,7 +51,19 @@ gains ``manifest_nonce`` (the manifest is encrypted under the proposal key and m
 ``app_tier2_granted`` takes the version as well as the proposal (drafts are never granted); ``organizations`` gains
 ``suspended_at`` (the "not suspended" condition of can_view_tier2); ``org_claims`` gains ``otp_verified_at`` (set only
 by ``app_confirm_claim_otp``); ``moderation_cases`` gains ``reporter_id``; ``brief_invitations`` carries the brief's
-``org_id`` so the two brief policies never read each other recursively.
+``org_id`` so the two brief policies never read each other recursively. Templates and acceptances are tied by
+``(template id, sha256)`` foreign keys, so an accepted template version cannot change; ``nda_templates`` follows its
+legal body ON UPDATE CASCADE until an acceptance pins it. The listed-organisations rule is a second SELECT policy
+(``bridge_app_select_listed``) next to 0001's, which stays untouched.
+
+Operating rules for the code that uses this schema:
+
+- Switch roles only with ``bridge.db.as_role`` and never commit inside it; write audit events after it returns.
+- Tables some callers may insert into but not read back (``moderation_cases``, ``directory_invitations``,
+  ``llm_calls`` system rows, ``signal_events``, ``legal_acceptances`` by a claimant, the Tier-2 worker tables) need
+  inserts without RETURNING; their ORM models set ``eager_defaults=False``.
+- The OTP functions count an attempt even when they return false: commit after calling them.
+- Jobs bind the user they act for (``bind_tenant``): the Tier-2 worker roles read only that user's rows.
 
 Revision ID: 0002
 Revises: 0001
