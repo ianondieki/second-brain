@@ -203,6 +203,7 @@ class ProposalConfidential(TimestampsMixin, Base):
     __tablename__ = "proposal_confidential"
     __table_args__ = (
         _version_fk("proposal_confidential", ondelete="CASCADE"),
+        CheckConstraint("(manifest_ciphertext IS NULL) = (manifest_nonce IS NULL)", name="manifest_pair"),
         {"info": {"tenancy": Tenancy.USER, "user_column": "owner_id", "db_role": "tier2_reader"}},
     )
 

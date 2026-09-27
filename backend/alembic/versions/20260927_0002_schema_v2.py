@@ -2196,6 +2196,10 @@ def _create_tables() -> None:
         sa.Column("manifest_nonce", sa.LargeBinary(), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint(
+            "(manifest_ciphertext IS NULL) = (manifest_nonce IS NULL)",
+            name=op.f("ck_proposal_confidential_manifest_pair"),
+        ),
         sa.ForeignKeyConstraint(["owner_id"], ["users.id"], name=op.f("fk_proposal_confidential_owner_id_users")),
         sa.ForeignKeyConstraint(
             ["proposal_id", "version_id"],
