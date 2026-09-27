@@ -44,7 +44,8 @@ models:
 # Task keys: model, effort (required, even when null: null only for a model without effort), max_tokens, batchable
 # (default false), confidential (default true: no prompt or output text in logs or ledger outputs), purpose
 # (tier1_only | tier2_llm_assistant | tier2_llm_moderation; a Tier-2 field needs the matching live consent),
-# fallback_model + fallback_effort (the one retry after a refusal; null = straight to the human queue),
+# fallback_model + fallback_effort (the one retry after a refusal; null = straight to the human queue; ADR-005's
+# "at most one retry" allows zero, and D-29 proposes fallbacks within the docs/spec/09 allocation only),
 # allowed_tools (server tools the task may use; default none), max_field_chars (optional lower cap).
 tasks:
   moderation_prescreen:         # injection/spam/moderation classifier at submission, Tier 1 only (REQ-MOD-01)
@@ -54,8 +55,8 @@ tasks:
     batchable: false
     confidential: true
     purpose: tier1_only
-    fallback_model: claude-sonnet-5
-    fallback_effort: low
+    fallback_model: null         # D-29
+    fallback_effort: null
   over_disclosure_check:        # teaser over-disclosure check, Tier 1 only, warn only (REQ-PROP-02)
     model: claude-haiku-4-5
     effort: null
@@ -63,8 +64,8 @@ tasks:
     batchable: false
     confidential: true
     purpose: tier1_only
-    fallback_model: claude-sonnet-5
-    fallback_effort: low
+    fallback_model: null         # D-29
+    fallback_effort: null
   originality_explainer:        # overlap explanation, submitter's text vs others' Tier 1 (REQ-PROP-04)
     model: claude-sonnet-5
     effort: medium
@@ -72,8 +73,8 @@ tasks:
     batchable: false
     confidential: true
     purpose: tier1_only
-    fallback_model: claude-opus-5-5
-    fallback_effort: medium
+    fallback_model: null         # D-29
+    fallback_effort: null
   submission_assistant:         # Tier-1 vs Tier-2 placement suggestions, per-use consent (REQ-PROP-05)
     model: claude-sonnet-5
     effort: medium
@@ -81,5 +82,5 @@ tasks:
     batchable: false
     confidential: true
     purpose: tier2_llm_assistant
-    fallback_model: claude-opus-5-5
-    fallback_effort: medium
+    fallback_model: null         # D-29
+    fallback_effort: null

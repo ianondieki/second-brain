@@ -109,10 +109,14 @@ async def test_citations_are_returned() -> None:
     assert [c.source for c in result.citations] == ["Grid report", "https://example.org/t"]
 
 
+FALLBACK = {"fallback_model": "claude-sonnet-5", "fallback_effort": "low"}  # the registry ships none (D-29)
+
+
 async def test_refusal_goes_to_the_human_queue_and_retries_once_on_the_fallback() -> None:
     tape = player("messages_refusal_then_ok")
-    r = rig(tape.adapter())
-    spec = real_registry().task(TASK)
+    reg = registry_with(moderation_prescreen=FALLBACK)
+    r = rig(tape.adapter(), reg=reg)
+    spec = reg.task(TASK)
     result = await r.service.complete(TASK, screen(), Verdict, ctx=CTX)
     assert result.model == spec.fallback_model
     assert result.attempts == 2
@@ -127,7 +131,7 @@ async def test_refusal_goes_to_the_human_queue_and_retries_once_on_the_fallback(
 
 
 async def test_second_refusal_is_dead_lettered() -> None:
-    r = rig(player("messages_refusal_twice").adapter())
+    r = rig(player("messages_refusal_twice").adapter(), reg=registry_with(moderation_prescreen=FALLBACK))
     with pytest.raises(LLMRefused) as info:
         await r.service.complete(TASK, screen(), Verdict, ctx=CTX)
     assert statuses(r.ledger.entries) == [CallStatus.REFUSAL, CallStatus.REFUSAL]
@@ -139,8 +143,9 @@ async def test_second_refusal_is_dead_lettered() -> None:
 
 
 async def test_refusal_without_a_fallback_is_dead_lettered_at_once() -> None:
-    reg = registry_with(moderation_prescreen={"fallback_model": None, "fallback_effort": None})
-    r = rig(player("messages_refusal_twice").adapter(), reg=reg)
+    """The shipped registry: no fallback, so a refusal goes straight to the human queue and the dead-letter queue."""
+    assert real_registry().task(TASK).fallback_model is None
+    r = rig(player("messages_refusal_twice").adapter())
     with pytest.raises(LLMRefused):
         await r.service.complete(TASK, screen(), Verdict, ctx=CTX)
     assert statuses(r.ledger.entries) == [CallStatus.REFUSAL]

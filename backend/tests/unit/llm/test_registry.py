@@ -17,6 +17,15 @@ from bridge.llm.types import TokenUsage
 from bridge.models.enums import ConsentPurpose
 
 PHASE_2_TASKS = {"moderation_prescreen", "over_disclosure_check", "originality_explainer", "submission_assistant"}
+HAIKU, SONNET, OPUS = "claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5-5"
+# docs/spec/09 model allocation per registered task. A refusal fallback must be null or another model the spec
+# allocates to the same task (D-29); a new task must be added here with its allocation.
+SPEC_09_ALLOCATION = {
+    "moderation_prescreen": {HAIKU},  # injection/spam/moderation classifier (Tier 1 only)
+    "over_disclosure_check": {HAIKU},  # teaser over-disclosure check
+    "originality_explainer": {SONNET},  # originality overlap explanation
+    "submission_assistant": {SONNET},  # submission assistant
+}
 
 
 def raw() -> dict[str, Any]:
@@ -86,7 +95,10 @@ def test_unknown_task_is_a_config_error() -> None:
             ),
             "another model",
         ),
-        (lambda d: d["tasks"]["moderation_prescreen"].update(fallback_effort=None), "effort is set explicitly"),
+        (
+            lambda d: d["tasks"]["moderation_prescreen"].update(fallback_model=SONNET, fallback_effort=None),
+            "effort is set explicitly",
+        ),
         (
             lambda d: d["tasks"]["moderation_prescreen"].update(fallback_model=None, fallback_effort="low"),
             "without fallback_model",
@@ -160,3 +172,14 @@ def test_cost_counts_every_token_kind() -> None:
 def test_load_is_cached() -> None:
     path = get_settings().llm_models_file
     assert registry.load(path) is registry.load(path)
+
+
+def test_every_task_follows_the_spec_09_allocation() -> None:
+    """D-29: the task model and any refusal fallback are models docs/spec/09 allocates to that task."""
+    reg = registry.load(get_settings().llm_models_file)
+    assert set(reg.tasks) == set(SPEC_09_ALLOCATION), "add new tasks to SPEC_09_ALLOCATION with their spec 09 models"
+    for name, spec in reg.tasks.items():
+        allowed = SPEC_09_ALLOCATION[name]
+        assert spec.model in allowed, name
+        assert spec.fallback_model is None or spec.fallback_model in allowed - {spec.model}, name
+        assert spec.fallback_effort is None or spec.fallback_model is not None, name
