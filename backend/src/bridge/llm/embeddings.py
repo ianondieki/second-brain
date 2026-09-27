@@ -1,8 +1,9 @@
 """Embeddings (REQ-EMB-01; ADR-005 decision 6; docs/spec/08 Embeddings). Anthropic has no embeddings endpoint.
 
 - ``BgeM3Embedder``: self-hosted ``BAAI/bge-m3`` (1024 dimensions, multilingual incl. Swahili) through
-  sentence-transformers on the worker, fp16 or int8. The library is an optional extra
-  (``uv sync --extra embeddings``; CI does not install it) imported lazily, and the weights are loaded with
+  sentence-transformers on the worker, fp16 or int8. sentence-transformers is not a dependency (not in uv.lock):
+  it is imported lazily, and the worker image installs it from the CPU-only torch index only after the human
+  approves bge-m3 (weights and image size; Docker has 4 GB). The weights are loaded with
   ``local_files_only``: code never downloads them (the image must carry them; the human approves that first).
 - ``FakeEmbedder``: deterministic 1024-dimension unit vectors from a SHAKE-256 hash of the normalised text, for
   tests and CI. Similar texts are NOT close; ``pin`` and ``vector_with_similarity`` let a test choose vectors.
@@ -144,10 +145,11 @@ class BgeM3Embedder:
 
     def _load(self) -> Any:
         try:
-            from sentence_transformers import SentenceTransformer  # optional extra, never installed in CI
+            from sentence_transformers import SentenceTransformer  # not a dependency: installed in the worker image
         except ImportError as exc:
             raise EmbedderUnavailable(
-                "sentence-transformers is not installed; the worker needs `uv sync --extra embeddings` (REQ-EMB-01)"
+                "sentence-transformers is not installed: the worker image adds it (CPU torch index) once bge-m3 is"
+                " approved (REQ-EMB-01)"
             ) from exc
         try:
             loaded = SentenceTransformer(self._source, device=self._device, local_files_only=True)

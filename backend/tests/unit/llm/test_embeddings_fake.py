@@ -102,7 +102,7 @@ class _Model:
 
 @pytest.fixture
 def stand_in(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Stand-in ``sentence_transformers`` and ``torch`` modules: the real ones are an optional extra CI lacks."""
+    """Stand-in ``sentence_transformers`` and ``torch`` modules: the real ones are not dependencies (REQ-EMB-01)."""
     seen: dict[str, Any] = {}
 
     def factory(source: str, **kwargs: Any) -> _Model:
@@ -150,7 +150,7 @@ async def test_bge_m3_fp16_and_default_source(stand_in: dict[str, Any]) -> None:
 
 async def test_bge_m3_without_the_library_or_weights_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)
-    with pytest.raises(EmbedderUnavailable, match="extra embeddings"):
+    with pytest.raises(EmbedderUnavailable, match="once bge-m3 is approved"):
         await BgeM3Embedder().embed(["x"])
 
     def missing(source: str, **kwargs: Any) -> None:
@@ -180,3 +180,12 @@ def test_embedder_setting() -> None:
     production = settings().model_copy(update={"app_env": "production"})  # the validator already refuses this
     with pytest.raises(ValueError, match="not allowed in production"):
         embedder_from_settings(production, policy)
+
+
+def test_the_lock_carries_no_ml_stack() -> None:
+    """sentence-transformers and torch stay out of uv.lock until the human approves bge-m3 (Docker has 4 GB)."""
+    lock = (Path(embeddings.__file__).resolve().parents[3] / "uv.lock").read_text(encoding="utf-8")
+    names = {line.split('"')[1] for line in lock.splitlines() if line.startswith("name = ")}
+    heavy = {"torch", "triton", "sentence-transformers", "transformers", "scikit-learn", "safetensors"}
+    assert not names & heavy
+    assert not [name for name in names if name.startswith("nvidia-")]
