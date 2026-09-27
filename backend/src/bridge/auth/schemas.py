@@ -1,13 +1,17 @@
-"""Request and response bodies for the auth API (REQ-AUTH-01)."""
+"""Request and response bodies for the auth API (REQ-AUTH-01, OAuth REQ-AUTH-02)."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from bridge.models.enums import ConsentPurpose, OrgKind, OrgRole, StaffRole
+from bridge.models.enums import AuthProvider, ConsentPurpose, OrgKind, OrgRole, StaffRole
+
+# Where a successful OAuth sign-in may land (an allow-list; anything else is refused with 422).
+ReturnPath = Literal["/dev", "/org", "/settings/security"]
 
 
 class OrgSignup(BaseModel):
@@ -120,3 +124,42 @@ class TotpEnrolRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str | None = Field(default=None, max_length=256)
+
+
+class OAuthSignup(BaseModel):
+    """The signup form's choices for an OAuth signup (the address comes from the provider): replayed at the callback
+    only if no account exists yet. Sealed in the flow cookie meanwhile."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    side: Literal["developer", "org"]
+    org: OrgSignup | None = None
+    consents: dict[ConsentPurpose, bool] = Field(default_factory=dict)
+    consents_version: str | None = Field(default=None, max_length=64)
+    locale: Literal["en", "sw"] = "en"
+    accept_terms: bool
+
+
+class OAuthStartRequest(BaseModel):
+    """``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s
+    choices; ``link``: add the provider to the signed-in account (fresh second factor or recent sign-in)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intent: Literal["login", "signup", "link"] = "login"
+    return_to: ReturnPath | None = None
+    signup: OAuthSignup | None = None
+
+
+class OAuthStartResponse(BaseModel):
+    authorize_url: str  # the provider's consent page; the browser navigates there
+
+
+class OAuthProvidersResponse(BaseModel):
+    providers: list[AuthProvider]  # only the configured ones; hide the other buttons
+
+
+class IdentityOut(BaseModel):
+    id: UUID
+    provider: AuthProvider
+    linked_at: datetime
