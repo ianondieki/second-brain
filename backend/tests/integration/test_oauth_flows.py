@@ -11,9 +11,10 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -25,6 +26,8 @@ from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+import bridge.clock
+from bridge.auth import identities, service, totp
 from bridge.config import Settings, get_settings
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
@@ -468,4 +471,304 @@ async def test_a_provider_without_a_primary_address_cannot_sign_up(client: httpx
         fake_github(router, person(), emails=[{"email": email(), "primary": False, "verified": True}])
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/signup", {"oauth_error": "oauth_no_email", "provider": "github"})
+    assert not signed_in(response)
+
+
+# ------------------------------------------------------------------ linking from settings
+
+
+def now_counter() -> int:
+    return int(time.time() // 30)
+
+
+async def age_second_factor(owner_engine: AsyncEngine, address: str, hours: int) -> None:
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE sessions SET mfa_verified_at = now() - make_interval(hours => :h) "
+                "WHERE user_id = (SELECT id FROM users WHERE email = :e) AND revoked_at IS NULL"
+            ),
+            {"h": hours, "e": address},
+        )
+
+
+def refusal(response: httpx.Response) -> tuple[int, str]:
+    return response.status_code, response.json()["detail"]["code"]
+
+
+async def test_linking_from_settings(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    address = email()
+    await email_account(client, address)
+    user_id = (await me(client))["user"]["id"]
+    who = person()  # a GitHub account with a different address: linking does not depend on the address
+    response = await round_trip(client, who, intent="link")
+    assert landing(response) == ("/settings/security", {"linked": "github"})
+    assert not signed_in(response)  # the same session carries on
+    assert await linked(client) == ["github"]
+    assert [m for m in outbox(client).outbox if m.to == address and "GitHub sign-in was added" in m.text]
+    assert ("auth.identity_linked", {"provider": "github"}) in await audit_trail(owner_engine, user_id)
+    again = await round_trip(client, who, intent="link")  # linking the same identity again changes nothing
+    assert landing(again) == ("/settings/security", {"linked": "github"})
+    assert await linked(client) == ["github"]
+
+
+async def test_linking_needs_a_signed_in_session(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    assert refusal(response) == (401, "unauthenticated")
+
+
+async def test_linking_needs_a_recent_sign_in_without_totp(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await email_account(client, email())
+    later = datetime.now(UTC) + timedelta(minutes=16)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    response = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    assert refusal(response) == (403, "recent_sign_in_required")
+
+
+async def test_linking_and_unlinking_need_a_fresh_second_factor_with_totp(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = email()
+    await email_account(client, address)
+    secret = str((await client.post("/api/auth/totp/enrol", json={"password": PASSWORD})).json()["secret"])
+    confirmed = await client.post("/api/auth/totp/confirm", json={"code": totp.code_at(secret, now_counter())})
+    assert confirmed.status_code == 200
+    await age_second_factor(owner_engine, address, 13)
+    stale = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    assert refusal(stale) == (403, "step_up_required")
+    await age_second_factor(owner_engine, address, 0)
+    response = await round_trip(client, person(), intent="link")
+    assert landing(response) == ("/settings/security", {"linked": "github"})
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    await age_second_factor(owner_engine, address, 13)
+    assert refusal(await client.delete(f"/api/auth/identities/{identity_id}")) == (403, "step_up_required")
+    await age_second_factor(owner_engine, address, 0)
+    assert (await client.delete(f"/api/auth/identities/{identity_id}")).status_code == 204
+
+
+async def test_a_pending_second_factor_cannot_link(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    address = email()
+    await email_account(client, address)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE sessions SET mfa_pending = true WHERE user_id = (SELECT id FROM users WHERE email = :e)"),
+            {"e": address},
+        )
+    response = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    assert refusal(response) == (401, "mfa_required")
+
+
+async def test_an_identity_owned_by_another_account_is_refused(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    owner = person()
+    await round_trip(client, owner, intent="signup", **signup_body())
+    await email_account(other, email())
+    response = await round_trip(other, owner, intent="link")
+    assert landing(response) == ("/settings/security", {"oauth_error": "identity_in_use", "provider": "github"})
+    assert await linked(other) == []
+    assert await identity_rows(owner_engine, owner.email) == ["github"]
+
+
+async def test_an_account_holds_one_identity_per_provider(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    address = email()
+    await email_account(client, address)
+    assert landing(await round_trip(client, person(), intent="link")) == ("/settings/security", {"linked": "github"})
+    second = await round_trip(client, person(), intent="link")
+    assert landing(second) == ("/settings/security", {"oauth_error": "provider_already_linked", "provider": "github"})
+    # Another GitHub account with the same verified address cannot sign in and add itself either.
+    sign_in = await round_trip(other, person(address), intent="login")
+    assert landing(sign_in) == ("/login", {"oauth_error": "provider_already_linked", "provider": "github"})
+    assert not signed_in(sign_in)
+    assert await linked(client) == ["github"]
+
+
+async def test_a_link_finished_in_another_session_is_refused(client: httpx.AsyncClient) -> None:
+    await email_account(client, email())
+    params = await start(client, "github", "link")
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    await email_account(client, email())  # someone else signs in on this browser before the provider answers
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, person())
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_session", "provider": "github"})
+    assert await linked(client) == []
+
+
+# ------------------------------------------------------------------ state, replay, expiry and provider errors
+
+
+async def test_a_state_mismatch_is_refused_before_any_provider_call(client: httpx.AsyncClient) -> None:
+    await start(client, "github", "login")
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, person())
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": "forged-state"})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
+    assert _deleted(response, "__Host-bridge_oauth")
+
+
+async def test_a_code_from_another_browser_is_refused(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    """Login CSRF: an attacker's code and state, delivered to a victim's browser that holds no matching flow."""
+    params = await start(client, "github", "login")
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, person())
+        response = await other.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
+    assert not signed_in(response)
+
+
+async def test_a_replayed_callback_is_refused(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    params = await start(client, "github", "login")
+    flow_cookie = client.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    callback = {"code": "code-used-once", "state": params["state"]}
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        first = await client.get("/api/auth/oauth/github/callback", params=callback)
+        assert landing(first) == ("/dev", {})
+        replay = await client.get("/api/auth/oauth/github/callback", params=callback)  # the cookie is spent
+    assert landing(replay) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    # With a stolen copy of the cookie, the provider refuses the spent code (single use, PKCE-bound).
+    other.cookies.set("__Host-bridge_oauth", flow_cookie)
+    with respx.mock(assert_all_called=True) as router:
+        router.post(GITHUB_TOKEN).mock(return_value=httpx.Response(200, json={"error": "bad_verification_code"}))
+        stolen = await other.get("/api/auth/oauth/github/callback", params=callback)
+    assert landing(stolen) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+    assert not signed_in(stolen)
+
+
+async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    params = await start(client, "github", "login")
+    later = datetime.now(UTC) + timedelta(minutes=11)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, person())
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
+
+
+async def test_a_flow_for_one_provider_cannot_finish_at_another(client: httpx.AsyncClient) -> None:
+    params = await start(client, "github", "login")
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_google(router, person(), params.get("nonce", ""))
+        response = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "google"})
+    assert token.call_count == 0
+
+
+async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> None:
+    params = await start(client, "google", "signup", **signup_body())
+    denied = await client.get(
+        "/api/auth/oauth/google/callback",
+        params={"error": "access_denied", "error_description": "<script>alert(1)</script>", "state": params["state"]},
+    )
+    assert landing(denied) == ("/signup", {"oauth_error": "oauth_cancelled", "provider": "google"})
+    assert "script" not in denied.headers["location"]
+    assert "access_denied" not in denied.headers["location"]
+    assert denied.headers["referrer-policy"] == "no-referrer"
+    params = await start(client, "google", "login")
+    with respx.mock(assert_all_called=True) as router:
+        router.post(GOOGLE_TOKEN).mock(return_value=httpx.Response(500, text="internal detail from the provider"))
+        failed = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
+    assert landing(failed) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    params = await start(client, "google", "login")
+    missing = await client.get("/api/auth/oauth/google/callback", params={"state": params["state"]})
+    assert landing(missing) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+
+
+# ------------------------------------------------------------------ second factor, unlinking, edge cases
+
+
+async def test_accounts_with_totp_sign_in_pending_the_second_factor(client: httpx.AsyncClient) -> None:
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await refresh_csrf(client)
+    secret = str((await client.post("/api/auth/totp/enrol", json={})).json()["secret"])  # password-less, recent
+    assert (
+        await client.post("/api/auth/totp/confirm", json={"code": totp.code_at(secret, now_counter())})
+    ).status_code == 200
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    response = await round_trip(client, who, intent="login")
+    assert landing(response) == ("/auth/mfa", {})
+    assert signed_in(response)
+    assert (await me(client))["side"] == "pending"
+    verified = await client.post("/api/auth/mfa/verify", json={"code": totp.code_at(secret, now_counter() + 1)})
+    assert verified.status_code == 200, verified.text
+
+
+async def test_unlinking(client: httpx.AsyncClient, other: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    user_id = (await me(client))["user"]["id"]
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    url = f"/api/auth/identities/{identity_id}"
+    await email_account(other, email())
+    assert refusal(await other.delete(url)) == (404, "not_found")  # someone else's identity does not exist for them
+    assert refusal(await client.delete(url, headers={"X-CSRF-Token": "forged"})) == (403, "csrf_failed")
+    # A GitHub-only account can still sign in with an emailed link to its verified address.
+    assert (await client.delete(url)).status_code == 204
+    assert await linked(client) == []
+    assert [m for m in outbox(client).outbox if m.to == who.email and "GitHub sign-in was removed" in m.text]
+    assert ("auth.identity_unlinked", {"provider": "github"}) in await audit_trail(owner_engine, user_id)
+    assert refusal(await client.delete(url)) == (404, "not_found")
+
+
+async def test_the_last_way_to_sign_in_cannot_be_unlinked(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await refresh_csrf(client)
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    async with owner_engine.begin() as conn:  # no password, no other identity and no verified address to email
+        await conn.execute(text("UPDATE users SET email_verified_at = NULL WHERE email = :e"), {"e": who.email})
+    response = await client.delete(f"/api/auth/identities/{identity_id}")
+    assert refusal(response) == (409, "last_sign_in_method")
+
+
+async def test_a_throttled_oauth_signup_creates_nothing(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def throttled(*_args: object) -> bool:
+        return False
+
+    monkeypatch.setattr(service, "allow_email", throttled)
+    who = person(verified=False)
+    response = await round_trip(client, who, intent="signup", **signup_body())
+    assert landing(response) == ("/signup/check-email", {})
+    async with owner_engine.connect() as conn:
+        assert await conn.scalar(text("SELECT count(*) FROM users WHERE email = :e"), {"e": who.email}) == 0
+
+
+@pytest.mark.parametrize("verified", [True, False])
+async def test_consent_wording_changed_during_the_flow(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, verified: bool
+) -> None:
+    params = await start(client, "github", "signup", **signup_body())
+    monkeypatch.setattr(identities, "consents_version", lambda _settings: "a-newer-version")
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, person(verified=verified))
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/signup", {"oauth_error": "consent_text_changed", "provider": "github"})
+
+
+@pytest.mark.parametrize(("verified", "page"), [(True, "/signup"), (False, "/signup/check-email")])
+async def test_an_address_taken_during_the_flow_creates_nothing(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, verified: bool, page: str
+) -> None:
+    async def taken(*_args: object, **_kwargs: object) -> None:
+        return None  # what create_account answers when a concurrent signup took the address
+
+    monkeypatch.setattr(service, "create_account", taken)
+    response = await round_trip(client, person(verified=verified), intent="signup", **signup_body())
+    assert landing(response)[0] == page
     assert not signed_in(response)
