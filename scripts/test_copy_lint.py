@@ -333,6 +333,31 @@ class SpecMinimumAndRoundTwo(LintTree):
                 self.assertEqual(len(self.violations()), 1)
 
 
+class RoundThree(LintTree):
+    def test_uppercase_cyrillic_and_foreign_line_breaks_are_folded(self) -> None:
+        for text in ("THЕFT-PRООF", "РАTENTED", "cannot be\r\nstolen", "cannot be stolen"):
+            with self.subTest(text=text):
+                self.locale({"landing": {"t": text}})
+                self.assertEqual(len(self.violations()), 1)
+
+    def test_python_modules_in_an_emails_package_are_scanned_as_python(self) -> None:
+        self.write("backend/src/bridge/notifications/emails/__init__.py", '"""Never say theft-proof (principle 2)."""\n')
+        self.write("backend/src/bridge/notifications/emails/em2.py", '"""EM2: sent when an org approved it."""\n')
+        self.assertEqual(self.violations(), [])
+
+    def test_a_comparison_does_not_hide_approved_from_the_em2_rule(self) -> None:
+        self.write(
+            "backend/src/bridge/notifications/templates/em2.txt.j2",
+            "{% if n < 1 %}{{ c }} approved it.{% endif %}{% if m > 0 %}x{% endif %}\n",
+        )
+        self.assertEqual(len(self.violations()), 1)
+
+    def test_top_level_test_fixtures_are_skipped(self) -> None:
+        self.write("backend/tests/fixtures/templates/bad.html", "<p>theft-proof</p>")
+        self.write("frontend/test/locales/en.json", json.dumps({"s": "theft-proof"}))
+        self.assertEqual(self.violations(), [])
+
+
 class RulesFile(unittest.TestCase):
     def test_a_line_outside_a_section_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

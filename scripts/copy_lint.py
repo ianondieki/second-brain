@@ -55,6 +55,7 @@ _TEMPLATE_COMMENT = re.compile(r"\{#.*?#\}|<!--.*?-->", re.S)
 _SEP = r"[ \t\-]*(?:\n[ \t\-]*)?"
 # Blank fillers used as separators, and Cyrillic/Greek letters that look like Latin ones (deliberate evasions).
 _FILLERS = re.compile("[ᅟᅠ⠀ㅤﾠ]")
+_LINE_BREAKS = re.compile(r"\r\n?|[\x0b\x0c\x85\u2028\u2029]")
 _CONFUSABLES = str.maketrans("аеорсхуіѕјԁкмтнвгΑΒΕΗΙΚΜΝΟΡΤΧΥοαερτ", "aeopcxyisjdkmthbrABEHIKMNOPTXYoaept")
 MARKUP_SUFFIXES = {".html", ".htm", ".j2", ".jinja", ".mjml", ".tsx", ".jsx", ".md", ".mdx", ".svg", ".xml"}
 FRONTEND_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".md", ".mdx", ".html", ".htm", ".json", ".txt", ".svg"}
@@ -104,7 +105,8 @@ def normalise(text: str, *, markup: bool = False) -> str:
     Newlines inside a removed tag are kept, so line numbers of later matches stay right."""
     text = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", html.unescape(text)))
     text = "".join(ch for ch in text if unicodedata.category(ch) not in {"Cf", "Mn"})
-    text = _FILLERS.sub(" ", unicodedata.normalize("NFKC", text)).translate(_CONFUSABLES)
+    text = _LINE_BREAKS.sub("\n", unicodedata.normalize("NFKC", text))
+    text = _FILLERS.sub(" ", text).casefold().translate(_CONFUSABLES)
     if markup:
         text = _TAG.sub(_strip_tag, text)
     return _APOSTROPHES.sub("'", _DASHES.sub("-", text)).casefold()
@@ -331,14 +333,14 @@ def targets(root: Path) -> Iterator[tuple[str, Path]]:
             parts = path.relative_to(base).parts
             folders = set(parts[:-1])
             suffix = path.suffix.casefold()
-            if folders & CATALOGUE_DIRS and suffix == ".json":
+            if side == "backend" and parts[0] in {"src", "alembic"} and suffix == ".py":
+                yield "python", path
+            elif folders & CATALOGUE_DIRS and suffix == ".json":
                 yield "catalogue", path
             elif folders & CATALOGUE_DIRS and suffix == ".po":
                 yield "po", path
             elif folders & TEMPLATE_DIRS:
                 yield "template", path
-            elif side == "backend" and parts[0] in {"src", "alembic"} and suffix == ".py":
-                yield "python", path
             elif side == "backend" and parts[0] in {"config", "seed"} and suffix in {".yaml", ".yml"}:
                 yield "text", path
             elif side == "frontend" and parts[0] in {"app", "components", "lib", "public"}:
