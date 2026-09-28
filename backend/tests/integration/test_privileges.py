@@ -1174,28 +1174,64 @@ async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: s
     return membership
 
 
+async def _invite(conn: AsyncConnection, org: UUID, invited_by: UUID, roles: str, *, accepted: bool = False) -> UUID:
+    """A Phase 1 invitation to ``org`` (pending unless ``accepted``)."""
+    invitation = uuid7()
+    await run(
+        conn,
+        "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, accepted_at)"
+        " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :hash, :by, now() + interval '7 days',"
+        " CASE WHEN :accepted THEN now() END)",
+        id=invitation,
+        org=org,
+        email=_email("invitee"),
+        roles=roles,
+        hash=invitation.bytes,
+        by=invited_by,
+        accepted=accepted,
+    )
+    return invitation
+
+
 @pytest.mark.parametrize("level", ["e1", "e2"])
 async def test_an_upheld_dispute_transfers_the_organisation(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes], level: str
 ) -> None:
     """Competing claims go to dispute review, never an automatic transfer (docs/spec/06 6.2, AC-DIR-2); staff admin
-    upholding the dispute transfers the organisation in the same statement: the earlier claimant's approved claim is
-    rejected, naming the claim that superseded it, and their membership is removed, so they can no longer remove the
-    new owner. Other members stay."""
+    upholding the dispute transfers the organisation in the same transaction, and the new claimant is its only owner
+    and admin: the earlier claimant's approved claim is rejected, naming the claim that superseded it, and their
+    membership is removed with no role but viewer (nobody reactivates them with power); every other member loses
+    owner and admin but keeps their other roles (viewer when none is left), so the self-signup founder can no longer
+    remove the new owner; and every pending invitation issued under the old control (by anyone but the new claimant),
+    or carrying owner or admin, is revoked. The new claimant re-promotes people afterwards."""
     right, _ = otp
     async with as_app(owner_engine) as conn:
         admin = await w.add_user(conn, _email("dispute-admin"), "Admin", staff_role="admin")
-        org = await add_org(conn, official_domains="{first.example.test}")
+        org = await add_org(conn, source="self_signup", official_domains="{first.example.test}")
+        founder = await w.add_user(conn, _email("founder"), "Self-signup founder")
         first = await w.add_user(conn, _email("first"), "First claimant")
         second = await w.add_user(conn, _email("second"), "Second claimant")
         reviewer = await w.add_user(conn, _email("dispute-reviewer"), "Reviewer")
+        signer = await w.add_user(conn, _email("dispute-signer"), "Signer")
+        await _add_membership(conn, org, founder, "{owner,admin}")  # app_create_organization() at self-signup
         met = await add_legal_template(conn, "master_enterprise_terms")
-        await act(conn, first)  # E1 at once on an official domain; the owner then invites a reviewer
+        elsewhere = await add_org(conn)
+        await _invite(conn, elsewhere, founder, "{owner}")  # another organisation's invitation: untouched
+        await act(conn, first)  # E1 at once on an official domain; the owner then builds the roster
         earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
         await _prove_domain(conn, earlier, right)
         assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
         await _add_membership(conn, org, reviewer, "{reviewer}")
-        await act(conn, second)  # another domain, proven, and the claim disputed
+        await _add_membership(conn, org, signer, "{admin,signatory}")
+        await _add_membership(conn, org, second, "{admin}")
+        by_first = await _invite(conn, org, first, "{reviewer}")
+        accepted = await _invite(conn, org, first, "{viewer}", accepted=True)
+        await act(conn, founder)
+        by_founder = await _invite(conn, org, founder, "{finance}")
+        await act(conn, second)
+        by_second = await _invite(conn, org, second, "{viewer}")
+        admin_by_second = await _invite(conn, org, second, "{admin}")
+        # another domain, proven, and the claim disputed
         disputed = await _claim(conn, org, second, "second.example.test", level, right)
         await _prove_domain(conn, disputed, right)
         if level == "e2":
@@ -1212,25 +1248,38 @@ async def test_an_upheld_dispute_transfers_the_organisation(
             earlier: ("rejected", f"superseded by claim {disputed} (dispute upheld)"),
             disputed: ("approved", "dispute upheld"),
         }
-        members = await conn.execute(
-            text("SELECT user_id, status::text AS status FROM memberships WHERE org_id = :org"), {"org": org}
-        )
-        assert {row.user_id: row.status for row in members.all()} == {
-            first: "removed",
-            second: "active",
-            reviewer: "active",  # other members stay; staff correct them with app_staff_remove_membership()
+        roster = "SELECT user_id, status::text AS status, roles::text[] AS roles FROM memberships WHERE org_id = :org"
+        members = await conn.execute(text(roster), {"org": org})
+        assert {row.user_id: (row.status, sorted(row.roles)) for row in members.all()} == {
+            first: ("removed", ["viewer"]),
+            second: ("active", ["admin", "owner"]),
+            founder: ("active", ["viewer"]),
+            signer: ("active", ["signatory"]),
+            reviewer: ("active", ["reviewer"]),
         }
+        revoked = await conn.execute(
+            text("SELECT id, revoked_at IS NOT NULL AS revoked FROM invitations WHERE org_id = ANY (:orgs)"),
+            {"orgs": [org, elsewhere]},
+        )
+        invitations = {row.id: row.revoked for row in revoked.all()}
+        assert {accepted, by_second} <= set(invitations)  # kept: accepted, or the new claimant's without power
+        assert {i for i, is_revoked in invitations.items() if is_revoked} == {by_first, by_founder, admin_by_second}
         verified = "SELECT verification::text, verified_domain::text FROM organizations WHERE id = :id"
         assert tuple((await conn.execute(text(verified), {"id": org})).one()) == (level, "second.example.test")
-        await act(conn, first)
-        assert await run(conn, "SELECT app_is_member(:id)", id=org) is False
-        removal = await conn.execute(
-            text("UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"),
-            {"org": org, "u": second},
-        )
-        assert removal.rowcount == 0
+        remove_second = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        reactivate_first = "UPDATE memberships SET status = 'active' WHERE org_id = :org AND user_id = :u"
+        for ousted in (first, founder):  # neither the earlier claimant nor the founder holds any power now
+            await act(conn, ousted)
+            assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is False
+            assert (await conn.execute(text(remove_second), {"org": org, "u": second})).rowcount == 0
+            assert (await conn.execute(text(reactivate_first), {"org": org, "u": first})).rowcount == 0
         await act(conn, second)
         assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is True
+        # Reactivated by the new owner, the earlier claimant comes back without power.
+        assert (await conn.execute(text(reactivate_first), {"org": org, "u": first})).rowcount == 1
+        await act(conn, first)
+        assert await run(conn, "SELECT app_is_member(:id)", id=org) is True
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin,signatory}')", id=org) is False
 
 
 async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(

@@ -1401,9 +1401,13 @@ $$;
 -- the DNS TXT record (dns_verified_at), or, for E2 only, a claimant who is an active owner, admin or signatory of an
 -- organisation already E1 on that same domain. Staff never decide their own claim.
 -- Approving a disputed claim upholds the dispute (docs/spec/06 6.2: competing claims go to dispute review, never an
--- automatic transfer) and transfers the organisation in the same transaction: every earlier approved claim of another
--- claimant becomes rejected, its decision_reason naming this claim, and those claimants' memberships are removed.
--- Other members stay (staff correct them with app_staff_remove_membership). The caller audits every change.
+-- automatic transfer) and transfers the organisation in the same transaction, the new claimant becoming its only owner
+-- and admin: every earlier approved claim of another claimant becomes rejected, its decision_reason naming this claim,
+-- and those claimants' memberships are removed with no role but viewer (so nobody reactivates them with power); every
+-- other active membership loses owner and admin and keeps its other roles (viewer when none is left); every pending
+-- invitation issued by anyone but the new claimant (all issued under the old control), or carrying owner or admin, is
+-- revoked. The new claimant re-promotes people afterwards; staff correct a roster with app_staff_remove_membership.
+-- The caller audits every change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1478,6 +1482,7 @@ BEGIN
                AND closed_at IS NULL;
         END IF;
         IF v_claim.status = 'disputed' THEN
+            -- The transfer: the new claimant becomes the only owner and admin (they re-promote people afterwards).
             WITH superseded AS (
                 UPDATE public.org_claims c
                    SET status = 'rejected',
@@ -1490,9 +1495,19 @@ BEGIN
                 RETURNING c.claimant_user_id
             )
             UPDATE public.memberships m
-               SET status = 'removed', updated_at = now()
+               SET status = 'removed', roles = '{viewer}', updated_at = now()
               FROM superseded s
-             WHERE m.org_id = v_org.id AND m.user_id = s.claimant_user_id AND m.status = 'active';
+             WHERE m.org_id = v_org.id AND m.user_id = s.claimant_user_id;
+            UPDATE public.memberships m
+               SET roles = coalesce(nullif(array_remove(array_remove(m.roles, 'owner'), 'admin'), '{}'),
+                                    '{viewer}'::public.org_role[]),
+                   updated_at = now()
+             WHERE m.org_id = v_org.id AND m.user_id <> v_claim.claimant_user_id AND m.status = 'active'
+               AND m.roles && '{owner,admin}'::public.org_role[];
+            UPDATE public.invitations i
+               SET revoked_at = now()
+             WHERE i.org_id = v_org.id AND i.accepted_at IS NULL AND i.revoked_at IS NULL
+               AND (i.invited_by <> v_claim.claimant_user_id OR i.roles && '{owner,admin}'::public.org_role[]);
         END IF;
         INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
         VALUES (public.uuid7(), v_org.id, v_claim.claimant_user_id, '{owner,admin}', 'active')

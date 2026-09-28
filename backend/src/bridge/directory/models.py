@@ -63,6 +63,12 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
     through the definer functions: ``otp_attempts`` counts every attempt and is never reset, and a new code comes from
     ``app_reissue_claim_otp`` (at most 5 reissues, then manual review). One open claim per claimant and organisation,
     and one new claim per claimant and organisation per 24 hours (trigger).
+
+    The DNS proof: ``dns_token`` is written with the claim and is write-once; ``dns_verified_at`` is set only by
+    ``app_mark_claim_dns_verified`` once the app has resolved the TXT record, and is write-once too (trigger, every
+    role). Staff approving a ``disputed`` claim upholds the dispute and transfers the organisation: the new claimant
+    becomes its only owner and admin, earlier approved claims of other claimants are rejected and their memberships
+    removed, the other members lose owner and admin, and pending invitations of the old control are revoked.
     """
 
     __tablename__ = "org_claims"
