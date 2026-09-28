@@ -145,8 +145,7 @@ async def registered_version(
         if register:
             await _exec(
                 conn,
-                "UPDATE proposal_versions SET status = 'registered', cert_id = :cert, registered_at = now()"
-                " WHERE id = :id",
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :cert WHERE id = :id",
                 id=version_id,
                 cert=cert_id,
             )

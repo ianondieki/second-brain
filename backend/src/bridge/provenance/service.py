@@ -132,19 +132,21 @@ async def enqueue_registration(session: AsyncSession, version_id: UUID) -> int:
     return await _defer_next(session, TASK_HASH, version_id, row.owner_id)
 
 
-# --- the owner ref (one place: revision 0002's fix replaces the salt read with app_subject_digest) -------------------
+# --- the owner ref (one place) ---------------------------------------------------------------------------------------
+
+_SUBJECT_DIGEST = text("SELECT app_subject_digest(:user, :data)")
 
 
 async def subject_digest(session: AsyncSession, user_id: UUID, data: bytes) -> bytes:
-    """``SHA-256(subject_salt || data)`` for one user. The owner ref is ``subject_digest(owner, owner_id.bytes)``.
+    """``SHA-256(subject_salt || data)`` for one user. The owner ref is ``subject_digest(owner, owner_id.bytes)``, the
+    same value as ``app_subject_digest(user_id, uuid_send(user_id))`` in SQL.
 
-    Reads ``users.subject_salt`` as ``bridge_app`` today. Revision 0002's pending fix withdraws that read and adds the
-    SECURITY DEFINER ``app_subject_digest(p_user_id, p_data)``, which computes the same value in SQL; switch this one
-    helper to ``SELECT app_subject_digest(:user, :data)`` when it lands."""
-    salt = (
-        await session.execute(text("SELECT subject_salt FROM users WHERE id = :user"), {"user": user_id})
-    ).scalar_one()
-    return hashlib.sha256(bytes(salt) + data).digest()
+    The salt never leaves the database (bridge_app holds no SELECT on ``users.subject_salt``): the SECURITY DEFINER
+    ``app_subject_digest`` computes the digest. An unknown user is a permanent error."""
+    digest = (await session.execute(_SUBJECT_DIGEST, {"user": user_id, "data": data})).scalar_one()
+    if digest is None:
+        raise RegistrationError(f"user {user_id} has no subject salt")
+    return bytes(digest)
 
 
 # --- step 1: manifest and hash -------------------------------------------------------------------------------------
@@ -180,9 +182,6 @@ _STORE_MANIFEST = text(
 _INSERT_RECORD = text(
     "INSERT INTO provenance_records (id, version_id, cert_id, content_hash, status, evidence_s3_key)"
     " VALUES (:id, :version, :cert_id, :content_hash, 'hashed', :evidence_key)"
-)
-_WORKER_FILLS_VERSION = text(
-    "SELECT has_column_privilege('provenance_worker', 'proposal_versions', 'content_hash', 'UPDATE')"
 )
 _FILL_VERSION = text(
     "UPDATE proposal_versions SET content_hash = :content_hash, prev_version_hash = :prev_hash,"
@@ -250,13 +249,9 @@ def sealed_manifest_object(
 
 
 async def _fill_version_hashes(session: AsyncSession, params: dict[str, Any]) -> None:
-    """Fill the version's fill-once registration columns. Revision 0002 as merged grants this to the owner-bound
-    ``bridge_app``; its pending fix gives it to ``provenance_worker`` only. The privilege decides, so this is right
-    before and after that fix; drop the ``bridge_app`` branch once the fix is merged."""
-    if (await session.execute(_WORKER_FILLS_VERSION)).scalar_one():
-        async with as_role(session, WORKER):
-            filled = _rowcount(await session.execute(_FILL_VERSION, params))
-    else:
+    """Fill the version's fill-once registration columns as ``provenance_worker``, the only role that may (its RLS
+    admits registered versions of the bound owner only)."""
+    async with as_role(session, WORKER):
         filled = _rowcount(await session.execute(_FILL_VERSION, params))
     if filled != 1:
         raise RegistrationError("the version's registration hashes were already set without a provenance record")
