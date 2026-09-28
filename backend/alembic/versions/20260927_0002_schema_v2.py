@@ -696,10 +696,12 @@ POLICIES: tuple[Policy, ...] = (
     ),
     # --- staff tables ---
     Policy("moderation_cases", "SELECT", _STAFF),
+    # A user's report only, in their own name, open and without classifier output; the system sources (prescreen,
+    # regex, claim_dispute, tier2_similarity) file through app_open_moderation_case(), which checks the caller.
     Policy(
         "moderation_cases",
         "INSERT",
-        check="(reporter_id IS NULL OR reporter_id = app_user_id()) AND status IN ('open', 'held')"
+        check="source = 'report' AND reporter_id = app_user_id() AND status = 'open' AND classifier IS NULL"
         " AND assigned_to IS NULL AND decided_by IS NULL AND decided_at IS NULL",
     ),
     Policy("moderation_cases", "UPDATE", _STAFF, f"{_STAFF} AND (decided_by IS NULL OR decided_by = app_user_id())"),
@@ -1096,6 +1098,97 @@ BEGIN
     UPDATE public.problems
        SET moderation_state = 'held', updated_at = now()
      WHERE id = p_problem AND moderation_state = 'clear';
+END;
+$$;
+
+-- Files a moderation case from a system source (docs/spec/06 6.12) and returns its id. A user's report is not filed
+-- here: the app inserts it with reporter_id = the reporting user (moderation_cases INSERT policy). Sources and their
+-- subjects: prescreen and regex on a proposal or a problem, claim_dispute on an org_claim, tier2_similarity on a
+-- proposal. The caller is checked against the subject: prescreen and regex for whoever may write it (the proposal's
+-- owner; a developer problem's author or an editor of the Brief's organisation) or staff admin|moderator; a claim
+-- dispute for the claimant of that disputed claim or staff admin; tier2_similarity in a staff admin|moderator context
+-- only (the similarity job reads the full-text embeddings as tier2_moderation, which reads only then, and calls this
+-- as tier2_moderation without switching back). A subject without an owner (a research-agent candidate) needs a staff
+-- context. classifier is Tier-1 output only (labels, scores, ids; never Tier-2 text), a JSON object of at most 8 KB;
+-- reasons are 1 to 20 non-blank codes of at most 200 characters. One unresolved case (open, held, escalated) per
+-- subject and source: a new call adds its new reasons to it (at most 50) and returns it, so a retried job files
+-- nothing twice. The caller writes the audit event.
+CREATE FUNCTION app_open_moderation_case(
+    p_subject_type text, p_subject_id uuid, p_reasons text[], p_source moderation_source,
+    p_classifier jsonb DEFAULT NULL
+) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_reasons text[];
+    v_allowed boolean;
+    v_case uuid;
+BEGIN
+    IF p_source IS NULL OR p_source = 'report' THEN
+        RAISE EXCEPTION 'app_open_moderation_case: a system source only (a report is inserted with its reporter_id)'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF NOT coalesce((p_source IN ('prescreen', 'regex') AND p_subject_type IN ('proposal', 'problem'))
+                    OR (p_source = 'claim_dispute' AND p_subject_type = 'org_claim')
+                    OR (p_source = 'tier2_similarity' AND p_subject_type = 'proposal'), false) THEN
+        RAISE EXCEPTION 'app_open_moderation_case: the source does not file cases about this subject type'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF p_reasons IS NULL OR cardinality(p_reasons) NOT BETWEEN 1 AND 20 OR EXISTS (
+        SELECT 1 FROM unnest(p_reasons) AS r(reason)
+         WHERE r.reason IS NULL OR btrim(r.reason) = '' OR length(r.reason) > 200
+    ) THEN
+        RAISE EXCEPTION 'app_open_moderation_case: 1 to 20 non-blank reasons of at most 200 characters are required'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF p_classifier IS NOT NULL
+       AND (jsonb_typeof(p_classifier) <> 'object' OR octet_length(CAST(p_classifier AS text)) > 8192) THEN
+        RAISE EXCEPTION 'app_open_moderation_case: the classifier output is a JSON object of at most 8 KB (Tier-1'
+            ' only)' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    v_allowed := CASE
+        WHEN p_source = 'tier2_similarity' THEN (
+            SELECT public.app_is_staff('{admin,moderator}') FROM public.proposals p WHERE p.id = p_subject_id)
+        WHEN p_subject_type = 'proposal' THEN (
+            SELECT p.owner_id = v_user OR public.app_is_staff('{admin,moderator}')
+              FROM public.proposals p WHERE p.id = p_subject_id)
+        WHEN p_subject_type = 'problem' THEN (
+            SELECT (pr.org_id IS NULL AND pr.created_by = v_user)
+                   OR (pr.org_id IS NOT NULL AND public.app_is_member(pr.org_id, '{owner,admin,signatory,reviewer}'))
+                   OR public.app_is_staff('{admin,moderator}')
+              FROM public.problems pr WHERE pr.id = p_subject_id)
+        WHEN p_subject_type = 'org_claim' THEN (
+            SELECT c.status = 'disputed' AND (c.claimant_user_id = v_user OR public.app_is_staff('{admin}'))
+              FROM public.org_claims c WHERE c.id = p_subject_id)
+    END;
+    IF NOT coalesce(v_allowed, false) THEN
+        RAISE EXCEPTION 'app_open_moderation_case: no such subject, or the caller may not file this case about it'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    v_reasons := ARRAY(SELECT DISTINCT btrim(r.reason) FROM unnest(p_reasons) AS r(reason) ORDER BY 1);
+    -- One caller at a time per subject and source, so two concurrent calls never file two unresolved cases.
+    PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+        concat_ws(':', 'moderation_cases', p_subject_type, p_subject_id, p_source), 0));
+    SELECT m.id INTO v_case
+      FROM public.moderation_cases m
+     WHERE m.subject_type = p_subject_type AND m.subject_id = p_subject_id AND m.source = p_source
+       AND m.status IN ('open', 'held', 'escalated')
+     ORDER BY m.created_at, m.id
+     LIMIT 1
+       FOR UPDATE;
+    IF FOUND THEN
+        UPDATE public.moderation_cases m
+           SET reasons = (m.reasons || ARRAY(SELECT x FROM unnest(v_reasons) AS x WHERE x <> ALL (m.reasons)))[1:50],
+               updated_at = now()
+         WHERE m.id = v_case;
+        RETURN v_case;
+    END IF;
+    v_case := public.uuid7();
+    INSERT INTO public.moderation_cases (id, subject_type, subject_id, reasons, source, classifier)
+    VALUES (v_case, p_subject_type, p_subject_id, v_reasons, p_source, p_classifier);
+    RETURN v_case;
 END;
 $$;
 
@@ -1937,6 +2030,8 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_moderate_problem(uuid, moderation_state, problem_status)": ("bridge_app",),
     "app_hold_proposal(uuid)": ("bridge_app",),
     "app_hold_problem(uuid)": ("bridge_app",),
+    # tier2_moderation: the Tier-2 similarity job files its case without switching back to bridge_app.
+    "app_open_moderation_case(text, uuid, text[], moderation_source, jsonb)": ("bridge_app", "tier2_moderation"),
     "app_confirm_claim_otp(uuid, bytea)": ("bridge_app",),
     "app_mark_claim_dns_verified(uuid)": ("bridge_app",),
     "app_approve_claim_e1(uuid)": ("bridge_app",),

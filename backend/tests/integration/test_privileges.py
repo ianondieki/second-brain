@@ -616,6 +616,129 @@ async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(
         await expect(conn, "SELECT app_moderate_proposal(:id, 'clear')", "moderator's own", id=mine)
 
 
+# A user's report: inserted without RETURNING (the reporter cannot read the queue).
+FILE_CASE = (
+    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id, status, classifier)"
+    " VALUES (:id, 'proposal', :subject, '{abuse}', CAST(:source AS moderation_source), :reporter,"
+    " CAST(:status AS moderation_case_status), CAST(:classifier AS jsonb))"
+)
+OPEN_CASE = (
+    "SELECT app_open_moderation_case(:type, :subject, CAST(:reasons AS text[]), CAST(:source AS moderation_source),"
+    " CAST(:classifier AS jsonb))"
+)
+
+
+async def test_users_only_report_and_system_sources_file_through_the_function(owner_engine: AsyncEngine) -> None:
+    """A user files only a report, in their own name: an open case without classifier output. The system sources
+    (prescreen, regex, claim_dispute, tier2_similarity) file only through app_open_moderation_case(), which checks the
+    caller against the subject (the owner or staff for the pre-screen and regex; the claimant of a disputed claim or
+    staff admin; staff for the Tier-2 similarity job, which calls it as tier2_moderation) and keeps one unresolved
+    case per subject and source (a new call adds its reasons and returns that case)."""
+    async with as_app(owner_engine) as conn:
+        niche = uuid7()
+        await run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Mod')", id=niche, s=f"q-{niche.hex}")
+        owner = await w.add_user(conn, _email("case-owner"), "Owner")
+        stranger = await w.add_user(conn, _email("case-stranger"), "Stranger")
+        claimant = await w.add_user(conn, _email("case-claimant"), "Claimant")
+        moderator = await w.add_user(conn, _email("case-mod"), "Moderator", staff_role="moderator")
+        admin = await w.add_user(conn, _email("case-admin"), "Admin", staff_role="admin")
+        problem = await w.add_problem(conn, owner, niche)
+        proposal, _ = await w.add_proposal(conn, owner, niche, problem)
+        earlier, _ = await w.add_proposal(conn, stranger, niche, problem)
+        disputed = await _claim(
+            conn, await add_org(conn, verification="e2"), claimant, "d.example.test", "e1", bytes(32)
+        )
+        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
+        open_claim = await _claim(conn, await add_org(conn), claimant, "o.example.test", "e1", bytes(32))
+        case = {"type": "proposal", "subject": proposal, "reasons": "{spam}", "source": "regex", "classifier": None}
+
+        await act(conn, stranger)  # a report, in the reporter's own name only
+        report = uuid7()
+        report_row = {"subject": proposal, "source": "report", "reporter": stranger, "status": "open"}
+        await run(conn, FILE_CASE, id=report, **report_row, classifier=None)
+        for change in (
+            {"source": "regex", "reporter": None},  # a system source
+            {"source": "prescreen"},  # a system source, even with the reporter set
+            {"reporter": None},
+            {"reporter": owner},  # in another user's name
+            {"status": "held"},
+        ):
+            await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **(report_row | change), classifier=None)
+        await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **report_row, classifier='{"label": "spam"}')
+        await expect(conn, OPEN_CASE, "may not file", **case)  # the function checks the caller: not the owner
+        await act(conn, None)
+        await expect(
+            conn, FILE_CASE, "row-level security", id=uuid7(), **(report_row | {"reporter": None}), classifier=None
+        )
+        await expect(conn, OPEN_CASE, "may not file", **case)
+
+        await act(conn, owner)  # the pre-screen and the regex holds on the owner's content
+        flagged = case | {"source": "prescreen", "classifier": '{"label": "spam", "score": 0.97}'}
+        first = await run(conn, OPEN_CASE, **flagged)
+        assert (
+            await run(conn, OPEN_CASE, **(flagged | {"reasons": "{malicious_link,spam}", "classifier": None})) == first
+        )
+        regex = await run(conn, OPEN_CASE, **case)
+        on_problem = await run(conn, OPEN_CASE, **(case | {"type": "problem", "subject": problem}))
+        assert len({first, regex, on_problem}) == 3
+        for change, refusal in (
+            ({"source": "report"}, "a system source only"),
+            ({"source": "claim_dispute"}, "does not file cases about"),  # a proposal is no claim
+            ({"type": "message"}, "does not file cases about"),
+            ({"subject": uuid7()}, "may not file"),  # no such proposal
+            ({"source": "tier2_similarity"}, "may not file"),  # staff only
+            ({"reasons": "{}"}, "reasons"),
+            ({"reasons": '{"  "}'}, "reasons"),
+            ({"reasons": "{" + ",".join(f"r{i}" for i in range(21)) + "}"}, "reasons"),
+            ({"classifier": "[1, 2]"}, "JSON object"),
+            ({"classifier": '{"note": "' + "x" * 8200 + '"}'}, "JSON object"),
+        ):
+            await expect(conn, OPEN_CASE, refusal, **(case | change))
+
+        await act(conn, claimant)  # a claim dispute: the claimant of the disputed claim, or staff admin
+        dispute = {"type": "org_claim", "subject": disputed, "reasons": "{competing_claim}", "source": "claim_dispute"}
+        dispute_case = await run(conn, OPEN_CASE, **dispute, classifier=None)
+        await expect(conn, OPEN_CASE, "may not file", **(dispute | {"subject": open_claim}), classifier=None)
+        await act(conn, stranger)
+        await expect(conn, OPEN_CASE, "may not file", **dispute, classifier=None)
+        await act(conn, admin)
+        assert await run(conn, OPEN_CASE, **dispute, classifier=None) == dispute_case
+
+        # The Tier-2 similarity job reads the full-text embeddings as tier2_moderation, which reads only in a staff
+        # context, and files the case without switching back. Classifier output holds ids and scores only.
+        await act(conn, moderator)
+        await conn.execute(text("SET LOCAL ROLE tier2_moderation"))
+        similarity = f'{{"similar_to": "{earlier}", "cosine": 0.93}}'
+        similar = await run(
+            conn,
+            OPEN_CASE,
+            **(case | {"source": "tier2_similarity", "reasons": "{near_copy}", "classifier": similarity}),
+        )
+
+        await act(conn, moderator)  # the queue: staff read it
+        rows = await conn.execute(
+            text(
+                "SELECT id, subject_type, source::text AS source, status::text AS status, reasons, reporter_id,"
+                " classifier FROM moderation_cases WHERE subject_id = ANY (:ids)"
+            ),
+            {"ids": [proposal, problem, disputed]},
+        )
+        spam, near = {"label": "spam", "score": 0.97}, {"similar_to": str(earlier), "cosine": 0.93}
+        assert {r.id: (r.subject_type, r.source, r.status, r.reasons, r.reporter_id, r.classifier) for r in rows} == {
+            report: ("proposal", "report", "open", ["abuse"], stranger, None),
+            first: ("proposal", "prescreen", "open", ["spam", "malicious_link"], None, spam),  # reasons added
+            regex: ("proposal", "regex", "open", ["spam"], None, None),
+            on_problem: ("problem", "regex", "open", ["spam"], None, None),
+            dispute_case: ("org_claim", "claim_dispute", "open", ["competing_claim"], None, None),
+            similar: ("proposal", "tier2_similarity", "open", ["near_copy"], None, near),
+        }
+        # Once decided, the next hit files a new case.
+        decide = "UPDATE moderation_cases SET status = 'rejected', decided_by = :u, decided_at = now() WHERE id = :id"
+        await run(conn, decide, u=moderator, id=first)
+        await act(conn, owner)
+        assert await run(conn, OPEN_CASE, **flagged) not in (first, None)
+
+
 # What the app's DNS-check code calls once it has resolved the claim's TXT record (the lookup itself is app-side).
 MARK_DNS = "SELECT app_mark_claim_dns_verified(:id)"
 

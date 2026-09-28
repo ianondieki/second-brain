@@ -268,6 +268,10 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_moderate_problem(uuid, moderation_state, problem_status)": (True, {"bridge_app"}),
     "app_hold_proposal(uuid)": (True, {"bridge_app"}),
     "app_hold_problem(uuid)": (True, {"bridge_app"}),
+    "app_open_moderation_case(text, uuid, text[], moderation_source, jsonb)": (
+        True,
+        {"bridge_app", "tier2_moderation"},  # tier2_moderation: the Tier-2 similarity job
+    ),
     "app_confirm_claim_otp(uuid, bytea)": (True, {"bridge_app"}),
     "app_mark_claim_dns_verified(uuid)": (True, {"bridge_app"}),
     "app_approve_claim_e1(uuid)": (True, {"bridge_app"}),
