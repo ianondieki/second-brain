@@ -30,3 +30,18 @@ Fix round 1 (reviewer and security-reviewer CHANGES_REQUIRED), orchestrator deci
   other sessions; OAuth start and callback are throttled to 10 a minute per client IP each; the callback spends its
   `state` server-side on first use (the `login_attempts` ledger, no new table) and releases its database connection
   before the provider call; uvicorn's access log drops the query string on `/api/auth/oauth/*`.
+
+Round-2 MINOR follow-ups (branch `feat/REQ-AUTH-02-followups`):
+
+- The callback throttle is charged only once the `state` matched the flow cookie and a code is present, just before
+  the state is spent and the provider called. No separate limit guards the earlier refusals: they touch no database
+  and never reach the provider, and a 256-bit state sealed in the cookie is nothing to guess.
+- After the provider call the callback forgets every row read before it and looks the session up again
+  (`identities.reload_session`): a link whose session ended, or whose account was suspended, meanwhile gets
+  `oauth_session`; a sign-in reads the account afresh.
+- The state spend window (2 x `FLOW_TTL`) is pinned by two tests.
+- `require_reauth` keys its ledger rows by the client IP: 5 attempts a minute per account from any IP, 100 per client
+  IP for any account (the IP key was a constant, so that limit was platform-wide).
+- `THREAT_MODEL.md` records the 12 h residual for password-less TOTP accounts (link and unlink need only a second
+  factor within the step-up window) and the provider-call race.
+- The `TRUSTED_PROXIES` start-up warning is left for Phase 8: the right check depends on the deployed proxy topology.
