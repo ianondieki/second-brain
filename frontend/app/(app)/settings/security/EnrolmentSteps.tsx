@@ -6,6 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "
 import { encode } from "uqr";
 
 import { QrCode } from "@/components/QrCode";
+import { Alert } from "@/components/ui/Alert";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -22,6 +23,18 @@ import { Steps } from "./Steps";
 // this is in the page's first download (docs/spec/07 item 5: 150 KB, i.e. 150,000 bytes, of gzipped JS per route).
 
 type Notice = "keyCopied" | "codesCopied" | "copyFailed" | null;
+
+/** How long "Cancel setup" waits for the server to say whether two-step sign-in is on before saying it cannot tell. */
+const STATUS_CHECK_MS = 10_000;
+
+/**
+ * Whether two-step sign-in is on at the server (GET /api/auth/me), or null when that cannot be told: offline, an
+ * error, the session ended, or no answer in time.
+ */
+async function enrolledOnServer(): Promise<boolean | null> {
+  const outcome = await settle(api.GET("/api/auth/me", { signal: AbortSignal.timeout(STATUS_CHECK_MS) }));
+  return outcome.ok ? outcome.data.mfa.enrolled : null;
+}
 
 /** "ABCDEFGHIJKL" -> ["ABCD", "EFGH", "IJKL"]: easier to type into an authenticator app by hand. */
 function keyGroups(secret: string) {
@@ -49,14 +62,26 @@ export interface EnrolmentStepsProps {
   secret: string;
   otpauthUri: string;
   homeHref: string;
-  /** The server lost the pending enrolment (no_pending_enrolment): go back to the start. */
+  /** The name the authenticator app lists the entry under (the setup key's issuer, else the product name). */
+  entryName: string;
+  /** The server lost the pending enrolment (no_pending_enrolment) and two-step sign-in is off: back to the start. */
   onRestart: (error: ErrorKey) => void;
-  /** "Cancel setup" before the code is confirmed: go back to the start. */
+  /** "Cancel setup", with two-step sign-in known to be off: back to the start. */
   onCancel: () => void;
+  /** Two-step sign-in is on at the server, but the answer with the recovery codes never arrived. */
+  onEnrolled: () => void;
 }
 
 /** Steps 1-3 after enrolment starts: QR and key, confirm a code, then the ten recovery codes shown once. */
-export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCancel }: EnrolmentStepsProps) {
+export function EnrolmentSteps({
+  secret,
+  otpauthUri,
+  homeHref,
+  entryName,
+  onRestart,
+  onCancel,
+  onEnrolled,
+}: EnrolmentStepsProps) {
   const t = useTranslations("security");
   const tv = useTranslations("validation");
   const te = useTranslations("errors");
@@ -71,6 +96,14 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCanc
   const [notice, setNotice] = useState<Notice>(null);
   const [error, setError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
+  const [statusUnknown, setStatusUnknown] = useState(false);
+  // Set once a confirmation fails other than with a wrong code. Past the code check the server commits in one go
+  // (two-step sign-in on, recovery codes made, the "turned on" email queued), and a lost answer (offline, a reset
+  // connection), a 5xx or a proxy timeout can come after that commit. From then on, the page asks the server before
+  // it says setup was cancelled: "delete that entry" to someone whose two-step sign-in is on, with recovery codes
+  // they never saw, locks them out at the next sign-in. It stays set: a later wrong-code answer does not prove the
+  // earlier try failed.
+  const maybeOn = useRef(false);
 
   const current = codes ? 3 : codeFocused ? 2 : 1;
   // Steps 1 and 2 count as done only once the code is confirmed, not because the code field has focus.
@@ -100,24 +133,53 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCanc
     }
     setBusy(true);
     setError(null);
+    setStatusUnknown(false);
     const outcome = await settle(api.POST("/api/auth/totp/confirm", { body: { code } }));
-    setBusy(false);
     if (outcome.ok) {
+      setBusy(false);
       setNotice(null);
       setCodes(outcome.data.recovery_codes);
       return;
     }
     if (outcome.key === "invalid_code") {
+      setBusy(false);
       setCode("");
       setCodeError(te("invalid_code"));
       document.getElementById("totp-code")?.focus();
       return;
     }
+    maybeOn.current = true;
     if (outcome.key === "no_pending_enrolment") {
-      onRestart(outcome.key);
+      // No setup is waiting: it was replaced, or an earlier try whose answer was lost turned two-step sign-in on.
+      await askServer(() => onRestart("no_pending_enrolment"));
       return;
     }
+    setBusy(false);
     setError(outcome.key);
+  }
+
+  /**
+   * Asks the server whether two-step sign-in is on (busy meanwhile, so neither Confirm nor Cancel acts): on goes to
+   * the "on" screen, off goes on with `whenOff`, and no answer keeps these steps with a hint to reload.
+   */
+  async function askServer(whenOff: () => void) {
+    const enrolled = await enrolledOnServer();
+    setBusy(false);
+    if (enrolled === true) onEnrolled();
+    else if (enrolled === false) whenOff();
+    else setStatusUnknown(true);
+  }
+
+  async function cancel() {
+    if (busy) return;
+    if (!maybeOn.current) {
+      onCancel(); // only wrong codes so far, or no try: nothing was turned on
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setStatusUnknown(false);
+    await askServer(onCancel);
   }
 
   const noticeLine = (
@@ -215,6 +277,7 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCanc
 
   return (
     <div className="flex flex-col gap-6">
+      {statusUnknown ? <Alert>{t("statusUnknown", { product: entryName })}</Alert> : null}
       <ErrorNotice error={error} />
       <Steps
         // The recovery codes are a new stage, not a moved one: a new list replaces the setup list, focus goes to its
@@ -233,10 +296,10 @@ export function EnrolmentSteps({ secret, otpauthUri, homeHref, onRestart, onCanc
         ]}
       />
       {codes ? null : (
-        // Once the code is confirmed, two-step sign-in is on: nothing is left to cancel. While a code is being
-        // checked, cancelling could hide a success, so the button waits (busy ignores presses).
+        // Once the code is confirmed, two-step sign-in is on: nothing is left to cancel. While a code or the status is
+        // being checked, cancelling could hide a success, so the button waits (busy ignores presses).
         <div>
-          <Button variant="link" busy={busy} onClick={onCancel}>
+          <Button variant="link" busy={busy} onClick={cancel}>
             {t("cancelSetup")}
           </Button>
         </div>
