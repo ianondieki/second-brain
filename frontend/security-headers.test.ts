@@ -19,8 +19,13 @@ function headersFor(path: string, caseSensitive: boolean = CASE_SENSITIVE_ROUTES
   return sent;
 }
 
-// Proxied /api responses are FastAPI's own: they carry no Next.js headers, and the API's security headers are
-// asserted by the backend tests (backend/tests/unit/test_app.py).
+// Not listed: /api/... . The rules below match it, but Next.js 16.3.6 sends none of them on the /api rewrite: for a
+// rewrite to another origin, resolveRoutes returns `resHeaders: null` (next/dist/server/lib/router-utils/
+// resolve-routes.js, "handle rewrite"), so router-server.js has no headers() values to set before proxyRequest. The
+// answer carries FastAPI's headers only (backend main.py SECURITY_HEADERS: nosniff, X-Frame-Options, Referrer-Policy,
+// `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Cache-Control: no-store`), without
+// Permissions-Policy or the report-only CSP. e2e/auth.spec.ts checks that through the web origin, so a Next.js
+// upgrade that changes it fails there.
 const PAGES = [
   "/",
   "/signup",

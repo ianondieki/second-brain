@@ -113,6 +113,23 @@ test("a page at a near miss of the build-asset path still carries the page heade
   expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
 });
 
+test("API answers through the web origin carry the API's security headers, not the page headers", async ({
+  request,
+}) => {
+  // Next.js sets no headers() values on a rewrite to another origin (see security-headers.test.ts): the /api answer
+  // is FastAPI's, with its own headers (backend main.py SECURITY_HEADERS).
+  const response = await request.get("/api/auth/me"); // signed out: 401, still through the security middleware
+  expect(response.status()).toBe(401);
+  const headers = response.headers();
+  expect(headers["content-security-policy"]).toBe("default-src 'none'; frame-ancestors 'none'");
+  expect(headers["x-frame-options"]).toBe("DENY");
+  expect(headers["x-content-type-options"]).toBe("nosniff");
+  expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(headers["cache-control"]).toBe("no-store");
+  expect(headers["permissions-policy"]).toBeUndefined();
+  expect(headers["content-security-policy-report-only"]).toBeUndefined();
+});
+
 test("before JavaScript runs, submitting the login form never puts credentials in the URL", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
