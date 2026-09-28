@@ -301,6 +301,24 @@ async def test_a_delisted_seed_org_is_not_refreshed_when_the_seed_runs_again(
             await transaction.rollback()
 
 
+async def test_a_re_seed_drops_a_niche_the_file_no_longer_lists(owner_engine: AsyncEngine, seeded: Seeded) -> None:
+    data = copy.deepcopy(load_directory())
+    row = next(r for r in data["orgs"] if r["slug"] == "poa-internet-kenya")
+    row["niches"] = ["higher-education"]
+    query = text(
+        "SELECT array_agg(n.slug ORDER BY n.slug) FROM org_niches x JOIN niches n ON n.id = x.niche_id"
+        " WHERE x.org_id = (SELECT id FROM organizations WHERE slug = 'poa-internet-kenya')"
+    )
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            assert (await conn.execute(query)).scalar_one() == ["networks-telecommunications"]
+            await seed_directory(conn, get_settings(), data)
+            assert (await conn.execute(query)).scalar_one() == ["higher-education"]
+        finally:
+            await transaction.rollback()
+
+
 def _seed_command(database_url: URL, app_env: str) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
