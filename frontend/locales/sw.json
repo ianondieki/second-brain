@@ -167,7 +167,7 @@
     "done": "Nimehifadhi misimbo yangu",
     "on": "Kuingia kwa hatua mbili kumewashwa.",
     "off": "Kuingia kwa hatua mbili kumezimwa.",
-    "cancelled": "Uwekaji umeghairiwa. Ikiwa uliongeza Bridge kwenye programu yako ya uthibitishaji, futa ingizo hilo.",
+    "cancelled": "Uwekaji umeghairiwa. Ikiwa uliongeza {product} kwenye programu yako ya uthibitishaji, futa ingizo hilo.",
     "mandatory": "Jukumu lako linahitaji kuingia kwa hatua mbili, kwa hivyo kitabaki kimewashwa.",
     "turnOff": "Zima kuingia kwa hatua mbili",
     "turningOff": "Inazima…",

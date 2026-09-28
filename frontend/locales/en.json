@@ -167,7 +167,7 @@
     "done": "I have saved my codes",
     "on": "Two-step sign-in is on.",
     "off": "Two-step sign-in is off.",
-    "cancelled": "Setup cancelled. If you added Bridge to your authenticator app, delete that entry.",
+    "cancelled": "Setup cancelled. If you added {product} to your authenticator app, delete that entry.",
     "mandatory": "Your role requires two-step sign-in, so it stays on.",
     "turnOff": "Turn off two-step sign-in",
     "turningOff": "Turning off…",

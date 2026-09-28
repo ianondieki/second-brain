@@ -20,8 +20,23 @@ import { usePasswordState } from "./PasswordState";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
-/** An info line at the start: two-step sign-in was just turned off, or its setup was cancelled. */
-type Notice = "off" | "cancelled" | null;
+/**
+ * An info line at the start: two-step sign-in was just turned off, or its setup was cancelled (with the name the
+ * authenticator app shows for the entry to delete).
+ */
+type Notice = { key: "off" } | { key: "cancelled"; issuer: string | null } | null;
+
+/**
+ * The issuer an authenticator app lists the account under: "Bridge" in otpauth://totp/Bridge:a%40b.c?issuer=Bridge.
+ * The API takes it from its product name setting, so a rename reaches this line without a copy change.
+ */
+export function issuerOf(otpauthUri: string): string | null {
+  try {
+    return new URL(otpauthUri).searchParams.get("issuer")?.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 export interface SecuritySettingsProps {
   enrolled: boolean;
@@ -33,9 +48,11 @@ export interface SecuritySettingsProps {
    * "Email me a sign-in link" when an account without a password must sign in again first.
    */
   email: string;
+  /** The product's name (the `app.name` brand token), for the cancelled notice if the setup key names no issuer. */
+  productName: string;
 }
 
-export function SecuritySettings({ enrolled, required, homeHref, email }: SecuritySettingsProps) {
+export function SecuritySettings({ enrolled, required, homeHref, email, productName }: SecuritySettingsProps) {
   const t = useTranslations("security");
   const te = useTranslations("errors");
 
@@ -104,7 +121,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setBusy(false);
     if (outcome.ok) {
       setStepUp(false);
-      setNotice("off");
+      setNotice({ key: "off" });
       show({ name: "intro" });
       return;
     }
@@ -152,7 +169,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
             otpauthUri={phase.otpauthUri}
             homeHref={homeHref}
             onRestart={(key) => backToStart(key, null)}
-            onCancel={() => backToStart(null, "cancelled")}
+            onCancel={() => backToStart(null, { key: "cancelled", issuer: issuerOf(phase.otpauthUri) })}
           />
         </Suspense>
       </div>
@@ -161,7 +178,11 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
 
   return (
     <div className="mt-8 flex flex-col gap-6">
-      {notice ? <Alert tone="info">{t(notice)}</Alert> : null}
+      {notice ? (
+        <Alert tone="info">
+          {notice.key === "off" ? t("off") : t("cancelled", { product: notice.issuer ?? productName })}
+        </Alert>
+      ) : null}
       {errorBlock}
       <Steps
         label={t("stepsLabel")}

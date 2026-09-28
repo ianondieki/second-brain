@@ -6,7 +6,7 @@ import { renderWithIntl } from "@/test/intl";
 
 import { PasswordSettings } from "./PasswordSettings";
 import { PasswordStateProvider } from "./PasswordState";
-import { SecuritySettings } from "./SecuritySettings";
+import { issuerOf, SecuritySettings } from "./SecuritySettings";
 import { StepUpForm } from "./StepUpForm";
 
 const mocks = vi.hoisted(() => ({ post: vi.fn(), push: vi.fn() }));
@@ -46,7 +46,9 @@ function usernameFields(passwordField: HTMLElement) {
 
 const ENROL_FIELD = "Confirm with your current password";
 const CANCELLED = "Setup cancelled. If you added Bridge to your authenticator app, delete that entry.";
-const twoStep = <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" />;
+const twoStep = (
+  <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" productName="Bridge" />
+);
 
 beforeEach(() => {
   mocks.post.mockReset();
@@ -190,6 +192,29 @@ describe("the Password section during two-step setup", () => {
     expect(screen.queryByText(CANCELLED)).toBeNull();
   });
 
+  it("names the entry to delete as the authenticator app lists it: the setup key's issuer", async () => {
+    // After a rename (G5), the API's product name reaches the setup key before any copy changes.
+    const renamed = { ...ENROLMENT, otpauth_uri: ENROLMENT.otpauth_uri.replaceAll("Bridge", "Kiungo") };
+    answerWith({ "/api/auth/totp/enrol": ok(renamed) });
+    page(true, twoStep);
+    await startSetup();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    expect(screen.getByRole("status").textContent).toBe(
+      "Setup cancelled. If you added Kiungo to your authenticator app, delete that entry.",
+    );
+  });
+
+  it("falls back to the product name when the setup key names no issuer", async () => {
+    const unnamed = { ...ENROLMENT, otpauth_uri: "otpauth://totp/a%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DP" };
+    answerWith({ "/api/auth/totp/enrol": ok(unnamed) });
+    page(true, <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" productName="Daraja" />);
+    await startSetup();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    expect(screen.getByRole("status").textContent).toBe(
+      "Setup cancelled. If you added Daraja to your authenticator app, delete that entry.",
+    );
+  });
+
   it("puts focus on the start button after cancelling when the account has no password", async () => {
     answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
     page(false, twoStep);
@@ -271,6 +296,19 @@ describe("the Password section during two-step setup", () => {
     fireEvent.click(cancel);
     expect(screen.getByTestId("totp-key")).toBeTruthy();
     expect(passwordSection()).toBeNull();
+  });
+});
+
+describe("issuerOf", () => {
+  it("reads the issuer an authenticator app shows, decoded", () => {
+    expect(issuerOf(ENROLMENT.otpauth_uri)).toBe("Bridge");
+    expect(issuerOf("otpauth://totp/Bridge%20Staging:a%40b.c?secret=K&issuer=Bridge%20Staging")).toBe("Bridge Staging");
+  });
+
+  it("is null when there is no issuer or the key cannot be read", () => {
+    expect(issuerOf("otpauth://totp/a%40b.c?secret=K")).toBeNull();
+    expect(issuerOf("otpauth://totp/a%40b.c?secret=K&issuer=%20")).toBeNull();
+    expect(issuerOf("not a uri")).toBeNull();
   });
 });
 
