@@ -245,12 +245,19 @@ APP_GRANTS: dict[str, str] = {
     "signal_events": "INSERT",  # read only by aggregate_worker
     "moderation_cases": "SELECT, INSERT, UPDATE (status, reasons, assigned_to, decided_by, decided_at, updated_at)",
     # The OTP columns change only through app_reissue_claim_otp() and app_confirm_claim_otp() (attempts never reset).
+    # otp_hash is written (INSERT) but never readable: codes are compared in SQL, so a read path (a query bug, an ORM
+    # load) can never hand out a hash of a 6-digit code to brute-force offline.
     "org_claims": (
-        "SELECT, INSERT, UPDATE (dns_token, dns_verified_at, registration_no, cr12_date, kra_pin, sector_register,"
+        "SELECT (id, org_id, claimant_user_id, domain, email_address, level, status, otp_expires_at, otp_attempts,"
+        " otp_reissues, otp_verified_at, dns_token, dns_verified_at, registration_no, cr12_date, kra_pin,"
+        " sector_register, public_entity_requested, document_keys, reviewed_by, decided_at, decision_reason,"
+        " updated_at, created_at),"
+        " INSERT, UPDATE (dns_token, dns_verified_at, registration_no, cr12_date, kra_pin, sector_register,"
         " public_entity_requested, document_keys, status, updated_at)"
     ),
     "directory_invitations": "SELECT, INSERT, UPDATE (status, reason, approved_by, sent_at, updated_at)",
-    "phone_verifications": "SELECT, INSERT",  # confirmed only through app_confirm_phone_otp()
+    # Confirmed only through app_confirm_phone_otp(); otp_hash is written but never readable (as for org_claims).
+    "phone_verifications": ("SELECT (id, user_id, phone_e164, attempts, expires_at, verified_at, created_at), INSERT"),
     "kyc_reviews": "SELECT, INSERT",  # decided only through app_decide_kyc()
     "llm_calls": "SELECT, INSERT",
 }

@@ -1369,6 +1369,82 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             await expect_error(conn, sql, "permission denied")
 
 
+# Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.
+UNREADABLE_COLUMNS: dict[str, str] = {"org_claims": "otp_hash", "phone_verifications": "otp_hash"}
+
+
+@pytest.mark.parametrize(("table", "column"), sorted(UNREADABLE_COLUMNS.items()))
+async def test_bridge_app_reads_every_column_but_the_unreadable_one(
+    owner_engine: AsyncEngine, table: str, column: str
+) -> None:
+    held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), 'SELECT')"
+    assert await scalar(owner_engine, held, t=f"public.{table}", c=column) is False
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'SELECT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
+    readable = await rows(
+        owner_engine,
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, 'SELECT')",
+        columns=[c.name for c in TABLES[table].columns],
+        t=f"public.{table}",
+    )
+    assert {row.name for row in readable} == {c.name for c in TABLES[table].columns} - {column}
+
+
+async def test_otp_digests_are_written_but_never_read_back(owner_engine: AsyncEngine) -> None:
+    """The claimant and the phone owner write their code's digest and read their rows, through SQL and the ORM, but
+    no statement of bridge_app returns the digest (offline brute force of a 6-digit code needs it)."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.directory.models import OrgClaim
+    from bridge.profiles.models import PhoneVerification
+
+    async with rolled_back(owner_engine) as conn:
+        user, org, claim, code = uuid7(), uuid7(), uuid7(), uuid7()
+        await add_user(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source, verification) VALUES (:id, 'company',"
+                " 'OTP Ltd', :slug, 'seed', 'unclaimed')"
+            ),
+            {"id": org, "slug": f"otp-{org.hex}"},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await act_as(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, otp_hash,"
+                " otp_expires_at) VALUES (:id, :org, :u, 'otp.example.test', 'info@otp.example.test', 'e1', 'otp_sent',"
+                " :h, now() + interval '10 minutes')"
+            ),
+            {"id": claim, "org": org, "u": user, "h": ZERO_HASH},
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash) VALUES (:id, :u, '+254712345678',"
+                " :h)"
+            ),
+            {"id": code, "u": user, "h": ZERO_HASH},
+        )
+        for sql in (
+            "SELECT otp_hash FROM org_claims",
+            "SELECT * FROM org_claims",
+            "SELECT otp_hash FROM phone_verifications",
+            "SELECT * FROM phone_verifications",
+            "SELECT id FROM org_claims WHERE otp_hash IS NOT NULL",
+        ):
+            await expect_error(conn, sql, "permission denied")
+        session = AsyncSession(bind=conn)
+        loaded_claim = await session.get(OrgClaim, claim)
+        loaded_code = await session.get(PhoneVerification, code)
+        assert loaded_claim is not None
+        assert loaded_code is not None
+        assert (loaded_claim.otp_attempts, loaded_code.attempts) == (0, 0)
+        with pytest.raises(sa.exc.InvalidRequestError, match="raiseload"):
+            _ = loaded_claim.otp_hash
+        await session.close()
+
+
 async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID, UUID]:
     """As the owner: (owner, niche, proposal, registered version) of a fresh developer."""
     niche = uuid7()
