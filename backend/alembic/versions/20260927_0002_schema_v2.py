@@ -1234,6 +1234,10 @@ $$;
 -- claimant an owner and admin. Every approval needs the claimed domain proven: the email code (otp_verified_at) and
 -- the DNS TXT record (dns_verified_at), or, for E2 only, a claimant who is an active owner, admin or signatory of an
 -- organisation already E1 on that same domain. Staff never decide their own claim.
+-- Approving a disputed claim upholds the dispute (docs/spec/06 6.2: competing claims go to dispute review, never an
+-- automatic transfer) and transfers the organisation in the same transaction: every earlier approved claim of another
+-- claimant becomes rejected, its decision_reason naming this claim, and those claimants' memberships are removed.
+-- Other members stay (staff correct them with app_staff_remove_membership). The caller audits every change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1307,6 +1311,23 @@ BEGIN
              WHERE org_id = v_org.id AND status IN ('held_unclaimed', 'held_pending_verification')
                AND closed_at IS NULL;
         END IF;
+        IF v_claim.status = 'disputed' THEN
+            WITH superseded AS (
+                UPDATE public.org_claims c
+                   SET status = 'rejected',
+                       reviewed_by = v_staff,
+                       decided_at = now(),
+                       decision_reason = format('superseded by claim %s (dispute upheld)', p_claim),
+                       updated_at = now()
+                 WHERE c.org_id = v_org.id AND c.id <> p_claim AND c.status = 'approved'
+                   AND c.claimant_user_id <> v_claim.claimant_user_id
+                RETURNING c.claimant_user_id
+            )
+            UPDATE public.memberships m
+               SET status = 'removed', updated_at = now()
+              FROM superseded s
+             WHERE m.org_id = v_org.id AND m.user_id = s.claimant_user_id AND m.status = 'active';
+        END IF;
         INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
         VALUES (public.uuid7(), v_org.id, v_claim.claimant_user_id, '{owner,admin}', 'active')
         ON CONFLICT (org_id, user_id) DO UPDATE
@@ -1321,6 +1342,34 @@ BEGIN
            decision_reason = p_reason,
            updated_at = now()
      WHERE id = p_claim;
+END;
+$$;
+
+-- Staff admin corrects an organisation's roster (after an upheld dispute, or a member the organisation cannot remove
+-- itself): the membership becomes removed, the row stays (roster history). A reason is required for the caller's audit
+-- event. Returns whether this call removed it.
+CREATE FUNCTION app_staff_remove_membership(p_membership uuid, p_reason text) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_status public.membership_status;
+BEGIN
+    IF NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_staff_remove_membership: staff admin only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF coalesce(btrim(p_reason), '') = '' THEN
+        RAISE EXCEPTION 'app_staff_remove_membership: a reason is required' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT status INTO v_status FROM public.memberships WHERE id = p_membership FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'app_staff_remove_membership: no such membership' USING ERRCODE = 'no_data_found';
+    END IF;
+    IF v_status = 'removed' THEN
+        RETURN false;
+    END IF;
+    UPDATE public.memberships SET status = 'removed', updated_at = now() WHERE id = p_membership;
+    RETURN true;
 END;
 $$;
 
@@ -1821,6 +1870,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_confirm_claim_otp(uuid, bytea)": ("bridge_app",),
     "app_approve_claim_e1(uuid)": ("bridge_app",),
     "app_decide_claim(uuid, boolean, text)": ("bridge_app",),
+    "app_staff_remove_membership(uuid, text)": ("bridge_app",),
     "app_delist_org(uuid)": ("bridge_app",),
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),

@@ -925,6 +925,111 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=e1) == "e2"
 
 
+async def _prove_domain(conn: AsyncConnection, claim: UUID, otp_hash: bytes) -> None:
+    """As the claimant: the claim's email code and DNS TXT record verified."""
+    assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=otp_hash) is True
+    await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+
+
+async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str) -> UUID:
+    membership = uuid7()
+    await run(
+        conn,
+        "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, CAST(:roles AS org_role[]))",
+        id=membership,
+        org=org,
+        u=user,
+        roles=roles,
+    )
+    return membership
+
+
+@pytest.mark.parametrize("level", ["e1", "e2"])
+async def test_an_upheld_dispute_transfers_the_organisation(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes], level: str
+) -> None:
+    """Competing claims go to dispute review, never an automatic transfer (docs/spec/06 6.2, AC-DIR-2); staff admin
+    upholding the dispute transfers the organisation in the same statement: the earlier claimant's approved claim is
+    rejected, naming the claim that superseded it, and their membership is removed, so they can no longer remove the
+    new owner. Other members stay."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("dispute-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{first.example.test}")
+        first = await w.add_user(conn, _email("first"), "First claimant")
+        second = await w.add_user(conn, _email("second"), "Second claimant")
+        reviewer = await w.add_user(conn, _email("dispute-reviewer"), "Reviewer")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        await act(conn, first)  # E1 at once on an official domain; the owner then invites a reviewer
+        earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        await _add_membership(conn, org, reviewer, "{reviewer}")
+        await act(conn, second)  # another domain, proven, and the claim disputed
+        disputed = await _claim(conn, org, second, "second.example.test", level, right)
+        await _prove_domain(conn, disputed, right)
+        if level == "e2":
+            await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=second, t=met)
+        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'dispute upheld')", id=disputed)
+
+        await as_owner(conn)
+        claims = await conn.execute(
+            text("SELECT id, status::text AS status, decision_reason FROM org_claims WHERE org_id = :org"), {"org": org}
+        )
+        assert {row.id: (row.status, row.decision_reason) for row in claims.all()} == {
+            earlier: ("rejected", f"superseded by claim {disputed} (dispute upheld)"),
+            disputed: ("approved", "dispute upheld"),
+        }
+        members = await conn.execute(
+            text("SELECT user_id, status::text AS status FROM memberships WHERE org_id = :org"), {"org": org}
+        )
+        assert {row.user_id: row.status for row in members.all()} == {
+            first: "removed",
+            second: "active",
+            reviewer: "active",  # other members stay; staff correct them with app_staff_remove_membership()
+        }
+        verified = "SELECT verification::text, verified_domain::text FROM organizations WHERE id = :id"
+        assert tuple((await conn.execute(text(verified), {"id": org})).one()) == (level, "second.example.test")
+        await act(conn, first)
+        assert await run(conn, "SELECT app_is_member(:id)", id=org) is False
+        removal = await conn.execute(
+            text("UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"),
+            {"org": org, "u": second},
+        )
+        assert removal.rowcount == 0
+        await act(conn, second)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is True
+
+
+async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:
+    """Staff correct an organisation's roster (e.g. after an upheld dispute) through app_staff_remove_membership():
+    staff admin only, with a reason for the caller's audit event; removing is idempotent and keeps the row."""
+    remove = "SELECT app_staff_remove_membership(:id, :reason)"
+    async with as_app(owner_engine) as conn:
+        org = await add_org(conn, verification="e1")
+        admin = await w.add_user(conn, _email("roster-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("roster-mod"), "Moderator", staff_role="moderator")
+        owner = await w.add_user(conn, _email("roster-owner"), "Owner")
+        member = await w.add_user(conn, _email("roster-member"), "Member")
+        await _add_membership(conn, org, owner, "{owner,admin}")
+        membership = await _add_membership(conn, org, member, "{owner,signatory}")
+        for caller in (owner, moderator, None):  # not the organisation's owner either: its own roster rules apply
+            await act(conn, caller)
+            await expect(conn, remove, "staff admin only", id=membership, reason="dispute upheld")
+        await act(conn, admin)
+        for reason in (None, "  "):
+            await expect(conn, remove, "a reason is required", id=membership, reason=reason)
+        await expect(conn, remove, "no such membership", id=uuid7(), reason="dispute upheld")
+        assert await run(conn, remove, id=membership, reason="dispute upheld") is True
+        assert await run(conn, remove, id=membership, reason="dispute upheld") is False  # already removed
+        await act(conn, member)
+        assert await run(conn, "SELECT app_is_member(:id)", id=org) is False
+        await act(conn, owner)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner}')", id=org) is True
+
+
 async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncEngine) -> None:
     async with as_app(owner_engine) as conn:
         e0 = await add_org(conn)

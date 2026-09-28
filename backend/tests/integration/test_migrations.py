@@ -271,6 +271,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_confirm_claim_otp(uuid, bytea)": (True, {"bridge_app"}),
     "app_approve_claim_e1(uuid)": (True, {"bridge_app"}),
     "app_decide_claim(uuid, boolean, text)": (True, {"bridge_app"}),
+    "app_staff_remove_membership(uuid, text)": (True, {"bridge_app"}),
     "app_delist_org(uuid)": (True, {"bridge_app"}),
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
