@@ -101,6 +101,25 @@ def test_providers_are_enabled_only_when_both_values_are_set() -> None:
 _ALL_OAUTH_FIELDS = ("github_client_id", "github_client_secret", "google_client_id", "google_client_secret")
 
 
+@pytest.mark.parametrize("secret", [None, SecretStr(""), SecretStr("   ")])
+@pytest.mark.parametrize("name", ["github", "google"])
+def test_a_client_id_without_its_secret_is_not_configured(name: str, secret: SecretStr | None) -> None:
+    """Settings refuse half a configuration at start-up; ``configured`` fails closed on its own too (settings copied
+    without validation), so a missing or blank secret never yields a client."""
+    settings = SETTINGS.model_copy(update={f"{name}_client_secret": secret})
+    assert oauth.configured(settings, name) is None
+    assert AuthProvider(name) not in oauth.enabled(settings)
+    neither = settings.model_copy(update={"github_client_secret": secret, "google_client_secret": secret})
+    assert oauth.enabled(neither) == []
+
+
+@pytest.mark.parametrize("client_id", [None, SecretStr(""), SecretStr("   ")])
+def test_a_secret_without_its_client_id_is_not_configured(client_id: SecretStr | None) -> None:
+    settings = SETTINGS.model_copy(update={"github_client_id": client_id})
+    assert oauth.configured(settings, "github") is None
+    assert oauth.enabled(settings) == [AuthProvider.GOOGLE]
+
+
 @pytest.mark.parametrize("name", ["gitlab", "GitHub", "", "github/../google"])
 def test_unknown_providers_are_not_configured(name: str) -> None:
     assert oauth.configured(SETTINGS, name) is None
