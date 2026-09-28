@@ -19,7 +19,7 @@ from asn1crypto import cms, tsp
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from cryptography.x509.oid import ExtendedKeyUsageOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from pydantic import SecretStr
 
 from bridge.config import ConfigurationError, Settings
@@ -340,19 +340,23 @@ def _other_cert_hash(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo]
     return change
 
 
-def _other_serial(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], None]:
+def _issuer_serial(
+    local_tsa: LocalTsa, *, serial_offset: int = 0, other_issuer: bool = False
+) -> Callable[[Any, Any, cms.SignerInfo], None]:
+    """An ESSCertIDv2 with the right certificate hash and an issuerSerial (openssl leaves it out)."""
     cert = x509.load_pem_x509_certificate(local_tsa.tsa_pem.read_bytes())
     der = cert.public_bytes(serialization.Encoding.DER)
     from asn1crypto import x509 as asn1_x509
 
-    issuer = asn1_x509.Name.load(cert.issuer.public_bytes())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Another CA")]) if other_issuer else cert.issuer
+    issuer = asn1_x509.Name.load(name.public_bytes())
 
     def change(_r: Any, _sd: Any, signer: cms.SignerInfo) -> None:
         ess_id = {
             "cert_hash": hashlib.sha256(der).digest(),
             "issuer_serial": {
                 "issuer": [asn1_x509.GeneralName(name="directory_name", value=issuer)],
-                "serial_number": cert.serial_number + 1,
+                "serial_number": cert.serial_number + serial_offset,
             },
         }
         _signing_certificate_attr(signer)["values"] = [{"certs": [ess_id]}]
@@ -361,12 +365,46 @@ def _other_serial(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], N
     return change
 
 
+def _other_serial(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], None]:
+    return _issuer_serial(local_tsa, serial_offset=1)
+
+
+def _other_issuer(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], None]:
+    return _issuer_serial(local_tsa, other_issuer=True)
+
+
+def _two_ess_values(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], None]:
+    def change(_r: Any, _sd: Any, signer: cms.SignerInfo) -> None:
+        attr = _signing_certificate_attr(signer)
+        value = attr["values"][0].native
+        attr["values"] = [value, value]
+        resign(local_tsa, signer)
+
+    return change
+
+
+def _unsupported_ess_hash(local_tsa: LocalTsa) -> Callable[[Any, Any, cms.SignerInfo], None]:
+    def change(_r: Any, _sd: Any, signer: cms.SignerInfo) -> None:
+        ess_id = {"hash_algorithm": {"algorithm": "md5"}, "cert_hash": bytes(16)}
+        _signing_certificate_attr(signer)["values"] = [{"certs": [ess_id]}]
+        resign(local_tsa, signer)
+
+    return change
+
+
+def test_an_ess_issuer_serial_naming_the_signer_is_accepted(local_tsa: LocalTsa, good_response: bytes) -> None:
+    assert parse(mutate(good_response, _issuer_serial(local_tsa)), local_tsa.trust).serial.startswith("0x")
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
         (_without_ess, "no ESS signingCertificate"),
         (_other_cert_hash, "does not name the signer certificate"),
         (_other_serial, "issuer and serial do not match"),
+        (_other_issuer, "issuer and serial do not match"),  # the right serial under another issuer's name
+        (_two_ess_values, "has one value"),
+        (_unsupported_ess_hash, "unsupported ESS certificate hash"),
     ],
 )
 def test_the_ess_signing_certificate_must_name_the_signer(

@@ -263,10 +263,14 @@ def _check_ess(signed_attrs: cms.CMSAttributes, signer_der: bytes, certificate: 
 
 
 def _names_certificate(issuer_serial: tsp.IssuerSerial, certificate: x509.Certificate) -> bool:
+    """The issuerSerial names ``certificate``: its serial, and a directoryName whose DER is the certificate's issuer.
+    ``directoryName`` is ``[4] EXPLICIT Name``: the tag is stripped (``untag``) before the bytes are compared."""
     if issuer_serial["serial_number"].native != certificate.serial_number:
         return False
     issuer = certificate.issuer.public_bytes()
-    return any(name.name == "directory_name" and name.chosen.dump() == issuer for name in issuer_serial["issuer"])
+    return any(
+        name.name == "directory_name" and name.chosen.untag().dump() == issuer for name in issuer_serial["issuer"]
+    )
 
 
 def _ca_constraints(_policy: Policy, _cert: x509.Certificate, value: x509.BasicConstraints) -> None:
