@@ -12,11 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from bridge.config import get_settings
 from bridge.llm import registry as registry_module
 from bridge.llm.adapter import ModelAdapter, ModelResponse
-from bridge.llm.budget import EntitlementsCaps
 from bridge.llm.client import LLMService
-from bridge.llm.guard import SessionConsentChecker
+from bridge.llm.deps import sql_service
 from bridge.llm.registry import Registry
-from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import TokenUsage
 
 TASK = "moderation_prescreen"
@@ -33,16 +31,11 @@ def service(
     registry: Registry | None = None,
     **overrides: Any,
 ) -> LLMService:
-    """``LLMService`` over the SQL ledger, the plan caps and the consent table, all as ``db``'s tenant."""
+    """The app's default service (``bridge.llm.deps.sql_service``: the SQL ledger, the plan caps and the consent
+    table, all as ``db``'s tenant) over a scripted adapter."""
     cfg = get_settings().model_copy(update={"llm_global_daily_cap_usd": ROOMY_GLOBAL_CAP, **overrides})
-    return LLMService(
-        adapter=adapter,
-        registry=registry or registry_module.load(cfg.llm_models_file),
-        settings=cfg,
-        ledger=SqlLedger(factory, caller=db),
-        consents=SessionConsentChecker(db),
-        caps=EntitlementsCaps(db, cfg),
-    )
+    reg = registry or registry_module.load(cfg.llm_models_file)
+    return sql_service(db, factory=factory, settings=cfg, registry=reg, adapter=adapter)
 
 
 def reply(

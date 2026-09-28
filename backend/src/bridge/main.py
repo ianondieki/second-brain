@@ -17,6 +17,7 @@ from bridge.auth import csrf
 from bridge.auth.router import router as auth_router
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
+from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
 from bridge.profiles.router import public_router as consents_router
@@ -45,6 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
+        # The LLM registry and adapter; requests get LLMService over the SQL stores (bridge.llm.deps.LLMDep).
+        app.state.llm_registry, app.state.llm_adapter = llm_runtime(settings)
         try:
             yield
         finally:
