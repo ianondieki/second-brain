@@ -26,8 +26,13 @@ def local_tsa(tmp_path_factory: pytest.TempPathFactory) -> LocalTsa:
 
 
 @pytest.fixture(scope="session")
-def wrapper() -> LocalKeyWrapper:
-    return LocalKeyWrapper(os.urandom(32))
+def kek() -> bytes:
+    return os.urandom(32)
+
+
+@pytest.fixture(scope="session")
+def wrapper(kek: bytes) -> LocalKeyWrapper:
+    return LocalKeyWrapper(kek)
 
 
 @pytest.fixture(scope="session")

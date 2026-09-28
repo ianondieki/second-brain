@@ -21,6 +21,7 @@ from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
 API_PREFIX = "/api"
@@ -88,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(orgs_router)
     app.include_router(me_router)
     app.include_router(consents_router)
+    app.include_router(provenance_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 
