@@ -125,6 +125,11 @@ def _raw(value: object) -> str:
         _raw([0, "a", str(uuid4()), "b", ["x"]]),
         _raw([0, "a", str(uuid4()), "b", 5]),
         _raw([0, "a", ["x"], "b", str(uuid4())]),
+        # the text elements are text Postgres can hold: no NUL (0x00), no lone surrogate
+        _raw([0, "a\x00", str(uuid4()), "b", str(uuid4())]),
+        _raw([0, "a", str(uuid4()), "\x00b", str(uuid4())]),
+        _raw([0, "\ud800", str(uuid4()), "b", str(uuid4())]),
+        _raw([0, "a", str(uuid4()), "b\udfff", str(uuid4())]),
     ],
 )
 def test_anything_else_is_not_a_cursor(value: str) -> None:

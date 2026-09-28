@@ -530,13 +530,26 @@ ZERO = str(UUID(int=0))
         pytest.param([True, "a", ZERO, "b", ZERO], id="boolean-rank"),
         pytest.param([0, "a", 5, "b", ZERO], id="integer-niche-id"),
         pytest.param([0, "a", ZERO, "b", ["x"]], id="list-org-id"),
+        pytest.param([0, "a\x00", ZERO, "b", ZERO], id="nul-in-label"),
+        pytest.param([0, "a", ZERO, "b\x00", ZERO], id="nul-in-name"),
+        pytest.param([0, "\ud800", ZERO, "b", ZERO], id="lone-surrogate-in-label"),
     ],
 )
 async def test_a_forged_cursor_answers_400(client: httpx.AsyncClient, value: list[object]) -> None:
-    """Well-formed JSON with the wrong types is refused before the query runs (it answered 500)."""
+    """Well-formed JSON with the wrong types, or text Postgres cannot hold, is refused before the query runs (it
+    answered 500)."""
     response = await client.get("/api/directory/orgs", params={"cursor": forged(value)})
     assert response.status_code == 400, response.text
     assert response.json()["detail"]["code"] == "invalid_cursor"
+
+
+@pytest.mark.parametrize("q", ["\x00", "Safari\x00com"])
+async def test_a_nul_in_the_name_search_answers_422(client: httpx.AsyncClient, q: str) -> None:
+    """Postgres text cannot hold NUL (0x00): the search is refused like any other malformed parameter (it answered
+    500)."""
+    response = await client.get("/api/directory/orgs", params={"q": q})
+    assert response.status_code == 422, response.text
+    assert [error["loc"] for error in response.json()["detail"]] == [["query", "q"]]
 
 
 async def test_delisted_pending_and_unknown_orgs_are_never_shown(client: httpx.AsyncClient, seeded: Seeded) -> None:

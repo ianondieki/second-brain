@@ -107,6 +107,11 @@ def encode_cursor(cursor: Cursor) -> str:
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
 
+def _postgres_text(text: str) -> bool:
+    """Postgres text holds neither NUL (0x00) nor a lone surrogate (JSON ``"\\ud800"`` decodes to one)."""
+    return not any(char == "\x00" or "\ud800" <= char <= "\udfff" for char in text)
+
+
 def decode_cursor(value: str) -> Cursor:
     """Raise ValueError for anything that is not a cursor this module wrote."""
     try:
@@ -116,6 +121,8 @@ def decode_cursor(value: str) -> Cursor:
             raise ValueError("malformed cursor")
         if not all(isinstance(item, str) for item in (label, niche_id, name, org_id)):
             raise ValueError("malformed cursor")  # UUID() raises AttributeError, not ValueError, on a non-string
+        if not (_postgres_text(label) and _postgres_text(name)):
+            raise ValueError("malformed cursor")
         return Cursor(rank, label, UUID(niche_id), name, UUID(org_id))
     except (binascii.Error, UnicodeDecodeError, TypeError, ValueError) as exc:  # JSONDecodeError is a ValueError
         raise ValueError("invalid cursor") from exc

@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api/directory", tags=["directory"], responses=ERROR_
 
 CountyCode = Annotated[str, StringConstraints(pattern=r"^KE-\d{2}$")]
 NicheSlug = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)]
+NO_NUL = r"^[^\x00]*$"  # Postgres text cannot hold NUL (0x00); a URL query cannot carry a lone surrogate
 MAX_FILTER_VALUES = 50
 
 
@@ -53,7 +54,7 @@ async def browse(
     kind: Annotated[list[OrgKind] | None, Query(description="Org type; repeat for several")] = None,
     county: Annotated[list[CountyCode] | None, Query(description="ISO 3166-2:KE county code; repeat")] = None,
     niche: Annotated[list[NicheSlug] | None, Query(description="Niche slug (a parent includes its children)")] = None,
-    q: Annotated[str | None, Query(min_length=1, max_length=100, description="Name contains")] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=NO_NUL, description="Name contains")] = None,
     cursor: Annotated[str | None, Query(max_length=2000)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> DirectoryPage:
