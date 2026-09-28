@@ -647,9 +647,69 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
         await run(conn, new_claim, id=again, org=other_org, u=claimant)
 
 
+MET_ACCEPTANCE = (
+    "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+    " SELECT :id, :org, :u, id, sha256 FROM legal_templates WHERE id = :t"
+)
+
+
+async def add_legal_template(conn: AsyncConnection, kind: str) -> UUID:
+    """As the owner: a new (so current) placeholder version of a legal template kind."""
+    template = uuid7()
+    await run(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, CAST(:kind AS legal_template_kind),"
+        " :version, :body, sha256(convert_to(:body, 'UTF8')))",
+        id=template,
+        kind=kind,
+        version=f"t-{template.hex[-12:]}",
+        body=f"[[LEGAL-PLACEHOLDER:{kind}-{template.hex}]]\n",
+    )
+    return template
+
+
+async def test_only_a_verified_e2_claimant_or_a_member_accepts_terms_for_an_organisation(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Acceptances are permanent evidence, so an outsider must never write one for an organisation. Besides its owners,
+    admins and signatories, only the claimant of their own open E2 claim with a verified email code, on an
+    organisation that is not E2 yet, may accept, and only the Master Enterprise Terms."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        unclaimed = await add_org(conn)
+        verified = await add_org(conn, verification="e2")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        tos = await add_legal_template(conn, "tos")
+        stranger = await w.add_user(conn, _email("terms-stranger"), "Stranger")
+        claimant = await w.add_user(conn, _email("terms-claimant"), "Claimant")
+        e1_claimant = await w.add_user(conn, _email("terms-e1"), "E1 claimant")
+        confirm = "SELECT app_confirm_claim_otp(:id, :h)"
+        refused = "row-level security"
+
+        await act(conn, stranger)
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=stranger, t=met)
+        await act(conn, claimant)
+        claim = await _claim(conn, unclaimed, claimant, "terms.example.test", "e2", right)
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=claimant, t=met)  # code unverified
+        assert await run(conn, confirm, id=claim, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=claimant, t=tos)  # terms only
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=unclaimed, u=claimant, t=met)
+        # A verified E1 claim is no E2 claim, and an organisation that is already E2 is disputed, never re-signed.
+        await act(conn, e1_claimant)
+        e1_claim = await _claim(conn, unclaimed, e1_claimant, "terms.example.test", "e1", right)
+        assert await run(conn, confirm, id=e1_claim, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=e1_claimant, t=met)
+        await act(conn, claimant)
+        on_e2 = await _claim(conn, verified, claimant, "verified.example.test", "e2", right)
+        assert await run(conn, confirm, id=on_e2, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=verified, u=claimant, t=met)
+
+
 async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held_tags(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
+    """E2 needs the current Master Enterprise Terms accepted by the claimant: not by another member, and not a
+    superseded version."""
     right, _ = otp
     decide = "SELECT app_decide_claim(:id, true, 'documents checked')"
     async with as_app(owner_engine) as conn:
@@ -658,25 +718,37 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         admin = await w.add_user(conn, _email("claims-admin"), "Admin", staff_role="admin")
         moderator = await w.add_user(conn, _email("claims-mod"), "Moderator", staff_role="moderator")
         claimant = await w.add_user(conn, _email("signatory"), "Signatory")
-        met, _ = await w.add_templates(conn, uuid4().hex[:8])
+        owner = await w.add_user(conn, _email("e1-owner"), "Owner")
+        await run(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
+            id=uuid7(),
+            org=org,
+            u=owner,
+        )
+        superseded = await add_legal_template(conn, "master_enterprise_terms")
         await act(conn, claimant)
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
+        assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
         await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
         await expect(conn, decide, "Master Enterprise Terms", id=claim)
-        # The claimant of an open E2 claim may accept the terms before being a member.
+        # Another member's acceptance is not the claimant's.
+        await act(conn, owner)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=owner, t=superseded)
+        await act(conn, admin)
+        await expect(conn, decide, "Master Enterprise Terms", id=claim)
+        # The claimant of an open E2 claim may accept the terms before being a member; a newer version supersedes it.
         await act(conn, claimant)
-        await run(
-            conn,
-            "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
-            " SELECT :id, :org, :u, id, sha256 FROM legal_templates WHERE id = :t",
-            id=uuid7(),
-            org=org,
-            u=claimant,
-            t=met,
-        )
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=claimant, t=superseded)
+        await as_owner(conn)
+        current = await add_legal_template(conn, "master_enterprise_terms")
+        await act(conn, admin)
+        await expect(conn, decide, "Master Enterprise Terms", id=claim)
+        await act(conn, claimant)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=claimant, t=current)
         await act(conn, admin)
         await run(conn, decide, id=claim)
         await as_owner(conn)

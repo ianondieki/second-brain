@@ -253,9 +253,11 @@ async def _sql(conn: AsyncConnection, sql: str, **params: object) -> None:
     await conn.execute(text(sql), params)
 
 
-# Each case breaks exactly one condition of app_tier2_granted(); "none" breaks nothing (the reviewer reads the row).
+# Each case breaks exactly one condition of app_tier2_granted(), except the TIER2_READABLE ones: "none" breaks nothing
+# and "met_by_the_approved_claimant" meets the terms condition the other way (the reviewer reads the row).
 TIER2_CASES = (
     "none",
+    "met_by_the_approved_claimant",
     "no_grant",
     "grant_requested",
     "grant_revoked",
@@ -266,6 +268,9 @@ TIER2_CASES = (
     "no_totp",
     "user_suspended",
     "no_master_enterprise_terms",
+    "met_by_a_non_signatory",
+    "met_by_an_unapproved_claimant",
+    "met_superseded",
     "no_nda",
     "nda_for_another_proposal",
     "engagement_withdrawn",
@@ -275,20 +280,94 @@ TIER2_CASES = (
     "proposal_held",
     "context_of_another_org",
 )
+TIER2_READABLE = frozenset({"none", "met_by_the_approved_claimant"})
+
+
+async def _add_user(conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True) -> UUID:
+    user = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Member',"
+        " CAST(:status AS user_status), :totp)",
+        id=user,
+        email=email,
+        status=status,
+        totp=datetime.now(UTC) if totp else None,
+    )
+    return user
+
+
+async def _add_member(conn: AsyncConnection, org: UUID, user: UUID, roles: str, status: str = "active") -> None:
+    await _sql(
+        conn,
+        "INSERT INTO memberships (id, org_id, user_id, roles, status) VALUES (:id, :org, :user,"
+        " CAST(:roles AS org_role[]), CAST(:status AS membership_status))",
+        id=uuid7(),
+        org=org,
+        user=user,
+        roles=roles,
+        status=status,
+    )
+
+
+async def _add_master_terms(conn: AsyncConnection, tag: str) -> UUID:
+    """A new, so current, version of the Master Enterprise Terms."""
+    template = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, 'master_enterprise_terms',"
+        " :version, :body, sha256(convert_to(:body, 'UTF8')))",
+        id=template,
+        version=f"g-{tag}-{template.hex[-6:]}",
+        body=f"[[LEGAL-PLACEHOLDER:met-{template.hex}]]\n",
+    )
+    return template
+
+
+async def _accept_master_terms(conn: AsyncConnection, org: UUID, broken: str, tag: str) -> None:
+    """As the owner: G's current Master Enterprise Terms, accepted by a signatory of G unless ``broken`` says
+    otherwise (nobody; an outsider (and the reviewer); the approved or a still-pending E2 claimant, an owner and admin
+    but no signatory; or a version superseded since)."""
+    terms = await _add_master_terms(conn, tag)
+    if broken == "no_master_enterprise_terms":
+        return
+    acceptor = await _add_user(conn, f"acceptor-{tag}@example.test")
+    if broken in ("met_by_the_approved_claimant", "met_by_an_unapproved_claimant"):
+        await _add_member(conn, org, acceptor, "{owner,admin}")  # what approval makes the claimant; no signatory
+        await _sql(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :user, :domain, :email, 'e2', CAST(:status AS claim_status))",
+            id=uuid7(),
+            org=org,
+            user=acceptor,
+            domain=f"granted-{tag}.example.test",
+            email=f"acceptor-{tag}@granted-{tag}.example.test",
+            status="approved" if broken == "met_by_the_approved_claimant" else "pending_review",
+        )
+    elif broken != "met_by_a_non_signatory":
+        await _add_member(conn, org, acceptor, "{signatory}")
+    await _sql(
+        conn,
+        "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+        " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+        id=uuid7(),
+        org=org,
+        user=acceptor,
+        template=terms,
+    )
+    if broken == "met_superseded":
+        await _add_master_terms(conn, tag)
 
 
 async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> tuple[UUID, UUID]:
     """As the owner: an E2 org G whose reviewer R may read B's published Tier 2, except for ``broken``."""
     b, tag = world.b, uuid7().hex[:12]
-    reviewer = uuid7()
-    await _sql(
+    reviewer = await _add_user(
         conn,
-        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Reviewer',"
-        " CAST(:status AS user_status), :totp)",
-        id=reviewer,
-        email=f"reviewer-{tag}@example.test",
+        f"reviewer-{tag}@example.test",
         status="suspended" if broken == "user_suspended" else "active",
-        totp=None if broken == "no_totp" else datetime.now(UTC),
+        totp=broken != "no_totp",
     )
     org = uuid7()
     await _sql(
@@ -301,25 +380,22 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
         verification="e1" if broken == "org_not_e2" else "e2",
         suspended=broken == "org_suspended",
     )
-    await _sql(
+    await _add_member(
         conn,
-        "INSERT INTO memberships (id, org_id, user_id, roles, status) VALUES (:id, :org, :user,"
-        " CAST(:roles AS org_role[]), CAST(:status AS membership_status))",
-        id=uuid7(),
-        org=org,
-        user=reviewer,
-        roles="{viewer}" if broken == "role_viewer" else "{reviewer}",
-        status="removed" if broken == "membership_removed" else "active",
+        org,
+        reviewer,
+        "{viewer}" if broken == "role_viewer" else "{reviewer}",
+        "removed" if broken == "membership_removed" else "active",
     )
-    if broken != "no_master_enterprise_terms":
+    await _accept_master_terms(conn, org, broken, tag)
+    if broken == "met_by_a_non_signatory":  # the reviewer accepts too, next to the outsider
         await _sql(
             conn,
             "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
-            " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+            " SELECT :id, :org, :user, legal_template_id, template_sha256 FROM legal_acceptances WHERE org_id = :org",
             id=uuid7(),
             org=org,
             user=reviewer,
-            template=world.met_template_id,
         )
     if broken != "no_nda":
         await _sql(
@@ -410,7 +486,7 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
         rows = await conn.execute(
             text("SELECT version_id FROM proposal_confidential WHERE owner_id = :b"), {"b": world.b.user_id}
         )
-        expected = [world.b.published_version] if broken == "none" else []
+        expected = [world.b.published_version] if broken in TIER2_READABLE else []
         assert list(rows.scalars()) == expected
 
 

@@ -257,6 +257,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "audit_block_mutation()": (False, set()),
     # revision 0002
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
+    "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
     "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),

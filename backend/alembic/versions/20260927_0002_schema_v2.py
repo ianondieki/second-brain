@@ -566,14 +566,21 @@ POLICIES: tuple[Policy, ...] = (
         " AND EXISTS (SELECT 1 FROM proposals p WHERE p.id = nda_acceptances.proposal_id)",
     ),
     Policy("legal_acceptances", "SELECT", _ORG_MEMBER),
-    # By the organisation's owner, admin or signatory, or by the claimant of an open E2 claim (docs/spec/06 6.2: the
-    # E2 review includes the e-signed Master Enterprise Terms, before the claimant is a member).
+    # By the organisation's owner, admin or signatory; or the Master Enterprise Terms by the claimant of their own open
+    # E2 claim whose email code is verified, on an organisation that is not E2 yet (docs/spec/06 6.2: the E2 review
+    # includes the e-signed terms, before the claimant is a member). Which acceptances count is decided in SQL by
+    # app_decide_claim() and app_tier2_granted(): the current version, by the approved E2 claimant or a signatory.
     Policy(
         "legal_acceptances",
         "INSERT",
         check="user_id = app_user_id() AND (app_is_member(org_id, '{owner,admin,signatory}')"
-        " OR EXISTS (SELECT 1 FROM org_claims c WHERE c.org_id = legal_acceptances.org_id"
-        f" AND c.claimant_user_id = app_user_id() AND c.level = 'e2' AND c.{_OPEN_CLAIM}))",
+        " OR (EXISTS (SELECT 1 FROM org_claims c WHERE c.org_id = legal_acceptances.org_id"
+        f" AND c.claimant_user_id = app_user_id() AND c.level = 'e2' AND c.{_OPEN_CLAIM}"
+        " AND c.otp_verified_at IS NOT NULL)"
+        " AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = legal_acceptances.org_id"
+        " AND o.verification IN ('unclaimed', 'e1'))"
+        " AND EXISTS (SELECT 1 FROM legal_templates t WHERE t.id = legal_acceptances.legal_template_id"
+        " AND t.kind = 'master_enterprise_terms')))",
     ),
     Policy("document_views", "SELECT", "owner_id = app_user_id() OR viewer_user_id = app_user_id()"),
     Policy(
@@ -687,9 +694,20 @@ AS $$
     )
 $$;
 
+-- The current version of a legal template kind: the most recently created one. Publishing a new version supersedes
+-- the old: acceptances of a superseded version no longer count (app_decide_claim, app_tier2_granted).
+CREATE FUNCTION app_current_legal_template(p_kind legal_template_kind) RETURNS uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT t.id FROM public.legal_templates t WHERE t.kind = p_kind ORDER BY t.created_at DESC, t.id DESC LIMIT 1
+$$;
+
 -- The database half of can_view_tier2 (docs/spec/06 6.1), used by the tier2_reader SELECT policy: the current user may
 -- read Tier 2 of p_version through an organisation when all of these hold. The application predicate checks the rest
--- (FEATURE_TIER2_ENABLED, step-up recency) and is the one that answers 403 with the failing condition.
+-- (FEATURE_TIER2_ENABLED, step-up recency) and is the one that answers 403 with the failing condition. The Master
+-- Enterprise Terms count only in their current version and only when accepted by the organisation's approved E2
+-- claimant or by an active signatory (never by any other member or an outsider).
 CREATE FUNCTION app_tier2_granted(p_proposal uuid, p_version uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -715,8 +733,18 @@ AS $$
            AND EXISTS (
                 SELECT 1
                   FROM public.legal_acceptances la
-                  JOIN public.legal_templates lt ON lt.id = la.legal_template_id
-                 WHERE la.org_id = g.org_id AND lt.kind = 'master_enterprise_terms')
+                 WHERE la.org_id = g.org_id
+                   AND la.legal_template_id = public.app_current_legal_template('master_enterprise_terms')
+                   AND (EXISTS (
+                            SELECT 1
+                              FROM public.org_claims c
+                             WHERE c.org_id = la.org_id AND c.claimant_user_id = la.user_id
+                               AND c.level = 'e2' AND c.status = 'approved')
+                        OR EXISTS (
+                            SELECT 1
+                              FROM public.memberships s
+                             WHERE s.org_id = la.org_id AND s.user_id = la.user_id AND s.status = 'active'
+                               AND s.roles && '{signatory}'::public.org_role[])))
            AND EXISTS (
                 SELECT 1
                   FROM public.nda_acceptances na
@@ -1103,7 +1131,7 @@ END;
 $$;
 
 -- Staff admin decision on an open claim (manual E1, E2 via ManualReviewVerifier, disputes). Approving E2 needs the
--- organisation's Master Enterprise Terms on record; it sets e2, verified_domain, e2_verified_at, the annual
+-- current Master Enterprise Terms accepted by this claimant; it sets e2, verified_domain, e2_verified_at, the annual
 -- re-verification date, public_entity as requested, and delivers the organisation's held tags. Approval makes the
 -- claimant an owner and admin. Staff never decide their own claim.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
@@ -1146,10 +1174,11 @@ BEGIN
             IF NOT EXISTS (
                 SELECT 1
                   FROM public.legal_acceptances la
-                  JOIN public.legal_templates lt ON lt.id = la.legal_template_id
-                 WHERE la.org_id = v_org.id AND lt.kind = 'master_enterprise_terms'
+                 WHERE la.org_id = v_org.id AND la.user_id = v_claim.claimant_user_id
+                   AND la.legal_template_id = public.app_current_legal_template('master_enterprise_terms')
             ) THEN
-                RAISE EXCEPTION 'app_decide_claim: E2 needs the Master Enterprise Terms accepted for the organisation'
+                RAISE EXCEPTION 'app_decide_claim: E2 needs the current Master Enterprise Terms, accepted by the'
+                    ' claimant'
                     USING ERRCODE = 'check_violation';
             END IF;
             UPDATE public.organizations
@@ -1533,6 +1562,7 @@ NO_TRUNCATE_TABLES = (*APPEND_ONLY_TABLES, "proposal_versions", "proposal_confid
 # policies call; app_org_id() and app_is_member() are only called inside definer functions for them.
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_is_staff(staff_role[])": ("bridge_app", "tier2_moderation"),
+    "app_current_legal_template(legal_template_kind)": ("bridge_app",),
     "app_tier2_granted(uuid, uuid)": ("bridge_app", "tier2_reader"),
     "app_held_tag_count(uuid)": ("bridge_app",),
     "app_confirm_phone_otp(uuid, bytea)": ("bridge_app",),
