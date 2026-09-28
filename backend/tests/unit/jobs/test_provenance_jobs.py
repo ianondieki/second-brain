@@ -64,6 +64,15 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
     assert crons == {jobs.ANCHOR_TASK: "7 * * * *", audit_jobs.VERIFY_TASK: "30 21 * * *"}
 
 
+def test_hourly_anchor_runs_never_overlap() -> None:
+    """One anchor run at a time: every job of the hourly task (the periodic deferrer uses the task's defaults) holds
+    the Procrastinate lock ``provenance:anchors``, so a run that outlives the hour holds the next one back."""
+    app.perform_import_paths()  # type: ignore[no-untyped-call]
+    task = app.tasks[jobs.ANCHOR_TASK]
+    assert task.lock == jobs.ANCHOR_LOCK == "provenance:anchors"
+    assert task.configure(task_kwargs={"timestamp": 0}).job.lock == "provenance:anchors"
+
+
 def test_backoff_is_capped_and_stops_on_permanent_errors() -> None:
     backoff = jobs.Backoff(base=30, cap=3600, max_attempts=12)
     first = backoff.get_retry_decision(exception=RegistrationPendingError("later"), job=job(0))

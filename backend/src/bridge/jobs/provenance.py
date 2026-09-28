@@ -5,7 +5,9 @@ step's writes, one version at a time (lock ``provenance:<version id>``), each id
 
 - ``provenance.hash_manifest`` -> ``provenance.sign_manifest`` -> ``provenance.timestamp_manifest``.
 
-Periodic: ``provenance.anchor_chain_heads`` hourly at minute 7 (RFC 3161 anchors of the audit chain heads). The nightly
+Periodic: ``provenance.anchor_chain_heads`` hourly at minute 7 (RFC 3161 anchors of the audit chain heads), one run at
+a time (lock ``provenance:anchors``: a run that outlives the hour holds the next one back). A run stores its anchors in
+batches and stops requesting timestamps after its time budget (``bridge.provenance.transparency``). The nightly
 ``audit.verify_chain`` lives in ``bridge.jobs.audit``.
 
 Retries: ``RegistrationError`` is permanent. Anything else (the database, the object store, an earlier version still
@@ -38,6 +40,7 @@ from bridge.provenance.tsa import TsaClient, tsa_client_from_settings
 from bridge.storage.objects import ObjectStore, object_store_from_settings
 
 ANCHOR_TASK = "provenance.anchor_chain_heads"
+ANCHOR_LOCK = "provenance:anchors"  # never a version id: registration locks are provenance:<uuid>
 
 
 class Backoff(BaseRetryStrategy):
@@ -173,7 +176,7 @@ async def timestamp_manifest(version_id: str, owner_id: str) -> None:
 
 
 @app.periodic(cron="7 * * * *", periodic_id="hourly")
-@app.task(name=ANCHOR_TASK, queue=service.QUEUE, retry=ANCHOR_RETRY)
+@app.task(name=ANCHOR_TASK, queue=service.QUEUE, retry=ANCHOR_RETRY, lock=ANCHOR_LOCK)
 async def anchor_chain_heads(timestamp: int) -> None:
     rt = runtime()
     async with rt.session_factory() as session:

@@ -13,6 +13,11 @@ A token's time may be at most ``ANCHOR_MAX_AHEAD`` (one minute) ahead of the wor
 side keeps the client's 15 minutes. Each anchor is inserted in its own savepoint, so one the database still refuses
 (the worker's and the database's clocks disagree) is logged (``provenance.anchor_rejected``) and skipped: the other
 anchors of the run are stored and the refused head waits for the next run. A run fails only when none landed.
+Anchors are committed every ``ANCHOR_BATCH`` tokens, so a run cut short keeps what it stored, and a run requests no
+timestamp once ``ANCHOR_RUN_BUDGET`` seconds (15 minutes) have passed since it started: one attempt may last the
+whole TSA deadline, so a run lasts at most about the budget plus ``TSA_DEADLINE_SECONDS`` and the storing of the
+last batch. The untried heads wait for the next hourly run; the job holds the Procrastinate lock
+``provenance:anchors``, so runs never overlap (``bridge.jobs.provenance``).
 
 Nightly ``verify_and_publish_root``: ``audit_reader`` verifies every chain (``bridge.audit.chain``) in one
 REPEATABLE READ snapshot; only when all verify, the day's root is published: a Merkle tree (RFC 6962 hashing: leaf
@@ -27,7 +32,8 @@ card). A broken chain publishes nothing and raises ``ChainVerificationError``.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
@@ -47,6 +53,8 @@ from bridge.provenance.tsa import TimestampToken, TsaClient, TsaError
 WORKER = "provenance_worker"
 MAX_ANCHORS_PER_RUN = 500
 ANCHOR_MAX_AHEAD = timedelta(minutes=1)  # chain_anchors_guard: tsa_time <= clock_timestamp() + 1 minute
+ANCHOR_BATCH = 25  # anchors committed per transaction
+ANCHOR_RUN_BUDGET = 15 * 60.0  # seconds after which a run requests no further timestamp
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 log = get_logger("bridge.provenance.transparency")
 
@@ -77,7 +85,7 @@ class AnchorReport:
     anchored: list[ChainHead] = field(default_factory=list)
     failed: list[ChainHead] = field(default_factory=list)
     rejected: list[ChainHead] = field(default_factory=list)  # timestamped, but the database refused the anchor
-    deferred: list[ChainHead] = field(default_factory=list)  # not tried after a failure: the next run takes them
+    deferred: list[ChainHead] = field(default_factory=list)  # not tried (a failure, the time budget): the next run
 
 
 def leaf(head: ChainHead) -> bytes:
@@ -173,13 +181,21 @@ async def _store(
 
 
 async def anchor_chain_heads(
-    session: AsyncSession, tsa: TsaClient, *, limit: int = MAX_ANCHORS_PER_RUN
+    session: AsyncSession,
+    tsa: TsaClient,
+    *,
+    limit: int = MAX_ANCHORS_PER_RUN,
+    batch: int = ANCHOR_BATCH,
+    budget: float = ANCHOR_RUN_BUDGET,
+    clock: Callable[[], float] = time.monotonic,
 ) -> AnchorReport:
     """Timestamp every chain head not anchored yet (at most ``limit`` per run; the rest wait for the next hour).
 
     The first failed timestamp ends the run's TSA calls: each attempt may last the whole TSA deadline, so trying every
-    pending head during an outage would hold the worker for hours. Tokens already obtained are stored, each in its
-    own savepoint. The run fails when no head could be timestamped, or when the database refused every token."""
+    pending head during an outage would hold the worker for hours. So does a spent ``budget`` (seconds of ``clock``
+    since the run started). Tokens are stored every ``batch`` tokens and at the end, each in its own savepoint. The
+    run fails when no head could be timestamped, or when the database refused every token."""
+    started = clock()
     report = AnchorReport()
     async with session.begin(), as_role(session, WORKER):
         rows = (await session.execute(_HEADS)).all()
@@ -187,10 +203,16 @@ async def anchor_chain_heads(
         report.heads = len(heads)
         pending = anchor_order(await _unanchored(session, heads))[:limit]
     tokens: list[tuple[ChainHead, TimestampToken]] = []
+    timestamped = 0
     reason = ""
     for index, head in enumerate(pending):
+        if clock() - started >= budget:
+            reason = f"the run's time budget of {budget:g} s is spent"
+            report.deferred = pending[index:]
+            log.warning("provenance.anchor_budget_spent", budget_seconds=budget, deferred=len(report.deferred))
+            break
         try:
-            tokens.append((head, await tsa.timestamp(head.event_hash, max_ahead=ANCHOR_MAX_AHEAD)))
+            token = await tsa.timestamp(head.event_hash, max_ahead=ANCHOR_MAX_AHEAD)
         except TsaError as exc:
             reason = str(exc)
             report.failed.append(head)
@@ -203,6 +225,11 @@ async def anchor_chain_heads(
                 deferred=len(report.deferred),
             )
             break
+        timestamped += 1
+        tokens.append((head, token))
+        if len(tokens) >= batch:
+            await _store(session, tokens, report)
+            tokens = []
     if tokens:
         await _store(session, tokens, report)
     log.info(
@@ -213,7 +240,7 @@ async def anchor_chain_heads(
         failed=len(report.failed),
         deferred=len(report.deferred),
     )
-    if pending and not tokens:
+    if pending and not timestamped:
         raise TsaError(
             f"no chain head could be timestamped ({len(report.failed)} tried, {len(report.deferred)} left for the"
             f" next run): {reason}"

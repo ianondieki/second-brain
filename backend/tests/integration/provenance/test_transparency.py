@@ -69,19 +69,33 @@ async def fresh_signer(engines: dict[str, AsyncEngine]) -> LocalSigner:
     return signer
 
 
+class WorkerCrash(Exception):
+    """Anything but a TSA error ends an anchor run at once (a dropped connection, the worker shutting down)."""
+
+
 class CountingTsa:
-    """The local openssl TSA behind an httpx transport that counts calls and can fail chosen digests."""
+    """The local openssl TSA behind an httpx transport that counts calls, can fail every call or crash at one, and
+    keeps a fake clock (``clock``) that each call moves on by ``seconds_per_call``."""
 
     def __init__(self, local_tsa: LocalTsa) -> None:
         self.local_tsa = local_tsa
         self.calls = 0
         self.fail_all = False
+        self.crash_at: int | None = None
+        self.seconds_per_call = 0.0
+        self.elapsed = 0.0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.calls += 1
+        self.elapsed += self.seconds_per_call
+        if self.calls == self.crash_at:
+            raise WorkerCrash
         if self.fail_all:
             return httpx.Response(503)
         return self.local_tsa.handler(request)
+
+    def clock(self) -> float:
+        return self.elapsed
 
     def client(self) -> TsaClient:
         return TsaClient([self.local_tsa.endpoint("http://tsa.test/tsr")], transport=httpx.MockTransport(self.handler))
@@ -301,6 +315,51 @@ async def test_the_anchor_takes_no_token_more_than_a_minute_ahead_of_the_worker(
     async with sessions() as s:
         with pytest.raises(TsaError, match="more than 60 s ahead"):
             await anchor_chain_heads(s, worker_behind)
+
+
+async def test_anchors_are_stored_batch_by_batch(engines: dict[str, AsyncEngine], local_tsa: LocalTsa) -> None:
+    """Tokens are committed every ``batch`` anchors, not only after the whole run: a run that dies half-way keeps
+    the batches it stored (here the first two anchors; the third token was not stored yet)."""
+    sessions = create_session_factory(engines["bridge_app"])
+    async with sessions() as s:
+        await anchor_chain_heads(s, CountingTsa(local_tsa).client())  # drain what earlier tests left pending
+    for i in range(5):
+        await append(engines["bridge_owner"], f"org:batch-{i}")
+    tsa = CountingTsa(local_tsa)
+    tsa.crash_at = 4
+    async with sessions() as s:
+        with pytest.raises(WorkerCrash):
+            await anchor_chain_heads(s, tsa.client(), batch=2)
+    stored = {r.chain_id for r in await anchors(engines["audit_reader"]) if r.chain_id.startswith("org:batch-")}
+    assert len(stored) == 2
+    async with sessions() as s:
+        rest = await anchor_chain_heads(s, CountingTsa(local_tsa).client(), batch=2)
+    assert {h.chain_id for h in rest.anchored} == {f"org:batch-{i}" for i in range(5)} - stored
+
+
+async def test_a_run_takes_no_timestamp_once_its_time_budget_is_spent(
+    engines: dict[str, AsyncEngine], local_tsa: LocalTsa
+) -> None:
+    """Each timestamp takes 100 s here: with a 250 s budget the run asks for three, stores them and leaves the
+    fourth head to the next run without failing. A run whose budget is spent before its first timestamp fails."""
+    sessions = create_session_factory(engines["bridge_app"])
+    async with sessions() as s:
+        await anchor_chain_heads(s, CountingTsa(local_tsa).client())  # drain what earlier tests left pending
+    for i in range(4):
+        await append(engines["bridge_owner"], f"org:budget-{i}")
+    tsa = CountingTsa(local_tsa)
+    tsa.seconds_per_call = 100.0
+    async with sessions() as s:
+        report = await anchor_chain_heads(s, tsa.client(), budget=250.0, clock=tsa.clock)
+    assert tsa.calls == 3
+    assert len(report.anchored) == 3
+    assert [h.chain_id for h in report.deferred] == [
+        name for name in (f"org:budget-{i}" for i in range(4)) if name not in {h.chain_id for h in report.anchored}
+    ]
+    async with sessions() as s:
+        with pytest.raises(TsaError, match="time budget of 0 s is spent"):
+            await anchor_chain_heads(s, tsa.client(), budget=0.0, clock=tsa.clock)
+    assert tsa.calls == 3
 
 
 async def test_the_anchor_task_uses_the_job_runtime(engines: dict[str, AsyncEngine], local_tsa: LocalTsa) -> None:
