@@ -15,18 +15,20 @@ from bridge.auth.models import User
 from bridge.clock import utcnow
 from bridge.config import Settings, get_settings
 from bridge.db import bind_tenant, create_session_factory
+from bridge.integrations.sms import FakeSmsProvider
 from bridge.main import create_app
 from bridge.notifications.email import FakeEmailProvider
 
 
 @asynccontextmanager
 async def make_client(app_engine: AsyncEngine, settings: Settings | None = None) -> AsyncIterator[httpx.AsyncClient]:
-    """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and a fake email outbox."""
+    """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and fake email and SMS outboxes."""
     settings = settings or get_settings()
     app = create_app(settings)
     app.state.engine = app_engine
     app.state.session_factory = create_session_factory(app_engine)
     app.state.email_provider = FakeEmailProvider()
+    app.state.sms_provider = FakeSmsProvider()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
         client.app = app  # type: ignore[attr-defined]
@@ -37,6 +39,11 @@ async def make_client(app_engine: AsyncEngine, settings: Settings | None = None)
 
 def outbox(client: httpx.AsyncClient) -> FakeEmailProvider:
     provider: FakeEmailProvider = client.app.state.email_provider  # type: ignore[attr-defined]
+    return provider
+
+
+def sms_outbox(client: httpx.AsyncClient) -> FakeSmsProvider:
+    provider: FakeSmsProvider = client.app.state.sms_provider  # type: ignore[attr-defined]
     return provider
 
 

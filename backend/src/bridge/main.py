@@ -17,6 +17,7 @@ from bridge.auth import csrf
 from bridge.auth.router import router as auth_router
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
+from bridge.integrations.sms import sms_provider_from_settings
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
 from bridge.profiles.router import public_router as consents_router
@@ -41,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.sms_provider = sms_provider_from_settings(settings)  # fails closed (production needs the vendor)
         engine = create_engine(settings.database_url.get_secret_value())
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
