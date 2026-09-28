@@ -265,6 +265,7 @@ TIER2_CASES = (
     "org_suspended",
     "role_viewer",
     "membership_removed",
+    "off_domain_member",
     "no_totp",
     "user_suspended",
     "no_master_enterprise_terms",
@@ -361,22 +362,25 @@ async def _accept_master_terms(conn: AsyncConnection, org: UUID, broken: str, ta
 
 
 async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> tuple[UUID, UUID]:
-    """As the owner: an E2 org G whose reviewer R may read B's published Tier 2, except for ``broken``."""
+    """As the owner: an E2 org G with a verified domain whose reviewer R (an address at that domain) may read B's
+    published Tier 2, except for ``broken``."""
     b, tag = world.b, uuid7().hex[:12]
+    domain = f"granted-{tag}.example.test"  # G's verified domain
     reviewer = await _add_user(
         conn,
-        f"reviewer-{tag}@example.test",
+        f"reviewer-{tag}@{'elsewhere.example.test' if broken == 'off_domain_member' else domain}",
         status="suspended" if broken == "user_suspended" else "active",
         totp=broken != "no_totp",
     )
     org = uuid7()
     await _sql(
         conn,
-        "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, suspended_at)"
-        " VALUES (:id, 'company', 'Granted Ltd', :slug, 'seed', CAST(:verification AS org_verification),"
+        "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, verified_domain, suspended_at)"
+        " VALUES (:id, 'company', 'Granted Ltd', :slug, 'seed', CAST(:verification AS org_verification), :domain,"
         " CASE WHEN :suspended THEN now() END)",
         id=org,
         slug=f"granted-{tag}",
+        domain=domain,
         verification="e1" if broken == "org_not_e2" else "e2",
         suspended=broken == "org_suspended",
     )

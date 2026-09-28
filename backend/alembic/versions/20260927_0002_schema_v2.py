@@ -705,7 +705,8 @@ $$;
 
 -- The database half of can_view_tier2 (docs/spec/06 6.1), used by the tier2_reader SELECT policy: the current user may
 -- read Tier 2 of p_version through an organisation when all of these hold. The application predicate checks the rest
--- (FEATURE_TIER2_ENABLED, step-up recency) and is the one that answers 403 with the failing condition. The Master
+-- (FEATURE_TIER2_ENABLED, step-up recency) and is the one that answers 403 with the failing condition. The viewer's
+-- membership must be on the organisation's verified domain (their email address at exactly that domain). The Master
 -- Enterprise Terms count only in their current version and only when accepted by the organisation's approved E2
 -- claimant or by an active signatory (never by any other member or an outsider).
 CREATE FUNCTION app_tier2_granted(p_proposal uuid, p_version uuid) RETURNS boolean
@@ -726,10 +727,12 @@ AS $$
            AND p.status = 'published' AND p.moderation_state = 'clear'  -- hidden ("deleted") or held: no new views
            AND g.status = 'active' AND g.tier >= 2 AND g.revoked_at IS NULL
            AND (public.app_org_id() IS NULL OR g.org_id = public.app_org_id())
-           AND o.verification = 'e2' AND o.suspended_at IS NULL
+           AND o.verification = 'e2' AND o.suspended_at IS NULL AND o.verified_domain IS NOT NULL
            AND m.user_id = public.app_user_id() AND m.status = 'active'
            AND m.roles && '{reviewer,signatory,admin}'::public.org_role[]
            AND u.status = 'active' AND u.totp_enabled_at IS NOT NULL
+           -- membership on the verified domain: the member's email address is at exactly that domain
+           AND CAST(split_part(CAST(u.email AS text), '@', 2) AS public.citext) = o.verified_domain
            AND EXISTS (
                 SELECT 1
                   FROM public.legal_acceptances la
