@@ -22,7 +22,7 @@ from bridge.llm.errors import (
     LLMUnsupportedStop,
     Tier2NotAllowed,
 )
-from bridge.llm.fakes import FakeAdapter
+from bridge.llm.fakes import FakeAdapter, Reply
 from bridge.llm.ledger import CallStatus
 from bridge.llm.registry import Registry
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Result, Tier, TokenUsage
@@ -154,3 +154,32 @@ async def test_other_stop_reasons_outputs_and_the_soft_cap() -> None:
     assert transient.transient
     assert r.ledger.entries[0].output == OK
     assert len(r.listener.events) == 1
+
+
+class ResultsWithout(FakeAdapter):
+    """The provider's results lack the items in ``missing`` (they never ran, or the results file was cut short)."""
+
+    def __init__(self, replies: list[Reply], missing: set[str]) -> None:
+        super().__init__(replies)
+        self.missing = missing
+
+    async def batch_results(self, batch_id: str) -> dict[str, ModelResponse | BatchItemError]:
+        results = await super().batch_results(batch_id)
+        return {custom_id: item for custom_id, item in results.items() if custom_id not in self.missing}
+
+
+async def test_an_item_missing_from_the_results_is_reported_and_recorded() -> None:
+    adapter = ResultsWithout([OK, OK, OK], missing={"b"})
+    r = rig(adapter, reg=batchable())
+    handle = await r.service.batch_submit(TASK, items("a", "b", "c"), Verdict, ctx=CTX)
+    done = await r.service.batch_poll(handle, Verdict)
+    assert set(done.results) == {"a", "b", "c"}
+    assert isinstance(done.results["a"], Result)
+    missing = done.results["b"]
+    assert isinstance(missing, LLMProviderError)
+    assert "batch item missing" in str(missing)
+    assert missing.transient  # it never ran: the caller may resubmit it
+    [row] = [e for e in r.ledger.entries if e.status is CallStatus.PROVIDER_ERROR]
+    assert (row.batch_id, row.cost_usd, row.input_tokens, row.output_tokens) == (handle.batch_id, Decimal(0), 0, 0)
+    assert row.inputs == handle.inputs["b"]
+    assert sorted(e.status.value for e in r.ledger.entries) == ["ok", "ok", "provider_error"]

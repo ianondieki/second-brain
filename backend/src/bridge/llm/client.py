@@ -18,7 +18,8 @@ the nonce (a model answer echoing it, replayed as input) could name it; the sani
 so a block cannot be closed or opened from inside, and the nonce is never shown to an author.
 
 Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger; a failed batch item is
-dead-lettered and reported, not retried (the caller may resubmit it).
+dead-lettered and reported, not retried (the caller may resubmit it). An item the provider's results lack is recorded
+and reported as a transient provider error, never dropped.
 """
 
 from __future__ import annotations
@@ -84,7 +85,8 @@ log = get_logger("bridge.llm")
 FINISHED = frozenset({"end_turn", "stop_sequence"})
 MAX_FEEDBACK_ERRORS = 5
 CUSTOM_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
-BATCH_TRANSIENT = frozenset({"expired", "canceled", "api_error", "overloaded_error", "rate_limit_error"})
+BATCH_TRANSIENT = frozenset({"missing", "expired", "canceled", "api_error", "overloaded_error", "rate_limit_error"})
+MISSING_ITEM = BatchItemError("missing", "the provider returned no result for it")
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,7 +584,7 @@ class LLMService:
         )
 
     async def batch_poll[OutputT: LLMOutput](self, handle: BatchHandle, schema: type[OutputT]) -> BatchPoll[OutputT]:
-        """The batch's state; once it has ended, one outcome per item (each recorded at the batch price)."""
+        """The batch's state; once it has ended, one outcome per submitted item (each recorded at the batch price)."""
         spec = self._registry.task(handle.task)
         check_schema(schema)
         ctx = CallContext(org_id=handle.org_id, user_id=handle.user_id, trace_id=handle.trace_id)
@@ -592,10 +594,11 @@ class LLMService:
         if state is not BatchState.ENDED:
             return BatchPoll(state)
         raw = await self._adapter.batch_results(handle.batch_id)
+        found = {custom_id: raw.get(custom_id, MISSING_ITEM) for custom_id in handle.inputs} | raw
         snapshot = await self._budget.snapshot(ctx)
         outcomes: dict[str, Result[OutputT] | LLMError] = {}
         total = Decimal(0)
-        for custom_id, item in raw.items():
+        for custom_id, item in found.items():
             inputs = handle.inputs.get(custom_id, {})
             if isinstance(item, BatchItemError):
                 detail = f"batch item {item.kind} ({item.detail})"
