@@ -95,6 +95,11 @@ def lock_for(version_id: UUID) -> str:
     return f"provenance:{version_id}"
 
 
+def advisory_key(version_id: UUID) -> int:
+    """A signed 64-bit advisory lock key for one version's registration."""
+    return int.from_bytes(hashlib.sha256(b"bridge.provenance|" + version_id.bytes).digest()[:8], "big", signed=True)
+
+
 def evidence_key(proposal_id: UUID, version_id: UUID) -> str:
     return f"manifests/{proposal_id}/{version_id}/manifest-v{MANIFEST_VERSION}.sealed.json"
 
@@ -144,10 +149,13 @@ async def subject_digest(session: AsyncSession, user_id: UUID, data: bytes) -> b
 
 # --- step 1: manifest and hash -------------------------------------------------------------------------------------
 
+# One registration of a version at a time, whatever else runs: a transaction-scoped advisory lock needs no privilege
+# on the version row (a row lock would depend on the app role's UPDATE policy for registered versions).
+_LOCK = text("SELECT pg_advisory_xact_lock(:key)")
 _VERSION = text(
     "SELECT v.id, v.proposal_id, v.version_no, v.status, v.cert_id, v.registered_at, v.title, v.niche_id, v.country,"
     " v.county_code, v.maturity, v.ask, v.problem_statement, v.impact_claims, v.summary, p.owner_id"
-    " FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id WHERE v.id = :version FOR UPDATE OF v"
+    " FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id WHERE v.id = :version"
 )
 _PREVIOUS = text(
     "SELECT content_hash FROM proposal_versions WHERE proposal_id = :proposal AND status = 'registered'"
@@ -260,6 +268,7 @@ async def hash_manifest(
     """Step 1. Returns False when the version already has its provenance record (nothing to do)."""
     await bind_tenant(session, user_id=owner_id)
     async with session.begin():
+        await session.execute(_LOCK, {"key": advisory_key(version_id)})
         version = (await session.execute(_VERSION, {"version": version_id})).one_or_none()
         if version is None or version.owner_id != owner_id:
             raise RegistrationError(f"version {version_id} is not visible to its owner")

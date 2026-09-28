@@ -75,3 +75,29 @@ async def test_a_worker_registers_a_published_version_once(
     assert {s.status for s in statuses} == {"succeeded"}
     assert [s.task_name for s in statuses].count("provenance.hash_manifest") == 2
     assert [s.task_name for s in statuses].count("provenance.timestamp_manifest") == 1
+
+
+async def test_concurrent_hash_steps_register_once(owner_engine: AsyncEngine, runtime: ProvenanceRuntime) -> None:
+    """Two workers pick up the same version at once: the advisory lock lets one build the manifest, the other finds
+    the record and does nothing."""
+    import asyncio
+
+    from bridge.provenance.service import hash_manifest
+
+    built = await registered_version(owner_engine, runtime.wrapper)
+
+    async def run() -> bool:
+        async with runtime.session_factory() as session:
+            return await hash_manifest(
+                session, built.version_id, built.owner_id, wrapper=runtime.wrapper, store=runtime.store
+            )
+
+    results = await asyncio.gather(run(), run())
+    assert sorted(results) == [False, True]
+    async with owner_engine.connect() as conn:
+        count = (
+            await conn.execute(
+                text("SELECT count(*) FROM provenance_records WHERE version_id = :v"), {"v": built.version_id}
+            )
+        ).scalar_one()
+    assert count == 1
