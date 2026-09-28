@@ -219,7 +219,7 @@ class LLMService:
         *,
         attempt: int,
         inputs: Mapping[str, Any],
-        model: str | None = None,
+        model: str,
         response: ModelResponse | None = None,
         cost: Decimal = Decimal(0),
         latency_ms: int = 0,
@@ -299,7 +299,9 @@ class LLMService:
         )
 
     async def _refuse_early(self, call: _Call, messages: Sequence[Message]) -> None:
-        """Kill switch and Tier-2 guard: refused calls are recorded with names and lengths only."""
+        """The ledger's subject check (a call it cannot record is refused unrecorded), then the kill switch and the
+        Tier-2 guard: those refusals are recorded with names and lengths only, against the task's model."""
+        await self._ledger.check_subject(org_id=call.ctx.org_id, user_id=call.ctx.user_id)
         try:
             self._budget.check_kill_switch()
             await check_tier2(call.spec, messages, self._consents, session_id=call.ctx.session_id)
@@ -311,15 +313,18 @@ class LLMService:
                 if isinstance(exc, Tier2NotAllowed)
                 else CallStatus.BLOCKED_CONSENT
             )
-            await self._record(call, status, attempt=0, inputs=unsent_inputs(messages), error=str(exc))
+            inputs = unsent_inputs(messages)
+            await self._record(call, status, attempt=0, inputs=inputs, model=call.spec.model, error=str(exc))
             raise
 
-    async def _check_budget(self, call: _Call, estimate: Decimal, attempt: int, inputs: Mapping[str, Any]) -> Snapshot:
+    async def _check_budget(
+        self, call: _Call, estimate: Decimal, attempt: int, inputs: Mapping[str, Any], model: str
+    ) -> Snapshot:
         try:
             return await self._budget.check(call.ctx, estimate)
         except LLMBlocked as exc:
             status = CallStatus.BLOCKED_KILL_SWITCH if isinstance(exc, LLMKillSwitch) else CallStatus.BLOCKED_BUDGET
-            await self._record(call, status, attempt=attempt, inputs=inputs, error=str(exc))
+            await self._record(call, status, attempt=attempt, inputs=inputs, model=model, error=str(exc))
             raise
 
     # ------------------------------------------------------------------------------------------------ complete
@@ -378,7 +383,7 @@ class LLMService:
                 cache_writes=request.cache_writes,
                 tool_fees_usd=self._registry.tool_fees_usd(tools),
             )
-            snapshot = await self._check_budget(call, estimate, attempt, inputs)
+            snapshot = await self._check_budget(call, estimate, attempt, inputs, model)
             started = self._monotonic()
             try:
                 response = await self._adapter.create(request)
@@ -552,7 +557,7 @@ class LLMService:
             ),
             Decimal(0),
         )
-        await self._check_budget(call, estimate, 0, {"batch_items": inputs})
+        await self._check_budget(call, estimate, 0, {"batch_items": inputs}, spec.model)
         try:
             batch_id = await self._adapter.batch_create(requests)
         except (LLMProviderError, LLMUnavailable) as exc:
@@ -582,6 +587,7 @@ class LLMService:
         check_schema(schema)
         ctx = CallContext(org_id=handle.org_id, user_id=handle.user_id, trace_id=handle.trace_id)
         call = _Call(spec, ctx, handle.trace_id)
+        await self._ledger.check_subject(org_id=ctx.org_id, user_id=ctx.user_id)  # before results are fetched
         state = await self._adapter.batch_state(handle.batch_id)
         if state is not BatchState.ENDED:
             return BatchPoll(state)

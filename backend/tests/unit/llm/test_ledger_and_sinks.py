@@ -1,14 +1,19 @@
-"""REQ-LLM-01: the in-memory ledger, dead-letter sink and human queue (the SQL ledger follows T2.1)."""
+"""REQ-LLM-01: the in-memory ledger, dead-letter sink and human queue (the SQL ledger: tests/integration/llm)."""
 
 from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from typing import cast
 from uuid import uuid4
 
+from sqlalchemy import String
+
+from bridge.llm import registry
 from bridge.llm.ledger import CallStatus, InMemoryLedger, LedgerEntry
+from bridge.llm.models import LlmCall
 from bridge.llm.sinks import DeadLetter, InMemoryDeadLetters, InMemoryHumanQueue, RefusalEvent
-from bridge.llm.types import TokenUsage
+from bridge.llm.types import TRACE_ID, TokenUsage
 from tests.unit.llm.helpers import NOW, ORG, USER
 
 
@@ -20,7 +25,7 @@ def entry(cost: str, org: object = None, user: object = None, when: object = NOW
         user_id=user,  # type: ignore[arg-type]
         task="t",
         purpose="tier1_only",
-        model=None,
+        model="m",
         status=CallStatus.BLOCKED_BUDGET,
         stop_reason=None,
         input_tokens=0,
@@ -56,6 +61,14 @@ async def test_sinks_keep_what_they_receive() -> None:
     await queue.refusal(event)
     assert letters.letters == [letter]
     assert queue.events == [event]
+
+
+def test_names_and_trace_ids_fit_the_llm_calls_columns() -> None:
+    """The registry refuses longer task and model names and CallContext longer trace ids, so no row can fail on
+    length after a paid attempt."""
+    columns = LlmCall.__table__.c
+    assert cast(String, columns.task.type).length == cast(String, columns.model.type).length == registry.NAME_CHARS
+    assert TRACE_ID.pattern.endswith(f"{{1,{cast(String, columns.trace_id.type).length}}}")
 
 
 def test_token_usage_adds_up() -> None:

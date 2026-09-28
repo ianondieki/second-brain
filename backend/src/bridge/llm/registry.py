@@ -27,6 +27,7 @@ EFFORTS: frozenset[str] = frozenset({"low", "medium", "high", "xhigh", "max"})
 PRECISIONS: frozenset[str] = frozenset({"fp32", "fp16", "int8"})
 MILLION = Decimal(1_000_000)
 COST_QUANTUM = Decimal("0.000001")  # llm_calls.cost_usd is numeric(12,6)
+NAME_CHARS = 80  # llm_calls.task and llm_calls.model are varchar(80): a longer name could not be recorded
 
 
 class Purpose(StrEnum):
@@ -226,7 +227,14 @@ def _effort(model: ModelSpec, value: Any, where: str) -> Effort | None:
     return None
 
 
+def _name(name: str, kind: str) -> str:
+    if not 0 < len(name) <= NAME_CHARS:
+        raise ValueError(f"{kind} names are 1-{NAME_CHARS} characters (llm_calls.{kind})")
+    return name
+
+
 def _model(model_id: str, raw: Mapping[str, Any]) -> ModelSpec:
+    _name(model_id, "model")
     prices = raw["price_usd_per_mtok"]
     if set(prices) != set(_PRICE_KEYS):
         raise ValueError(f"{model_id} prices need exactly {', '.join(_PRICE_KEYS)}")
@@ -239,6 +247,7 @@ def _model(model_id: str, raw: Mapping[str, Any]) -> ModelSpec:
 
 
 def _task(name: str, raw: Mapping[str, Any], models: Mapping[str, ModelSpec], default_cap: int) -> TaskSpec:
+    _name(name, "task")
     unknown = set(raw) - _TASK_KEYS
     if unknown:
         raise ValueError(f"task {name} has unknown keys {sorted(unknown)}")

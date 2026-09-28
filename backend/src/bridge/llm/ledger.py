@@ -2,12 +2,13 @@
 
 Every attempt writes one ``LedgerEntry``: calls refused before sending (kill switch, caps, Tier-2 guard) with zero
 tokens, and every model attempt with its tokens (cache reads and writes included), cost, latency, status and stop
-reason. ``inputs`` holds the sanitised Tier-1 field values and, for Tier-2 fields, only the name, tier and length:
-a Tier-2 value never reaches the ledger, with or without consent (AC-SEC-6). Output text is kept only for tasks
-marked ``confidential: false``.
+reason. ``model`` is the model the attempt targeted (a refused call names the task's model). ``inputs`` holds the
+sanitised Tier-1 field values and, for Tier-2 fields, only the name, tier and length: a Tier-2 value never reaches
+the ledger, with or without consent (AC-SEC-6). Output text is kept only for tasks marked ``confidential: false``.
 
-``LedgerStore`` is the seam; ``InMemoryLedger`` serves tests and fakes. The SQL store over the ``llm_calls`` table
-(T2.1) implements the same protocol; its global-spend query needs a role that can sum across tenants.
+``LedgerStore`` is the seam; ``InMemoryLedger`` serves tests and fakes. ``check_subject`` runs first in every call:
+a store that cannot write the subject's rows or read its spend refuses the call before anything is sent, never after
+a paid attempt. The SQL store over the ``llm_calls`` table (T2.1) is ``bridge.llm.sql_ledger.SqlLedger``.
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ class LedgerEntry:
     user_id: UUID | None
     task: str
     purpose: str
-    model: str | None
+    model: str
     status: CallStatus
     stop_reason: str | None
     input_tokens: int
@@ -60,6 +61,10 @@ class LedgerEntry:
 
 
 class LedgerStore(Protocol):
+    async def check_subject(self, *, org_id: UUID | None, user_id: UUID | None) -> None:
+        """Raise ``LLMConfigError`` unless this store may write the subject's rows and read its spend."""
+        ...
+
     async def record(self, entry: LedgerEntry) -> None: ...
 
     async def tenant_spent_usd(self, *, org_id: UUID | None, user_id: UUID | None, since: datetime) -> Decimal:
@@ -75,6 +80,9 @@ class InMemoryLedger:
 
     def __init__(self) -> None:
         self.entries: list[LedgerEntry] = []
+
+    async def check_subject(self, *, org_id: UUID | None, user_id: UUID | None) -> None:
+        return None  # memory holds any subject
 
     async def record(self, entry: LedgerEntry) -> None:
         self.entries.append(entry)

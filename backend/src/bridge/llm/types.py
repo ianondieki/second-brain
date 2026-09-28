@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic import Field as SchemaField
 
 FIELD_NAME = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
+TRACE_ID = re.compile(r"[A-Za-z0-9._:-]{1,64}")
 
 
 class Tier(StrEnum):
@@ -114,12 +115,17 @@ class CallContext:
     means a platform call bound by the global cap only. ``trace_id`` joins ledger rows to logs and traces.
     ``session_id`` is the login session of an interactive call (``sessions.id``, i.e. ``CurrentSession.row.id``):
     per-session consents (``tier2_llm_assistant``, see ``bridge.llm.guard.grant_session_consent``) are live only for
-    it; jobs have none."""
+    it; jobs have none. A ``trace_id`` is 1-64 characters from A-Z a-z 0-9 . _ : - (``llm_calls.trace_id``); none
+    means a fresh one per call."""
 
     org_id: UUID | None = None
     user_id: UUID | None = None
     trace_id: str | None = None
     session_id: UUID | None = None
+
+    def __post_init__(self) -> None:
+        if self.trace_id is not None and not TRACE_ID.fullmatch(self.trace_id):
+            raise ValueError("a trace id is 1-64 characters from A-Z a-z 0-9 . _ : -")
 
 
 class LLMOutput(BaseModel):

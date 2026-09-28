@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from bridge.llm.adapter import ModelResponse
 from bridge.llm.budget import StaticCaps
+from bridge.llm.client import BatchHandle, BatchItem, LLMService
 from bridge.llm.errors import (
     LLMBudgetExceeded,
     LLMConfigError,
@@ -28,7 +29,8 @@ from bridge.llm.errors import (
     LLMUnsupportedStop,
 )
 from bridge.llm.fakes import FakeAdapter
-from bridge.llm.ledger import CallStatus
+from bridge.llm.guard import StaticConsents
+from bridge.llm.ledger import CallStatus, InMemoryLedger
 from bridge.llm.sanitiser import FRAMING_RULES, new_nonce
 from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message, TokenUsage
 from tests.unit.llm.helpers import ORG, USER, real_registry, settings
@@ -235,8 +237,49 @@ async def test_kill_switch_refuses_before_sending() -> None:
     assert adapter.requests == []
     [entry] = r.ledger.entries
     assert entry.status is CallStatus.BLOCKED_KILL_SWITCH
-    assert (entry.cost_usd, entry.model, entry.attempt) == (Decimal(0), None, 0)
+    # the row names the model the call targeted (llm_calls.model is NOT NULL); nothing was sent or billed
+    assert (entry.cost_usd, entry.model, entry.attempt) == (Decimal(0), real_registry().task(TASK).model, 0)
     assert "value" not in entry.inputs["fields"][0]
+
+
+class RefusingLedger(InMemoryLedger):
+    """A store that holds no subject (as the SQL store refuses a subject its session is not bound to)."""
+
+    async def check_subject(self, *, org_id: Any, user_id: Any) -> None:
+        raise LLMConfigError("the ledger cannot record this subject")
+
+
+async def test_a_subject_the_ledger_cannot_record_is_refused_before_anything() -> None:
+    """Checked before the kill switch, the Tier-2 guard and the caps, and for batches, so a call whose row could not
+    be written never reaches the model (its cost would go unrecorded)."""
+    ledger, adapter = RefusingLedger(), FakeAdapter([OK])
+    service = LLMService(
+        adapter=adapter,
+        registry=real_registry(),
+        settings=settings(llm_kill_switch=True),
+        ledger=ledger,
+        consents=StaticConsents(),
+        caps=StaticCaps(),
+    )
+    with pytest.raises(LLMConfigError, match="cannot record"):
+        await service.complete(TASK, screen(), Verdict, ctx=CTX)
+    reg = registry_with(moderation_prescreen={"batchable": True})
+    batching = LLMService(
+        adapter=adapter, registry=reg, settings=settings(), ledger=ledger, consents=StaticConsents(), caps=StaticCaps()
+    )
+    with pytest.raises(LLMConfigError, match="cannot record"):
+        await batching.batch_submit(TASK, [BatchItem("item-1", screen())], Verdict, ctx=CTX)
+    handle = BatchHandle(batch_id="b", task=TASK, model="m", trace_id="t", org_id=ORG, user_id=None, inputs={})
+    with pytest.raises(LLMConfigError, match="cannot record"):
+        await batching.batch_poll(handle, Verdict)
+    assert (adapter.requests, ledger.entries) == ([], [])
+
+
+@pytest.mark.parametrize("trace_id", ["", "t" * 65, "has space", "line\nbreak", "café"])
+def test_trace_ids_fit_the_ledger_column(trace_id: str) -> None:
+    with pytest.raises(ValueError, match="trace id"):
+        CallContext(trace_id=trace_id)
+    assert CallContext(trace_id="req:01J.x_y-z").trace_id == "req:01J.x_y-z"
 
 
 async def test_global_cap_refuses_before_sending() -> None:

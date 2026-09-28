@@ -106,6 +106,8 @@ def test_unknown_task_is_a_config_error() -> None:
         ),
         (lambda d: d["tasks"]["moderation_prescreen"].update(allowed_tools="web"), "allowed_tools"),
         (lambda d: d["tasks"]["moderation_prescreen"].update(json_schema_format="no"), "json_schema_format"),
+        (lambda d: d["tasks"].update({"t" * 81: d["tasks"]["moderation_prescreen"]}), r"llm_calls\.task"),
+        (lambda d: d["models"].update({"m" * 81: next(iter(d["models"].values()))}), r"llm_calls\.model"),
         (lambda d: d["budget"].update(soft_cap_ratio=1.5), "soft_cap_ratio"),
         (lambda d: d["embeddings"].update(precision="int4"), "embeddings.precision"),
         (lambda d: d["embeddings"].update(batch_size=0), "embeddings.batch_size"),
