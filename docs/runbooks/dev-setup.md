@@ -82,9 +82,9 @@ make dev
 ```
 
 This builds and starts, all bound to `127.0.0.1`: `web` (Next.js, port 3000), `api` (FastAPI, port 8000), `mailpit`
-(UI on 8025, SMTP on 1025), `postgres` (pgvector, port 5432) and `s3` (SeaweedFS S3 stand-in, port 8333, unused
-until Phase 2 uploads). `make dev-full` additionally starts `clamav` (port 3310; needs ~1.3 GB more RAM), used for
-attachment scanning from Phase 2.
+(UI on 8025, SMTP on 1025), `postgres` (pgvector, port 5432) and `s3` (SeaweedFS S3 stand-in, port 8333, for
+evidence and uploads from Phase 2). `make dev-full` additionally starts `clamav` (port 3310; needs ~1.3 GB more RAM),
+used for attachment scanning from Phase 2.
 
 Migrations and the seed run automatically: the `migrate` one-shot service runs `alembic upgrade head` then
 `python -m bridge.seed` (idempotent: niches, plans, NDA v1, holidays, provisional directory, dev/test only) before

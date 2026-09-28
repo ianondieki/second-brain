@@ -20,3 +20,18 @@ Stays IN-PROGRESS after Phase 1: its ACs (AC-IP-2, AC-IP-7) close in Phases 2 an
 ## Phase 2 (T2.4)
 
 Hourly `provenance.anchor_chain_heads` job: an RFC 3161 token over each audit chain head (`chain_anchors`), through the same TSA client as REQ-PROV-01 (local `openssl ts` test CA in tests). Nightly `audit.verify_chain` job and a signed Merkle root over the day's chain heads (`transparency_roots`), readable at `/api/transparency` (the public `/transparency` page follows with the admin console in Phase 8). AC-IP-2 closes at the Phase 2 exit (trigger rejection + verifier detection, manifest half in `unit/provenance/test_tamper.py`); REQ-AUD-01 stays IN-PROGRESS until AC-IP-7 (Phase 8).
+
+## Notes (T2.4, Phase 2 implementation)
+
+- `provenance.anchor_chain_heads` (hourly at minute 7 UTC) timestamps only heads that moved: `provenance_worker` may
+  insert into `chain_anchors` but not read it, so a head counts as anchored when a trial insert in a savepoint
+  conflicts (always rolled back). At most 500 anchors per run. A definer function `app_unanchored_chain_heads()`
+  (heads without an anchor at their `seq`) would replace the probe: a request for db-migrations, not a blocker.
+- `audit.verify_chain` (21:30 UTC = 00:30 Nairobi) verifies every chain as `audit_reader` in one REPEATABLE READ
+  snapshot and only then publishes the RFC 6962 Merkle root of that snapshot's heads (leaf = chain id, 0x00, seq as
+  8 bytes big-endian, event hash), signed over `bridge-transparency-root-v1:<day>:<root hex>`, for the Nairobi day
+  that just ended. A broken chain publishes nothing and fails the job. It needs `AUDIT_READER_DATABASE_URL` (an
+  `audit_reader` login; the dev compose stack has none, so there the job fails closed with a clear message).
+- `GET /api/transparency` lists the signed roots (public, newest first).
+- Tests run on their own database (`tests/integration/provenance/test_transparency.py`): the shared one holds chains
+  other tests break on purpose.
