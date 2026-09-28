@@ -186,7 +186,8 @@ export interface paths {
         /**
          * Oauth Callback
          * @description The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow
-         *     cookie. Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
+         *     cookie; the first callback carrying a code also spends its state server-side, so a replay gets oauth_state.
+         *     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
          *     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
          *     consents_version_required, too_many_attempts (10 callbacks a minute from one IP). Success: the return path (or
          *     /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.

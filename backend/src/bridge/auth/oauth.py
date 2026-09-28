@@ -1,10 +1,13 @@
 """OAuth 2.0 sign-in with GitHub and Google (REQ-AUTH-02, ADR-002): the protocol half.
 
-Authorization code flow with PKCE (RFC 7636, S256). ``state``, the OpenID Connect ``nonce`` (Google) and the PKCE
-verifier travel in the ``__Host-bridge_oauth`` cookie, sealed with AES-256-GCM under a key derived from SECRET_KEY,
-valid for 10 minutes and bound to one flow: provider, intent, a return path from an allow-list and, for linking, the
-session that started it. The callback accepts a code only with the matching ``state`` from that cookie, so a code
-minted in another browser (login CSRF) or replayed after the cookie is spent is refused before any provider call.
+Authorization code flow. ``state``, the OpenID Connect ``nonce`` (Google) and a PKCE verifier (RFC 7636, S256) travel
+in the ``__Host-bridge_oauth`` cookie, sealed with AES-256-GCM under a key derived from SECRET_KEY, valid for 10
+minutes and bound to one flow: provider, intent, a return path from an allow-list and, for linking, the session that
+started it. The callback accepts a code only with the matching ``state`` from that cookie, so a code minted in another
+browser (login CSRF, code injection) is refused before any provider call; the first callback also spends the state
+server-side (``identities.spend_state``), so a replay, even with a copy of the cookie, is refused the same way. Every
+flow sends the PKCE challenge and verifier, which bind the code to this flow at a provider that enforces PKCE; none of
+the defences above relies on a provider doing so.
 
 Provider access tokens are used once, in memory, to read the identity; they are never stored or logged. Google's ID
 token is read from the token endpoint's own TLS response, where OpenID Connect Core 1.0 section 3.1.3.7 lets the TLS

@@ -94,6 +94,17 @@ async def allow_request(db: AsyncSession, settings: Settings, step: Literal["sta
     return True
 
 
+async def spend_state(db: AsyncSession, settings: Settings, flow: oauth.Flow) -> bool:
+    """The flow's first callback: record its ``state`` as used (an HMAC digest in the ``login_attempts`` ledger) and
+    return True; any later callback with the same state, even with a copy of the cookie, gets False and is refused
+    before a provider call. The record outlives the cookie (twice its ten minutes); the caller commits."""
+    secret = settings.secret_key.get_secret_value()
+    if await throttle.first_use(db, secret, "oauth_state", flow.state, window=2 * oauth.FLOW_TTL):
+        return True
+    get_logger(__name__).warning("auth.oauth_state_replayed", provider=flow.provider.value)
+    return False
+
+
 # ------------------------------------------------------------------------------------------------ start
 
 

@@ -8,6 +8,7 @@ by another account, state mismatch, replay and expiry, MFA-pending sign-in, unli
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
@@ -28,8 +29,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from structlog.testing import capture_logs
 
 import bridge.clock
-from bridge.auth import identities, service, totp
+from bridge.auth import identities, service, throttle, totp
 from bridge.config import Settings, get_settings
+from bridge.db import create_session_factory
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
@@ -753,13 +755,55 @@ async def test_a_replayed_callback_is_refused(client: httpx.AsyncClient, other: 
         assert landing(first) == ("/dev", {})
         replay = await client.get("/api/auth/oauth/github/callback", params=callback)  # the cookie is spent
     assert landing(replay) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
-    # With a stolen copy of the cookie, the provider refuses the spent code (single use, PKCE-bound).
+    # A copy of the cookie replayed within its ten minutes, with a code the provider would accept, is refused before
+    # any provider call: the state was spent server-side on first use (fix round 1; no reliance on provider PKCE).
     other.cookies.set("__Host-bridge_oauth", flow_cookie)
-    with respx.mock(assert_all_called=True) as router:
-        router.post(GITHUB_TOKEN).mock(return_value=httpx.Response(200, json={"error": "bad_verification_code"}))
-        stolen = await other.get("/api/auth/oauth/github/callback", params=callback)
-    assert landing(stolen) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, who)
+        stolen = await other.get("/api/auth/oauth/github/callback", params={**callback, "code": "another-code"})
+    assert landing(stolen) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
     assert not signed_in(stolen)
+
+
+async def test_concurrent_callbacks_with_one_flow_sign_in_once(
+    client: httpx.AsyncClient, other: httpx.AsyncClient
+) -> None:
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    params = await start(client, "github", "login")
+    flow_cookie = client.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    other.cookies.set("__Host-bridge_oauth", flow_cookie)
+    url = "/api/auth/oauth/github/callback"
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, who)
+        results = await asyncio.gather(
+            client.get(url, params={"code": "code-a", "state": params["state"]}),
+            other.get(url, params={"code": "code-b", "state": params["state"]}),
+        )
+    assert sorted(landing(r)[0] for r in results) == ["/dev", "/login"]
+    assert sum(signed_in(r) for r in results) == 1
+    assert token.call_count == 1
+
+
+async def test_a_state_in_use_by_an_open_transaction_waits_for_it(app_engine: AsyncEngine) -> None:
+    """``throttle.first_use`` holds an advisory lock until commit: a second use of the same state waits for the first
+    transaction and then finds its row, instead of both seeing an empty ledger."""
+    factory = create_session_factory(app_engine)
+    secret, state = "k" * 40, f"state-{uuid4().hex}"
+    async with factory() as first, factory() as second:
+        assert await throttle.first_use(first, secret, "oauth_state", state, window=timedelta(minutes=20))
+        racing = asyncio.create_task(
+            throttle.first_use(second, secret, "oauth_state", state, window=timedelta(minutes=20))
+        )
+        await asyncio.sleep(0.3)
+        assert not racing.done()  # blocked on the first transaction's lock
+        await first.commit()
+        assert await racing is False
+        await second.commit()
 
 
 async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
