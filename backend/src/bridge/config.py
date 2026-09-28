@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     tsa_url: str = "http://timestamp.digicert.com"
     tsa_fallback_url: str | None = "https://freetsa.org/tsr"
     tsa_timeout_seconds: float = 10.0
+    # One timestamp attempt, primary and fallback together: a slow or dripping TSA never holds a worker longer.
+    tsa_deadline_seconds: float = Field(default=30.0, gt=0)
     # The pinned CA bundle (PEM file) of each TSA: a token must chain to it. Required outside dev and test (the TSA
     # client fails closed at use without it); ops provide DigiCert's and FreeTSA's before staging.
     tsa_ca_bundle: Path | None = None

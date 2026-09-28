@@ -4,9 +4,11 @@ back or reports "unavailable" when no TSA answers (the record then stays "Timest
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
-from collections.abc import Callable
+import time
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -438,9 +440,55 @@ async def test_every_failure_mode_ends_in_unavailable(good_response: bytes) -> N
     assert "nonce" in text
 
 
-def test_a_client_needs_a_url() -> None:
+async def test_one_deadline_bounds_the_attempt_across_primary_and_fallback() -> None:
+    """The primary fails slowly and the fallback never answers: the attempt ends at the overall deadline, not after
+    the sum of the per-request timeouts (the fallback was still tried within the same budget)."""
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "slow.test":
+            await asyncio.sleep(0.3)
+            return httpx.Response(503)
+        await asyncio.sleep(60)
+        return httpx.Response(503)
+
+    endpoints = [TsaEndpoint("http://slow.test/", None), TsaEndpoint("http://hang.test/", None)]
+    client = TsaClient(endpoints, timeout=30.0, deadline=1.0, transport=httpx.MockTransport(handler))
+    started = time.monotonic()
+    with pytest.raises(TsaUnavailableError, match="within the 1 s deadline") as info:
+        await client.timestamp(DIGEST)
+    assert time.monotonic() - started < 10
+    assert calls == ["slow.test", "hang.test"]
+    assert "HTTP 503" in str(info.value)
+
+
+async def test_a_tsa_that_drips_its_answer_is_cut_off_at_the_deadline() -> None:
+    """httpx's read timeout restarts with every chunk, so a TSA sending a byte now and then would hold the worker
+    for as long as it likes; the deadline does not restart."""
+
+    async def drip() -> AsyncIterator[bytes]:
+        while True:
+            await asyncio.sleep(0.05)
+            yield b"0"
+
+    client = TsaClient(
+        [TsaEndpoint("http://drip.test/", None)],
+        timeout=30.0,
+        deadline=0.5,
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=drip())),
+    )
+    started = time.monotonic()
+    with pytest.raises(TsaUnavailableError, match="deadline"):
+        await client.timestamp(DIGEST)
+    assert time.monotonic() - started < 10
+
+
+def test_a_client_needs_a_url_and_a_positive_deadline() -> None:
     with pytest.raises(ValueError, match="at least one TSA URL"):
         TsaClient([])
+    with pytest.raises(ValueError, match="deadline"):
+        TsaClient([TsaEndpoint("http://a.test/", None)], deadline=0)
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -469,6 +517,8 @@ def test_the_client_comes_from_settings(local_tsa: LocalTsa) -> None:
     )
     assert both.urls == ("http://a.test/", "http://b.test/")
     assert all(e.trust is not None and e.trust.source == str(local_tsa.ca_pem) for e in both.endpoints)
+    assert both.deadline == 30.0
+    assert tsa_client_from_settings(_settings(app_env="test", tsa_deadline_seconds=12.5)).deadline == 12.5
     only = tsa_client_from_settings(_settings(app_env="test", tsa_url="http://a.test/", tsa_fallback_url=None))
     assert only.urls == ("http://a.test/",)
     assert only.endpoints[0].trust is None  # dev and test only: no chain check without a bundle

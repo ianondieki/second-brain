@@ -17,6 +17,9 @@ response is accepted only when:
   a CA (and limited to timestamping or any purpose when it states an extended key usage). Certificates inside the
   token are never trusted as anchors.
 
+One attempt (``TSA_DEADLINE_SECONDS``, 30 s by default) covers the primary and the fallback together; each request
+also has its per-step ``TSA_TIMEOUT_SECONDS``. A failed attempt raises ``TsaUnavailableError`` and the job retries.
+
 The pinned chain and our nonce are what make a token evidence: the signature alone only proves that someone holding
 some timestamping key answered. Outside ``APP_ENV`` dev and test a TSA URL without its bundle fails closed at use
 (``tsa_client_from_settings`` raises ``ConfigurationError``); in dev and test the chain check is skipped for a URL
@@ -29,6 +32,7 @@ transport that answers with ``openssl ts -reply`` from a CA generated at test ti
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -59,6 +63,7 @@ from bridge.logging import get_logger
 
 MAX_RESPONSE_BYTES = 256 * 1024
 MAX_CLOCK_SKEW = timedelta(minutes=15)
+DEFAULT_DEADLINE = 30.0  # seconds for one attempt, primary and fallback together (TSA_DEADLINE_SECONDS)
 MAX_CHAIN_DEPTH = 4
 UNPINNED_ENVS = frozenset({"dev", "test"})
 log = get_logger("bridge.provenance.tsa")
@@ -357,19 +362,27 @@ def _verify(
 
 
 class TsaClient:
-    """Timestamps a SHA-256 digest at the first TSA that answers with a valid token."""
+    """Timestamps a SHA-256 digest at the first TSA that answers with a valid token.
+
+    ``timeout`` bounds each network step of one request (httpx: connect, write, and each read, so a TSA that sends a
+    byte now and then never trips it); ``deadline`` bounds the whole attempt, primary and fallback together, so a
+    slow or dripping TSA cannot hold a worker longer than that."""
 
     def __init__(
         self,
         endpoints: Sequence[TsaEndpoint],
         *,
         timeout: float = 10.0,
+        deadline: float = DEFAULT_DEADLINE,
         transport: httpx.AsyncBaseTransport | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if not endpoints:
             raise ValueError("at least one TSA URL is needed")
+        if not deadline > 0:
+            raise ValueError("the deadline of a timestamp attempt must be positive")
         self.endpoints = tuple(endpoints)
+        self.deadline = deadline
         self._timeout = timeout
         self._transport = transport
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -382,15 +395,23 @@ class TsaClient:
         nonce = secrets.randbits(63) | 1  # positive and never zero
         request = build_request(digest, nonce)
         failures: list[str] = []
-        async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client:
-            for endpoint in self.endpoints:
-                try:
-                    body = await self._post(client, endpoint.url, request)
-                    info = parse_response(body, digest=digest, nonce=nonce, trust=endpoint.trust, now=self._clock())
-                except (httpx.HTTPError, TsaResponseError) as exc:
-                    failures.append(f"{endpoint.url}: {exc or type(exc).__name__}")
-                    continue
-                return TimestampToken(body, info.gen_time, info.serial, info.policy, endpoint.url)
+        current = self.endpoints[0].url
+        try:
+            async with (
+                asyncio.timeout(self.deadline),
+                httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client,
+            ):
+                for endpoint in self.endpoints:
+                    current = endpoint.url
+                    try:
+                        body = await self._post(client, endpoint.url, request)
+                        info = parse_response(body, digest=digest, nonce=nonce, trust=endpoint.trust, now=self._clock())
+                    except (httpx.HTTPError, TsaResponseError) as exc:
+                        failures.append(f"{endpoint.url}: {exc or type(exc).__name__}")
+                        continue
+                    return TimestampToken(body, info.gen_time, info.serial, info.policy, endpoint.url)
+        except TimeoutError:
+            failures.append(f"{current}: no answer within the {self.deadline:g} s deadline of this attempt")
         raise TsaUnavailableError("no TSA returned a valid token: " + "; ".join(failures))
 
     @staticmethod
@@ -426,4 +447,6 @@ def tsa_client_from_settings(settings: Settings, *, transport: httpx.AsyncBaseTr
         endpoints.append(
             _endpoint(settings, settings.tsa_fallback_url, settings.tsa_fallback_ca_bundle, "TSA_FALLBACK_CA_BUNDLE")
         )
-    return TsaClient(endpoints, timeout=settings.tsa_timeout_seconds, transport=transport)
+    return TsaClient(
+        endpoints, timeout=settings.tsa_timeout_seconds, deadline=settings.tsa_deadline_seconds, transport=transport
+    )
