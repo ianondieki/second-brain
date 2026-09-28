@@ -18,7 +18,8 @@ Plain code decides (docs/spec/04 principle 1). For a ``login`` or ``signup`` cal
 
 An identity is attached to an account only when an OAuth signup creates the account, or through ``link`` from
 ``/settings/security`` (orchestrator decision, fix round 1 of T2.12), which does not depend on the provider's
-address. Linking completes only in the session that started it, which gave a fresh second factor when TOTP is on (the
+address. Linking completes only in the session that started it, still live when the provider has answered
+(``reload_session``), which gave a fresh second factor when TOTP is on (the
 ADR-002 step-up rule) and the current password when the account has one (throttled like a login); a password-less
 account without TOTP needs a sign-in within the last 15 minutes instead. An identity that belongs to another account
 is refused, and an account holds one identity per provider. Unlinking needs the same proof and another way to sign
@@ -165,6 +166,18 @@ async def begin(
 
 
 # ------------------------------------------------------------------------------------------------ callback
+
+
+async def reload_session(db: AsyncSession, live: sessions.LiveSession | None) -> sessions.LiveSession | None:
+    """After the provider call, before ``complete`` (T2.12 follow-up): forget every row read before the call and look
+    the browser's session up again. While the token exchange was in flight the person may have signed out, the
+    session may have been revoked or have expired, or the account may have been suspended; the copies read before
+    (kept across the commit) would still link to that session or sign in to that account. None when the session is
+    gone, so a ``link`` fails with ``oauth_session``; a sign-in does not depend on it."""
+    db.expunge_all()
+    fresh = await sessions.lookup(db, live.token) if live is not None else None
+    await bind_tenant(db, user_id=fresh.user.id if fresh is not None else None)
+    return fresh
 
 
 async def complete(

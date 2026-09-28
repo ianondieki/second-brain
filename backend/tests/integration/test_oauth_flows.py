@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from structlog.testing import capture_logs
 
 import bridge.clock
-from bridge.auth import identities, service, throttle, totp
+from bridge.auth import identities, oauth, service, throttle, totp
 from bridge.config import Settings, get_settings
 from bridge.db import create_session_factory
 from bridge.profiles.consents import consents_version
@@ -714,6 +714,58 @@ async def test_a_link_finished_in_another_session_is_refused(client: httpx.Async
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/login", {"oauth_error": "oauth_session", "provider": "github"})
     assert await linked(client) == []
+
+
+SIGNED_OUT = "UPDATE sessions SET revoked_at = now() WHERE user_id = (SELECT id FROM users WHERE email = :e)"
+SUSPENDED = "UPDATE users SET status = 'suspended' WHERE email = :e"
+
+
+def during_the_provider_call(
+    monkeypatch: pytest.MonkeyPatch, owner_engine: AsyncEngine, sql: str, address: str
+) -> None:
+    """Run ``sql`` for the account at ``address`` while the callback waits for the provider (no connection held)."""
+    real = oauth.fetch_identity
+
+    async def provider_call(*args: Any, **kwargs: Any) -> oauth.ProviderIdentity:
+        ident = await real(*args, **kwargs)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text(sql), {"e": address})
+        return ident
+
+    monkeypatch.setattr(oauth, "fetch_identity", provider_call)
+
+
+@pytest.mark.parametrize("change", [SIGNED_OUT, SUSPENDED], ids=["signed_out", "suspended"])
+async def test_a_link_whose_session_ends_during_the_provider_call_is_refused(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """T2.12 follow-up: the session is looked up again after the provider call; the copy read before it would still
+    link an identity to a signed-out session or a suspended account."""
+    address = email()
+    await email_account(client, address)
+    during_the_provider_call(monkeypatch, owner_engine, change, address)
+    response = await round_trip(client, person(), intent="link", **REAUTH)
+    assert landing(response) == ("/login", {"oauth_error": "oauth_session", "provider": "github"})
+    assert await identity_rows(owner_engine, address) == []
+    assert not [m for m in outbox(client).outbox if "sign-in was added" in m.text]
+
+
+@pytest.mark.parametrize("via", ["identity", "address"])
+async def test_an_account_suspended_during_the_provider_call_is_not_signed_in(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, via: str
+) -> None:
+    """T2.12 follow-up: rows read before the provider call are not trusted after it, even when this browser is
+    still signed in to the account (its session and user rows were read before the call)."""
+    who = person()
+    if via == "identity":
+        await round_trip(client, who, intent="signup", **signup_body())
+    else:
+        await email_account(client, who.email)
+    await refresh_csrf(client)
+    during_the_provider_call(monkeypatch, owner_engine, SUSPENDED, who.email)
+    response = await round_trip(client, who, intent="login")
+    assert landing(response) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+    assert not signed_in(response)
 
 
 # ------------------------------------------------------------------ state, replay, expiry and provider errors

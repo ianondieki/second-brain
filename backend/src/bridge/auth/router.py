@@ -436,7 +436,7 @@ async def oauth_callback(
                 settings,
                 flow,
                 ident,
-                live=live,
+                live=await identities.reload_session(db, live),  # it may have ended during the provider call
                 ip=client_ip(request),
                 user_agent=request.headers.get("user-agent"),
             )
