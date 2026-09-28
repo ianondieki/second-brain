@@ -43,6 +43,7 @@ QR_SIZE = 38 * mm
 @dataclass(frozen=True, slots=True)
 class CertificateData:
     cert_id: str
+    version_id: UUID
     title: str
     version_no: int
     owner_name: str
@@ -178,6 +179,7 @@ async def load_certificate(
     handle = profile.handle if profile is not None else row.owner_handle
     return CertificateData(
         cert_id=row.cert_id,
+        version_id=row.version_id,
         title=row.title,
         version_no=row.version_no,
         owner_name=legal or handle,

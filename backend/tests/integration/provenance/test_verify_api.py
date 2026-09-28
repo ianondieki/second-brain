@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -30,7 +32,7 @@ from bridge.provenance.tsa import TsaClient
 from bridge.provenance.verify import LOOKUPS_PER_MINUTE, MAX_UPLOAD_BYTES, UPLOADS_PER_MINUTE
 from bridge.storage.objects import InMemoryObjectStore
 from tests.integration.api import sign_in_as
-from tests.integration.provenance.builders import Built, registered_version
+from tests.integration.provenance.builders import TIER2, Built, registered_version
 from tests.openssl_tsa import LocalTsa
 from tests.unit.provenance.test_certificate import pdf_text
 
@@ -255,3 +257,62 @@ async def test_the_manifest_is_not_served_before_it_is_stored(
         pdf = await c.get(f"/api/provenance/certificates/{built.cert_id}/certificate.pdf")
     assert response.status_code == 404
     assert "Timestamp pending" in pdf_text(pdf.content)
+
+
+async def download_events(engine: AsyncEngine, version_id: UUID) -> list[Any]:
+    async with engine.connect() as conn:
+        return list(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT e.id, e.action, e.chain_id, e.actor_kind::text, e.actor_user_id, e.org_id,"
+                        " e.subject_type, e.subject_id, e.payload, d.event_id AS details"
+                        " FROM audit_events e LEFT JOIN event_details d ON d.event_id = e.id"
+                        " WHERE e.subject_id = :v AND e.action LIKE 'provenance.%' ORDER BY e.chain_id, e.seq"
+                    ),
+                    {"v": version_id},
+                )
+            ).all()
+        )
+
+
+async def test_the_owners_downloads_are_audited_with_ids_only(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, registered: Built, kek: bytes
+) -> None:
+    """Every read of the manifest (Tier 2, read as tier2_reader) and of the certificate writes an audit event on the
+    owner's chain, committed before the bytes leave: the certificate id only, no Tier-2 text, title or name."""
+    base = f"/api/provenance/certificates/{registered.cert_id}"
+    async with client(app_engine, kek) as c:
+        await sign_in_as(c, app_engine, registered.owner_id, mfa_verified=True)
+        manifest = await c.get(f"{base}/manifest.json")
+        pdf = await c.get(f"{base}/certificate.pdf")
+        again = await c.get(f"{base}/manifest.json")
+    assert (manifest.status_code, pdf.status_code, again.status_code) == (200, 200, 200)
+    events = await download_events(owner_engine, registered.version_id)
+    assert sorted(e.action for e in events) == [
+        "provenance.certificate_downloaded",
+        "provenance.manifest_downloaded",
+        "provenance.manifest_downloaded",
+    ]
+    for event in events:
+        assert event.chain_id == f"user:{registered.owner_id}"
+        assert (event.actor_kind, event.actor_user_id, event.org_id) == ("user", registered.owner_id, None)
+        assert event.subject_type == "proposal_version"
+        assert event.payload == {"cert_id": registered.cert_id}
+        assert event.details is None
+        assert TIER2["how"] not in json.dumps(event.payload)
+
+
+async def test_refused_or_failed_downloads_write_no_audit_event(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, registered: Built, wrapper: LocalKeyWrapper, kek: bytes
+) -> None:
+    stranger = await registered_version(owner_engine, wrapper, register=False)
+    base = f"/api/provenance/certificates/{registered.cert_id}"
+    async with client(app_engine, kek) as other:
+        await sign_in_as(other, app_engine, stranger.owner_id, mfa_verified=True)
+        assert (await other.get(f"{base}/manifest.json")).status_code == 404
+        assert (await other.get(f"{base}/certificate.pdf")).status_code == 404
+    async with client(app_engine, None) as owner:  # no key wrapper: the manifest cannot be opened
+        await sign_in_as(owner, app_engine, registered.owner_id, mfa_verified=True)
+        assert (await owner.get(f"{base}/manifest.json")).status_code == 503
+    assert await download_events(owner_engine, registered.version_id) == []

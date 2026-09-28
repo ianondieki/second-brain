@@ -8,6 +8,7 @@ import re
 import zlib
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from bridge.models.enums import ProvenanceStatus
 from bridge.provenance.certificate import FOOTER, CertificateData, eat_text, render_pdf, utc_text, verify_url
@@ -23,6 +24,7 @@ STAMPED = datetime(2026, 9, 28, 6, 15, 42, tzinfo=UTC)
 def data(**overrides: Any) -> CertificateData:
     values: dict[str, Any] = {
         "cert_id": "BRX7K2M9Q4TZ8W3D",
+        "version_id": UUID(int=7),
         "title": "Cold-chain alerts",
         "version_no": 1,
         "owner_name": "dev-handle",

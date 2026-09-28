@@ -11,7 +11,9 @@ Public, no session needed:
 - ``GET /api/transparency``: the signed nightly Merkle roots over the audit chain heads.
 
 Owner only (404 for anyone else): ``GET /api/provenance/certificates/{cert_id}/certificate.pdf`` (generated on demand,
-never stored) and ``.../manifest.json`` (the registered manifest, decrypted, whose SHA-256 is the content hash).
+never stored) and ``.../manifest.json`` (the registered manifest, decrypted, whose SHA-256 is the content hash). Each
+download writes an audit event on the owner's chain, committed before the bytes are sent. An owner's reads of their
+own Tier 2 are not gated by ``FEATURE_TIER2_ENABLED`` (a human decision, noted on the REQ-PROV-01 card).
 """
 
 from __future__ import annotations
@@ -20,13 +22,16 @@ import base64
 import hashlib
 from datetime import date, datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import APIRouter, Path, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.audit import service as audit
 from bridge.auth.deps import CurrentSession, Db, SettingsDep, client_ip
 from bridge.config import ConfigurationError
 from bridge.crypto.envelope import Purpose, Sealed, key_wrapper_from_settings, open_data_key, open_sealed
@@ -234,11 +239,32 @@ async def certificate_pdf(cert_id: CertId, live: CurrentSession, db: Db, setting
     data = await load_certificate(db, cert_id=cert_id, user_id=live.user.id, public_base_url=settings.public_base_url)
     if data is None:
         raise not_found("No certificate of yours has this id.")
+    pdf = render_pdf(data)
+    await _audit_download(db, CERTIFICATE_DOWNLOADED, live.user.id, data.version_id, data.cert_id)
     return Response(
-        render_pdf(data),
+        pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="certificate-{data.cert_id}.pdf"'},
     )
+
+
+CERTIFICATE_DOWNLOADED = "provenance.certificate_downloaded"
+MANIFEST_DOWNLOADED = "provenance.manifest_downloaded"
+
+
+async def _audit_download(db: AsyncSession, action: str, user_id: UUID, version_id: UUID, cert_id: str) -> None:
+    """Audit an owner's download on their own chain (the certificate id only: no title, name or Tier-2 text) and
+    commit before the bytes are sent, so a read that cannot be recorded is not served (docs/spec/06 6.1: every
+    Tier-2 read writes an audit event)."""
+    await audit.record(
+        db,
+        action,
+        actor_user_id=user_id,
+        subject_type="proposal_version",
+        subject_id=version_id,
+        payload={"cert_id": cert_id},
+    )
+    await db.commit()
 
 
 _OWNED_VERSION = text(
@@ -279,6 +305,7 @@ async def manifest_json(cert_id: CertId, live: CurrentSession, db: Db, settings:
         version_id=row.version_id,
         purpose=Purpose.MANIFEST,
     )
+    await _audit_download(db, MANIFEST_DOWNLOADED, live.user.id, version_id, cert_id)
     return Response(
         manifest,
         media_type="application/json",
