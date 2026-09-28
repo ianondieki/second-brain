@@ -31,7 +31,8 @@ export interface paths {
         /** Admin List Niches */
         get: operations["admin_list_niches_api_admin_niches_get"];
         put?: never;
-        post?: never;
+        /** Admin Add Niche */
+        post: operations["admin_add_niche_api_admin_niches_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -813,6 +814,20 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /**
+         * NicheCreate
+         * @description A new niche: top level, or a child of an active top-level niche (the taxonomy has two levels).
+         */
+        NicheCreate: {
+            /** Isic Code */
+            isic_code?: string | null;
+            /** Name */
+            name: string;
+            /** Parent Slug */
+            parent_slug?: string | null;
+            /** Slug */
+            slug: string;
+        };
         /** NicheNode */
         NicheNode: {
             /** Children */
@@ -1187,6 +1202,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminNicheOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    admin_add_niche_api_admin_niches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NicheCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminNicheOut"];
                 };
             };
             /** @description Bad Request */
