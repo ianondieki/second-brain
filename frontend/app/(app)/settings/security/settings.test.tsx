@@ -457,6 +457,27 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(container.textContent).not.toMatch(/delete|cancelled/i);
   });
 
+  describe("focus after the status check, which ends after an await", () => {
+    // Outside React's event batching, a browser may commit the new screen only after the next animation frame (seen
+    // in Chrome at 1440 px): focus must not wait for a frame, so here frames never come.
+    beforeEach(() => vi.stubGlobal("requestAnimationFrame", () => 0));
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("lands on the notice when two-step sign-in turned out to be on", async () => {
+      await confirmFails(new TypeError("Failed to fetch"), ok(me(true)));
+      fireEvent.click(cancelButton());
+      await screen.findByText("Two-step sign-in is on.");
+      expect(document.activeElement).toBe(screen.getByRole("alert"));
+    });
+
+    it("lands where setup starts again when it turned out to be off", async () => {
+      await confirmFails(new TypeError("Failed to fetch"), ok(me(false)));
+      fireEvent.click(cancelButton());
+      const field = await screen.findByLabelText(ENROL_FIELD, { selector: "input" });
+      expect(document.activeElement).toBe(field);
+    });
+  });
+
   it("ignores Confirm and Cancel while it asks the server", async () => {
     await confirmFails(new TypeError("Failed to fetch"), new Promise(() => {}));
     fireEvent.click(cancelButton());

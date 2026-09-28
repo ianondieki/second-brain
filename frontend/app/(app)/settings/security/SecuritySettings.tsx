@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Suspense, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -77,24 +78,30 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   /**
    * Back to the start (setup cancelled, or the server lost it), with focus where setup begins again: the password
    * field when the account has one, else the start button. The server's pending key is replaced on the next start.
+   * This often runs after an await (the status check), outside React's event batching, where the new screen may be
+   * committed only after the next animation frame: flushSync commits it first, so the element to focus exists.
    */
   function backToStart(nextError: ErrorKey | null, nextNotice: Notice) {
-    setError(nextError);
-    setNotice(nextNotice);
-    show({ name: "intro" });
-    requestAnimationFrame(() => document.getElementById(hasPassword ? "enrol-password" : "two-step-start")?.focus());
+    flushSync(() => {
+      setError(nextError);
+      setNotice(nextNotice);
+      show({ name: "intro" });
+    });
+    document.getElementById(hasPassword ? "enrol-password" : "two-step-start")?.focus();
   }
 
   /**
    * Two-step sign-in is on at the server, but the answer with the recovery codes was lost: the "on" screen, with focus
-   * on the notice that says to keep the app entry. No route shows or replaces the codes yet, so the notice says how
-   * to get new ones where the role allows turning two-step sign-in off.
+   * on the notice that says to keep the app entry (committed at once, as in backToStart). No route shows or replaces
+   * the codes yet, so the notice says how to get new ones where the role allows turning two-step sign-in off.
    */
   function onWithoutCodes(product: string) {
-    setError(null);
-    setNotice({ key: "codesNotShown", product });
-    show({ name: "on" });
-    requestAnimationFrame(() => noticeRef.current?.focus());
+    flushSync(() => {
+      setError(null);
+      setNotice({ key: "codesNotShown", product });
+      show({ name: "on" });
+    });
+    noticeRef.current?.focus();
   }
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
