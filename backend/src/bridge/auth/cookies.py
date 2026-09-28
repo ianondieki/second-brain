@@ -56,6 +56,32 @@ def signup_binding(settings: Settings, user_id: object, password_hash: str) -> s
     return hmac.new(key, f"signup|{user_id}|{password_hash}".encode(), hashlib.sha256).hexdigest()
 
 
+def identity_binding(settings: Settings, user_id: object, identity_id: object) -> str:
+    """The same defence for an OAuth identity attached at signup with an address the provider had not verified
+    (REQ-AUTH-02): only a verification link opened in the browser that signed up keeps the identity."""
+    key = settings.secret_key.get_secret_value().encode("utf-8")
+    return hmac.new(key, f"signup-identity|{user_id}|{identity_id}".encode(), hashlib.sha256).hexdigest()
+
+
+def set_oauth_flow(response: Response, settings: Settings, sealed: str, max_age: int) -> None:
+    """The sealed OAuth flow (bridge.auth.oauth). SameSite=Lax: the provider's redirect back is a top-level GET."""
+    response.set_cookie(
+        settings.oauth_cookie_name,
+        sealed,
+        max_age=max_age,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_oauth_flow(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        settings.oauth_cookie_name, path="/", secure=settings.cookie_secure, httponly=True, samesite="lax"
+    )
+
+
 def set_signup_binding(response: Response, settings: Settings, binding: str | None) -> None:
     """Always set (a random value when there is no binding), so the cookie reveals nothing about the address."""
     value = binding or secrets.token_hex(32)
