@@ -1,11 +1,12 @@
 """Schema v2: repository, directory, provenance and the Tier-2 role set (T2.1).
 
 REQ-REPO-01 (tiered proposal storage, ``proposal_confidential`` behind the Tier-2 roles), REQ-PROV-01 (registration
-records, anchors, transparency roots), REQ-TEN-01 (RLS on every new tenant table, the PUBLISHED and STAFF tenancy
-classes). Design: ``docs/platform/tasks/REQ-REPO-01.md`` ("T2.1 schema v2 design"). Additive only: 32 new tables,
-new enum types, new columns on ``organizations`` and ``users``, one new SELECT policy each on ``organizations`` and
-``org_niches``, and one new column grant (``organizations.county_code``). Nothing of revision 0001 is altered or
-dropped.
+records, anchors, transparency roots), REQ-TEN-01 (RLS on every new tenant table, the PUBLISHED, STAFF and EVIDENCE
+tenancy classes). Design: ``docs/platform/tasks/REQ-REPO-01.md`` ("T2.1 schema v2 design" and its refinements).
+Additive only: 32 new tables, new enum types, new columns on ``organizations`` and ``users``, one new SELECT policy
+each on ``organizations`` and ``org_niches``, one new column grant (``organizations.county_code``), and bridge_app's
+SELECT on ``users`` narrowed to every column but the new ``subject_salt`` (the table-wide grant is restored on
+downgrade). Nothing of revision 0001 is dropped.
 
 Before upgrading an existing cluster, re-run ``infra/postgres/roles.sql`` (as a superuser) and
 ``infra/postgres/prepare_db.sql`` (in the database): the five Tier-2 roles and their schema USAGE live there, because
@@ -18,27 +19,43 @@ Tier 2 and the role set (docs/spec/06 6.1):
   ``dsr_exporter`` WITH INHERIT FALSE, SET TRUE (``roles.sql``), so it can only ``SET LOCAL ROLE`` to one of them
   (``bridge.db.as_role``) after the application check; RLS applies to each role with its own policies.
 - ``tier2_reader`` reads the owner's rows, or rows ``app_tier2_granted(proposal_id, version_id)`` allows: an active
-  Tier >= 2 grant to an E2, unsuspended organisation the current user belongs to with role reviewer, signatory or
-  admin and TOTP enrolled, a registered version of a published, clear proposal, the organisation's Master
-  Enterprise Terms and this person's Evaluation NDA for this proposal on record, and no WITHDRAWN, DECLINED or
-  TERMINATED engagement. It writes only the owner's rows, and only while the version is a draft (trigger).
+  Tier >= 2 grant to an E2, unsuspended organisation with a verified domain that the current user belongs to, with an
+  email address at exactly that domain, role reviewer, signatory or admin and TOTP enrolled; a registered version of a
+  published, clear proposal (drafts are never granted); the current Master Enterprise Terms accepted for the
+  organisation by its approved E2 claimant or an active signatory; this person's Evaluation NDA for this proposal; and
+  no WITHDRAWN, DECLINED or TERMINATED engagement. It writes only the owner's rows, and only while the version is a
+  draft (trigger).
 - ``provenance_worker``, ``tier2_embed_worker`` and ``dsr_exporter`` read the rows of the user the job is bound to
   (``app.user_id``: one tenant per job); ``tier2_moderation`` reads only in a staff context (``app_is_staff``).
+  ``provenance_worker`` also reads the bound owner's registered versions and fills their registration hashes, and
+  reads and writes only the ``provenance_records`` of that owner's versions (``app_owns_version``).
 
-Tenancy classes added to ``bridge.models.base.Tenancy`` (the generated RLS tests cover both):
+Tenancy classes added to ``bridge.models.base.Tenancy`` (the generated RLS tests cover all three):
 
 - PUBLISHED (``proposals``, ``proposal_versions``, ``proposal_problems``, ``problems``, ``problem_sources``): the owner
   reads and writes; every signed-in user reads published rows clear of moderation holds; staff admin|moderator read
   everything. ``candidate`` problems are readable by staff only.
 - STAFF (``moderation_cases``, ``directory_invitations``, ``proposal_confidential_embeddings``): ``app_is_staff()``
   reads and updates; the app (or the embed worker) inserts.
+- EVIDENCE (``provenance_records``): bridge_app reads every row (``/verify`` is anonymous); only provenance_worker
+  writes, for versions its bound owner owns.
+
+Master Enterprise Terms. An organisation's owner, admin or signatory may record an acceptance; so may the claimant of
+their own open E2 claim whose email code is verified, on an organisation that is unclaimed or E1, and only for the
+Master Enterprise Terms. Acceptances are permanent, so what counts is decided in SQL: ``app_decide_claim`` approves E2
+only with the current version (``app_current_legal_template``: the most recently created) accepted by that claimant,
+and ``app_tier2_granted`` counts only the current version accepted by the approved E2 claimant or an active signatory.
 
 Privileged changes run only through the SECURITY DEFINER functions below, which check their caller in SQL: moderation
-decisions and holds, claim approval (E1 automatic, E1/E2 by staff admin), delisting, D1 confirmation (the OTP hash is
-compared in SQL), D2 decisions (staff admin), the KYC image purge bookkeeping, the invitation opt-out and the global
-LLM spend, reissuing a claim's email code, closing a tag, and the audit chain heads for the hourly anchor (EXECUTE for
-``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``, ``verification_level``,
-``moderation_state``, ``tags.closed_at`` or the claim OTP columns.
+decisions and holds, claim approval (E1 automatic, E1/E2 by staff admin, always with the domain proven), delisting, D1
+confirmation (the OTP hash is compared in SQL), D2 decisions (staff admin), the KYC image purge bookkeeping, the
+invitation opt-out and the global LLM spend, reissuing a claim's email code, closing a tag, adding a niche (staff
+admin), the per-subject digests (``app_subject_digest``), the LLM call inputs (staff admin) and the audit chain heads
+for the hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``,
+``verification_level``, ``moderation_state``, ``tags.closed_at``, the claim OTP columns, ``registered_at`` or the
+registration hashes, and no SELECT on ``org_claims.otp_hash``, ``phone_verifications.otp_hash``,
+``users.subject_salt`` or ``llm_calls.inputs`` (column grants on the rest of each table). ``llm_calls.inputs`` never
+holds Tier-2 plaintext: the LLM layer stores Tier-2 fields only as name, tier and length (AC-SEC-6).
 
 Consistency rules by trigger and index: ``proposals.current_version_id`` is a registered version of the proposal and
 ``draft_version_id`` a draft one. A tag is open while ``closed_at`` IS NULL (one open tag per developer and
@@ -46,25 +63,31 @@ organisation, the database form of "one open engagement or held tag"); withdrawn
 closed, ``app_close_tag`` closes one otherwise (Phase 3: when its engagement ends), and nothing reopens a tag. A
 claim's ``otp_attempts`` is cumulative and never reset: its budget is 5 attempts per code issued, with at most 5
 reissues (``app_reissue_claim_otp``), after which the claim goes to manual review; one open claim per claimant and
-organisation, and one new claim per claimant and organisation per 24 hours.
+organisation, and one new claim per claimant and organisation per 24 hours. A phone code expires 10 minutes after it
+is stored, by the database clock (trigger), and verifies only while the caller's developer profile is D0.
 
-Evidence is immutable by trigger (AC-IP-2): a registered ``proposal_versions`` row refuses UPDATE and DELETE except
-filling its still-empty ``content_hash``, ``prev_version_hash`` and ``manifest_version``; its ``proposal_confidential``
-row refuses changes except filling the empty manifest pair; ``provenance_records`` refuses DELETE and any UPDATE other
-than filling empty signature/TSA/evidence columns and moving ``status`` forward; ``attestations``, ``nda_acceptances``,
-``legal_acceptances``, ``chain_anchors`` and ``transparency_roots`` are append-only. Registering a version needs at
-least one linked problem (trigger) and the complete Tier-1 snapshot (CHECK).
+Evidence is immutable by trigger (AC-IP-2): a version is inserted as a draft without registration columns; registering
+it sets ``registered_at`` to the database's now() (any value sent is replaced); a registered ``proposal_versions`` row
+refuses UPDATE and DELETE except filling its still-empty ``content_hash``, ``prev_version_hash`` and
+``manifest_version`` (provenance_worker's columns); its ``proposal_confidential`` row refuses changes except filling
+the empty manifest pair; its attachments are never deleted and change only ``av_status``, ``rerendered`` and
+``updated_at``; ``provenance_records`` refuses DELETE and any UPDATE other than filling empty signature/TSA/evidence
+columns and moving ``status`` forward; ``attestations``, ``nda_acceptances``, ``legal_acceptances``, ``chain_anchors``
+and ``transparency_roots`` are append-only. Registering a version needs at least one linked problem (trigger) and the
+complete Tier-1 snapshot (CHECK).
 
-Refinements of the task card, all within its rules: ``proposals`` also denormalises the current ``problem_statement``,
-``impact_claims`` and ``summary`` (the generated ``search_tsv`` can only read its own row); ``proposal_confidential``
-gains ``manifest_nonce`` (the manifest is encrypted under the proposal key and must not reuse the content nonce);
-``app_tier2_granted`` takes the version as well as the proposal (drafts are never granted); ``organizations`` gains
-``suspended_at`` (the "not suspended" condition of can_view_tier2); ``org_claims`` gains ``otp_verified_at`` (set only
-by ``app_confirm_claim_otp``); ``moderation_cases`` gains ``reporter_id``; ``brief_invitations`` carries the brief's
-``org_id`` so the two brief policies never read each other recursively. Templates and acceptances are tied by
-``(template id, sha256)`` foreign keys, so an accepted template version cannot change; ``nda_templates`` follows its
-legal body ON UPDATE CASCADE until an acceptance pins it. The listed-organisations rule is a second SELECT policy
-(``bridge_app_select_listed``) next to 0001's, which stays untouched.
+Refinements of the task card (listed in the card, approved by the orchestrator 2026-09-28): ``proposals`` also
+denormalises the current ``problem_statement``, ``impact_claims`` and ``summary`` (the generated ``search_tsv`` can
+only read its own row); ``proposal_confidential`` gains ``manifest_nonce`` (the manifest is encrypted under the
+proposal key and must not reuse the content nonce); ``app_tier2_granted`` takes the version as well as the proposal
+(drafts are never granted); ``organizations`` gains ``suspended_at`` (the "not suspended" condition of
+can_view_tier2); ``org_claims`` gains ``otp_verified_at`` (set only by ``app_confirm_claim_otp``) and
+``otp_reissues``; ``moderation_cases`` gains ``reporter_id``; ``brief_invitations`` carries the brief's ``org_id`` so
+the two brief policies never read each other recursively; ``tags.closed_at`` marks an open tag; plus the functions
+and rules above. Templates and acceptances are tied by ``(template id, sha256)`` foreign keys, so an accepted template
+version cannot change; ``nda_templates`` follows its legal body ON UPDATE CASCADE until an acceptance pins it. The
+listed-organisations rule is a second SELECT policy (``bridge_app_select_listed``) next to 0001's, which stays
+untouched.
 
 Operating rules for the code that uses this schema:
 
@@ -72,6 +95,9 @@ Operating rules for the code that uses this schema:
 - Tables some callers may insert into but not read back (``moderation_cases``, ``directory_invitations``,
   ``llm_calls`` system rows, ``signal_events``, ``legal_acceptances`` by a claimant, the Tier-2 worker tables) need
   inserts without RETURNING; their ORM models set ``eager_defaults=False``.
+- Columns the app writes but never reads (the OTP digests, ``llm_calls.inputs``) are mapped deferred with raiseload;
+  ``users.subject_salt`` is not mapped at all. Store OTPs as HMAC-SHA-256 under a server pepper, never bare hashes.
+- ``registered_at`` and ``phone_verifications.expires_at`` are the database's: leave them out and read them back.
 - The OTP functions count an attempt even when they return false: commit after calling them.
 - Jobs bind the user they act for (``bind_tenant``): the Tier-2 worker roles read only that user's rows.
 

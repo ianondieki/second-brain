@@ -9,9 +9,13 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - PUBLISHED tables: A reads B's published, clear rows but none of B's drafts, held, hidden or candidate rows, and all
   of A's own; staff admin/moderator read everything.
 - STAFF tables: a non-staff user reads 0 rows; staff read them.
+- EVIDENCE (``provenance_records``): readable without a signed-in user (``/verify``); provenance_worker bound to A
+  reads and writes only records of A's versions.
 - Developer A reads 0 of developer B's drafts, versions and Tier-2 rows; an organisation without a live grant reads 0
   ``proposal_confidential`` rows even as ``tier2_reader``, and removing any single condition of the database half of
-  can_view_tier2 (``app_tier2_granted``) hides the row again.
+  can_view_tier2 (``app_tier2_granted``) hides the row again; a draft version of a granted proposal stays hidden.
+- Every Tier-2 role bound to developer A reads and updates 0 of B's Tier-2 rows and writes none of B's embeddings;
+  tier2_moderation reads nothing without a staff context.
 - ``aggregate_worker`` reads 0 rows of every tenant table (no privilege at all) and reads ``signal_events``.
 - A cross-tenant API access returns 404.
 """

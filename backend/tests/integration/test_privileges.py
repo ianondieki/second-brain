@@ -8,7 +8,10 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - bridge_app is a member of each Tier-2 role WITH INHERIT FALSE, SET TRUE (PostgreSQL 16) and of nothing else, so a
   session logged in as bridge_app (``SET SESSION AUTHORIZATION`` here) can switch to a Tier-2 role and to no other.
 - Each definer function checks its caller in SQL: staff decisions need the staff role (and TOTP), the OTPs are compared
-  against the stored hash, holds only go up, and approvals set verification and create the membership.
+  against the stored hash (D1 only from D0; codes expire by the database clock), holds only go up, approvals need the
+  domain proven and set verification and create the membership, and only the verified E2 claimant or a member records
+  the Master Enterprise Terms (the current version by the claimant for E2 approval).
+- Registration: the database sets ``registered_at``; only ``provenance_worker`` bound to the owner fills the hashes.
 """
 
 from __future__ import annotations
