@@ -60,6 +60,7 @@ EMAIL_ACCOUNT_LIMIT = 6  # emails to one address in a window from any IPs (bound
 EMAIL_DAILY_LIMIT = 20  # emails to one address a day, whatever the source
 EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
+REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minute from one client IP, any account
 
 
 class AuthError(Exception):
@@ -474,14 +475,16 @@ async def complete_mfa(
 
 
 async def require_reauth(
-    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
 ) -> None:
-    """Credential changes (password, TOTP enrolment, OAuth linking and unlinking) need the current password
-    (throttled like a login, so a stolen session cannot guess it), or, for a password-less account, a sign-in
-    within 15 minutes."""
+    """Credential changes (password, TOTP enrolment, OAuth linking and unlinking) need the current password, or, for
+    a password-less account, a sign-in within 15 minutes. The check is throttled like a login, so a stolen session
+    cannot guess the password: 5 attempts a minute for the account from any IP, and ``REAUTH_IP_LIMIT`` a minute from
+    one client IP for any account (T2.12 follow-up: the IP key was a constant, so that limit was platform-wide)."""
     if user.password_hash:
-        keys = throttle.keys(settings.secret_key.get_secret_value(), "reauth", str(user.id), "session")
-        if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
+        limit = settings.login_attempts_per_minute
+        keys = throttle.keys(settings.secret_key.get_secret_value(), "reauth", str(user.id), ip)
+        if await throttle.blocked(db, keys, pair_limit=limit, account_limit=limit, ip_limit=REAUTH_IP_LIMIT):
             raise AuthError("too_many_attempts", 429)
         ok = bool(password) and await passwords.verify_password_async(user.password_hash, password or "")
         throttle.record(db, keys, succeeded=ok)
@@ -498,10 +501,10 @@ def notice_email(settings: Settings, user: User, what: str) -> PendingEmail:
 
 
 async def set_password(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, current: str | None, new: str
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, current: str | None, new: str, *, ip: str
 ) -> list[PendingEmail]:
     user = await lock_user(db, live.user.id)
-    await require_reauth(db, settings, user, live, current)
+    await require_reauth(db, settings, user, live, current, ip=ip)
     try:
         passwords.check_policy(new, email=user.email)
     except passwords.PasswordPolicyError as exc:
@@ -513,12 +516,12 @@ async def set_password(
 
 
 async def begin_totp_enrolment(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, password: str | None
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, password: str | None, *, ip: str
 ) -> tuple[str, str]:
     user = await lock_user(db, live.user.id)
     if user.totp_enabled_at is not None:
         raise AuthError("totp_already_enabled", 409)
-    await require_reauth(db, settings, user, live, password)
+    await require_reauth(db, settings, user, live, password, ip=ip)
     secret = totp.new_secret()
     user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)

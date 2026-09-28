@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 import bridge.clock
-from bridge.auth import totp
+from bridge.auth import service, totp
 from bridge.config import get_settings
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
@@ -490,6 +490,51 @@ async def test_a_wrong_current_password_is_refused_and_throttled(client: httpx.A
         codes.append((response.status_code, response.json()["detail"]["code"]))
     assert codes[0] == (403, "current_password_required")
     assert codes[-1] == (429, "too_many_attempts")
+
+
+def new_ip() -> str:
+    n = uuid4().int
+    return f"10.{n >> 16 & 255}.{n >> 8 & 255}.{n & 255}"
+
+
+NEW_PASSWORD = {"new_password": "a brand new password"}  # no current password: refused (and counted) without argon2
+
+
+async def test_re_auth_attempts_are_counted_per_ip_not_platform_wide(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up: re-auth attempts were counted under one constant address, so 100 a minute anywhere refused
+    every account's password change, TOTP enrolment, OAuth link and unlink. Now each client IP has its own budget."""
+    monkeypatch.setattr(service, "REAUTH_IP_LIMIT", 2)
+    shared = new_ip()
+    async with (
+        make_client(app_engine, ip=shared) as first,
+        make_client(app_engine, ip=shared) as second,
+        make_client(app_engine, ip=new_ip()) as elsewhere,
+    ):
+        for browser in (first, second, elsewhere):
+            await verified(browser, email())
+        for _ in range(2):
+            assert (await first.post("/api/auth/password", json=NEW_PASSWORD)).status_code == 403
+        change = {"current_password": PASSWORD, **NEW_PASSWORD}
+        blocked = await second.post("/api/auth/password", json=change)  # another account, the same address
+        assert (blocked.status_code, blocked.json()["detail"]["code"]) == (429, "too_many_attempts")
+        assert (await elsewhere.post("/api/auth/password", json=change)).status_code == 204
+
+
+async def test_re_auth_attempts_from_several_ips_share_the_account_budget(app_engine: AsyncEngine) -> None:
+    """A stolen session used from several addresses still gets five re-auth attempts a minute in all."""
+    name = get_settings().session_cookie_name
+    async with make_client(app_engine, ip=new_ip()) as here, make_client(app_engine, ip=new_ip()) as there:
+        await verified(here, email())
+        session = here.cookies.get(name)
+        assert session
+        there.cookies.set(name, session)
+        await refresh_csrf(there)
+        for browser in (here, here, here, there, there):
+            assert (await browser.post("/api/auth/password", json=NEW_PASSWORD)).status_code == 403
+        blocked = await there.post("/api/auth/password", json={"current_password": PASSWORD, **NEW_PASSWORD})
+        assert (blocked.status_code, blocked.json()["detail"]["code"]) == (429, "too_many_attempts")
 
 
 async def test_a_password_less_account_needs_a_recent_sign_in(

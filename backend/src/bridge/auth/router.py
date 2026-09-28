@@ -287,7 +287,9 @@ async def set_password(
     """Set or change the password: the current one is required when set; a password-less account needs a sign-in
     within the last 15 minutes. Other sessions end; the account gets a notice."""
     try:
-        pending = await service.set_password(db, settings, live, body.current_password, body.new_password)
+        pending = await service.set_password(
+            db, settings, live, body.current_password, body.new_password, ip=client_ip(request)
+        )
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -296,9 +298,11 @@ async def set_password(
 
 
 @router.post("/totp/enrol")
-async def totp_enrol(body: TotpEnrolRequest, live: CurrentSession, db: Db, settings: SettingsDep) -> TotpEnrolResponse:
+async def totp_enrol(
+    body: TotpEnrolRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
+) -> TotpEnrolResponse:
     try:
-        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password)
+        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -367,7 +371,7 @@ async def oauth_start(
     if not await identities.allow_request(db, settings, "start", client_ip(request)):
         raise _fail(service.AuthError("too_many_attempts", 429))
     try:
-        flow = await identities.begin(db, settings, client.provider.name, body, live)
+        flow = await identities.begin(db, settings, client.provider.name, body, live, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -468,7 +472,8 @@ async def unlink_identity(
     """Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's
     other sessions end. 409 last_sign_in_method when nothing else could sign in."""
     try:
-        pending = await identities.unlink(db, settings, live, identity_id, body.current_password if body else None)
+        password = body.current_password if body else None
+        pending = await identities.unlink(db, settings, live, identity_id, password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc

@@ -116,7 +116,7 @@ async def spend_state(db: AsyncSession, settings: Settings, flow: oauth.Flow) ->
 
 
 async def ensure_fresh_proof(
-    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
 ) -> None:
     """Adding or removing a sign-in method: a second factor within STEP_UP_MAX_AGE_HOURS when TOTP is on (the
     ADR-002 step-up rule), and the current password when the account has one (``service.require_reauth``, throttled
@@ -127,7 +127,7 @@ async def ensure_fresh_proof(
             raise service.AuthError("step_up_required", 403)
         if user.password_hash is None:
             return
-    await service.require_reauth(db, settings, user, live, password)
+    await service.require_reauth(db, settings, user, live, password, ip=ip)
 
 
 def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
@@ -143,6 +143,8 @@ async def begin(
     provider: AuthProvider,
     req: OAuthStartRequest,
     live: sessions.LiveSession | None,
+    *,
+    ip: str,
 ) -> oauth.Flow:
     """Check the request and create the flow to seal into the cookie. Raises ``service.AuthError``."""
     now = clock.utcnow()
@@ -151,7 +153,7 @@ async def begin(
             raise service.AuthError("unauthenticated", 401)
         if live.row.mfa_pending:
             raise service.AuthError("mfa_required", 401)
-        await ensure_fresh_proof(db, settings, live.user, live, req.current_password)
+        await ensure_fresh_proof(db, settings, live.user, live, req.current_password, ip=ip)
         return oauth.new_flow(provider, "link", "/settings/security", now=now, session=csrf.binding_for(live.token))
     signup: OAuthSignup | None = None
     if req.intent == "signup":
@@ -430,7 +432,13 @@ async def list_for(db: AsyncSession, user_id: UUID) -> list[AuthIdentity]:
 
 
 async def unlink(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, identity_id: UUID, password: str | None
+    db: AsyncSession,
+    settings: Settings,
+    live: sessions.LiveSession,
+    identity_id: UUID,
+    password: str | None,
+    *,
+    ip: str,
 ) -> list[PendingEmail]:
     """Remove one of the signed-in account's identities (404 for anyone else's), keeping a way to sign in. The
     account's other sessions end, so none opened with the removed identity outlives it."""
@@ -439,7 +447,7 @@ async def unlink(
     identity = (await db.execute(stmt)).scalar_one_or_none()
     if identity is None:
         raise service.AuthError("not_found", 404)
-    await ensure_fresh_proof(db, settings, user, live, password)
+    await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
     others = (
         select(func.count())
         .select_from(AuthIdentity)
