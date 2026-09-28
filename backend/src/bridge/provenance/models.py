@@ -20,6 +20,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -55,6 +56,7 @@ class ProvenanceRecord(IdMixin, CreatedMixin, Base):
 
     __tablename__ = "provenance_records"
     __table_args__ = (
+        Index("ix_provenance_records_content_hash", "content_hash"),  # /verify upload matching without a cert id
         CheckConstraint("octet_length(content_hash) = 32", name="content_hash_length"),
         CheckConstraint("status = 'hashed' OR (signature IS NOT NULL AND key_id IS NOT NULL)", name="signed_has_key"),
         CheckConstraint("status <> 'timestamped' OR (tsa_token IS NOT NULL AND tsa_time IS NOT NULL)", name="tsa"),

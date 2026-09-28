@@ -3255,6 +3255,7 @@ def _create_tables() -> None:
         sa.UniqueConstraint("cert_id", name=op.f("uq_provenance_records_cert_id")),
         sa.UniqueConstraint("version_id", name=op.f("uq_provenance_records_version_id")),
     )
+    op.create_index("ix_provenance_records_content_hash", "provenance_records", ["content_hash"], unique=False)
     op.create_table(
         "brief_invitations",
         sa.Column("brief_id", sa.Uuid(), nullable=False),

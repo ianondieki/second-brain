@@ -1766,6 +1766,18 @@ async def test_a_record_carries_its_versions_cert_id_and_content_hash(owner_engi
         await conn.execute(sa.text(record), {"id": uuid7(), "v": second, "c": certs[second], "h": h1})
 
 
+async def test_upload_matching_finds_a_record_by_content_hash_through_an_index(owner_engine: AsyncEngine) -> None:
+    """POST /api/verify without a cert id matches an uploaded file's SHA-256 against every record: the lookup uses
+    ix_provenance_records_content_hash rather than scanning the table."""
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL enable_seqscan = off"))  # any usable index is taken over a scan
+        plan = await conn.execute(
+            sa.text("EXPLAIN (COSTS OFF) SELECT cert_id FROM provenance_records WHERE content_hash = :h"),
+            {"h": ZERO_HASH},
+        )
+        assert "ix_provenance_records_content_hash" in " ".join(plan.scalars())
+
+
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
         owner, _niche, _proposal, version = await _registered_proposal(conn)
