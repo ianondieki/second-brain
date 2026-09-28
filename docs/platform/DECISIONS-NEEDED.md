@@ -50,6 +50,31 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
 - Decision:
 
+### D-30 · Upholding a claim dispute against an E2 organisation (T2.1 schema v2, T2.6b claims, REQ-DIR-03)
+- Why: `docs/spec/06` 6.2 and AC-DIR-2 say a claim on an E2 organisation opens a dispute instead of transferring it, and the platform never rules on legal ownership (6.12). Schema v2 sends such a claim to `disputed`, and staff can uphold a dispute with `app_decide_claim` (it rejects the earlier approved claims and removes those claimants' memberships in the same transaction). Against an **E2** organisation that path is closed on purpose today: an E1-level claim cannot be approved (there is no E2 → E1 step), and an E2-level claim cannot be approved either, because the claimant may accept the Master Enterprise Terms only on an unclaimed or E1 organisation and E2 approval requires that acceptance. So a dispute against an E2 organisation can be rejected but never upheld in the product.
+- Options: (a) allow an E2-level disputed claim to be upheld: the claimant of an open **disputed E2** claim may record the Master Enterprise Terms acceptance on that E2 organisation; staff admin approval keeps E2 (new `e2_verified_at`, new re-verification date) and transfers ownership as for E1 disputes; (b) add a staff-only step `app_staff_revoke_verification(org, reason)` (E2 → unclaimed, held engagements frozen, Tier-2 grants revoked) that staff run first, after which the disputed claim follows the normal E1/E2 path; (c) keep it closed: disputes against E2 organisations are handled off-platform under the 6.12 process (suspend the organisation with `organizations.suspended_at`, which already stops Tier-2 access, and reject the in-app claim with a reason), revisited when real disputes occur; (d) decide at G2 with the advocate, keep (c) until then.
+- Recommended default: (c) until you decide; it needs no schema change and fails closed (Tier-2 access stops on suspension). (a) is the smallest change if in-product transfers of E2 organisations are wanted; (b) is cleaner for audit but touches engagements and grants (T2.5, Phase 3).
+- Blocks: nothing in Phase 2 (T2.6b builds the dispute queue either way; only the "uphold" button on an E2 organisation depends on this).
+- Decision:
+
+### D-31 · Badge text for an E2 (legal entity verified) organisation (T2.6a, REQ-DIR-01, AC-DIR-3)
+- Why: `docs/spec/06` 6.2 gives the badge copy for unclaimed ("Listed from public information · not on the platform · not affiliated") and E1 ("Domain verified (pending legal verification)") organisations, but none for E2. A verification badge is a claim to users, and claims text needs you (`CLAUDE.md` stop rule). T2.6a (`feat/REQ-DIR-02-provisional-seed`, `backend/src/bridge/directory/service.py` `BADGE_TEXT`) ships a placeholder tagged `[[COPY-REVIEW]]`: "Legal entity verified". No organisation can reach E2 until T2.6b, so nobody sees it yet.
+- Options: (a) approve "Legal entity verified"; (b) a line that says what was checked, e.g. "Registration and signatory verified" or "Business registration verified (BRS, KRA PIN)"; (c) your own wording, or leave it to the advocate's review at G2.
+- Recommended default: (a) as the placeholder until you answer; it must be approved before T2.6b can approve an E2 claim in staging.
+- Blocks: E2 approvals shown to users (T2.6b); nothing else.
+- Decision:
+
+### D-32 · Hardening the per-user digest: a separate login for the registration worker, and HMAC instead of SHA-256(salt ‖ data) (T2.1, REQ-TEN-01, ADR-002)
+- Why: the T2.1 round-3 security review found two limits of `app_subject_digest` (the per-user digest behind owner refs, audit digests and phone digests). (1) The database lets only the caller's own digest through unless the call runs as staff or as the `provenance_worker` role. But the app's login role `bridge_app` may switch to `provenance_worker` (by design, like every Tier-2 role: membership `WITH INHERIT FALSE, SET TRUE`). So an injected SQL expression on the request path can switch roles inside one statement and compute any user's digest. The binding stops query bugs and ORM loads, not injected SQL. The same trust applies to the `app.user_id` setting (threat model TB2). (2) The spec's formula `SHA-256(subject_salt ‖ data)` (`docs/spec/06` 6.4) puts a secret in front of the data, which is open to length extension. `HMAC-SHA-256(key = subject_salt, data)` is the standard construction. Changing it changes the spec.
+- Options:
+  (a) Keep both as they are for Phase 2. Record them as residuals (done in `THREAT_MODEL.md`) and revisit at the Phase 8 security audit.
+  (b) Give the registration worker its own database login `provenance_worker` (detected with `session_user`) and remove `bridge_app`'s SET membership in it. This changes `infra/postgres/roles.sql` and the deploy config, adds one more database URL secret, and needs an ADR-002 addendum.
+  (c) Switch the formula to HMAC (pgcrypto `hmac(data, salt, 'sha256')`) before any digest is stored in staging. This needs a `docs/spec/06` change by you.
+  (d) Both (b) and (c).
+- Recommended default: (a) now. Then (c) before staging (cheap while no real digests exist), and (b) with the Phase 8 hardening.
+- Blocks: nothing in Phase 2. (c) must be decided before real digests are stored (staging, D-22).
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |

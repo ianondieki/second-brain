@@ -14,8 +14,10 @@ from __future__ import annotations
 import hmac
 import re
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -25,18 +27,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge import clock
 from bridge.audit.service import record as audit
 from bridge.auth import emails, passwords, sessions, throttle, totp
-from bridge.auth.cookies import signup_binding
+from bridge.auth.cookies import identity_binding, signup_binding
 from bridge.auth.crypto import decode_key, decrypt, encrypt, new_token, token_hash
 from bridge.auth.mailer import PendingEmail
-from bridge.auth.models import LoginToken, User
-from bridge.auth.schemas import SignupRequest
+from bridge.auth.models import AuthIdentity, LoginToken, User
+from bridge.auth.schemas import OrgSignup, SignupRequest
 from bridge.billing.service import start_free_subscription
 from bridge.config import Settings
 from bridge.db import bind_tenant
 from bridge.engagements.calendar import local_date
 from bridge.ids import uuid7
 from bridge.logging import get_logger
-from bridge.models.enums import MFA_REQUIRED_ORG_ROLES, LoginTokenPurpose, MembershipStatus, PlanSide, UserStatus
+from bridge.models.enums import (
+    MFA_REQUIRED_ORG_ROLES,
+    ConsentPurpose,
+    LoginTokenPurpose,
+    MembershipStatus,
+    PlanSide,
+    UserStatus,
+)
 from bridge.notifications.email import is_mailbox
 from bridge.profiles.consents import consents_version, record_decisions, terms_version
 from bridge.profiles.models import DeveloperProfile
@@ -81,7 +90,7 @@ class SignupOutcome:
 log = get_logger("bridge.auth.service")
 
 
-async def _allow_email(db: AsyncSession, settings: Settings, purpose: str, email: str, ip: str) -> bool:
+async def allow_email(db: AsyncSession, settings: Settings, purpose: str, email: str, ip: str) -> bool:
     """Throttle an action that sends email; record it when allowed. A drop is silent to the caller but logged."""
     limit, window = (SIGNUP_LIMIT, SIGNUP_WINDOW) if purpose == "signup" else (MAGIC_LIMIT, MAGIC_WINDOW)
     keys = throttle.keys(settings.secret_key.get_secret_value(), purpose, email, ip)
@@ -101,7 +110,7 @@ def normalise_email(email: str) -> str:
     return email.strip().lower()
 
 
-async def _user_by_email(db: AsyncSession, email: str) -> User | None:
+async def user_by_email(db: AsyncSession, email: str) -> User | None:
     return (await db.execute(select(User).where(User.email == normalise_email(email)))).scalar_one_or_none()
 
 
@@ -122,7 +131,7 @@ def _binding(settings: Settings, user: User) -> str | None:
     return signup_binding(settings, user.id, user.password_hash) if user.password_hash else None
 
 
-async def _issue_link(db: AsyncSession, settings: Settings, user: User, purpose: LoginTokenPurpose) -> str:
+async def issue_link(db: AsyncSession, settings: Settings, user: User, purpose: LoginTokenPurpose) -> str:
     """A fresh single-use token. Earlier links stay valid until one is used or the password is replaced, so a
     stranger asking for a link cannot void the owner's."""
     now = clock.utcnow()
@@ -167,7 +176,7 @@ def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None
         raise AuthError("weak_password", 422) from exc
 
 
-def _verify_email(settings: Settings, user: User, token: str) -> PendingEmail:
+def verification_email(settings: Settings, user: User, token: str) -> PendingEmail:
     wording = emails.verify_email(settings.product_name, _link(settings, token), settings.magic_link_ttl_minutes)
     return PendingEmail(user.id, user.email, wording, "auth.verify_email")
 
@@ -180,11 +189,11 @@ async def _existing_account(
         # Unverified: this signup's password replaces the stored one, unless throttled (then nothing changes).
         # Earlier links stay valid, so a stranger's signup cannot void the owner's link; any link keeps the
         # password only in the browser that set it (the binding covers the current password hash).
-        if not await _allow_email(db, settings, "magic", user.email, ip):
+        if not await allow_email(db, settings, "magic", user.email, ip):
             return SignupOutcome()
         user.password_hash = password_hash
-        token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-        return SignupOutcome([_verify_email(settings, user, token)], _binding(settings, user))
+        token = await issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
+        return SignupOutcome([verification_email(settings, user, token)], _binding(settings, user))
     login_url = f"{settings.public_base_url.rstrip('/')}/login"
     wording = emails.account_exists(settings.product_name, login_url)
     dedupe = f"auth.account_exists:{user.id}:{local_date(clock.utcnow()).isoformat()}"  # at most one a day
@@ -195,42 +204,87 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
     """Create an unverified account (developer, or organisation owner) and return the verification email to send."""
     email = normalise_email(req.email)
     _validate_signup(settings, req, email)
-    if not await _allow_email(db, settings, "signup", email, ip):
+    if not await allow_email(db, settings, "signup", email, ip):
         return SignupOutcome()  # silent: same answer, no email (stops email bombing through signup)
     password_hash = await passwords.hash_password_async(req.password)  # on every path: timing reveals nothing
 
-    existing = await _user_by_email(db, email)
+    existing = await user_by_email(db, email)
     if existing is not None:
         return await _existing_account(db, settings, existing, password_hash, ip)
 
+    account = NewAccount(
+        email=email,
+        display_name=req.display_name.strip(),
+        locale=req.locale,
+        side=req.side,
+        org=req.org,
+        consents=req.consents,
+        method="password",
+    )
+    user = await create_account(db, settings, account, password_hash=password_hash)
+    if user is None:
+        # A concurrent signup created the address first: answer exactly as for an existing account.
+        existing = await user_by_email(db, email)
+        assert existing is not None  # create_account re-raises when the address is still free
+        return await _existing_account(db, settings, existing, password_hash, ip)
+    token = await issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
+    return SignupOutcome([verification_email(settings, user, token)], _binding(settings, user))
+
+
+@dataclass(frozen=True, slots=True)
+class NewAccount:
+    """What a signup collects apart from the credential: the email form (REQ-AUTH-01) or OAuth (REQ-AUTH-02)."""
+
+    email: str  # normalised
+    display_name: str
+    locale: str
+    side: Literal["developer", "org"]
+    org: OrgSignup | None
+    consents: Mapping[ConsentPurpose, bool]
+    method: str  # "password" or the OAuth provider, for the audit event
+
+
+async def create_account(
+    db: AsyncSession,
+    settings: Settings,
+    account: NewAccount,
+    *,
+    password_hash: str | None,
+    verified_at: datetime | None = None,
+) -> User | None:
+    """Insert the user with a developer profile, or a new organisation it owns, plus the free plan, the consent
+    decisions and the ``auth.signup`` audit event. None when a concurrent signup took the address first."""
     user = User(
-        id=uuid7(), email=email, password_hash=password_hash, display_name=req.display_name.strip(), locale=req.locale
+        id=uuid7(),
+        email=account.email,
+        password_hash=password_hash,
+        display_name=account.display_name,
+        locale=account.locale,
+        email_verified_at=verified_at,
     )
     try:
         async with db.begin_nested():
             db.add(user)
             await db.flush()
     except IntegrityError:
-        # A concurrent signup created the address first: answer exactly as for an existing account.
-        existing = await _user_by_email(db, email)
-        if existing is None:
+        if await user_by_email(db, account.email) is None:
             raise
-        return await _existing_account(db, settings, existing, password_hash, ip)
+        return None
     await bind_tenant(db, user_id=user.id)
 
     org_id: UUID | None = None
-    if req.side == "developer":
+    if account.side == "developer":
         db.add(DeveloperProfile(user_id=user.id, handle=_handle_from(user.display_name)))
         await db.flush()
         await start_free_subscription(db, settings, side=PlanSide.DEVELOPER, user_id=user.id)
     else:
-        assert req.org is not None
+        assert account.org is not None
         org_id = await create_organization(
-            db, kind=req.org.kind, legal_name=req.org.legal_name, slug=_slug_from(req.org.legal_name)
+            db, kind=account.org.kind, legal_name=account.org.legal_name, slug=_slug_from(account.org.legal_name)
         )
         await start_free_subscription(db, settings, side=PlanSide.ORG, org_id=org_id)
 
-    await record_decisions(db, settings, user_id=user.id, decisions=req.consents, source="signup")
+    await record_decisions(db, settings, user_id=user.id, decisions=account.consents, source="signup")
     await audit(
         db,
         "auth.signup",
@@ -239,38 +293,55 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
         subject_type="user",
         subject_id=user.id,
         payload={
-            "side": req.side,
+            "side": account.side,
+            "method": account.method,
             "terms_version": terms_version(settings),
             "consents_version": consents_version(settings),
         },
     )
-    token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-    return SignupOutcome([_verify_email(settings, user, token)], _binding(settings, user))
+    return user
 
 
 async def request_magic_link(db: AsyncSession, settings: Settings, email: str, ip: str) -> list[PendingEmail]:
     """A sign-in link (or a verification link for an unverified account). Silent when throttled or unknown."""
     email = normalise_email(email)
-    if not await _allow_email(db, settings, "magic", email, ip):
+    if not await allow_email(db, settings, "magic", email, ip):
         return []
-    user = await _user_by_email(db, email)
+    user = await user_by_email(db, email)
     if user is None or user.status != UserStatus.ACTIVE:
         return []
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
-        return [_verify_email(settings, user, await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL))]
-    token = await _issue_link(db, settings, user, LoginTokenPurpose.LOGIN)
+        return [
+            verification_email(settings, user, await issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL))
+        ]
+    token = await issue_link(db, settings, user, LoginTokenPurpose.LOGIN)
     wording = emails.login_link(settings.product_name, _link(settings, token), settings.magic_link_ttl_minutes)
     return [PendingEmail(user.id, user.email, wording, "auth.login_link")]
 
 
-async def _start_session(db: AsyncSession, settings: Settings, user: User, user_agent: str | None) -> LoginOutcome:
+async def start_session(db: AsyncSession, settings: Settings, user: User, user_agent: str | None) -> LoginOutcome:
     mfa = user.totp_enabled_at is not None
     live = await sessions.create(
         db, user, ttl=timedelta(days=settings.session_ttl_days), mfa_pending=mfa, user_agent=user_agent
     )
     await bind_tenant(db, user_id=user.id)
     return LoginOutcome(live, mfa_required=mfa)
+
+
+def _same(presented: str, expected: str) -> bool:
+    """Constant-time comparison that also accepts non-ASCII input (a planted cookie) without raising."""
+    return hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
+
+
+async def _drop_unbound_identities(db: AsyncSession, settings: Settings, user_id: UUID, signup_cookie: str) -> None:
+    """OAuth identities attached before the address was verified (an OAuth signup whose provider had not verified the
+    address, REQ-AUTH-02) survive only when the link is opened in the browser that attached them; elsewhere they
+    could be an attacker's account waiting for the owner to verify (pre-hijacking)."""
+    identities = (await db.execute(select(AuthIdentity).where(AuthIdentity.user_id == user_id))).scalars().all()
+    for identity in identities:
+        if not _same(signup_cookie, identity_binding(settings, user_id, identity.id)):
+            await db.delete(identity)
 
 
 async def consume_link(
@@ -290,13 +361,14 @@ async def consume_link(
     await bind_tenant(db, user_id=user.id)
     if user.email_verified_at is None:
         expected = _binding(settings, user)
-        bound = expected is not None and hmac.compare_digest(signup_cookie or "", expected)
+        bound = expected is not None and _same(signup_cookie or "", expected)
         if not bound:
             user.password_hash = None  # a password set before verification from another browser is not trusted
+        await _drop_unbound_identities(db, settings, user.id, signup_cookie or "")
         user.email_verified_at = now
         await sessions.revoke_all(db, user.id)
     await _spend_links(db, user.id)  # one link used: the account's other outstanding links stop working
-    outcome = await _start_session(db, settings, user, user_agent)
+    outcome = await start_session(db, settings, user, user_agent)
     await audit(
         db,
         "auth.login",
@@ -314,7 +386,7 @@ async def login(
     keys = throttle.keys(settings.secret_key.get_secret_value(), "login", email, ip)
     if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
         raise AuthError("too_many_attempts", 429)
-    user = await _user_by_email(db, email)
+    user = await user_by_email(db, email)
     ok = await passwords.verify_password_async(user.password_hash if user else None, password)
     throttle.record(db, keys, succeeded=ok)
     if user is None or not ok or user.status != UserStatus.ACTIVE:
@@ -322,13 +394,13 @@ async def login(
     if user.email_verified_at is None:
         await bind_tenant(db, user_id=user.id)
         pending: list[PendingEmail] = []
-        if await _allow_email(db, settings, "magic", user.email, ip):  # a resend, under the magic-link limits
-            token = await _issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
-            pending = [_verify_email(settings, user, token)]
+        if await allow_email(db, settings, "magic", user.email, ip):  # a resend, under the magic-link limits
+            token = await issue_link(db, settings, user, LoginTokenPurpose.VERIFY_EMAIL)
+            pending = [verification_email(settings, user, token)]
         raise AuthError("email_unverified", 403, pending=pending, binding=_binding(settings, user))
     if user.password_hash and passwords.needs_rehash(user.password_hash):
         user.password_hash = await passwords.hash_password_async(password)
-    outcome = await _start_session(db, settings, user, user_agent)
+    outcome = await start_session(db, settings, user, user_agent)
     await audit(
         db, "auth.login", actor_user_id=user.id, subject_type="user", subject_id=user.id, payload={"method": "password"}
     )
@@ -401,11 +473,12 @@ async def complete_mfa(
     return live
 
 
-async def _require_reauth(
+async def require_reauth(
     db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
 ) -> None:
-    """Credential changes need the current password (throttled like a login, so a stolen session cannot guess it),
-    or, for a password-less account, a sign-in within 15 minutes."""
+    """Credential changes (password, TOTP enrolment, OAuth linking and unlinking) need the current password
+    (throttled like a login, so a stolen session cannot guess it), or, for a password-less account, a sign-in
+    within 15 minutes."""
     if user.password_hash:
         keys = throttle.keys(settings.secret_key.get_secret_value(), "reauth", str(user.id), "session")
         if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
@@ -418,7 +491,7 @@ async def _require_reauth(
         raise AuthError("recent_sign_in_required", 403)
 
 
-def _notice(settings: Settings, user: User, what: str) -> PendingEmail:
+def notice_email(settings: Settings, user: User, what: str) -> PendingEmail:
     return PendingEmail(
         user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice"
     )
@@ -428,7 +501,7 @@ async def set_password(
     db: AsyncSession, settings: Settings, live: sessions.LiveSession, current: str | None, new: str
 ) -> list[PendingEmail]:
     user = await lock_user(db, live.user.id)
-    await _require_reauth(db, settings, user, live, current)
+    await require_reauth(db, settings, user, live, current)
     try:
         passwords.check_policy(new, email=user.email)
     except passwords.PasswordPolicyError as exc:
@@ -436,7 +509,7 @@ async def set_password(
     user.password_hash = await passwords.hash_password_async(new)
     await sessions.revoke_all(db, user.id, except_id=live.row.id)
     await audit(db, "auth.password_set", actor_user_id=user.id, subject_type="user", subject_id=user.id)
-    return [_notice(settings, user, "Your password was changed.")]
+    return [notice_email(settings, user, "Your password was changed.")]
 
 
 async def begin_totp_enrolment(
@@ -445,7 +518,7 @@ async def begin_totp_enrolment(
     user = await lock_user(db, live.user.id)
     if user.totp_enabled_at is not None:
         raise AuthError("totp_already_enabled", 409)
-    await _require_reauth(db, settings, user, live, password)
+    await require_reauth(db, settings, user, live, password)
     secret = totp.new_secret()
     user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
@@ -472,7 +545,7 @@ async def confirm_totp_enrolment(
     # Other sessions were created without the second factor: end them.
     await sessions.revoke_all(db, user.id, except_id=live.row.id)
     await audit(db, "auth.totp_enabled", actor_user_id=user.id, subject_type="user", subject_id=user.id)
-    return codes, [_notice(settings, user, "Two-step sign-in was turned on.")]
+    return codes, [notice_email(settings, user, "Two-step sign-in was turned on.")]
 
 
 async def mfa_required_for(db: AsyncSession, user: User) -> bool:
@@ -501,7 +574,7 @@ async def disable_totp(db: AsyncSession, settings: Settings, live: sessions.Live
     user.totp_last_counter = None
     user.totp_recovery_hashes = []
     await audit(db, "auth.totp_disabled", actor_user_id=user.id, subject_type="user", subject_id=user.id)
-    return [_notice(settings, user, "Two-step sign-in was turned off.")]
+    return [notice_email(settings, user, "Two-step sign-in was turned off.")]
 
 
 async def has_developer_profile(db: AsyncSession, user_id: UUID) -> bool:

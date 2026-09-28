@@ -20,14 +20,17 @@ from bridge.notifications.email import FakeEmailProvider
 
 
 @asynccontextmanager
-async def make_client(app_engine: AsyncEngine, settings: Settings | None = None) -> AsyncIterator[httpx.AsyncClient]:
-    """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and a fake email outbox."""
+async def make_client(
+    app_engine: AsyncEngine, settings: Settings | None = None, *, ip: str = "127.0.0.1"
+) -> AsyncIterator[httpx.AsyncClient]:
+    """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and a fake email outbox. ``ip`` is
+    the client address the app sees (per-IP throttles)."""
     settings = settings or get_settings()
     app = create_app(settings)
     app.state.engine = app_engine
     app.state.session_factory = create_session_factory(app_engine)
     app.state.email_provider = FakeEmailProvider()
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=app, client=(ip, 123))
     async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
         client.app = app  # type: ignore[attr-defined]
         csrf = await client.get("/api/auth/csrf")
