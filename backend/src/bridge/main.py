@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from bridge import __version__
+from bridge.admin.router import router as admin_router
 from bridge.api import health
 from bridge.auth import csrf
 from bridge.auth.router import router as auth_router
@@ -92,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(me_router)
     app.include_router(consents_router)
     app.include_router(directory_router)
+    app.include_router(admin_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 
