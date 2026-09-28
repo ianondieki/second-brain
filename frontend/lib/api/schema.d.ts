@@ -188,8 +188,8 @@ export interface paths {
          * @description The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow
          *     cookie. Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
          *     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-         *     consents_version_required. Success: the return path (or /auth/mfa), /signup/check-email, or
-         *     /settings/security?linked=PROVIDER.
+         *     consents_version_required, too_many_attempts (10 callbacks a minute from one IP). Success: the return path (or
+         *     /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.
          */
         get: operations["oauth_callback_api_auth_oauth__provider__callback_get"];
         put?: never;
@@ -214,7 +214,8 @@ export interface paths {
          * @description Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
          *     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
          *     a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
-         *     15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms.
+         *     15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts
+         *     after 10 starts a minute from one IP.
          */
         post: operations["oauth_start_api_auth_oauth__provider__start_post"];
         delete?: never;

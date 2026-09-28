@@ -41,18 +41,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge import clock
 from bridge.audit.service import record as audit
-from bridge.auth import csrf, oauth, service, sessions
+from bridge.auth import csrf, oauth, service, sessions, throttle
 from bridge.auth.cookies import identity_binding
 from bridge.auth.mailer import PendingEmail
 from bridge.auth.models import AuthIdentity, User
 from bridge.auth.schemas import OAuthSignup, OAuthStartRequest
 from bridge.config import Settings
 from bridge.db import bind_tenant
+from bridge.logging import get_logger
 from bridge.models.enums import AuthProvider, LoginTokenPurpose, UserStatus
 from bridge.profiles.consents import consents_version
 
 ERROR_PAGES: dict[oauth.Intent, str] = {"login": "/login", "signup": "/signup", "link": "/settings/security"}
 CHECK_EMAIL = "/signup/check-email"
+REQUESTS_PER_IP_PER_MINUTE = 10  # OAuth starts, and separately callbacks, from one client IP
 
 
 @dataclass(slots=True)
@@ -75,6 +77,21 @@ def failed(intent: oauth.Intent | None, code: str, provider: AuthProvider) -> Ou
 
 class _Taken(Exception):
     """The address or the identity was taken by a concurrent request: undo the whole signup."""
+
+
+# ------------------------------------------------------------------------------------------------ throttle
+
+
+async def allow_request(db: AsyncSession, settings: Settings, step: Literal["start", "callback"], ip: str) -> bool:
+    """At most ``REQUESTS_PER_IP_PER_MINUTE`` OAuth starts, and as many callbacks, a minute from one client IP (the
+    ``login_attempts`` ledger, HMAC digests only). Each allowed request is recorded; the caller commits. A refusal is
+    logged as ``auth.oauth_throttled`` (not audited: an audit append per junk request would be its own flood)."""
+    keys = throttle.ip_keys(settings.secret_key.get_secret_value(), f"oauth_{step}", ip)
+    if await throttle.ip_blocked(db, keys, limit=REQUESTS_PER_IP_PER_MINUTE):
+        get_logger(__name__).info("auth.oauth_throttled", step=step)
+        return False
+    throttle.record(db, keys, succeeded=True)
+    return True
 
 
 # ------------------------------------------------------------------------------------------------ start

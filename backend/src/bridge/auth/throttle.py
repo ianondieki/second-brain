@@ -2,7 +2,8 @@
 
 Keys are HMAC digests of the normalised email and the client IP, never the raw values. Limits per rolling minute:
 5 for one (IP, account) pair; 20 for one account from any IP (credential stuffing); 100 for one IP (a shared NAT
-must not lock out a whole campus). Magic-link and signup emails reuse the ledger with their own purpose labels.
+must not lock out a whole campus). Magic-link and signup emails reuse the ledger with their own purpose labels, and
+the OAuth start and callback routes (REQ-AUTH-02) with per-IP keys only (``ip_keys``, ``ip_blocked``).
 """
 
 from __future__ import annotations
@@ -34,6 +35,11 @@ def keys(secret: str, purpose: str, email: str, ip: str) -> Keys:
     )
 
 
+def ip_keys(secret: str, purpose: str, ip: str) -> Keys:
+    """Keys for an action throttled per client IP only (no account is known yet)."""
+    return keys(secret, purpose, "", ip)
+
+
 async def _count(db: AsyncSession, *conditions: object, window: timedelta) -> int:
     since = clock.utcnow() - window
     stmt = select(func.count()).select_from(LoginAttempt).where(and_(LoginAttempt.created_at > since, *conditions))  # type: ignore[arg-type]
@@ -57,6 +63,11 @@ async def blocked(
     if await _count(db, LoginAttempt.email_digest == k.email, window=window) >= account_limit:
         return True
     return await _count(db, LoginAttempt.ip_digest == k.ip, window=window) >= ip_limit
+
+
+async def ip_blocked(db: AsyncSession, k: Keys, *, limit: int, window: timedelta = WINDOW) -> bool:
+    """True when this IP made ``limit`` or more attempts (for this purpose) in the window."""
+    return await _count(db, LoginAttempt.ip_digest == k.ip, window=window) >= limit
 
 
 async def account_count(db: AsyncSession, k: Keys, *, window: timedelta) -> int:

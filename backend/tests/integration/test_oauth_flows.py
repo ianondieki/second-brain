@@ -25,6 +25,7 @@ import respx
 from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+from structlog.testing import capture_logs
 
 import bridge.clock
 from bridge.auth import identities, service, totp
@@ -62,16 +63,22 @@ async def seeded(owner_engine: AsyncEngine) -> None:
         await seed_all(conn, get_settings())
 
 
+def new_ip() -> str:
+    """Each browser gets its own address: the OAuth routes are throttled per IP and every test shares one database."""
+    n = uuid4().int
+    return f"10.{n >> 16 & 255}.{n >> 8 & 255}.{n & 255}"
+
+
 @pytest.fixture
 async def client(app_engine: AsyncEngine) -> AsyncIterator[httpx.AsyncClient]:
-    async with make_client(app_engine, settings=oauth_settings()) as c:
+    async with make_client(app_engine, settings=oauth_settings(), ip=new_ip()) as c:
         yield c
 
 
 @pytest.fixture
 async def other(app_engine: AsyncEngine) -> AsyncIterator[httpx.AsyncClient]:
-    """A second browser (its own cookies)."""
-    async with make_client(app_engine, settings=oauth_settings()) as c:
+    """A second browser (its own cookies and address)."""
+    async with make_client(app_engine, settings=oauth_settings(), ip=new_ip()) as c:
         yield c
 
 
@@ -793,6 +800,59 @@ async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> Non
     params = await start(client, "google", "login")
     missing = await client.get("/api/auth/oauth/google/callback", params={"state": params["state"]})
     assert landing(missing) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+
+
+# ------------------------------------------------------------------ throttling and connections
+
+
+async def test_starting_oauth_is_throttled_per_ip(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    """Fix round 1: at most 10 starts a minute from one address (each would lead to a token-endpoint call)."""
+    for _ in range(10):
+        assert (await client.post("/api/auth/oauth/github/start", json={"intent": "login"})).status_code == 200
+    with capture_logs() as logs:
+        throttled = await client.post("/api/auth/oauth/google/start", json={"intent": "login"})
+    assert refusal(throttled) == (429, "too_many_attempts")
+    assert "__Host-bridge_oauth" not in cookie_names(throttled)
+    assert [entry["step"] for entry in logs if entry["event"] == "auth.oauth_throttled"] == ["start"]
+    assert (await other.post("/api/auth/oauth/github/start", json={"intent": "login"})).status_code == 200
+
+
+async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient) -> None:
+    """Junk callbacks use up the address's budget; the next one, even with a valid flow, reaches no provider."""
+    callback = "/api/auth/oauth/github/callback"
+    for _ in range(10):
+        junk = await client.get(callback, params={"code": "c", "state": "junk"})
+        assert landing(junk) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    params = await start(client, "github", "signup", **signup_body())
+    with respx.mock(assert_all_called=False) as router, capture_logs() as logs:
+        token = fake_github(router, person())
+        throttled = await client.get(callback, params={"code": "c", "state": params["state"]})
+    assert landing(throttled) == ("/signup", {"oauth_error": "too_many_attempts", "provider": "github"})
+    assert token.call_count == 0
+    assert not signed_in(throttled)
+    assert _deleted(throttled, "__Host-bridge_oauth")
+    assert [entry["step"] for entry in logs if entry["event"] == "auth.oauth_throttled"] == ["callback"]
+
+
+async def test_no_database_connection_is_held_during_the_provider_call(
+    client: httpx.AsyncClient, app_engine: AsyncEngine
+) -> None:
+    """The callback commits its throttle entry and releases its connection before calling the provider, so slow
+    providers cannot exhaust the pool (a signed-in callback also looked up its session first)."""
+    await email_account(client, email())
+    params = await start(client, "github", "link", **REAUTH)
+    held: list[int] = []
+
+    def token(_request: httpx.Request) -> httpx.Response:
+        held.append(app_engine.pool.checkedout())  # type: ignore[attr-defined]
+        return httpx.Response(200, json={"access_token": "gho_fake", "token_type": "bearer"})
+
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, person())
+        router.post(GITHUB_TOKEN).mock(side_effect=token)
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/settings/security", {"linked": "github"})
+    assert held == [0]
 
 
 # ------------------------------------------------------------------ second factor, unlinking, edge cases

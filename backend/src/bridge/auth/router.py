@@ -348,15 +348,24 @@ async def oauth_providers(settings: SettingsDep) -> OAuthProvidersResponse:
 
 @router.post("/oauth/{provider}/start")
 async def oauth_start(
-    provider: str, body: OAuthStartRequest, response: Response, db: Db, settings: SettingsDep, live: OptionalSession
+    provider: str,
+    body: OAuthStartRequest,
+    request: Request,
+    response: Response,
+    db: Db,
+    settings: SettingsDep,
+    live: OptionalSession,
 ) -> OAuthStartResponse:
     """Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
     a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
-    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms."""
+    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts
+    after 10 starts a minute from one IP."""
     client = oauth.configured(settings, provider)
     if client is None:
         raise not_found()
+    if not await identities.allow_request(db, settings, "start", client_ip(request)):
+        raise _fail(service.AuthError("too_many_attempts", 429))
     try:
         flow = await identities.begin(db, settings, client.provider.name, body, live)
     except service.AuthError as exc:
@@ -394,20 +403,24 @@ async def oauth_callback(
     """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow
     cookie. Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-    consents_version_required. Success: the return path (or /auth/mfa), /signup/check-email, or
-    /settings/security?linked=PROVIDER."""
+    consents_version_required, too_many_attempts (10 callbacks a minute from one IP). Success: the return path (or
+    /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER."""
     client = oauth.configured(settings, provider)
     if client is None:
         raise not_found()
     now = clock.utcnow()
     flow = oauth.unseal(settings, request.cookies.get(settings.oauth_cookie_name), now=now)
-    if flow is None or flow.provider != client.provider.name or not _state_matches(state, flow):
+    if not await identities.allow_request(db, settings, "callback", client_ip(request)):
+        outcome = identities.failed(flow.intent if flow else None, "too_many_attempts", client.provider.name)
+    elif flow is None or flow.provider != client.provider.name or not _state_matches(state, flow):
         outcome = identities.failed(None, "oauth_state", client.provider.name)
     elif error is not None:
         outcome = identities.failed(flow.intent, "oauth_cancelled", flow.provider)  # never the provider's own text
     elif not code or len(code) > MAX_CALLBACK_PARAM_CHARS:
         outcome = identities.failed(flow.intent, "oauth_failed", flow.provider)
     else:
+        # Keep the throttle entry and release the connection (and any row or advisory lock) before the provider call.
+        await db.commit()
         try:
             ident = await oauth.fetch_identity(client, flow, code, now=now)
         except oauth.ProviderError:
@@ -422,7 +435,7 @@ async def oauth_callback(
                 ip=client_ip(request),
                 user_agent=request.headers.get("user-agent"),
             )
-            await db.commit()
+    await db.commit()
     response = RedirectResponse(
         oauth.web_url(settings, outcome.path, outcome.params), status_code=status.HTTP_302_FOUND, background=tasks
     )
