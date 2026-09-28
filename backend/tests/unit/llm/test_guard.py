@@ -1,19 +1,28 @@
 """AC-SEC-6 (unit half): the Tier-2 guard refuses Tier-2 fields for Tier-1-only purposes and without the exact live
-consent; the full per-task assertion over the ledger and the transport is test_no_tier2_in_llm_calls.py."""
+consent; the full per-task assertion over the ledger and the transport is test_no_tier2_in_llm_calls.py, and the
+per-session consent against PostgreSQL and RLS is tests/integration/llm/test_session_consent.py."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
 import pytest
 
 from bridge.llm.errors import ConsentRequired, Tier2NotAllowed
-from bridge.llm.guard import SessionConsentChecker, StaticConsents, check_tier2, session_consent_source
+from bridge.llm.guard import (
+    SessionConsentChecker,
+    StaticConsents,
+    check_tier2,
+    grant_session_consent,
+    session_consent_source,
+    withdraw_session_consent,
+)
 from bridge.llm.types import InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
-from tests.unit.llm.helpers import OTHER_OWNER, OTHER_SESSION, OWNER, SESSION, real_registry
+from tests.unit.llm.helpers import OTHER_OWNER, OTHER_SESSION, OWNER, SESSION, real_registry, settings
 from tests.unit.llm.rig import registry_with
 
 ASSISTANT = ConsentPurpose.TIER2_LLM_ASSISTANT
@@ -53,7 +62,7 @@ async def test_assistant_needs_the_owners_live_assistant_consent() -> None:
     assert info.value.purpose is ASSISTANT
     consents.grant(OWNER, ASSISTANT, session_id=SESSION)
     await check_tier2(task, msgs(tier2()), consents, session_id=SESSION)
-    for other in (OTHER_SESSION, None):  # per session (ADR-002): another session or a job does not count
+    for other in (OTHER_SESSION, None):  # per session (ADR-005 decision 4): another session or a job does not count
         with pytest.raises(ConsentRequired):
             await check_tier2(task, msgs(tier2()), consents, session_id=other)
     consents.withdraw(OWNER, ASSISTANT)
@@ -77,8 +86,17 @@ async def test_every_owner_must_consent() -> None:
     assert info.value.fields == ("other.method",)
 
 
+async def test_a_later_grant_in_another_session_replaces_the_first() -> None:
+    consents = StaticConsents({(OWNER, ASSISTANT, SESSION)})
+    consents.grant(OWNER, ASSISTANT, session_id=OTHER_SESSION)
+    assert not await consents.has_live_consent(OWNER, ASSISTANT, session_id=SESSION)
+    assert await consents.has_live_consent(OWNER, ASSISTANT, session_id=OTHER_SESSION)
+    consents.grant(OWNER, ASSISTANT)  # a grant without a session (the settings page) is no per-use opt-in
+    assert not await consents.has_live_consent(OWNER, ASSISTANT, session_id=OTHER_SESSION)
+
+
 async def test_session_checker_reads_persistent_consents(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Persistent purposes go through bridge.profiles.consents; the per-session query is an integration test."""
+    """Persistent purposes go through bridge.profiles.consents; the SQL itself is covered by the integration test."""
     seen: list[tuple[Any, ...]] = []
 
     async def fake(db: Any, user_id: UUID, purpose: ConsentPurpose) -> bool:
@@ -91,6 +109,57 @@ async def test_session_checker_reads_persistent_consents(monkeypatch: pytest.Mon
     assert await checker.has_live_consent(OWNER, MODERATION, session_id=None)
     assert seen == [(session, OWNER, MODERATION)]
     assert not await checker.has_live_consent(OWNER, ASSISTANT, session_id=None)  # per session: no session, no consent
+
+
+@pytest.mark.parametrize(
+    ("latest", "live"),
+    [
+        (None, False),  # never decided
+        ({"granted": True, "source": "session"}, True),  # granted in this session (placeholder resolved below)
+        ({"granted": False, "source": "session"}, False),  # withdrawn in this session
+        ({"granted": True, "source": "other"}, False),  # granted in another session
+        ({"granted": True, "source": "settings"}, False),  # granted on the settings page: no per-use opt-in
+    ],
+)
+async def test_session_checker_compares_the_latest_decisions_source(
+    monkeypatch: pytest.MonkeyPatch, latest: dict[str, Any] | None, live: bool
+) -> None:
+    sources = {"session": session_consent_source(SESSION), "other": session_consent_source(OTHER_SESSION)}
+    seen: list[tuple[Any, ...]] = []
+
+    async def fake(db: Any, user_id: UUID, purpose: ConsentPurpose) -> Any:
+        seen.append((db, user_id, purpose))
+        if latest is None:
+            return None
+        return SimpleNamespace(granted=latest["granted"], source=sources.get(latest["source"], latest["source"]))
+
+    monkeypatch.setattr(consents, "latest", fake)
+    db = object()
+    assert await SessionConsentChecker(db).has_live_consent(OWNER, ASSISTANT, session_id=SESSION) is live  # type: ignore[arg-type]
+    assert seen == [(db, OWNER, ASSISTANT)]
+
+
+@pytest.mark.parametrize(("writer", "granted"), [(grant_session_consent, True), (withdraw_session_consent, False)])
+async def test_session_writers_record_one_session_bound_decision(
+    monkeypatch: pytest.MonkeyPatch, writer: Any, granted: bool
+) -> None:
+    recorded: list[dict[str, Any]] = []
+
+    async def fake(db: Any, cfg: Any, **kwargs: Any) -> None:
+        recorded.append({"db": db, "settings": cfg, **kwargs})
+
+    monkeypatch.setattr(consents, "record_decisions", fake)
+    db, cfg = object(), settings()
+    await writer(db, cfg, user_id=OWNER, session_id=SESSION)
+    assert recorded == [
+        {
+            "db": db,
+            "settings": cfg,
+            "user_id": OWNER,
+            "decisions": {ASSISTANT: granted},
+            "source": session_consent_source(SESSION),
+        }
+    ]
 
 
 def test_session_consent_source_fits_the_column() -> None:

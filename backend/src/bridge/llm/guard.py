@@ -1,14 +1,17 @@
-"""The Tier-2 guard (AC-SEC-6; ADR-005 decision 4; ADR-002 consents; docs/spec/09 ground rules).
+"""The Tier-2 guard (AC-SEC-6; ADR-005 decision 4; docs/spec/09 ground rules).
 
 A Tier-2 field reaches a model only when the task's purpose is consent-covered (``tier2_llm_assistant`` or
 ``tier2_llm_moderation``) and every owner of a Tier-2 field holds a live consent for exactly that purpose. Tier-1-only
 tasks (classifiers, the over-disclosure check, the originality explainer) refuse any Tier-2 field. The check runs
 before sanitising, budgeting or sending, so a refused value is never framed, logged or recorded.
 
-Consent scope (ADR-002): ``tier2_llm_moderation`` is persistent; ``tier2_llm_assistant`` is per session, so it is live
-only for the session in which the owner granted it. The per-use decision is recorded (REQ-PROP-05) with
-``source = session_consent_source(session_id)``; the checker compares the latest decision's source with the current
-session, so a grant from another or an earlier session does not count.
+Consent scope (ADR-005 decision 4; docs/spec/06 §6.3): ``tier2_llm_moderation`` is persistent; ``tier2_llm_assistant``
+is an explicit per-use opt-in that expires with the login session. Consents stay append-only rows of
+``bridge.profiles.consents`` (REQ-CON-01, latest row wins); this module owns the session rule. The opt-in is written
+only by ``grant_session_consent`` with ``source = session_consent_source(session_id)``, and it is live only while that
+row is the owner's latest ``tier2_llm_assistant`` decision and the call carries the same session. A grant from another
+or an earlier session, a grant from the settings page (no session) and any call without a session (a job) do not
+count.
 """
 
 from __future__ import annotations
@@ -18,15 +21,14 @@ from collections.abc import Iterable, Sequence
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.config import Settings
 from bridge.llm.errors import ConsentRequired, Tier2NotAllowed
 from bridge.llm.registry import TaskSpec
 from bridge.llm.types import Message, Tier
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
-from bridge.profiles.models import Consent
 
 PER_SESSION = frozenset({ConsentPurpose.TIER2_LLM_ASSISTANT})
 SESSION_SOURCE_PREFIX = "session:"
@@ -34,8 +36,39 @@ SESSION_SOURCE_PREFIX = "session:"
 
 def session_consent_source(session_id: UUID) -> str:
     """``consents.source`` of a per-session decision: the prefix and the session id in unpadded base64url (30
-    characters, within the column's 32)."""
+    characters, within the column's 32; the hex form would not fit)."""
     return SESSION_SOURCE_PREFIX + base64.urlsafe_b64encode(session_id.bytes).rstrip(b"=").decode("ascii")
+
+
+async def grant_session_consent(db: AsyncSession, settings: Settings, *, user_id: UUID, session_id: UUID) -> None:
+    """Record the owner's per-use opt-in to ``tier2_llm_assistant`` for one login session (REQ-PROP-05).
+
+    The only writer of a per-session decision, so the source always matches what the checker compares. An interactive
+    endpoint (the submission assistant, T2.9) takes both ids from its authenticated ``CurrentSession``: ``user_id`` is
+    ``live.user.id`` and ``session_id`` is ``live.row.id`` (``sessions.id``, a UUID; never the cookie token). The
+    same ``live.row.id`` goes into ``CallContext(session_id=...)`` for ``LLMService.complete``; jobs pass none. ``db``
+    must be bound to ``user_id`` (``bind_tenant``): RLS refuses a row for anyone else. The endpoint checks the text
+    version the user saw (as ``PUT /api/me/consents`` does), writes its audit event and commits; this only adds the
+    row.
+    """
+    await _record_session_decision(db, settings, user_id=user_id, session_id=session_id, granted=True)
+
+
+async def withdraw_session_consent(db: AsyncSession, settings: Settings, *, user_id: UUID, session_id: UUID) -> None:
+    """Record the end of the opt-in (the user turns the assistant off) before the session itself ends."""
+    await _record_session_decision(db, settings, user_id=user_id, session_id=session_id, granted=False)
+
+
+async def _record_session_decision(
+    db: AsyncSession, settings: Settings, *, user_id: UUID, session_id: UUID, granted: bool
+) -> None:
+    await consents.record_decisions(
+        db,
+        settings,
+        user_id=user_id,
+        decisions={ConsentPurpose.TIER2_LLM_ASSISTANT: granted},  # one purpose per decision, never bundled
+        source=session_consent_source(session_id),
+    )
 
 
 class ConsentChecker(Protocol):
@@ -45,8 +78,9 @@ class ConsentChecker(Protocol):
 
 
 class SessionConsentChecker:
-    """Reads ``consents`` with the caller's database session. RLS applies: a session not scoped to the owner reads no
-    rows, so the check fails closed."""
+    """Reads ``consents`` through ``bridge.profiles.consents`` with the caller's database session (``db``; not to be
+    confused with the login ``session_id``). RLS applies: a database session not bound to the owner reads no rows, so
+    the check fails closed."""
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -56,15 +90,8 @@ class SessionConsentChecker:
             return await consents.has_live_consent(self._db, user_id, purpose)
         if session_id is None:
             return False
-        latest = (
-            await self._db.execute(
-                select(Consent.granted, Consent.source)
-                .where(Consent.user_id == user_id, Consent.purpose == purpose)
-                .order_by(Consent.created_at.desc(), Consent.id.desc())
-                .limit(1)
-            )
-        ).first()
-        return latest is not None and bool(latest.granted) and latest.source == session_consent_source(session_id)
+        latest = await consents.latest(self._db, user_id, purpose)
+        return latest is not None and latest.granted and latest.source == session_consent_source(session_id)
 
 
 class StaticConsents:
