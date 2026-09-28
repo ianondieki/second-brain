@@ -2,12 +2,14 @@
 ``bridge_app`` under Row-Level Security.
 
 ``tier2_llm_assistant`` is recorded per login session by ``grant_session_consent`` and is live only for that session
-while it is the owner's latest decision; ``tier2_llm_moderation`` is persistent. Every database session is RLS-bound
-with ``bind_tenant``, exactly as a request uses it, so another user's context reads no consent and fails closed.
+while it is the owner's latest decision and the session is a live login session of the owner (not revoked, not
+expired, the owner active); ``tier2_llm_moderation`` is persistent. Every database session is RLS-bound with
+``bind_tenant``, exactly as a request uses it, so another user's context reads no consent and fails closed.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 
 import pytest
@@ -32,6 +34,7 @@ from bridge.llm.types import InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
 from bridge.profiles.models import Consent
+from tests.integration.llm.helpers import login
 
 ASSISTANT = ConsentPurpose.TIER2_LLM_ASSISTANT
 MODERATION = ConsentPurpose.TIER2_LLM_MODERATION
@@ -116,7 +119,7 @@ def _assistant_call(owner: UUID) -> list[Message]:
 
 
 async def test_a_grant_is_live_in_its_own_session_only(factory: async_sessionmaker[AsyncSession], user: UUID) -> None:
-    session, other_session = uuid7(), uuid7()
+    session, other_session = await login(factory, user), await login(factory, user)  # two live logins of the owner
     await _grant(factory, user, session)
 
     assert await _live(factory, user, ASSISTANT, session)
@@ -135,7 +138,7 @@ async def test_a_grant_is_live_in_its_own_session_only(factory: async_sessionmak
 async def test_the_guard_admits_tier2_in_the_granting_session_only(
     factory: async_sessionmaker[AsyncSession], user: UUID
 ) -> None:
-    session, other_session = uuid7(), uuid7()
+    session, other_session = await login(factory, user), await login(factory, user)
     task = registry.load(get_settings().llm_models_file).task("submission_assistant")
     await _grant(factory, user, session)
     async with factory() as db:
@@ -149,7 +152,7 @@ async def test_the_guard_admits_tier2_in_the_granting_session_only(
 
 
 async def test_a_later_withdrawal_ends_it(factory: async_sessionmaker[AsyncSession], user: UUID) -> None:
-    session = uuid7()
+    session = await login(factory, user)
     await _grant(factory, user, session)
     await _withdraw(factory, user, session)
     assert not await _live(factory, user, ASSISTANT, session)
@@ -163,7 +166,7 @@ async def test_a_later_withdrawal_ends_it(factory: async_sessionmaker[AsyncSessi
 async def test_a_later_grant_in_another_session_replaces_it(
     factory: async_sessionmaker[AsyncSession], user: UUID
 ) -> None:
-    session, next_session = uuid7(), uuid7()
+    session, next_session = await login(factory, user), await login(factory, user)
     await _grant(factory, user, session)
     await _grant(factory, user, next_session)
     assert not await _live(factory, user, ASSISTANT, session)
@@ -175,7 +178,7 @@ async def test_a_grant_not_bound_to_a_session_is_never_live(
 ) -> None:
     """A ``tier2_llm_assistant`` grant from the settings page is not a per-use opt-in: it opens no session."""
     await _record(factory, user, ASSISTANT, True)
-    for session in (uuid7(), None):
+    for session in (await login(factory, user), None):
         assert not await _live(factory, user, ASSISTANT, session)
 
 
@@ -195,7 +198,7 @@ async def test_another_users_context_reads_nothing(
     factory: async_sessionmaker[AsyncSession], user: UUID, other_user: UUID
 ) -> None:
     """RLS scopes consents to app.user_id: a foreign context sees no decision and the check fails closed."""
-    session = uuid7()
+    session = await login(factory, user)
     await _grant(factory, user, session)
     await _record(factory, user, MODERATION, True)
     assert await _live(factory, user, ASSISTANT, session)  # positive control in the owner's own context
@@ -220,3 +223,33 @@ async def test_a_grant_for_another_user_is_refused_by_rls(
     async with factory() as db:
         await bind_tenant(db, user_id=user)
         assert (await db.execute(select(Consent).where(Consent.user_id == user))).all() == []
+
+
+async def test_the_opt_in_lives_only_as_long_as_the_owners_login_session(
+    factory: async_sessionmaker[AsyncSession], owner_engine: AsyncEngine, user: UUID, other_user: UUID
+) -> None:
+    """The call's session must be a live login session of the owner (the rule of ``bridge.auth.sessions.lookup``):
+    an expired session, another user's session, a suspended owner or a revoked session ends the opt-in, although the
+    grant is the owner's latest decision and names that very session."""
+    expired = await login(factory, user, expires_in=-timedelta(minutes=1))
+    await _grant(factory, user, expired)
+    assert not await _live(factory, user, ASSISTANT, expired)
+
+    theirs = await login(factory, other_user)  # a live session, but not the owner's
+    await _grant(factory, user, theirs)
+    assert not await _live(factory, user, ASSISTANT, theirs)
+
+    session = await login(factory, user)
+    await _grant(factory, user, session)
+    assert await _live(factory, user, ASSISTANT, session)  # positive control: the owner's live session
+
+    for status, live in (("suspended", False), ("active", True)):
+        async with owner_engine.begin() as conn:
+            suspend = text("UPDATE users SET status = CAST(:s AS user_status) WHERE id = :u")
+            await conn.execute(suspend, {"s": status, "u": user})
+        assert await _live(factory, user, ASSISTANT, session) is live
+
+    async with factory() as db:  # logout, as bridge.auth.sessions.revoke does
+        await db.execute(text("UPDATE sessions SET revoked_at = now() WHERE id = :id"), {"id": session})
+        await db.commit()
+    assert not await _live(factory, user, ASSISTANT, session)

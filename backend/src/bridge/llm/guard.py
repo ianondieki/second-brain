@@ -9,9 +9,10 @@ Consent scope (ADR-005 decision 4; docs/spec/06 §6.3): ``tier2_llm_moderation``
 is an explicit per-use opt-in that expires with the login session. Consents stay append-only rows of
 ``bridge.profiles.consents`` (REQ-CON-01, latest row wins); this module owns the session rule. The opt-in is written
 only by ``grant_session_consent`` with ``source = session_consent_source(session_id)``, and it is live only while that
-row is the owner's latest ``tier2_llm_assistant`` decision and the call carries the same session. A grant from another
-or an earlier session, a grant from the settings page (no session) and any call without a session (a job) do not
-count.
+row is the owner's latest ``tier2_llm_assistant`` decision, the call carries the same session and that session is a
+live login session of the owner (``bridge.auth.sessions.is_live``: not revoked, not expired, the owner active). A grant
+from another or an earlier session, a grant naming another user's session, a revoked or expired session, a grant from
+the settings page (no session) and any call without a session (a job) do not count.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.auth import sessions as login_sessions
 from bridge.config import Settings
 from bridge.llm.errors import ConsentRequired, Tier2NotAllowed
 from bridge.llm.registry import TaskSpec
@@ -88,7 +90,7 @@ class SessionConsentChecker:
     async def has_live_consent(self, user_id: UUID, purpose: ConsentPurpose, *, session_id: UUID | None) -> bool:
         if purpose not in PER_SESSION:
             return await consents.has_live_consent(self._db, user_id, purpose)
-        if session_id is None:
+        if session_id is None or not await login_sessions.is_live(self._db, session_id, user_id=user_id):
             return False
         latest = await consents.latest(self._db, user_id, purpose)
         return latest is not None and latest.granted and latest.source == session_consent_source(session_id)

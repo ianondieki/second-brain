@@ -10,6 +10,7 @@ from uuid import UUID
 
 import pytest
 
+from bridge.auth import sessions as login_sessions
 from bridge.llm.errors import ConsentRequired, Tier2NotAllowed
 from bridge.llm.guard import (
     SessionConsentChecker,
@@ -133,10 +134,33 @@ async def test_session_checker_compares_the_latest_decisions_source(
             return None
         return SimpleNamespace(granted=latest["granted"], source=sources.get(latest["source"], latest["source"]))
 
+    async def session_live(db: Any, session_id: UUID, *, user_id: UUID) -> bool:
+        return True
+
     monkeypatch.setattr(consents, "latest", fake)
+    monkeypatch.setattr(login_sessions, "is_live", session_live)
     db = object()
     assert await SessionConsentChecker(db).has_live_consent(OWNER, ASSISTANT, session_id=SESSION) is live  # type: ignore[arg-type]
     assert seen == [(db, OWNER, ASSISTANT)]
+
+
+async def test_session_checker_needs_a_live_login_session_of_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A grant naming the call's session is dead unless that session is a live login session of the owner (the SQL,
+    revoked, expired and foreign sessions, is covered by the integration test)."""
+    asked: list[tuple[Any, ...]] = []
+
+    async def session_live(db: Any, session_id: UUID, *, user_id: UUID) -> bool:
+        asked.append((db, session_id, user_id))
+        return False
+
+    async def latest(db: Any, user_id: UUID, purpose: ConsentPurpose) -> Any:
+        return SimpleNamespace(granted=True, source=session_consent_source(SESSION))
+
+    monkeypatch.setattr(login_sessions, "is_live", session_live)
+    monkeypatch.setattr(consents, "latest", latest)
+    db = object()
+    assert not await SessionConsentChecker(db).has_live_consent(OWNER, ASSISTANT, session_id=SESSION)  # type: ignore[arg-type]
+    assert asked == [(db, SESSION, OWNER)]
 
 
 @pytest.mark.parametrize(("writer", "granted"), [(grant_session_consent, True), (withdraw_session_consent, False)])

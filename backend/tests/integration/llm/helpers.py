@@ -1,15 +1,21 @@
-"""Helpers for the SQL ledger tests: the service over the SQL stores, scripted replies and the stored rows."""
+"""Helpers for the SQL ledger tests: the service over the SQL stores, scripted replies, login sessions and the stored
+rows."""
 
 from __future__ import annotations
 
 import json
+import secrets
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from bridge import clock
 from bridge.config import get_settings
+from bridge.ids import uuid7
 from bridge.llm import registry as registry_module
 from bridge.llm.adapter import ModelAdapter, ModelResponse
 from bridge.llm.client import LLMService
@@ -50,3 +56,22 @@ async def stored(owner_engine: AsyncEngine, trace_id: str) -> list[RowMapping]:
     async with owner_engine.connect() as conn:
         result = await conn.execute(text("SELECT * FROM llm_calls WHERE trace_id = :t ORDER BY id"), {"t": trace_id})
         return list(result.mappings())
+
+
+async def login(
+    factory: async_sessionmaker[AsyncSession], user_id: UUID, *, expires_in: timedelta = timedelta(hours=1)
+) -> UUID:
+    """A login session of ``user_id`` (``sessions.id``), written by bridge_app as the login endpoint does (the table
+    has no RLS); a negative ``expires_in`` gives an expired one."""
+    session_id, now = uuid7(), clock.utcnow()
+    row = {"id": session_id, "user": user_id, "hash": secrets.token_bytes(32), "expires": now + expires_in, "now": now}
+    async with factory() as db:
+        await db.execute(
+            text(
+                "INSERT INTO sessions (id, user_id, token_hash, expires_at, last_seen_at)"
+                " VALUES (:id, :user, :hash, :expires, :now)"
+            ),
+            row,
+        )
+        await db.commit()
+    return session_id

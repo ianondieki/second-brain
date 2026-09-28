@@ -32,7 +32,7 @@ from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import PlanSide
 from tests.integration.llm.conftest import People
-from tests.integration.llm.helpers import TASK, reply, service, stored
+from tests.integration.llm.helpers import TASK, login, reply, service, stored
 from tests.unit.llm.rig import screen
 from tests.unit.llm.schemas import Verdict
 
@@ -55,7 +55,7 @@ def tier2_call(owner: UUID) -> list[Message]:
 async def test_a_tier2_sentinel_never_reaches_any_stored_column(
     factory: Factory, owner_engine: AsyncEngine, people: People
 ) -> None:
-    trace, session, other_session = f"sec6-{people.tag}", uuid7(), uuid7()
+    trace, session, other_session = f"sec6-{people.tag}", await login(factory, people.a), await login(factory, people.a)
     echo = {"injection_suspected": False, "verdict": "clean", "reason": "r", CANARY: 1}  # an answer quoting it
     quoting = {"injection_suspected": False, "verdict": "clean", "reason": f"keep {CANARY} private"}
     adapter = FakeAdapter([reply(quoting), reply(echo), reply(echo)])
