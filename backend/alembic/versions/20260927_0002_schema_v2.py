@@ -227,6 +227,7 @@ RLS_TABLES = (
     "proposal_confidential",
     "proposal_confidential_embeddings",
     "proposal_attachments",
+    "proposal_lsh_bands",
     "originality_checks",
     "attestations",
     "tags",
@@ -537,6 +538,13 @@ POLICIES: tuple[Policy, ...] = (
     Policy(
         "proposal_problems", "DELETE", _DRAFT_VERSION_OWNED.format(t="proposal_problems", col="proposal_version_id")
     ),
+    # Originality buckets (REQ-PROP-04) follow their proposal's visibility, so the check compares a submission with
+    # other owners' published teasers only; only the proposal's owner writes or removes them.
+    Policy(
+        "proposal_lsh_bands", "SELECT", "EXISTS (SELECT 1 FROM proposals p WHERE p.id = proposal_lsh_bands.proposal_id)"
+    ),
+    Policy("proposal_lsh_bands", "INSERT", check=_PROPOSAL_OWNED.format(t="proposal_lsh_bands")),
+    Policy("proposal_lsh_bands", "DELETE", _PROPOSAL_OWNED.format(t="proposal_lsh_bands")),
     # --- Tier 2: no bridge_app policy (no privilege); one policy per role and command ---
     Policy(
         "proposal_confidential",

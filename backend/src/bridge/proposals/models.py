@@ -277,12 +277,14 @@ class ProposalAttachment(IdMixin, TimestampsMixin, Base):
 
 
 class ProposalLshBand(Base):
-    """MinHash LSH buckets over the Tier-1 teaser text only (originality check, REQ-PROP-04)."""
+    """MinHash LSH buckets over the Tier-1 teaser text only (originality check, REQ-PROP-04). Readable exactly when
+    the proposal is (its owner; every signed-in user for a published, clear one; staff), so the check compares
+    against other owners' published teasers only; written and removed only by the proposal's owner (RLS)."""
 
     __tablename__ = "proposal_lsh_bands"
     __table_args__ = (
         Index("ix_proposal_lsh_bands_band_bucket", "band", "bucket"),
-        {"info": {"tenancy": Tenancy.SYSTEM}},
+        {"info": {"tenancy": Tenancy.PUBLISHED, "via": "proposals"}},
     )
 
     proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id", ondelete="CASCADE"), primary_key=True)

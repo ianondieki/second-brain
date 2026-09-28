@@ -188,13 +188,22 @@ async def test_org_b_rows_cannot_be_updated_by_a(app_engine: AsyncEngine, world:
         grants = await conn.execute(
             text("UPDATE disclosure_grants SET status = 'active' WHERE owner_id = :id"), {"id": world.b.user_id}
         )
-        assert [r.rowcount for r in (updated, removed, proposals, versions, grants)] == [0] * 5
+        bands = await conn.execute(  # B's originality buckets, published proposal included (readable, not A's)
+            text("DELETE FROM proposal_lsh_bands WHERE proposal_id = ANY (:ids)"),
+            {"ids": [world.b.published, world.b.draft]},
+        )
+        assert [r.rowcount for r in (updated, removed, proposals, versions, grants, bands)] == [0] * 6
         await conn.rollback()
 
 
 async def test_a_cannot_write_into_b_proposals(app_engine: AsyncEngine, world: w.World) -> None:
-    """New rows must belong to the writer: a version, a problem link, a tag or a grant on B's proposal is refused."""
+    """New rows must belong to the writer: a version, a tag, a grant or an originality bucket of B's proposal is
+    refused."""
     statements = (
+        (
+            "INSERT INTO proposal_lsh_bands (proposal_id, band, bucket) VALUES (:proposal, 99, 1)",
+            {"proposal": world.b.published},
+        ),
         (
             "INSERT INTO proposal_versions (id, proposal_id, version_no) VALUES (:id, :proposal, 99)",
             {"id": uuid7(), "proposal": world.b.draft},
