@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Suspense, useRef, useState, type FormEvent } from "react";
-import { flushSync } from "react-dom";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -18,6 +17,7 @@ import type { ErrorKey } from "@/lib/api/errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { EnrolmentSteps, loadEnrolmentSteps, StepUpForm } from "./lazy";
 import { usePasswordState } from "./PasswordState";
+import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
@@ -65,7 +65,9 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [stepUp, setStepUp] = useState(false);
+  // What just happened (one notice at a time) and an API error: each takes focus when it appears after an action.
   const noticeRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   // Without a password, enrolment needs a fresh sign-in instead; the flag is shared with the Password section.
   const { hasPassword, markPasswordSet, setEnrolling } = usePasswordState();
 
@@ -76,32 +78,40 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   }
 
   /**
-   * Back to the start (setup cancelled, or the server lost it), with focus where setup begins again: the password
-   * field when the account has one, else the start button. The server's pending key is replaced on the next start.
-   * This often runs after an await (the status check), outside React's event batching, where the new screen may be
-   * committed only after the next animation frame: flushSync commits it first, so the element to focus exists.
+   * Back to the start (setup cancelled, or the server lost it), with focus on what happened: the "cancelled" notice
+   * or the error. They sit above the steps, off screen at 360 px after the long setup steps, and the next Tab reaches
+   * where setup begins again (the password field when the account has one, else the start button), which takes
+   * focus itself when there is nothing to read. The server's pending key is replaced on the next start.
    */
   function backToStart(nextError: ErrorKey | null, nextNotice: Notice) {
-    flushSync(() => {
-      setError(nextError);
-      setNotice(nextNotice);
-      show({ name: "intro" });
-    });
-    document.getElementById(hasPassword ? "enrol-password" : "two-step-start")?.focus();
+    reveal(
+      () => {
+        setError(nextError);
+        setNotice(nextNotice);
+        show({ name: "intro" });
+      },
+      () =>
+        noticeRef.current ??
+        errorRef.current ??
+        document.getElementById(hasPassword ? "enrol-password" : "two-step-start"),
+    );
   }
 
   /**
    * Two-step sign-in is on at the server, but the answer with the recovery codes was lost: the "on" screen, with focus
-   * on the notice that says to keep the app entry (committed at once, as in backToStart). No route shows or replaces
-   * the codes yet, so the notice says how to get new ones where the role allows turning two-step sign-in off.
+   * on the notice that says to keep the app entry. No route shows or replaces the codes yet (a step-up-protected one
+   * that issues new codes is follow-up 8 in docs/platform/tasks/REQ-AUTH-01.md), so the notice says how to get new
+   * ones only where the role allows turning two-step sign-in off.
    */
   function onWithoutCodes(product: string) {
-    flushSync(() => {
-      setError(null);
-      setNotice({ key: "codesNotShown", product });
-      show({ name: "on" });
-    });
-    noticeRef.current?.focus();
+    reveal(
+      () => {
+        setError(null);
+        setNotice({ key: "codesNotShown", product });
+        show({ name: "on" });
+      },
+      () => noticeRef.current,
+    );
   }
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
@@ -139,13 +149,20 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
     setBusy(true);
     setError(null);
     const outcome = await settle(api.POST("/api/auth/totp/disable"));
-    setBusy(false);
     if (outcome.ok) {
-      setStepUp(false);
-      setNotice({ key: "off" });
-      show({ name: "intro" });
+      // Focus on the "off" notice: the button that had it is gone, and the notice starts above the screen at 360 px.
+      reveal(
+        () => {
+          setBusy(false);
+          setStepUp(false);
+          setNotice({ key: "off" });
+          show({ name: "intro" });
+        },
+        () => noticeRef.current,
+      );
       return;
     }
+    setBusy(false);
     if (outcome.key === "step_up_required") {
       setStepUp(true); // StepUpForm asks for a fresh code, then calls turnOff again
       return;
@@ -153,7 +170,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
     setError(outcome.key);
   }
 
-  const errorBlock = <ErrorNotice error={error} email={email} />;
+  const errorBlock = <ErrorNotice error={error} email={email} alertRef={errorRef} />;
 
   if (phase.name === "on") {
     return (
@@ -207,8 +224,16 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
 
   return (
     <div className="mt-8 flex flex-col gap-6">
-      {notice?.key === "off" ? <Alert tone="info">{t("off")}</Alert> : null}
-      {notice?.key === "cancelled" ? <Alert tone="info">{t("cancelled", { product: notice.product })}</Alert> : null}
+      {notice?.key === "off" ? (
+        <Alert ref={noticeRef} tone="info">
+          {t("off")}
+        </Alert>
+      ) : null}
+      {notice?.key === "cancelled" ? (
+        <Alert ref={noticeRef} tone="info">
+          {t("cancelled", { product: notice.product })}
+        </Alert>
+      ) : null}
       {errorBlock}
       <Steps
         label={t("stepsLabel")}

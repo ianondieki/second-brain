@@ -17,6 +17,7 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
+import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
 // Loaded only after POST /api/auth/totp/enrol succeeds (React.lazy, see lazy.ts), with the QR encoder, so none of
@@ -87,6 +88,9 @@ export function EnrolmentSteps({
   const te = useTranslations("errors");
   const router = useRouter();
   const heading = useRef<HTMLHeadingElement>(null);
+  // The notices show above the steps, far above the buttons that lead to them (at 360 px, over 400 px up).
+  const statusRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const qr = useMemo(() => qrMatrix(otpauthUri), [otpauthUri]);
 
   const [codes, setCodes] = useState<string[] | null>(null);
@@ -154,20 +158,35 @@ export function EnrolmentSteps({
       await askServer(() => onRestart("no_pending_enrolment"));
       return;
     }
-    setBusy(false);
-    setError(outcome.key);
+    // The error shows above the steps, out of sight from the Confirm button at 360 px: focus brings it into view.
+    reveal(
+      () => {
+        setBusy(false);
+        setError(outcome.key);
+      },
+      () => errorRef.current,
+    );
   }
 
   /**
    * Asks the server whether two-step sign-in is on (busy meanwhile, so neither Confirm nor Cancel acts): on goes to
-   * the "on" screen, off goes on with `whenOff`, and no answer keeps these steps with a hint to reload.
+   * the "on" screen, off goes on with `whenOff`, and no answer keeps these steps with a hint to reload, focused.
    */
   async function askServer(whenOff: () => void) {
     const enrolled = await enrolledOnServer();
+    if (enrolled === null) {
+      reveal(
+        () => {
+          setBusy(false);
+          setStatusUnknown(true);
+        },
+        () => statusRef.current,
+      );
+      return;
+    }
     setBusy(false);
-    if (enrolled === true) onEnrolled();
-    else if (enrolled === false) whenOff();
-    else setStatusUnknown(true);
+    if (enrolled) onEnrolled();
+    else whenOff();
   }
 
   async function cancel() {
@@ -277,8 +296,8 @@ export function EnrolmentSteps({
 
   return (
     <div className="flex flex-col gap-6">
-      {statusUnknown ? <Alert>{t("statusUnknown", { product: entryName })}</Alert> : null}
-      <ErrorNotice error={error} />
+      {statusUnknown ? <Alert ref={statusRef}>{t("statusUnknown", { product: entryName })}</Alert> : null}
+      <ErrorNotice error={error} alertRef={errorRef} />
       <Steps
         // The recovery codes are a new stage, not a moved one: a new list replaces the setup list, focus goes to its
         // current heading, and step 3 does not slide up into the space steps 1-2 leave (a 0.94 layout shift at

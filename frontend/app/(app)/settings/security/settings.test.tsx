@@ -75,6 +75,23 @@ function usernameFields(passwordField: HTMLElement) {
   return [...passwordField.closest("form")!.querySelectorAll<HTMLInputElement>('input[autocomplete="username"]')];
 }
 
+/** The notice (role alert or status) whose words are exactly `text`. */
+function noticeReading(text: string) {
+  return screen.getByText(text).closest<HTMLElement>('[role="alert"], [role="status"]');
+}
+
+/** Where Tab goes from `from`: the next focusable element in document order (these pages set no tabindex > 0). */
+function nextInTabOrder(from: Element) {
+  const focusable = document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]");
+  return [...focusable].find(
+    (element) =>
+      Boolean(from.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      element.tabIndex >= 0 &&
+      !element.closest("[hidden]") &&
+      !element.matches(":disabled"),
+  );
+}
+
 const ENROL_FIELD = "Confirm with your current password";
 const CANCELLED = "Setup cancelled. If you added Bridge to your authenticator app, delete that entry.";
 const twoStep = (
@@ -207,9 +224,11 @@ describe("the Password section during two-step setup", () => {
     expect(screen.getByLabelText<HTMLInputElement>("New password", { selector: "input" }).value).toBe(
       "typed before setup",
     );
-    // Focus goes where setup starts again (the password it asks for), not to the top of the page.
-    const field = screen.getByLabelText(ENROL_FIELD, { selector: "input" });
-    await waitFor(() => expect(document.activeElement).toBe(field));
+    // Focus goes to the notice that says what happened (above the steps, so off screen at 360 px without it), not to
+    // the top of the page; the next Tab reaches where setup starts again (the password it asks for).
+    const notice = noticeReading(CANCELLED);
+    await waitFor(() => expect(document.activeElement).toBe(notice));
+    expect(nextInTabOrder(notice!)).toBe(screen.getByLabelText(ENROL_FIELD, { selector: "input" }));
   });
 
   it("says setup was cancelled and what to tidy up, with still one primary action", async () => {
@@ -248,14 +267,15 @@ describe("the Password section during two-step setup", () => {
     );
   });
 
-  it("puts focus on the start button after cancelling when the account has no password", async () => {
+  it("puts focus on the notice, one Tab before the start button, after cancelling without a password", async () => {
     answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
     page(false, twoStep);
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
     await screen.findByTestId("totp-key");
     fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
-    const start = screen.getByRole("button", { name: "Turn on two-step sign-in" });
-    await waitFor(() => expect(document.activeElement).toBe(start));
+    const notice = noticeReading(CANCELLED);
+    await waitFor(() => expect(document.activeElement).toBe(notice));
+    expect(nextInTabOrder(notice!)).toBe(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
   });
 
   it("stays hidden through the recovery codes, which cannot be cancelled; Done ends setup", async () => {
@@ -311,11 +331,13 @@ describe("the Password section during two-step setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
     await screen.findByRole("button", { name: "Turn on two-step sign-in" });
     expect(passwordSection()).not.toBeNull();
-    expect(screen.getByRole("alert")).toBeTruthy(); // the error says why; no "cancelled" line
+    const error = screen.getByRole("alert"); // the error says why; no "cancelled" line
+    expect(error.textContent).toBe("Start the setup again to get a new key.");
     expect(screen.queryByText(CANCELLED)).toBeNull();
-    // Focus is not left on the page body: it goes where setup starts again.
-    const field = screen.getByLabelText(ENROL_FIELD, { selector: "input" });
-    await waitFor(() => expect(document.activeElement).toBe(field));
+    // Focus is not left on the page body: it goes to the error (above the steps), and the next Tab to where setup
+    // starts again.
+    await waitFor(() => expect(document.activeElement).toBe(error));
+    expect(nextInTabOrder(error)).toBe(screen.getByLabelText(ENROL_FIELD, { selector: "input" }));
   });
 
   it("ignores Cancel while a code is being checked, so a confirmed setup is never hidden", async () => {
@@ -457,7 +479,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(container.textContent).not.toMatch(/delete|cancelled/i);
   });
 
-  describe("focus after the status check, which ends after an await", () => {
+  describe("focus after an API answer, which ends after an await", () => {
     // Outside React's event batching, a browser may commit the new screen only after the next animation frame (seen
     // in Chrome at 1440 px): focus must not wait for a frame, so here frames never come.
     beforeEach(() => vi.stubGlobal("requestAnimationFrame", () => 0));
@@ -470,11 +492,36 @@ describe("a confirmation whose answer never arrived (the server may have turned 
       expect(document.activeElement).toBe(screen.getByRole("alert"));
     });
 
-    it("lands where setup starts again when it turned out to be off", async () => {
+    it("lands on the cancelled notice, one Tab before where setup starts again, when it turned out off", async () => {
       await confirmFails(new TypeError("Failed to fetch"), ok(me(false)));
       fireEvent.click(cancelButton());
       const field = await screen.findByLabelText(ENROL_FIELD, { selector: "input" });
-      expect(document.activeElement).toBe(field);
+      const notice = noticeReading(CANCELLED);
+      expect(document.activeElement).toBe(notice);
+      expect(nextInTabOrder(notice!)).toBe(field);
+    });
+
+    // The notices below show above the setup steps: at 360 px, more than a screen above Confirm and Cancel.
+    it("lands on the 'could not check' notice when the check after Cancel fails", async () => {
+      await confirmFails(new TypeError("Failed to fetch"), answer(503));
+      fireEvent.click(cancelButton());
+      const unknown = await screen.findByText(UNKNOWN);
+      expect(document.activeElement).toBe(unknown.closest('[role="alert"]'));
+    });
+
+    it("lands on the 'could not check' notice when a retry finds no setup waiting and the check fails", async () => {
+      await confirmFails(new TypeError("Failed to fetch"), answer(503));
+      mocks.post.mockResolvedValue(answer(409, "no_pending_enrolment"));
+      fireEvent.click(confirmButton());
+      const unknown = await screen.findByText(UNKNOWN);
+      expect(document.activeElement).toBe(unknown.closest('[role="alert"]'));
+      expect(screen.getByTestId("totp-key")).toBeTruthy();
+    });
+
+    it("lands on the error when a confirmation gets no answer", async () => {
+      await confirmFails(new TypeError("Failed to fetch"));
+      const error = noticeReading("We could not reach the server. Check your connection, then try again.");
+      expect(document.activeElement).toBe(error);
     });
   });
 
@@ -490,6 +537,44 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(mocks.post).toHaveBeenCalledTimes(2); // enrol and the one confirmation
     expect(mocks.get).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("totp-key")).toBeTruthy();
+  });
+});
+
+describe("turning two-step sign-in off, where the role allows it", () => {
+  // The "off" notice replaces the button that had focus, above the screen at 360 px: focus must reach it at once
+  // (after an await, and with no animation frames here), or it falls to the page body.
+  const optionalOn = (
+    <SecuritySettings enrolled required={false} homeHref="/dev" email="a@example.com" productName="Bridge" />
+  );
+  beforeEach(() => vi.stubGlobal("requestAnimationFrame", () => 0));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("moves focus to the notice that it is off, with the start button ready", async () => {
+    answerWith({ "/api/auth/totp/disable": answer(204) });
+    page(true, optionalOn);
+    fireEvent.click(screen.getByRole("button", { name: "Turn off two-step sign-in" }));
+    await screen.findByText("Two-step sign-in is off.");
+    expect(document.activeElement).toBe(noticeReading("Two-step sign-in is off."));
+    const start = screen.getByRole("button", { name: "Turn on two-step sign-in" }); // not left "Starting…"
+    expect(start.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("does the same when turning it off first asks for a fresh code", async () => {
+    let disables = 0;
+    mocks.post.mockImplementation((path: string) =>
+      path === "/api/auth/totp/disable" && disables++ === 0 ? answer(403, "step_up_required") : answer(204),
+    );
+    page(true, optionalOn);
+    fireEvent.click(screen.getByRole("button", { name: "Turn off two-step sign-in" }));
+    fireEvent.change(await screen.findByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and turn off" }));
+    await screen.findByText("Two-step sign-in is off.");
+    expect(mocks.post.mock.calls.map(([path]) => path)).toEqual([
+      "/api/auth/totp/disable",
+      "/api/auth/step-up",
+      "/api/auth/totp/disable",
+    ]);
+    expect(document.activeElement).toBe(noticeReading("Two-step sign-in is off."));
   });
 });
 
