@@ -244,7 +244,8 @@ Open branches (each merged `claude/eloquent-hypatia-aa3577` at `a9b0e66` with a 
 |---|---|---|---|
 | `feat/REQ-AUTH-01-phase1-followups` | `39bc276` | in review | reviewer + ux-reviewer on follow-ups 1–4; on PASS merge into the integration branch |
 | `feat/REQ-REPO-01-schema-v2` | `7360411` | in review | reviewer + security-reviewer (T2.1, revision 0002); on PASS merge (unblocks T2.2 ledger store, T2.3, T2.4, T2.6a) |
-| `feat/REQ-LLM-01-llm-layer` | `2f23384` | WIP | finish `c509ea6` (per-session `tier2_llm_assistant` consent, spec 06 §6.3): integration test of `SessionConsentChecker`, a grant helper; after T2.1 merges, the SQL `llm_calls` ledger store; then reviewer |
+| `feat/REQ-LLM-01-llm-layer` | `60bdf90` | WIP | `c509ea6` reviewed and finished (writer `grant_session_consent`, PostgreSQL test under RLS; 842 passed). Next: after T2.1 merges, merge it in and add the SQL `llm_calls` ledger store; then reviewer. Carry to T2.9: settings API still offers `tier2_llm_assistant`; consent wording; audit event on grant |
+| `feat/REQ-PROV-04-verification` | `7360411` | WIP (T2.10a) | new, based on schema v2; impl-backend is building D1 (`SmsProvider` fake, phone OTP, `require_d1`); D2 waits for the T2.4 object store |
 | `feat/REQ-AUTH-02-oauth` | `fe119ee` | in review | reviewer + security-reviewer on the backend; buttons and linked accounts come with F4 |
 | `feat/REQ-DIR-02-provisional-seed` | `de3a9b4` | WIP (T2.6a) | merged schema v2 in; impl-backend is adding the seed loader, directory API, niches endpoint and the staff dependency; then reviewer |
 | `feat/REQ-PROV-01-provenance` | `7360411` | WIP (T2.4) | new, based on schema v2; impl-backend is building envelope crypto, object store, manifest, signing, TSA (local openssl CA), pipeline jobs, certificate, `/verify` API, anchors; then reviewer + security-reviewer |
@@ -256,6 +257,11 @@ pgvector/pgvector:pg16` and `export TEST_DATABASE_ADMIN_URL=postgresql+psycopg:/
 `uv python install 3.12`, `uv sync --frozen` in `backend/`, `npm ci` in `frontend/`; legacy suite on a Python 3.13 venv
 with `requirements.txt` and a `cloudflared` stub on `PATH` (as in `pr.yml`), then `python scripts/run_legacy_tests.py`.
 Worktrees live in `../sb-wt/<REQ-ID>`. Baselines on `a9b0e66`: backend 579 passed, Vitest 105, legacy 307 OK (Linux).
+Cloud-only limits: the egress policy denies `pkg-containers.githubusercontent.com` (GHCR blobs), so `make dev` cannot
+build the api image there; the cloud session runs postgres/mailpit/s3 from compose and the API (uvicorn) and web
+(`next build && next start`) on the host. Playwright 1.63 wants Chromium 1243 while the container has 1194: point
+`PLAYWRIGHT_BROWSERS_PATH` at a scratch shim (no config change). Full CI (incl. the compose E2E) runs on feature
+branches through `workflow_dispatch` of `pr.yml`.
 
 Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`, on top of `40f1adc`. Decisions applied:
 D-18 (no paid API calls: LLM fakes and synthetic cassettes only), D-20 (OAuth is T2.12), D-21 (provisional directory
