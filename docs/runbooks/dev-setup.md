@@ -102,13 +102,13 @@ Migrations and the seed run automatically: the `migrate` one-shot service runs `
 
 When `PROVENANCE_SIGNING_KEY` is set, the `migrate` step also publishes its public half
 (`python -m bridge.provenance register-key --if-configured`, owner role), which `/.well-known/provenance-keys.json`
-serves; outside compose run `uv run python -m bridge.provenance register-key` in `backend/`. The `s3` service
-(SeaweedFS) holds the `evidence`, `kyc-review` and `uploads` buckets; create them once if your SeaweedFS does not
-create buckets on first write:
+serves; outside compose run `uv run python -m bridge.provenance register-key` in `backend/`.
 
-```bash
-cd backend && uv run python -c "import boto3; s3 = boto3.client('s3', endpoint_url='http://localhost:8333', aws_access_key_id='dev', aws_secret_access_key='dev', region_name='af-south-1'); [s3.create_bucket(Bucket=b) for b in ('evidence', 'kyc-review', 'uploads')]"
-```
+The `migrate` step also creates the `evidence`, `kyc-review` and `uploads` buckets in the `s3` service (SeaweedFS)
+with `python -m bridge.storage ensure-buckets` (idempotent; it waits up to 30 s for SeaweedFS to accept connections).
+No code creates a bucket at first use. Outside compose run `uv run python -m bridge.storage ensure-buckets` in
+`backend/`. With `APP_ENV` staging or production the same command only checks that the buckets exist and exits 2
+naming any that is missing: there infrastructure creates them (Object Lock on `evidence` is set at creation).
 
 Signup and login emails (magic links, TOTP enrolment) never leave the box: they land in Mailpit's UI at
 `http://localhost:8025`, not in a real inbox.

@@ -33,3 +33,17 @@ def test_the_worker_and_migrate_keep_them_from_backend_env() -> None:
         service = services()[name]
         assert service["env_file"] == "../backend/.env"
         assert not set(WORKER_ONLY) & set(service["environment"]), f"{name} must take them from backend/.env"
+
+
+def test_the_buckets_are_created_by_the_migrate_step_before_api_and_worker_start() -> None:
+    """Never at first use: migrate runs ``python -m bridge.storage ensure-buckets`` once s3 is up, and api and worker
+    wait for migrate to finish."""
+    stack = services()
+    migrate = stack["migrate"]
+    script = " ".join(migrate["command"])
+    assert "python -m bridge.storage ensure-buckets" in script
+    assert script.index("alembic upgrade head") < script.index("ensure-buckets")
+    assert "s3" in migrate["depends_on"]
+    assert migrate["depends_on"]["postgres"] == {"condition": "service_healthy"}
+    for name in ("api", "worker"):
+        assert stack[name]["depends_on"]["migrate"] == {"condition": "service_completed_successfully"}

@@ -5,10 +5,14 @@
 - ``kyc-review``: ID images for manual D2 review only (separate, encrypted, no backups, purged 72 h after decision).
 - ``uploads``: attachments (presigned uploads arrive with T2.3).
 
-Code names a bucket by its logical name; ``S3_BUCKET_*`` settings map it to the real bucket. ``InMemoryObjectStore``
-serves tests; ``S3ObjectStore`` talks the S3 API through boto3 (AWS S3 in production, SeaweedFS in dev via
-``S3_ENDPOINT_URL``) and is never reached from tests (``tests/egress.py``). Object keys must never carry personal data
-or file names (docs/spec/06 6.1): use ids.
+Code names a bucket by its logical name; ``S3_BUCKET_*`` settings map it to the real bucket. Buckets are never
+created at first use: ``ensure_buckets`` runs once before the API and worker start (``python -m bridge.storage
+ensure-buckets``, the dev compose ``migrate`` step) and creates missing buckets only in dev and test; in staging and
+production it only checks them, because infrastructure creates them (Object Lock on ``evidence`` is set at creation).
+
+``InMemoryObjectStore`` serves tests; ``S3ObjectStore`` talks the S3 API through boto3 (AWS S3 in production,
+SeaweedFS in dev via ``S3_ENDPOINT_URL``) and is never reached from tests (``tests/egress.py``). Object keys must never
+carry personal data or file names (docs/spec/06 6.1): use ids.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from bridge.config import Settings
+from bridge.config import ConfigurationError, Settings
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -24,10 +28,21 @@ if TYPE_CHECKING:
 BucketName = Literal["evidence", "kyc-review", "uploads"]
 BUCKETS: tuple[BucketName, ...] = ("evidence", "kyc-review", "uploads")
 _MISSING = frozenset({"NoSuchKey", "404", "NotFound"})
+_NO_BUCKET = frozenset({"NoSuchBucket", "404", "NotFound"})
 
 
 class ObjectNotFoundError(KeyError):
     """No object under that bucket and key."""
+
+
+class BucketMissingError(RuntimeError):
+    """The bucket does not exist (``ensure_buckets`` did not run)."""
+
+
+def _refuse_missing(missing: list[BucketName]) -> None:
+    raise ConfigurationError(
+        f"object store buckets missing: {', '.join(missing)} (outside dev and test infrastructure creates them)"
+    )
 
 
 class ObjectStore(Protocol):
@@ -37,15 +52,24 @@ class ObjectStore(Protocol):
 
     async def delete(self, bucket: BucketName, key: str) -> None: ...
 
+    async def ensure_buckets(self, *, create: bool) -> list[BucketName]:
+        """Every bucket exists afterwards: missing ones are created when ``create`` (dev and test), otherwise
+        ``ConfigurationError`` names them. Idempotent; returns the buckets created now."""
+        ...
+
 
 class InMemoryObjectStore:
-    """A dict-backed store for tests (``OBJECT_STORE=memory``; refused in staging and production)."""
+    """A dict-backed store for tests (``OBJECT_STORE=memory``; refused in staging and production). Its buckets exist
+    from the start unless ``buckets_exist=False``; then ``put`` fails until ``ensure_buckets`` creates them."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, buckets_exist: bool = True) -> None:
         self.objects: dict[tuple[BucketName, str], tuple[bytes, str]] = {}
+        self.buckets: set[BucketName] = set(BUCKETS) if buckets_exist else set()
 
     async def put(self, bucket: BucketName, key: str, data: bytes, *, content_type: str) -> None:
         _check(bucket, key)
+        if bucket not in self.buckets:
+            raise BucketMissingError(f"bucket {bucket} does not exist")
         self.objects[(bucket, key)] = (bytes(data), content_type)
 
     async def get(self, bucket: BucketName, key: str) -> bytes:
@@ -56,6 +80,13 @@ class InMemoryObjectStore:
 
     async def delete(self, bucket: BucketName, key: str) -> None:
         self.objects.pop((bucket, key), None)
+
+    async def ensure_buckets(self, *, create: bool) -> list[BucketName]:
+        missing = [name for name in BUCKETS if name not in self.buckets]
+        if missing and not create:
+            _refuse_missing(missing)
+        self.buckets.update(missing)
+        return missing
 
 
 class S3ObjectStore:
@@ -115,6 +146,34 @@ class S3ObjectStore:
 
     async def delete(self, bucket: BucketName, key: str) -> None:
         await asyncio.to_thread(self.client.delete_object, Bucket=self.bucket(bucket), Key=key)
+
+    async def ensure_buckets(self, *, create: bool) -> list[BucketName]:
+        missing = [name for name in BUCKETS if not await asyncio.to_thread(self._exists, name)]
+        if missing and not create:
+            _refuse_missing(missing)
+        for name in missing:
+            await asyncio.to_thread(self._create, name)
+        return missing
+
+    def _exists(self, name: BucketName) -> bool:
+        from botocore.exceptions import ClientError
+
+        try:
+            self.client.head_bucket(Bucket=self.bucket(name))
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in _NO_BUCKET:
+                return False
+            raise
+        return True
+
+    def _create(self, name: BucketName) -> None:
+        from botocore.exceptions import ClientError
+
+        try:
+            self.client.create_bucket(Bucket=self.bucket(name))
+        except ClientError as exc:  # another migrate run created it meanwhile
+            if exc.response.get("Error", {}).get("Code") != "BucketAlreadyOwnedByYou":
+                raise
 
 
 def _check(bucket: str, key: str) -> None:

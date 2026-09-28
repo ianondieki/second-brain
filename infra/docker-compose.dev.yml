@@ -67,8 +67,16 @@ services:
 
   migrate:
     <<: *backend
-    # The provenance signing key's public half is published once PROVENANCE_SIGNING_KEY is set (skipped otherwise).
-    command: ["sh", "-c", "alembic upgrade head && python -m bridge.seed && python -m bridge.provenance register-key --if-configured"]
+    # Creates the object-store buckets before api and worker start (never at first use; idempotent). The provenance
+    # signing key's public half is published once PROVENANCE_SIGNING_KEY is set (skipped otherwise).
+    command: ["sh", "-c", "alembic upgrade head && python -m bridge.seed && python -m bridge.storage ensure-buckets && python -m bridge.provenance register-key --if-configured"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      s3:
+        condition: service_started
     restart: "no"
 
   api:
