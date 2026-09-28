@@ -1,11 +1,16 @@
 """Egress guard for the test suite (AC-SEC-5): a test may connect only to loopback, private-network addresses
 (Docker services) or Unix sockets. Anything else raises, so no test can reach an LLM, email, WhatsApp or payment
 provider even when the machine has network access. CI adds a network-level lock on top (infra/ci/egress-lock.sh).
+
+Because loopback is allowed, a proxy listening on loopback (a developer's, or a cloud container's
+``HTTPS_PROXY=http://127.0.0.1:...``) would carry an httpx or urllib request to any host. ``disable_proxies`` removes
+every proxy variable and sets ``NO_PROXY=*``; the test conftest calls it, with ``install``, before any test runs.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 from collections.abc import Callable
 from typing import Any
@@ -51,3 +56,15 @@ def _guarded_connect_ex(self: socket.socket, address: Any) -> Any:
 def install() -> None:
     setattr(socket.socket, "connect", _guarded_connect)  # noqa: B010 - patching a C-level method
     setattr(socket.socket, "connect_ex", _guarded_connect_ex)  # noqa: B010
+
+
+def disable_proxies() -> list[str]:
+    """Remove every ``*_proxy`` variable, in any case (``HTTP_PROXY``, ``HTTPS_PROXY``, ``ALL_PROXY``, ``NO_PROXY`` and
+    the rest urllib reads), then set ``NO_PROXY=*`` so that httpx and urllib connect directly. Without it urllib, which
+    httpx asks, falls back to the Windows registry or macOS system proxy settings. Returns the names removed."""
+    dropped = [name for name in os.environ if name.lower().endswith("_proxy")]
+    for name in dropped:
+        del os.environ[name]
+    for name in ("NO_PROXY", "no_proxy"):  # one variable on Windows, two elsewhere
+        os.environ[name] = "*"
+    return dropped

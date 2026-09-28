@@ -1,9 +1,10 @@
 """REQ-PROV-04: the ``SmsProvider`` seam for D1 phone codes (docs/spec/06 6.4 item 8).
 
 The Africa's Talking adapter is exercised against respx fakes only: no test reaches api.africastalking.com
-(AC-SEC-5; the egress guard refuses it anyway). Request and response fields follow Africa's Talking's SMS API
-documentation (``POST /version1/messaging``, form-encoded, ``apiKey`` header, ``SMSMessageData.Recipients``); they are
-confirmed against the live account at gate G1.
+(AC-SEC-5). Past respx, the egress guard refuses any connection that is not local; it allows loopback, so the test
+conftest first disables proxies, or a loopback ``HTTPS_PROXY`` would relay the request (``tests/unit/test_egress.py``).
+Request and response fields follow Africa's Talking's SMS API documentation (``POST /version1/messaging``,
+form-encoded, ``apiKey`` header, ``SMSMessageData.Recipients``); they are confirmed against the live account at gate G1.
 """
 
 from __future__ import annotations
