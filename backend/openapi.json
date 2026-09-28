@@ -57,6 +57,30 @@
         "title": "ApiErrorDetail",
         "type": "object"
       },
+      "Badge": {
+        "properties": {
+          "level": {
+            "enum": [
+              "e0",
+              "e1",
+              "e2"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "text": {
+            "description": "Approved badge copy, shown verbatim",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "text"
+        ],
+        "title": "Badge",
+        "type": "object"
+      },
       "CodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -170,6 +194,25 @@
         "title": "ConsentTexts",
         "type": "object"
       },
+      "CountyRef": {
+        "properties": {
+          "code": {
+            "description": "ISO 3166-2:KE code, e.g. KE-30",
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "CountyRef",
+        "type": "object"
+      },
       "CsrfResponse": {
         "properties": {
           "csrf_token": {
@@ -192,6 +235,63 @@
         ],
         "title": "DevVerification",
         "type": "string"
+      },
+      "DirectoryGroup": {
+        "properties": {
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The heading; null groups organisations without a niche (last)"
+          },
+          "orgs": {
+            "items": {
+              "$ref": "#/components/schemas/OrgCard"
+            },
+            "title": "Orgs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "niche",
+          "orgs"
+        ],
+        "title": "DirectoryGroup",
+        "type": "object"
+      },
+      "DirectoryPage": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "groups",
+          "next_cursor"
+        ],
+        "title": "DirectoryPage",
+        "type": "object"
       },
       "EmailRequest": {
         "additionalProperties": false,
@@ -229,6 +329,30 @@
           "limits"
         ],
         "title": "EntitlementsOut",
+        "type": "object"
+      },
+      "FilterOptions": {
+        "properties": {
+          "counties": {
+            "items": {
+              "$ref": "#/components/schemas/CountyRef"
+            },
+            "title": "Counties",
+            "type": "array"
+          },
+          "org_types": {
+            "items": {
+              "$ref": "#/components/schemas/OrgTypeOption"
+            },
+            "title": "Org Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "org_types",
+          "counties"
+        ],
+        "title": "FilterOptions",
         "type": "object"
       },
       "LoginRequest": {
@@ -385,6 +509,183 @@
         "title": "MyOrgOut",
         "type": "object"
       },
+      "NicheChild": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isic_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isic Code"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "label",
+          "isic_code"
+        ],
+        "title": "NicheChild",
+        "type": "object"
+      },
+      "NicheNode": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/NicheChild"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isic_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isic Code"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "label",
+          "isic_code",
+          "children"
+        ],
+        "title": "NicheNode",
+        "type": "object"
+      },
+      "NicheRef": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "Two-level label, e.g. 'ICT › Networks & Telecommunications'",
+            "title": "Label",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "label"
+        ],
+        "title": "NicheRef",
+        "type": "object"
+      },
+      "OrgCard": {
+        "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/Badge"
+          },
+          "county": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CountyRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OrgKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "niches": {
+            "items": {
+              "$ref": "#/components/schemas/NicheRef"
+            },
+            "title": "Niches",
+            "type": "array"
+          },
+          "responsiveness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Responsiveness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "kind",
+          "niches",
+          "county",
+          "badge",
+          "responsiveness"
+        ],
+        "title": "OrgCard",
+        "type": "object"
+      },
       "OrgEntitlementsOut": {
         "properties": {
           "limits": {
@@ -502,6 +803,23 @@
           "kind"
         ],
         "title": "OrgSignup",
+        "type": "object"
+      },
+      "OrgTypeOption": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/OrgKind"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "OrgTypeOption",
         "type": "object"
       },
       "OrgUpdate": {
@@ -665,6 +983,30 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodesResponse",
+        "type": "object"
+      },
+      "Responsiveness": {
+        "description": "E2 only, once there are at least 10 eligible tags and 60 days have passed since E2 verification.",
+        "properties": {
+          "answered_pct": {
+            "title": "Answered Pct",
+            "type": "integer"
+          },
+          "median_days": {
+            "title": "Median Days",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "median_days",
+          "answered_pct",
+          "text"
+        ],
+        "title": "Responsiveness",
         "type": "object"
       },
       "RolesUpdate": {
@@ -2548,6 +2890,543 @@
         "summary": "Consent Texts",
         "tags": [
           "consents"
+        ]
+      }
+    },
+    "/api/directory/filter-options": {
+      "get": {
+        "operationId": "get_filter_options_api_directory_filter_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Filter Options",
+        "tags": [
+          "directory"
+        ]
+      }
+    },
+    "/api/directory/niches": {
+      "get": {
+        "operationId": "list_niches_api_directory_niches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NicheNode"
+                  },
+                  "title": "Response List Niches Api Directory Niches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Niches",
+        "tags": [
+          "directory"
+        ]
+      }
+    },
+    "/api/directory/orgs": {
+      "get": {
+        "operationId": "browse_api_directory_orgs_get",
+        "parameters": [
+          {
+            "description": "Org type; repeat for several",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/OrgKind"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Org type; repeat for several",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "ISO 3166-2:KE county code; repeat",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "pattern": "^KE-\\d{2}$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2:KE county code; repeat",
+              "title": "County"
+            }
+          },
+          {
+            "description": "Niche slug (a parent includes its children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 80,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes its children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "Name contains",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Name contains",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Browse",
+        "tags": [
+          "directory"
+        ]
+      }
+    },
+    "/api/directory/orgs/{org_id}": {
+      "get": {
+        "operationId": "get_org_card_api_directory_orgs__org_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Org Card",
+        "tags": [
+          "directory"
         ]
       }
     },
