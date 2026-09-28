@@ -482,6 +482,49 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(container.textContent).not.toMatch(/delete|cancelled/i);
   });
 
+  it("says it cannot tell when the status check has no answer in 10 s; Confirm and Cancel then work", async () => {
+    // AbortSignal.timeout under the test's control; the check's GET fails, as fetch does, once its signal aborts.
+    const timeouts: Array<{ ms: number; controller: AbortController }> = [];
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      const controller = new AbortController();
+      timeouts.push({ ms, controller });
+      return controller.signal;
+    });
+    try {
+      await confirmFails(new TypeError("Failed to fetch"));
+      mocks.get.mockImplementation(
+        (_path: string, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          }),
+      );
+      fireEvent.click(cancelButton());
+      await waitFor(() => expect(cancelButton().getAttribute("aria-disabled")).toBe("true"));
+      expect(timeouts.map(({ ms }) => ms)).toEqual([10_000]);
+      expect(mocks.get.mock.calls[0][1]?.signal).toBe(timeouts[0].controller.signal);
+      expect(screen.queryByText(UNKNOWN)).toBeNull(); // still asking
+
+      timeouts[0].controller.abort(new DOMException("signal timed out", "TimeoutError"));
+      await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(UNKNOWN));
+      expect(screen.getByTestId("totp-key")).toBeTruthy();
+      expect(cancelButton().getAttribute("aria-disabled")).toBeNull();
+      expect(confirmButton().getAttribute("aria-disabled")).toBeNull();
+
+      // Confirm sends the code again...
+      mocks.post.mockResolvedValue(answer(401, "invalid_code"));
+      fireEvent.click(confirmButton());
+      await screen.findByText("That code did not work. Enter the newest code from your authenticator app.");
+      expect(mocks.post).toHaveBeenLastCalledWith("/api/auth/totp/confirm", { body: { code: "123456" } });
+      // ...and Cancel asks the server again (the earlier lost answer still counts), which now answers "off".
+      mocks.get.mockResolvedValue(ok(me(false)));
+      fireEvent.click(cancelButton());
+      await waitFor(() => expect(screen.getByRole("status").textContent).toBe(CANCELLED));
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   describe("focus after an API answer, which ends after an await", () => {
     // Outside React's event batching, a browser may commit the new screen only after the next animation frame (seen
     // in Chrome at 1440 px): focus must not wait for a frame, so here frames never come.
