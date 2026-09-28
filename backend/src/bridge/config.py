@@ -11,13 +11,28 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIN_SECRET_CHARS = 32
 
 AppEnv = Literal["dev", "test", "staging", "production"]
+
+# Optional settings: an empty value means unset (None).
+OPTIONAL_SETTINGS = (
+    "database_owner_url",
+    "postmark_server_token",
+    "tier2_local_kek",
+    "tier2_kms_key_id",
+    "provenance_signing_key",
+    "provenance_kms_key_id",
+    "tsa_fallback_url",
+    "s3_endpoint_url",
+    "s3_access_key_id",
+    "s3_secret_access_key",
+    "audit_reader_database_url",
+)
 
 
 class ConfigurationError(RuntimeError):
@@ -117,6 +132,15 @@ class Settings(BaseSettings):
 
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
+
+    @field_validator(*OPTIONAL_SETTINGS, mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        """``NAME=`` (an empty value, as in ``.env.example`` or a compose override) means unset, never an empty key,
+        URL or path: the component that needs it then fails closed at use."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:

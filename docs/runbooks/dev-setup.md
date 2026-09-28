@@ -75,6 +75,13 @@ For provenance and Tier 2 (Phase 2), also set in `backend/.env`, each a fresh `o
 registration manifests with). Both are optional for starting the stack, but anything that needs them fails closed
 with a message naming the variable, and neither is ever generated for you. Production refuses both (KMS only).
 
+In the compose stack the `api` service never receives `PROVENANCE_SIGNING_KEY` or `AUDIT_READER_DATABASE_URL`, even
+though they sit in `backend/.env`: `infra/docker-compose.dev.yml` overrides both to an empty value for `api`, and an
+empty value means unset (`bridge/config.py`). Only the `worker` (which signs manifests and verifies the audit chains)
+and the `migrate` step (which publishes the public key) get them. The override is plain compose YAML and works the
+same with Docker Desktop on Windows and Docker on Linux or macOS. Outside compose, leave both unset in the
+environment of any process that serves the API.
+
 Start the stack:
 
 ```bash

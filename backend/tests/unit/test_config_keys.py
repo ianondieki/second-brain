@@ -74,3 +74,33 @@ def test_decoded_key() -> None:
     assert decoded_key(KEY) == bytes(range(32))
     assert decoded_key(SecretStr("AAAA")) is None
     assert decoded_key(SecretStr("%%%")) is None
+
+
+OPTIONAL = (
+    "database_owner_url",
+    "postmark_server_token",
+    "tier2_local_kek",
+    "tier2_kms_key_id",
+    "provenance_signing_key",
+    "provenance_kms_key_id",
+    "tsa_fallback_url",
+    "s3_endpoint_url",
+    "s3_access_key_id",
+    "s3_secret_access_key",
+    "audit_reader_database_url",
+)
+
+
+@pytest.mark.parametrize("name", OPTIONAL)
+def test_an_empty_optional_setting_means_unset(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """The dev compose stack overrides PROVENANCE_SIGNING_KEY and AUDIT_READER_DATABASE_URL to "" for the api service:
+    an empty value is unset (None), never a malformed key or an empty URL."""
+    monkeypatch.setenv(name.upper(), "")
+    settings = Settings(
+        database_url=SecretStr("postgresql+psycopg://u:p@localhost/db"),
+        secret_key=SecretStr("x" * 32),
+        data_encryption_key=KEY,
+        recovery_code_pepper=SecretStr("p" * 32),
+        _env_file=None,  # type: ignore[call-arg]
+    )
+    assert getattr(settings, name) is None
