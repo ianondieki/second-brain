@@ -618,9 +618,10 @@ async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(
 
 # A user's report: inserted without RETURNING (the reporter cannot read the queue).
 FILE_CASE = (
-    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id, status, classifier)"
-    " VALUES (:id, 'proposal', :subject, '{abuse}', CAST(:source AS moderation_source), :reporter,"
-    " CAST(:status AS moderation_case_status), CAST(:classifier AS jsonb))"
+    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id, status, classifier,"
+    " assigned_to, decided_by, decided_at) VALUES (:id, 'proposal', :subject, '{abuse}',"
+    " CAST(:source AS moderation_source), :reporter, CAST(:status AS moderation_case_status),"
+    " CAST(:classifier AS jsonb), :assigned, :decided_by, CAST(:decided_at AS timestamptz))"
 )
 OPEN_CASE = (
     "SELECT app_open_moderation_case(:type, :subject, CAST(:reasons AS text[]), CAST(:source AS moderation_source),"
@@ -654,7 +655,15 @@ async def test_users_only_report_and_system_sources_file_through_the_function(ow
 
         await act(conn, stranger)  # a report, in the reporter's own name only
         report = uuid7()
-        report_row = {"subject": proposal, "source": "report", "reporter": stranger, "status": "open"}
+        report_row = {
+            "subject": proposal,
+            "source": "report",
+            "reporter": stranger,
+            "status": "open",
+            "assigned": None,
+            "decided_by": None,
+            "decided_at": None,
+        }
         await run(conn, FILE_CASE, id=report, **report_row, classifier=None)
         for change in (
             {"source": "regex", "reporter": None},  # a system source
@@ -662,6 +671,9 @@ async def test_users_only_report_and_system_sources_file_through_the_function(ow
             {"reporter": None},
             {"reporter": owner},  # in another user's name
             {"status": "held"},
+            {"assigned": moderator},  # the queue's routing and decisions are staff's (UPDATE policy)
+            {"decided_by": stranger},
+            {"decided_at": datetime.now(UTC)},
         ):
             await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **(report_row | change), classifier=None)
         await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **report_row, classifier='{"label": "spam"}')
@@ -1219,6 +1231,48 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         assert removal.rowcount == 0
         await act(conn, second)
         assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is True
+
+
+async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Only an upheld dispute transfers the organisation: staff approving an ordinary claim (here the E2 upgrade of
+    an E1 organisation by its own signatory, through the E1 shortcut) leaves the earlier approved claim of another
+    claimant approved and every membership as it was."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("upgrade-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{upgrade.example.test}")
+        first = await w.add_user(conn, _email("upgrade-first"), "First claimant")
+        signatory = await w.add_user(conn, _email("upgrade-signatory"), "Signatory")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        await act(conn, first)  # E1 at once on an official domain
+        earlier = await _claim(conn, org, first, "upgrade.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        await as_owner(conn)
+        await _add_membership(conn, org, signatory, "{signatory}")
+        await act(conn, signatory)  # E2 on the organisation's verified domain: no new domain proof needed
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=signatory, t=met)
+        upgrade = await _claim(conn, org, signatory, "upgrade.example.test", "e2", right)
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=upgrade)
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'E2 documents checked')", id=upgrade)
+
+        await as_owner(conn)
+        claims = await conn.execute(
+            text("SELECT id, status::text AS status FROM org_claims WHERE org_id = :org"), {"org": org}
+        )
+        assert {row.id: row.status for row in claims.all()} == {earlier: "approved", upgrade: "approved"}
+        members = await conn.execute(
+            text("SELECT user_id, status::text AS status, roles::text[] AS roles FROM memberships WHERE org_id = :org"),
+            {"org": org},
+        )
+        assert {row.user_id: (row.status, sorted(row.roles)) for row in members.all()} == {
+            first: ("active", ["admin", "owner"]),
+            signatory: ("active", ["admin", "owner", "signatory"]),
+        }
+        assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=org) == "e2"
 
 
 async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:
