@@ -819,7 +819,9 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         await act(conn, claimant)
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
-        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
+        await run(
+            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'pending_review' WHERE id = :id", id=claim
+        )
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
@@ -858,6 +860,66 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         assert await run(conn, "SELECT app_is_member(:id, '{owner}')", id=org) is True
         await act(conn, admin)
         await expect(conn, decide, "not open", id=claim)
+
+
+async def test_staff_approval_needs_the_claimed_domain_proven(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Staff approve a claim (E1 or E2) only once the email code and the DNS TXT record are verified; for E2 an active
+    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    unproven = "domain is not proven"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("proof-admin"), "Admin", staff_role="admin")
+        unclaimed = await add_org(conn)
+        capped_org = await add_org(conn)
+        e1 = await add_org(conn, verification="e1")
+        await run(conn, "UPDATE organizations SET verified_domain = 'e1.example.test' WHERE id = :id", id=e1)
+        claimant = await w.add_user(conn, _email("prover"), "Prover")
+        outsider = await w.add_user(conn, _email("outsider"), "Outsider")
+        owner = await w.add_user(conn, _email("e1-owner"), "Owner")
+        await run(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
+            id=uuid7(),
+            org=e1,
+            u=owner,
+        )
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        # An E2 claim on an unclaimed organisation: refused until both the code and the DNS record are verified.
+        await act(conn, claimant)
+        claim = await _claim(conn, unclaimed, claimant, "prover.example.test", "e2", right)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=claim)
+        await act(conn, claimant)
+        assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=unclaimed, u=claimant, t=met)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=claim)  # the DNS TXT record is still missing
+        await act(conn, claimant)
+        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+        await act(conn, admin)
+        await run(conn, decide, id=claim)
+        # An E1 claim sent to manual review without a verified code (reissues spent) is never approved.
+        await act(conn, claimant)
+        capped = await _claim(conn, capped_org, claimant, "prover.example.test", "e1", right)
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=capped)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=capped)
+        # E2 for an organisation already E1 on the claimed domain: its owner needs no new proof, an outsider does.
+        for user in (outsider, owner):
+            await act(conn, user)
+            e2_claim = await _claim(conn, e1, user, "e1.example.test", "e2", right)
+            if user == owner:
+                await run(conn, MET_ACCEPTANCE, id=uuid7(), org=e1, u=owner, t=met)
+            await act(conn, admin)
+            if user == outsider:
+                await expect(conn, decide, unproven, id=e2_claim)
+            else:
+                await run(conn, decide, id=e2_claim)
+        await as_owner(conn)
+        assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=e1) == "e2"
 
 
 async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncEngine) -> None:

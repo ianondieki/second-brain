@@ -1205,7 +1205,9 @@ $$;
 -- Staff admin decision on an open claim (manual E1, E2 via ManualReviewVerifier, disputes). Approving E2 needs the
 -- current Master Enterprise Terms accepted by this claimant; it sets e2, verified_domain, e2_verified_at, the annual
 -- re-verification date, public_entity as requested, and delivers the organisation's held tags. Approval makes the
--- claimant an owner and admin. Staff never decide their own claim.
+-- claimant an owner and admin. Every approval needs the claimed domain proven: the email code (otp_verified_at) and
+-- the DNS TXT record (dns_verified_at), or, for E2 only, a claimant who is an active owner, admin or signatory of an
+-- organisation already E1 on that same domain. Staff never decide their own claim.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1231,6 +1233,18 @@ BEGIN
     END IF;
     IF p_approve THEN
         SELECT * INTO v_org FROM public.organizations WHERE id = v_claim.org_id FOR UPDATE;
+        IF NOT (
+            (v_claim.otp_verified_at IS NOT NULL AND v_claim.dns_verified_at IS NOT NULL)
+            OR (v_claim.level = 'e2' AND v_org.verification = 'e1' AND v_org.verified_domain = v_claim.domain
+                AND EXISTS (
+                    SELECT 1
+                      FROM public.memberships m
+                     WHERE m.org_id = v_org.id AND m.user_id = v_claim.claimant_user_id AND m.status = 'active'
+                       AND m.roles && '{owner,admin,signatory}'::public.org_role[]))
+        ) THEN
+            RAISE EXCEPTION 'app_decide_claim: the claimed domain is not proven (email code and DNS TXT record, or for'
+                ' E2 a member of the organisation already E1 on that domain)' USING ERRCODE = 'check_violation';
+        END IF;
         IF v_claim.level = 'e1' THEN
             IF v_org.verification = 'e2' THEN
                 RAISE EXCEPTION 'app_decide_claim: an E2 organisation is not moved back to E1'
