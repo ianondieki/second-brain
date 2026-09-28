@@ -9,6 +9,7 @@ The task list comes from ``ai/models.yaml``, so a newly registered task is cover
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -18,12 +19,12 @@ from bridge.llm.cassettes import CassettePlayer
 from bridge.llm.client import BatchItem
 from bridge.llm.errors import ConsentRequired, LLMSchemaError, Tier2NotAllowed
 from bridge.llm.fakes import FakeAdapter
-from bridge.llm.guard import StaticConsents
+from bridge.llm.guard import PER_SESSION, StaticConsents
 from bridge.llm.ledger import CallStatus
 from bridge.llm.registry import Purpose
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
-from tests.unit.llm.helpers import OWNER, SESSION, real_registry
+from tests.unit.llm.helpers import OTHER_SESSION, OWNER, SESSION, real_registry
 from tests.unit.llm.rig import Rig, registry_with, rig
 from tests.unit.llm.schemas import Verdict, player
 
@@ -31,6 +32,7 @@ CANARY = "CANARY-T2-7f3a9c41"
 TIER1_TEXT = "Public teaser: solar cold rooms for fish traders."
 TASKS = sorted(real_registry().tasks)
 CONSENT_TASKS = [t for t in TASKS if real_registry().task(t).purpose is not Purpose.TIER1_ONLY]
+PER_SESSION_TASKS = [t for t in CONSENT_TASKS if real_registry().task(t).purpose.consent in PER_SESSION]
 CTX = CallContext(user_id=OWNER, trace_id="ac-sec-6", session_id=SESSION)
 
 
@@ -68,6 +70,7 @@ def sent(tape: CassettePlayer) -> str:
 
 def test_the_registry_has_both_kinds_of_task() -> None:
     assert CONSENT_TASKS, "no consent-covered task: the positive control would be empty"
+    assert PER_SESSION_TASKS, "no per-session consent task: the session control would be empty"
     assert set(TASKS) - set(CONSENT_TASKS), "no Tier-1-only task"
 
 
@@ -148,6 +151,22 @@ async def test_withdrawn_consent_blocks_again(task: str) -> None:
     with pytest.raises(ConsentRequired):
         await r.service.complete(task, fixture(task), Verdict, ctx=CTX)
     assert tape.requests == []
+
+
+@pytest.mark.parametrize("task", PER_SESSION_TASKS)
+async def test_a_per_session_consent_blocks_outside_its_session(task: str) -> None:
+    """ADR-005 decision 4: ``tier2_llm_assistant`` granted in another login session, or a call with no session (a
+    job), sends nothing and records only a blocked row."""
+    purpose = real_registry().task(task).purpose.consent
+    assert purpose is not None
+    tape = player()
+    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose, OTHER_SESSION)}))
+    for ctx in (CTX, replace(CTX, session_id=None)):
+        with pytest.raises(ConsentRequired):
+            await r.service.complete(task, fixture(task), Verdict, ctx=ctx)
+    assert tape.requests == []
+    assert [e.status for e in r.ledger.entries] == [CallStatus.BLOCKED_CONSENT] * 2
+    assert CANARY not in repr(r.ledger.entries)
 
 
 @pytest.mark.parametrize("task", TASKS)
