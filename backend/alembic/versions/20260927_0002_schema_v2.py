@@ -272,14 +272,15 @@ APP_GRANTS: dict[str, str] = {
     "moderation_cases": "SELECT, INSERT, UPDATE (status, reasons, assigned_to, decided_by, decided_at, updated_at)",
     # The OTP columns change only through app_reissue_claim_otp() and app_confirm_claim_otp() (attempts never reset).
     # otp_hash is written (INSERT) but never readable: codes are compared in SQL, so a read path (a query bug, an ORM
-    # load) can never hand out a hash of a 6-digit code to brute-force offline.
+    # load) can never hand out a hash of a 6-digit code to brute-force offline. dns_token is written with the claim
+    # (write-once, org_claims_dns_guard()); dns_verified_at only by app_mark_claim_dns_verified().
     "org_claims": (
         "SELECT (id, org_id, claimant_user_id, domain, email_address, level, status, otp_expires_at, otp_attempts,"
         " otp_reissues, otp_verified_at, dns_token, dns_verified_at, registration_no, cr12_date, kra_pin,"
         " sector_register, public_entity_requested, document_keys, reviewed_by, decided_at, decision_reason,"
         " updated_at, created_at),"
-        " INSERT, UPDATE (dns_token, dns_verified_at, registration_no, cr12_date, kra_pin, sector_register,"
-        " public_entity_requested, document_keys, status, updated_at)"
+        " INSERT, UPDATE (registration_no, cr12_date, kra_pin, sector_register, public_entity_requested,"
+        " document_keys, status, updated_at)"
     ),
     "directory_invitations": "SELECT, INSERT, UPDATE (status, reason, approved_by, sent_at, updated_at)",
     # Confirmed only through app_confirm_phone_otp(); otp_hash is written but never readable (as for org_claims).
@@ -1159,6 +1160,39 @@ BEGIN
 END;
 $$;
 
+-- The DNS half of E1: the app's DNS-check code calls this for the claimant's own open claim once it has resolved the
+-- claim's TXT record (the lookup itself is app-side; the database cannot resolve names). The claim must carry its
+-- token (written with the claim, never changed: org_claims_dns_guard()). Returns whether this call marked it: false
+-- when it was already verified.
+CREATE FUNCTION app_mark_claim_dns_verified(p_claim_id uuid) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_claim public.org_claims%ROWTYPE;
+BEGIN
+    SELECT * INTO v_claim
+      FROM public.org_claims
+     WHERE id = p_claim_id AND claimant_user_id = public.app_user_id()
+       FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'app_mark_claim_dns_verified: no such claim for the current user'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_claim.status NOT IN ('otp_sent', 'dns_pending', 'pending_review', 'disputed') THEN
+        RAISE EXCEPTION 'app_mark_claim_dns_verified: the claim is not open' USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_claim.dns_token IS NULL THEN
+        RAISE EXCEPTION 'app_mark_claim_dns_verified: the claim has no DNS token' USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_claim.dns_verified_at IS NOT NULL THEN
+        RETURN false;
+    END IF;
+    UPDATE public.org_claims SET dns_verified_at = now(), updated_at = now() WHERE id = p_claim_id;
+    RETURN true;
+END;
+$$;
+
 -- Automatic E1 (docs/spec/06 6.2) for the claimant's own open E1 claim once the OTP and the DNS TXT record are
 -- verified. Automatic only when the organisation is unclaimed or pending, not delisted, has no other open claim, and
 -- the domain is in official_domains[] (or it is the claimant's own self-signup organisation); otherwise the claim goes
@@ -1811,7 +1845,24 @@ BEGIN
 END;
 $$;
 
+-- The DNS proof of a claim is write-once: once set, dns_token and dns_verified_at never change (for every role, the
+-- definer functions included); bridge_app writes the token only with the claim (no UPDATE grant on either).
+CREATE FUNCTION org_claims_dns_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (OLD.dns_token IS NOT NULL AND NEW.dns_token IS DISTINCT FROM OLD.dns_token)
+       OR (OLD.dns_verified_at IS NOT NULL AND NEW.dns_verified_at IS DISTINCT FROM OLD.dns_verified_at) THEN
+        RAISE EXCEPTION 'org_claims: the DNS token and its verification are write-once'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION phone_verifications_guard() FROM PUBLIC;
@@ -1842,6 +1893,9 @@ CREATE TRIGGER tags_guard
 CREATE TRIGGER org_claims_guard
     BEFORE INSERT ON org_claims
     FOR EACH ROW EXECUTE FUNCTION org_claims_guard();
+CREATE TRIGGER org_claims_dns_guard
+    BEFORE UPDATE ON org_claims
+    FOR EACH ROW EXECUTE FUNCTION org_claims_dns_guard();
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
@@ -1868,6 +1922,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_hold_proposal(uuid)": ("bridge_app",),
     "app_hold_problem(uuid)": ("bridge_app",),
     "app_confirm_claim_otp(uuid, bytea)": ("bridge_app",),
+    "app_mark_claim_dns_verified(uuid)": ("bridge_app",),
     "app_approve_claim_e1(uuid)": ("bridge_app",),
     "app_decide_claim(uuid, boolean, text)": ("bridge_app",),
     "app_staff_remove_membership(uuid, text)": ("bridge_app",),
@@ -1891,6 +1946,7 @@ TRIGGER_FUNCTIONS = (
     "proposals_guard()",
     "tags_guard()",
     "org_claims_guard()",
+    "org_claims_dns_guard()",
     "phone_verifications_guard()",
 )
 

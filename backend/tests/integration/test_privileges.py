@@ -568,14 +568,19 @@ async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(
         await expect(conn, "SELECT app_moderate_proposal(:id, 'clear')", "moderator's own", id=mine)
 
 
+# What the app's DNS-check code calls once it has resolved the claim's TXT record (the lookup itself is app-side).
+MARK_DNS = "SELECT app_mark_claim_dns_verified(:id)"
+
+
 async def _claim(conn: AsyncConnection, org: UUID, claimant: UUID, domain: str, level: str, otp_hash: bytes) -> UUID:
     claim = uuid7()
     await run(
         conn,
         "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, otp_hash,"
-        " otp_expires_at) VALUES (:id, :org, :u, :d, :e, CAST(:level AS claim_level), 'otp_sent', :h,"
-        " now() + interval '10 minutes')",
+        " otp_expires_at, dns_token) VALUES (:id, :org, :u, :d, :e, CAST(:level AS claim_level), 'otp_sent', :h,"
+        " now() + interval '10 minutes', :token)",
         id=claim,
+        token=f"bridge-verify-{claim.hex}",
         org=org,
         u=claimant,
         d=domain,
@@ -630,9 +635,8 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=wrong) is False
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
         await expect(conn, approve, "must both be verified", id=claim)  # the DNS TXT record is still missing
-        await run(
-            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'dns_pending' WHERE id = :id", id=claim
-        )
+        assert await run(conn, MARK_DNS, id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'dns_pending' WHERE id = :id", id=claim)
         assert await run(conn, approve, id=claim) == "approved"
         org = (
             await conn.execute(
@@ -649,7 +653,7 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         await act(conn, claimant)
         other = await _claim(conn, lookalike, claimant, "telco-b-ke.example.test", "e1", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=other, h=right) is True
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=other)
+        assert await run(conn, MARK_DNS, id=other) is True
         assert await run(conn, approve, id=other) == "pending_review"
         assert (
             await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=lookalike) == "unclaimed"
@@ -657,7 +661,7 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         # A claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2).
         dispute = await _claim(conn, verified, claimant, "verified.example.test", "e1", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=dispute, h=right) is True
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=dispute)
+        assert await run(conn, MARK_DNS, id=dispute) is True
         assert await run(conn, approve, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_is_member(:id)", id=verified) is False
 
@@ -737,6 +741,46 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
         await expect(conn, new_claim, "uq_org_claims_open_claimant_org", id=again, org=other_org, u=claimant)
         await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=capped)
         await run(conn, new_claim, id=again, org=other_org, u=claimant)
+
+
+async def test_dns_verification_is_marked_only_through_the_function_and_the_token_is_write_once(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """bridge_app cannot set dns_verified_at or change dns_token (the token is written with the claim):
+    app_mark_claim_dns_verified() marks the claimant's own open claim with a token once the app has resolved the TXT
+    record. Once set, the token and the verification time never change, for any role."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        org, tokenless_org, withdrawn_org = await add_org(conn), await add_org(conn), await add_org(conn)
+        claimant = await w.add_user(conn, _email("dns-claimant"), "Claimant")
+        stranger = await w.add_user(conn, _email("dns-stranger"), "Stranger")
+        await act(conn, claimant)
+        claim = await _claim(conn, org, claimant, "dns.example.test", "e1", right)
+        for column in ("dns_verified_at = now()", "dns_token = 'mine'", "dns_verified_at = NULL"):
+            await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "permission denied", id=claim)
+        await act(conn, stranger)
+        await expect(conn, MARK_DNS, "no such claim for the current user", id=claim)
+        await act(conn, claimant)
+        assert await run(conn, MARK_DNS, id=claim) is True
+        assert await run(conn, MARK_DNS, id=claim) is False  # already verified: nothing changes
+        tokenless = uuid7()
+        await run(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'dns.example.test', 'info@dns.example.test', 'e1', 'otp_sent')",
+            id=tokenless,
+            org=tokenless_org,
+            u=claimant,
+        )
+        await expect(conn, MARK_DNS, "no DNS token", id=tokenless)
+        withdrawn = await _claim(conn, withdrawn_org, claimant, "dns.example.test", "e1", right)
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=withdrawn)
+        await expect(conn, MARK_DNS, "not open", id=withdrawn)
+        await as_owner(conn)  # the trigger holds for every role
+        later = "dns_verified_at = now() + interval '1 minute'"  # now() is the transaction's: the marked time
+        for column in ("dns_token = 'other'", "dns_token = NULL", later, "dns_verified_at = NULL"):
+            await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "write-once", id=claim)
+        await run(conn, "UPDATE org_claims SET dns_token = 'late' WHERE id = :id", id=tokenless)  # a first write
 
 
 MET_ACCEPTANCE = (
@@ -822,9 +866,8 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         await act(conn, claimant)
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
-        await run(
-            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'pending_review' WHERE id = :id", id=claim
-        )
+        assert await run(conn, MARK_DNS, id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
@@ -901,7 +944,7 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         await act(conn, admin)
         await expect(conn, decide, unproven, id=claim)  # the DNS TXT record is still missing
         await act(conn, claimant)
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+        assert await run(conn, MARK_DNS, id=claim) is True
         await act(conn, admin)
         await run(conn, decide, id=claim)
         # An E1 claim sent to manual review without a verified code (reissues spent) is never approved.
@@ -928,7 +971,7 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
 async def _prove_domain(conn: AsyncConnection, claim: UUID, otp_hash: bytes) -> None:
     """As the claimant: the claim's email code and DNS TXT record verified."""
     assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=otp_hash) is True
-    await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+    assert await run(conn, MARK_DNS, id=claim) is True
 
 
 async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str) -> UUID:

@@ -134,9 +134,9 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     },
     "document_views": {"duration_bucket"},
     "moderation_cases": {"status", "reasons", "assigned_to", "decided_by", "decided_at", "updated_at"},
-    "org_claims": {  # never the OTP columns: app_reissue_claim_otp() and app_confirm_claim_otp() own them
-        "dns_token",
-        "dns_verified_at",
+    # never the OTP columns (app_reissue_claim_otp(), app_confirm_claim_otp()) nor the DNS proof (dns_token is
+    # written with the claim, dns_verified_at only by app_mark_claim_dns_verified())
+    "org_claims": {
         "registration_no",
         "cr12_date",
         "kra_pin",
@@ -269,6 +269,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_hold_proposal(uuid)": (True, {"bridge_app"}),
     "app_hold_problem(uuid)": (True, {"bridge_app"}),
     "app_confirm_claim_otp(uuid, bytea)": (True, {"bridge_app"}),
+    "app_mark_claim_dns_verified(uuid)": (True, {"bridge_app"}),
     "app_approve_claim_e1(uuid)": (True, {"bridge_app"}),
     "app_decide_claim(uuid, boolean, text)": (True, {"bridge_app"}),
     "app_staff_remove_membership(uuid, text)": (True, {"bridge_app"}),
@@ -283,6 +284,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "proposals_guard()": (True, set()),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
     "org_claims_guard()": (True, set()),
+    "org_claims_dns_guard()": (False, set()),
     "phone_verifications_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
@@ -1362,6 +1364,8 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             "UPDATE org_claims SET otp_reissues = 0",
             "UPDATE org_claims SET otp_hash = NULL",
             "UPDATE org_claims SET otp_expires_at = now()",
+            "UPDATE org_claims SET dns_verified_at = now()",
+            "UPDATE org_claims SET dns_token = 'x'",
             "DELETE FROM nda_acceptances",
             "INSERT INTO provenance_keys (key_id, public_key) VALUES ('k', '\\x00')",
             "SELECT 1 FROM proposal_confidential",
@@ -1795,6 +1799,7 @@ V2_TRIGGERS = {
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
+    ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
