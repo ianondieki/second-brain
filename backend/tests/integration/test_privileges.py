@@ -8,7 +8,10 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - bridge_app is a member of each Tier-2 role WITH INHERIT FALSE, SET TRUE (PostgreSQL 16) and of nothing else, so a
   session logged in as bridge_app (``SET SESSION AUTHORIZATION`` here) can switch to a Tier-2 role and to no other.
 - Each definer function checks its caller in SQL: staff decisions need the staff role (and TOTP), the OTPs are compared
-  against the stored hash, holds only go up, and approvals set verification and create the membership.
+  against the stored hash (D1 only from D0; codes expire by the database clock), holds only go up, approvals need the
+  domain proven and set verification and create the membership, and only the verified E2 claimant or a member records
+  the Master Enterprise Terms (the current version by the claimant for E2 approval).
+- Registration: the database sets ``registered_at``; only ``provenance_worker`` bound to the owner fills the hashes.
 """
 
 from __future__ import annotations
@@ -18,18 +21,21 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, CursorResult
 from sqlalchemy.exc import DBAPIError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.sql.elements import TextClause
 
 from bridge.db import TIER2_ROLES, as_role, bind_tenant
 from bridge.ids import uuid7
+from bridge.models.enums import VersionStatus
+from bridge.proposals.models import ProposalVersion
 from tests.integration import world as w
 
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
@@ -230,6 +236,58 @@ async def test_as_role_rolls_back_when_the_block_breaks_the_transaction(
         assert (await session.execute(text("SELECT current_user"))).scalar_one() == "bridge_app"
 
 
+async def rowcount(session: AsyncSession, statement: TextClause, params: dict[str, Any] | None = None) -> int:
+    """Rows an UPDATE or DELETE matched, as a session reports it."""
+    result = cast(CursorResult[Any], await session.execute(statement, params or {}))
+    return result.rowcount
+
+
+async def test_the_database_times_a_registration_and_only_the_bound_worker_fills_its_hashes(
+    app_session_engine: AsyncEngine, developer: Developer
+) -> None:
+    """The app registers a version (status, cert_id) but never chooses registered_at: the trigger sets it and the ORM
+    reads it back on the same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the
+    app role holds no UPDATE on them, and a worker bound to another user matches no row."""
+    factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
+    digest = hashlib.sha256(b"manifest").digest()
+    fill = text(
+        "UPDATE proposal_versions SET content_hash = :h, prev_version_hash = :h, manifest_version = '1' WHERE id = :id"
+    )
+    async with factory() as session:
+        await bind_tenant(session, user_id=developer.user_id)
+        version = await session.get(ProposalVersion, developer.draft_version)
+        assert version is not None
+        version.status = VersionStatus.REGISTERED
+        version.cert_id = uuid4().hex[:16]
+        await session.flush()
+        stamped = (
+            await session.execute(
+                text("SELECT registered_at, now() AS now FROM proposal_versions WHERE id = :id"), {"id": version.id}
+            )
+        ).one()
+        assert version.registered_at == stamped.registered_at == stamped.now
+        for column in ("content_hash = :h", "registered_at = now()"):
+            with pytest.raises(ProgrammingError, match="permission denied"):
+                async with session.begin_nested():
+                    await session.execute(
+                        text(f"UPDATE proposal_versions SET {column} WHERE id = :id"), {"id": version.id, "h": digest}
+                    )
+        await bind_tenant(session, user_id=uuid7())  # a job bound to another user sees and touches no version
+        async with as_role(session, "provenance_worker"):
+            assert (await session.execute(text("SELECT count(*) FROM proposal_versions"))).scalar_one() == 0
+            touch_all = text("UPDATE proposal_versions SET updated_at = now()")  # no WHERE: the UPDATE policy alone
+            assert await rowcount(session, touch_all) == 0
+            assert await rowcount(session, fill, {"id": version.id, "h": digest}) == 0
+        await bind_tenant(session, user_id=developer.user_id)
+        async with as_role(session, "provenance_worker"):
+            assert await rowcount(session, fill, {"id": version.id, "h": digest}) == 1
+        filled = await session.execute(
+            text("SELECT content_hash, manifest_version FROM proposal_versions WHERE id = :id"), {"id": version.id}
+        )
+        assert tuple(filled.one()) == (digest, "1")
+        await session.rollback()
+
+
 # --- SECURITY DEFINER functions (privileged changes checked in SQL) ------------------------------------------------
 
 
@@ -324,55 +382,89 @@ async def test_app_is_staff_needs_an_active_staff_user_with_totp(owner_engine: A
             assert tuple((await conn.execute(text(check))).one()) == answer, user
 
 
+PHONE_CODE = (
+    "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
+    " VALUES (:id, :u, :phone, :h, now() + interval '10 minutes')"
+)
+
+
+async def _phone_code(conn: AsyncConnection, user: UUID, otp_hash: bytes, phone: str = "+254712345678") -> UUID:
+    code = uuid7()
+    await run(conn, PHONE_CODE, id=code, u=user, phone=phone, h=otp_hash)
+    return code
+
+
 async def test_phone_otp_is_compared_in_sql_and_raises_d0_to_d1(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     right, wrong = otp
+    level = "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u"
+    attempts = "SELECT attempts, verified_at IS NOT NULL AS verified FROM phone_verifications WHERE id = :id"
     async with as_app(owner_engine) as conn:
         user = await w.add_user(conn, _email("phone"), "Phone")
         other = await w.add_user(conn, _email("other"), "Other")
-        await run(conn, "INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)", u=user, h=f"h{user.hex}")
+        locked_user = await w.add_user(conn, _email("locked"), "Locked")
+        no_profile = await w.add_user(conn, _email("no-profile"), "No profile")
+        for developer in (user, locked_user):
+            await run(
+                conn,
+                "INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)",
+                u=developer,
+                h=f"h{developer.hex}",
+            )
         await act(conn, user)
-        code = uuid7()
-        await run(
-            conn,
-            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
-            " VALUES (:id, :u, '+254712345678', :h, now() + interval '10 minutes')",
-            id=code,
-            u=user,
-            h=right,
-        )
+        code = await _phone_code(conn, user, right)
+        second = await _phone_code(conn, user, right, phone="+254722000000")  # another number, still open
         await expect(conn, "UPDATE phone_verifications SET verified_at = now()", "permission denied")
         await expect(conn, "UPDATE developer_profiles SET verification_level = 'd1'", "permission denied")
         confirm = "SELECT app_confirm_phone_otp(:id, :h)"
         assert await run(conn, confirm, id=code, h=wrong) is False
-        assert (
-            await run(conn, "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u", u=user)
-            == "d0"
-        )
+        assert await run(conn, level, u=user) == "d0"
         assert await run(conn, confirm, id=code, h=right) is True
-        assert (
-            await run(conn, "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u", u=user)
-            == "d1"
-        )
-        assert await run(conn, "SELECT attempts FROM phone_verifications WHERE id = :id", id=code) == 2
+        assert await run(conn, level, u=user) == "d1"
+        assert tuple((await conn.execute(text(attempts), {"id": code})).one()) == (2, True)
         assert await run(conn, confirm, id=code, h=right) is False  # a code confirms once
+        # Once D1, a second open code never verifies too; the attempt is still counted.
+        assert await run(conn, confirm, id=second, h=right) is False
+        assert tuple((await conn.execute(text(attempts), {"id": second})).one()) == (1, False)
         await act(conn, other)
         await expect(conn, confirm, "no such code for the current user", id=code, h=right)
         # Five wrong attempts lock a code, even against the right one afterwards.
-        await act(conn, user)
-        locked = uuid7()
-        await run(
-            conn,
-            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
-            " VALUES (:id, :u, '+254712345678', :h, now() + interval '10 minutes')",
-            id=locked,
-            u=user,
-            h=right,
-        )
+        await act(conn, locked_user)
+        locked = await _phone_code(conn, locked_user, right)
         for _ in range(5):
             assert await run(conn, confirm, id=locked, h=wrong) is False
         assert await run(conn, confirm, id=locked, h=right) is False
+        assert await run(conn, level, u=locked_user) == "d0"
+        # Without a developer profile there is nothing to raise: no code verifies.
+        await act(conn, no_profile)
+        orphan = await _phone_code(conn, no_profile, right)
+        assert await run(conn, confirm, id=orphan, h=right) is False
+        assert tuple((await conn.execute(text(attempts), {"id": orphan})).one()) == (1, False)
+
+
+async def test_a_phone_code_expires_ten_minutes_after_it_is_stored(owner_engine: AsyncEngine) -> None:
+    """The database sets expires_at (trigger): a later expiry sent by the application, or none, gives now() + 10 min,
+    for every role."""
+    ttl = "SELECT expires_at - now() FROM phone_verifications WHERE id = :id"
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("expiry"), "Expiry")
+        await act(conn, user)
+        codes = [uuid7() for _ in range(3)]
+        insert = (
+            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash{col})"
+            " VALUES (:id, :u, '+254712345678', :h{val})"
+        )
+        await run(
+            conn, insert.format(col=", expires_at", val=", now() + interval '1 day'"), id=codes[0], u=user, h=bytes(32)
+        )
+        await run(conn, insert.format(col="", val=""), id=codes[1], u=user, h=bytes(32))
+        await as_owner(conn)
+        await run(
+            conn, insert.format(col=", expires_at", val=", now() + interval '1 year'"), id=codes[2], u=user, h=bytes(32)
+        )
+        for code in codes:
+            assert await run(conn, ttl, id=code) == timedelta(minutes=10)
 
 
 async def test_kyc_decisions_are_staff_admin_only_and_raise_d1_to_d2(owner_engine: AsyncEngine) -> None:
@@ -647,9 +739,69 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
         await run(conn, new_claim, id=again, org=other_org, u=claimant)
 
 
+MET_ACCEPTANCE = (
+    "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+    " SELECT :id, :org, :u, id, sha256 FROM legal_templates WHERE id = :t"
+)
+
+
+async def add_legal_template(conn: AsyncConnection, kind: str) -> UUID:
+    """As the owner: a new (so current) placeholder version of a legal template kind."""
+    template = uuid7()
+    await run(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, CAST(:kind AS legal_template_kind),"
+        " :version, :body, sha256(convert_to(:body, 'UTF8')))",
+        id=template,
+        kind=kind,
+        version=f"t-{template.hex[-12:]}",
+        body=f"[[LEGAL-PLACEHOLDER:{kind}-{template.hex}]]\n",
+    )
+    return template
+
+
+async def test_only_a_verified_e2_claimant_or_a_member_accepts_terms_for_an_organisation(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Acceptances are permanent evidence, so an outsider must never write one for an organisation. Besides its owners,
+    admins and signatories, only the claimant of their own open E2 claim with a verified email code, on an
+    organisation that is not E2 yet, may accept, and only the Master Enterprise Terms."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        unclaimed = await add_org(conn)
+        verified = await add_org(conn, verification="e2")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        tos = await add_legal_template(conn, "tos")
+        stranger = await w.add_user(conn, _email("terms-stranger"), "Stranger")
+        claimant = await w.add_user(conn, _email("terms-claimant"), "Claimant")
+        e1_claimant = await w.add_user(conn, _email("terms-e1"), "E1 claimant")
+        confirm = "SELECT app_confirm_claim_otp(:id, :h)"
+        refused = "row-level security"
+
+        await act(conn, stranger)
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=stranger, t=met)
+        await act(conn, claimant)
+        claim = await _claim(conn, unclaimed, claimant, "terms.example.test", "e2", right)
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=claimant, t=met)  # code unverified
+        assert await run(conn, confirm, id=claim, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=claimant, t=tos)  # terms only
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=unclaimed, u=claimant, t=met)
+        # A verified E1 claim is no E2 claim, and an organisation that is already E2 is disputed, never re-signed.
+        await act(conn, e1_claimant)
+        e1_claim = await _claim(conn, unclaimed, e1_claimant, "terms.example.test", "e1", right)
+        assert await run(conn, confirm, id=e1_claim, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=unclaimed, u=e1_claimant, t=met)
+        await act(conn, claimant)
+        on_e2 = await _claim(conn, verified, claimant, "verified.example.test", "e2", right)
+        assert await run(conn, confirm, id=on_e2, h=right) is True
+        await expect(conn, MET_ACCEPTANCE, refused, id=uuid7(), org=verified, u=claimant, t=met)
+
+
 async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held_tags(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
+    """E2 needs the current Master Enterprise Terms accepted by the claimant: not by another member, and not a
+    superseded version."""
     right, _ = otp
     decide = "SELECT app_decide_claim(:id, true, 'documents checked')"
     async with as_app(owner_engine) as conn:
@@ -658,25 +810,39 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         admin = await w.add_user(conn, _email("claims-admin"), "Admin", staff_role="admin")
         moderator = await w.add_user(conn, _email("claims-mod"), "Moderator", staff_role="moderator")
         claimant = await w.add_user(conn, _email("signatory"), "Signatory")
-        met, _ = await w.add_templates(conn, uuid4().hex[:8])
+        owner = await w.add_user(conn, _email("e1-owner"), "Owner")
+        await run(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
+            id=uuid7(),
+            org=org,
+            u=owner,
+        )
+        superseded = await add_legal_template(conn, "master_enterprise_terms")
         await act(conn, claimant)
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
-        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
+        assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
+        await run(
+            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'pending_review' WHERE id = :id", id=claim
+        )
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
         await expect(conn, decide, "Master Enterprise Terms", id=claim)
-        # The claimant of an open E2 claim may accept the terms before being a member.
+        # Another member's acceptance is not the claimant's.
+        await act(conn, owner)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=owner, t=superseded)
+        await act(conn, admin)
+        await expect(conn, decide, "Master Enterprise Terms", id=claim)
+        # The claimant of an open E2 claim may accept the terms before being a member; a newer version supersedes it.
         await act(conn, claimant)
-        await run(
-            conn,
-            "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
-            " SELECT :id, :org, :u, id, sha256 FROM legal_templates WHERE id = :t",
-            id=uuid7(),
-            org=org,
-            u=claimant,
-            t=met,
-        )
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=claimant, t=superseded)
+        await as_owner(conn)
+        current = await add_legal_template(conn, "master_enterprise_terms")
+        await act(conn, admin)
+        await expect(conn, decide, "Master Enterprise Terms", id=claim)
+        await act(conn, claimant)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=claimant, t=current)
         await act(conn, admin)
         await run(conn, decide, id=claim)
         await as_owner(conn)
@@ -697,6 +863,66 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         assert await run(conn, "SELECT app_is_member(:id, '{owner}')", id=org) is True
         await act(conn, admin)
         await expect(conn, decide, "not open", id=claim)
+
+
+async def test_staff_approval_needs_the_claimed_domain_proven(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Staff approve a claim (E1 or E2) only once the email code and the DNS TXT record are verified; for E2 an active
+    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    unproven = "domain is not proven"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("proof-admin"), "Admin", staff_role="admin")
+        unclaimed = await add_org(conn)
+        capped_org = await add_org(conn)
+        e1 = await add_org(conn, verification="e1")
+        await run(conn, "UPDATE organizations SET verified_domain = 'e1.example.test' WHERE id = :id", id=e1)
+        claimant = await w.add_user(conn, _email("prover"), "Prover")
+        outsider = await w.add_user(conn, _email("outsider"), "Outsider")
+        owner = await w.add_user(conn, _email("e1-owner"), "Owner")
+        await run(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
+            id=uuid7(),
+            org=e1,
+            u=owner,
+        )
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        # An E2 claim on an unclaimed organisation: refused until both the code and the DNS record are verified.
+        await act(conn, claimant)
+        claim = await _claim(conn, unclaimed, claimant, "prover.example.test", "e2", right)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=claim)
+        await act(conn, claimant)
+        assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=unclaimed, u=claimant, t=met)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=claim)  # the DNS TXT record is still missing
+        await act(conn, claimant)
+        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+        await act(conn, admin)
+        await run(conn, decide, id=claim)
+        # An E1 claim sent to manual review without a verified code (reissues spent) is never approved.
+        await act(conn, claimant)
+        capped = await _claim(conn, capped_org, claimant, "prover.example.test", "e1", right)
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=capped)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=capped)
+        # E2 for an organisation already E1 on the claimed domain: its owner needs no new proof, an outsider does.
+        for user in (outsider, owner):
+            await act(conn, user)
+            e2_claim = await _claim(conn, e1, user, "e1.example.test", "e2", right)
+            if user == owner:
+                await run(conn, MET_ACCEPTANCE, id=uuid7(), org=e1, u=owner, t=met)
+            await act(conn, admin)
+            if user == outsider:
+                await expect(conn, decide, unproven, id=e2_claim)
+            else:
+                await run(conn, decide, id=e2_claim)
+        await as_owner(conn)
+        assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=e1) == "e2"
 
 
 async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncEngine) -> None:
@@ -848,6 +1074,83 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
         found = (await conn.execute(text(heads), {"c": chains})).all()
         assert {row.chain_id: (row.seq, row.event_hash) for row in found} == expected
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
+
+
+async def test_staff_admin_adds_a_niche_without_a_deploy(owner_engine: AsyncEngine) -> None:
+    """AC-DIR-5 (the database half of the admin route): app_add_niche() is staff admin only, adds a top-level niche or
+    a child of an active top-level one (two levels), refuses a taken or malformed slug, and the app reads the new niche
+    at once."""
+    tag = uuid4().hex[:10]
+    add = "SELECT app_add_niche(:slug, :name, :parent, :isic)"
+    niche = "SELECT slug, name_en, parent_id, isic_code, active FROM niches WHERE id = :id"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("niche-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("niche-mod"), "Moderator", staff_role="moderator")
+        developer = await w.add_user(conn, _email("niche-dev"), "Developer")
+        retired = f"retired-{tag}"
+        await run(
+            conn,
+            "INSERT INTO niches (id, slug, name_en, active) VALUES (:id, :s, 'Retired', false)",
+            id=uuid7(),
+            s=retired,
+        )
+        top = {"slug": f"water-{tag}", "name": " Water & sanitation ", "parent": None, "isic": "E36"}
+        for caller in (developer, moderator, None):
+            await act(conn, caller)
+            await expect(conn, add, "staff admin only", **top)
+        await act(conn, admin)
+        parent = await run(conn, add, **top)
+        row = (await conn.execute(text(niche), {"id": parent})).one()
+        assert tuple(row) == (top["slug"], "Water & sanitation", None, "E36", True)
+        child = await run(conn, add, slug=f"water-kiosks-{tag}", name="Water kiosks", parent=top["slug"], isic=None)
+        assert (await conn.execute(text(niche), {"id": child})).one().parent_id == parent
+        refusals = (
+            ({"slug": top["slug"], "name": "Again", "parent": None, "isic": None}, "the slug is taken"),
+            ({"slug": f"deep-{tag}", "name": "Deep", "parent": f"water-kiosks-{tag}", "isic": None}, "top-level"),
+            ({"slug": f"under-retired-{tag}", "name": "Orphan", "parent": retired, "isic": None}, "top-level"),
+            ({"slug": f"lost-{tag}", "name": "Lost", "parent": f"missing-{tag}", "isic": None}, "no such parent"),
+            ({"slug": f"Bad Slug {tag}", "name": "Bad", "parent": None, "isic": None}, "lower-case"),
+            ({"slug": f"blank-{tag}", "name": "  ", "parent": None, "isic": None}, "English name"),
+            ({"slug": f"isic-{tag}", "name": "ISIC", "parent": None, "isic": "k64; drop"}, "ISIC code"),
+        )
+        for params, refusal in refusals:
+            await expect(conn, add, refusal, **params)
+        await act(conn, developer)  # selectable at once: every signed-in user reads niches
+        assert await run(conn, "SELECT count(*) FROM niches WHERE id = ANY (:ids)", ids=[parent, child]) == 2
+        await expect(
+            conn,
+            "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Direct')",
+            "permission denied",
+            id=uuid7(),
+            s=f"direct-{tag}",
+        )
+
+
+async def test_llm_call_inputs_are_read_by_staff_admin_only(owner_engine: AsyncEngine) -> None:
+    """A user reads their call rows but not the sanitised inputs; staff admin reads those through the function."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("llm-inputs"), "LLM")
+        admin = await w.add_user(conn, _email("llm-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("llm-mod"), "Moderator", staff_role="moderator")
+        call = uuid7()
+        await act(conn, user)
+        await run(
+            conn,
+            "INSERT INTO llm_calls (id, user_id, task, model, status, inputs)"
+            " VALUES (:id, :u, 't', 'm', 'ok', CAST(:inputs AS jsonb))",
+            id=call,
+            u=user,
+            inputs='{"title": "Solar cold rooms"}',
+        )
+        assert await run(conn, "SELECT task FROM llm_calls WHERE id = :id", id=call) == "t"
+        await expect(conn, "SELECT inputs FROM llm_calls WHERE id = :id", "permission denied", id=call)
+        read = "SELECT app_llm_call_inputs(:id)"
+        for caller in (user, moderator, None):
+            await act(conn, caller)
+            await expect(conn, read, "staff admin only", id=call)
+        await act(conn, admin)
+        assert await run(conn, read, id=call) == {"title": "Solar cold rooms"}
+        assert await run(conn, read, id=uuid7()) is None
 
 
 async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:

@@ -9,19 +9,24 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - PUBLISHED tables: A reads B's published, clear rows but none of B's drafts, held, hidden or candidate rows, and all
   of A's own; staff admin/moderator read everything.
 - STAFF tables: a non-staff user reads 0 rows; staff read them.
+- EVIDENCE (``provenance_records``): readable without a signed-in user (``/verify``); provenance_worker bound to A
+  reads and writes only records of A's versions.
 - Developer A reads 0 of developer B's drafts, versions and Tier-2 rows; an organisation without a live grant reads 0
   ``proposal_confidential`` rows even as ``tier2_reader``, and removing any single condition of the database half of
-  can_view_tier2 (``app_tier2_granted``) hides the row again.
+  can_view_tier2 (``app_tier2_granted``) hides the row again; a draft version of a granted proposal stays hidden.
+- Every Tier-2 role bound to developer A reads and updates 0 of B's Tier-2 rows and writes none of B's embeddings;
+  tier2_moderation reads nothing without a staff context.
 - ``aggregate_worker`` reads 0 rows of every tenant table (no privilege at all) and reads ``signal_events``.
 - A cross-tenant API access returns 404.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import UUID
 
 import httpx
@@ -41,6 +46,7 @@ TABLES = Base.metadata.tables
 TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED}
 TENANT_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") in TENANT_KINDS)
 STAFF_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.STAFF)
+EVIDENCE_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.EVIDENCE)
 PUBLISHED_TABLES = sorted(t for t in TENANT_TABLES if TABLES[t].info["tenancy"] == Tenancy.PUBLISHED)
 RLS_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") in RLS_TENANCIES)
 
@@ -53,7 +59,8 @@ def test_every_table_declares_its_tenancy() -> None:
 def test_every_tenant_table_has_an_rls_fixture() -> None:
     assert sorted(w.TENANT_ROWS) == TENANT_TABLES
     assert sorted(w.STAFF_ROWS) == STAFF_TABLES
-    assert sorted(TENANT_TABLES + STAFF_TABLES) == RLS_TABLES
+    assert EVIDENCE_TABLES == ["provenance_records"]  # a new EVIDENCE table needs its own writer test below
+    assert sorted(TENANT_TABLES + STAFF_TABLES + EVIDENCE_TABLES) == RLS_TABLES
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +123,7 @@ async def test_tenant_a_reads_only_its_own_and_public_rows_of_b(
         assert {r.pub for r in b_rows} == {True, False}, f"{table}: fixture needs public and private rows of B"
 
 
-@pytest.mark.parametrize("table", RLS_TABLES)
+@pytest.mark.parametrize("table", sorted(set(RLS_TABLES) - set(EVIDENCE_TABLES)))  # evidence is public (/verify)
 async def test_no_tenant_context_reads_nothing(app_engine: AsyncEngine, world: w.World, table: str) -> None:
     async with app_engine.connect() as conn, conn.begin():
         await _as_tenant(conn, None, None, table)
@@ -253,9 +260,11 @@ async def _sql(conn: AsyncConnection, sql: str, **params: object) -> None:
     await conn.execute(text(sql), params)
 
 
-# Each case breaks exactly one condition of app_tier2_granted(); "none" breaks nothing (the reviewer reads the row).
+# Each case breaks exactly one condition of app_tier2_granted(), except the TIER2_READABLE ones: "none" breaks nothing
+# and "met_by_the_approved_claimant" meets the terms condition the other way (the reviewer reads the row).
 TIER2_CASES = (
     "none",
+    "met_by_the_approved_claimant",
     "no_grant",
     "grant_requested",
     "grant_revoked",
@@ -263,9 +272,13 @@ TIER2_CASES = (
     "org_suspended",
     "role_viewer",
     "membership_removed",
+    "off_domain_member",
     "no_totp",
     "user_suspended",
     "no_master_enterprise_terms",
+    "met_by_a_non_signatory",
+    "met_by_an_unapproved_claimant",
+    "met_superseded",
     "no_nda",
     "nda_for_another_proposal",
     "engagement_withdrawn",
@@ -275,51 +288,153 @@ TIER2_CASES = (
     "proposal_held",
     "context_of_another_org",
 )
+TIER2_READABLE = frozenset({"none", "met_by_the_approved_claimant"})
 
 
-async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> tuple[UUID, UUID]:
-    """As the owner: an E2 org G whose reviewer R may read B's published Tier 2, except for ``broken``."""
-    b, tag = world.b, uuid7().hex[:12]
-    reviewer = uuid7()
+async def _add_user(conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True) -> UUID:
+    user = uuid7()
     await _sql(
         conn,
-        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Reviewer',"
+        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Member',"
         " CAST(:status AS user_status), :totp)",
-        id=reviewer,
-        email=f"reviewer-{tag}@example.test",
-        status="suspended" if broken == "user_suspended" else "active",
-        totp=None if broken == "no_totp" else datetime.now(UTC),
+        id=user,
+        email=email,
+        status=status,
+        totp=datetime.now(UTC) if totp else None,
     )
-    org = uuid7()
-    await _sql(
-        conn,
-        "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, suspended_at)"
-        " VALUES (:id, 'company', 'Granted Ltd', :slug, 'seed', CAST(:verification AS org_verification),"
-        " CASE WHEN :suspended THEN now() END)",
-        id=org,
-        slug=f"granted-{tag}",
-        verification="e1" if broken == "org_not_e2" else "e2",
-        suspended=broken == "org_suspended",
-    )
+    return user
+
+
+async def _add_member(conn: AsyncConnection, org: UUID, user: UUID, roles: str, status: str = "active") -> None:
     await _sql(
         conn,
         "INSERT INTO memberships (id, org_id, user_id, roles, status) VALUES (:id, :org, :user,"
         " CAST(:roles AS org_role[]), CAST(:status AS membership_status))",
         id=uuid7(),
         org=org,
-        user=reviewer,
-        roles="{viewer}" if broken == "role_viewer" else "{reviewer}",
-        status="removed" if broken == "membership_removed" else "active",
+        user=user,
+        roles=roles,
+        status=status,
     )
-    if broken != "no_master_enterprise_terms":
+
+
+async def _add_master_terms(conn: AsyncConnection, tag: str) -> UUID:
+    """A new, so current, version of the Master Enterprise Terms."""
+    template = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, 'master_enterprise_terms',"
+        " :version, :body, sha256(convert_to(:body, 'UTF8')))",
+        id=template,
+        version=f"g-{tag}-{template.hex[-6:]}",
+        body=f"[[LEGAL-PLACEHOLDER:met-{template.hex}]]\n",
+    )
+    return template
+
+
+async def _accept_master_terms(conn: AsyncConnection, org: UUID, broken: str, tag: str) -> None:
+    """As the owner: G's current Master Enterprise Terms, accepted by a signatory of G unless ``broken`` says
+    otherwise (nobody; an outsider (and the reviewer); the approved or a still-pending E2 claimant, an owner and admin
+    but no signatory; or a version superseded since)."""
+    terms = await _add_master_terms(conn, tag)
+    if broken == "no_master_enterprise_terms":
+        return
+    acceptor = await _add_user(conn, f"acceptor-{tag}@example.test")
+    if broken in ("met_by_the_approved_claimant", "met_by_an_unapproved_claimant"):
+        await _add_member(conn, org, acceptor, "{owner,admin}")  # what approval makes the claimant; no signatory
+        await _sql(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :user, :domain, :email, 'e2', CAST(:status AS claim_status))",
+            id=uuid7(),
+            org=org,
+            user=acceptor,
+            domain=f"granted-{tag}.example.test",
+            email=f"acceptor-{tag}@granted-{tag}.example.test",
+            status="approved" if broken == "met_by_the_approved_claimant" else "pending_review",
+        )
+    elif broken != "met_by_a_non_signatory":
+        await _add_member(conn, org, acceptor, "{signatory}")
+    await _sql(
+        conn,
+        "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+        " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+        id=uuid7(),
+        org=org,
+        user=acceptor,
+        template=terms,
+    )
+    if broken == "met_superseded":
+        await _add_master_terms(conn, tag)
+
+
+class GrantScenario(NamedTuple):
+    reviewer: UUID
+    context: UUID  # the organisation the reviewer's request is scoped to (app.org_id)
+    draft_version: UUID  # the next version of B's published proposal, still a draft (Tier 0)
+
+
+async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> GrantScenario:
+    """As the owner: an E2 org G with a verified domain whose reviewer R (an address at that domain) may read B's
+    published Tier 2, except for ``broken``. B's published proposal also has a draft next version with its own Tier-2
+    row, which no grant ever opens (drafts are Tier 0: owner only)."""
+    b, tag = world.b, uuid7().hex[:12]
+    draft_version = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
+        " summary, owner_handle) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem',"
+        " 'What it does', 'rls-handle')",
+        id=draft_version,
+        proposal=b.published,
+        niche=world.niche_id,
+    )
+    await _sql(
+        conn,
+        "INSERT INTO proposal_confidential (version_id, proposal_id, owner_id, ciphertext, nonce, wrapped_dek,"
+        " kms_key_id) VALUES (:version, :proposal, :owner, '\\x04', '\\x05', '\\x06', 'local:test')",
+        version=draft_version,
+        proposal=b.published,
+        owner=b.user_id,
+    )
+    await _sql(
+        conn, "UPDATE proposals SET draft_version_id = :version WHERE id = :id", version=draft_version, id=b.published
+    )
+    domain = f"granted-{tag}.example.test"  # G's verified domain
+    reviewer = await _add_user(
+        conn,
+        f"reviewer-{tag}@{'elsewhere.example.test' if broken == 'off_domain_member' else domain}",
+        status="suspended" if broken == "user_suspended" else "active",
+        totp=broken != "no_totp",
+    )
+    org = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, verified_domain, suspended_at)"
+        " VALUES (:id, 'company', 'Granted Ltd', :slug, 'seed', CAST(:verification AS org_verification), :domain,"
+        " CASE WHEN :suspended THEN now() END)",
+        id=org,
+        slug=f"granted-{tag}",
+        domain=domain,
+        verification="e1" if broken == "org_not_e2" else "e2",
+        suspended=broken == "org_suspended",
+    )
+    await _add_member(
+        conn,
+        org,
+        reviewer,
+        "{viewer}" if broken == "role_viewer" else "{reviewer}",
+        "removed" if broken == "membership_removed" else "active",
+    )
+    await _accept_master_terms(conn, org, broken, tag)
+    if broken == "met_by_a_non_signatory":  # the reviewer accepts too, next to the outsider
         await _sql(
             conn,
             "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
-            " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+            " SELECT :id, :org, :user, legal_template_id, template_sha256 FROM legal_acceptances WHERE org_id = :org",
             id=uuid7(),
             org=org,
             user=reviewer,
-            template=world.met_template_id,
         )
     if broken != "no_nda":
         await _sql(
@@ -334,7 +449,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             template=world.nda_template_id,
         )
     grants = [] if broken == "no_grant" else [b.published]
-    if broken == "none":  # a live grant never opens a draft (Tier 0): the draft's row stays hidden
+    if broken == "none":  # nor does a live grant open a draft proposal: its row stays hidden
         grants.append(b.draft)
         await _sql(
             conn,
@@ -393,7 +508,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
         )
         context = world.a.org_id
-    return reviewer, context
+    return GrantScenario(reviewer, context, draft_version)
 
 
 @pytest.mark.parametrize("broken", TIER2_CASES)
@@ -401,16 +516,22 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
     owner_engine: AsyncEngine, world: w.World, broken: str
 ) -> None:
     """An organisation without a live grant reads 0 proposal_confidential rows even as tier2_reader (AC-SEC-1/b);
-    with every condition met its reviewer reads the registered version's row (never a draft's)."""
+    with every condition met its reviewer reads the registered version's row, never a draft's: neither the draft
+    version (Tier 0) nor its Tier-2 row."""
     async with rolled_back(owner_engine) as conn:
-        reviewer, context = await _grant_scenario(conn, world, broken)
+        scenario = await _grant_scenario(conn, world, broken)
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
-        await _as_tenant(conn, reviewer, context, "proposal_confidential")
+        await _as_tenant(conn, scenario.reviewer, scenario.context)
+        draft = await conn.execute(
+            text("SELECT count(*) FROM proposal_versions WHERE id = :id"), {"id": scenario.draft_version}
+        )
+        assert draft.scalar_one() == 0
+        await _as_tenant(conn, scenario.reviewer, scenario.context, "proposal_confidential")
         assert (await conn.execute(text("SELECT current_user"))).scalar_one() == "tier2_reader"
         rows = await conn.execute(
             text("SELECT version_id FROM proposal_confidential WHERE owner_id = :b"), {"b": world.b.user_id}
         )
-        expected = [world.b.published_version] if broken == "none" else []
+        expected = [world.b.published_version] if broken in TIER2_READABLE else []
         assert list(rows.scalars()) == expected
 
 
@@ -421,6 +542,122 @@ async def test_the_owner_reads_their_tier2_through_tier2_reader(app_engine: Asyn
             text("SELECT count(*) FROM proposal_confidential WHERE owner_id = :b"), {"b": world.b.user_id}
         )
         assert rows.scalar_one() == 4
+
+
+# --- every Tier-2 role, bound to one developer --------------------------------------------------------------------
+
+# docs/spec/06 6.1. Jobs bind the user they act for (app.user_id: one tenant per job).
+TIER2_ROLES = ("dsr_exporter", "provenance_worker", "tier2_embed_worker", "tier2_moderation", "tier2_reader")
+TIER2_INSERT = (
+    "INSERT INTO proposal_confidential (version_id, proposal_id, owner_id, ciphertext, nonce, wrapped_dek, kms_key_id)"
+    " VALUES (:version, :proposal, :owner, '\\x01', '\\x02', '\\x03', 'local:test')"
+)
+EMBEDDING_INSERT = (
+    "INSERT INTO proposal_confidential_embeddings (version_id, embed_model, embed_version, full_embedding)"
+    f" VALUES (:version, 'rls-role-test', '1', {w.VECTOR_1024})"
+)
+
+
+async def _tier2_owners(conn: AsyncConnection) -> Counter[UUID]:
+    return Counter((await conn.execute(text("SELECT owner_id FROM proposal_confidential"))).scalars())
+
+
+async def _refused_by_rls(conn: AsyncConnection, sql: str, **params: object) -> None:
+    savepoint = await conn.begin_nested()
+    with pytest.raises(ProgrammingError, match="row-level security"):
+        await conn.execute(text(sql), params)
+    await savepoint.rollback()
+
+
+async def _next_draft_version(conn: AsyncConnection, proposal: UUID) -> UUID:
+    """As the owner: a second, draft version of ``proposal`` without a Tier-2 row yet."""
+    version = uuid7()
+    await _sql(
+        conn, "INSERT INTO proposal_versions (id, proposal_id, version_no) VALUES (:id, :p, 2)", id=version, p=proposal
+    )
+    return version
+
+
+@pytest.mark.parametrize("role", TIER2_ROLES)
+async def test_every_tier2_role_bound_to_developer_a_reads_and_writes_none_of_b(
+    owner_engine: AsyncEngine, world: w.World, role: str
+) -> None:
+    """Each role of the Tier-2 set, bound to developer A, reads and updates 0 of developer B's proposal_confidential
+    rows and writes none of B's full-text embeddings, while the roles that act for an owner do read and write A's own
+    rows (so no policy is merely closed). tier2_moderation reads nothing without a staff context, A's rows included,
+    and everything with one. The UPDATE without WHERE touches exactly the rows the UPDATE policy admits (no SELECT
+    policy applies to it), so an UPDATE policy opened to ``true`` fails the count."""
+    a, b = world.a, world.b
+    async with rolled_back(owner_engine) as conn:
+        a_next, b_next = await _next_draft_version(conn, a.draft), await _next_draft_version(conn, b.draft)
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, a.user_id, None)
+        await conn.execute(text(f"SET LOCAL ROLE {role}"))
+        assert (await conn.execute(text("SELECT current_user"))).scalar_one() == role
+        seen = await _tier2_owners(conn)
+        if role == "tier2_moderation":
+            assert seen == Counter(), "tier2_moderation read Tier 2 without a staff context"
+        else:
+            assert seen[b.user_id] == 0, f"{role} bound to A read B's Tier 2"
+            assert seen[a.user_id] == 4, f"{role} bound to A cannot read A's own Tier 2"
+        if role in ("tier2_reader", "provenance_worker"):
+            touched = await conn.execute(text("UPDATE proposal_confidential SET updated_at = now()"))
+            assert touched.rowcount == 4, f"{role} bound to A updated rows that are not A's"
+            for version in (b.draft_version, b.published_version):
+                targeted = await conn.execute(
+                    text("UPDATE proposal_confidential SET updated_at = now() WHERE version_id = :v"), {"v": version}
+                )
+                assert targeted.rowcount == 0
+        if role == "tier2_reader":
+            await _refused_by_rls(conn, TIER2_INSERT, version=b_next, proposal=b.draft, owner=b.user_id)
+            await _sql(conn, TIER2_INSERT, version=a_next, proposal=a.draft, owner=a.user_id)
+        if role == "tier2_embed_worker":
+            await _refused_by_rls(conn, EMBEDDING_INSERT, version=b.published_version)
+            await _sql(conn, EMBEDDING_INSERT, version=a.published_version)
+        if role == "tier2_moderation":
+            embeddings = text("SELECT version_id FROM proposal_confidential_embeddings")
+            assert list((await conn.execute(embeddings)).scalars()) == []
+            await conn.execute(text("SELECT set_config('app.user_id', :u, true)"), {"u": str(world.staff_id)})
+            seen = await _tier2_owners(conn)
+            assert (seen[a.user_id], seen[b.user_id]) == (4, 4)
+            assert {a.published_version, b.published_version} <= set((await conn.execute(embeddings)).scalars())
+
+
+# --- EVIDENCE: provenance_records ---------------------------------------------------------------------------------
+
+RECORD_INSERT = (
+    "INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :version, :cert, :hash)"
+)
+
+
+async def test_registration_records_are_public_and_written_only_for_the_bound_owner(
+    owner_engine: AsyncEngine, world: w.World
+) -> None:
+    """/verify reads every record without a signed-in user. The registration job (provenance_worker) bound to
+    developer A reads, inserts and updates only records of A's versions: none of B's."""
+    a, b = world.a, world.b
+    b_record = uuid7()
+    async with rolled_back(owner_engine) as conn:
+        await _sql(conn, RECORD_INSERT, id=b_record, version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, None, None)
+        public = await conn.execute(text("SELECT id FROM provenance_records WHERE id = :id"), {"id": b_record})
+        assert list(public.scalars()) == [b_record]  # anonymous /verify
+        await _as_tenant(conn, a.user_id, None)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        await _refused_by_rls(
+            conn, RECORD_INSERT, id=uuid7(), version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32)
+        )
+        a_record = uuid7()
+        await _sql(conn, RECORD_INSERT, id=a_record, version=a.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        seen = await conn.execute(text("SELECT id FROM provenance_records"))
+        assert list(seen.scalars()) == [a_record]
+        touched = await conn.execute(text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test'"))
+        assert touched.rowcount == 1  # no WHERE: the UPDATE policy alone admits A's record only
+        targeted = await conn.execute(
+            text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test' WHERE id = :id"), {"id": b_record}
+        )
+        assert targeted.rowcount == 0
 
 
 # --- aggregate_worker ------------------------------------------------------------------------------------------------

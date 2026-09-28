@@ -37,12 +37,17 @@ class Tenancy(StrEnum):
     PUBLISHED = "published"
     # Platform staff tables (moderation queue, invitation approvals): app_is_staff() reads and updates; the app inserts.
     STAFF = "staff"
+    # Public registration evidence (provenance_records): every reader reads every row (/verify is anonymous); rows are
+    # written only by the worker bound to the owner of the version they register.
+    EVIDENCE = "evidence"
     GLOBAL = "global"  # reference data readable by everyone (niches, plans, holidays, regions)
     SYSTEM = "system"  # internal tables with no tenant (auth credentials, sessions, suppressions, jobs)
 
 
 # Tenancy classes whose tables have Row-Level Security (every other class has none).
-RLS_TENANCIES = frozenset({Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED, Tenancy.STAFF})
+RLS_TENANCIES = frozenset(
+    {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED, Tenancy.STAFF, Tenancy.EVIDENCE}
+)
 
 
 class Base(DeclarativeBase):

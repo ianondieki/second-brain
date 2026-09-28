@@ -117,11 +117,7 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "impact_claims",
         "summary",
         "owner_handle",
-        "prev_version_hash",
-        "content_hash",
         "cert_id",
-        "manifest_version",
-        "registered_at",
         "updated_at",
     },
     "proposal_attachments": {"sha256", "size_bytes", "av_status", "rerendered", "updated_at"},
@@ -217,6 +213,7 @@ ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
     "audit_reader": {"audit_events": {S}, "chain_anchors": {S}},
     "tier2_reader": {"proposal_confidential": {S, I, U}},
     "provenance_worker": {
+        "proposal_versions": {S, U},
         "proposal_confidential": {S, U},
         "provenance_records": {S, I, U},
         "provenance_keys": {S},
@@ -230,6 +227,7 @@ ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
 ROLE_COLUMN_UPDATES: dict[str, dict[str, set[str]]] = {
     "tier2_reader": {"proposal_confidential": {"ciphertext", "nonce", "wrapped_dek", "kms_key_id", "updated_at"}},
     "provenance_worker": {
+        "proposal_versions": {"content_hash", "prev_version_hash", "manifest_version", "updated_at"},
         "proposal_confidential": {"manifest_ciphertext", "manifest_nonce", "updated_at"},
         "provenance_records": {
             "signature",
@@ -257,6 +255,9 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "audit_block_mutation()": (False, set()),
     # revision 0002
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
+    "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
+    "app_owns_version(uuid)": (True, {"provenance_worker"}),
+    "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
     "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
@@ -273,16 +274,20 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_delist_org(uuid)": (True, {"bridge_app"}),
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
+    "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
+    "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
     "proposals_guard()": (True, set()),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
     "org_claims_guard()": (True, set()),
+    "phone_verifications_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
     "provenance_records_guard()": (False, set()),
+    "proposal_attachments_guard()": (True, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -699,6 +704,8 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
+    registration = {"registered_at", "content_hash", "prev_version_hash", "manifest_version"}
+    assert not registration & updatable["proposal_versions"]  # the database's and provenance_worker's
     assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
     claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
     claim_protected |= {"otp_hash", "otp_expires_at", "otp_attempts", "otp_reissues"}
@@ -1330,9 +1337,8 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
     user_id = uuid7()
     async with rolled_back(app_engine, user_id) as conn:
         await add_user(conn, user_id)
-        salt = sa.text("SELECT octet_length(subject_salt) FROM users WHERE id = :id")
-        assert (await conn.execute(salt, {"id": user_id})).scalar_one() == 32  # set by the database per user
         for sql in (
+            "SELECT subject_salt FROM users",
             "UPDATE users SET subject_salt = '\\x00'",
             "UPDATE organizations SET verified_domain = 'x.example'",
             "UPDATE organizations SET official_domains = '{}'",
@@ -1365,6 +1371,122 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             await expect_error(conn, sql, "permission denied")
 
 
+async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_the_salt(
+    owner_engine: AsyncEngine,
+) -> None:
+    """Every user gets a random 32-byte salt from the database. bridge_app and provenance_worker get SHA-256(salt ||
+    data) from app_subject_digest() (owner refs: data = the id's 16 bytes), never the salt; the ORM creates and loads
+    users without selecting or returning it."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.auth.models import User
+
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        session = AsyncSession(bind=conn)
+        user = User(email=f"{uuid4().hex}@example.test", display_name="Salted")
+        session.add(user)
+        await session.flush()  # INSERT ... RETURNING the server defaults, never subject_salt
+        await act_as(conn, user.id)
+        session.expunge_all()
+        assert (await session.get(User, user.id)) is not None
+        await session.close()
+        digest = "SELECT app_subject_digest(:id, uuid_send(:id))"
+        from_app = (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one()
+        await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))
+        assert (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one() == from_app
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
+        salt = (
+            await conn.execute(sa.text("SELECT subject_salt FROM users WHERE id = :id"), {"id": user.id})
+        ).scalar_one()
+        assert len(salt) == 32
+        assert from_app == hashlib.sha256(salt + user.id.bytes).digest()  # bridge.provenance.manifest.owner_ref
+        unknown = "SELECT app_subject_digest(:id, '\\x00')"
+        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
+
+
+# Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.
+# users.subject_salt: digests come from app_subject_digest(), the salt never leaves the database.
+UNREADABLE_COLUMNS: dict[str, str] = {
+    "org_claims": "otp_hash",
+    "phone_verifications": "otp_hash",
+    "users": "subject_salt",
+    "llm_calls": "inputs",  # staff admin reads it through app_llm_call_inputs()
+}
+
+
+@pytest.mark.parametrize(("table", "column"), sorted(UNREADABLE_COLUMNS.items()))
+async def test_bridge_app_reads_every_column_but_the_unreadable_one(
+    owner_engine: AsyncEngine, table: str, column: str
+) -> None:
+    held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), 'SELECT')"
+    assert await scalar(owner_engine, held, t=f"public.{table}", c=column) is False
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'SELECT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
+    readable = await rows(
+        owner_engine,
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, 'SELECT')",
+        columns=[c.name for c in TABLES[table].columns],
+        t=f"public.{table}",
+    )
+    assert {row.name for row in readable} == {c.name for c in TABLES[table].columns} - {column}
+
+
+async def test_otp_digests_are_written_but_never_read_back(owner_engine: AsyncEngine) -> None:
+    """The claimant and the phone owner write their code's digest and read their rows, through SQL and the ORM, but
+    no statement of bridge_app returns the digest (offline brute force of a 6-digit code needs it)."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.directory.models import OrgClaim
+    from bridge.profiles.models import PhoneVerification
+
+    async with rolled_back(owner_engine) as conn:
+        user, org, claim, code = uuid7(), uuid7(), uuid7(), uuid7()
+        await add_user(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source, verification) VALUES (:id, 'company',"
+                " 'OTP Ltd', :slug, 'seed', 'unclaimed')"
+            ),
+            {"id": org, "slug": f"otp-{org.hex}"},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await act_as(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, otp_hash,"
+                " otp_expires_at) VALUES (:id, :org, :u, 'otp.example.test', 'info@otp.example.test', 'e1', 'otp_sent',"
+                " :h, now() + interval '10 minutes')"
+            ),
+            {"id": claim, "org": org, "u": user, "h": ZERO_HASH},
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash) VALUES (:id, :u, '+254712345678',"
+                " :h)"
+            ),
+            {"id": code, "u": user, "h": ZERO_HASH},
+        )
+        for sql in (
+            "SELECT otp_hash FROM org_claims",
+            "SELECT * FROM org_claims",
+            "SELECT otp_hash FROM phone_verifications",
+            "SELECT * FROM phone_verifications",
+            "SELECT id FROM org_claims WHERE otp_hash IS NOT NULL",
+        ):
+            await expect_error(conn, sql, "permission denied")
+        session = AsyncSession(bind=conn)
+        loaded_claim = await session.get(OrgClaim, claim)
+        loaded_code = await session.get(PhoneVerification, code)
+        assert loaded_claim is not None
+        assert loaded_code is not None
+        assert (loaded_claim.otp_attempts, loaded_code.attempts) == (0, 0)
+        with pytest.raises(sa.exc.InvalidRequestError, match="raiseload"):
+            _ = loaded_claim.otp_hash
+        await session.close()
+
+
 async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID, UUID]:
     """As the owner: (owner, niche, proposal, registered version) of a fresh developer."""
     niche = uuid7()
@@ -1381,7 +1503,8 @@ async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID,
 async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncEngine) -> None:
     """AC-IP-2 (manifest half): the trigger holds for every role, the owner included; only the empty registration
     hashes may be filled, once. Drafts stay editable, and a version is inserted as a draft and registered only with a
-    linked problem."""
+    linked problem. registered_at is the database's: a value sent at registration is replaced by now(), and neither
+    it nor a registration hash can be set on a draft."""
     h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
     async with rolled_back(owner_engine) as conn:
         owner, niche, proposal, version = await _registered_proposal(conn)
@@ -1429,7 +1552,35 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             "inserted as a draft",
             {"id": uuid7(), "p": draft},
         )
+        for assignment in (
+            "registered_at = now()",
+            "content_hash = :h",
+            "prev_version_hash = :h",
+            "manifest_version = 'm'",
+        ):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_versions SET {assignment} WHERE id = :id",
+                "registered_at is set at registration|filled after registration",
+                {"id": second, "h": h1},
+            )
+        for column, value in (("registered_at", "now()"), ("content_hash", ":h"), ("manifest_version", "'m'")):
+            await expect_error(
+                conn,
+                f"INSERT INTO proposal_versions (id, proposal_id, version_no, {column}) VALUES (:id, :p, 3, {value})",
+                "set at registration",
+                {"id": uuid7(), "p": draft, "h": h1},
+            )
         await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
+        # Registering sets registered_at to the transaction's now(), whatever the writer sends.
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t WHERE id = :id"
+            ),
+            {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)},
+        )
+        stamped = sa.text("SELECT registered_at = now() FROM proposal_versions WHERE id = :id")
+        assert (await conn.execute(stamped, {"id": draft_version})).scalar_one() is True
 
 
 NEW_VERSION = (
@@ -1520,9 +1671,53 @@ async def test_tier2_of_a_registered_version_is_frozen_except_the_manifest(owner
         )
 
 
+async def test_attachments_of_a_registered_version_change_only_their_scan_state(owner_engine: AsyncEngine) -> None:
+    """A draft's attachments stay editable; once the version is registered the owner (as bridge_app) and every other
+    role may change only av_status, rerendered and updated_at, and nobody deletes the attachment."""
+    h1, h2 = hashlib.sha256(b"attachment-1").digest(), hashlib.sha256(b"attachment-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, _proposal, _registered = await _registered_proposal(conn)
+        problem = await w.add_problem(conn, owner, niche)
+        draft, version = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        attachment = uuid7()
+        by_id = {"id": attachment, "h": h2}
+        await conn.execute(
+            sa.text(
+                "INSERT INTO proposal_attachments (id, owner_id, proposal_id, version_id, content_type, sha256,"
+                " size_bytes) VALUES (:id, :owner, :p, :v, 'application/pdf', :h, 100)"
+            ),
+            {"id": attachment, "owner": owner, "p": draft, "v": version, "h": h1},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})
+        await conn.execute(sa.text("UPDATE proposal_attachments SET sha256 = :h WHERE id = :id"), by_id)  # a draft's
+        await conn.execute(
+            sa.text("UPDATE proposal_versions SET status = 'registered', cert_id = :c WHERE id = :v"),
+            {"v": version, "c": uuid4().hex[:16]},
+        )
+        for assignment in ("sha256 = :h", "size_bytes = 200", "sha256 = NULL"):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_attachments SET {assignment} WHERE id = :id",
+                "changes only its scan state",
+                {"id": attachment, "h": h1},
+            )
+        scanned = await conn.execute(
+            sa.text("UPDATE proposal_attachments SET av_status = 'clean', rerendered = true WHERE id = :id"), by_id
+        )
+        assert scanned.rowcount == 1
+        removed = await conn.execute(sa.text("DELETE FROM proposal_attachments WHERE id = :id"), by_id)
+        assert removed.rowcount == 0  # the DELETE policy covers drafts only
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))  # the trigger holds for every role
+        for sql in ("UPDATE proposal_attachments SET content_type = 'text/plain' WHERE id = :id",):
+            await expect_error(conn, sql, "changes only its scan state", by_id)
+        await expect_error(conn, "DELETE FROM proposal_attachments WHERE id = :id", "never deleted", by_id)
+
+
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
-        _owner, _niche, _proposal, version = await _registered_proposal(conn)
+        owner, _niche, _proposal, version = await _registered_proposal(conn)
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})  # the job's owner
         key_id, record = f"test-{uuid4().hex[:8]}", uuid7()
         await conn.execute(
             sa.text("INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)"), {"k": key_id, "pk": bytes(32)}
@@ -1592,9 +1787,14 @@ V2_TRIGGERS = {
         "provenance_records_guard",
         ROW | BEFORE | ON_DELETE | ON_UPDATE,
     ),
+    ("proposal_attachments", "proposal_attachments_guard"): (
+        "proposal_attachments_guard",
+        ROW | BEFORE | ON_DELETE | ON_UPDATE,
+    ),
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
+    ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)

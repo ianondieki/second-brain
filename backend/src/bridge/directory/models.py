@@ -83,7 +83,9 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
     email_address: Mapped[str] = mapped_column(CIText())
     level: Mapped[ClaimLevel] = mapped_column(pg_enum(ClaimLevel, "claim_level"))
     status: Mapped[ClaimStatus] = mapped_column(pg_enum(ClaimStatus, "claim_status"))
-    otp_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
+    # Write-only: bridge_app holds no SELECT on it (the OTP functions compare it in SQL). Never loaded; reading the
+    # attribute of a loaded claim raises. Store HMAC-SHA-256(pepper, code), never the code or a bare hash.
+    otp_hash: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True, deferred_raiseload=True)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     otp_attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     otp_reissues: Mapped[int] = mapped_column(SmallInteger, server_default="0")

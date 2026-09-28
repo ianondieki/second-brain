@@ -23,6 +23,7 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    FetchedValue,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -143,6 +144,9 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     """One version: a draft (Tier 0, owner only) until registered, then immutable (AC-IP-2)."""
 
     __tablename__ = "proposal_versions"
+    # Server-set values (registered_at by the registration trigger, updated_at) come back with RETURNING on every
+    # flush, so the ORM never holds a stale registration time and never lazy-loads it in async code.
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012
     __table_args__ = (
         UniqueConstraint("proposal_id", "version_no"),
         UniqueConstraint("proposal_id", "id"),  # target of the (proposal_id, version_id) foreign keys
@@ -175,13 +179,14 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     impact_claims: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)  # <= 150 words (validated by the Tier-1 sanitiser)
     owner_handle: Mapped[str | None] = mapped_column(CIText())  # pseudonymous handle shown on Tier-1 cards
-    # Registration (docs/spec/06 6.4 item 1). content_hash, prev_version_hash and manifest_version are fill-once:
-    # the registration job may set them after the version is registered, never change them.
+    # Registration (docs/spec/06 6.4 item 1). registered_at is set by the database when the version is registered
+    # (any value sent is replaced). content_hash, prev_version_hash and manifest_version are fill-once: only the
+    # registration job (provenance_worker, bound to the owner) sets them after registration, never changes them.
     prev_version_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     content_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     cert_id: Mapped[str | None] = mapped_column(String(24), unique=True)
     manifest_version: Mapped[str | None] = mapped_column(String(16))
-    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
 
 
 class ProposalProblem(Base):
