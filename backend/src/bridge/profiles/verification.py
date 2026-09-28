@@ -10,10 +10,12 @@ Plain code and SQL decide (docs/spec/04 principle 1):
 - Numbers normalise to E.164: ``+254`` and nine digits starting 7 or 1 (Kenyan mobiles), typed as ``07..``, ``01..``,
   ``254..`` or ``+254..`` with optional spaces, dots, hyphens or parentheses. Anything else is 422 ``invalid_phone``.
 - A code is six random digits, valid 10 minutes, with 5 attempts. The row stores only HMAC-SHA-256 under
-  ``SECRET_KEY`` (purpose ``phone_otp``, bound to the row id), inserted without RETURNING; Python never reads the
-  digest back. ``app_confirm_phone_otp`` compares it in SQL with the database clock, counts the attempt and, on a
-  match, raises the profile from D0 to D1 (``bridge_app`` has no UPDATE on ``verification_level``). The attempt counts
-  even without a match, so the transaction is committed after every call.
+  ``SECRET_KEY`` (purpose ``phone_otp``, bound to the row id); ``bridge_app`` cannot read the digest back. The
+  database sets ``expires_at`` (a trigger: 10 minutes after the insert, whatever is sent), which the insert returns;
+  the application clock never decides expiry. ``app_confirm_phone_otp`` compares the digest in SQL with the database
+  clock, counts the attempt and, on a match while the profile is D0, raises it to D1 (``bridge_app`` has no UPDATE
+  on ``verification_level``). The attempt counts even without a match, so the transaction is committed after every
+  call. A D1 or higher profile is refused before the call (409 ``already_verified``), under the profile row lock.
 - Sends are throttled on the ``login_attempts`` ledger (``bridge.auth.throttle``: HMAC keys, never raw values) per
   user, per number and per client IP: one per user a minute; 3 per user or number and 30 per IP in 15 minutes; 5 per
   user or number and 100 per IP a day. Concurrent requests count and record one after another: the profile row lock
@@ -22,13 +24,12 @@ Plain code and SQL decide (docs/spec/04 principle 1):
   the two advisory keys in ascending order), so two requests never wait on each other; COMMIT releases them.
 - The code row, the throttle records and the audit event are committed before the SMS leaves, so a failed or slow send
   cannot be retried past the limits.
-- Audit events carry the code's id and SHA-256(subject_salt || number); logs carry the code's id only. Neither ever
-  holds the number, the code or the SMS text.
+- Audit events carry the code's id and SHA-256(subject_salt || number) from ``app_subject_digest`` (the salt never
+  leaves the database); logs carry the code's id only. Neither ever holds the number, the code or the SMS text.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -40,7 +41,6 @@ from fastapi import Depends, Request
 from sqlalchemy import insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bridge import clock
 from bridge.audit.service import record as audit
 from bridge.auth import throttle
 from bridge.auth.crypto import keyed_digest
@@ -55,7 +55,7 @@ from bridge.models.enums import DevVerification
 from bridge.profiles.models import DeveloperProfile, PhoneVerification
 
 OTP_DIGITS = 6
-OTP_TTL = timedelta(minutes=10)
+OTP_TTL = timedelta(minutes=10)  # the database's (trigger phone_verifications_guard); here for the SMS text
 OTP_MAX_ATTEMPTS = 5  # per code; enforced in SQL by app_confirm_phone_otp (revision 0002)
 RESEND_AFTER = timedelta(minutes=1)
 SEND_WINDOW = timedelta(minutes=15)
@@ -70,6 +70,7 @@ _KENYAN_MOBILE = re.compile(r"(?:\+254|254|0)([17][0-9]{8})")
 _CODE = re.compile(r"[0-9]{6}")
 _CONFIRM = text("SELECT app_confirm_phone_otp(:verification, :digest)")
 _ADVISORY_LOCK = text("SELECT pg_advisory_xact_lock(:key)")
+_SUBJECT_DIGEST = text("SELECT app_subject_digest(:user_id, :data)")
 
 
 class InvalidPhoneError(ValueError):
@@ -124,9 +125,14 @@ def otp_digest(secret: str, verification_id: UUID, code: str) -> bytes:
     return keyed_digest(secret, "phone_otp", f"{verification_id}:{code}")
 
 
-def phone_digest(subject_salt: bytes, phone_e164: str) -> str:
-    """The number as audit payloads carry it (docs/spec/06 6.4 item 4): SHA-256(subject_salt || number), hex."""
-    return hashlib.sha256(subject_salt + phone_e164.encode("ascii")).hexdigest()
+async def phone_digest(db: AsyncSession, user_id: UUID, phone_e164: str) -> str:
+    """The number as audit payloads carry it (docs/spec/06 6.4 item 4): SHA-256(subject_salt || number), hex, from
+    ``app_subject_digest`` (``bridge_app`` cannot read ``users.subject_salt``)."""
+    params = {"user_id": user_id, "data": phone_e164.encode("ascii")}
+    digest: bytes | None = (await db.execute(_SUBJECT_DIGEST, params)).scalar_one()
+    if digest is None:  # the signed-in user's row always exists; never write an audit event without the digest
+        raise LookupError("app_subject_digest: no such user")
+    return bytes(digest).hex()
 
 
 def mask_phone(phone_e164: str) -> str:
@@ -237,18 +243,15 @@ async def request_code(
     throttle.record(db, user_keys, succeeded=True)
     throttle.record(db, number_keys, succeeded=True)
     verification_id, code = uuid7(), new_code()
-    expires_at = clock.utcnow() + OTP_TTL
-    # No RETURNING: bridge_app need not (and after the 0002 fix cannot) read otp_hash back.
-    await db.execute(
-        insert(PhoneVerification).values(
-            id=verification_id,
-            user_id=user.id,
-            phone_e164=number,
-            otp_hash=otp_digest(secret, verification_id, code),
-            expires_at=expires_at,
-        )
+    # expires_at is the database's (now() + 10 minutes, by trigger); RETURNING reads only that column back.
+    inserted = insert(PhoneVerification).values(
+        id=verification_id,
+        user_id=user.id,
+        phone_e164=number,
+        otp_hash=otp_digest(secret, verification_id, code),
     )
-    payload = {"phone_digest": phone_digest(user.subject_salt, number)}
+    expires_at: datetime = (await db.execute(inserted.returning(PhoneVerification.expires_at))).scalar_one()
+    payload = {"phone_digest": await phone_digest(db, user.id, number)}
     await _audit_code(db, "verification.phone_code_sent", user.id, verification_id, payload)
     await db.commit()
 
@@ -268,12 +271,11 @@ async def request_code(
 
 
 def _refuse_if_closed(state: _CodeState) -> None:
+    """Refusals that need no comparison. Expiry is not one of them: only the database clock decides it."""
     if state.verified_at is not None:
         raise VerificationError(409, "already_verified", "Your mobile number is already verified.")
     if state.attempts >= OTP_MAX_ATTEMPTS:
         raise VerificationError(429, "code_locked", "Too many wrong codes. Ask for a new code.")
-    if state.expires_at <= clock.utcnow():
-        raise VerificationError(400, "code_expired", "This code has expired. Ask for a new code.")
 
 
 def _refusal(before: _CodeState, after: _CodeState) -> VerificationError:
@@ -318,7 +320,7 @@ async def confirm_code(
     after = await _code_state(db, user.id, verification_id)
     assert after is not None  # the row was visible a moment ago and the app never deletes it
     if matched:
-        verified = {"phone_digest": phone_digest(user.subject_salt, after.phone_e164), "level": "d1"}
+        verified = {"phone_digest": await phone_digest(db, user.id, after.phone_e164), "level": "d1"}
         await _audit_code(db, "verification.phone_verified", user.id, verification_id, verified)
         await db.commit()
         return await _level(db, user.id) or DevVerification.D1

@@ -294,16 +294,26 @@ async def test_a_malformed_code_is_422_and_not_counted(signed_in: Client, owner_
     assert (await code_row(owner_engine, sent["verification_id"]))["attempts"] == 0
 
 
-async def test_an_expired_code_is_refused(
+async def test_the_database_sets_the_expiry_not_the_app_clock(
     signed_in: Client, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A code lives 10 minutes by the database clock (trigger): the response reports the stored expiry, and an
+    application clock that runs past it refuses nothing (``test_the_database_clock_decides_expiry`` refuses)."""
     developer = await signed_in()
     sent = (await ask(developer, new_number()[0])).json()
+    async with owner_engine.connect() as conn:
+        created, expires = (
+            await conn.execute(
+                text("SELECT created_at, expires_at FROM phone_verifications WHERE id = :id"),
+                {"id": sent["verification_id"]},
+            )
+        ).one()
+    assert expires - created == timedelta(minutes=10)
+    assert datetime.fromisoformat(sent["expires_at"]) == expires
     at(monkeypatch, bridge.clock.utcnow() + timedelta(minutes=10, seconds=1))
     response = await confirm(developer, sent["verification_id"], last_code(developer))
-    assert (response.status_code, response.json()["detail"]["code"]) == (400, "code_expired")
-    assert (await code_row(owner_engine, sent["verification_id"]))["attempts"] == 0
-    assert await level_of(developer) == "d0"
+    assert response.status_code == 200, response.text
+    assert await level_of(developer) == "d1"
 
 
 async def test_the_database_clock_decides_expiry(
@@ -322,6 +332,31 @@ async def test_the_database_clock_decides_expiry(
     assert (response.status_code, response.json()["detail"]["code"]) == (400, "code_expired")
     assert (await code_row(owner_engine, sent["verification_id"]))["attempts"] == 0
     assert await level_of(developer) == "d0"
+
+
+async def test_audit_digests_of_the_number_are_salted_per_subject(signed_in: Client, owner_engine: AsyncEngine) -> None:
+    """Two accounts ask for one number: each audit event carries SHA-256(own subject_salt || number), so the two
+    digests differ and neither is a bare hash of the number (the salt stays in the database)."""
+    typed, e164 = new_number()
+    first, second = await signed_in(), await signed_in()
+    for developer in (first, second):
+        assert (await ask(developer, typed)).status_code == 201
+    digests = []
+    async with owner_engine.connect() as conn:
+        for developer in (first, second):
+            salt, payload = (
+                await conn.execute(
+                    text(
+                        "SELECT u.subject_salt, e.payload FROM audit_events e JOIN users u ON u.id = e.actor_user_id"
+                        " WHERE e.actor_user_id = :u AND e.action = 'verification.phone_code_sent'"
+                    ),
+                    {"u": user_of(developer)},
+                )
+            ).one()
+            assert payload["phone_digest"] == hashlib.sha256(bytes(salt) + e164.encode()).hexdigest()
+            digests.append(payload["phone_digest"])
+    assert digests[0] != digests[1]
+    assert hashlib.sha256(e164.encode()).hexdigest() not in digests
 
 
 async def test_another_user_cannot_confirm(signed_in: Client, owner_engine: AsyncEngine) -> None:

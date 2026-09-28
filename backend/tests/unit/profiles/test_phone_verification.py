@@ -20,7 +20,6 @@ from bridge.profiles.verification import (
     new_code,
     normalise_kenyan_mobile,
     otp_digest,
-    phone_digest,
     sms_text,
 )
 
@@ -90,14 +89,6 @@ def test_the_digest_is_a_keyed_hmac_bound_to_the_code_row() -> None:
     assert digest != otp_digest(SECRET, UUID("01920000-0000-7000-8000-000000000002"), "123456")
     assert digest != otp_digest("another-secret-key-0123456789abcdef0123", VERIFICATION, "123456")
     assert digest != hashlib.sha256(b"123456").digest()  # never an unkeyed hash: six digits are guessable offline
-
-
-def test_the_phone_digest_is_salted_per_subject() -> None:
-    first = phone_digest(b"\x01" * 32, "+254712345678")
-    assert first == phone_digest(b"\x01" * 32, "+254712345678")
-    assert first != phone_digest(b"\x02" * 32, "+254712345678")
-    assert len(first) == 64
-    assert "712345678" not in first
 
 
 def test_the_mask_keeps_only_the_country_code_and_last_three_digits() -> None:
