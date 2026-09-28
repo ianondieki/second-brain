@@ -379,6 +379,7 @@ class DocumentView(IdMixin, Base):
     nda_acceptance_id: Mapped[UUID | None] = mapped_column(ForeignKey("nda_acceptances.id"))
     nda_template_version: Mapped[str | None] = mapped_column(String(32))
     render_kind: Mapped[RenderKind] = mapped_column(pg_enum(RenderKind, "render_kind"))
+    # The database's (evidence_time_guard: now() on insert, whatever is sent): leave it out and read it back.
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     duration_bucket: Mapped[ViewDuration | None] = mapped_column(pg_enum(ViewDuration, "view_duration"))
     fingerprint_seed: Mapped[bytes] = mapped_column(LargeBinary)

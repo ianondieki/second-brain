@@ -1985,6 +1985,26 @@ BEGIN
 END;
 $$;
 
+-- Evidence times are the database's: when an attestation was made, the Master Enterprise Terms or an NDA accepted and
+-- a Tier-2 view started is set to now() on insert, whatever the writer sends (the registered_at rule).
+CREATE FUNCTION evidence_time_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'attestations' THEN
+        NEW.created_at := now();
+    ELSIF TG_TABLE_NAME IN ('legal_acceptances', 'nda_acceptances') THEN
+        NEW.accepted_at := now();
+    ELSIF TG_TABLE_NAME = 'document_views' THEN
+        NEW.started_at := now();
+    ELSE
+        RAISE EXCEPTION 'evidence_time_guard: no evidence time on %', TG_TABLE_NAME USING ERRCODE = 'internal_error';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- One claim per claimant and organisation per 24 hours, whatever became of the earlier one: withdrawing and claiming
 -- again cannot reset the OTP attempt and reissue limits. (One open claim per claimant and organisation is also a
 -- partial unique index.) SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
@@ -2021,6 +2041,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION evidence_time_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
@@ -2059,6 +2080,18 @@ CREATE TRIGGER org_claims_dns_guard
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
+CREATE TRIGGER attestations_evidence_time
+    BEFORE INSERT ON attestations
+    FOR EACH ROW EXECUTE FUNCTION evidence_time_guard();
+CREATE TRIGGER legal_acceptances_evidence_time
+    BEFORE INSERT ON legal_acceptances
+    FOR EACH ROW EXECUTE FUNCTION evidence_time_guard();
+CREATE TRIGGER nda_acceptances_evidence_time
+    BEFORE INSERT ON nda_acceptances
+    FOR EACH ROW EXECUTE FUNCTION evidence_time_guard();
+CREATE TRIGGER document_views_evidence_time
+    BEFORE INSERT ON document_views
+    FOR EACH ROW EXECUTE FUNCTION evidence_time_guard();
 """
 
 APPEND_ONLY_TABLES = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
@@ -2110,6 +2143,7 @@ TRIGGER_FUNCTIONS = (
     "org_claims_guard()",
     "org_claims_dns_guard()",
     "phone_verifications_guard()",
+    "evidence_time_guard()",
 )
 
 

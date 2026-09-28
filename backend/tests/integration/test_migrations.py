@@ -289,6 +289,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "org_claims_guard()": (True, set()),
     "org_claims_dns_guard()": (False, set()),
     "phone_verifications_guard()": (False, set()),
+    "evidence_time_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -1787,6 +1788,59 @@ async def test_append_only_evidence_refuses_update_and_delete_even_for_the_owner
             await expect_error(conn, f"DELETE FROM {table}", "append-only evidence")
 
 
+async def test_evidence_times_are_the_databases(owner_engine: AsyncEngine) -> None:
+    """When an attestation was made, the Master Enterprise Terms or an NDA accepted and a Tier-2 view started is
+    evidence: the database sets it to now() on insert, whatever the writer sends (a backdated value is replaced), for
+    every role, the owner included."""
+    backdated = datetime.now(UTC) - timedelta(days=30)
+    async with rolled_back(owner_engine) as conn:
+        owner, _niche, proposal, version = await _registered_proposal(conn)
+        org, attestation, terms, nda, view = uuid7(), uuid7(), uuid7(), uuid7(), uuid7()
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'company', 'Evidence Ltd',"
+                " :slug, 'seed')"
+            ),
+            {"id": org, "slug": f"evidence-{org.hex}"},
+        )
+        met_template, nda_template = await w.add_templates(conn, uuid4().hex[:12])
+        params = {"t": backdated, "u": owner, "org": org, "p": proposal, "v": version, "h": ZERO_HASH}
+        for statement, row in (
+            (
+                "INSERT INTO attestations (id, user_id, version_id, created_it, not_owned_by_employer_or_client,"
+                " no_third_party_confidential, text_version, text_sha256, created_at)"
+                " VALUES (:id, :u, :v, true, true, true, 'v1', :h, :t)",
+                {"id": attestation},
+            ),
+            (
+                "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256, accepted_at)"
+                " SELECT :id, :org, :u, id, sha256, :t FROM legal_templates WHERE id = :template",
+                {"id": terms, "template": met_template},
+            ),
+            (
+                "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+                " logging_notice_version, accepted_at) SELECT :id, :u, :org, :p, id, sha256, 'v1', :t"
+                " FROM nda_templates WHERE id = :template",
+                {"id": nda, "template": nda_template},
+            ),
+            (
+                "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id,"
+                " nda_acceptance_id, render_kind, fingerprint_seed, started_at)"
+                " VALUES (:id, :p, :v, :u, :u, :org, :nda, 'html', :h, :t)",
+                {"id": view, "nda": nda},
+            ),
+        ):
+            await conn.execute(sa.text(statement), params | row)
+        for table, column, row_id in (
+            ("attestations", "created_at", attestation),
+            ("legal_acceptances", "accepted_at", terms),
+            ("nda_acceptances", "accepted_at", nda),
+            ("document_views", "started_at", view),
+        ):
+            stamped = sa.text(f"SELECT {column} = now() FROM {table} WHERE id = :id")
+            assert (await conn.execute(stamped, {"id": row_id})).scalar_one() is True, f"{table}.{column} was backdated"
+
+
 # pg_trigger.tgtype bits: see AUDIT_TRIGGERS.
 V2_APPEND_ONLY = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
 V2_TRIGGERS = {
@@ -1811,6 +1865,10 @@ V2_TRIGGERS = {
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
+    **{
+        (t, f"{t}_evidence_time"): ("evidence_time_guard", ROW | BEFORE | ON_INSERT)
+        for t in ("attestations", "legal_acceptances", "nda_acceptances", "document_views")
+    },
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)

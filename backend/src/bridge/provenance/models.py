@@ -113,7 +113,8 @@ class TransparencyRoot(CreatedMixin, Base):
 
 
 class Attestation(IdMixin, CreatedMixin, Base):
-    """Ownership attestations made at a registration (docs/spec/06 6.4 item 7). Append-only."""
+    """Ownership attestations made at a registration (docs/spec/06 6.4 item 7). Append-only; ``created_at`` is the
+    database's (evidence_time_guard: now() on insert, whatever is sent)."""
 
     __tablename__ = "attestations"
     __table_args__ = (
