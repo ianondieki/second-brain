@@ -16,7 +16,10 @@ Plain code and SQL decide (docs/spec/04 principle 1):
   even without a match, so the transaction is committed after every call.
 - Sends are throttled on the ``login_attempts`` ledger (``bridge.auth.throttle``: HMAC keys, never raw values) per
   user, per number and per client IP: one per user a minute; 3 per user or number and 30 per IP in 15 minutes; 5 per
-  user or number and 100 per IP a day.
+  user or number and 100 per IP a day. Concurrent requests count and record one after another: the profile row lock
+  serialises one user's requests, and transaction-level advisory locks on the number's and the IP's digests serialise
+  every account's requests for one number or from one IP. Locks are always taken in the same order (profile row, then
+  the two advisory keys in ascending order), so two requests never wait on each other; COMMIT releases them.
 - The code row, the throttle records and the audit event are committed before the SMS leaves, so a failed or slow send
   cannot be retried past the limits.
 - Audit events carry the code's id and SHA-256(subject_salt || number); logs carry the code's id only. Neither ever
@@ -66,6 +69,7 @@ _SEPARATORS = re.compile(r"[\s().\-]")
 _KENYAN_MOBILE = re.compile(r"(?:\+254|254|0)([17][0-9]{8})")
 _CODE = re.compile(r"[0-9]{6}")
 _CONFIRM = text("SELECT app_confirm_phone_otp(:verification, :digest)")
+_ADVISORY_LOCK = text("SELECT pg_advisory_xact_lock(:key)")
 
 
 class InvalidPhoneError(ValueError):
@@ -148,6 +152,19 @@ async def _level(db: AsyncSession, user_id: UUID, *, lock: bool = False) -> DevV
     return level
 
 
+def advisory_key(digest: bytes) -> int:
+    """The signed 64-bit ``pg_advisory_xact_lock`` key for a keyed digest (its first eight bytes)."""
+    return int.from_bytes(digest[:8], "big", signed=True)
+
+
+async def _lock_number_and_ip(db: AsyncSession, number_keys: throttle.Keys) -> None:
+    """Hold the number's and the client IP's advisory locks until COMMIT, so requests from several accounts for one
+    number, or from one IP, cannot all pass the limits before any of them has recorded its send. Ascending key order
+    is one total order for every request, so no two requests can each hold the lock the other waits for."""
+    for key in sorted({advisory_key(number_keys.email), advisory_key(number_keys.ip)}):
+        await db.execute(_ADVISORY_LOCK, {"key": key})
+
+
 async def _code_state(db: AsyncSession, user_id: UUID, verification_id: UUID) -> _CodeState | None:
     """The caller's code row without its digest (RLS limits the read to the caller's rows as well)."""
     stmt = select(
@@ -204,6 +221,7 @@ async def request_code(
     secret = _secret(settings)
     user_keys = throttle.keys(secret, "phone_otp_user", str(user.id), ip)
     number_keys = throttle.keys(secret, "phone_otp_number", number, ip)
+    await _lock_number_and_ip(db, number_keys)  # after the profile row lock, before counting
     if await throttle.account_count(db, user_keys, window=RESEND_AFTER) > 0:
         log.info("verification.sms_throttled", reason="resend_too_soon")
         raise VerificationError(

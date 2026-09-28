@@ -322,6 +322,31 @@ async def test_concurrent_requests_from_one_account_send_one_code(signed_in: Cli
     assert len(sms_outbox(developer).outbox) == 1
 
 
+async def test_concurrent_requests_for_one_number_from_several_accounts_respect_its_limit(signed_in: Client) -> None:
+    """Eight accounts race for one number: the number's advisory lock makes them count one after another, so exactly
+    its three codes in 15 minutes go out (the profile lock alone serialises only one account's requests)."""
+    typed, _ = new_number()
+    clients = [await signed_in() for _ in range(8)]
+    responses = await asyncio.gather(*(ask(client, typed) for client in clients))
+    assert sorted(r.status_code for r in responses) == [201] * 3 + [429] * 5
+    assert {r.json()["detail"]["code"] for r in responses if r.status_code == 429} == {"too_many_codes"}
+    assert sum(len(sms_outbox(client).outbox) for client in clients) == 3
+
+
+async def test_concurrent_requests_from_one_ip_across_accounts_respect_its_limit(
+    signed_in: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Six accounts on one client IP, each for its own number, race past an IP limit of two: two codes go out."""
+    monkeypatch.setattr(verification, "IP_SENDS_PER_WINDOW", 2)
+    clients = [await signed_in() for _ in range(6)]
+    for client in clients[1:]:
+        client.headers["X-Forwarded-For"] = clients[0].headers["X-Forwarded-For"]
+    responses = await asyncio.gather(*(ask(client, new_number()[0]) for client in clients))
+    assert sorted(r.status_code for r in responses) == [201] * 2 + [429] * 4
+    assert {r.json()["detail"]["code"] for r in responses if r.status_code == 429} == {"too_many_codes"}
+    assert sum(len(sms_outbox(client).outbox) for client in clients) == 2
+
+
 async def test_one_number_is_throttled_across_accounts(signed_in: Client, monkeypatch: pytest.MonkeyPatch) -> None:
     typed, _ = new_number()
     start = bridge.clock.utcnow()

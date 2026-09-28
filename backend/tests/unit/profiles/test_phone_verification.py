@@ -15,6 +15,7 @@ from bridge.profiles.verification import (
     InvalidPhoneError,
     _CodeState,
     _refusal,
+    advisory_key,
     mask_phone,
     new_code,
     normalise_kenyan_mobile,
@@ -118,3 +119,10 @@ def test_refusals_report_what_the_database_decided() -> None:
     assert _refusal(before, before).code == "code_expired"  # refused without counting: the database clock said so
     wrong = _refusal(before, replace(before, attempts=2))
     assert (wrong.status, wrong.code, wrong.extra) == (400, "invalid_code", {"attempts_left": 3})
+
+
+def test_advisory_keys_are_stable_signed_64_bit_integers() -> None:
+    digest = otp_digest(SECRET, VERIFICATION, "123456")
+    assert advisory_key(digest) == advisory_key(digest) == int.from_bytes(digest[:8], "big", signed=True)
+    assert advisory_key(b"\xff" * 32) == -1  # pg_advisory_xact_lock takes a signed bigint
+    assert advisory_key(b"\x7f" + b"\xff" * 31) == 2**63 - 1
