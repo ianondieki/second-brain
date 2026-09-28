@@ -7,6 +7,13 @@ organisation's rows and staff ``admin`` every row; the global daily cap reads th
 length: Tier-2 plaintext is never stored here, with or without consent (the LLM layer redacts, AC-SEC-6). It is kept
 30 days, written by the app but readable only by staff admin through ``app_llm_call_inputs(call_id)``: bridge_app holds
 no SELECT on the column, so the mapper never loads it.
+
+Message Batches: an item is reserved at submission (``status = 'batch_reserved'``, the estimated cost, ``batch_id`` and
+``custom_id``) and settled once its result arrives (a second row with the same pair and the final status and cost,
+inserted with ``ON CONFLICT DO NOTHING``; partial unique indexes allow one reservation and one settlement per item).
+Spend is read from the ``llm_spend`` view (org_id, user_id, cost_usd, created_at; revision 0002), the one rule that
+counts a reservation until its item settles and then only the settled row: the tenant monthly sum reads the view
+under RLS, and ``app_llm_spend_usd`` the platform total.
 """
 
 from __future__ import annotations
@@ -15,11 +22,18 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy
+
+MAX_CALL_COST_USD = 100
+BATCH_RESERVED = "batch_reserved"  # the status of a Message Batches reservation
+COUNTS_NOT_NEGATIVE = (
+    "input_tokens >= 0 AND output_tokens >= 0 AND cache_read_tokens >= 0 AND cache_write_tokens >= 0"
+    " AND (latency_ms IS NULL OR latency_ms >= 0)"
+)
 
 
 class LlmCall(IdMixin, CreatedMixin, Base):
@@ -31,6 +45,26 @@ class LlmCall(IdMixin, CreatedMixin, Base):
         Index("ix_llm_calls_org_id_created_at", "org_id", "created_at"),
         Index("ix_llm_calls_user_id_created_at", "user_id", "created_at"),
         Index("ix_llm_calls_created_at", "created_at"),
+        # One row is one plausible call: the global daily cap sums every row, so a row must neither blow it (a cost
+        # over 100 USD) nor offset real spend (a negative cost). Token counts and latency are never negative.
+        CheckConstraint(f"cost_usd BETWEEN 0 AND {MAX_CALL_COST_USD}", name="cost_usd_range"),
+        CheckConstraint(COUNTS_NOT_NEGATIVE, name="counts_not_negative"),
+        CheckConstraint("(batch_id IS NULL) = (custom_id IS NULL)", name="batch_pair"),
+        CheckConstraint(f"status <> '{BATCH_RESERVED}' OR batch_id IS NOT NULL", name="batch_reserved_has_batch"),
+        Index(
+            "uq_llm_calls_batch_reservation",
+            "batch_id",
+            "custom_id",
+            unique=True,
+            postgresql_where=text(f"status = '{BATCH_RESERVED}'"),
+        ),
+        Index(
+            "uq_llm_calls_batch_settlement",
+            "batch_id",
+            "custom_id",
+            unique=True,
+            postgresql_where=text(f"batch_id IS NOT NULL AND status <> '{BATCH_RESERVED}'"),
+        ),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "user_id"}},
     )
 
@@ -48,4 +82,6 @@ class LlmCall(IdMixin, CreatedMixin, Base):
     status: Mapped[str] = mapped_column(String(24))
     stop_reason: Mapped[str | None] = mapped_column(String(40))
     trace_id: Mapped[str | None] = mapped_column(String(64))
+    batch_id: Mapped[str | None] = mapped_column(String(64))  # the provider's batch id; with custom_id or neither
+    custom_id: Mapped[str | None] = mapped_column(String(64))  # the item's id within the batch
     inputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB, deferred=True, deferred_raiseload=True)

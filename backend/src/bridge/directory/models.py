@@ -6,7 +6,19 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, LargeBinary, SmallInteger, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    SmallInteger,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,6 +75,12 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
     through the definer functions: ``otp_attempts`` counts every attempt and is never reset, and a new code comes from
     ``app_reissue_claim_otp`` (at most 5 reissues, then manual review). One open claim per claimant and organisation,
     and one new claim per claimant and organisation per 24 hours (trigger).
+
+    The DNS proof: ``dns_token`` is written with the claim and is write-once; ``dns_verified_at`` is set only by
+    ``app_mark_claim_dns_verified`` once the app has resolved the TXT record, and is write-once too (trigger, every
+    role). Staff approving a ``disputed`` claim upholds the dispute and transfers the organisation: the new claimant
+    becomes its only owner and admin, earlier approved claims of other claimants are rejected and their memberships
+    removed, the other members lose owner and admin, and pending invitations of the old control are revoked.
     """
 
     __tablename__ = "org_claims"
@@ -112,7 +130,13 @@ class DirectoryInvitation(IdMixin, TimestampsMixin, Base):
     # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
     # RETURNING for server defaults.
     __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
-    __table_args__ = ({"info": {"tenancy": Tenancy.STAFF, "tenant_column": "org_id"}},)
+    __table_args__ = (
+        CheckConstraint(
+            "length(to_address) <= 254 AND to_address ~ '^[^@[:space:]]+@[^@[:space:]]+$'", name="to_address"
+        ),
+        CheckConstraint("reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 500)", name="reason"),
+        {"info": {"tenancy": Tenancy.STAFF, "tenant_column": "org_id"}},
+    )
 
     org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     to_address: Mapped[str] = mapped_column(CIText())

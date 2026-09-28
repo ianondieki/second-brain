@@ -167,6 +167,7 @@ async def test_bridge_app_cannot_switch_to_any_other_role(app_session_engine: As
 class Developer(NamedTuple):
     user_id: UUID
     published_version: UUID
+    draft_proposal: UUID
     draft_version: UUID
 
 
@@ -183,8 +184,8 @@ async def developer(owner_engine: AsyncEngine) -> Developer:
         user = await w.add_user(conn, f"dev-{tag}@example.test", "Developer")
         problem = await w.add_problem(conn, user, niche)
         _, published_version = await w.add_proposal(conn, user, niche, problem)
-        _, draft_version = await w.add_proposal(conn, user, niche, problem, registered=False)
-    return Developer(user, published_version, draft_version)
+        draft_proposal, draft_version = await w.add_proposal(conn, user, niche, problem, registered=False)
+    return Developer(user, published_version, draft_proposal, draft_version)
 
 
 async def test_as_role_switches_to_a_tier2_role_and_back(app_session_engine: AsyncEngine, developer: Developer) -> None:
@@ -245,9 +246,10 @@ async def rowcount(session: AsyncSession, statement: TextClause, params: dict[st
 async def test_the_database_times_a_registration_and_only_the_bound_worker_fills_its_hashes(
     app_session_engine: AsyncEngine, developer: Developer
 ) -> None:
-    """The app registers a version (status, cert_id) but never chooses registered_at: the trigger sets it and the ORM
-    reads it back on the same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the
-    app role holds no UPDATE on them, and a worker bound to another user matches no row."""
+    """The app registers a version (status, cert_id) but never chooses registered_at or the handle it is shown under:
+    the trigger sets both (the owner's developer handle, never another developer's) and the ORM reads them back on the
+    same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the app role holds no UPDATE
+    on them, and a worker bound to another user matches no row."""
     factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
     digest = hashlib.sha256(b"manifest").digest()
     fill = text(
@@ -255,6 +257,15 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
     )
     async with factory() as session:
         await bind_tenant(session, user_id=developer.user_id)
+        with pytest.raises(DBAPIError, match="owner_handle and the registration hashes are set at registration"):
+            async with session.begin_nested():  # a draft never names a handle, its owner's or another's
+                await session.execute(
+                    text(
+                        "INSERT INTO proposal_versions (id, proposal_id, version_no, owner_handle) VALUES (:id, :p, 9,"
+                        " 'alice')"
+                    ),
+                    {"id": uuid7(), "p": developer.draft_proposal},
+                )
         version = await session.get(ProposalVersion, developer.draft_version)
         assert version is not None
         version.status = VersionStatus.REGISTERED
@@ -262,11 +273,16 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
         await session.flush()
         stamped = (
             await session.execute(
-                text("SELECT registered_at, now() AS now FROM proposal_versions WHERE id = :id"), {"id": version.id}
+                text(
+                    "SELECT v.registered_at, now() AS now, d.handle FROM proposal_versions v JOIN proposals p"
+                    " ON p.id = v.proposal_id JOIN developer_profiles d ON d.user_id = p.owner_id WHERE v.id = :id"
+                ),
+                {"id": version.id},
             )
         ).one()
         assert version.registered_at == stamped.registered_at == stamped.now
-        for column in ("content_hash = :h", "registered_at = now()"):
+        assert version.owner_handle == stamped.handle
+        for column in ("content_hash = :h", "registered_at = now()", "owner_handle = 'alice'"):
             with pytest.raises(ProgrammingError, match="permission denied"):
                 async with session.begin_nested():
                     await session.execute(
@@ -285,6 +301,59 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
             text("SELECT content_hash, manifest_version FROM proposal_versions WHERE id = :id"), {"id": version.id}
         )
         assert tuple(filled.one()) == (digest, "1")
+        await session.rollback()
+
+
+SUBJECT_DIGEST = "SELECT app_subject_digest(:u, uuid_send(:u))"
+DIGEST_REFUSED = "only the current user's own digest"
+
+
+async def test_subject_digests_are_bound_to_the_caller(
+    owner_engine: AsyncEngine, app_session_engine: AsyncEngine, developer: Developer
+) -> None:
+    """A subject digest is a stable pseudonym of its user, so bridge_app computes only the current user's own
+    (app.user_id); staff admin|moderator (never support) and the registration job (provenance_worker) compute any
+    user's. Inside the SECURITY DEFINER function current_user is its owner and session_user the login role, so the
+    job is recognised by the role it switched to (the ``role`` setting, changed only by a membership-checked SET
+    ROLE): proven here on a session logged in as bridge_app, exactly as in production, and under the harness's SET
+    ROLE. bridge_app holds that membership, so the binding stops a query bug or an ORM load, not SQL the app role
+    itself runs (D-32)."""
+    async with owner_engine.begin() as conn:  # committed: the bridge_app session below reads them
+        other = await w.add_user(conn, _email("digest-other"), "Other")
+        support = await w.add_user(conn, _email("digest-support"), "Support", staff_role="support")
+        moderator = await w.add_user(conn, _email("digest-mod"), "Moderator", staff_role="moderator")
+        salted = "SELECT sha256(subject_salt || uuid_send(id)) FROM users WHERE id = :u"
+        expected = {user: await run(conn, salted, u=user) for user in (developer.user_id, other)}
+
+    async with as_app(owner_engine) as conn:
+        await act(conn, developer.user_id)
+        assert await run(conn, SUBJECT_DIGEST, u=developer.user_id) == expected[developer.user_id]
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=other)
+        await act(conn, None)  # no app.user_id: nobody's digest (the NULL-safe check)
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=developer.user_id)
+        await act(conn, support)  # support staff see no pseudonyms of other users
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=other)
+        await act(conn, moderator)
+        assert await run(conn, SUBJECT_DIGEST, u=other) == expected[other]
+        await act(conn, developer.user_id)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        assert await run(conn, SUBJECT_DIGEST, u=other) == expected[other]
+        assert await run(conn, SUBJECT_DIGEST, u=uuid7()) is None  # an unknown user
+
+    factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
+    digest = text(SUBJECT_DIGEST)
+    async with factory() as session:
+        await bind_tenant(session, user_id=developer.user_id)
+        assert (await session.execute(text("SELECT session_user"))).scalar_one() == "bridge_app"
+        assert (await session.execute(digest, {"u": developer.user_id})).scalar_one() == expected[developer.user_id]
+        with pytest.raises(DBAPIError, match=DIGEST_REFUSED):
+            async with session.begin_nested():
+                await session.execute(digest, {"u": other})
+        async with as_role(session, "provenance_worker"):
+            assert (await session.execute(digest, {"u": other})).scalar_one() == expected[other]
+        with pytest.raises(DBAPIError, match=DIGEST_REFUSED):  # back as bridge_app: bound again
+            async with session.begin_nested():
+                await session.execute(digest, {"u": other})
         await session.rollback()
 
 
@@ -523,10 +592,16 @@ async def test_kyc_decisions_are_staff_admin_only_and_raise_d1_to_d2(owner_engin
         assert await run(conn, "SELECT count(*) FROM app_kyc_purge_due() AS r(id) WHERE r.id = :id", id=review) == 0
         await as_owner(conn)
         await run(conn, "UPDATE kyc_reviews SET purge_due_at = now() - interval '1 minute' WHERE id = :id", id=review)
-        await act(conn, None)
+        mark = "SELECT app_mark_kyc_images_purged(:id)"
+        for caller in (subject, moderator):  # a signed-in request never marks images purged (they would be kept)
+            await act(conn, caller)
+            await expect(conn, mark, "the kyc.purge job", id=review)
+        await act(conn, None)  # the kyc.purge job: no user bound
         assert await run(conn, "SELECT count(*) FROM app_kyc_purge_due() AS r(id) WHERE r.id = :id", id=review) == 1
-        assert await run(conn, "SELECT app_mark_kyc_images_purged(:id)", id=review) is True
-        assert await run(conn, "SELECT app_mark_kyc_images_purged(:id)", id=review) is False
+        assert await run(conn, mark, id=review) is True
+        assert await run(conn, mark, id=review) is False
+        await act(conn, admin)  # staff admin may mark by hand (already marked: nothing changes)
+        assert await run(conn, mark, id=review) is False
 
 
 async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(owner_engine: AsyncEngine) -> None:
@@ -568,14 +643,154 @@ async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(
         await expect(conn, "SELECT app_moderate_proposal(:id, 'clear')", "moderator's own", id=mine)
 
 
+# A user's report: inserted without RETURNING (the reporter cannot read the queue).
+FILE_CASE = (
+    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id, status, classifier,"
+    " assigned_to, decided_by, decided_at) VALUES (:id, 'proposal', :subject, '{abuse}',"
+    " CAST(:source AS moderation_source), :reporter, CAST(:status AS moderation_case_status),"
+    " CAST(:classifier AS jsonb), :assigned, :decided_by, CAST(:decided_at AS timestamptz))"
+)
+OPEN_CASE = (
+    "SELECT app_open_moderation_case(:type, :subject, CAST(:reasons AS text[]), CAST(:source AS moderation_source),"
+    " CAST(:classifier AS jsonb))"
+)
+
+
+async def test_users_only_report_and_system_sources_file_through_the_function(owner_engine: AsyncEngine) -> None:
+    """A user files only a report, in their own name: an open case without classifier output. The system sources
+    (prescreen, regex, claim_dispute, tier2_similarity) file only through app_open_moderation_case(), which checks the
+    caller against the subject (the owner or staff for the pre-screen and regex; the claimant of a disputed claim or
+    staff admin; staff for the Tier-2 similarity job, which calls it as tier2_moderation) and keeps one unresolved
+    case per subject and source (a new call adds its reasons and returns that case)."""
+    async with as_app(owner_engine) as conn:
+        niche = uuid7()
+        await run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Mod')", id=niche, s=f"q-{niche.hex}")
+        owner = await w.add_user(conn, _email("case-owner"), "Owner")
+        stranger = await w.add_user(conn, _email("case-stranger"), "Stranger")
+        claimant = await w.add_user(conn, _email("case-claimant"), "Claimant")
+        moderator = await w.add_user(conn, _email("case-mod"), "Moderator", staff_role="moderator")
+        admin = await w.add_user(conn, _email("case-admin"), "Admin", staff_role="admin")
+        problem = await w.add_problem(conn, owner, niche)
+        proposal, _ = await w.add_proposal(conn, owner, niche, problem)
+        earlier, _ = await w.add_proposal(conn, stranger, niche, problem)
+        disputed = await _claim(
+            conn, await add_org(conn, verification="e2"), claimant, "d.example.test", "e1", bytes(32)
+        )
+        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
+        open_claim = await _claim(conn, await add_org(conn), claimant, "o.example.test", "e1", bytes(32))
+        case = {"type": "proposal", "subject": proposal, "reasons": "{spam}", "source": "regex", "classifier": None}
+
+        await act(conn, stranger)  # a report, in the reporter's own name only
+        report = uuid7()
+        report_row = {
+            "subject": proposal,
+            "source": "report",
+            "reporter": stranger,
+            "status": "open",
+            "assigned": None,
+            "decided_by": None,
+            "decided_at": None,
+        }
+        await run(conn, FILE_CASE, id=report, **report_row, classifier=None)
+        for change in (
+            {"source": "regex", "reporter": None},  # a system source
+            {"source": "prescreen"},  # a system source, even with the reporter set
+            {"reporter": None},
+            {"reporter": owner},  # in another user's name
+            {"status": "held"},
+            {"assigned": moderator},  # the queue's routing and decisions are staff's (UPDATE policy)
+            {"decided_by": stranger},
+            {"decided_at": datetime.now(UTC)},
+        ):
+            await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **(report_row | change), classifier=None)
+        await expect(conn, FILE_CASE, "row-level security", id=uuid7(), **report_row, classifier='{"label": "spam"}')
+        await expect(conn, OPEN_CASE, "may not file", **case)  # the function checks the caller: not the owner
+        await act(conn, None)
+        await expect(
+            conn, FILE_CASE, "row-level security", id=uuid7(), **(report_row | {"reporter": None}), classifier=None
+        )
+        await expect(conn, OPEN_CASE, "may not file", **case)
+
+        await act(conn, owner)  # the pre-screen and the regex holds on the owner's content
+        flagged = case | {"source": "prescreen", "classifier": '{"label": "spam", "score": 0.97}'}
+        first = await run(conn, OPEN_CASE, **flagged)
+        assert (
+            await run(conn, OPEN_CASE, **(flagged | {"reasons": "{malicious_link,spam}", "classifier": None})) == first
+        )
+        regex = await run(conn, OPEN_CASE, **case)
+        on_problem = await run(conn, OPEN_CASE, **(case | {"type": "problem", "subject": problem}))
+        assert len({first, regex, on_problem}) == 3
+        for change, refusal in (
+            ({"source": "report"}, "a system source only"),
+            ({"source": "claim_dispute"}, "does not file cases about"),  # a proposal is no claim
+            ({"type": "message"}, "does not file cases about"),
+            ({"subject": uuid7()}, "may not file"),  # no such proposal
+            ({"source": "tier2_similarity"}, "may not file"),  # staff only
+            ({"reasons": "{}"}, "reasons"),
+            ({"reasons": '{"  "}'}, "reasons"),
+            ({"reasons": "{" + ",".join(f"r{i}" for i in range(21)) + "}"}, "reasons"),
+            ({"classifier": "[1, 2]"}, "JSON object"),
+            ({"classifier": '{"note": "' + "x" * 8200 + '"}'}, "JSON object"),
+        ):
+            await expect(conn, OPEN_CASE, refusal, **(case | change))
+
+        await act(conn, claimant)  # a claim dispute: the claimant of the disputed claim, or staff admin
+        dispute = {"type": "org_claim", "subject": disputed, "reasons": "{competing_claim}", "source": "claim_dispute"}
+        dispute_case = await run(conn, OPEN_CASE, **dispute, classifier=None)
+        await expect(conn, OPEN_CASE, "may not file", **(dispute | {"subject": open_claim}), classifier=None)
+        await act(conn, stranger)
+        await expect(conn, OPEN_CASE, "may not file", **dispute, classifier=None)
+        await act(conn, admin)
+        assert await run(conn, OPEN_CASE, **dispute, classifier=None) == dispute_case
+
+        # The Tier-2 similarity job reads the full-text embeddings as tier2_moderation, which reads only in a staff
+        # context, and files the case without switching back. Classifier output holds ids and scores only.
+        await act(conn, moderator)
+        await conn.execute(text("SET LOCAL ROLE tier2_moderation"))
+        similarity = f'{{"similar_to": "{earlier}", "cosine": 0.93}}'
+        similar = await run(
+            conn,
+            OPEN_CASE,
+            **(case | {"source": "tier2_similarity", "reasons": "{near_copy}", "classifier": similarity}),
+        )
+
+        await act(conn, moderator)  # the queue: staff read it
+        rows = await conn.execute(
+            text(
+                "SELECT id, subject_type, source::text AS source, status::text AS status, reasons, reporter_id,"
+                " classifier FROM moderation_cases WHERE subject_id = ANY (:ids)"
+            ),
+            {"ids": [proposal, problem, disputed]},
+        )
+        spam, near = {"label": "spam", "score": 0.97}, {"similar_to": str(earlier), "cosine": 0.93}
+        assert {r.id: (r.subject_type, r.source, r.status, r.reasons, r.reporter_id, r.classifier) for r in rows} == {
+            report: ("proposal", "report", "open", ["abuse"], stranger, None),
+            first: ("proposal", "prescreen", "open", ["spam", "malicious_link"], None, spam),  # reasons added
+            regex: ("proposal", "regex", "open", ["spam"], None, None),
+            on_problem: ("problem", "regex", "open", ["spam"], None, None),
+            dispute_case: ("org_claim", "claim_dispute", "open", ["competing_claim"], None, None),
+            similar: ("proposal", "tier2_similarity", "open", ["near_copy"], None, near),
+        }
+        # Once decided, the next hit files a new case.
+        decide = "UPDATE moderation_cases SET status = 'rejected', decided_by = :u, decided_at = now() WHERE id = :id"
+        await run(conn, decide, u=moderator, id=first)
+        await act(conn, owner)
+        assert await run(conn, OPEN_CASE, **flagged) not in (first, None)
+
+
+# What the app's DNS-check code calls once it has resolved the claim's TXT record (the lookup itself is app-side).
+MARK_DNS = "SELECT app_mark_claim_dns_verified(:id)"
+
+
 async def _claim(conn: AsyncConnection, org: UUID, claimant: UUID, domain: str, level: str, otp_hash: bytes) -> UUID:
     claim = uuid7()
     await run(
         conn,
         "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, otp_hash,"
-        " otp_expires_at) VALUES (:id, :org, :u, :d, :e, CAST(:level AS claim_level), 'otp_sent', :h,"
-        " now() + interval '10 minutes')",
+        " otp_expires_at, dns_token) VALUES (:id, :org, :u, :d, :e, CAST(:level AS claim_level), 'otp_sent', :h,"
+        " now() + interval '10 minutes', :token)",
         id=claim,
+        token=f"bridge-verify-{claim.hex}",
         org=org,
         u=claimant,
         d=domain,
@@ -630,9 +845,8 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=wrong) is False
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
         await expect(conn, approve, "must both be verified", id=claim)  # the DNS TXT record is still missing
-        await run(
-            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'dns_pending' WHERE id = :id", id=claim
-        )
+        assert await run(conn, MARK_DNS, id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'dns_pending' WHERE id = :id", id=claim)
         assert await run(conn, approve, id=claim) == "approved"
         org = (
             await conn.execute(
@@ -649,7 +863,7 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         await act(conn, claimant)
         other = await _claim(conn, lookalike, claimant, "telco-b-ke.example.test", "e1", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=other, h=right) is True
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=other)
+        assert await run(conn, MARK_DNS, id=other) is True
         assert await run(conn, approve, id=other) == "pending_review"
         assert (
             await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=lookalike) == "unclaimed"
@@ -657,7 +871,7 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         # A claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2).
         dispute = await _claim(conn, verified, claimant, "verified.example.test", "e1", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=dispute, h=right) is True
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=dispute)
+        assert await run(conn, MARK_DNS, id=dispute) is True
         assert await run(conn, approve, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_is_member(:id)", id=verified) is False
 
@@ -737,6 +951,67 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
         await expect(conn, new_claim, "uq_org_claims_open_claimant_org", id=again, org=other_org, u=claimant)
         await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=capped)
         await run(conn, new_claim, id=again, org=other_org, u=claimant)
+
+
+async def test_a_claim_is_timed_by_the_database_so_the_cooldown_holds(owner_engine: AsyncEngine) -> None:
+    """The 24-hour cooldown between claims reads created_at, so the database sets it: a claim sent with a backdated
+    created_at is stamped now(), and withdrawing it and claiming again is still refused."""
+    new_claim = (
+        "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, created_at)"
+        " VALUES (:id, :org, :u, 'cool.example.test', 'info@cool.example.test', 'e1', 'otp_sent',"
+        " now() - interval '2 days')"
+    )
+    async with as_app(owner_engine) as conn:
+        org = await add_org(conn)
+        claimant = await w.add_user(conn, _email("cooldown"), "Claimant")
+        await act(conn, claimant)
+        claim = uuid7()
+        await run(conn, new_claim, id=claim, org=org, u=claimant)
+        assert await run(conn, "SELECT created_at = now() FROM org_claims WHERE id = :id", id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=claim)
+        await expect(
+            conn, new_claim, "one claim per claimant and organisation per 24 hours", id=uuid7(), org=org, u=claimant
+        )
+
+
+async def test_dns_verification_is_marked_only_through_the_function_and_the_token_is_write_once(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """bridge_app cannot set dns_verified_at or change dns_token (the token is written with the claim):
+    app_mark_claim_dns_verified() marks the claimant's own open claim with a token once the app has resolved the TXT
+    record. Once set, the token and the verification time never change, for any role."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        org, tokenless_org, withdrawn_org = await add_org(conn), await add_org(conn), await add_org(conn)
+        claimant = await w.add_user(conn, _email("dns-claimant"), "Claimant")
+        stranger = await w.add_user(conn, _email("dns-stranger"), "Stranger")
+        await act(conn, claimant)
+        claim = await _claim(conn, org, claimant, "dns.example.test", "e1", right)
+        for column in ("dns_verified_at = now()", "dns_token = 'mine'", "dns_verified_at = NULL"):
+            await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "permission denied", id=claim)
+        await act(conn, stranger)
+        await expect(conn, MARK_DNS, "no such claim for the current user", id=claim)
+        await act(conn, claimant)
+        assert await run(conn, MARK_DNS, id=claim) is True
+        assert await run(conn, MARK_DNS, id=claim) is False  # already verified: nothing changes
+        tokenless = uuid7()
+        await run(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'dns.example.test', 'info@dns.example.test', 'e1', 'otp_sent')",
+            id=tokenless,
+            org=tokenless_org,
+            u=claimant,
+        )
+        await expect(conn, MARK_DNS, "no DNS token", id=tokenless)
+        withdrawn = await _claim(conn, withdrawn_org, claimant, "dns.example.test", "e1", right)
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=withdrawn)
+        await expect(conn, MARK_DNS, "not open", id=withdrawn)
+        await as_owner(conn)  # the trigger holds for every role
+        later = "dns_verified_at = now() + interval '1 minute'"  # now() is the transaction's: the marked time
+        for column in ("dns_token = 'other'", "dns_token = NULL", later, "dns_verified_at = NULL"):
+            await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "write-once", id=claim)
+        await run(conn, "UPDATE org_claims SET dns_token = 'late' WHERE id = :id", id=tokenless)  # a first write
 
 
 MET_ACCEPTANCE = (
@@ -822,9 +1097,8 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         await act(conn, claimant)
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
-        await run(
-            conn, "UPDATE org_claims SET dns_verified_at = now(), status = 'pending_review' WHERE id = :id", id=claim
-        )
+        assert await run(conn, MARK_DNS, id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
@@ -869,7 +1143,8 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     """Staff approve a claim (E1 or E2) only once the email code and the DNS TXT record are verified; for E2 an active
-    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again."""
+    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again, and only on
+    that domain: the organisation's own signatory claiming another domain proves nothing."""
     right, _ = otp
     decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
     unproven = "domain is not proven"
@@ -882,13 +1157,9 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         claimant = await w.add_user(conn, _email("prover"), "Prover")
         outsider = await w.add_user(conn, _email("outsider"), "Outsider")
         owner = await w.add_user(conn, _email("e1-owner"), "Owner")
-        await run(
-            conn,
-            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
-            id=uuid7(),
-            org=e1,
-            u=owner,
-        )
+        await _add_membership(conn, e1, owner, "{owner,admin}")
+        signatory = await w.add_user(conn, _email("e1-signatory"), "Signatory")
+        await _add_membership(conn, e1, signatory, "{signatory}")
         met = await add_legal_template(conn, "master_enterprise_terms")
         # An E2 claim on an unclaimed organisation: refused until both the code and the DNS record are verified.
         await act(conn, claimant)
@@ -901,7 +1172,7 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         await act(conn, admin)
         await expect(conn, decide, unproven, id=claim)  # the DNS TXT record is still missing
         await act(conn, claimant)
-        await run(conn, "UPDATE org_claims SET dns_verified_at = now() WHERE id = :id", id=claim)
+        assert await run(conn, MARK_DNS, id=claim) is True
         await act(conn, admin)
         await run(conn, decide, id=claim)
         # An E1 claim sent to manual review without a verified code (reissues spent) is never approved.
@@ -910,6 +1181,13 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=capped)
         await act(conn, admin)
         await expect(conn, decide, unproven, id=capped)
+        # The E1 shortcut holds only on the organisation's verified domain: its signatory, terms accepted, claiming E2
+        # on another domain is refused (without the domain equality in app_decide_claim it would be approved).
+        await act(conn, signatory)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=e1, u=signatory, t=met)
+        elsewhere = await _claim(conn, e1, signatory, "elsewhere.example.test", "e2", right)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=elsewhere)
         # E2 for an organisation already E1 on the claimed domain: its owner needs no new proof, an outsider does.
         for user in (outsider, owner):
             await act(conn, user)
@@ -923,6 +1201,202 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
                 await run(conn, decide, id=e2_claim)
         await as_owner(conn)
         assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=e1) == "e2"
+
+
+async def _prove_domain(conn: AsyncConnection, claim: UUID, otp_hash: bytes) -> None:
+    """As the claimant: the claim's email code and DNS TXT record verified."""
+    assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=otp_hash) is True
+    assert await run(conn, MARK_DNS, id=claim) is True
+
+
+async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str) -> UUID:
+    membership = uuid7()
+    await run(
+        conn,
+        "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, CAST(:roles AS org_role[]))",
+        id=membership,
+        org=org,
+        u=user,
+        roles=roles,
+    )
+    return membership
+
+
+async def _invite(conn: AsyncConnection, org: UUID, invited_by: UUID, roles: str, *, accepted: bool = False) -> UUID:
+    """A Phase 1 invitation to ``org`` (pending unless ``accepted``)."""
+    invitation = uuid7()
+    await run(
+        conn,
+        "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, accepted_at)"
+        " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :hash, :by, now() + interval '7 days',"
+        " CASE WHEN :accepted THEN now() END)",
+        id=invitation,
+        org=org,
+        email=_email("invitee"),
+        roles=roles,
+        hash=invitation.bytes,
+        by=invited_by,
+        accepted=accepted,
+    )
+    return invitation
+
+
+@pytest.mark.parametrize("level", ["e1", "e2"])
+async def test_an_upheld_dispute_transfers_the_organisation(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes], level: str
+) -> None:
+    """Competing claims go to dispute review, never an automatic transfer (docs/spec/06 6.2, AC-DIR-2); staff admin
+    upholding the dispute transfers the organisation in the same transaction, and the new claimant is its only owner
+    and admin: the earlier claimant's approved claim is rejected, naming the claim that superseded it, and their
+    membership is removed with no role but viewer (nobody reactivates them with power); every other member loses
+    owner and admin but keeps their other roles (viewer when none is left), so the self-signup founder can no longer
+    remove the new owner; and every pending invitation issued under the old control (by anyone but the new claimant),
+    or carrying owner or admin, is revoked. The new claimant re-promotes people afterwards."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("dispute-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, source="self_signup", official_domains="{first.example.test}")
+        founder = await w.add_user(conn, _email("founder"), "Self-signup founder")
+        first = await w.add_user(conn, _email("first"), "First claimant")
+        second = await w.add_user(conn, _email("second"), "Second claimant")
+        reviewer = await w.add_user(conn, _email("dispute-reviewer"), "Reviewer")
+        signer = await w.add_user(conn, _email("dispute-signer"), "Signer")
+        await _add_membership(conn, org, founder, "{owner,admin}")  # app_create_organization() at self-signup
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        elsewhere = await add_org(conn)
+        await _invite(conn, elsewhere, founder, "{owner}")  # another organisation's invitation: untouched
+        await act(conn, first)  # E1 at once on an official domain; the owner then builds the roster
+        earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        await _add_membership(conn, org, reviewer, "{reviewer}")
+        await _add_membership(conn, org, signer, "{admin,signatory}")
+        await _add_membership(conn, org, second, "{admin}")
+        by_first = await _invite(conn, org, first, "{reviewer}")
+        accepted = await _invite(conn, org, first, "{viewer}", accepted=True)
+        await act(conn, founder)
+        by_founder = await _invite(conn, org, founder, "{finance}")
+        await act(conn, second)
+        by_second = await _invite(conn, org, second, "{viewer}")
+        admin_by_second = await _invite(conn, org, second, "{admin}")
+        # another domain, proven, and the claim disputed
+        disputed = await _claim(conn, org, second, "second.example.test", level, right)
+        await _prove_domain(conn, disputed, right)
+        if level == "e2":
+            await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=second, t=met)
+        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'dispute upheld')", id=disputed)
+
+        await as_owner(conn)
+        claims = await conn.execute(
+            text("SELECT id, status::text AS status, decision_reason FROM org_claims WHERE org_id = :org"), {"org": org}
+        )
+        assert {row.id: (row.status, row.decision_reason) for row in claims.all()} == {
+            earlier: ("rejected", f"superseded by claim {disputed} (dispute upheld)"),
+            disputed: ("approved", "dispute upheld"),
+        }
+        roster = "SELECT user_id, status::text AS status, roles::text[] AS roles FROM memberships WHERE org_id = :org"
+        members = await conn.execute(text(roster), {"org": org})
+        assert {row.user_id: (row.status, sorted(row.roles)) for row in members.all()} == {
+            first: ("removed", ["viewer"]),
+            second: ("active", ["admin", "owner"]),
+            founder: ("active", ["viewer"]),
+            signer: ("active", ["signatory"]),
+            reviewer: ("active", ["reviewer"]),
+        }
+        revoked = await conn.execute(
+            text("SELECT id, revoked_at IS NOT NULL AS revoked FROM invitations WHERE org_id = ANY (:orgs)"),
+            {"orgs": [org, elsewhere]},
+        )
+        invitations = {row.id: row.revoked for row in revoked.all()}
+        assert {accepted, by_second} <= set(invitations)  # kept: accepted, or the new claimant's without power
+        assert {i for i, is_revoked in invitations.items() if is_revoked} == {by_first, by_founder, admin_by_second}
+        verified = "SELECT verification::text, verified_domain::text FROM organizations WHERE id = :id"
+        assert tuple((await conn.execute(text(verified), {"id": org})).one()) == (level, "second.example.test")
+        remove_second = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        reactivate_first = "UPDATE memberships SET status = 'active' WHERE org_id = :org AND user_id = :u"
+        for ousted in (first, founder):  # neither the earlier claimant nor the founder holds any power now
+            await act(conn, ousted)
+            assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is False
+            assert (await conn.execute(text(remove_second), {"org": org, "u": second})).rowcount == 0
+            assert (await conn.execute(text(reactivate_first), {"org": org, "u": first})).rowcount == 0
+        await act(conn, second)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is True
+        # Reactivated by the new owner, the earlier claimant comes back without power.
+        assert (await conn.execute(text(reactivate_first), {"org": org, "u": first})).rowcount == 1
+        await act(conn, first)
+        assert await run(conn, "SELECT app_is_member(:id)", id=org) is True
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin,signatory}')", id=org) is False
+
+
+async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Only an upheld dispute transfers the organisation: staff approving an ordinary claim (here the E2 upgrade of
+    an E1 organisation by its own signatory, through the E1 shortcut) leaves the earlier approved claim of another
+    claimant approved and every membership as it was."""
+    right, _ = otp
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("upgrade-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{upgrade.example.test}")
+        first = await w.add_user(conn, _email("upgrade-first"), "First claimant")
+        signatory = await w.add_user(conn, _email("upgrade-signatory"), "Signatory")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        await act(conn, first)  # E1 at once on an official domain
+        earlier = await _claim(conn, org, first, "upgrade.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        await as_owner(conn)
+        await _add_membership(conn, org, signatory, "{signatory}")
+        await act(conn, signatory)  # E2 on the organisation's verified domain: no new domain proof needed
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=signatory, t=met)
+        upgrade = await _claim(conn, org, signatory, "upgrade.example.test", "e2", right)
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=upgrade)
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'E2 documents checked')", id=upgrade)
+
+        await as_owner(conn)
+        claims = await conn.execute(
+            text("SELECT id, status::text AS status FROM org_claims WHERE org_id = :org"), {"org": org}
+        )
+        assert {row.id: row.status for row in claims.all()} == {earlier: "approved", upgrade: "approved"}
+        members = await conn.execute(
+            text("SELECT user_id, status::text AS status, roles::text[] AS roles FROM memberships WHERE org_id = :org"),
+            {"org": org},
+        )
+        assert {row.user_id: (row.status, sorted(row.roles)) for row in members.all()} == {
+            first: ("active", ["admin", "owner"]),
+            signatory: ("active", ["admin", "owner", "signatory"]),
+        }
+        assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=org) == "e2"
+
+
+async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:
+    """Staff correct an organisation's roster (e.g. after an upheld dispute) through app_staff_remove_membership():
+    staff admin only, with a reason for the caller's audit event; removing is idempotent and keeps the row."""
+    remove = "SELECT app_staff_remove_membership(:id, :reason)"
+    async with as_app(owner_engine) as conn:
+        org = await add_org(conn, verification="e1")
+        admin = await w.add_user(conn, _email("roster-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("roster-mod"), "Moderator", staff_role="moderator")
+        owner = await w.add_user(conn, _email("roster-owner"), "Owner")
+        member = await w.add_user(conn, _email("roster-member"), "Member")
+        await _add_membership(conn, org, owner, "{owner,admin}")
+        membership = await _add_membership(conn, org, member, "{owner,signatory}")
+        for caller in (owner, moderator, None):  # not the organisation's owner either: its own roster rules apply
+            await act(conn, caller)
+            await expect(conn, remove, "staff admin only", id=membership, reason="dispute upheld")
+        await act(conn, admin)
+        for reason in (None, "  "):
+            await expect(conn, remove, "a reason is required", id=membership, reason=reason)
+        await expect(conn, remove, "no such membership", id=uuid7(), reason="dispute upheld")
+        assert await run(conn, remove, id=membership, reason="dispute upheld") is True
+        assert await run(conn, remove, id=membership, reason="dispute upheld") is False  # already removed
+        await act(conn, member)
+        assert await run(conn, "SELECT app_is_member(:id)", id=org) is False
+        await act(conn, owner)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner}')", id=org) is True
 
 
 async def test_delisting_and_opt_out_and_the_held_tag_count(owner_engine: AsyncEngine) -> None:
@@ -1044,8 +1518,9 @@ async def test_one_open_tag_per_developer_and_org_and_a_closed_tag_never_reopens
 
 
 async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(owner_engine: AsyncEngine) -> None:
-    """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash) of every audit chain from
-    app_audit_chain_heads(); provenance_worker cannot read audit_events itself, and no other role may call it."""
+    """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash, occurred_at) of every audit chain from
+    app_audit_chain_heads(), and the heads not anchored yet, oldest first, from app_unanchored_chain_heads();
+    provenance_worker cannot read audit_events or chain_anchors itself, and no other role may call either."""
     chains = [f"test:{uuid4().hex}" for _ in range(2)]
     async with as_app(owner_engine) as conn:
         for chain, count in zip(chains, (1, 3), strict=True):
@@ -1059,21 +1534,95 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
                 )
         last = await conn.execute(
             text(
-                "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events"
+                "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash, occurred_at FROM audit_events"
                 " WHERE chain_id = ANY (:c) ORDER BY chain_id, seq DESC"
             ),
             {"c": chains},
         )
-        expected = {row.chain_id: (row.seq, row.event_hash) for row in last.all()}
-        assert {chain: seq for chain, (seq, _) in expected.items()} == {chains[0]: 1, chains[1]: 3}
-        heads = "SELECT chain_id, seq, event_hash FROM app_audit_chain_heads() WHERE chain_id = ANY (:c)"
+        expected = {row.chain_id: (row.seq, row.event_hash, row.occurred_at) for row in last.all()}
+        assert {chain: head[0] for chain, head in expected.items()} == {chains[0]: 1, chains[1]: 3}
+        heads = "SELECT chain_id, seq, event_hash, occurred_at FROM app_audit_chain_heads() WHERE chain_id = ANY (:c)"
+        unanchored = (  # in the function's order (WITH ORDINALITY keeps it through the filter)
+            "SELECT h.chain_id FROM app_unanchored_chain_heads() WITH ORDINALITY AS h(chain_id, seq, event_hash,"
+            " occurred_at, n) WHERE h.chain_id = ANY (:c) ORDER BY h.n"
+        )
         for role in ("bridge_app", "audit_reader", "aggregate_worker", "tier2_reader", "dsr_exporter"):
             await conn.execute(text(f"SET LOCAL ROLE {role}"))
             await expect(conn, heads, "permission denied", c=chains)
+            await expect(conn, unanchored, "permission denied", c=chains)
         await conn.execute(text("SET LOCAL ROLE provenance_worker"))
         found = (await conn.execute(text(heads), {"c": chains})).all()
-        assert {row.chain_id: (row.seq, row.event_hash) for row in found} == expected
+        assert {row.chain_id: (row.seq, row.event_hash, row.occurred_at) for row in found} == expected
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
+        assert list((await conn.execute(text(unanchored), {"c": chains})).scalars()) == chains  # oldest head first
+        seq, event_hash, _ = expected[chains[0]]
+        await run(conn, ANCHOR, id=uuid7(), chain=chains[0], seq=seq, hash=event_hash, tsa_time=datetime.now(UTC))
+        assert list((await conn.execute(text(unanchored), {"c": chains})).scalars()) == [chains[1]]
+
+
+ANCHOR = (
+    "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
+    " VALUES (:id, :chain, :seq, :hash, '\\x01', CAST(:tsa_time AS timestamptz), 'serial')"
+)
+ROOT = (
+    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id, snapshot_at)"
+    " VALUES (CAST(:day AS date), :root, '\\x02', :key, CAST(:snapshot AS timestamptz))"
+)
+NAIROBI_TODAY = "SELECT CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date)"
+
+
+async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engine: AsyncEngine) -> None:
+    """chain_anchors and transparency_roots are append-only and one per head or day, so a forged row would be
+    permanent and block the real one. provenance_worker (the only writer) may anchor only an existing audit event
+    (its chain, sequence number and hash) at a TSA time no later than the database clock allows (one minute of
+    clock skew), and publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended
+    and no later than now (``snapshot_at``, when given)."""
+    chain = f"test:{uuid4().hex}"
+    async with as_app(owner_engine) as conn:
+        for _ in range(2):
+            await run(
+                conn,
+                "INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'test.anchor')",
+                id=uuid7(),
+                c=chain,
+            )
+        events = await conn.execute(
+            text("SELECT seq, event_hash FROM audit_events WHERE chain_id = :c ORDER BY seq"), {"c": chain}
+        )
+        earlier, head = events.all()
+        key = f"test-{uuid4().hex[:8]}"
+        await run(conn, "INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)", k=key, pk=bytes(32))
+        today = await run(conn, NAIROBI_TODAY)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        anchor = {"chain": chain, "seq": head.seq, "hash": head.event_hash, "tsa_time": datetime.now(UTC)}
+        refused = "an anchor names an existing audit event"
+        for change in (
+            {"hash": hashlib.sha256(b"forged").digest()},
+            {"seq": head.seq + 1},
+            {"chain": f"test:{uuid4().hex}"},
+        ):
+            await expect(conn, ANCHOR, refused, id=uuid7(), **(anchor | change))
+        future = datetime.now(UTC) + timedelta(hours=1)
+        await expect(
+            conn, ANCHOR, "TSA time is later than the database clock", id=uuid7(), **(anchor | {"tsa_time": future})
+        )
+        await run(conn, ANCHOR, id=uuid7(), **anchor)
+        await run(conn, ANCHOR, id=uuid7(), **(anchor | {"seq": earlier.seq, "hash": earlier.event_hash}))
+        root = {"root": hashlib.sha256(b"root").digest(), "key": key, "snapshot": None}
+        for day in (today, today + timedelta(days=1)):
+            await expect(conn, ROOT, "a root closes a Nairobi day that has ended", day=day, **root)
+        yesterday = today - timedelta(days=1)
+        began = await run(conn, "SELECT CAST(CAST(:d AS date) AS timestamp) AT TIME ZONE 'Africa/Nairobi'", d=yesterday)
+        for snapshot in (datetime.now(UTC) + timedelta(hours=1), began + timedelta(hours=12)):  # future; mid-day
+            await expect(
+                conn,
+                ROOT,
+                "the snapshot is taken after the day ended",
+                day=yesterday,
+                **(root | {"snapshot": snapshot}),
+            )
+        await run(conn, ROOT, day=yesterday, **(root | {"snapshot": datetime.now(UTC) - timedelta(minutes=1)}))
+        await run(conn, ROOT, day=today - timedelta(days=2), **root)  # snapshot_at may still be left out
 
 
 async def test_staff_admin_adds_a_niche_without_a_deploy(owner_engine: AsyncEngine) -> None:
@@ -1167,3 +1716,167 @@ async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
         await act(conn, None)  # another tenant's (or no tenant's) request still sees the total, never the rows
         assert await run(conn, "SELECT count(*) FROM llm_calls WHERE user_id = :u", u=user) == 0
         assert await run(conn, "SELECT app_llm_spend_usd(:t)", t=since) - before == Decimal("1.25")
+
+
+BATCH_CALL = (
+    "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, batch_id, custom_id)"
+    " VALUES (:id, :u, 't', 'm', :status, :cost, :batch, :item)"
+)
+# How the ledger settles an item: untargeted, since a targeted ON CONFLICT is refused by RLS for system rows.
+SETTLE = BATCH_CALL + " ON CONFLICT DO NOTHING"
+USER_SPEND = "SELECT coalesce(sum(cost_usd), 0) FROM llm_spend WHERE user_id = :u"
+GLOBAL_SPEND = "SELECT app_llm_spend_usd(:t)"
+
+
+async def test_only_the_app_reads_the_spend_view(owner_engine: AsyncEngine) -> None:
+    """llm_spend (the spend rule, security_invoker) is read by bridge_app for the tenant monthly sum; no worker or
+    Tier-2 role reads it, and nobody writes it."""
+    assert await roles_holding(owner_engine, "llm_spend", "SELECT") == {"bridge_app"}
+    for privilege in ("INSERT", "UPDATE", "DELETE"):
+        assert await roles_holding(owner_engine, "llm_spend", privilege) == set()
+
+
+async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engine: AsyncEngine) -> None:
+    """A Message Batches item is reserved at submission (status batch_reserved, the estimated cost) and settled once
+    its result arrives. Spend (llm_spend, the one rule behind the tenant monthly sum and app_llm_spend_usd) counts a
+    reservation until its item settles, then only the settled row; an item is reserved once and settles once (a
+    second settle is skipped by ON CONFLICT DO NOTHING); a batch id always comes with an item id. Tenants still read
+    only their own rows, through llm_calls and llm_spend alike."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("batch-user"), "Batch")
+        other = await w.add_user(conn, _email("batch-other"), "Other")
+        since = await run(conn, "SELECT now() - interval '1 second'")
+        before = await run(conn, GLOBAL_SPEND, t=since)
+        await act(conn, user)
+        batch = f"msgbatch_{uuid4().hex[:20]}"
+        item = {"u": user, "batch": batch, "item": "item-1"}
+        await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("2.00"), **item)
+        assert await run(conn, USER_SPEND, u=user) == Decimal("2.00")  # reserved: counted
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("2.00")
+        reserve_again = {"id": uuid7(), "status": "batch_reserved", "cost": Decimal("2.00")}
+        await expect(conn, BATCH_CALL, "uq_llm_calls_batch_reservation", **reserve_again, **item)
+        settle = {"status": "ok", "cost": Decimal("1.50")}
+        assert (await conn.execute(text(SETTLE), {"id": uuid7(), **settle, **item})).rowcount == 1
+        assert (await conn.execute(text(SETTLE), {"id": uuid7(), **settle, **item})).rowcount == 0  # skipped
+        failed = {"id": uuid7(), "status": "error", "cost": Decimal("0")}
+        await expect(conn, BATCH_CALL, "uq_llm_calls_batch_settlement", **failed, **item)  # settles once
+        assert await run(conn, USER_SPEND, u=user) == Decimal("1.50")  # settled: only the settled row
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.50")
+        unpaired = {"id": uuid7(), "u": user, "cost": Decimal("0")}
+        await expect(conn, BATCH_CALL, "ck_llm_calls_batch_pair", **unpaired, status="ok", batch=batch, item=None)
+        await expect(conn, BATCH_CALL, "ck_llm_calls_batch_pair", **unpaired, status="ok", batch=None, item="item-9")
+        await expect(
+            conn,
+            BATCH_CALL,
+            "ck_llm_calls_batch_reserved_has_batch",
+            **unpaired,
+            status="batch_reserved",
+            batch=None,
+            item=None,
+        )
+        # A system job's item (no user, no organisation) settles the same way.
+        system = {"u": None, "batch": batch, "item": "item-2"}
+        await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("1.00"), **system)
+        for _ in range(2):
+            await conn.execute(text(SETTLE), {"id": uuid7(), "status": "ok", "cost": Decimal("0.25"), **system})
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")
+        await act(conn, other)  # RLS unchanged: another tenant reads none of these rows, raw or through the view
+        assert await run(conn, "SELECT count(*) FROM llm_spend WHERE user_id = :u", u=user) == 0
+        assert await run(conn, "SELECT count(*) FROM llm_calls WHERE batch_id = :b", b=batch) == 0
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")  # the total, never the rows
+
+
+LLM_CALL = (
+    "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, input_tokens, output_tokens,"
+    " cache_read_tokens, cache_write_tokens, latency_ms) VALUES (:id, :u, 't', 'm', 'ok', :cost, :input, :output,"
+    " :cache_read, :cache_write, :latency)"
+)
+
+
+async def test_a_ledger_row_cannot_blow_or_offset_the_global_spend(owner_engine: AsyncEngine) -> None:
+    """The global daily cap sums every row, so one row a user writes must stay a plausible single call: its cost is
+    0 to 100 USD, and no token count or latency is negative (a negative cost would offset real spend)."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("llm-bounds"), "LLM")
+        await act(conn, user)
+        call = {"cost": Decimal("100"), "input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "latency": None}
+        await run(conn, LLM_CALL, id=uuid7(), u=user, **call)  # the bounds themselves are allowed
+        for change, constraint in (
+            ({"cost": Decimal("999999")}, "ck_llm_calls_cost_usd_range"),
+            ({"cost": Decimal("100.000001")}, "ck_llm_calls_cost_usd_range"),
+            ({"cost": Decimal("-5")}, "ck_llm_calls_cost_usd_range"),
+            ({"input": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"output": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"cache_read": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"cache_write": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"latency": -1}, "ck_llm_calls_counts_not_negative"),
+        ):
+            await expect(conn, LLM_CALL, constraint, id=uuid7(), u=user, **(call | change))
+
+
+REPORT = (
+    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id)"
+    " VALUES (:id, 'proposal', :subject, CAST(:reasons AS text[]), 'report', :reporter)"
+)
+INVITATION = "INSERT INTO directory_invitations (id, org_id, to_address, reason) VALUES (:id, :org, :address, :reason)"
+
+
+async def test_reports_and_directory_invitations_are_bounded(owner_engine: AsyncEngine) -> None:
+    """What any signed-in user may write into the staff queues is bounded in the table (rate limits stay app-side):
+    a moderation case has 1 to 50 non-blank reasons of at most 200 characters (as app_open_moderation_case files
+    them), for a report and for a staff edit alike; a directory invitation goes to an address of at most 254
+    characters with one @, and its reason, when given, is non-blank and at most 500 characters."""
+    async with as_app(owner_engine) as conn:
+        niche = uuid7()
+        await run(
+            conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Bounds')", id=niche, s=f"b-{niche.hex}"
+        )
+        reporter = await w.add_user(conn, _email("bounds-reporter"), "Reporter")
+        moderator = await w.add_user(conn, _email("bounds-mod"), "Moderator", staff_role="moderator")
+        problem = await w.add_problem(conn, reporter, niche)
+        proposal, _ = await w.add_proposal(conn, reporter, niche, problem)
+        org = await add_org(conn)
+        await act(conn, reporter)
+        report = uuid7()
+        await run(
+            conn,
+            REPORT,
+            id=report,
+            subject=proposal,
+            reasons="{" + ",".join(f"r{i}" for i in range(50)) + "}",
+            reporter=reporter,
+        )
+        for reasons in (
+            "{}",
+            '{"  "}',
+            '{abuse,""}',
+            "{abuse,NULL}",
+            "{" + ",".join(f"r{i}" for i in range(51)) + "}",
+            "{" + "x" * 201 + "}",
+        ):
+            await expect(
+                conn,
+                REPORT,
+                "ck_moderation_cases_reasons_valid",
+                id=uuid7(),
+                subject=proposal,
+                reasons=reasons,
+                reporter=reporter,
+            )
+        await run(conn, INVITATION, id=uuid7(), org=org, address="partnerships@bounds.example.test", reason=None)
+        for address, reason, constraint in (
+            ("no-at-sign.example.test", None, "ck_directory_invitations_to_address"),
+            ("two@at@bounds.example.test", None, "ck_directory_invitations_to_address"),
+            ("a b@bounds.example.test", None, "ck_directory_invitations_to_address"),
+            ("x" * 250 + "@b.test", None, "ck_directory_invitations_to_address"),
+            ("info@bounds.example.test", "   ", "ck_directory_invitations_reason"),
+            ("info@bounds.example.test", "x" * 501, "ck_directory_invitations_reason"),
+        ):
+            await expect(conn, INVITATION, constraint, id=uuid7(), org=org, address=address, reason=reason)
+        await act(conn, moderator)  # the bound holds for a staff edit too
+        await expect(
+            conn,
+            "UPDATE moderation_cases SET reasons = '{}' WHERE id = :id",
+            "ck_moderation_cases_reasons_valid",
+            id=report,
+        )
