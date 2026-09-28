@@ -17,6 +17,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in CI; the manual OAuth demo step only.
 - Decision:
 
+### D-27 · Swahili banned claims and the non-binding qualifier (copy-lint, AC-IP-4)
+- Why: the copy-lint (`copy/banned_claims.txt`, `scripts/copy_lint.py`) holds the English banned phrases ("theft-proof", "cannot be stolen", "protected idea", "patented") and the English non-binding qualifiers ("non-binding", "not a contract or a commitment to buy"). `locales/sw.json` is scanned with these English rules only, so a Swahili equivalent of a banned claim, or Swahili EM2/tracker copy without a Swahili qualifier, would pass. Claims wording is human copy (`CLAUDE.md` stop rule), and `sw.json` goes live only after the native-speaker review at G5.
+- Options: (a) at G5 the reviewer supplies the Swahili banned phrases and the approved Swahili qualifier(s); I add them to `copy/banned_claims.txt` with tests; (b) supply them now; (c) keep English-only rules and block `sw.json` from carrying `engagement.*`, `tracker.*`, `email.em2.*` keys until G5.
+- Recommended default: (a); until then Swahili stays off (G5), so nothing ships unlinted. Also noted: the rule's terms are the spec pair and inflections ("approve", "approved", "approves", "approving"); binding milestone and signing copy in `tracker.*` should say "accept"/"sign", never "approve".
+- Blocks: nothing before G5.
+- Decision:
+
 ### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
 - Why: ADR-005 decision 3 allows "at most one retry on the next allowed model" after `stop_reason == "refusal"`. The `docs/spec/09` table allocates exactly one model to each Phase 2 task and lists `claude-opus-5-5` only for the moderator pre-checklist and the eval judge, so any fallback model would be outside the allocation. `backend/ai/models.yaml` therefore ships `fallback_model: null` for all four Phase 2 tasks: a refusal is logged, goes to the human queue and the dead-letter queue, with no retry. `tests/unit/llm/test_registry.py` fails if a fallback is outside the spec 09 allocation of its task.
 - Proposal (needs your approval and a `docs/spec/09` change, since it widens the allocation):

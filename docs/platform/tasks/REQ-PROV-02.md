@@ -2,7 +2,7 @@
 
 - Task: T2.4 (`docs/platform/PLAN.md` Phase 2)
 - Agent: impl-backend (certificate, verify API), impl-frontend (`/verify`, F3); security-reviewer (Fable)
-- Files owned: `bridge/provenance/{certificate,verify,router}.py`, `copy/banned_claims.txt`, `scripts/copy_lint.py`, `scripts/tests/test_copy_lint.py`, `frontend/app/(public)/verify/`
+- Files owned: `bridge/provenance/{certificate,verify,router}.py`, `copy/banned_claims.txt`, `scripts/copy_lint.py`, `scripts/test_copy_lint.py`, `frontend/app/(public)/verify/`
 - Depends on: T2.1; the copy-lint can land first.
 
 ## Scope
@@ -11,4 +11,4 @@ Authorship certificate PDF on demand (never stored): cert id, owner (legal name 
 
 ## Acceptance criteria and tests
 
-AC-IP-4 (`scripts/tests/test_copy_lint.py`), AC-IP-1 (`unit/provenance/test_certificate.py`).
+AC-IP-4 (`scripts/test_copy_lint.py`), AC-IP-1 (`unit/provenance/test_certificate.py`).

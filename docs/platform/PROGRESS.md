@@ -250,8 +250,8 @@ Checklist (updated after every task; commit and push after each):
 | Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | todo | impl-frontend; item 5 ships with the first `/admin` route |
 | T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | todo | db-migrations; security-reviewer |
 | T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | todo | impl-ai; fakes and synthetic cassettes only |
-| Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | todo | |
-| Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | todo | researcher |
+| Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | done (merge `23e8104`) | reviewer PASS after 3 rounds (mutation-checked); pr.yml hygiene step + `make check-copy`; D-27 (Swahili claim copy) opened |
+| Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | done (branch `feat/REQ-DIR-02-provisional-seed`, merges with T2.6a) | 85 E0 rows from CA, CBK, SASRA, CUE, TVETA, government and PBORA registers; no contacts; basic education skipped (no official list) |
 | T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | todo | security-reviewer |
 | T2.6a Directory browse + seed loader (REQ-DIR-01/02) | todo | |
 | T2.6b Claims E1/E2, admin claim queue, MET acceptance (REQ-DIR-03, REQ-ADM-01) | todo | security-reviewer |
