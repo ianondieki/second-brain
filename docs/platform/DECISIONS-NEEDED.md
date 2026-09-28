@@ -38,13 +38,15 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
   | `/org` | 146,453 | 144,411 | 147,708 | within |
   | `/settings/security` | 150,051 | 147,976 | **151,653** | within |
 
+  Re-measured 2026-09-28 at `335fd0a` (after the review fix that checks the server before "Cancel setup"; stand-in API, same build mode): `/settings/security` 148,441 bytes of bodies, **152,118** with headers; `/signup` 147,898 / **151,195**; `/login` 146,553 / 149,850. The other routes did not change.
+
   At the Phase 1 end (`00fc8f2`), every script also carried the page headers: `/signup` was 150,378 bytes of bodies, 157,741 with headers. The remaining first load is about 130 KB of Next.js and React runtime; the app's own code is 6–10 KB per route.
 - Options:
   (a) **Bodies only**, 1 KB = 1,000 bytes (this branch). The T7.4 Lighthouse job reports transfer size for information, and the pass/fail check is `npm run budget` until an HTTP/2 target exists. From staging (D-22) or Phase 8 on, Lighthouse's own number is asserted against the HTTP/2 edge.
   (b) **Lighthouse transfer size including headers, measured on local HTTP/1.1.** `/signup` and `/settings/security` must lose about 1–2 KB more in T7.4. Candidates: server-rendered strings instead of client-side `useTranslations` in the auth forms (the use-intl client runtime is about 2.9 KB); fewer client components per route.
   (c) **Lighthouse transfer size including headers, measured against the production-like HTTP/2 edge** (staging or Phase 8). This is expected to be the bodies plus under 1 KB (not measured here). Until that edge exists, (a) applies.
-  (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 151,653 with headers).
-- Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 2 KB of headroom on the heaviest routes for Phase 2 screens.
+  (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 152,118 with headers, `/settings/security`).
+- Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 1.5 KB of headroom on the heaviest route (`/settings/security`, 1,559 bytes) for Phase 2 screens.
 - Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
 - Decision:
 
