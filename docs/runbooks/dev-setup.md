@@ -144,7 +144,7 @@ The run fails when a route is over, answers with an error, or is skipped. In Git
 **Open: whether response headers count (DECISIONS-NEEDED D-28).** Lighthouse's script "transfer size", the
 instrument of AC-UX-3, includes response headers. The script prints that figure too ("with HTTP/1.1 response
 headers"). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
-(152,074) are over 150,000 on 2026-09-28, while their bodies are 147,898 and 148,397 (`/login`: 146,553 bodies,
+(152,118) are over 150,000 on 2026-09-28, while their bodies are 147,898 and 148,441 (`/login`: 146,553 bodies,
 149,850 with headers). Behind HTTP/2 in production the headers shrink to a few bytes per script. Until the human
 decides D-28, the bodies count.
 
