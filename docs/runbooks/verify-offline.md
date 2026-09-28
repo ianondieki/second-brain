@@ -80,15 +80,23 @@ openssl ts -verify -data manifest.json -in token.tsr -CAfile tsa-root.pem
 openssl ts -verify -digest "$HASH" -in token.tsr -CAfile tsa-root.pem
 ```
 
-Both print `Verification: OK`. `tsa-root.pem` is the root certificate of the TSA that issued the token (the last
-`issuer` printed above), fetched from that TSA's own site, not from Bridge:
+Both print `Verification: OK`. `openssl ts -verify` checks that the token's message imprint is this hash, that the
+signature over the token holds, and that the signing certificate is a timestamping certificate chaining to
+`tsa-root.pem`. `tsa-root.pem` is the root certificate of the TSA that issued the token (the last `issuer` printed
+above), fetched from that TSA's own site, never from Bridge and never taken out of the token:
 
-- DigiCert (the default TSA): the DigiCert root named as issuer, from DigiCert's published root certificates. Most
-  operating systems already trust it: `-CAfile /etc/ssl/certs/ca-certificates.crt` (Debian/Ubuntu) or
-  `-CApath /etc/ssl/certs` also works.
+- DigiCert (the default TSA): the DigiCert root named as issuer, from DigiCert's published root certificates.
+  Operating systems ship it too (`-CAfile /etc/ssl/certs/ca-certificates.crt` on Debian/Ubuntu works), but that
+  trusts every CA in the store; the one root is the stricter check.
 - FreeTSA (the fallback TSA): `cacert.pem` from freetsa.org.
 
-The TSA's own certificate travels inside the token (Bridge asks for it), so `-untrusted` is not needed.
+The TSA's own certificate travels inside the token (Bridge asks for it with `certReq`); TSAs usually send their
+intermediate CA too. If `openssl` reports `unable to get local issuer certificate` with the right root, save the
+intermediate CA from the TSA's site as `tsa-intermediate.pem` and add `-untrusted tsa-intermediate.pem`: an
+untrusted certificate only helps build the chain, the root still decides.
+
+The token's nonce cannot be checked offline (only Bridge kept its request); Bridge checked it when it stored the token,
+together with the rest of "What Bridge checks before it stores a token" below.
 
 ## 4. Check Bridge's signature
 
@@ -127,12 +135,61 @@ curl -fsS "$HOST/api/transparency"
 Each root is signed over `bridge-transparency-root-v1:<YYYY-MM-DD>:<merkle_root hex>`; check it exactly as in step 4
 with that message. Keeping copies of these roots over time lets anyone detect a later rewrite of the audit history.
 
+## What Bridge checks before it stores a token
+
+A timestamp is evidence only if it comes from a TSA you trust and answers the question Bridge asked. The signature
+alone proves neither: anyone can run a timestamp server and sign a plausible token. So the worker
+(`bridge/provenance/tsa.py`) stores a token only when all of these hold, and otherwise tries the fallback TSA or
+retries later (the record reads "Timestamp pending" meanwhile):
+
+- it answers Bridge's own request: the message imprint is the SHA-256 content hash and the nonce is the random
+  63-bit value Bridge sent with this request, so an older token (for this or any hash) cannot be replayed;
+- its signing certificate chains, through the certificates in the token, to the CA bundle pinned for that TSA's URL
+  (`TSA_CA_BUNDLE` for `TSA_URL`, `TSA_FALLBACK_CA_BUNDLE` for `TSA_FALLBACK_URL`). Every certificate on the chain
+  is valid at the token's time, every issuer is a CA allowed to sign certificates and, when it states an extended
+  key usage, to vouch for timestamping. Certificates in the token only fill in the chain; they are never trusted;
+- the signing certificate has the timestamping usage as its only purpose, in a critical extension (RFC 3161), and is
+  the certificate the signed ESS `signingCertificate(V2)` attribute names;
+- the token's time is within 15 minutes of the worker's clock.
+
+## Operators: the pinned TSA bundles
+
+Outside `APP_ENV` dev and test the worker refuses to timestamp without both bundles (`ConfigurationError` naming the
+variable; the timestamp jobs retry and records stay "Timestamp pending" until it is fixed). Before staging, and
+again before production, ops supply them:
+
+1. Download each TSA's root certificate from the TSA's own site over HTTPS: DigiCert's root that issues its
+   timestamping CA (the issuer chain of a current DigiCert token, step 3, names it), and FreeTSA's `cacert.pem`.
+2. Check each file against a second source before trusting it: compare
+   `openssl x509 -in <file> -noout -subject -fingerprint -sha256` with the fingerprint the TSA publishes (for
+   DigiCert, also with the same root in the operating system's or Mozilla's trust store).
+3. Put them on the worker as PEM files (they are public certificates, not secrets) and set `TSA_CA_BUNDLE` and
+   `TSA_FALLBACK_CA_BUNDLE` to their paths. A bundle may hold several certificates (a root and its successor
+   during a rollover); it may also pin the issuing CA itself. Each bundle checks only its own URL's tokens.
+4. Prove the pair works before the release, from the worker host (a real TSA call, so never from tests or CI):
+
+   ```bash
+   printf 'bridge bundle check' > probe.txt
+   openssl ts -query -data probe.txt -sha256 -cert -out probe.tsq
+   curl -fsS -H 'Content-Type: application/timestamp-query' --data-binary @probe.tsq "$TSA_URL" -o probe.tsr
+   openssl ts -verify -queryfile probe.tsq -in probe.tsr -CAfile "$TSA_CA_BUNDLE"
+   ```
+
+   `Verification: OK` (here `-queryfile` checks the nonce too). Repeat with `TSA_FALLBACK_URL` and its bundle.
+
+When a TSA moves to a new root, its tokens stop verifying: records stay "Timestamp pending" and the failed timestamp
+jobs name the chain failure (the timestamp step keeps retrying for two weeks). Add the new root to that TSA's bundle
+(keep the old one while old tokens are still being checked), redeploy the worker, and the pending records are
+timestamped on the next retry. In dev and test a TSA without a bundle is used without the chain check (logged as
+`provenance.tsa_unpinned`); the tests pin a CA generated at test time.
+
 ## Troubleshooting
 
 - `Verification: FAILED ... message imprint mismatch`: the manifest file is not the registered one (edited, re-saved
   or a different version), or `$HASH` was mistyped.
-- `unable to get local issuer certificate`: `tsa-root.pem` is not the root of the TSA that signed this token; print
-  the token's certificates (step 3) and fetch the right root.
+- `unable to get local issuer certificate`: `tsa-root.pem` is not the root of the TSA that signed this token, or the
+  token lacks the intermediate CA; print the token's certificates (step 3), fetch the right root and, if needed, the
+  intermediate for `-untrusted`.
 - `pkeyutl: Error ... -rawin`: OpenSSL is older than 3.0; use the Python check.
 - `Signature Verification Failure`: wrong `key.pem` (match `kid` to `key_id`), a mistyped hash, or a newline in
   `message.txt` (use `printf`, not `echo`).

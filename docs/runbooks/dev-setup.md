@@ -74,6 +74,9 @@ For provenance and Tier 2 (Phase 2), also set in `backend/.env`, each a fresh `o
 `TIER2_LOCAL_KEK` (wraps the per-proposal Tier-2 keys) and `PROVENANCE_SIGNING_KEY` (the Ed25519 key the worker signs
 registration manifests with). Both are optional for starting the stack, but anything that needs them fails closed
 with a message naming the variable, and neither is ever generated for you. Production refuses both (KMS only).
+`TSA_CA_BUNDLE` and `TSA_FALLBACK_CA_BUNDLE` (PEM paths of the DigiCert and FreeTSA roots) may stay empty in dev: the
+worker then timestamps without checking the TSA's chain and logs `provenance.tsa_unpinned`. Staging and production
+refuse to timestamp without them; ops supply both before staging (`docs/runbooks/verify-offline.md`, "Operators").
 
 In the compose stack the `api` service never receives `PROVENANCE_SIGNING_KEY` or `AUDIT_READER_DATABASE_URL`, even
 though they sit in `backend/.env`: `infra/docker-compose.dev.yml` overrides both to an empty value for `api`, and an
