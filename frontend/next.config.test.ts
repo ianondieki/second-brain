@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { fileURLToPath } from "node:url";
 
-import { PHASE_PRODUCTION_SERVER } from "next/constants";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import loadConfig from "next/dist/server/config";
 import { describe, expect, it } from "vitest";
 
@@ -20,8 +20,9 @@ describe("next.config.ts", () => {
     expect(await nextConfig.headers?.()).toEqual(HEADER_RULES);
   });
 
-  it("keeps exact-case matching once Next.js has loaded and validated the config", async () => {
-    const loaded = await loadConfig(PHASE_PRODUCTION_SERVER, fileURLToPath(new URL(".", import.meta.url)));
+  // `next build` reads the config this way and writes both into routes-manifest.json, which the server then follows.
+  it("keeps exact-case matching once Next.js has loaded and validated the config for a build", async () => {
+    const loaded = await loadConfig(PHASE_PRODUCTION_BUILD, fileURLToPath(new URL(".", import.meta.url)));
     expect(loaded.experimental.caseSensitiveRoutes).toBe(true);
     expect(await loaded.headers?.()).toEqual(HEADER_RULES);
   });
