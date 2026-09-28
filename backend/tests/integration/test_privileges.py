@@ -30,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, async_sessionma
 
 from bridge.db import TIER2_ROLES, as_role, bind_tenant
 from bridge.ids import uuid7
+from bridge.models.enums import VersionStatus
+from bridge.proposals.models import ProposalVersion
 from tests.integration import world as w
 
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
@@ -228,6 +230,52 @@ async def test_as_role_rolls_back_when_the_block_breaks_the_transaction(
                 await session.execute(text("SELECT 1 FROM users"))  # dsr_exporter has no grant on users
         assert not session.in_transaction()
         assert (await session.execute(text("SELECT current_user"))).scalar_one() == "bridge_app"
+
+
+async def test_the_database_times_a_registration_and_only_the_bound_worker_fills_its_hashes(
+    app_session_engine: AsyncEngine, developer: Developer
+) -> None:
+    """The app registers a version (status, cert_id) but never chooses registered_at: the trigger sets it and the ORM
+    reads it back on the same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the
+    app role holds no UPDATE on them, and a worker bound to another user matches no row."""
+    factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
+    digest = hashlib.sha256(b"manifest").digest()
+    fill = text(
+        "UPDATE proposal_versions SET content_hash = :h, prev_version_hash = :h, manifest_version = '1' WHERE id = :id"
+    )
+    async with factory() as session:
+        await bind_tenant(session, user_id=developer.user_id)
+        version = await session.get(ProposalVersion, developer.draft_version)
+        assert version is not None
+        version.status = VersionStatus.REGISTERED
+        version.cert_id = uuid4().hex[:16]
+        await session.flush()
+        stamped = (
+            await session.execute(
+                text("SELECT registered_at, now() AS now FROM proposal_versions WHERE id = :id"), {"id": version.id}
+            )
+        ).one()
+        assert version.registered_at == stamped.registered_at == stamped.now
+        for column in ("content_hash = :h", "registered_at = now()"):
+            with pytest.raises(ProgrammingError, match="permission denied"):
+                async with session.begin_nested():
+                    await session.execute(
+                        text(f"UPDATE proposal_versions SET {column} WHERE id = :id"), {"id": version.id, "h": digest}
+                    )
+        await bind_tenant(session, user_id=uuid7())  # a job bound to another user sees and touches no version
+        async with as_role(session, "provenance_worker"):
+            assert (await session.execute(text("SELECT count(*) FROM proposal_versions"))).scalar_one() == 0
+            touch_all = text("UPDATE proposal_versions SET updated_at = now()")  # no WHERE: the UPDATE policy alone
+            assert (await session.execute(touch_all)).rowcount == 0
+            assert (await session.execute(fill, {"id": version.id, "h": digest})).rowcount == 0
+        await bind_tenant(session, user_id=developer.user_id)
+        async with as_role(session, "provenance_worker"):
+            assert (await session.execute(fill, {"id": version.id, "h": digest})).rowcount == 1
+        filled = await session.execute(
+            text("SELECT content_hash, manifest_version FROM proposal_versions WHERE id = :id"), {"id": version.id}
+        )
+        assert tuple(filled.one()) == (digest, "1")
+        await session.rollback()
 
 
 # --- SECURITY DEFINER functions (privileged changes checked in SQL) ------------------------------------------------

@@ -117,11 +117,7 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "impact_claims",
         "summary",
         "owner_handle",
-        "prev_version_hash",
-        "content_hash",
         "cert_id",
-        "manifest_version",
-        "registered_at",
         "updated_at",
     },
     "proposal_attachments": {"sha256", "size_bytes", "av_status", "rerendered", "updated_at"},
@@ -217,6 +213,7 @@ ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
     "audit_reader": {"audit_events": {S}, "chain_anchors": {S}},
     "tier2_reader": {"proposal_confidential": {S, I, U}},
     "provenance_worker": {
+        "proposal_versions": {S, U},
         "proposal_confidential": {S, U},
         "provenance_records": {S, I, U},
         "provenance_keys": {S},
@@ -230,6 +227,7 @@ ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
 ROLE_COLUMN_UPDATES: dict[str, dict[str, set[str]]] = {
     "tier2_reader": {"proposal_confidential": {"ciphertext", "nonce", "wrapped_dek", "kms_key_id", "updated_at"}},
     "provenance_worker": {
+        "proposal_versions": {"content_hash", "prev_version_hash", "manifest_version", "updated_at"},
         "proposal_confidential": {"manifest_ciphertext", "manifest_nonce", "updated_at"},
         "provenance_records": {
             "signature",
@@ -258,6 +256,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     # revision 0002
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
     "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
+    "app_owns_version(uuid)": (True, {"provenance_worker"}),
     "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
@@ -701,6 +700,8 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
+    registration = {"registered_at", "content_hash", "prev_version_hash", "manifest_version"}
+    assert not registration & updatable["proposal_versions"]  # the database's and provenance_worker's
     assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
     claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
     claim_protected |= {"otp_hash", "otp_expires_at", "otp_attempts", "otp_reissues"}
@@ -1383,7 +1384,8 @@ async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID,
 async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncEngine) -> None:
     """AC-IP-2 (manifest half): the trigger holds for every role, the owner included; only the empty registration
     hashes may be filled, once. Drafts stay editable, and a version is inserted as a draft and registered only with a
-    linked problem."""
+    linked problem. registered_at is the database's: a value sent at registration is replaced by now(), and neither
+    it nor a registration hash can be set on a draft."""
     h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
     async with rolled_back(owner_engine) as conn:
         owner, niche, proposal, version = await _registered_proposal(conn)
@@ -1431,7 +1433,35 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             "inserted as a draft",
             {"id": uuid7(), "p": draft},
         )
+        for assignment in (
+            "registered_at = now()",
+            "content_hash = :h",
+            "prev_version_hash = :h",
+            "manifest_version = 'm'",
+        ):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_versions SET {assignment} WHERE id = :id",
+                "registered_at is set at registration|filled after registration",
+                {"id": second, "h": h1},
+            )
+        for column, value in (("registered_at", "now()"), ("content_hash", ":h"), ("manifest_version", "'m'")):
+            await expect_error(
+                conn,
+                f"INSERT INTO proposal_versions (id, proposal_id, version_no, {column}) VALUES (:id, :p, 3, {value})",
+                "set at registration",
+                {"id": uuid7(), "p": draft, "h": h1},
+            )
         await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
+        # Registering sets registered_at to the transaction's now(), whatever the writer sends.
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t WHERE id = :id"
+            ),
+            {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)},
+        )
+        stamped = sa.text("SELECT registered_at = now() FROM proposal_versions WHERE id = :id")
+        assert (await conn.execute(stamped, {"id": draft_version})).scalar_one() is True
 
 
 NEW_VERSION = (

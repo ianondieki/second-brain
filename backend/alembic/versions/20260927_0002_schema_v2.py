@@ -220,10 +220,10 @@ APP_GRANTS: dict[str, str] = {
         " county_code, maturity, ask, problem_statement, impact_claims, summary, teaser_embedding, embed_model,"
         " embed_version, tier2_policy, raw_download_enabled, published_at, hidden_at, updated_at)"
     ),
+    # registered_at is the database's (set at registration); the registration hashes are provenance_worker's.
     "proposal_versions": (
         "SELECT, INSERT, DELETE, UPDATE (status, title, niche_id, country, county_code, maturity, ask,"
-        " problem_statement, impact_claims, summary, owner_handle, prev_version_hash, content_hash, cert_id,"
-        " manifest_version, registered_at, updated_at)"
+        " problem_statement, impact_claims, summary, owner_handle, cert_id, updated_at)"
     ),
     "proposal_problems": "SELECT, INSERT, DELETE",
     "proposal_attachments": "SELECT, INSERT, DELETE, UPDATE (sha256, size_bytes, av_status, rerendered, updated_at)",
@@ -263,6 +263,7 @@ ROLE_GRANTS: dict[str, dict[str, str]] = {
         "proposal_confidential": "SELECT, INSERT, UPDATE (ciphertext, nonce, wrapped_dek, kms_key_id, updated_at)"
     },
     "provenance_worker": {
+        "proposal_versions": "SELECT, UPDATE (content_hash, prev_version_hash, manifest_version, updated_at)",
         "proposal_confidential": "SELECT, UPDATE (manifest_ciphertext, manifest_nonce, updated_at)",
         "provenance_records": (
             "SELECT, INSERT, UPDATE (signature, key_id, status, tsa_token, tsa_time, tsa_serial, tsa_url, ots_proof,"
@@ -450,6 +451,15 @@ POLICIES: tuple[Policy, ...] = (
         _PROPOSAL_OWNED.format(t="proposal_versions"),
     ),
     Policy("proposal_versions", "DELETE", f"status = 'draft' AND {_PROPOSAL_OWNED.format(t='proposal_versions')}"),
+    # The registration job fills the hashes of its owner's registered versions (one tenant per job).
+    Policy("proposal_versions", "SELECT", "status = 'registered' AND app_owns_version(id)", role="provenance_worker"),
+    Policy(
+        "proposal_versions",
+        "UPDATE",
+        "status = 'registered' AND app_owns_version(id)",
+        "app_owns_version(id)",
+        role="provenance_worker",
+    ),
     Policy(
         "proposal_problems",
         "SELECT",
@@ -691,6 +701,20 @@ AS $$
            AND u.status = 'active'
            AND u.totp_enabled_at IS NOT NULL
            AND (p_roles IS NULL OR u.staff_role = ANY (p_roles))
+    )
+$$;
+
+-- True when p_version is a version of a proposal the current user (app.user_id) owns. SECURITY DEFINER: the policies of
+-- provenance_worker call it, and that role cannot read proposals.
+CREATE FUNCTION app_owns_version(p_version uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.proposal_versions v
+          JOIN public.proposals p ON p.id = v.proposal_id
+         WHERE v.id = p_version AND p.owner_id = public.app_user_id()
     )
 $$;
 
@@ -1321,10 +1345,12 @@ BEGIN
 END;
 $$;
 
--- A version is inserted as a draft. While a draft, its keys never change and registering it needs a linked problem.
--- Once registered it is never deleted, and an UPDATE may only fill content_hash, prev_version_hash and
--- manifest_version while they are empty (updated_at may move). SECURITY DEFINER: reads proposal_problems whatever the
--- caller's visibility.
+-- A version is inserted as a draft, without registration columns. While a draft, its keys never change and the
+-- registration columns stay empty; registering it needs a linked problem, and the database sets registered_at to
+-- now() whatever value is sent (the app never chooses its registration time). Once registered it is never deleted,
+-- and an UPDATE may only fill content_hash, prev_version_hash and manifest_version while they are empty (updated_at
+-- may move); only provenance_worker holds UPDATE on those columns. SECURITY DEFINER: reads proposal_problems whatever
+-- the caller's visibility.
 CREATE FUNCTION proposal_versions_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1335,6 +1361,11 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         IF NEW.status <> 'draft' THEN
             RAISE EXCEPTION 'proposal_versions: a version is inserted as a draft and registered by UPDATE'
+                USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.registered_at IS NOT NULL OR NEW.content_hash IS NOT NULL OR NEW.prev_version_hash IS NOT NULL
+           OR NEW.manifest_version IS NOT NULL THEN
+            RAISE EXCEPTION 'proposal_versions: registered_at and the registration hashes are set at registration'
                 USING ERRCODE = 'check_violation';
         END IF;
         RETURN NEW;
@@ -1368,10 +1399,18 @@ BEGIN
         RAISE EXCEPTION 'proposal_versions: id, proposal_id and version_no never change'
             USING ERRCODE = 'check_violation';
     END IF;
-    IF NEW.status = 'registered'
-       AND NOT EXISTS (SELECT 1 FROM public.proposal_problems pp WHERE pp.proposal_version_id = NEW.id) THEN
-        RAISE EXCEPTION 'proposal_versions: registering a version needs at least one linked problem'
+    IF NEW.content_hash IS NOT NULL OR NEW.prev_version_hash IS NOT NULL OR NEW.manifest_version IS NOT NULL THEN
+        RAISE EXCEPTION 'proposal_versions: the registration hashes are filled after registration'
             USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status = 'registered' THEN
+        IF NOT EXISTS (SELECT 1 FROM public.proposal_problems pp WHERE pp.proposal_version_id = NEW.id) THEN
+            RAISE EXCEPTION 'proposal_versions: registering a version needs at least one linked problem'
+                USING ERRCODE = 'check_violation';
+        END IF;
+        NEW.registered_at := now();
+    ELSIF NEW.registered_at IS NOT NULL THEN
+        RAISE EXCEPTION 'proposal_versions: registered_at is set at registration' USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;
@@ -1586,6 +1625,7 @@ NO_TRUNCATE_TABLES = (*APPEND_ONLY_TABLES, "proposal_versions", "proposal_confid
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_is_staff(staff_role[])": ("bridge_app", "tier2_moderation"),
     "app_current_legal_template(legal_template_kind)": ("bridge_app",),
+    "app_owns_version(uuid)": ("provenance_worker",),
     "app_tier2_granted(uuid, uuid)": ("bridge_app", "tier2_reader"),
     "app_held_tag_count(uuid)": ("bridge_app",),
     "app_confirm_phone_otp(uuid, bytea)": ("bridge_app",),
