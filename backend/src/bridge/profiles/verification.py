@@ -31,7 +31,7 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
@@ -99,7 +99,7 @@ class CodeSent:
 
 @dataclass(frozen=True, slots=True)
 class _CodeState:
-    phone_e164: str
+    phone_e164: str = field(repr=False)  # kept out of repr(), so a logged or asserted state never shows it
     attempts: int
     expires_at: datetime
     verified_at: datetime | None

@@ -126,3 +126,13 @@ def test_advisory_keys_are_stable_signed_64_bit_integers() -> None:
     assert advisory_key(digest) == advisory_key(digest) == int.from_bytes(digest[:8], "big", signed=True)
     assert advisory_key(b"\xff" * 32) == -1  # pg_advisory_xact_lock takes a signed bigint
     assert advisory_key(b"\x7f" + b"\xff" * 31) == 2**63 - 1
+
+
+def test_the_code_state_repr_leaves_the_number_out() -> None:
+    state = _CodeState("+254712345678", 2, datetime(2026, 9, 28, 12, 0, tzinfo=UTC), None)
+    for shown in (repr(state), str(state), f"{state!r}"):
+        assert "712345678" not in shown
+        assert "attempts=2" in shown
+    assert state.phone_e164 == "+254712345678"
+    assert state == _CodeState("+254712345678", 2, state.expires_at, None)
+    assert state != replace(state, phone_e164="+254712345679")  # still compared, only hidden
