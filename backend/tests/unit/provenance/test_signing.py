@@ -135,3 +135,15 @@ def test_register_key_command_registers(monkeypatch: pytest.MonkeyPatch, capsys:
     assert f"{LocalSigner(SEED).key_id} registered" in out
     assert "already registered" in out
     assert calls == ["postgresql+psycopg://owner@localhost/db"] * 2
+
+
+def test_the_module_runs_as_a_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    import runpy
+    import sys
+
+    monkeypatch.delitem(sys.modules, "bridge.provenance.__main__", raising=False)
+    monkeypatch.setattr("sys.argv", ["python -m bridge.provenance", "register-key", "--if-configured"])
+    monkeypatch.setattr("bridge.config.get_settings", lambda: settings())
+    with pytest.raises(SystemExit) as info:
+        runpy.run_module("bridge.provenance", run_name="__main__")
+    assert info.value.code == 0
