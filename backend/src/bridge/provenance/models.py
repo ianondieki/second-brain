@@ -3,7 +3,8 @@
 
 ``provenance_records``, ``chain_anchors`` and ``transparency_roots`` are evidence: triggers refuse DELETE and TRUNCATE,
 and UPDATE except filling a record's still-empty signature/TSA columns and moving its status forward
-(hashed -> signed -> timestamped). ``bridge_app`` reads records (``/verify``); ``provenance_worker`` writes them.
+(hashed -> signed -> timestamped). ``bridge_app`` reads every record (``/verify``, anonymous); ``provenance_worker``
+reads and writes only the records of versions its bound owner (``app.user_id``) owns (RLS, tenancy EVIDENCE).
 """
 
 from __future__ import annotations
@@ -56,7 +57,7 @@ class ProvenanceRecord(IdMixin, CreatedMixin, Base):
         CheckConstraint("octet_length(content_hash) = 32", name="content_hash_length"),
         CheckConstraint("status = 'hashed' OR (signature IS NOT NULL AND key_id IS NOT NULL)", name="signed_has_key"),
         CheckConstraint("status <> 'timestamped' OR (tsa_token IS NOT NULL AND tsa_time IS NOT NULL)", name="tsa"),
-        SYSTEM,
+        {"info": {"tenancy": Tenancy.EVIDENCE, "via": "proposal_versions"}},
     )
 
     version_id: Mapped[UUID] = mapped_column(ForeignKey("proposal_versions.id"), unique=True)
