@@ -105,6 +105,14 @@ test("pages carry the security headers", async ({ request }) => {
   expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
 });
 
+test("a page at a near miss of the build-asset path still carries the page headers", async ({ request }) => {
+  // Only /_next/static/ in exact case is exempt (next.config.ts experimental.caseSensitiveRoutes): this is a 404 page.
+  const response = await request.get("/_NEXT/static/x.js");
+  expect(response.headers()["content-type"]).toContain("text/html");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
+});
+
 test("before JavaScript runs, submitting the login form never puts credentials in the URL", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
