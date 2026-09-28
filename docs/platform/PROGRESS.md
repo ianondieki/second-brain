@@ -246,8 +246,8 @@ CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers;
 CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_handle`; MAJOR: `document_views` rows need
 no grant and evidence timestamps are caller-set; 11 MINORs). Round-4 fixes done by db-migrations (`c555a9f`..`593dc2f`, 930
 passed; orchestrator decision applied: an upheld dispute leaves the new claimant the only owner/admin; T2.4 follow-ups
-F1–F3 done, F4 skipped and recorded as **D-33**). db-migrations is adding item G (llm_calls batch reservations for
-T2.2); then reviewer and security-reviewer round 4 on the lot. Two items went to the human as **D-32**.
+F1–F3 done, F4 skipped and recorded as **D-33**). Item G (llm_calls batch reservations for T2.2) done
+(`6262483`, `abc4263`). Reviewer and security-reviewer round 4 are running on `abc4263`. Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
@@ -256,7 +256,8 @@ subject skips the plan cap, `httpx2` undeclared, T4.3 deferral (now in PLAN), th
 deviations). Fix round (`d0e9dc4`..`0c0ac6d`, 1191 passed): M1, m4 (the per-session
 consent now needs the owner's live login session: new `bridge.auth.sessions.is_live`, so T2.2 also needs
 security-reviewer), m5, m6 fixed; m3 half done (missing batch items reported). M2 (batch reservations) and settle-once
-need `llm_calls.batch_id`/`custom_id`, a `batch_reserved` status and a spend rule: sent to db-migrations as item G. Carry to T2.9 and Phase 4 as the card notes
+need `llm_calls.batch_id`/`custom_id`, a `batch_reserved` status and a spend rule: done as schema item G; impl-ai
+is merging schema `abc4263` into T2.2 and finishing M2 and settle-once. Carry to T2.9 and Phase 4 as the card notes
 say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
