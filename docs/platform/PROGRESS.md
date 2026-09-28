@@ -273,6 +273,7 @@ anchor-outage stop; 1124 passed; `bridge/provenance` 99%); reviewer and security
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
+OAuth MINOR follow-ups started on `feat/REQ-AUTH-02-followups` (impl-backend, worktree `sb-wt/REQ-AUTH-02`).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
