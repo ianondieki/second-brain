@@ -423,6 +423,9 @@ async def test_pagination_walks_every_pair_exactly_once(client: httpx.AsyncClien
     assert bad.json()["detail"]["code"] == "invalid_cursor"
     assert (await client.get("/api/directory/orgs", params={"limit": 101})).status_code == 422
     assert (await client.get("/api/directory/orgs", params={"county": "030"})).status_code == 422
+    too_many = await client.get("/api/directory/orgs", params={"niche": [f"n-{i}" for i in range(51)]})
+    assert too_many.status_code == 422
+    assert too_many.json()["detail"]["code"] == "too_many_filter_values"
 
 
 async def test_delisted_pending_and_unknown_orgs_are_never_shown(client: httpx.AsyncClient, seeded: Seeded) -> None:
