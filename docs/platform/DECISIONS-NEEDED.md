@@ -75,6 +75,16 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in Phase 2. (c) must be decided before real digests are stored (staging, D-22).
 - Decision:
 
+### D-33 · What the owner's "show name and title" opt-in on `/verify` means (T2.4, REQ-PROV-02)
+- Why: `docs/spec/06` 6.4 item 2 says public `/verify` shows only the hash, timestamp, TSA serial and match/no-match "unless the owner opts to show name and title". It does not say which name, at what scope, or what withdrawing does. The answer decides a schema column (T2.1 follow-up F4 was skipped for this reason) and what strangers can learn about an owner. Today `/verify` shows no name or title (fails closed).
+- Questions and options:
+  1. Which name: (a) the pseudonymous handle; (b) the display name; (c) the D2-verified legal name only (the certificate's rule), with the handle for owners below D2.
+  2. Scope: (a) per proposal (every version); (b) per registered version.
+  3. Withdrawal: (a) the owner can turn it off again, and `/verify` hides the name and title from then on (copies already seen cannot be recalled); (b) once on, it stays on for that version (it becomes part of the public record).
+- Recommended default: 1(c), 2(a), 3(a): the strongest identity only where it is verified, one switch per proposal, and a reversible choice. It needs one nullable column on `proposals` and an audit event on each change.
+- Blocks: the opt-in switch on `/verify` (F1–F4 screens); nothing else. Until then nothing is shown.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |

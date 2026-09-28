@@ -244,8 +244,10 @@ pushed state. Wip `6481de6` (schema v2) reviewed and verified: ruff, format, myp
 done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); round 3 on `0fd9159`: reviewer
 CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers; 4 MINORs) and security-reviewer
 CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_handle`; MAJOR: `document_views` rows need
-no grant and evidence timestamps are caller-set; 11 MINORs). db-migrations is on the combined round-4 fixes (orchestrator
-decision: an upheld dispute leaves the new claimant the only owner/admin). Two items went to the human as **D-32**.
+no grant and evidence timestamps are caller-set; 11 MINORs). Round-4 fixes done by db-migrations (`c555a9f`..`593dc2f`, 930
+passed; orchestrator decision applied: an upheld dispute leaves the new claimant the only owner/admin; T2.4 follow-ups
+F1–F3 done, F4 skipped and recorded as **D-33**). db-migrations is adding item G (llm_calls batch reservations for
+T2.2); then reviewer and security-reviewer round 4 on the lot. Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
@@ -312,7 +314,7 @@ is pushed, clean, and unmerged. The order of merges matters: schema v2 first, th
 Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
 reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
 T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
-D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy) and D-32 (digest hardening). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
+D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy), D-32 (digest hardening) and D-33 (`/verify` opt-in). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
 are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
 `/api/openapi.json` lists admin routes in production (Phase 8).
 
