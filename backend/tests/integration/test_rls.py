@@ -639,7 +639,8 @@ async def test_registration_records_are_public_and_written_only_for_the_bound_ow
     owner_engine: AsyncEngine, world: w.World
 ) -> None:
     """/verify reads every record without a signed-in user. The registration job (provenance_worker) bound to
-    developer A reads, inserts and updates only records of A's versions: none of B's."""
+    developer A reads, inserts and updates only records of A's versions: none of B's, and none of A's draft (only a
+    registered version is evidence)."""
     a, b = world.a, world.b
     b_record = uuid7()
     async with rolled_back(owner_engine) as conn:
@@ -650,9 +651,10 @@ async def test_registration_records_are_public_and_written_only_for_the_bound_ow
         assert list(public.scalars()) == [b_record]  # anonymous /verify
         await _as_tenant(conn, a.user_id, None)
         await conn.execute(text("SET LOCAL ROLE provenance_worker"))
-        await _refused_by_rls(
-            conn, RECORD_INSERT, id=uuid7(), version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32)
-        )
+        for version in (b.published_version, a.draft_version):
+            await _refused_by_rls(
+                conn, RECORD_INSERT, id=uuid7(), version=version, cert=uuid7().hex[:16], hash=bytes(32)
+            )
         a_record = uuid7()
         await _sql(conn, RECORD_INSERT, id=a_record, version=a.published_version, cert=uuid7().hex[:16], hash=bytes(32))
         seen = await conn.execute(text("SELECT id FROM provenance_records"))

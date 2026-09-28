@@ -551,10 +551,17 @@ POLICIES: tuple[Policy, ...] = (
         role="tier2_embed_worker",
     ),
     # --- provenance_records (EVIDENCE): public to readers (/verify is anonymous); the registration job, bound to the
-    # owner (one tenant per job), reads and writes only the records of that owner's versions ---
+    # owner (one tenant per job), reads and writes only the records of that owner's versions, and records only a
+    # registered version (a draft is not evidence) ---
     Policy("provenance_records", "SELECT", "true"),
     Policy("provenance_records", "SELECT", "app_owns_version(version_id)", role="provenance_worker"),
-    Policy("provenance_records", "INSERT", check="app_owns_version(version_id)", role="provenance_worker"),
+    Policy(
+        "provenance_records",
+        "INSERT",
+        check="app_owns_version(version_id) AND EXISTS (SELECT 1 FROM proposal_versions v"
+        " WHERE v.id = provenance_records.version_id AND v.status = 'registered')",
+        role="provenance_worker",
+    ),
     Policy(
         "provenance_records",
         "UPDATE",
