@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import UUID
 
 import httpx
@@ -361,10 +361,38 @@ async def _accept_master_terms(conn: AsyncConnection, org: UUID, broken: str, ta
         await _add_master_terms(conn, tag)
 
 
-async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> tuple[UUID, UUID]:
+class GrantScenario(NamedTuple):
+    reviewer: UUID
+    context: UUID  # the organisation the reviewer's request is scoped to (app.org_id)
+    draft_version: UUID  # the next version of B's published proposal, still a draft (Tier 0)
+
+
+async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) -> GrantScenario:
     """As the owner: an E2 org G with a verified domain whose reviewer R (an address at that domain) may read B's
-    published Tier 2, except for ``broken``."""
+    published Tier 2, except for ``broken``. B's published proposal also has a draft next version with its own Tier-2
+    row, which no grant ever opens (drafts are Tier 0: owner only)."""
     b, tag = world.b, uuid7().hex[:12]
+    draft_version = uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
+        " summary, owner_handle) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem',"
+        " 'What it does', 'rls-handle')",
+        id=draft_version,
+        proposal=b.published,
+        niche=world.niche_id,
+    )
+    await _sql(
+        conn,
+        "INSERT INTO proposal_confidential (version_id, proposal_id, owner_id, ciphertext, nonce, wrapped_dek,"
+        " kms_key_id) VALUES (:version, :proposal, :owner, '\\x04', '\\x05', '\\x06', 'local:test')",
+        version=draft_version,
+        proposal=b.published,
+        owner=b.user_id,
+    )
+    await _sql(
+        conn, "UPDATE proposals SET draft_version_id = :version WHERE id = :id", version=draft_version, id=b.published
+    )
     domain = f"granted-{tag}.example.test"  # G's verified domain
     reviewer = await _add_user(
         conn,
@@ -414,7 +442,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             template=world.nda_template_id,
         )
     grants = [] if broken == "no_grant" else [b.published]
-    if broken == "none":  # a live grant never opens a draft (Tier 0): the draft's row stays hidden
+    if broken == "none":  # nor does a live grant open a draft proposal: its row stays hidden
         grants.append(b.draft)
         await _sql(
             conn,
@@ -473,7 +501,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
         )
         context = world.a.org_id
-    return reviewer, context
+    return GrantScenario(reviewer, context, draft_version)
 
 
 @pytest.mark.parametrize("broken", TIER2_CASES)
@@ -481,11 +509,17 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
     owner_engine: AsyncEngine, world: w.World, broken: str
 ) -> None:
     """An organisation without a live grant reads 0 proposal_confidential rows even as tier2_reader (AC-SEC-1/b);
-    with every condition met its reviewer reads the registered version's row (never a draft's)."""
+    with every condition met its reviewer reads the registered version's row, never a draft's: neither the draft
+    version (Tier 0) nor its Tier-2 row."""
     async with rolled_back(owner_engine) as conn:
-        reviewer, context = await _grant_scenario(conn, world, broken)
+        scenario = await _grant_scenario(conn, world, broken)
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
-        await _as_tenant(conn, reviewer, context, "proposal_confidential")
+        await _as_tenant(conn, scenario.reviewer, scenario.context)
+        draft = await conn.execute(
+            text("SELECT count(*) FROM proposal_versions WHERE id = :id"), {"id": scenario.draft_version}
+        )
+        assert draft.scalar_one() == 0
+        await _as_tenant(conn, scenario.reviewer, scenario.context, "proposal_confidential")
         assert (await conn.execute(text("SELECT current_user"))).scalar_one() == "tier2_reader"
         rows = await conn.execute(
             text("SELECT version_id FROM proposal_confidential WHERE owner_id = :b"), {"b": world.b.user_id}
