@@ -117,6 +117,8 @@ class TransparencyRoot(CreatedMixin, Base):
     merkle_root: Mapped[bytes] = mapped_column(LargeBinary)
     signature: Mapped[bytes] = mapped_column(LargeBinary)
     key_id: Mapped[str] = mapped_column(ForeignKey("provenance_keys.key_id"))
+    # When the snapshot whose chain heads the root covers was taken: after the day ended, not in the future (trigger).
+    snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Attestation(IdMixin, CreatedMixin, Base):

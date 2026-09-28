@@ -1565,8 +1565,8 @@ ANCHOR = (
     " VALUES (:id, :chain, :seq, :hash, '\\x01', CAST(:tsa_time AS timestamptz), 'serial')"
 )
 ROOT = (
-    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id)"
-    " VALUES (CAST(:day AS date), :root, '\\x02', :key)"
+    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id, snapshot_at)"
+    " VALUES (CAST(:day AS date), :root, '\\x02', :key, CAST(:snapshot AS timestamptz))"
 )
 NAIROBI_TODAY = "SELECT CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date)"
 
@@ -1575,7 +1575,8 @@ async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engi
     """chain_anchors and transparency_roots are append-only and one per head or day, so a forged row would be
     permanent and block the real one. provenance_worker (the only writer) may anchor only an existing audit event
     (its chain, sequence number and hash) at a TSA time no later than the database clock allows (one minute of
-    clock skew), and publish a root only for a Nairobi day that has ended."""
+    clock skew), and publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended
+    and no later than now (``snapshot_at``, when given)."""
     chain = f"test:{uuid4().hex}"
     async with as_app(owner_engine) as conn:
         for _ in range(2):
@@ -1607,10 +1608,21 @@ async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engi
         )
         await run(conn, ANCHOR, id=uuid7(), **anchor)
         await run(conn, ANCHOR, id=uuid7(), **(anchor | {"seq": earlier.seq, "hash": earlier.event_hash}))
-        root = {"root": hashlib.sha256(b"root").digest(), "key": key}
+        root = {"root": hashlib.sha256(b"root").digest(), "key": key, "snapshot": None}
         for day in (today, today + timedelta(days=1)):
             await expect(conn, ROOT, "a root closes a Nairobi day that has ended", day=day, **root)
-        await run(conn, ROOT, day=today - timedelta(days=1), **root)
+        yesterday = today - timedelta(days=1)
+        began = await run(conn, "SELECT CAST(CAST(:d AS date) AS timestamp) AT TIME ZONE 'Africa/Nairobi'", d=yesterday)
+        for snapshot in (datetime.now(UTC) + timedelta(hours=1), began + timedelta(hours=12)):  # future; mid-day
+            await expect(
+                conn,
+                ROOT,
+                "the snapshot is taken after the day ended",
+                day=yesterday,
+                **(root | {"snapshot": snapshot}),
+            )
+        await run(conn, ROOT, day=yesterday, **(root | {"snapshot": datetime.now(UTC) - timedelta(minutes=1)}))
+        await run(conn, ROOT, day=today - timedelta(days=2), **root)  # snapshot_at may still be left out
 
 
 async def test_staff_admin_adds_a_niche_without_a_deploy(owner_engine: AsyncEngine) -> None:

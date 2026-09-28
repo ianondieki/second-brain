@@ -2121,7 +2121,8 @@ END;
 $$;
 
 -- A transparency root closes a Nairobi calendar day (the nightly job publishes the day that just ended, at 00:30 EAT),
--- so a day that has not ended has no root: a forged root cannot pre-empt today's or a later day's real one.
+-- so a day that has not ended has no root: a forged root cannot pre-empt today's or a later day's real one. Its
+-- snapshot_at, the moment of the snapshot whose chain heads it covers, is after that day ended and not in the future.
 CREATE FUNCTION transparency_roots_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
@@ -2129,6 +2130,11 @@ AS $$
 BEGIN
     IF NEW.day >= CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date) THEN
         RAISE EXCEPTION 'transparency_roots: a root closes a Nairobi day that has ended'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.snapshot_at > pg_catalog.clock_timestamp()
+       OR NEW.snapshot_at < CAST(NEW.day + 1 AS timestamp) AT TIME ZONE 'Africa/Nairobi' THEN
+        RAISE EXCEPTION 'transparency_roots: the snapshot is taken after the day ended, and not in the future'
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -2689,6 +2695,7 @@ def _create_tables() -> None:
         sa.Column("merkle_root", sa.LargeBinary(), nullable=False),
         sa.Column("signature", sa.LargeBinary(), nullable=False),
         sa.Column("key_id", sa.String(length=64), nullable=False),
+        sa.Column("snapshot_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint("octet_length(merkle_root) = 32", name=op.f("ck_transparency_roots_merkle_root_length")),
         sa.ForeignKeyConstraint(
