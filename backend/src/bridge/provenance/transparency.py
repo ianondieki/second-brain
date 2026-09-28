@@ -64,6 +64,7 @@ class AnchorReport:
     heads: int = 0
     anchored: list[ChainHead] = field(default_factory=list)
     failed: list[ChainHead] = field(default_factory=list)
+    deferred: list[ChainHead] = field(default_factory=list)  # not tried after a failure: the next run takes them
 
 
 def leaf(head: ChainHead) -> bytes:
@@ -127,7 +128,10 @@ async def _unanchored(session: AsyncSession, heads: Sequence[ChainHead]) -> list
 async def anchor_chain_heads(
     session: AsyncSession, tsa: TsaClient, *, limit: int = MAX_ANCHORS_PER_RUN
 ) -> AnchorReport:
-    """Timestamp every chain head not anchored yet (at most ``limit`` per run; the rest wait for the next hour)."""
+    """Timestamp every chain head not anchored yet (at most ``limit`` per run; the rest wait for the next hour).
+
+    The first failed timestamp ends the run's TSA calls: each attempt may last the whole TSA deadline, so trying every
+    pending head during an outage would hold the worker for hours. Tokens already obtained are stored."""
     report = AnchorReport()
     async with session.begin(), as_role(session, WORKER):
         rows = (await session.execute(_HEADS)).all()
@@ -135,12 +139,20 @@ async def anchor_chain_heads(
         report.heads = len(heads)
         pending = anchor_order(await _unanchored(session, heads))[:limit]
     tokens: list[tuple[ChainHead, TimestampToken]] = []
-    for head in pending:
+    for index, head in enumerate(pending):
         try:
             tokens.append((head, await tsa.timestamp(head.event_hash)))
         except TsaError as exc:
             report.failed.append(head)
-            log.warning("provenance.anchor_failed", chain_id=head.chain_id, seq=head.seq, reason=str(exc))
+            report.deferred = pending[index + 1 :]
+            log.warning(
+                "provenance.anchor_failed",
+                chain_id=head.chain_id,
+                seq=head.seq,
+                reason=str(exc),
+                deferred=len(report.deferred),
+            )
+            break
     if tokens:
         async with session.begin(), as_role(session, WORKER):
             for head, token in tokens:
@@ -158,9 +170,18 @@ async def anchor_chain_heads(
                 )
                 if cast(CursorResult[Any], inserted).rowcount == 1:
                     report.anchored.append(head)
-    log.info("provenance.anchored", heads=report.heads, anchored=len(report.anchored), failed=len(report.failed))
+    log.info(
+        "provenance.anchored",
+        heads=report.heads,
+        anchored=len(report.anchored),
+        failed=len(report.failed),
+        deferred=len(report.deferred),
+    )
     if pending and not tokens:
-        raise TsaError(f"no chain head could be timestamped ({len(report.failed)} tried)")
+        raise TsaError(
+            f"no chain head could be timestamped ({len(report.failed)} tried, {len(report.deferred)} left for the"
+            " next run)"
+        )
     return report
 
 

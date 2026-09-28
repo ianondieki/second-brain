@@ -175,19 +175,29 @@ async def test_capped_runs_anchor_pending_heads_in_anchor_order(
 async def test_a_tsa_outage_anchors_nothing_and_fails_the_run(
     engines: dict[str, AsyncEngine], local_tsa: LocalTsa
 ) -> None:
+    """With the TSA down the run stops at the first failed attempt (each one may take the whole TSA deadline, and a
+    run may hold up to MAX_ANCHORS_PER_RUN heads): the other heads wait for the next hourly run."""
     sessions = create_session_factory(engines["bridge_app"])
     tsa = CountingTsa(local_tsa)
+    async with sessions() as s:
+        await anchor_chain_heads(s, tsa.client())  # drain what earlier tests left pending
     tsa.fail_all = True
-    await append(engines["bridge_owner"], "org:anchor-outage")
+    tsa.calls = 0
+    for name in ("org:anchor-outage", "org:anchor-outage-2", "user:anchor-outage-3"):
+        await append(engines["bridge_owner"], name)
     before = len(await anchors(engines["audit_reader"]))
     async with sessions() as s:
-        with pytest.raises(TsaError, match="no chain head could be timestamped"):
+        with pytest.raises(TsaError, match="no chain head could be timestamped") as info:
             await anchor_chain_heads(s, tsa.client())
+    assert tsa.calls == 1
+    assert "2 left for the next run" in str(info.value)
     assert len(await anchors(engines["audit_reader"])) == before
     tsa.fail_all = False
     async with sessions() as s:
         report = await anchor_chain_heads(s, tsa.client())
-    assert ("org:anchor-outage", 1) in {(h.chain_id, h.seq) for h in report.anchored}
+    assert {("org:anchor-outage", 1), ("org:anchor-outage-2", 1), ("user:anchor-outage-3", 1)} <= {
+        (h.chain_id, h.seq) for h in report.anchored
+    }
 
 
 async def test_the_anchor_task_uses_the_job_runtime(engines: dict[str, AsyncEngine], local_tsa: LocalTsa) -> None:
