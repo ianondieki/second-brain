@@ -1718,6 +1718,74 @@ async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
         assert await run(conn, "SELECT app_llm_spend_usd(:t)", t=since) - before == Decimal("1.25")
 
 
+BATCH_CALL = (
+    "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, batch_id, custom_id)"
+    " VALUES (:id, :u, 't', 'm', :status, :cost, :batch, :item)"
+)
+# How the ledger settles an item: untargeted, since a targeted ON CONFLICT is refused by RLS for system rows.
+SETTLE = BATCH_CALL + " ON CONFLICT DO NOTHING"
+USER_SPEND = "SELECT coalesce(sum(cost_usd), 0) FROM llm_spend WHERE user_id = :u"
+GLOBAL_SPEND = "SELECT app_llm_spend_usd(:t)"
+
+
+async def test_only_the_app_reads_the_spend_view(owner_engine: AsyncEngine) -> None:
+    """llm_spend (the spend rule, security_invoker) is read by bridge_app for the tenant monthly sum; no worker or
+    Tier-2 role reads it, and nobody writes it."""
+    assert await roles_holding(owner_engine, "llm_spend", "SELECT") == {"bridge_app"}
+    for privilege in ("INSERT", "UPDATE", "DELETE"):
+        assert await roles_holding(owner_engine, "llm_spend", privilege) == set()
+
+
+async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engine: AsyncEngine) -> None:
+    """A Message Batches item is reserved at submission (status batch_reserved, the estimated cost) and settled once
+    its result arrives. Spend (llm_spend, the one rule behind the tenant monthly sum and app_llm_spend_usd) counts a
+    reservation until its item settles, then only the settled row; an item is reserved once and settles once (a
+    second settle is skipped by ON CONFLICT DO NOTHING); a batch id always comes with an item id. Tenants still read
+    only their own rows, through llm_calls and llm_spend alike."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("batch-user"), "Batch")
+        other = await w.add_user(conn, _email("batch-other"), "Other")
+        since = await run(conn, "SELECT now() - interval '1 second'")
+        before = await run(conn, GLOBAL_SPEND, t=since)
+        await act(conn, user)
+        batch = f"msgbatch_{uuid4().hex[:20]}"
+        item = {"u": user, "batch": batch, "item": "item-1"}
+        await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("2.00"), **item)
+        assert await run(conn, USER_SPEND, u=user) == Decimal("2.00")  # reserved: counted
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("2.00")
+        reserve_again = {"id": uuid7(), "status": "batch_reserved", "cost": Decimal("2.00")}
+        await expect(conn, BATCH_CALL, "uq_llm_calls_batch_reservation", **reserve_again, **item)
+        settle = {"status": "ok", "cost": Decimal("1.50")}
+        assert (await conn.execute(text(SETTLE), {"id": uuid7(), **settle, **item})).rowcount == 1
+        assert (await conn.execute(text(SETTLE), {"id": uuid7(), **settle, **item})).rowcount == 0  # skipped
+        failed = {"id": uuid7(), "status": "error", "cost": Decimal("0")}
+        await expect(conn, BATCH_CALL, "uq_llm_calls_batch_settlement", **failed, **item)  # settles once
+        assert await run(conn, USER_SPEND, u=user) == Decimal("1.50")  # settled: only the settled row
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.50")
+        unpaired = {"id": uuid7(), "u": user, "cost": Decimal("0")}
+        await expect(conn, BATCH_CALL, "ck_llm_calls_batch_pair", **unpaired, status="ok", batch=batch, item=None)
+        await expect(conn, BATCH_CALL, "ck_llm_calls_batch_pair", **unpaired, status="ok", batch=None, item="item-9")
+        await expect(
+            conn,
+            BATCH_CALL,
+            "ck_llm_calls_batch_reserved_has_batch",
+            **unpaired,
+            status="batch_reserved",
+            batch=None,
+            item=None,
+        )
+        # A system job's item (no user, no organisation) settles the same way.
+        system = {"u": None, "batch": batch, "item": "item-2"}
+        await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("1.00"), **system)
+        for _ in range(2):
+            await conn.execute(text(SETTLE), {"id": uuid7(), "status": "ok", "cost": Decimal("0.25"), **system})
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")
+        await act(conn, other)  # RLS unchanged: another tenant reads none of these rows, raw or through the view
+        assert await run(conn, "SELECT count(*) FROM llm_spend WHERE user_id = :u", u=user) == 0
+        assert await run(conn, "SELECT count(*) FROM llm_calls WHERE batch_id = :b", b=batch) == 0
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")  # the total, never the rows
+
+
 LLM_CALL = (
     "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, input_tokens, output_tokens,"
     " cache_read_tokens, cache_write_tokens, latency_ms) VALUES (:id, :u, 't', 'm', 'ok', :cost, :input, :output,"

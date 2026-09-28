@@ -3,10 +3,10 @@
 REQ-REPO-01 (tiered proposal storage, ``proposal_confidential`` behind the Tier-2 roles), REQ-PROV-01 (registration
 records, anchors, transparency roots), REQ-TEN-01 (RLS on every new tenant table, the PUBLISHED, STAFF and EVIDENCE
 tenancy classes). Design: ``docs/platform/tasks/REQ-REPO-01.md`` ("T2.1 schema v2 design" and its refinements).
-Additive only: 32 new tables, new enum types, new columns on ``organizations`` and ``users``, one new SELECT policy
-each on ``organizations`` and ``org_niches``, one new column grant (``organizations.county_code``), and bridge_app's
-SELECT on ``users`` narrowed to every column but the new ``subject_salt`` (the table-wide grant is restored on
-downgrade). Nothing of revision 0001 is dropped.
+Additive only: 32 new tables, one view (``llm_spend``), new enum types, new columns on ``organizations`` and ``users``,
+one new SELECT policy each on ``organizations`` and ``org_niches``, one new column grant
+(``organizations.county_code``), and bridge_app's SELECT on ``users`` narrowed to every column but the new
+``subject_salt`` (the table-wide grant is restored on downgrade). Nothing of revision 0001 is dropped.
 
 Before upgrading an existing cluster, re-run ``infra/postgres/roles.sql`` (as a superuser) and
 ``infra/postgres/prepare_db.sql`` (in the database): the five Tier-2 roles and their schema USAGE live there, because
@@ -96,7 +96,8 @@ other than filling empty signature/TSA/evidence columns and moving ``status`` fo
 attestations, acceptances and Tier-2 views (``created_at``, ``accepted_at``, ``started_at``) are the database's; an
 anchor names an existing audit event, and a root closes a Nairobi day that has ended. Registering a version needs at
 least one linked problem (trigger) and the complete Tier-1 snapshot (CHECK). One ``llm_calls`` row costs 0 to 100 USD
-and counts nothing negative.
+and counts nothing negative; a Message Batches item is reserved once and settles once, and spend (the ``llm_spend``
+view) counts a reservation only until its item settles.
 
 Refinements of the task card (listed in the card, approved by the orchestrator 2026-09-28): ``proposals`` also
 denormalises the current ``problem_statement``, ``impact_claims`` and ``summary`` (the generated ``search_tsv`` can
@@ -325,7 +326,8 @@ APP_GRANTS: dict[str, str] = {
     # plaintext, AC-SEC-6) is written but read only by staff admin, through app_llm_call_inputs().
     "llm_calls": (
         "SELECT (id, org_id, user_id, task, purpose, model, input_tokens, output_tokens, cache_read_tokens,"
-        " cache_write_tokens, cost_usd, latency_ms, status, stop_reason, trace_id, created_at), INSERT"
+        " cache_write_tokens, cost_usd, latency_ms, status, stop_reason, trace_id, batch_id, custom_id, created_at),"
+        " INSERT"
     ),
 }
 
@@ -812,6 +814,19 @@ AS $$
         SELECT 1 FROM unnest(p_reasons) AS r(reason)
          WHERE r.reason IS NULL OR btrim(r.reason) = '' OR length(r.reason) > 200)
 $$;
+"""
+
+# The LLM spend rule, defined once (docs/spec/09 cost caps): every llm_calls row counts, except a Message Batches
+# reservation whose item has settled (the settled row counts instead). security_invoker: a tenant reads only the rows
+# RLS lets it read, exactly as from llm_calls (the tenant monthly sum); app_llm_spend_usd() reads it as the owner.
+VIEWS_SQL = r"""
+CREATE VIEW llm_spend WITH (security_invoker = true) AS
+SELECT c.org_id, c.user_id, c.cost_usd, c.created_at
+  FROM llm_calls c
+ WHERE NOT (c.status = 'batch_reserved' AND EXISTS (
+       SELECT 1
+         FROM llm_calls s
+        WHERE s.batch_id = c.batch_id AND s.custom_id = c.custom_id AND s.status <> 'batch_reserved'));
 """
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1782,12 +1797,13 @@ BEGIN
 END;
 $$;
 
--- The platform-wide LLM spend since p_since, for the global daily cap (docs/spec/09); an aggregate only.
+-- The platform-wide LLM spend since p_since, for the global daily cap (docs/spec/09); an aggregate only, by the spend
+-- rule of the llm_spend view (a settled batch item counts once).
 CREATE FUNCTION app_llm_spend_usd(p_since timestamptz) RETURNS numeric
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    SELECT coalesce(sum(c.cost_usd), 0) FROM public.llm_calls c WHERE c.created_at >= p_since
+    SELECT coalesce(sum(c.cost_usd), 0) FROM public.llm_spend c WHERE c.created_at >= p_since
 $$;
 """
 
@@ -2340,6 +2356,7 @@ def _grant_sql() -> str:
     grants = [f"GRANT {privileges} ON TABLE {table} TO bridge_app;" for table, privileges in APP_GRANTS.items()]
     grants += [f"GRANT {privileges} ON TABLE {t} TO bridge_app;" for t, privileges in APP_GRANTS_0001_TABLES.items()]
     # REVOKE of a table privilege also revokes it on every column; the column grant follows.
+    grants.append("GRANT SELECT ON TABLE llm_spend TO bridge_app;")
     grants += [
         "REVOKE SELECT ON TABLE users FROM bridge_app;",
         f"GRANT SELECT ({USERS_READABLE_COLUMNS}) ON TABLE users TO bridge_app;",
@@ -2364,6 +2381,7 @@ def upgrade() -> None:
     _alter_phase1_tables()
     _run_sql(CHECK_HELPERS_SQL)
     _create_tables()
+    _run_sql(VIEWS_SQL)
     _run_sql(FUNCTIONS_SQL)
     _run_sql("\n".join(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" for table in RLS_TABLES))
     _run_sql("\n".join(policy.create_sql() for policy in POLICIES))
@@ -2391,6 +2409,7 @@ def downgrade() -> None:
     # Every policy of this revision first: policies depend on the tables their subqueries read (and the listed-org
     # policies on the 0001 columns dropped below), so no table could be dropped while they exist.
     _run_sql("\n".join(f"DROP POLICY {policy.name} ON {policy.table};" for policy in POLICIES))
+    _run_sql("DROP VIEW llm_spend;")  # it reads llm_calls
     op.drop_constraint("fk_proposals_current_version", "proposals", type_="foreignkey")
     op.drop_constraint("fk_proposals_draft_version", "proposals", type_="foreignkey")
     # Dropping a table drops its policies, triggers, indexes and grants. Referencing tables before referenced ones.
@@ -2806,11 +2825,17 @@ def _create_tables() -> None:
         sa.Column("status", sa.String(length=24), nullable=False),
         sa.Column("stop_reason", sa.String(length=40), nullable=True),
         sa.Column("trace_id", sa.String(length=64), nullable=True),
+        sa.Column("batch_id", sa.String(length=64), nullable=True),
+        sa.Column("custom_id", sa.String(length=64), nullable=True),
         sa.Column("inputs", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint("cost_usd BETWEEN 0 AND 100", name=op.f("ck_llm_calls_cost_usd_range")),
         sa.CheckConstraint(LLM_COUNTS_NOT_NEGATIVE, name=op.f("ck_llm_calls_counts_not_negative")),
+        sa.CheckConstraint("(batch_id IS NULL) = (custom_id IS NULL)", name=op.f("ck_llm_calls_batch_pair")),
+        sa.CheckConstraint(
+            "status <> 'batch_reserved' OR batch_id IS NOT NULL", name=op.f("ck_llm_calls_batch_reserved_has_batch")
+        ),
         sa.ForeignKeyConstraint(["org_id"], ["organizations.id"], name=op.f("fk_llm_calls_org_id_organizations")),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], name=op.f("fk_llm_calls_user_id_users")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_llm_calls")),
@@ -2818,6 +2843,21 @@ def _create_tables() -> None:
     op.create_index("ix_llm_calls_created_at", "llm_calls", ["created_at"], unique=False)
     op.create_index("ix_llm_calls_org_id_created_at", "llm_calls", ["org_id", "created_at"], unique=False)
     op.create_index("ix_llm_calls_user_id_created_at", "llm_calls", ["user_id", "created_at"], unique=False)
+    # A Message Batches item is reserved once and settles once (the ledger settles with ON CONFLICT DO NOTHING).
+    op.create_index(
+        "uq_llm_calls_batch_reservation",
+        "llm_calls",
+        ["batch_id", "custom_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'batch_reserved'"),
+    )
+    op.create_index(
+        "uq_llm_calls_batch_settlement",
+        "llm_calls",
+        ["batch_id", "custom_id"],
+        unique=True,
+        postgresql_where=sa.text("batch_id IS NOT NULL AND status <> 'batch_reserved'"),
+    )
     op.create_table(
         "nda_acceptances",
         sa.Column("user_id", sa.Uuid(), nullable=False),
