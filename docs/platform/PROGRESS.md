@@ -238,7 +238,8 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
 
-**Laptop session 2026-09-28 (in progress).** Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
+**Laptop session 2026-09-28 (in progress).** A network outage killed five running agents mid-task; all were resumed from their
+pushed state. Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
 `openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). Round-3 items 3–8
 done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); round 3 on `0fd9159`: reviewer
 CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers; 4 MINORs) and security-reviewer
@@ -270,7 +271,11 @@ confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the d
 (T2.4) reviewed and verified (1080 passed, `openapi --check` clean). Wip `c509ea6` (T2.2, per-session
 `tier2_llm_assistant` consent) reviewed and verified at `85f444f` (ruff, format, mypy, `openapi --check` clean; 1157
 passed). T2.4 fix round done by impl-backend (`8976166`..`f8bbcb6`, 19 commits; plus an ESS issuerSerial bug and an
-anchor-outage stop; 1124 passed; `bridge/provenance` 99%); reviewer and security-reviewer round 2 are running. Its four
+anchor-outage stop; 1124 passed; `bridge/provenance` 99%); security-reviewer round 2 **PASS** (MINORs, to fix
+before merge: store anchors per savepoint and use one clock-skew bound with the schema's `chain_anchors_guard`; a
+Procrastinate lock on the hourly anchor task; a THREAT_MODEL row for rogue/MITM/replayed TSA tokens; `_key_path` must
+not print owner-chosen Tier-2 key names; the test builder's `owner_handle` breaks under schema round 4; the
+verify-offline runbook's POST needs the CSRF header). Reviewer round 2 is running. Its four
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
