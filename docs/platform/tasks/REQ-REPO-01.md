@@ -116,6 +116,13 @@ Fourth review round (reviewer and security-reviewer findings on the third round;
 - `app_tier2_granted` counts only the current Evaluation NDA: `app_current_nda_template('evaluation')`, the most recently created `nda_templates` row of that kind (as `app_current_legal_template`; EXECUTE bridge_app). A new NDA version therefore requires re-acceptance; the T2.5 predicate must mirror it.
 - Tested (no schema change): a user's report naming an assignee, a decider or a decision time is refused (`test_users_only_report_and_system_sources_file_through_the_function`, revert-to-prove).
 
+Schema follow-ups requested by T2.4 (`docs/platform/tasks/REQ-PROV-01.md`, "Schema follow-ups"):
+
+- `app_audit_chain_heads()` also returns each head's `occurred_at`; `app_unanchored_chain_heads()` (definer, EXECUTE `provenance_worker`) returns the heads with no anchor at their `seq`, oldest first, with `occurred_at`, so the hourly job can drop its trial-insert probe.
+- `transparency_roots.snapshot_at timestamptz` (nullable until T2.4's insert sends it): the moment of the snapshot whose chain heads the root covers; `transparency_roots_guard` refuses a future time or one before the root's Nairobi day ended.
+- `ix_provenance_records_content_hash` for `/verify` upload matching without a cert id.
+- Not built: the owner's opt-in to show name and title on `/verify`. The spec says only "unless the owner opts to show name and title" (06 6.4 item 2); which name (handle, display name or D2 legal name), per proposal or per version, and whether withdrawing the opt-in hides the name again are not written down, so the column waits for that decision.
+
 Notes for the code on this schema:
 
 - OTP digests are HMAC-SHA-256 under a server pepper (T2.10a already does), never bare hashes; bridge_app can write them but never read them back, and the comparison stays in SQL (`app_confirm_phone_otp`, `app_confirm_claim_otp`).
