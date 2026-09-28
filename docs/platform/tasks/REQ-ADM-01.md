@@ -12,3 +12,14 @@ Phase 2 part: the `/admin` console shell (separate from both portals) with the c
 ## Acceptance criteria and tests
 
 Phase 2 tests: `integration/admin/test_moderation_queue.py`, `integration/directory/test_claims.py`. AC-ADM-3 is Phase 8.
+
+## Notes (T2.6a, staff dependency)
+
+- `bridge/admin/deps.py`: `staff_member(*roles)` (`StaffMember`, `StaffAdmin`, `StaffModerator`). 404 (the API's
+  not-found body) when signed out, second factor pending, not staff, or staff without TOTP; 403 for enrolled staff
+  lacking the route's role; 403 `step_up_required` when the second factor is older than `STEP_UP_MAX_AGE_HOURS`
+  (these are enrolled staff, so the console's existence is not a secret to them).
+- Routes so far: `GET /api/admin/me` (any staff; the console shell's access check) and `GET /api/admin/niches` (staff
+  admin; inactive niches included). Tests: `integration/admin/test_staff_dependency.py`.
+- Open: `/api/openapi.json` is served in every environment and lists the `/api/admin` paths; if the console must not
+  be discoverable from the schema either, production needs the admin router excluded from the public document.
