@@ -1,7 +1,8 @@
 """Anchoring the audit chains (REQ-AUD-01 Phase 2; docs/spec/06 6.4 item 4; ADR-003 item 4).
 
 Hourly ``anchor_chain_heads``: an RFC 3161 token over the head (last ``event_hash``) of every audit chain that moved
-since its last anchor, into ``chain_anchors``. The heads come from ``app_audit_chain_heads()`` (ids, sequence numbers
+since its last anchor, into ``chain_anchors``, at most ``MAX_ANCHORS_PER_RUN`` per run in ``anchor_order`` (oldest head
+first, then chain id). The heads come from ``app_audit_chain_heads()`` (ids, sequence numbers
 and hashes only); ``provenance_worker`` executes it and inserts anchors but may not read ``chain_anchors``, so a head
 is known to be anchored when a trial insert of it inside a savepoint conflicts (the savepoint is always rolled back,
 so the append-only table never sees it). A cleaner definer function (``app_unanchored_chain_heads()``) is noted for
@@ -52,6 +53,7 @@ class ChainHead:
     chain_id: str
     seq: int
     event_hash: bytes
+    occurred_at: datetime | None = None  # when the head event was appended, if the source reports it
 
 
 @dataclass(slots=True)
@@ -79,7 +81,17 @@ def root_over(heads: Sequence[ChainHead]) -> bytes:
     return merkle_root([leaf(h) for h in sorted(heads, key=lambda h: h.chain_id)])
 
 
-_HEADS = text("SELECT chain_id, seq, event_hash FROM app_audit_chain_heads() ORDER BY chain_id")
+# Every column the heads function returns: today chain_id, seq and event_hash; occurred_at (the head's time) once
+# db-migrations adds it (schema follow-up on the REQ-PROV-01 card). Until then heads are ordered by chain id alone.
+_HEADS = text("SELECT h.* FROM app_audit_chain_heads() AS h")
+
+
+def anchor_order(heads: Sequence[ChainHead]) -> list[ChainHead]:
+    """Oldest head first, then chain id: a capped run takes the heads that have waited longest, and a rerun takes
+    the same ones. A head of unknown age counts as the oldest (it cannot be shown to be young)."""
+    return sorted(heads, key=lambda h: (h.occurred_at or _EPOCH, h.chain_id))
+
+
 _INSERT_ANCHOR = text(
     "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
     " VALUES (:id, :chain_id, :seq, :event_hash, :token, :tsa_time, :serial) ON CONFLICT DO NOTHING"
@@ -116,9 +128,9 @@ async def anchor_chain_heads(
     report = AnchorReport()
     async with session.begin(), as_role(session, WORKER):
         rows = (await session.execute(_HEADS)).all()
-        heads = [ChainHead(r.chain_id, r.seq, bytes(r.event_hash)) for r in rows]
+        heads = [ChainHead(r.chain_id, r.seq, bytes(r.event_hash), r._mapping.get("occurred_at")) for r in rows]
         report.heads = len(heads)
-        pending = (await _unanchored(session, heads))[:limit]
+        pending = anchor_order(await _unanchored(session, heads))[:limit]
     tokens: list[tuple[ChainHead, TimestampToken]] = []
     for head in pending:
         try:

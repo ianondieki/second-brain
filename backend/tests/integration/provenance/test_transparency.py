@@ -149,6 +149,27 @@ async def test_the_hourly_anchor_timestamps_each_moved_head_once(
     assert {(r.chain_id, r.seq) for r in await anchors(reader)} >= {("org:anchor-a", 3), ("org:anchor-a", 4)}
 
 
+async def test_capped_runs_anchor_pending_heads_in_anchor_order(
+    engines: dict[str, AsyncEngine], local_tsa: LocalTsa
+) -> None:
+    """With room for one anchor per run, three moved chains are anchored one run at a time in a fixed order: oldest
+    head first, then chain id (appended here in chain-id order, so both rules agree whichever the heads function
+    reports), never a different subset on a rerun."""
+    sessions = create_session_factory(engines["bridge_app"])
+    tsa = CountingTsa(local_tsa)
+    async with sessions() as s:
+        await anchor_chain_heads(s, tsa.client())  # drain what earlier tests left pending
+    names = ["global-order-a", "org:order-b", "user:order-c"]
+    for name in names:
+        await append(engines["bridge_owner"], name)
+    anchored: list[str] = []
+    for _ in names:
+        async with sessions() as s:
+            report = await anchor_chain_heads(s, tsa.client(), limit=1)
+        anchored += [h.chain_id for h in report.anchored]
+    assert anchored == names
+
+
 async def test_a_tsa_outage_anchors_nothing_and_fails_the_run(
     engines: dict[str, AsyncEngine], local_tsa: LocalTsa
 ) -> None:
