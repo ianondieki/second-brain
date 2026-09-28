@@ -433,6 +433,29 @@ async def test_the_client_checks_the_time_against_its_clock(local_tsa: LocalTsa)
         await client.timestamp(DIGEST)
 
 
+def test_a_caller_may_allow_less_time_ahead_than_the_skew(good_response: bytes, trust: TrustBundle) -> None:
+    """The anchor path allows a token time at most a minute ahead of the clock (the chain_anchors guard's bound);
+    the past side keeps the 15 minutes."""
+    gen_time = parse(good_response, trust).gen_time
+    minute = timedelta(seconds=60)
+    assert parse(good_response, trust, now=gen_time - timedelta(seconds=59), max_ahead=minute).gen_time == gen_time
+    assert parse(good_response, trust, now=gen_time + timedelta(minutes=14), max_ahead=minute).gen_time == gen_time
+    with pytest.raises(TsaResponseError, match="more than 60 s ahead of the local clock"):
+        parse(good_response, trust, now=gen_time - timedelta(seconds=61), max_ahead=minute)
+    with pytest.raises(TsaResponseError, match="more than 15 minutes from the local clock"):
+        parse(good_response, trust, now=gen_time - timedelta(minutes=16), max_ahead=minute)
+
+
+async def test_the_client_applies_the_callers_bound_ahead(local_tsa: LocalTsa) -> None:
+    behind = datetime.now(UTC) - timedelta(minutes=5)
+    client = TsaClient(
+        [local_tsa.endpoint("http://tsa.test/tsr")], transport=local_tsa.transport(), clock=lambda: behind
+    )
+    assert (await client.timestamp(DIGEST)).gen_time > behind  # five minutes ahead: within the default skew
+    with pytest.raises(TsaUnavailableError, match="more than 60 s ahead"):
+        await client.timestamp(DIGEST, max_ahead=timedelta(seconds=60))
+
+
 def test_subject_key_identifier_signers_and_rsa_pss_are_accepted(
     local_tsa: LocalTsa, good_response: bytes, trust: TrustBundle
 ) -> None:

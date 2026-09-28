@@ -11,7 +11,8 @@ response is accepted only when:
   ``signingCertificateV2`` attribute names (RFC 2634, RFC 5816: hash and, when given, issuer and serial);
 - the signed ``messageDigest`` attribute matches the TSTInfo and the signature over the signed attributes verifies
   with that certificate's key (RSA PKCS#1 v1.5, RSA-PSS or ECDSA with SHA-256/384/512);
-- the token's ``genTime`` is within 15 minutes of the local clock;
+- the token's ``genTime`` is within 15 minutes of the local clock, and no further ahead of it than the caller
+  allows (``max_ahead``: the hourly anchors allow one minute, the bound of the ``chain_anchors`` guard);
 - the signer certificate chains, through the certificates the token carries, to the trust bundle pinned for that TSA
   URL (``TSA_CA_BUNDLE``, ``TSA_FALLBACK_CA_BUNDLE``: PEM files), every certificate valid at ``genTime``, every issuer
   a CA (and limited to timestamping or any purpose when it states an extended key usage). Certificates inside the
@@ -159,10 +160,17 @@ def format_serial(serial: int) -> str:
 
 
 def parse_response(
-    der: bytes, *, digest: bytes, nonce: int, trust: TrustBundle | None, now: datetime | None = None
+    der: bytes,
+    *,
+    digest: bytes,
+    nonce: int,
+    trust: TrustBundle | None,
+    now: datetime | None = None,
+    max_ahead: timedelta = MAX_CLOCK_SKEW,
 ) -> TokenInfo:
     """Check a DER ``TimeStampResp`` against our request and the TSA's pinned ``trust`` bundle (see the module
-    docstring; ``trust=None`` skips only the chain check) and return the token facts."""
+    docstring; ``trust=None`` skips only the chain check) and return the token facts. ``max_ahead`` narrows how far
+    ahead of ``now`` the token's time may be (never beyond ``MAX_CLOCK_SKEW``)."""
     try:
         parts = _Parts.load(der, strict=True)
         status = tsp.PKIStatusInfo.load(parts[0].dump())["status"].native
@@ -186,8 +194,13 @@ def parse_response(
             raise TsaResponseError("the token's nonce does not match the request")
         signer_cert, others = _check_signature(signed_data, tst_der)
         gen_time: datetime = tst_info["gen_time"].native
-        if abs(gen_time - (now or datetime.now(UTC))) > MAX_CLOCK_SKEW:
+        clock = now or datetime.now(UTC)
+        if abs(gen_time - clock) > MAX_CLOCK_SKEW:
             raise TsaResponseError("the token's time is more than 15 minutes from the local clock")
+        if gen_time - clock > max_ahead:
+            raise TsaResponseError(
+                f"the token's time is more than {max_ahead.total_seconds():g} s ahead of the local clock"
+            )
         if trust is not None:
             _check_chain(signer_cert, others, trust, at=gen_time)
         return TokenInfo(gen_time, format_serial(tst_info["serial_number"].native), tst_info["policy"].dotted)
@@ -395,7 +408,9 @@ class TsaClient:
     def urls(self) -> tuple[str, ...]:
         return tuple(endpoint.url for endpoint in self.endpoints)
 
-    async def timestamp(self, digest: bytes) -> TimestampToken:
+    async def timestamp(self, digest: bytes, *, max_ahead: timedelta = MAX_CLOCK_SKEW) -> TimestampToken:
+        """A token over ``digest`` whose time is at most ``max_ahead`` ahead of the client's clock (and within
+        ``MAX_CLOCK_SKEW`` of it); a TSA whose token is further ahead counts as failed and the next one is tried."""
         nonce = secrets.randbits(63) | 1  # positive and never zero
         request = build_request(digest, nonce)
         failures: list[str] = []
@@ -409,7 +424,14 @@ class TsaClient:
                     current = endpoint.url
                     try:
                         body = await self._post(client, endpoint.url, request)
-                        info = parse_response(body, digest=digest, nonce=nonce, trust=endpoint.trust, now=self._clock())
+                        info = parse_response(
+                            body,
+                            digest=digest,
+                            nonce=nonce,
+                            trust=endpoint.trust,
+                            now=self._clock(),
+                            max_ahead=max_ahead,
+                        )
                     except (httpx.HTTPError, TsaResponseError) as exc:
                         failures.append(f"{endpoint.url}: {exc or type(exc).__name__}")
                         continue

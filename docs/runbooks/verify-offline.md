@@ -164,7 +164,8 @@ retries later (the record reads "Timestamp pending" meanwhile):
   key usage, to vouch for timestamping. Certificates in the token only fill in the chain; they are never trusted;
 - the signing certificate has the timestamping usage as its only purpose, in a critical extension (RFC 3161), and is
   the certificate the signed ESS `signingCertificate(V2)` attribute names;
-- the token's time is within 15 minutes of the worker's clock.
+- the token's time is within 15 minutes of the worker's clock; for the hourly anchors of the audit chains, no more
+  than one minute ahead of it, the bound the database applies to an anchor with its own clock.
 
 ## Operators: the pinned TSA bundles
 

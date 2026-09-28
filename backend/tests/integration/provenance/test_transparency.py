@@ -9,7 +9,9 @@ import base64
 import json
 import os
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, date, datetime
+from contextlib import asynccontextmanager
+from dataclasses import replace
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -27,13 +29,14 @@ from bridge.jobs import audit as audit_jobs
 from bridge.jobs import provenance as provenance_jobs
 from bridge.provenance.signing import LocalSigner, register_public_key, root_message, verify_signature
 from bridge.provenance.transparency import (
+    AnchorRejectedError,
     ChainHead,
     ChainVerificationError,
     anchor_chain_heads,
     root_over,
     verify_and_publish_root,
 )
-from bridge.provenance.tsa import TsaClient, TsaError
+from bridge.provenance.tsa import MAX_CLOCK_SKEW, TimestampToken, TsaClient, TsaError
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.integration.provenance.test_verify_api import client
 from tests.openssl_tsa import LocalTsa
@@ -82,6 +85,49 @@ class CountingTsa:
 
     def client(self) -> TsaClient:
         return TsaClient([self.local_tsa.endpoint("http://tsa.test/tsr")], transport=httpx.MockTransport(self.handler))
+
+
+class AheadOfTheDatabase(TsaClient):
+    """The local TSA, but tokens over the chosen digests (every digest when none are chosen) record a time ten
+    minutes ahead: the TSA and the worker agree, the database's clock is behind (skew between hosts, which the worker
+    cannot see before the insert)."""
+
+    def __init__(self, local_tsa: LocalTsa, ahead: set[bytes] | None = None) -> None:
+        super().__init__([local_tsa.endpoint("http://tsa.test/tsr")], transport=local_tsa.transport())
+        self.ahead = ahead
+
+    async def timestamp(self, digest: bytes, *, max_ahead: timedelta = MAX_CLOCK_SKEW) -> TimestampToken:
+        token = await super().timestamp(digest, max_ahead=max_ahead)
+        if self.ahead is None or digest in self.ahead:
+            return replace(token, gen_time=token.gen_time + timedelta(minutes=10))
+        return token
+
+
+@asynccontextmanager
+async def database_clock_guard(owner: AsyncEngine) -> AsyncIterator[None]:
+    """A test trigger refusing anchors timed more than a minute after the database clock, as schema v2's
+    chain_anchors_guard does (the trial inserts of the unanchored-head probe are timed at the epoch and pass)."""
+    async with owner.begin() as conn:
+        await conn.execute(
+            text(
+                "CREATE FUNCTION test_anchor_time_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN"
+                " IF NEW.tsa_time > clock_timestamp() + interval '1 minute' THEN"
+                " RAISE EXCEPTION 'chain_anchors: the TSA time is later than the database clock'"
+                " USING ERRCODE = 'check_violation'; END IF; RETURN NEW; END $$"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE TRIGGER test_anchor_time_guard BEFORE INSERT ON chain_anchors"
+                " FOR EACH ROW EXECUTE FUNCTION test_anchor_time_guard()"
+            )
+        )
+    try:
+        yield
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(text("DROP TRIGGER test_anchor_time_guard ON chain_anchors"))
+            await conn.execute(text("DROP FUNCTION test_anchor_time_guard()"))
 
 
 async def append(engine: AsyncEngine, chain_id: str, n: int = 1) -> None:
@@ -198,6 +244,63 @@ async def test_a_tsa_outage_anchors_nothing_and_fails_the_run(
     assert {("org:anchor-outage", 1), ("org:anchor-outage-2", 1), ("user:anchor-outage-3", 1)} <= {
         (h.chain_id, h.seq) for h in report.anchored
     }
+
+
+async def test_an_anchor_the_database_refuses_is_skipped_and_the_others_land(
+    engines: dict[str, AsyncEngine], local_tsa: LocalTsa
+) -> None:
+    """Each anchor is inserted in its own savepoint: one the database refuses (its TSA time is ahead of the database
+    clock) is logged and skipped, the other anchors of the run are stored, and the refused head is anchored by the
+    next run."""
+    owner, reader = engines["bridge_owner"], engines["audit_reader"]
+    sessions = create_session_factory(engines["bridge_app"])
+    async with sessions() as s:
+        await anchor_chain_heads(s, CountingTsa(local_tsa).client())  # drain what earlier tests left pending
+    for name in ("org:skew-a", "org:skew-b", "org:skew-c"):
+        await append(owner, name)
+    skewed = {h.event_hash for h in await heads(reader) if h.chain_id == "org:skew-b"}
+    async with database_clock_guard(owner), sessions() as s:
+        report = await anchor_chain_heads(s, AheadOfTheDatabase(local_tsa, skewed))
+    assert {(h.chain_id, h.seq) for h in report.anchored} == {("org:skew-a", 1), ("org:skew-c", 1)}
+    assert [(h.chain_id, h.seq) for h in report.rejected] == [("org:skew-b", 1)]
+    stored = {(r.chain_id, r.seq) for r in await anchors(reader)}
+    assert {("org:skew-a", 1), ("org:skew-c", 1)} <= stored
+    assert ("org:skew-b", 1) not in stored
+    async with sessions() as s:
+        again = await anchor_chain_heads(s, CountingTsa(local_tsa).client())
+    assert [(h.chain_id, h.seq) for h in again.anchored] == [("org:skew-b", 1)]
+
+
+async def test_a_run_whose_every_anchor_is_refused_fails(engines: dict[str, AsyncEngine], local_tsa: LocalTsa) -> None:
+    owner = engines["bridge_owner"]
+    sessions = create_session_factory(engines["bridge_app"])
+    async with sessions() as s:
+        await anchor_chain_heads(s, CountingTsa(local_tsa).client())  # drain what earlier tests left pending
+    await append(owner, "org:skew-only")
+    async with database_clock_guard(owner), sessions() as s:
+        with pytest.raises(AnchorRejectedError, match="1 refused by the database"):
+            await anchor_chain_heads(s, AheadOfTheDatabase(local_tsa))
+    assert ("org:skew-only", 1) not in {(r.chain_id, r.seq) for r in await anchors(engines["audit_reader"])}
+
+
+async def test_the_anchor_takes_no_token_more_than_a_minute_ahead_of_the_worker(
+    engines: dict[str, AsyncEngine], local_tsa: LocalTsa
+) -> None:
+    """The worker refuses a token time more than 60 s ahead of its clock, the bound the chain_anchors guard applies
+    with the database's clock: a TSA running fast fails the attempt (the fallback TSA is tried) instead of reaching
+    the database. Registration timestamps keep the 15 minutes either way."""
+    sessions = create_session_factory(engines["bridge_app"])
+    async with sessions() as s:
+        await anchor_chain_heads(s, CountingTsa(local_tsa).client())  # drain what earlier tests left pending
+    await append(engines["bridge_owner"], "org:tsa-fast")
+    worker_behind = TsaClient(
+        [local_tsa.endpoint("http://tsa.test/tsr")],
+        transport=local_tsa.transport(),
+        clock=lambda: datetime.now(UTC) - timedelta(minutes=5),
+    )
+    async with sessions() as s:
+        with pytest.raises(TsaError, match="more than 60 s ahead"):
+            await anchor_chain_heads(s, worker_behind)
 
 
 async def test_the_anchor_task_uses_the_job_runtime(engines: dict[str, AsyncEngine], local_tsa: LocalTsa) -> None:

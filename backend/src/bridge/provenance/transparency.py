@@ -8,6 +8,12 @@ anchored when a trial insert of it inside a savepoint conflicts (the savepoint i
 append-only table never sees it). A cleaner definer function (``app_unanchored_chain_heads()``) is noted for
 db-migrations. TSA calls happen outside any transaction.
 
+A token's time may be at most ``ANCHOR_MAX_AHEAD`` (one minute) ahead of the worker's clock, the bound schema v2's
+``chain_anchors_guard`` applies with the database's clock (``tsa_time <= clock_timestamp() + 1 minute``); the past
+side keeps the client's 15 minutes. Each anchor is inserted in its own savepoint, so one the database still refuses
+(the worker's and the database's clocks disagree) is logged (``provenance.anchor_rejected``) and skipped: the other
+anchors of the run are stored and the refused head waits for the next run. A run fails only when none landed.
+
 Nightly ``verify_and_publish_root``: ``audit_reader`` verifies every chain (``bridge.audit.chain``) in one
 REPEATABLE READ snapshot; only when all verify, the day's root is published: a Merkle tree (RFC 6962 hashing: leaf
 ``SHA-256(0x00 || leaf)``, node ``SHA-256(0x01 || left || right)``) over the chain heads of that snapshot, sorted by
@@ -23,10 +29,11 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from bridge.audit.chain import ChainProblem, verify_all
@@ -39,8 +46,13 @@ from bridge.provenance.tsa import TimestampToken, TsaClient, TsaError
 
 WORKER = "provenance_worker"
 MAX_ANCHORS_PER_RUN = 500
+ANCHOR_MAX_AHEAD = timedelta(minutes=1)  # chain_anchors_guard: tsa_time <= clock_timestamp() + 1 minute
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 log = get_logger("bridge.provenance.transparency")
+
+
+class AnchorRejectedError(RuntimeError):
+    """Every token of an anchor run was refused by the database: nothing was anchored (the job retries)."""
 
 
 class ChainVerificationError(RuntimeError):
@@ -64,6 +76,7 @@ class AnchorReport:
     heads: int = 0
     anchored: list[ChainHead] = field(default_factory=list)
     failed: list[ChainHead] = field(default_factory=list)
+    rejected: list[ChainHead] = field(default_factory=list)  # timestamped, but the database refused the anchor
     deferred: list[ChainHead] = field(default_factory=list)  # not tried after a failure: the next run takes them
 
 
@@ -125,13 +138,48 @@ async def _unanchored(session: AsyncSession, heads: Sequence[ChainHead]) -> list
     return fresh
 
 
+async def _store(
+    session: AsyncSession, tokens: Sequence[tuple[ChainHead, TimestampToken]], report: AnchorReport
+) -> None:
+    """Insert the anchors, each in its own savepoint: one the database refuses is logged and skipped."""
+    async with session.begin(), as_role(session, WORKER):
+        for head, token in tokens:
+            try:
+                async with session.begin_nested():
+                    inserted = await session.execute(
+                        _INSERT_ANCHOR,
+                        {
+                            "id": uuid7(),
+                            "chain_id": head.chain_id,
+                            "seq": head.seq,
+                            "event_hash": head.event_hash,
+                            "token": token.response,
+                            "tsa_time": token.gen_time,
+                            "serial": token.serial,
+                        },
+                    )
+            except IntegrityError as exc:
+                report.rejected.append(head)
+                log.warning(
+                    "provenance.anchor_rejected",
+                    chain_id=head.chain_id,
+                    seq=head.seq,
+                    tsa_time=token.gen_time.isoformat(),
+                    sqlstate=getattr(exc.orig, "sqlstate", None),
+                )
+                continue
+            if cast(CursorResult[Any], inserted).rowcount == 1:
+                report.anchored.append(head)
+
+
 async def anchor_chain_heads(
     session: AsyncSession, tsa: TsaClient, *, limit: int = MAX_ANCHORS_PER_RUN
 ) -> AnchorReport:
     """Timestamp every chain head not anchored yet (at most ``limit`` per run; the rest wait for the next hour).
 
     The first failed timestamp ends the run's TSA calls: each attempt may last the whole TSA deadline, so trying every
-    pending head during an outage would hold the worker for hours. Tokens already obtained are stored."""
+    pending head during an outage would hold the worker for hours. Tokens already obtained are stored, each in its
+    own savepoint. The run fails when no head could be timestamped, or when the database refused every token."""
     report = AnchorReport()
     async with session.begin(), as_role(session, WORKER):
         rows = (await session.execute(_HEADS)).all()
@@ -139,48 +187,41 @@ async def anchor_chain_heads(
         report.heads = len(heads)
         pending = anchor_order(await _unanchored(session, heads))[:limit]
     tokens: list[tuple[ChainHead, TimestampToken]] = []
+    reason = ""
     for index, head in enumerate(pending):
         try:
-            tokens.append((head, await tsa.timestamp(head.event_hash)))
+            tokens.append((head, await tsa.timestamp(head.event_hash, max_ahead=ANCHOR_MAX_AHEAD)))
         except TsaError as exc:
+            reason = str(exc)
             report.failed.append(head)
             report.deferred = pending[index + 1 :]
             log.warning(
                 "provenance.anchor_failed",
                 chain_id=head.chain_id,
                 seq=head.seq,
-                reason=str(exc),
+                reason=reason,
                 deferred=len(report.deferred),
             )
             break
     if tokens:
-        async with session.begin(), as_role(session, WORKER):
-            for head, token in tokens:
-                inserted = await session.execute(
-                    _INSERT_ANCHOR,
-                    {
-                        "id": uuid7(),
-                        "chain_id": head.chain_id,
-                        "seq": head.seq,
-                        "event_hash": head.event_hash,
-                        "token": token.response,
-                        "tsa_time": token.gen_time,
-                        "serial": token.serial,
-                    },
-                )
-                if cast(CursorResult[Any], inserted).rowcount == 1:
-                    report.anchored.append(head)
+        await _store(session, tokens, report)
     log.info(
         "provenance.anchored",
         heads=report.heads,
         anchored=len(report.anchored),
+        rejected=len(report.rejected),
         failed=len(report.failed),
         deferred=len(report.deferred),
     )
     if pending and not tokens:
         raise TsaError(
             f"no chain head could be timestamped ({len(report.failed)} tried, {len(report.deferred)} left for the"
-            " next run)"
+            f" next run): {reason}"
+        )
+    if report.rejected and not report.anchored:
+        raise AnchorRejectedError(
+            f"no chain anchor was stored: {len(report.rejected)} refused by the database (TSA time ahead of the"
+            " database clock?); the heads wait for the next run"
         )
     return report
 
