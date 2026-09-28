@@ -34,6 +34,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Hygiene checks
         run: bash scripts/check_hygiene.sh
+      - name: Banned-claims copy-lint (AC-IP-4)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/copy_lint.py
 
   legacy:
     name: legacy suite (${{ matrix.os }})

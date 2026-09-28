@@ -8,7 +8,7 @@ LEGACY_PY ?= python
 UV = uv
 
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
-        check-legacy check-e2e test-integration e2e budget
+        check-legacy check-copy check-e2e test-integration e2e budget
 
 help:
 	@echo "dev             start the seeded local stack (Postgres+pgvector, Mailpit, S3 stand-in, api, worker, web)"
@@ -18,6 +18,7 @@ help:
 	@echo "check-backend   ruff, ruff format, mypy --strict, OpenAPI drift, pytest (unit + integration)"
 	@echo "check-frontend  eslint, tsc, vitest, API types drift"
 	@echo "check-legacy    the unchanged local-companion suite (scripts/run_legacy_tests.py)"
+	@echo "check-copy      banned-claims copy-lint (copy/banned_claims.txt, AC-IP-4)"
 	@echo "check-e2e       Playwright smoke against the running stack (make dev first)"
 	@echo "budget          gzipped JS per route against a running production web app (make dev first; not in check)"
 	@echo "openapi         regenerate backend/openapi.json;  api-types  regenerate frontend/lib/api/schema.d.ts"
@@ -43,7 +44,7 @@ openapi:
 api-types: openapi
 	cd frontend && npm run api:types
 
-check: check-backend check-frontend check-legacy check-e2e
+check: check-copy check-backend check-frontend check-legacy check-e2e
 
 check-backend:
 	cd backend && $(UV) run ruff check . && $(UV) run ruff format --check . && $(UV) run mypy
@@ -55,6 +56,9 @@ check-frontend:
 
 check-legacy:
 	$(LEGACY_PY) scripts/run_legacy_tests.py
+
+check-copy:
+	$(LEGACY_PY) scripts/copy_lint.py
 
 check-e2e:
 	cd frontend && npm run e2e

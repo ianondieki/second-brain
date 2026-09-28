@@ -17,6 +17,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in CI; the manual OAuth demo step only.
 - Decision:
 
+### D-27 · Swahili banned claims and the non-binding qualifier (copy-lint, AC-IP-4)
+- Why: the copy-lint (`copy/banned_claims.txt`, `scripts/copy_lint.py`) holds the English banned phrases ("theft-proof", "cannot be stolen", "protected idea", "patented") and the English non-binding qualifiers ("non-binding", "not a contract or a commitment to buy"). `locales/sw.json` is scanned with these English rules only, so a Swahili equivalent of a banned claim, or Swahili EM2/tracker copy without a Swahili qualifier, would pass. Claims wording is human copy (`CLAUDE.md` stop rule), and `sw.json` goes live only after the native-speaker review at G5.
+- Options: (a) at G5 the reviewer supplies the Swahili banned phrases and the approved Swahili qualifier(s); I add them to `copy/banned_claims.txt` with tests; (b) supply them now; (c) keep English-only rules and block `sw.json` from carrying `engagement.*`, `tracker.*`, `email.em2.*` keys until G5.
+- Recommended default: (a); until then Swahili stays off (G5), so nothing ships unlinted. Also noted: the rule's terms are the spec pair and inflections ("approve", "approved", "approves", "approving"); binding milestone and signing copy in `tracker.*` should say "accept"/"sign", never "approve".
+- Blocks: nothing before G5.
+- Decision:
+
 ### D-28 · What the 150 KB JS budget counts: unit, and whether response headers count (REQ-UX-05, AC-UX-3)
 - Why: `docs/spec/07` item 5 says "≤150 KB JS gzipped per route", and AC-UX-3 checks it with Lighthouse. The Phase 1 follow-up branch reads it as 150,000 bytes of gzip-compressed script **bodies** on first load (`npm run budget`, `make budget`; `docs/runbooks/dev-setup.md`). Lighthouse's script "transfer size" also counts **response headers**. Headers depend on the protocol: about 0.4 KB per script over the local HTTP/1.1 server (after page-only security headers; about 0.8 KB before), a few bytes each once HTTP/2 or HTTP/3 compresses them (HPACK or QPACK) behind Caddy and Cloudflare in production (Phase 8). By the Lighthouse reading, over local HTTP/1.1, two routes are over. By the body reading, every route passes.
 - Measured 2026-09-27 (production build, `next start`, HTTP/1.1; signed-in route with an org-owner test session). The body cuts on this branch: openapi-fetch's runtime left the browser bundle (its types stay), and the password field reads its own show/hide labels. A custom `global-error` saved nothing; the error styles are in Next's router bundle.
