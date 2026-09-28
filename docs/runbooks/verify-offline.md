@@ -181,7 +181,24 @@ again before production, ops supply them:
 3. Put them on the worker as PEM files (they are public certificates, not secrets) and set `TSA_CA_BUNDLE` and
    `TSA_FALLBACK_CA_BUNDLE` to their paths. A bundle may hold several certificates (a root and its successor
    during a rollover); it may also pin the issuing CA itself. Each bundle checks only its own URL's tokens.
-4. Prove the pair works before the release, from the worker host (a real TSA call, so never from tests or CI):
+4. Prove the pair works before the release, from the worker host, with the worker's own verifier (real TSA calls,
+   so never from tests or CI). In the worker's environment (the same settings and bundles the worker reads):
+
+   ```bash
+   python -m bridge.provenance probe-tsa
+   ```
+
+   It timestamps a random digest at `TSA_URL` and at `TSA_FALLBACK_URL`, each on its own (a working primary does
+   not hide a broken fallback), and applies every check the worker applies before it stores a token ("What Bridge
+   checks" above), with the anchors' one-minute bound ahead of the worker's clock. Expect one line per TSA,
+   `ok <url>: genTime ..., serial ..., policy ..., chain pinned to <bundle>`, and exit code 0. A
+   `FAILED <url>: ...` line names the check that failed (exit code 1); a missing or unreadable bundle fails closed
+   (exit code 2, naming the variable). `openssl ts -verify` is a different verifier: it does not hold the token's
+   time against the clock, and its chain rules are OpenSSL's, not the worker's (`cryptography` path validation with
+   the policy in `bridge/provenance/tsa.py`), so a token it accepts can still be refused by the worker. The probe is
+   the check that decides.
+
+   Then, as a second and independent check, openssl:
 
    ```bash
    printf 'bridge bundle check' > probe.txt
