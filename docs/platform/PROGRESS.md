@@ -266,7 +266,7 @@ recovery codes" route; 180 Vitest; `/settings/security` 148,518 bytes of bodies)
 an error notice with `role="alert"` that is then focused may be read twice; add an `announce={false}` option to `Alert`).
 Reviewer round 4 **PASS** (doc MINORs fixed in `1317915`; carried to T2.11: after a
 `current_password_required` answer focus does not reach the new password field, `SecuritySettings.tsx:135`). Integration
-merged in (`b1d1c5c`); CI run 36477150562 dispatched; merge into the integration branch when green.
+merged in (`b1d1c5c`); CI run 36477150562 green; **merged** into the integration branch (`228e1b6`).
 Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
 after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
 confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
@@ -299,7 +299,7 @@ is pushed, clean, and unmerged. The order of merges matters: schema v2 first, th
 | `feat/REQ-LLM-01-llm-layer` (T2.2) | `85f444f` | WIP | Clean stop after merging schema v2 (1157 passed). Next (impl-ai): the SQL `llm_calls` ledger store, SQL budget reads (monthly per tenant, global daily via the revision's definer), integration tests (one row per call, blocked rows, tenant isolation, `inputs` staff-only, AC-SEC-6 against SQL), wire it as the default. Then **reviewer** (never reviewed as a whole). Carry to T2.9: the settings API still offers `tier2_llm_assistant`; consent wording; an audit event on grant |
 | `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `396b2e3` | in review | Final round done (`POST /api/admin/niches`, 7 MINORs, 1019 passed). Round-1 reviewer PASS. **Re-run the round-2 reviewer** (it was discarded unfinished). After schema v2 merges, merge it in again and merge this branch. T2.6b (claims) builds on it: use `app_mark_claim_dns_verified`, write `dns_token` at insert |
 | `feat/REQ-PROV-04-verification` (T2.10a, D1) | `a4a1c4d` | done (reviewer PASS round 2) | Merge after schema v2 is merged, re-merging the final schema first (it contains schema v2). Dispatch CI first (not run on `a4a1c4d`). Small follow-up: make `test_concurrent_confirmations_of_two_numbers_verify_one` deterministic. D2 (KYC) waits for T2.4's object store |
-| `feat/REQ-AUTH-01-phase1-followups` | `81a1a35` | in review | Fix round done (155 Vitest; local E2E 24/24). ux-reviewer PASS round 2 in a browser (MINORs: D-28 JS headroom, `/settings/security` 148,305 B of bodies; inline text links 39 px, which predates this branch, so T2.11). **Re-run the round-2 reviewer** (it was discarded unfinished); check the CI dispatch run on `81a1a35`; then merge. Update the D-28 figures in `docs/runbooks/dev-setup.md` |
+| `feat/REQ-AUTH-01-phase1-followups` | `b1d1c5c` | done (merged `228e1b6`) | reviewer PASS and ux-reviewer PASS (round 4); CI run 36477150562 green. Carried: follow-ups 7 (`DELETE /api/auth/totp/enrol` under `lock_user`) and 8 (step-up "new recovery codes" route) in the REQ-AUTH-01 card, backend work with security-reviewer; T2.11: `Alert` `announce={false}` when focused, focus after `current_password_required` (`SecuritySettings.tsx:135`). D-28 figures current on the integration branch |
 | `feat/REQ-AUTH-02-oauth` (T2.12) | `7ae57b6` | done (merged `da0a98d`) | Buttons and the linked-accounts UI come in F4. MINOR follow-ups, not started, on a new `feat/REQ-AUTH-02-followups`: charge the callback throttle only after the state check; re-check the session after the provider call; a spend-window test; key the `require_reauth` throttle per IP; the 12 h residual row; a `TRUSTED_PROXIES` warning (Phase 8) |
 
 Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
@@ -335,7 +335,7 @@ Checklist (updated after every task; commit and push after each):
 | Item | Status | Notes |
 |---|---|---|
 | Phase 2 plan: task cards, this checklist, D-26 (OAuth test apps) | done | |
-| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | in review (`feat/REQ-AUTH-01-phase1-followups` `81a1a35`) | impl-frontend; item 5 ships with the first `/admin` route |
+| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | done (merge `228e1b6`) | reviewer + ux-reviewer PASS round 4; CI green; item 5 ships with the first `/admin` route; follow-ups 7 and 8 open |
 | T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | WIP (`feat/REQ-REPO-01-schema-v2` `6481de6`, review round 3 fixes part done) | db-migrations; security-reviewer |
 | T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | WIP (`feat/REQ-LLM-01-llm-layer` `85f444f`; SQL ledger store left) | impl-ai; fakes and synthetic cassettes only |
 | Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | done (merge `23e8104`) | reviewer PASS after 3 rounds (mutation-checked); pr.yml hygiene step + `make check-copy`; D-27 (Swahili claim copy) opened |
