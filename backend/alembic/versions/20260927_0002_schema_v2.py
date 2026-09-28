@@ -264,6 +264,12 @@ APP_GRANTS: dict[str, str] = {
 
 # New column grants of bridge_app on revision 0001 tables (dropped with the column on downgrade).
 APP_GRANTS_0001_TABLES: dict[str, str] = {"organizations": "UPDATE (county_code)"}
+# users.subject_salt never leaves the database: bridge_app's table-wide SELECT of revision 0001 becomes a column SELECT
+# of every other column (digests come from app_subject_digest()). Restored to the table-wide grant on downgrade.
+USERS_READABLE_COLUMNS = (
+    "id, email, email_verified_at, password_hash, display_name, locale, staff_role, status, totp_secret_enc,"
+    " totp_pending_enc, totp_enabled_at, totp_last_counter, totp_recovery_hashes, updated_at, created_at"
+)
 
 # Privileges of the other roles on this revision's tables.
 ROLE_GRANTS: dict[str, dict[str, str]] = {
@@ -804,6 +810,16 @@ AS $$
                  WHERE e.proposal_id = g.proposal_id AND e.org_id = g.org_id
                    AND e.state IN ('WITHDRAWN', 'DECLINED', 'TERMINATED'))
     )
+$$;
+
+-- SHA-256(subject_salt || p_data) for one user: owner refs in manifests (p_data = the id's 16 bytes, uuid_send(id)) and
+-- the per-subject salted digests of personal or free text in audit payloads (docs/spec/06 6.4 items 1 and 4). The salt
+-- itself never leaves the database (bridge_app holds no SELECT on users.subject_salt). NULL for an unknown user.
+CREATE FUNCTION app_subject_digest(p_user_id uuid, p_data bytea) RETURNS bytea
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT pg_catalog.sha256(u.subject_salt || p_data) FROM public.users u WHERE u.id = p_user_id
 $$;
 
 -- An E1 organisation sees only how many tags are held for it (docs/spec/06 6.3); members only, 0 for anyone else.
@@ -1684,6 +1700,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_is_staff(staff_role[])": ("bridge_app", "tier2_moderation"),
     "app_current_legal_template(legal_template_kind)": ("bridge_app",),
     "app_owns_version(uuid)": ("provenance_worker",),
+    "app_subject_digest(uuid, bytea)": ("bridge_app", "provenance_worker"),
     "app_tier2_granted(uuid, uuid)": ("bridge_app", "tier2_reader"),
     "app_held_tag_count(uuid)": ("bridge_app",),
     "app_confirm_phone_otp(uuid, bytea)": ("bridge_app",),
@@ -1735,6 +1752,11 @@ def _enum(name: str) -> postgresql.ENUM:
 def _grant_sql() -> str:
     grants = [f"GRANT {privileges} ON TABLE {table} TO bridge_app;" for table, privileges in APP_GRANTS.items()]
     grants += [f"GRANT {privileges} ON TABLE {t} TO bridge_app;" for t, privileges in APP_GRANTS_0001_TABLES.items()]
+    # REVOKE of a table privilege also revokes it on every column; the column grant follows.
+    grants += [
+        "REVOKE SELECT ON TABLE users FROM bridge_app;",
+        f"GRANT SELECT ({USERS_READABLE_COLUMNS}) ON TABLE users TO bridge_app;",
+    ]
     grants += [
         f"GRANT {privileges} ON TABLE {table} TO {role};"
         for role, tables in ROLE_GRANTS.items()
@@ -1844,6 +1866,7 @@ def downgrade() -> None:
     ):
         op.drop_column("organizations", column)
     op.drop_column("users", "subject_salt")
+    _run_sql("REVOKE SELECT ON TABLE users FROM bridge_app; GRANT SELECT ON TABLE users TO bridge_app;")
     bind = op.get_bind()
     for name in reversed(ENUMS):
         postgresql.ENUM(name=name).drop(bind, checkfirst=False)

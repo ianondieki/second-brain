@@ -257,6 +257,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
     "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
     "app_owns_version(uuid)": (True, {"provenance_worker"}),
+    "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
     "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
@@ -1334,9 +1335,8 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
     user_id = uuid7()
     async with rolled_back(app_engine, user_id) as conn:
         await add_user(conn, user_id)
-        salt = sa.text("SELECT octet_length(subject_salt) FROM users WHERE id = :id")
-        assert (await conn.execute(salt, {"id": user_id})).scalar_one() == 32  # set by the database per user
         for sql in (
+            "SELECT subject_salt FROM users",
             "UPDATE users SET subject_salt = '\\x00'",
             "UPDATE organizations SET verified_domain = 'x.example'",
             "UPDATE organizations SET official_domains = '{}'",
@@ -1369,8 +1369,47 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             await expect_error(conn, sql, "permission denied")
 
 
+async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_the_salt(
+    owner_engine: AsyncEngine,
+) -> None:
+    """Every user gets a random 32-byte salt from the database. bridge_app and provenance_worker get SHA-256(salt ||
+    data) from app_subject_digest() (owner refs: data = the id's 16 bytes), never the salt; the ORM creates and loads
+    users without selecting or returning it."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.auth.models import User
+
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        session = AsyncSession(bind=conn)
+        user = User(email=f"{uuid4().hex}@example.test", display_name="Salted")
+        session.add(user)
+        await session.flush()  # INSERT ... RETURNING the server defaults, never subject_salt
+        await act_as(conn, user.id)
+        session.expunge_all()
+        assert (await session.get(User, user.id)) is not None
+        await session.close()
+        digest = "SELECT app_subject_digest(:id, uuid_send(:id))"
+        from_app = (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one()
+        await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))
+        assert (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one() == from_app
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
+        salt = (
+            await conn.execute(sa.text("SELECT subject_salt FROM users WHERE id = :id"), {"id": user.id})
+        ).scalar_one()
+        assert len(salt) == 32
+        assert from_app == hashlib.sha256(salt + user.id.bytes).digest()  # bridge.provenance.manifest.owner_ref
+        unknown = "SELECT app_subject_digest(:id, '\\x00')"
+        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
+
+
 # Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.
-UNREADABLE_COLUMNS: dict[str, str] = {"org_claims": "otp_hash", "phone_verifications": "otp_hash"}
+# users.subject_salt: digests come from app_subject_digest(), the salt never leaves the database.
+UNREADABLE_COLUMNS: dict[str, str] = {
+    "org_claims": "otp_hash",
+    "phone_verifications": "otp_hash",
+    "users": "subject_salt",
+}
 
 
 @pytest.mark.parametrize(("table", "column"), sorted(UNREADABLE_COLUMNS.items()))
