@@ -146,7 +146,7 @@ def _secret(settings: Settings) -> str:
 
 async def _level(db: AsyncSession, user_id: UUID, *, lock: bool = False) -> DevVerification | None:
     stmt = select(DeveloperProfile.verification_level).where(DeveloperProfile.user_id == user_id)
-    if lock:  # serialises one user's concurrent requests, so both cannot pass the throttle before either commits
+    if lock:  # serialises one user's sends and confirmations until COMMIT (throttle counts, the D0 check)
         stmt = stmt.with_for_update()
     level: DevVerification | None = (await db.execute(stmt)).scalar_one_or_none()
     return level
@@ -297,13 +297,20 @@ async def confirm_code(
     db: AsyncSession, settings: Settings, *, user: User, verification_id: UUID, code: str
 ) -> DevVerification:
     """Check ``code`` against one of the caller's codes in SQL and commit (the attempt counts even when the code is
-    wrong). Returns the caller's new level; raises ``VerificationError`` otherwise."""
+    wrong). Returns the caller's new level; raises ``VerificationError`` otherwise.
+
+    Only a D0 profile can confirm: once one number has raised it to D1, another open code (for another number) is 409
+    ``already_verified``. The profile row stays locked until the commit, so two codes confirmed at once cannot both
+    verify."""
     compact = "".join(code.split())
     if not _CODE.fullmatch(compact):
         raise VerificationError(422, "invalid_code_format", "Enter the 6-digit code from the SMS.")
+    level = await _level(db, user.id, lock=True)
     before = await _code_state(db, user.id, verification_id)
-    if before is None:
+    if level is None or before is None:
         raise VerificationError(404, "not_found", "Not found.")
+    if level != DevVerification.D0:
+        raise VerificationError(409, "already_verified", "Your mobile number is already verified.")
     _refuse_if_closed(before)
 
     digest = otp_digest(_secret(settings), verification_id, compact)

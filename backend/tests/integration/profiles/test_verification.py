@@ -216,6 +216,57 @@ async def test_the_right_code_raises_the_profile_to_d1(signed_in: Client, owner_
     assert all(len(e.payload["phone_digest"]) == 64 for e in events)
 
 
+async def second_open_code(
+    developer: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> tuple[tuple[str, str], tuple[str, str]]:
+    """Two open codes for two numbers, asked for a minute apart: ((id, code), (id, code))."""
+    start = bridge.clock.utcnow()
+    first = (await ask(developer, new_number()[0])).json()["verification_id"], last_code(developer)
+    at(monkeypatch, start + timedelta(seconds=61))
+    second = (await ask(developer, new_number()[0])).json()["verification_id"], last_code(developer)
+    return first, second
+
+
+async def phone_verified_events(owner_engine: AsyncEngine, user_id: UUID) -> int:
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(
+            text(
+                "SELECT count(*) FROM audit_events WHERE actor_user_id = :u AND action = 'verification.phone_verified'"
+            ),
+            {"u": user_id},
+        )
+        return int(found.scalar_one())
+
+
+async def test_a_second_open_code_does_not_verify_a_d1_profile(
+    signed_in: Client, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once one number has raised the profile to D1, the right code for another number is 409 and changes nothing."""
+    developer = await signed_in()
+    (first, first_code), (second, second_code) = await second_open_code(developer, monkeypatch)
+    assert (await confirm(developer, first, first_code)).status_code == 200
+
+    late = await confirm(developer, second, second_code)
+    assert (late.status_code, late.json()["detail"]["code"]) == (409, "already_verified")
+    row = await code_row(owner_engine, second)
+    assert (row["verified_at"], row["attempts"]) == (None, 0)
+    assert await level_of(developer) == "d1"
+    assert await phone_verified_events(owner_engine, user_of(developer)) == 1
+
+
+async def test_concurrent_confirmations_of_two_numbers_verify_one(
+    signed_in: Client, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The profile row is locked while a code is confirmed, so two racing codes cannot both verify."""
+    developer = await signed_in()
+    (first, first_code), (second, second_code) = await second_open_code(developer, monkeypatch)
+    responses = await asyncio.gather(confirm(developer, first, first_code), confirm(developer, second, second_code))
+    assert sorted(r.status_code for r in responses) == [200, 409]
+    rows = [await code_row(owner_engine, verification_id) for verification_id in (first, second)]
+    assert sum(row["verified_at"] is not None for row in rows) == 1
+    assert await phone_verified_events(owner_engine, user_of(developer)) == 1
+
+
 async def test_five_wrong_codes_lock_the_code(signed_in: Client, owner_engine: AsyncEngine) -> None:
     developer = await signed_in()
     sent = (await ask(developer, new_number()[0])).json()
