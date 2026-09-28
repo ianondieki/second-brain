@@ -264,7 +264,9 @@ roles). Fixed in `48d7a03`..`a05cc54` (notices take focus via `reveal.ts`; timeo
 test; follow-ups 7 and 8 on the REQ-AUTH-01 card: `DELETE /api/auth/totp/enrol` under `lock_user`, a step-up "new
 recovery codes" route; 180 Vitest; `/settings/security` 148,518 bytes of bodies). ux-reviewer round 4 **PASS** (MINOR carried to T2.11:
 an error notice with `role="alert"` that is then focused may be read twice; add an `announce={false}` option to `Alert`).
-Reviewer round 4 is running; then merge the integration branch in, dispatch CI and merge.
+Reviewer round 4 **PASS** (doc MINORs fixed in `1317915`; carried to T2.11: after a
+`current_password_required` answer focus does not reach the new password field, `SecuritySettings.tsx:135`). Integration
+merged in (`b1d1c5c`); CI run 36477150562 dispatched; merge into the integration branch when green.
 Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
 after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
 confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
