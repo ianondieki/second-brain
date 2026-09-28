@@ -28,10 +28,8 @@ AC-DIR-5/a, AC-DIR-6 (`integration/directory/test_seed_and_browse.py`). AC-DIR-5
 - Responsiveness: rules in `bridge/directory/responsiveness.py` (new file): E2, ≥ 10 eligible tags and ≥ 60 days after
   `organizations.e2_verified_at` (read as "after the claim" reached E2). Numbers from a `ResponsivenessSource` on
   `app.state.responsiveness`: none until Phase 3, `FixtureResponsiveness` in tests. The tag count is never exposed.
-- **Deviation (schema):** the admin niche route `POST /api/admin/niches` is not built: `bridge_app` holds SELECT only
-  on `niches`, and only `db-migrations` adds grants or functions. Needed: a SECURITY DEFINER
-  `app_add_niche(p_slug text, p_name_en text, p_parent_slug text DEFAULT NULL, p_isic_code text DEFAULT NULL) RETURNS
-  uuid` (pinned search_path, EXECUTE to `bridge_app` only; refuses unless `app_is_staff('{admin}')`; a parent must
-  exist and be top level; unique slug). Until then `test_a_niche_added_at_run_time_is_selectable_at_once` proves the
-  "without a deploy" half with a niche inserted while the app runs; it switches to the route when the function lands.
+- Admin niche route: `POST /api/admin/niches` (staff admin; REQ-ADM-01 router) calls `app_add_niche` (schema v2 fix
+  round); 201 with the niche, 409 `niche_slug_taken`, 422 `parent_niche_not_top_level` / `parent_niche_not_found`,
+  audited `directory.niche_added` (ids only). `test_an_admin_added_niche_is_selectable_at_once` proves AC-DIR-5/a end
+  to end through the route; `integration/admin/test_add_niche.py` covers the refusals.
 - `backend/pyproject.toml`: ruff `allowed-confusables = ["›"]` (the niche separator).
