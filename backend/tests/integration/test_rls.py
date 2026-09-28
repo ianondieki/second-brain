@@ -18,6 +18,7 @@ tenant table without a fixture fails the run. Tables read on the request path by
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -535,6 +536,85 @@ async def test_the_owner_reads_their_tier2_through_tier2_reader(app_engine: Asyn
             text("SELECT count(*) FROM proposal_confidential WHERE owner_id = :b"), {"b": world.b.user_id}
         )
         assert rows.scalar_one() == 4
+
+
+# --- every Tier-2 role, bound to one developer --------------------------------------------------------------------
+
+# docs/spec/06 6.1. Jobs bind the user they act for (app.user_id: one tenant per job).
+TIER2_ROLES = ("dsr_exporter", "provenance_worker", "tier2_embed_worker", "tier2_moderation", "tier2_reader")
+TIER2_INSERT = (
+    "INSERT INTO proposal_confidential (version_id, proposal_id, owner_id, ciphertext, nonce, wrapped_dek, kms_key_id)"
+    " VALUES (:version, :proposal, :owner, '\\x01', '\\x02', '\\x03', 'local:test')"
+)
+EMBEDDING_INSERT = (
+    "INSERT INTO proposal_confidential_embeddings (version_id, embed_model, embed_version, full_embedding)"
+    f" VALUES (:version, 'rls-role-test', '1', {w.VECTOR_1024})"
+)
+
+
+async def _tier2_owners(conn: AsyncConnection) -> Counter[UUID]:
+    return Counter((await conn.execute(text("SELECT owner_id FROM proposal_confidential"))).scalars())
+
+
+async def _refused_by_rls(conn: AsyncConnection, sql: str, **params: object) -> None:
+    savepoint = await conn.begin_nested()
+    with pytest.raises(ProgrammingError, match="row-level security"):
+        await conn.execute(text(sql), params)
+    await savepoint.rollback()
+
+
+async def _next_draft_version(conn: AsyncConnection, proposal: UUID) -> UUID:
+    """As the owner: a second, draft version of ``proposal`` without a Tier-2 row yet."""
+    version = uuid7()
+    await _sql(
+        conn, "INSERT INTO proposal_versions (id, proposal_id, version_no) VALUES (:id, :p, 2)", id=version, p=proposal
+    )
+    return version
+
+
+@pytest.mark.parametrize("role", TIER2_ROLES)
+async def test_every_tier2_role_bound_to_developer_a_reads_and_writes_none_of_b(
+    owner_engine: AsyncEngine, world: w.World, role: str
+) -> None:
+    """Each role of the Tier-2 set, bound to developer A, reads and updates 0 of developer B's proposal_confidential
+    rows and writes none of B's full-text embeddings, while the roles that act for an owner do read and write A's own
+    rows (so no policy is merely closed). tier2_moderation reads nothing without a staff context, A's rows included,
+    and everything with one. The UPDATE without WHERE touches exactly the rows the UPDATE policy admits (no SELECT
+    policy applies to it), so an UPDATE policy opened to ``true`` fails the count."""
+    a, b = world.a, world.b
+    async with rolled_back(owner_engine) as conn:
+        a_next, b_next = await _next_draft_version(conn, a.draft), await _next_draft_version(conn, b.draft)
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, a.user_id, None)
+        await conn.execute(text(f"SET LOCAL ROLE {role}"))
+        assert (await conn.execute(text("SELECT current_user"))).scalar_one() == role
+        seen = await _tier2_owners(conn)
+        if role == "tier2_moderation":
+            assert seen == Counter(), "tier2_moderation read Tier 2 without a staff context"
+        else:
+            assert seen[b.user_id] == 0, f"{role} bound to A read B's Tier 2"
+            assert seen[a.user_id] == 4, f"{role} bound to A cannot read A's own Tier 2"
+        if role in ("tier2_reader", "provenance_worker"):
+            touched = await conn.execute(text("UPDATE proposal_confidential SET updated_at = now()"))
+            assert touched.rowcount == 4, f"{role} bound to A updated rows that are not A's"
+            for version in (b.draft_version, b.published_version):
+                targeted = await conn.execute(
+                    text("UPDATE proposal_confidential SET updated_at = now() WHERE version_id = :v"), {"v": version}
+                )
+                assert targeted.rowcount == 0
+        if role == "tier2_reader":
+            await _refused_by_rls(conn, TIER2_INSERT, version=b_next, proposal=b.draft, owner=b.user_id)
+            await _sql(conn, TIER2_INSERT, version=a_next, proposal=a.draft, owner=a.user_id)
+        if role == "tier2_embed_worker":
+            await _refused_by_rls(conn, EMBEDDING_INSERT, version=b.published_version)
+            await _sql(conn, EMBEDDING_INSERT, version=a.published_version)
+        if role == "tier2_moderation":
+            embeddings = text("SELECT version_id FROM proposal_confidential_embeddings")
+            assert list((await conn.execute(embeddings)).scalars()) == []
+            await conn.execute(text("SELECT set_config('app.user_id', :u, true)"), {"u": str(world.staff_id)})
+            seen = await _tier2_owners(conn)
+            assert (seen[a.user_id], seen[b.user_id]) == (4, 4)
+            assert {a.published_version, b.published_version} <= set((await conn.execute(embeddings)).scalars())
 
 
 # --- aggregate_worker ------------------------------------------------------------------------------------------------
