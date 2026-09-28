@@ -112,8 +112,10 @@ def decode_cursor(value: str) -> Cursor:
     try:
         raw = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
         rank, label, niche_id, name, org_id = json.loads(raw.decode("utf-8"))
-        if rank not in (0, 1) or not isinstance(label, str) or not isinstance(name, str):
+        if type(rank) is not int or rank not in (0, 1):  # JSON true is a bool, an int subclass; 0.0 == 0
             raise ValueError("malformed cursor")
+        if not all(isinstance(item, str) for item in (label, niche_id, name, org_id)):
+            raise ValueError("malformed cursor")  # UUID() raises AttributeError, not ValueError, on a non-string
         return Cursor(rank, label, UUID(niche_id), name, UUID(org_id))
     except (binascii.Error, UnicodeDecodeError, TypeError, ValueError) as exc:  # JSONDecodeError is a ValueError
         raise ValueError("invalid cursor") from exc

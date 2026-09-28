@@ -116,6 +116,15 @@ def _raw(value: object) -> str:
         _raw([0, "x", "not-a-uuid", "y", str(uuid4())]),
         _raw([0, "x", str(uuid4()), None, str(uuid4())]),
         base64.urlsafe_b64encode(b"\xff\xfe").decode(),
+        # rank is the integer 0 or 1, never a boolean or a float (Postgres refuses ``integer > boolean``)
+        _raw([True, "x", str(uuid4()), "y", str(uuid4())]),
+        _raw([False, "x", str(uuid4()), "y", str(uuid4())]),
+        _raw([0.0, "x", str(uuid4()), "y", str(uuid4())]),
+        # the ids are strings (UUID() raises AttributeError, not ValueError, on an int or a list)
+        _raw([0, "a", 5, "b", "00000000-0000-0000-0000-000000000000"]),
+        _raw([0, "a", str(uuid4()), "b", ["x"]]),
+        _raw([0, "a", str(uuid4()), "b", 5]),
+        _raw([0, "a", ["x"], "b", str(uuid4())]),
     ],
 )
 def test_anything_else_is_not_a_cursor(value: str) -> None:

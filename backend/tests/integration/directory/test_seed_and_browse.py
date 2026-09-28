@@ -14,7 +14,9 @@ The NGO/PBO claim-to-E2 clause of AC-DIR-6 is T2.6b (``test_claims.py::test_ngo_
 
 from __future__ import annotations
 
+import base64
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -512,6 +514,29 @@ async def test_pagination_walks_every_pair_exactly_once(client: httpx.AsyncClien
     too_many = await client.get("/api/directory/orgs", params={"niche": [f"n-{i}" for i in range(51)]})
     assert too_many.status_code == 422
     assert too_many.json()["detail"]["code"] == "too_many_filter_values"
+
+
+def forged(value: object) -> str:
+    """A cursor the API never wrote: base64url JSON of ``value``."""
+    return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+
+ZERO = str(UUID(int=0))
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param([True, "a", ZERO, "b", ZERO], id="boolean-rank"),
+        pytest.param([0, "a", 5, "b", ZERO], id="integer-niche-id"),
+        pytest.param([0, "a", ZERO, "b", ["x"]], id="list-org-id"),
+    ],
+)
+async def test_a_forged_cursor_answers_400(client: httpx.AsyncClient, value: list[object]) -> None:
+    """Well-formed JSON with the wrong types is refused before the query runs (it answered 500)."""
+    response = await client.get("/api/directory/orgs", params={"cursor": forged(value)})
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["code"] == "invalid_cursor"
 
 
 async def test_delisted_pending_and_unknown_orgs_are_never_shown(client: httpx.AsyncClient, seeded: Seeded) -> None:
