@@ -79,7 +79,7 @@ class CountingTsa:
         return self.local_tsa.handler(request)
 
     def client(self) -> TsaClient:
-        return TsaClient(["http://tsa.test/tsr"], transport=httpx.MockTransport(self.handler))
+        return TsaClient([self.local_tsa.endpoint("http://tsa.test/tsr")], transport=httpx.MockTransport(self.handler))
 
 
 async def append(engine: AsyncEngine, chain_id: str, n: int = 1) -> None:

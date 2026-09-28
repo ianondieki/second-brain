@@ -342,7 +342,7 @@ async def test_a_tsa_outage_leaves_timestamp_pending_until_a_retry_succeeds(
         await hash_manifest(s, built.version_id, built.owner_id, wrapper=wrapper, store=store)
     async with sessions() as s:
         await sign_manifest(s, built.version_id, built.owner_id, signer=signer)
-    down = TsaClient(["http://tsa.test/tsr"], transport=httpx.MockTransport(lambda r: httpx.Response(503)))
+    down = TsaClient(tsa.endpoints, transport=httpx.MockTransport(lambda r: httpx.Response(503)))
     async with sessions() as s:
         with pytest.raises(TsaUnavailableError):
             await timestamp_manifest(s, built.version_id, built.owner_id, tsa=down)

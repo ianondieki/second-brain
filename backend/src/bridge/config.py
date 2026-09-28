@@ -28,6 +28,8 @@ OPTIONAL_SETTINGS = (
     "provenance_signing_key",
     "provenance_kms_key_id",
     "tsa_fallback_url",
+    "tsa_ca_bundle",
+    "tsa_fallback_ca_bundle",
     "s3_endpoint_url",
     "s3_access_key_id",
     "s3_secret_access_key",
@@ -94,6 +96,10 @@ class Settings(BaseSettings):
     tsa_url: str = "http://timestamp.digicert.com"
     tsa_fallback_url: str | None = "https://freetsa.org/tsr"
     tsa_timeout_seconds: float = 10.0
+    # The pinned CA bundle (PEM file) of each TSA: a token must chain to it. Required outside dev and test (the TSA
+    # client fails closed at use without it); ops provide DigiCert's and FreeTSA's before staging.
+    tsa_ca_bundle: Path | None = None
+    tsa_fallback_ca_bundle: Path | None = None
 
     # Object storage (bridge.storage.objects; ADR-007): AWS S3 in production, SeaweedFS in dev (D-24, S3_ENDPOINT_URL);
     # "memory" is for tests and is refused in staging and production. Credentials may stay unset where the instance

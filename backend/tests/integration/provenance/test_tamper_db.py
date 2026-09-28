@@ -55,7 +55,7 @@ async def evidence(
     from bridge.db import create_session_factory
 
     sessions: async_sessionmaker[AsyncSession] = create_session_factory(app_engine)
-    tsa = TsaClient(["http://tsa.test/tsr"], transport=local_tsa.transport())
+    tsa = TsaClient([local_tsa.endpoint("http://tsa.test/tsr")], transport=local_tsa.transport())
     built = await registered_version(owner_engine, wrapper)
     async with sessions() as s:
         await hash_manifest(s, built.version_id, built.owner_id, wrapper=wrapper, store=InMemoryObjectStore())

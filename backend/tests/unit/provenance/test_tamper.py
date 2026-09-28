@@ -63,7 +63,8 @@ def test_every_byte_of_the_sealed_copy_is_authenticated() -> None:
 
 
 async def test_openssl_rejects_an_edited_manifest_against_the_stored_token(local_tsa: LocalTsa, tmp_path: Path) -> None:
-    token = await TsaClient(["http://tsa.test/tsr"], transport=local_tsa.transport()).timestamp(CONTENT_HASH)
+    client = TsaClient([local_tsa.endpoint("http://tsa.test/tsr")], transport=local_tsa.transport())
+    token = await client.timestamp(CONTENT_HASH)
     tsr = tmp_path / "token.tsr"
     tsr.write_bytes(token.response)
     original, edited = tmp_path / "manifest.json", tmp_path / "edited.json"

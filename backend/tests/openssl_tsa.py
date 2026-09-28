@@ -1,10 +1,11 @@
 """A local RFC 3161 test TSA for the provenance tests (AC-IP-1). Never DigiCert, FreeTSA or any network service.
 
-At test time: a throwaway root CA and a TSA certificate (critical timeStamping extended key usage) are generated with
-``cryptography`` into a temporary directory; tokens are then issued with ``openssl ts -reply`` and checked with
-``openssl ts -verify``, exactly as anyone would check a stored ``.tsr`` offline (docs/runbooks/verify-offline.md).
-``LocalTsa.transport()`` is an httpx transport that answers timestamp queries through ``openssl ts -reply``, so the
-production client code runs unchanged against it.
+At test time: a throwaway root CA (optionally an intermediate with the timeStamping usage, as DigiCert's chain has) and
+a TSA certificate (critical, sole timeStamping extended key usage) are generated with ``cryptography`` into a
+temporary directory; tokens are then issued with ``openssl ts -reply`` and checked with ``openssl ts -verify``, exactly
+as anyone would check a stored ``.tsr`` offline (docs/runbooks/verify-offline.md). ``LocalTsa.transport()`` is an
+httpx transport that answers timestamp queries through ``openssl ts -reply``, so the production client code runs
+unchanged against it; ``LocalTsa.trust`` is the pinned bundle (the root) that client checks the chain against.
 
 The ``openssl`` command is found on ``OPENSSL_BIN``, then ``PATH``, then (Windows) the copies that ship with Git for
 Windows. When none is found the test fails with instructions: it is never skipped (docs/runbooks/dev-setup.md).
@@ -26,7 +27,9 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID, ObjectIdentifier
+
+from bridge.provenance.tsa import TrustBundle, TsaEndpoint
 
 CONFIG_TEMPLATE = Path(__file__).resolve().parent / "fixtures" / "tsa" / "tsa.cnf"
 MISSING_OPENSSL = (
@@ -36,6 +39,7 @@ MISSING_OPENSSL = (
     "put any openssl.exe on PATH, or set OPENSSL_BIN to its full path. See docs/runbooks/dev-setup.md."
 )
 KeyType = Literal["rsa", "ec"]
+PrivateKey = rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
 
 
 def openssl_candidates() -> list[Path]:
@@ -70,7 +74,7 @@ def _name(common_name: str) -> x509.Name:
     )
 
 
-def _key(key_type: KeyType) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey:
+def _key(key_type: KeyType) -> PrivateKey:
     if key_type == "ec":
         return ec.generate_private_key(ec.SECP256R1())
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -90,6 +94,44 @@ def _usage(*, sign: bool, ca: bool) -> x509.KeyUsage:
     )
 
 
+def _pem(path: Path, *certs: x509.Certificate) -> None:
+    path.write_bytes(b"".join(c.public_bytes(serialization.Encoding.PEM) for c in certs))
+
+
+def _private_pem(path: Path, key: PrivateKey) -> None:
+    path.write_bytes(
+        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    )
+
+
+def _load_key(path: Path) -> PrivateKey:
+    key = serialization.load_pem_private_key(path.read_bytes(), password=None)
+    assert isinstance(key, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey)
+    return key
+
+
+def _ca(
+    subject: str, key: PrivateKey, issuer: x509.Name, issuer_key: PrivateKey, now: datetime, *, eku: bool
+) -> x509.Certificate:
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(_name(subject))
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0 if eku else 1), critical=True)
+        .add_extension(_usage(sign=False, ca=True), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+    )
+    if eku:  # an intermediate limited to timestamping, like DigiCert's "Trusted G4 TimeStamping" CA
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False
+        ).add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+    return builder.sign(issuer_key, hashes.SHA256())
+
+
 @dataclass(frozen=True, slots=True)
 class LocalTsa:
     directory: Path
@@ -97,6 +139,7 @@ class LocalTsa:
 
     @property
     def ca_pem(self) -> Path:
+        """The root certificate: the pinned trust bundle (``TSA_CA_BUNDLE``) and ``openssl ts -verify -CAfile``."""
         return self.directory / "ca.pem"
 
     @property
@@ -107,50 +150,80 @@ class LocalTsa:
     def config(self) -> Path:
         return self.directory / "tsa.cnf"
 
+    @property
+    def trust(self) -> TrustBundle:
+        return TrustBundle.from_pem_file(self.ca_pem)
+
+    def endpoint(self, url: str) -> TsaEndpoint:
+        """This TSA at ``url``, pinned to its own root."""
+        return TsaEndpoint(url, self.trust)
+
     @classmethod
-    def create(cls, directory: Path, *, key_type: KeyType = "rsa", timestamping_eku: bool = True) -> LocalTsa:
+    def create(
+        cls,
+        directory: Path,
+        *,
+        key_type: KeyType = "rsa",
+        intermediate: bool = False,
+        valid_from: timedelta = timedelta(days=-1),
+        valid_until: timedelta = timedelta(days=3650),
+    ) -> LocalTsa:
+        """A test TSA. ``valid_from``/``valid_until`` place the TSA certificate's validity relative to now (openssl
+        signs with it either way, so an expired or not-yet-valid certificate can be tested)."""
         openssl = find_openssl()
         now = datetime.now(UTC)
-        ca_key, tsa_key = _key(key_type), _key(key_type)
-        ca = (
-            x509.CertificateBuilder()
-            .subject_name(_name("Bridge Test TSA Root"))
-            .issuer_name(_name("Bridge Test TSA Root"))
-            .public_key(ca_key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(now - timedelta(days=1))
-            .not_valid_after(now + timedelta(days=3650))
-            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-            .add_extension(_usage(sign=False, ca=True), critical=True)
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
-            .sign(ca_key, hashes.SHA256())
-        )
-        builder = (
+        root_key, tsa_key = _key(key_type), _key(key_type)
+        root_name = _name("Bridge Test TSA Root")
+        root = _ca("Bridge Test TSA Root", root_key, root_name, root_key, now, eku=False)
+        chain = [root]
+        issuer, issuer_key = root, root_key
+        if intermediate:
+            issuer_key = _key(key_type)
+            issuer = _ca("Bridge Test TimeStamping CA", issuer_key, root.subject, root_key, now, eku=True)
+            chain = [issuer, root]
+        tsa = (
             x509.CertificateBuilder()
             .subject_name(_name("Bridge Test TSA"))
-            .issuer_name(ca.subject)
+            .issuer_name(issuer.subject)
             .public_key(tsa_key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(now - timedelta(days=1))
-            .not_valid_after(now + timedelta(days=3650))
+            .not_valid_before(now + valid_from)
+            .not_valid_after(now + valid_until)
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(_usage(sign=True, ca=False), critical=True)
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(tsa_key.public_key()), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
+            .sign(issuer_key, hashes.SHA256())
         )
-        eku = ExtendedKeyUsageOID.TIME_STAMPING if timestamping_eku else ExtendedKeyUsageOID.CODE_SIGNING
-        tsa = builder.add_extension(x509.ExtendedKeyUsage([eku]), critical=True).sign(ca_key, hashes.SHA256())
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "ca.pem").write_bytes(ca.public_bytes(serialization.Encoding.PEM))
-        (directory / "tsa.pem").write_bytes(tsa.public_bytes(serialization.Encoding.PEM))
-        (directory / "tsa.key").write_bytes(
-            tsa_key.private_bytes(
-                serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-            )
-        )
+        _pem(directory / "ca.pem", root)
+        _pem(directory / "chain.pem", *chain)  # the certificates each token carries besides the signer's
+        _pem(directory / "issuer.pem", issuer)
+        _pem(directory / "tsa.pem", tsa)
+        _private_pem(directory / "tsa.key", tsa_key)
+        _private_pem(directory / "issuer.key", issuer_key)  # test-only: issues the twins below
         template = CONFIG_TEMPLATE.read_text(encoding="utf-8")
         (directory / "tsa.cnf").write_text(template.replace("{dir}", directory.as_posix()), encoding="utf-8")
         return cls(directory, openssl)
+
+    def twin(self, *, eku: list[ObjectIdentifier] | None, critical: bool = True) -> x509.Certificate:
+        """The TSA certificate re-issued by the same CA with the same key and serial but another extended key usage
+        (openssl refuses to sign with such a certificate, so tests swap it into a token)."""
+        original = x509.load_pem_x509_certificate(self.tsa_pem.read_bytes())
+        issuer = x509.load_pem_x509_certificate((self.directory / "issuer.pem").read_bytes())
+        builder = (
+            x509.CertificateBuilder()
+            .subject_name(original.subject)
+            .issuer_name(issuer.subject)
+            .public_key(_load_key(self.directory / "tsa.key").public_key())
+            .serial_number(original.serial_number)
+            .not_valid_before(original.not_valid_before_utc)
+            .not_valid_after(original.not_valid_after_utc)
+        )
+        if eku is not None:
+            builder = builder.add_extension(x509.ExtendedKeyUsage(eku), critical=critical)
+        return builder.sign(_load_key(self.directory / "issuer.key"), hashes.SHA256())
 
     def run(self, *args: str) -> subprocess.CompletedProcess[bytes]:
         env = {**os.environ, "OPENSSL_CONF": str(self.config)}

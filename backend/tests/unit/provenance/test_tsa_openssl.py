@@ -19,7 +19,7 @@ TSA_URL = "http://tsa.test/tsr"
 async def test_the_stored_tsr_verifies_with_openssl(local_tsa: LocalTsa, tmp_path: Path) -> None:
     manifest = (FIXTURES / "manifest_v1_basic.canonical.json").read_bytes()
     content_hash = hashlib.sha256(manifest).digest()
-    token = await TsaClient([TSA_URL], transport=local_tsa.transport()).timestamp(content_hash)
+    token = await TsaClient([local_tsa.endpoint(TSA_URL)], transport=local_tsa.transport()).timestamp(content_hash)
 
     stored = tmp_path / "timestamp.tsr"
     stored.write_bytes(token.response)
@@ -44,7 +44,7 @@ async def test_the_stored_tsr_verifies_with_openssl(local_tsa: LocalTsa, tmp_pat
 
 async def test_openssl_rejects_the_token_for_another_hash(local_tsa: LocalTsa) -> None:
     digest = hashlib.sha256(b"registered manifest").digest()
-    token = await TsaClient([TSA_URL], transport=local_tsa.transport()).timestamp(digest)
+    token = await TsaClient([local_tsa.endpoint(TSA_URL)], transport=local_tsa.transport()).timestamp(digest)
     other = hashlib.sha256(b"registered manifest, one byte edited").digest()
     assert local_tsa.verify(token.response, digest=other).returncode != 0
 
@@ -52,7 +52,7 @@ async def test_openssl_rejects_the_token_for_another_hash(local_tsa: LocalTsa) -
 async def test_openssl_rejects_a_token_from_an_untrusted_tsa(local_tsa: LocalTsa, tmp_path: Path) -> None:
     stranger = LocalTsa.create(tmp_path / "stranger")
     digest = hashlib.sha256(b"x").digest()
-    token = await TsaClient([TSA_URL], transport=stranger.transport()).timestamp(digest)
+    token = await TsaClient([stranger.endpoint(TSA_URL)], transport=stranger.transport()).timestamp(digest)
     assert stranger.verify(token.response, digest=digest).returncode == 0
     assert local_tsa.verify(token.response, digest=digest).returncode != 0
 
@@ -60,7 +60,7 @@ async def test_openssl_rejects_a_token_from_an_untrusted_tsa(local_tsa: LocalTsa
 async def test_ecdsa_tsa_tokens_are_accepted(tmp_path: Path) -> None:
     ec_tsa = LocalTsa.create(tmp_path / "ec", key_type="ec")
     digest = hashlib.sha256(b"ec").digest()
-    token = await TsaClient([TSA_URL], transport=ec_tsa.transport()).timestamp(digest)
+    token = await TsaClient([ec_tsa.endpoint(TSA_URL)], transport=ec_tsa.transport()).timestamp(digest)
     assert ec_tsa.verify(token.response, digest=digest).returncode == 0
 
 
@@ -73,7 +73,8 @@ async def test_fallback_tsa_is_used_when_the_primary_fails(local_tsa: LocalTsa) 
             return httpx.Response(503)
         return local_tsa.handler(request)
 
-    client = TsaClient(["http://primary.test/tsr", "http://fallback.test/tsr"], transport=httpx.MockTransport(handler))
+    endpoints = [local_tsa.endpoint("http://primary.test/tsr"), local_tsa.endpoint("http://fallback.test/tsr")]
+    client = TsaClient(endpoints, transport=httpx.MockTransport(handler))
     digest = hashlib.sha256(b"fallback").digest()
     token = await client.timestamp(digest)
     assert token.tsa_url == "http://fallback.test/tsr"

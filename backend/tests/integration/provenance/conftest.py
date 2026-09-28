@@ -50,7 +50,7 @@ def store() -> InMemoryObjectStore:
 
 @pytest.fixture
 def tsa(local_tsa: LocalTsa) -> TsaClient:
-    return TsaClient([TSA_URL], transport=local_tsa.transport())
+    return TsaClient([local_tsa.endpoint(TSA_URL)], transport=local_tsa.transport())
 
 
 @pytest.fixture
