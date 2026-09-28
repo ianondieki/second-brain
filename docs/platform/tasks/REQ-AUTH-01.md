@@ -24,4 +24,11 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
 3. Password forms: a hidden `autocomplete="username"` field so password managers save the right account.
 4. `/settings/security`: hide the Password section while two-step enrolment is in progress.
 5. The staff dependency (staff role + enrolled and verified TOTP; 404 for non-staff) ships with the first `/admin` route (REQ-ADM-01, T2.3/T2.6b).
-Item 6 (enforced CSP, HSTS) stays in Phase 8 (REQ-SEC-03).
+6. The enforced nonce CSP, HSTS and the report-only CSP's report endpoint stay in Phase 8 (REQ-SEC-03).
+7. Backend (`bridge/auth/`, security-reviewer review): a pending TOTP secret (`users.totp_pending_enc`) outlives
+   "Cancel setup" and a closed tab (`THREAT_MODEL.md` §1, "A pending TOTP secret lingers"). Clear it on cancel or
+   give it a TTL: a CSRF-checked `DELETE /api/auth/totp/enrol` that "Cancel setup" calls (the web client sends
+   DELETE), and/or a pending-since timestamp that `confirm_totp_enrolment` checks, clearing a secret older than 15
+   minutes (the magic-link lifetime) so an abandoned tab is covered too. A new column goes through `db-migrations`.
+   Tests: after cancel or expiry, confirming answers 409 `no_pending_enrolment` and the column is empty. Then narrow
+   that threat-model row's residual risk.
