@@ -1011,6 +1011,56 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
 
 
+async def test_staff_admin_adds_a_niche_without_a_deploy(owner_engine: AsyncEngine) -> None:
+    """AC-DIR-5 (the database half of the admin route): app_add_niche() is staff admin only, adds a top-level niche or
+    a child of an active top-level one (two levels), refuses a taken or malformed slug, and the app reads the new niche
+    at once."""
+    tag = uuid4().hex[:10]
+    add = "SELECT app_add_niche(:slug, :name, :parent, :isic)"
+    niche = "SELECT slug, name_en, parent_id, isic_code, active FROM niches WHERE id = :id"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("niche-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("niche-mod"), "Moderator", staff_role="moderator")
+        developer = await w.add_user(conn, _email("niche-dev"), "Developer")
+        retired = f"retired-{tag}"
+        await run(
+            conn,
+            "INSERT INTO niches (id, slug, name_en, active) VALUES (:id, :s, 'Retired', false)",
+            id=uuid7(),
+            s=retired,
+        )
+        top = {"slug": f"water-{tag}", "name": " Water & sanitation ", "parent": None, "isic": "E36"}
+        for caller in (developer, moderator, None):
+            await act(conn, caller)
+            await expect(conn, add, "staff admin only", **top)
+        await act(conn, admin)
+        parent = await run(conn, add, **top)
+        row = (await conn.execute(text(niche), {"id": parent})).one()
+        assert tuple(row) == (top["slug"], "Water & sanitation", None, "E36", True)
+        child = await run(conn, add, slug=f"water-kiosks-{tag}", name="Water kiosks", parent=top["slug"], isic=None)
+        assert (await conn.execute(text(niche), {"id": child})).one().parent_id == parent
+        refusals = (
+            ({"slug": top["slug"], "name": "Again", "parent": None, "isic": None}, "the slug is taken"),
+            ({"slug": f"deep-{tag}", "name": "Deep", "parent": f"water-kiosks-{tag}", "isic": None}, "top-level"),
+            ({"slug": f"under-retired-{tag}", "name": "Orphan", "parent": retired, "isic": None}, "top-level"),
+            ({"slug": f"lost-{tag}", "name": "Lost", "parent": f"missing-{tag}", "isic": None}, "no such parent"),
+            ({"slug": f"Bad Slug {tag}", "name": "Bad", "parent": None, "isic": None}, "lower-case"),
+            ({"slug": f"blank-{tag}", "name": "  ", "parent": None, "isic": None}, "English name"),
+            ({"slug": f"isic-{tag}", "name": "ISIC", "parent": None, "isic": "k64; drop"}, "ISIC code"),
+        )
+        for params, refusal in refusals:
+            await expect(conn, add, refusal, **params)
+        await act(conn, developer)  # selectable at once: every signed-in user reads niches
+        assert await run(conn, "SELECT count(*) FROM niches WHERE id = ANY (:ids)", ids=[parent, child]) == 2
+        await expect(
+            conn,
+            "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Direct')",
+            "permission denied",
+            id=uuid7(),
+            s=f"direct-{tag}",
+        )
+
+
 async def test_llm_call_inputs_are_read_by_staff_admin_only(owner_engine: AsyncEngine) -> None:
     """A user reads their call rows but not the sanitised inputs; staff admin reads those through the function."""
     async with as_app(owner_engine) as conn:

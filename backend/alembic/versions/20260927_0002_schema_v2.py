@@ -1365,6 +1365,54 @@ AS $$
      ORDER BY e.chain_id, e.seq DESC
 $$;
 
+-- Adds a niche without a deploy (docs/spec/06 6.2, AC-DIR-5: an admin-added niche is selectable in the directory,
+-- the editor and the scout form at once). Staff admin only. The slug is lower-case letters and digits joined by
+-- hyphens and must be new; a child's parent must be an active top-level niche (the taxonomy has two levels). Returns
+-- the new niche's id; the caller writes the audit event.
+CREATE FUNCTION app_add_niche(
+    p_slug text, p_name_en text, p_parent_slug text DEFAULT NULL, p_isic_code text DEFAULT NULL
+) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_id uuid := public.uuid7();
+    v_parent public.niches%ROWTYPE;
+BEGIN
+    IF NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_add_niche: staff admin only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_slug IS NULL OR length(p_slug) > 80 OR p_slug !~ '^[a-z0-9]+(-[a-z0-9]+)*$' THEN
+        RAISE EXCEPTION 'app_add_niche: the slug is lower-case letters and digits joined by hyphens, at most 80'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF coalesce(btrim(p_name_en), '') = '' OR length(btrim(p_name_en)) > 120 THEN
+        RAISE EXCEPTION 'app_add_niche: the English name is required, at most 120 characters'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF p_isic_code IS NOT NULL AND p_isic_code !~ '^[A-Z0-9]{1,8}$' THEN
+        RAISE EXCEPTION 'app_add_niche: the ISIC code is 1 to 8 upper-case letters and digits'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF p_parent_slug IS NOT NULL THEN
+        SELECT * INTO v_parent FROM public.niches WHERE slug = p_parent_slug;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'app_add_niche: no such parent niche' USING ERRCODE = 'foreign_key_violation';
+        END IF;
+        IF v_parent.parent_id IS NOT NULL OR NOT v_parent.active THEN
+            RAISE EXCEPTION 'app_add_niche: the parent must be an active top-level niche (two levels)'
+                USING ERRCODE = 'check_violation';
+        END IF;
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.niches n WHERE n.slug = p_slug) THEN
+        RAISE EXCEPTION 'app_add_niche: the slug is taken' USING ERRCODE = 'unique_violation';
+    END IF;
+    INSERT INTO public.niches (id, slug, name_en, parent_id, isic_code)
+    VALUES (v_id, p_slug, btrim(p_name_en), v_parent.id, p_isic_code);
+    RETURN v_id;
+END;
+$$;
+
 -- The sanitised inputs of one LLM call (kept 30 days), for staff admin only: bridge_app holds no SELECT on
 -- llm_calls.inputs, so users and members read their call rows without them. NULL for an unknown call.
 CREATE FUNCTION app_llm_call_inputs(p_call uuid) RETURNS jsonb
@@ -1737,6 +1785,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
     "app_llm_call_inputs(uuid)": ("bridge_app",),
+    "app_add_niche(text, text, text, text)": ("bridge_app",),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),
     "app_audit_chain_heads()": ("provenance_worker",),
