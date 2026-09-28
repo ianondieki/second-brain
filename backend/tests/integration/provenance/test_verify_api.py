@@ -242,7 +242,10 @@ async def test_the_manifest_is_not_served_before_it_is_stored(
     async with owner_engine.begin() as conn:  # simulate a record whose manifest never reached the Tier-2 row
         await conn.execute(text("ALTER TABLE proposal_confidential DISABLE TRIGGER USER"))
         await conn.execute(
-            text("UPDATE proposal_confidential SET manifest_ciphertext = NULL, manifest_nonce = NULL WHERE version_id = :v"),
+            text(
+                "UPDATE proposal_confidential SET manifest_ciphertext = NULL, manifest_nonce = NULL"
+                " WHERE version_id = :v"
+            ),
             {"v": built.version_id},
         )
         await conn.execute(text("ALTER TABLE proposal_confidential ENABLE TRIGGER USER"))

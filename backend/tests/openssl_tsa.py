@@ -161,8 +161,9 @@ class LocalTsa:
         stamp = f"{datetime.now(UTC):%H%M%S%f}-{os.getpid()}"
         query_file, reply_file = self.directory / f"q-{stamp}.tsq", self.directory / f"r-{stamp}.tsr"
         query_file.write_bytes(query)
-        result = self.run("ts", "-reply", "-config", str(self.config), "-queryfile", str(query_file), "-out",
-                          str(reply_file))  # fmt: skip
+        result = self.run(
+            "ts", "-reply", "-config", str(self.config), "-queryfile", str(query_file), "-out", str(reply_file)
+        )
         if result.returncode != 0:
             raise RuntimeError("openssl ts -reply failed: " + result.stderr.decode(errors="replace"))
         return reply_file.read_bytes()
@@ -172,8 +173,18 @@ class LocalTsa:
         stamp = f"{datetime.now(UTC):%H%M%S%f}"
         response_file = self.directory / f"v-{stamp}.tsr"
         response_file.write_bytes(tsr)
-        return self.run("ts", "-verify", "-digest", digest.hex(), "-in", str(response_file), "-CAfile",
-                        str(self.ca_pem), "-untrusted", str(self.tsa_pem))  # fmt: skip
+        return self.run(
+            "ts",
+            "-verify",
+            "-digest",
+            digest.hex(),
+            "-in",
+            str(response_file),
+            "-CAfile",
+            str(self.ca_pem),
+            "-untrusted",
+            str(self.tsa_pem),
+        )
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if request.headers.get("content-type") != "application/timestamp-query":

@@ -45,8 +45,12 @@ async def new_owner(conn: AsyncConnection) -> tuple[UUID, UUID, UUID]:
     user_id = await add_user(conn, f"prov-{tag}@example.test", f"Owner {tag}")
     await _exec(conn, "INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)", u=user_id, h=f"dev-{tag}")
     niche_id = uuid7()
-    await _exec(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Provenance niche')", id=niche_id,
-                slug=f"prov-{tag}")  # fmt: skip
+    await _exec(
+        conn,
+        "INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Provenance niche')",
+        id=niche_id,
+        slug=f"prov-{tag}",
+    )
     problem_id = await add_problem(conn, user_id, niche_id)
     return user_id, niche_id, problem_id
 
@@ -91,8 +95,12 @@ async def registered_version(
             no=version_no,
             n=niche_id,
         )
-        await _exec(conn, "INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :pr)",
-                    v=version_id, pr=problem_id)  # fmt: skip
+        await _exec(
+            conn,
+            "INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :pr)",
+            v=version_id,
+            pr=problem_id,
+        )
         plaintext = tier2_plaintext if tier2_plaintext is not None else json.dumps(tier2 or TIER2).encode()
         sealed = seal(key, plaintext, proposal_id=proposal_id, version_id=version_id, purpose=Purpose.TIER2)
         if tier2_row:

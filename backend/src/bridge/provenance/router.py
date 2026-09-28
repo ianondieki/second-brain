@@ -269,8 +269,9 @@ async def manifest_json(cert_id: CertId, live: CurrentSession, db: Db, settings:
         wrapper = key_wrapper_from_settings(settings)
     except ConfigurationError as exc:
         raise ApiError(503, "not_configured", "Manifest downloads are not available on this server.") from exc
-    key = await open_data_key(wrapper, wrapped=bytes(row.wrapped_dek), key_id=row.kms_key_id,
-                              proposal_id=row.proposal_id)  # fmt: skip
+    key = await open_data_key(
+        wrapper, wrapped=bytes(row.wrapped_dek), key_id=row.kms_key_id, proposal_id=row.proposal_id
+    )
     manifest = open_sealed(
         key,
         Sealed(bytes(row.manifest_nonce), bytes(row.manifest_ciphertext)),

@@ -88,8 +88,14 @@ def test_the_certificate_shows_every_required_fact() -> None:
 def test_pending_records_say_so() -> None:
     text = pdf_text(
         render_pdf(
-            data(status=ProvenanceStatus.HASHED, tsa_time=None, tsa_serial=None, signature=None, key_id=None,
-                 attachment_hashes=())  # fmt: skip
+            data(
+                status=ProvenanceStatus.HASHED,
+                tsa_time=None,
+                tsa_serial=None,
+                signature=None,
+                key_id=None,
+                attachment_hashes=(),
+            )
         )
     )
     assert "Timestamp pending" in text

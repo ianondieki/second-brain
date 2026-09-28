@@ -59,9 +59,13 @@ async def jobs_for(engine: AsyncEngine, version_id: UUID) -> list[tuple[str, dic
 
 
 async def register(
-    built: Built, sessions: Sessions, wrapper: LocalKeyWrapper, store: InMemoryObjectStore, signer: LocalSigner,
+    built: Built,
+    sessions: Sessions,
+    wrapper: LocalKeyWrapper,
+    store: InMemoryObjectStore,
+    signer: LocalSigner,
     tsa: TsaClient,
-) -> None:  # fmt: skip
+) -> None:
     async with sessions() as s:
         assert await hash_manifest(s, built.version_id, built.owner_id, wrapper=wrapper, store=store)
     async with sessions() as s:
@@ -156,8 +160,9 @@ async def test_publishing_registers_the_version_end_to_end(
     manifest_file.write_bytes(manifest)
     tsr_file = tmp_path / "token.tsr"
     tsr_file.write_bytes(bytes(record.tsa_token))
-    by_data = local_tsa.run("ts", "-verify", "-data", str(manifest_file), "-in", str(tsr_file), "-CAfile",
-                            str(local_tsa.ca_pem))  # fmt: skip
+    by_data = local_tsa.run(
+        "ts", "-verify", "-data", str(manifest_file), "-in", str(tsr_file), "-CAfile", str(local_tsa.ca_pem)
+    )
     assert by_data.returncode == 0, by_data.stderr.decode(errors="replace")
     assert record.tsa_serial.startswith("0x")
     assert record.tsa_url == "http://tsa.test/tsr"
@@ -341,8 +346,9 @@ async def test_a_tsa_outage_leaves_timestamp_pending_until_a_retry_succeeds(
     async with sessions() as s:
         with pytest.raises(TsaUnavailableError):
             await timestamp_manifest(s, built.version_id, built.owner_id, tsa=down)
-    record = await fetch(owner_engine, "SELECT status, tsa_token FROM provenance_records WHERE version_id = :v",
-                         v=built.version_id)  # fmt: skip
+    record = await fetch(
+        owner_engine, "SELECT status, tsa_token FROM provenance_records WHERE version_id = :v", v=built.version_id
+    )
     assert record.status == ProvenanceStatus.SIGNED
     assert record.tsa_token is None
     assert status_label(record.status) == "Timestamp pending"
