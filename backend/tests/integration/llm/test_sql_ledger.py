@@ -10,11 +10,14 @@ organisation B's rows; ``inputs`` is unreadable by bridge_app and read by staff 
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -22,8 +25,11 @@ from bridge.config import get_settings
 from bridge.db import bind_tenant
 from bridge.ids import uuid7
 from bridge.llm import registry
-from bridge.llm.errors import LLMBudgetExceeded, LLMKillSwitch, LLMRefused, Tier2NotAllowed
+from bridge.llm.budget import month_start
+from bridge.llm.errors import LLMBudgetExceeded, LLMConfigError, LLMKillSwitch, LLMRefused, Tier2NotAllowed
 from bridge.llm.fakes import FakeAdapter
+from bridge.llm.models import LlmCall
+from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from tests.integration.llm.conftest import People
 from tests.integration.llm.helpers import TASK, USAGE, reply, service, stored
@@ -103,3 +109,83 @@ async def test_blocked_and_refused_calls_are_rows_that_survive_the_callers_rollb
         assert all("value" not in f for f in row["inputs"]["fields"])
     assert (rows[3]["stop_reason"], rows[3]["output_tokens"]) == ("refusal", USAGE.output_tokens)
     assert rows[3]["cost_usd"] > 0
+
+
+async def count(factory: Factory, user: UUID | None, sql: str, *, org: UUID | None = None, **params: object) -> int:
+    """``sql`` as bridge_app bound to ``user`` (and ``org``), as a request is."""
+    async with factory() as db:
+        await bind_tenant(db, user_id=user, org_id=org)
+        return int((await db.execute(text(sql), params)).scalar_one())
+
+
+async def test_organisation_a_reads_none_of_organisation_bs_rows(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    traces = {"a": f"iso-a-{people.tag}", "b": f"iso-b-{people.tag}"}
+    for label, user, org in (("a", people.a, people.org_a), ("b", people.b, people.org_b)):
+        async with factory() as db:
+            await bind_tenant(db, user_id=user)
+            ctx = CallContext(org_id=org, user_id=user, trace_id=traces[label])
+            await service(db, factory, FakeAdapter([reply()])).complete(TASK, screen(), Verdict, ctx=ctx)
+    by_trace = "SELECT count(*) FROM llm_calls WHERE trace_id = :t"
+    by_org = "SELECT count(*) FROM llm_calls WHERE org_id = :o"
+    assert await count(factory, people.a, by_trace, t=traces["a"]) == 1
+    assert await count(factory, people.a, by_trace, t=traces["b"]) == 0
+    assert await count(factory, people.a, by_org, o=people.org_b) == 0
+    assert await count(factory, people.a, by_trace, org=people.org_a, t=traces["b"]) == 0
+    assert await count(factory, people.viewer, by_trace, t=traces["a"]) == 1  # every active member reads its org's
+    assert await count(factory, people.viewer, by_trace, t=traces["b"]) == 0
+    assert await count(factory, None, by_trace, t=traces["a"]) == 0  # no tenant context reads nothing
+    assert await count(factory, people.admin, by_trace, t=traces["b"]) == 1  # staff admin reads every row
+
+    # A's session neither sums B's spend nor records a call for B or for B's user; nor does an unbound session.
+    refused, adapter = f"iso-x-{people.tag}", FakeAdapter([reply()])
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a, org_id=people.org_a)
+        with pytest.raises(LLMConfigError):
+            await SqlLedger(factory, caller=db).tenant_spent_usd(
+                org_id=people.org_b, user_id=None, since=month_start(clock.utcnow())
+            )
+        for ctx in (
+            CallContext(org_id=people.org_b, user_id=people.a),
+            CallContext(org_id=people.org_b),
+            CallContext(user_id=people.b),
+        ):
+            with pytest.raises(LLMConfigError):
+                await service(db, factory, adapter).complete(
+                    TASK, screen(), Verdict, ctx=replace(ctx, trace_id=refused)
+                )
+    async with factory() as db:
+        ctx = CallContext(org_id=people.org_a, trace_id=refused)
+        with pytest.raises(LLMConfigError):
+            await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=ctx)
+    assert adapter.requests == []
+    assert await stored(owner_engine, refused) == []
+
+
+async def test_inputs_are_unreadable_by_bridge_app_and_read_by_staff_admin_only(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    trace = f"inputs-{people.tag}"
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        ctx = CallContext(user_id=people.a, trace_id=trace)
+        await service(db, factory, FakeAdapter([reply()])).complete(TASK, screen(), Verdict, ctx=ctx)
+    [row] = await stored(owner_engine, trace)
+    read = "SELECT app_llm_call_inputs(:id)"
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        mapped = (await db.execute(select(LlmCall).where(LlmCall.id == row["id"]))).scalar_one()
+        assert mapped.task == TASK  # the mapper never selects inputs
+        with pytest.raises(DBAPIError, match="permission denied"):
+            await db.execute(text("SELECT inputs FROM llm_calls WHERE id = :id"), {"id": row["id"]})
+    for caller in (people.a, people.viewer, None):
+        async with factory() as db:
+            await bind_tenant(db, user_id=caller)
+            with pytest.raises(DBAPIError, match="staff admin only"):
+                await db.execute(text(read), {"id": row["id"]})
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.admin)
+        inputs = (await db.execute(text(read), {"id": row["id"]})).scalar_one()
+    assert inputs == row["inputs"]
+    assert inputs["fields"][0]["value"] == "Solar kiosks for markets"
