@@ -243,7 +243,12 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); reviewer and
 security-reviewer round 3 are running on `0fd9159`. impl-ai is on the T2.2 SQL ledger. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
-headers in `security-headers.test.ts`); impl-frontend is fixing both. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
+headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
+premise was disputed with the Next source and pinned by an E2E test; D-28 figures updated: `/settings/security` 148,441
+bytes of bodies, 152,118 with headers; 174 Vitest). Reviewer round 3 and ux-reviewer (new states) are running.
+Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
+after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
+confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
 (T2.4) reviewed and verified (1080 passed, `openapi --check` clean). Wip `c509ea6` (T2.2, per-session
 `tier2_llm_assistant` consent) reviewed and verified at `85f444f` (ruff, format, mypy, `openapi --check` clean; 1157
 passed). impl-backend is on the T2.4 fix round (items 1b–12).
