@@ -236,32 +236,42 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
 
-### Handoff (resume from here; updated 2026-09-28 by the cloud session)
+### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
 
-Open branches (each merged `claude/eloquent-hypatia-aa3577` at `a9b0e66` with a merge commit; nothing is merged back yet):
+Integration branch `claude/eloquent-hypatia-aa3577`: only T2.12's backend is merged (`da0a98d`). Every other branch below
+is pushed, clean, and unmerged. The order of merges matters: schema v2 first, then the branches that contain it.
 
 | Branch | Last commit | Status | Exact next step |
 |---|---|---|---|
-| `feat/REQ-AUTH-01-phase1-followups` | `81a1a35` | re-review | fix round done (155 Vitest; local E2E 24/24 on the rebuilt host app); reviewer round 2 + ux-reviewer (with browser) running; CI dispatched |
-| `feat/REQ-REPO-01-schema-v2` | `6c478bd` | fix round 3 running | round 2: reviewer PASS (4 MINOR), security CHANGES_REQUIRED (MAJOR: approving a disputed claim leaves the losing claimant as owner). db-migrations round 3: dispute transfer + `app_staff_remove_membership`, `app_mark_claim_dns_verified`, `app_subject_digest` caller binding, verified email in `app_tier2_granted`, `moderation_cases` insert rules, records only for registered versions; then security re-review |
-| `feat/REQ-LLM-01-llm-layer` | `60bdf90` | WIP | `c509ea6` reviewed and finished (writer `grant_session_consent`, PostgreSQL test under RLS; 842 passed). Next: after T2.1 merges, merge it in and add the SQL `llm_calls` ledger store; then reviewer. Carry to T2.9: settings API still offers `tier2_llm_assistant`; consent wording; audit event on grant |
-| `feat/REQ-PROV-04-verification` | `a4a1c4d` | reviewer PASS (round 2) | merges after schema v2 (it contains it); MINOR follow-up: make the concurrent-confirm race test deterministic; oversized laptop commits recorded as a deviation |
-| `feat/REQ-AUTH-02-oauth` | `7ae57b6` | merged (`da0a98d`) | done; MINOR follow-ups go to `feat/REQ-AUTH-02-followups` (not started) |
-| `feat/REQ-DIR-02-provisional-seed` | `7598120` | final round running | impl-backend: `POST /api/admin/niches` via `app_add_niche` + the 7 MINORs; then a short re-review |
-| `feat/REQ-PROV-01-provenance` | `104a782` | fix round running | impl-backend: merge 0002 fixes, pinned TSA trust bundles + ESSCertIDv2 + gen_time bound, audit events on manifest/certificate reads, no Tier-2 values in errors, minors; then both reviewers re-run |
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `6481de6` | WIP | Round 3 is part done. Done: the dispute transfer, `app_staff_remove_membership` (`816dc5b`), `app_mark_claim_dns_verified` plus the write-once DNS columns (`6481de6`, wip, unverified; 901 passed; `alembic check` and `openapi --check` not re-run). Remaining (db-migrations): (3) bind `app_subject_digest` to `app_user_id()` unless the caller is staff or `provenance_worker`; (4) `u.email_verified_at IS NOT NULL` in `app_tier2_granted` plus a `TIER2_CASES` case; (5) `moderation_cases` INSERT only `source='report'`, with `app_open_moderation_case` for system sources; (6) `provenance_records` only for registered versions; (7) test the E1-shortcut domain equality; (8) THREAT_MODEL rows, card notes, docstring. Then re-run **reviewer + security-reviewer** (round 3). Open policy question: an upheld dispute against an **E2** org cannot be approved (no E2→E1 step; a claimant cannot accept the terms on an E2 org). Decide it, or record it as a D-entry |
+| `feat/REQ-PROV-01-provenance` (T2.4) | `09b4a2e` | WIP | Fix round is part done. Done: schema merged and adapted (`app_subject_digest`, worker-only hash fill), the signing key kept out of the API container, and item 1 in code and tests (pinned `TSA_CA_BUNDLE`/`TSA_FALLBACK_CA_BUNDLE`, chain valid at genTime, sole critical EKU, ESS v1/v2, ±15 min). 1080 passed at `09b4a2e` (wip, unverified; `openapi --check`, coverage and copy-lint not run). Remaining: the intermediate-CA policy test gap; verify-offline doc (ops supply the DigiCert/FreeTSA bundles before staging); items 2–8 and 10–12 of the round (no Tier-2 values in canonicalisation errors; audit events on `manifest.json` and certificate reads; overall TSA deadline; oldest-first anchors; verify_chain retry; D2-gate and grantee owner-filter tests; audit only when this call stored the token; buckets created in migrate; retired key on roots plus snapshot time; card notes incl. the REQ-SEC-01 owner exemption and the schema follow-ups list). Then re-run **reviewer + security-reviewer** |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `85f444f` | WIP | Clean stop after merging schema v2 (1157 passed). Next (impl-ai): the SQL `llm_calls` ledger store, SQL budget reads (monthly per tenant, global daily via the revision's definer), integration tests (one row per call, blocked rows, tenant isolation, `inputs` staff-only, AC-SEC-6 against SQL), wire it as the default. Then **reviewer** (never reviewed as a whole). Carry to T2.9: the settings API still offers `tier2_llm_assistant`; consent wording; an audit event on grant |
+| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `396b2e3` | in review | Final round done (`POST /api/admin/niches`, 7 MINORs, 1019 passed). Round-1 reviewer PASS. **Re-run the round-2 reviewer** (it was discarded unfinished). After schema v2 merges, merge it in again and merge this branch. T2.6b (claims) builds on it: use `app_mark_claim_dns_verified`, write `dns_token` at insert |
+| `feat/REQ-PROV-04-verification` (T2.10a, D1) | `a4a1c4d` | done (reviewer PASS round 2) | Merge after schema v2 is merged, re-merging the final schema first (it contains schema v2). Dispatch CI first (not run on `a4a1c4d`). Small follow-up: make `test_concurrent_confirmations_of_two_numbers_verify_one` deterministic. D2 (KYC) waits for T2.4's object store |
+| `feat/REQ-AUTH-01-phase1-followups` | `81a1a35` | in review | Fix round done (155 Vitest; local E2E 24/24). ux-reviewer PASS round 2 in a browser (MINORs: D-28 JS headroom, `/settings/security` 148,305 B of bodies; inline text links 39 px, which predates this branch, so T2.11). **Re-run the round-2 reviewer** (it was discarded unfinished); check the CI dispatch run on `81a1a35`; then merge. Update the D-28 figures in `docs/runbooks/dev-setup.md` |
+| `feat/REQ-AUTH-02-oauth` (T2.12) | `7ae57b6` | done (merged `da0a98d`) | Buttons and the linked-accounts UI come in F4. MINOR follow-ups, not started, on a new `feat/REQ-AUTH-02-followups`: charge the callback throttle only after the state check; re-check the session after the provider call; a spend-window test; key the `require_reauth` throttle per IP; the 12 h residual row; a `TRUSTED_PROXIES` warning (Phase 8) |
 
-Environment. Windows laptop: unchanged (`UV_NATIVE_TLS=1`, system Chrome; integration tests start a testcontainer when
-`TEST_DATABASE_ADMIN_URL` is unset). Linux cloud container: start Docker with `dockerd &` (or `sudo dockerd &`), then a
-reusable test server `docker run -d --name bridge-testdb -e POSTGRES_PASSWORD=postgres -p 55432:5432
-pgvector/pgvector:pg16` and `export TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`;
-`uv python install 3.12`, `uv sync --frozen` in `backend/`, `npm ci` in `frontend/`; legacy suite on a Python 3.13 venv
-with `requirements.txt` and a `cloudflared` stub on `PATH` (as in `pr.yml`), then `python scripts/run_legacy_tests.py` with that venv's Python (the system Python lacks the companion's dependencies and the runner then exits 2).
-Worktrees live in `../sb-wt/<REQ-ID>`. Baselines on `a9b0e66`: backend 579 passed, Vitest 105, legacy 307 OK (Linux).
-Cloud-only limits: the egress policy denies `pkg-containers.githubusercontent.com` (GHCR blobs), so `make dev` cannot
-build the api image there; the cloud session runs postgres/mailpit/s3 from compose and the API (uvicorn) and web
-(`next build && next start`) on the host. Playwright 1.63 wants Chromium 1243 while the container has 1194: point
-`PLAYWRIGHT_BROWSERS_PATH` at a scratch shim (no config change). Full CI (incl. the compose E2E) runs on feature
-branches through `workflow_dispatch` of `pr.yml`.
+Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
+reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
+T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
+D-29, and the E2-dispute question above. Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
+are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
+`/api/openapi.json` lists admin routes in production (Phase 8).
+
+Environment. Windows laptop: nothing new is needed beyond `uv sync` and `npm ci` (dependencies added on branches:
+rfc8785, asn1crypto, reportlab, boto3). Keep `UV_NATIVE_TLS=1` and system Chrome. Integration tests start a
+testcontainer when `TEST_DATABASE_ADMIN_URL` is unset; `openssl` must be on PATH for the TSA tests (Git's
+`usr\bin\openssl.exe` is found automatically). New `.env` keys on branches (documented in `backend/.env.example`):
+`TIER2_LOCAL_KEK`, `PROVENANCE_SIGNING_KEY`, `TSA_*`, `OBJECT_STORE`, `S3_*`, `SMS_PROVIDER`, `AFRICASTALKING_*`;
+`infra/ci/make-env.sh` generates throwaway values. Linux-only (cloud container; the laptop doesn't need any of this):
+start Docker with `dockerd &`; the test server is `docker run -d --name bridge-testdb -e POSTGRES_PASSWORD=postgres -p
+55432:5432 pgvector/pgvector:pg16`, with `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`;
+run the legacy suite on a Python 3.13 venv with `requirements.txt` and a `cloudflared` stub on PATH (the system Python
+makes the runner exit 2). The egress policy denies GHCR blobs (`pkg-containers.githubusercontent.com`) and ordinary
+websites, so `make dev` can't build the API image. Instead, run postgres, mailpit and s3 from compose, and the API
+(uvicorn) plus web (`next build`, then `node .next/standalone/server.js` with static assets copied) on the host.
+Playwright 1.63 wants Chromium 1243 and the container has 1194: point `PLAYWRIGHT_BROWSERS_PATH` at a scratch shim.
+Full CI runs on feature branches through `workflow_dispatch` of `pr.yml`.
 
 Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`, on top of `40f1adc`. Decisions applied:
 D-18 (no paid API calls: LLM fakes and synthetic cassettes only), D-20 (OAuth is T2.12), D-21 (provisional directory
@@ -274,16 +284,16 @@ Checklist (updated after every task; commit and push after each):
 | Item | Status | Notes |
 |---|---|---|
 | Phase 2 plan: task cards, this checklist, D-26 (OAuth test apps) | done | |
-| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | todo | impl-frontend; item 5 ships with the first `/admin` route |
-| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | todo | db-migrations; security-reviewer |
-| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | todo | impl-ai; fakes and synthetic cassettes only |
+| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | in review (`feat/REQ-AUTH-01-phase1-followups` `81a1a35`) | impl-frontend; item 5 ships with the first `/admin` route |
+| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | WIP (`feat/REQ-REPO-01-schema-v2` `6481de6`, review round 3 fixes part done) | db-migrations; security-reviewer |
+| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | WIP (`feat/REQ-LLM-01-llm-layer` `85f444f`; SQL ledger store left) | impl-ai; fakes and synthetic cassettes only |
 | Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | done (merge `23e8104`) | reviewer PASS after 3 rounds (mutation-checked); pr.yml hygiene step + `make check-copy`; D-27 (Swahili claim copy) opened |
 | Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | done (branch `feat/REQ-DIR-02-provisional-seed`, merges with T2.6a) | 85 E0 rows from CA, CBK, SASRA, CUE, TVETA, government and PBORA registers; no contacts; basic education skipped (no official list) |
-| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | todo | security-reviewer |
-| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | todo | |
+| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | WIP (`feat/REQ-PROV-01-provenance` `09b4a2e`, review fixes part done) | security-reviewer |
+| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | in review (`feat/REQ-DIR-02-provisional-seed` `396b2e3`) | |
 | T2.6b Claims E1/E2, admin claim queue, MET acceptance (REQ-DIR-03, REQ-ADM-01) | todo | security-reviewer |
 | T2.3 Proposals: editor API, sanitiser, holds, moderation queue, attachments (REQ-PROP-01/02, REQ-MOD-01, REQ-BIL-02) | todo | |
-| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | todo | |
+| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | D1 reviewed PASS (`feat/REQ-PROV-04-verification` `a4a1c4d`); D2 and REQ-PROV-05 todo | |
 | T2.12 GitHub + Google OAuth (REQ-AUTH-02) | backend done (merge `da0a98d`); UI in F4 | reviewer PASS and security-reviewer PASS (round 2); CI green on `7ae57b6`; 756 passed, `bridge/auth` 96%; respx fakes only (D-26 open). MINOR follow-ups on `feat/REQ-AUTH-02-followups`: callback throttle after the state check, re-check the session after the provider call, spend-window test, per-IP re-auth throttle key, threat-model residual (12 h), `TRUSTED_PROXIES` start-up warning (Phase 8) |
 | T2.5 Tier-2 access: predicate, NDA, grants, unlocks, renders, access log, flag (REQ-REPO-01, REQ-PROV-03, REQ-BIL-03, REQ-SEC-01) | todo | security-reviewer |
 | T2.7 Pitch to company: tags, held tags, 409, cooldown, EM1, tag privacy (REQ-PROP-03, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02) | todo | |
