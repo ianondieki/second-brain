@@ -47,7 +47,7 @@ adapters), `bridge/provenance/{manifest,signing,tsa,service,transparency}.py`, `
   builds); tokens are issued with `openssl ts -reply` and checked with `openssl ts -verify` (`tests/openssl_tsa.py`).
 - AC-IP-2 database half: `tests/integration/provenance/test_tamper_db.py` (the unit directory has no database); the
   manifest half is `tests/unit/provenance/test_tamper.py`.
-- Coverage: `bridge/provenance` 98% after review round 1 (`uv run pytest --cov=bridge.provenance
+- Coverage: `bridge/provenance` 99% after review round 1 (`uv run pytest --cov=bridge.provenance
   tests/unit/provenance tests/integration/provenance`); `[tool.coverage.run]` now traces SQLAlchemy's greenlets
   (`concurrency = ["greenlet", "thread"]`), which also lifts the measured coverage of every route handler.
 
