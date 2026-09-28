@@ -5,10 +5,11 @@ other tests break on purpose."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from collections.abc import AsyncIterator, Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.config import ConfigurationError
 from bridge.db import create_session_factory
 from bridge.ids import uuid7
 from bridge.jobs import audit as audit_jobs
@@ -250,6 +252,51 @@ async def test_the_nightly_task_closes_the_day_through_the_runtime(
     async with engines["bridge_owner"].connect() as conn:
         days = (await conn.execute(text("SELECT day FROM transparency_roots ORDER BY day"))).scalars().all()
     assert date(2026, 10, 1) in days
+
+
+async def test_a_root_names_its_key_after_retirement_and_retired_keys_sign_no_new_root(
+    engines: dict[str, AsyncEngine],
+) -> None:
+    """A root keeps naming the key that signed it, and that key stays listed (with retired_at) on
+    /.well-known/provenance-keys.json after it is retired, so the old root still verifies. A retired or never
+    published key signs no new root (the job fails at once); the next key does. The report carries the time of the
+    snapshot the root covers."""
+    owner, app, reader = engines["bridge_owner"], engines["bridge_app"], engines["audit_reader"]
+    old, new = LocalSigner(os.urandom(32)), LocalSigner(os.urandom(32))
+    async with owner.begin() as conn:
+        await register_public_key(conn, old)
+    await append(owner, "org:rotation", 2)
+    first_day, second_day = date(2026, 8, 1), date(2026, 8, 2)
+    before = datetime.now(UTC)
+    async with create_session_factory(app)() as s:
+        first = await verify_and_publish_root(reader, s, old, first_day)
+    assert first.published
+    assert before <= first.snapshot_at <= datetime.now(UTC)
+    async with owner.begin() as conn:
+        await conn.execute(text("UPDATE provenance_keys SET retired_at = now() WHERE key_id = :k"), {"k": old.key_id})
+
+    for refused in (old, new):  # retired, then not yet published
+        async with create_session_factory(app)() as s:
+            with pytest.raises(ConfigurationError, match="register-key"):
+                await verify_and_publish_root(reader, s, refused, second_day)
+    async with owner.begin() as conn:
+        await register_public_key(conn, new)
+    async with create_session_factory(app)() as s:
+        assert (await verify_and_publish_root(reader, s, new, second_day)).published
+
+    async with client(app, None) as c:
+        roots = {r["day"]: r for r in (await c.get("/api/transparency")).json()["roots"]}
+        keys = {k["kid"]: k for k in (await c.get("/.well-known/provenance-keys.json")).json()["keys"]}
+    assert roots["2026-08-01"]["key_id"] == old.key_id
+    assert roots["2026-08-02"]["key_id"] == new.key_id
+    assert keys[old.key_id]["retired_at"] is not None
+    assert keys[new.key_id]["retired_at"] is None
+    published = base64.urlsafe_b64decode(keys[old.key_id]["x"] + "=")
+    assert verify_signature(
+        published,
+        root_message(first_day, bytes.fromhex(roots["2026-08-01"]["merkle_root"])),
+        base64.b64decode(roots["2026-08-01"]["signature"]),
+    )
 
 
 async def test_a_broken_chain_publishes_nothing(engines: dict[str, AsyncEngine], fresh_signer: LocalSigner) -> None:

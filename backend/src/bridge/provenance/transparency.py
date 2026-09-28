@@ -12,8 +12,10 @@ Nightly ``verify_and_publish_root``: ``audit_reader`` verifies every chain (``br
 REPEATABLE READ snapshot; only when all verify, the day's root is published: a Merkle tree (RFC 6962 hashing: leaf
 ``SHA-256(0x00 || leaf)``, node ``SHA-256(0x01 || left || right)``) over the chain heads of that snapshot, sorted by
 chain id, where a leaf is ``chain_id (UTF-8) || 0x00 || seq (8 bytes, big-endian) || event_hash``. The root is signed
-(``signing.root_message``) and stored in ``transparency_roots`` (public at ``/api/transparency``). A broken chain
-publishes nothing and raises ``ChainVerificationError``.
+(``signing.root_message``) by a published, unretired key and stored in ``transparency_roots`` with that key's id
+(public at ``/api/transparency``; retired keys stay listed at ``/.well-known/provenance-keys.json``). The snapshot
+time is reported and logged; storing it needs a ``transparency_roots`` column (schema follow-up on the REQ-PROV-01
+card). A broken chain publishes nothing and raises ``ChainVerificationError``.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from bridge.audit.chain import ChainProblem, verify_all
+from bridge.config import ConfigurationError
 from bridge.db import as_role
 from bridge.ids import uuid7
 from bridge.logging import get_logger
@@ -161,10 +164,14 @@ async def anchor_chain_heads(
     return report
 
 
+# The first statement of the REPEATABLE READ transaction takes its snapshot: the root covers every audit event
+# committed before this time and none after (recorded in transparency_roots once schema v2 has the column).
+_SNAPSHOT_TIME = text("SELECT statement_timestamp()")
 _READER_HEADS = text(
     "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events ORDER BY chain_id, seq DESC"
 )
 _ROOT_EXISTS = text("SELECT 1 FROM transparency_roots WHERE day = :day")
+_KEY = text("SELECT retired_at FROM provenance_keys WHERE key_id = :key_id")
 _INSERT_ROOT = text(
     "INSERT INTO transparency_roots (day, merkle_root, signature, key_id)"
     " VALUES (:day, :root, :signature, :key_id) ON CONFLICT DO NOTHING"
@@ -177,15 +184,20 @@ class RootReport:
     merkle_root: bytes
     chains: int
     published: bool
+    snapshot_at: datetime  # when the snapshot whose chain heads the root covers was taken
 
 
 async def verify_and_publish_root(
     audit_engine: AsyncEngine, session: AsyncSession, signer: Signer, day: date
 ) -> RootReport:
-    """Verify every chain as ``audit_reader``, then publish the signed root for ``day`` (idempotent per day)."""
+    """Verify every chain as ``audit_reader``, then publish the signed root for ``day`` (idempotent per day).
+
+    Only a published, unretired key signs a root (``ConfigurationError`` otherwise, so the job fails at once): the
+    root names that key, and the key stays on ``/.well-known/provenance-keys.json`` after it is retired."""
     async with audit_engine.connect() as raw:
         connection = await raw.execution_options(isolation_level="REPEATABLE READ")
         async with connection.begin():
+            snapshot_at: datetime = (await connection.execute(_SNAPSHOT_TIME)).scalar_one()
             broken = await verify_all(connection)
             rows = (await connection.execute(_READER_HEADS)).all()
     if broken:
@@ -195,12 +207,25 @@ async def verify_and_publish_root(
     root = root_over(heads)
     async with session.begin():
         if (await session.execute(_ROOT_EXISTS, {"day": day})).first() is not None:
-            return RootReport(day, root, len(heads), published=False)
+            return RootReport(day, root, len(heads), published=False, snapshot_at=snapshot_at)
+        key = (await session.execute(_KEY, {"key_id": signer.key_id})).one_or_none()
+        if key is None or key.retired_at is not None:
+            raise ConfigurationError(
+                f"signing key {signer.key_id} is not published or is retired: publish the current key with"
+                " python -m bridge.provenance register-key"
+            )
         signature = await signer.sign(root_message(day, root))
         async with as_role(session, WORKER):
             inserted = await session.execute(
                 _INSERT_ROOT, {"day": day, "root": root, "signature": signature, "key_id": signer.key_id}
             )
     published = cast(CursorResult[Any], inserted).rowcount == 1
-    log.info("audit.transparency_root", day=day.isoformat(), chains=len(heads), published=published)
-    return RootReport(day, root, len(heads), published)
+    log.info(
+        "audit.transparency_root",
+        day=day.isoformat(),
+        chains=len(heads),
+        published=published,
+        key_id=signer.key_id,
+        snapshot_at=snapshot_at.isoformat(),
+    )
+    return RootReport(day, root, len(heads), published, snapshot_at)
