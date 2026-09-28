@@ -40,6 +40,7 @@ GITHUB_USER = "https://api.github.com/user"
 GITHUB_EMAILS = "https://api.github.com/user/emails"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 PASSWORD = "correct horse battery staple"
+REAUTH = {"current_password": PASSWORD}  # linking and unlinking on an account with a password
 OAUTH_FIELDS = ("github_client_id", "github_client_secret", "google_client_id", "google_client_secret")
 
 
@@ -380,7 +381,7 @@ async def test_a_verified_provider_address_signs_in_without_linking(
     assert ("auth.oauth_login", {"provider": "google", "via": "email"}) in trail
     assert "auth.identity_linked" not in {action for action, _ in trail}
     # The owner can still add the same Google account explicitly, from settings.
-    response = await round_trip(client, who, provider="google", intent="link")
+    response = await round_trip(client, who, provider="google", intent="link", **REAUTH)
     assert landing(response) == ("/settings/security", {"linked": "google"})
     assert await identity_rows(owner_engine, address) == ["google"]
     assert added_notices(client, address) == 1
@@ -407,7 +408,7 @@ async def test_a_totp_account_reached_by_its_address_gets_no_identity(
     assert await identity_rows(owner_engine, address) == []
     assert added_notices(other, address) == 0
     # An explicit link from settings, with the fresh second factor, still works.
-    response = await round_trip(client, who, provider="google", intent="link")
+    response = await round_trip(client, who, provider="google", intent="link", **REAUTH)
     assert landing(response) == ("/settings/security", {"linked": "google"})
     assert await identity_rows(owner_engine, address) == ["google"]
     assert added_notices(client, address) == 1
@@ -553,13 +554,13 @@ async def test_linking_from_settings(client: httpx.AsyncClient, owner_engine: As
     await email_account(client, address)
     user_id = (await me(client))["user"]["id"]
     who = person()  # a GitHub account with a different address: linking does not depend on the address
-    response = await round_trip(client, who, intent="link")
+    response = await round_trip(client, who, intent="link", **REAUTH)
     assert landing(response) == ("/settings/security", {"linked": "github"})
     assert not signed_in(response)  # the same session carries on
     assert await linked(client) == ["github"]
     assert [m for m in outbox(client).outbox if m.to == address and "GitHub sign-in was added" in m.text]
     assert ("auth.identity_linked", {"provider": "github"}) in await audit_trail(owner_engine, user_id)
-    again = await round_trip(client, who, intent="link")  # linking the same identity again changes nothing
+    again = await round_trip(client, who, intent="link", **REAUTH)  # linking the same identity again changes nothing
     assert landing(again) == ("/settings/security", {"linked": "github"})
     assert await linked(client) == ["github"]
 
@@ -569,35 +570,90 @@ async def test_linking_needs_a_signed_in_session(client: httpx.AsyncClient) -> N
     assert refusal(response) == (401, "unauthenticated")
 
 
-async def test_linking_needs_a_recent_sign_in_without_totp(
-    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+async def test_linking_and_unlinking_need_a_recent_sign_in_without_a_password_or_totp(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    await email_account(client, email())
+    await round_trip(client, person(), intent="signup", **signup_body())  # password-less, no TOTP
+    await refresh_csrf(client)
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
     later = datetime.now(UTC) + timedelta(minutes=16)
     monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
-    response = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    response = await client.post("/api/auth/oauth/google/start", json={"intent": "link"})
     assert refusal(response) == (403, "recent_sign_in_required")
+    assert refusal(await client.delete(f"/api/auth/identities/{identity_id}")) == (403, "recent_sign_in_required")
 
 
-async def test_linking_and_unlinking_need_a_fresh_second_factor_with_totp(
+async def test_linking_and_unlinking_need_the_current_password(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fix round 1: on an account with a password, a session alone (even a brand-new one) cannot add or remove a
+    sign-in method; the current password is checked (throttled like a login) as for a password change."""
+    await email_account(client, email())
+    url = "/api/auth/oauth/github/start"
+    assert refusal(await client.post(url, json={"intent": "link"})) == (403, "current_password_required")
+    wrong = {"intent": "link", "current_password": "not the password"}
+    assert refusal(await client.post(url, json=wrong)) == (403, "current_password_required")
+    response = await round_trip(client, person(), intent="link", **REAUTH)
+    assert landing(response) == ("/settings/security", {"linked": "github"})
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    unlink = f"/api/auth/identities/{identity_id}"
+    assert refusal(await client.delete(unlink)) == (403, "current_password_required")
+    later = datetime.now(UTC) + timedelta(hours=2)  # the password, not the age of the session, decides
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    assert (await client.request("DELETE", unlink, json=REAUTH)).status_code == 204
+    assert await linked(client) == []
+
+
+@pytest.mark.parametrize("where", ["start", "unlink"])
+async def test_guessing_the_password_to_link_or_unlink_is_throttled(client: httpx.AsyncClient, where: str) -> None:
+    await email_account(client, email())
+    wrong = {"current_password": "a guess"}
+    if where == "start":
+        for _ in range(5):
+            response = await client.post("/api/auth/oauth/github/start", json={"intent": "link", **wrong})
+            assert refusal(response) == (403, "current_password_required")
+        response = await client.post("/api/auth/oauth/github/start", json={"intent": "link", **REAUTH})
+    else:
+        await round_trip(client, person(), intent="link", **REAUTH)  # one re-auth of the five a minute
+        url = f"/api/auth/identities/{(await client.get('/api/me/identities')).json()[0]['id']}"
+        for _ in range(4):
+            assert refusal(await client.request("DELETE", url, json=wrong)) == (403, "current_password_required")
+        response = await client.request("DELETE", url, json=REAUTH)
+    assert refusal(response) == (429, "too_many_attempts")
+
+
+async def test_linking_and_unlinking_need_a_fresh_second_factor_and_the_password_with_totp(
     client: httpx.AsyncClient, owner_engine: AsyncEngine
 ) -> None:
     address = email()
     await email_account(client, address)
-    secret = str((await client.post("/api/auth/totp/enrol", json={"password": PASSWORD})).json()["secret"])
-    confirmed = await client.post("/api/auth/totp/confirm", json={"code": totp.code_at(secret, now_counter())})
-    assert confirmed.status_code == 200
+    await enrol_totp(client)
     await age_second_factor(owner_engine, address, 13)
-    stale = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    stale = await client.post("/api/auth/oauth/github/start", json={"intent": "link", **REAUTH})
     assert refusal(stale) == (403, "step_up_required")
     await age_second_factor(owner_engine, address, 0)
-    response = await round_trip(client, person(), intent="link")
+    no_password = await client.post("/api/auth/oauth/github/start", json={"intent": "link"})
+    assert refusal(no_password) == (403, "current_password_required")
+    response = await round_trip(client, person(), intent="link", **REAUTH)
     assert landing(response) == ("/settings/security", {"linked": "github"})
-    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    url = f"/api/auth/identities/{(await client.get('/api/me/identities')).json()[0]['id']}"
     await age_second_factor(owner_engine, address, 13)
-    assert refusal(await client.delete(f"/api/auth/identities/{identity_id}")) == (403, "step_up_required")
+    assert refusal(await client.request("DELETE", url, json=REAUTH)) == (403, "step_up_required")
     await age_second_factor(owner_engine, address, 0)
-    assert (await client.delete(f"/api/auth/identities/{identity_id}")).status_code == 204
+    assert refusal(await client.delete(url)) == (403, "current_password_required")
+    assert (await client.request("DELETE", url, json=REAUTH)).status_code == 204
+
+
+async def test_a_totp_account_without_a_password_needs_only_the_fresh_second_factor(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await round_trip(client, person(), intent="signup", **signup_body())
+    await refresh_csrf(client)
+    await enrol_totp(client, password=None)  # password-less and signed in just now
+    later = datetime.now(UTC) + timedelta(minutes=16)  # past the 15-minute rule, within the 12-hour step-up
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: later)
+    response = await client.post("/api/auth/oauth/google/start", json={"intent": "link"})
+    assert response.status_code == 200, response.text
 
 
 async def test_a_pending_second_factor_cannot_link(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
@@ -618,7 +674,7 @@ async def test_an_identity_owned_by_another_account_is_refused(
     owner = person()
     await round_trip(client, owner, intent="signup", **signup_body())
     await email_account(other, email())
-    response = await round_trip(other, owner, intent="link")
+    response = await round_trip(other, owner, intent="link", **REAUTH)
     assert landing(response) == ("/settings/security", {"oauth_error": "identity_in_use", "provider": "github"})
     assert await linked(other) == []
     assert await identity_rows(owner_engine, owner.email) == ["github"]
@@ -627,8 +683,9 @@ async def test_an_identity_owned_by_another_account_is_refused(
 async def test_an_account_holds_one_identity_per_provider(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
     address = email()
     await email_account(client, address)
-    assert landing(await round_trip(client, person(), intent="link")) == ("/settings/security", {"linked": "github"})
-    second = await round_trip(client, person(), intent="link")
+    first = await round_trip(client, person(), intent="link", **REAUTH)
+    assert landing(first) == ("/settings/security", {"linked": "github"})
+    second = await round_trip(client, person(), intent="link", **REAUTH)
     assert landing(second) == ("/settings/security", {"oauth_error": "provider_already_linked", "provider": "github"})
     # Another GitHub account with the same verified address cannot sign in by the address either.
     sign_in = await round_trip(other, person(address), intent="login")
@@ -639,7 +696,7 @@ async def test_an_account_holds_one_identity_per_provider(client: httpx.AsyncCli
 
 async def test_a_link_finished_in_another_session_is_refused(client: httpx.AsyncClient) -> None:
     await email_account(client, email())
-    params = await start(client, "github", "link")
+    params = await start(client, "github", "link", **REAUTH)
     await client.post("/api/auth/logout")
     await refresh_csrf(client)
     await email_account(client, email())  # someone else signs in on this browser before the provider answers
@@ -884,7 +941,7 @@ async def test_an_identity_attached_concurrently_is_not_attached_twice(
         await email_account(other, address)
     hide_identities(monkeypatch)
     raced = Person(taken.subject, address)  # the same provider account, now with another verified address
-    body = signup_body() if intent == "signup" else {}
+    body = signup_body() if intent == "signup" else REAUTH if intent == "link" else {}
     response = await round_trip(other, raced, intent=intent, **body)
     expected = {
         "link": ("/settings/security", {"oauth_error": "identity_in_use", "provider": "github"}),

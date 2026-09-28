@@ -53,6 +53,7 @@ from bridge.auth.schemas import (
     TokenRequest,
     TotpEnrolRequest,
     TotpEnrolResponse,
+    UnlinkRequest,
     UserOut,
 )
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
@@ -347,18 +348,21 @@ async def oauth_providers(settings: SettingsDep) -> OAuthProvidersResponse:
 
 @router.post("/oauth/{provider}/start")
 async def oauth_start(
-    provider: str, body: OAuthStartRequest, response: Response, settings: SettingsDep, live: OptionalSession
+    provider: str, body: OAuthStartRequest, response: Response, db: Db, settings: SettingsDep, live: OptionalSession
 ) -> OAuthStartResponse:
     """Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
-    a fresh second factor (TOTP accounts) or a sign-in within 15 minutes; ``signup`` needs the accepted terms."""
+    a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
+    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms."""
     client = oauth.configured(settings, provider)
     if client is None:
         raise not_found()
     try:
-        flow = identities.begin(settings, client.provider.name, body, live)
+        flow = await identities.begin(db, settings, client.provider.name, body, live)
     except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
+    await db.commit()
     set_oauth_flow(response, settings, oauth.seal(settings, flow), int(oauth.FLOW_TTL.total_seconds()))
     return OAuthStartResponse(authorize_url=oauth.authorize_url(client, flow))
 
@@ -441,11 +445,14 @@ async def unlink_identity(
     db: Db,
     settings: SettingsDep,
     email: EmailDep,
+    body: UnlinkRequest | None = None,
 ) -> None:
-    """Unlink a provider (the same proof as linking). 409 last_sign_in_method when nothing else could sign in."""
+    """Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409
+    last_sign_in_method when nothing else could sign in."""
     try:
-        pending = await identities.unlink(db, settings, live, identity_id)
+        pending = await identities.unlink(db, settings, live, identity_id, body.current_password if body else None)
     except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)

@@ -17,13 +17,14 @@ Plain code decides (docs/spec/04 principle 1). For a ``login`` or ``signup`` cal
    an existing owner gets a link.
 
 An identity is attached to an account only when an OAuth signup creates the account, or through ``link`` from
-``/settings/security`` (orchestrator decision, fix round 1 of T2.12). Linking completes only in the session that
-started it, which needed a fresh second factor (TOTP accounts, the ADR-002 step-up rule) or a sign-in within the last
-15 minutes (other accounts); an identity that belongs to another account is refused, and an account holds one
-identity per provider. It does not depend on the provider's address. Unlinking needs the same proof and another way
-to sign in: a password, another identity, or an emailed link to the verified address, so an account with a verified
-address can always unlink. Each change emails a security notice. Audit events carry ids and the provider name only;
-provider tokens are never stored.
+``/settings/security`` (orchestrator decision, fix round 1 of T2.12), which does not depend on the provider's
+address. Linking completes only in the session that started it, which gave a fresh second factor when TOTP is on (the
+ADR-002 step-up rule) and the current password when the account has one (throttled like a login); a password-less
+account without TOTP needs a sign-in within the last 15 minutes instead. An identity that belongs to another account
+is refused, and an account holds one identity per provider. Unlinking needs the same proof and another way to sign
+in: a password, another identity, or an emailed link to the verified address, so an account with a verified address
+can always unlink. Each change emails a security notice. Audit events carry ids and the provider name only; provider
+tokens are never stored.
 """
 
 from __future__ import annotations
@@ -79,14 +80,19 @@ class _Taken(Exception):
 # ------------------------------------------------------------------------------------------------ start
 
 
-def ensure_fresh_proof(settings: Settings, live: sessions.LiveSession) -> None:
+async def ensure_fresh_proof(
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
+) -> None:
     """Adding or removing a sign-in method: a second factor within STEP_UP_MAX_AGE_HOURS when TOTP is on (the
-    step-up rule), otherwise a sign-in within the last 15 minutes (the rule for other credential changes)."""
-    if live.user.totp_enabled_at is not None:
+    ADR-002 step-up rule), and the current password when the account has one (``service.require_reauth``, throttled
+    like a login; the caller commits even on failure). A password-less account without TOTP needs a sign-in within
+    the last 15 minutes instead; a password-less account with TOTP needs only the fresh second factor."""
+    if user.totp_enabled_at is not None:
         if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
             raise service.AuthError("step_up_required", 403)
-    elif clock.utcnow() - live.row.created_at > service.REAUTH_WINDOW:
-        raise service.AuthError("recent_sign_in_required", 403)
+        if user.password_hash is None:
+            return
+    await service.require_reauth(db, settings, user, live, password)
 
 
 def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
@@ -96,8 +102,12 @@ def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
         raise service.AuthError("consent_text_changed", 409)
 
 
-def begin(
-    settings: Settings, provider: AuthProvider, req: OAuthStartRequest, live: sessions.LiveSession | None
+async def begin(
+    db: AsyncSession,
+    settings: Settings,
+    provider: AuthProvider,
+    req: OAuthStartRequest,
+    live: sessions.LiveSession | None,
 ) -> oauth.Flow:
     """Check the request and create the flow to seal into the cookie. Raises ``service.AuthError``."""
     now = clock.utcnow()
@@ -106,7 +116,7 @@ def begin(
             raise service.AuthError("unauthenticated", 401)
         if live.row.mfa_pending:
             raise service.AuthError("mfa_required", 401)
-        ensure_fresh_proof(settings, live)
+        await ensure_fresh_proof(db, settings, live.user, live, req.current_password)
         return oauth.new_flow(provider, "link", "/settings/security", now=now, session=csrf.binding_for(live.token))
     signup: OAuthSignup | None = None
     if req.intent == "signup":
@@ -373,7 +383,7 @@ async def list_for(db: AsyncSession, user_id: UUID) -> list[AuthIdentity]:
 
 
 async def unlink(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, identity_id: UUID
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, identity_id: UUID, password: str | None
 ) -> list[PendingEmail]:
     """Remove one of the signed-in account's identities (404 for anyone else's), keeping a way to sign in."""
     user = await service.lock_user(db, live.user.id)
@@ -381,7 +391,7 @@ async def unlink(
     identity = (await db.execute(stmt)).scalar_one_or_none()
     if identity is None:
         raise service.AuthError("not_found", 404)
-    ensure_fresh_proof(settings, live)
+    await ensure_fresh_proof(db, settings, user, live, password)
     others = (
         select(func.count())
         .select_from(AuthIdentity)

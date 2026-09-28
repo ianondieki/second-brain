@@ -500,8 +500,20 @@
       },
       "OAuthStartRequest": {
         "additionalProperties": false,
-        "description": "``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s\nchoices; ``link``: add the provider to the signed-in account (fresh second factor or recent sign-in).",
+        "description": "``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s\nchoices; ``link``: add the provider to the signed-in account (a fresh second factor with TOTP, the current\npassword when the account has one, otherwise a recent sign-in).",
         "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          },
           "intent": {
             "default": "login",
             "enum": [
@@ -1045,6 +1057,26 @@
         "title": "TotpEnrolResponse",
         "type": "object"
       },
+      "UnlinkRequest": {
+        "additionalProperties": false,
+        "description": "Removing a sign-in method: the current password when the account has one.",
+        "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          }
+        },
+        "title": "UnlinkRequest",
+        "type": "object"
+      },
       "UserOut": {
         "properties": {
           "display_name": {
@@ -1224,7 +1256,7 @@
     },
     "/api/auth/identities/{identity_id}": {
       "delete": {
-        "description": "Unlink a provider (the same proof as linking). 409 last_sign_in_method when nothing else could sign in.",
+        "description": "Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409\nlast_sign_in_method when nothing else could sign in.",
         "operationId": "unlink_identity_api_auth_identities__identity_id__delete",
         "parameters": [
           {
@@ -1238,6 +1270,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/UnlinkRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -2229,7 +2278,7 @@
     },
     "/api/auth/oauth/{provider}/start": {
       "post": {
-        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) or a sign-in within 15 minutes; ``signup`` needs the accepted terms.",
+        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within\n15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms.",
         "operationId": "oauth_start_api_auth_oauth__provider__start_post",
         "parameters": [
           {

@@ -473,11 +473,12 @@ async def complete_mfa(
     return live
 
 
-async def _require_reauth(
+async def require_reauth(
     db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
 ) -> None:
-    """Credential changes need the current password (throttled like a login, so a stolen session cannot guess it),
-    or, for a password-less account, a sign-in within 15 minutes."""
+    """Credential changes (password, TOTP enrolment, OAuth linking and unlinking) need the current password
+    (throttled like a login, so a stolen session cannot guess it), or, for a password-less account, a sign-in
+    within 15 minutes."""
     if user.password_hash:
         keys = throttle.keys(settings.secret_key.get_secret_value(), "reauth", str(user.id), "session")
         if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
@@ -500,7 +501,7 @@ async def set_password(
     db: AsyncSession, settings: Settings, live: sessions.LiveSession, current: str | None, new: str
 ) -> list[PendingEmail]:
     user = await lock_user(db, live.user.id)
-    await _require_reauth(db, settings, user, live, current)
+    await require_reauth(db, settings, user, live, current)
     try:
         passwords.check_policy(new, email=user.email)
     except passwords.PasswordPolicyError as exc:
@@ -517,7 +518,7 @@ async def begin_totp_enrolment(
     user = await lock_user(db, live.user.id)
     if user.totp_enabled_at is not None:
         raise AuthError("totp_already_enabled", 409)
-    await _require_reauth(db, settings, user, live, password)
+    await require_reauth(db, settings, user, live, password)
     secret = totp.new_secret()
     user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)

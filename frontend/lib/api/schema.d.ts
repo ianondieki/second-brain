@@ -36,7 +36,8 @@ export interface paths {
         post?: never;
         /**
          * Unlink Identity
-         * @description Unlink a provider (the same proof as linking). 409 last_sign_in_method when nothing else could sign in.
+         * @description Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409
+         *     last_sign_in_method when nothing else could sign in.
          */
         delete: operations["unlink_identity_api_auth_identities__identity_id__delete"];
         options?: never;
@@ -212,7 +213,8 @@ export interface paths {
          * Oauth Start
          * @description Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
          *     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
-         *     a fresh second factor (TOTP accounts) or a sign-in within 15 minutes; ``signup`` needs the accepted terms.
+         *     a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
+         *     15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms.
          */
         post: operations["oauth_start_api_auth_oauth__provider__start_post"];
         delete?: never;
@@ -786,9 +788,12 @@ export interface components {
         /**
          * OAuthStartRequest
          * @description ``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s
-         *     choices; ``link``: add the provider to the signed-in account (fresh second factor or recent sign-in).
+         *     choices; ``link``: add the provider to the signed-in account (a fresh second factor with TOTP, the current
+         *     password when the account has one, otherwise a recent sign-in).
          */
         OAuthStartRequest: {
+            /** Current Password */
+            current_password?: string | null;
             /**
              * Intent
              * @default login
@@ -967,6 +972,14 @@ export interface components {
             /** Secret */
             secret: string;
         };
+        /**
+         * UnlinkRequest
+         * @description Removing a sign-in method: the current password when the account has one.
+         */
+        UnlinkRequest: {
+            /** Current Password */
+            current_password?: string | null;
+        };
         /** UserOut */
         UserOut: {
             /** Display Name */
@@ -1098,7 +1111,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UnlinkRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             204: {

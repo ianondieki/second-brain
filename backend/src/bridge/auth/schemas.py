@@ -142,13 +142,23 @@ class OAuthSignup(BaseModel):
 
 class OAuthStartRequest(BaseModel):
     """``login``: sign in (a new person is sent to signup); ``signup``: sign in or create an account with ``signup``'s
-    choices; ``link``: add the provider to the signed-in account (fresh second factor or recent sign-in)."""
+    choices; ``link``: add the provider to the signed-in account (a fresh second factor with TOTP, the current
+    password when the account has one, otherwise a recent sign-in)."""
 
     model_config = ConfigDict(extra="forbid")
 
     intent: Literal["login", "signup", "link"] = "login"
     return_to: ReturnPath | None = None
     signup: OAuthSignup | None = None
+    current_password: str | None = Field(default=None, max_length=256)  # link only; ignored otherwise
+
+
+class UnlinkRequest(BaseModel):
+    """Removing a sign-in method: the current password when the account has one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str | None = Field(default=None, max_length=256)
 
 
 class OAuthStartResponse(BaseModel):
