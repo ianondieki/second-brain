@@ -290,7 +290,10 @@ eight MINORs now (compatible with the schema before and after round 4); then mer
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
-OAuth MINOR follow-ups started on `feat/REQ-AUTH-02-followups` (impl-backend, worktree `sb-wt/REQ-AUTH-02`).
+OAuth MINOR follow-ups done on `feat/REQ-AUTH-02-followups` (`c89ced0`..`77892bc`; 765 passed; `bridge/auth` 96%; fixed a
+real bug: a session signed out or an account suspended during the provider call still linked or signed in).
+`TRUSTED_PROXIES` warning left for Phase 8. The 12 h link/unlink residual is **D-34**. security-reviewer is running; the
+reviewer follows. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
@@ -315,7 +318,8 @@ is pushed, clean, and unmerged. The order of merges matters: schema v2 first, th
 Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
 reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
 T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
-D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy), D-32 (digest hardening) and D-33 (`/verify` opt-in). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
+D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy), D-32 (digest hardening), D-33 (`/verify` opt-in) and D-34 (fresh code to link or
+unlink). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
 are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
 `/api/openapi.json` lists admin routes in production (Phase 8).
 

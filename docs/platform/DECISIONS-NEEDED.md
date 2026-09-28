@@ -85,6 +85,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: the opt-in switch on `/verify` (F1–F4 screens); nothing else. Until then nothing is shown.
 - Decision:
 
+### D-34 · A fresh code to link or unlink a sign-in method (T2.12 follow-ups, REQ-AUTH-02)
+- Why: linking or unlinking a GitHub or Google sign-in uses the step-up rule from `docs/spec/06` (a second factor within the last 12 hours). For an account without a password but with two-step sign-in, a stolen session can therefore link the thief's own GitHub or Google account for up to about 12 h 10 min after the owner last entered a code. The thief can then sign in without the session. The `feat/REQ-AUTH-02-followups` threat model rates this Medium.
+- Options: (a) keep the 12-hour step-up rule for link and unlink (the spec's rule; today's behaviour); (b) ask for a new two-step code (or the password) at every link and unlink, whatever the last one was; (c) (b) for link only, and (a) for unlink.
+- Recommended default: (a) until you decide. (c) is a small change (one extra code prompt on a rare action) and closes the takeover path.
+- Blocks: nothing; the OAuth buttons ship in F4.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
