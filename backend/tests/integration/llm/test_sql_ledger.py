@@ -198,6 +198,26 @@ async def test_a_call_for_an_organisation_the_bound_user_is_no_active_member_of_
     assert await stored(owner_engine, refused) == []
 
 
+async def test_a_session_bound_to_a_user_cannot_make_a_platform_call(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """A call with no subject is a platform job's (its row counts towards no plan cap). A request bound to a user may
+    not make one, bound to an organisation or not; an unbound session (a platform job) may."""
+    refused, platform, adapter = f"nosubj-x-{people.tag}", f"nosubj-ok-{people.tag}", FakeAdapter([reply()])
+    for org in (None, people.org_a):
+        async with factory() as db:
+            await bind_tenant(db, user_id=people.a, org_id=org)
+            with pytest.raises(LLMConfigError, match="no user and no organisation"):
+                await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=CallContext(trace_id=refused))
+    assert adapter.requests == []
+    assert await stored(owner_engine, refused) == []
+
+    async with factory() as db:  # positive control: the platform job, unbound
+        await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=CallContext(trace_id=platform))
+    [row] = await stored(owner_engine, platform)
+    assert (row["org_id"], row["user_id"], row["status"]) == (None, None, "ok")
+
+
 async def test_inputs_are_unreadable_by_bridge_app_and_read_by_staff_admin_only(
     factory: Factory, owner_engine: AsyncEngine, people: People
 ) -> None:

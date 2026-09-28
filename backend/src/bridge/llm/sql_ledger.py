@@ -12,7 +12,8 @@ caller's. A row is committed at once, so it survives the caller's rollback (a bl
 rolls back, but its row stays; a paid attempt is never lost with the request's work), and a caller inside ``as_role``
 or a failed transaction still records. ``check_subject`` refuses a subject the bound tenant could not write or whose
 spend it could not read, before anything is sent: otherwise RLS would refuse the row after the paid call, or sum no
-rows and let the cap pass (fail closed).
+rows and let the cap pass (fail closed). It also refuses a call with no subject from a session bound to a tenant: that
+is a platform job's call (an unbound session), and its row would count towards no plan cap.
 
 The table's CHECKs (``cost_usd`` between 0 and 100 USD, token and latency columns zero or more) are met by clamping,
 never by refusing: the row is written after the attempt was paid for, and a refused insert would lose it. A clamp is
@@ -99,6 +100,13 @@ class SqlLedger:
 
     async def check_subject(self, *, org_id: UUID | None, user_id: UUID | None) -> None:
         bound_user, bound_org = tenant_of(self._caller)
+        if org_id is None and user_id is None:
+            if bound_user is not None or bound_org is not None:
+                raise LLMConfigError(
+                    "a call with no user and no organisation is a platform job's; this database session is bound to"
+                    " a tenant"
+                )
+            return
         if user_id is not None and user_id != bound_user:
             raise LLMConfigError("the call's user is not the user its database session is bound to")
         if org_id is None:
