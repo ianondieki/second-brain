@@ -277,7 +277,10 @@ anchor-outage stop; 1124 passed; `bridge/provenance` 99%); security-reviewer rou
 before merge: store anchors per savepoint and use one clock-skew bound with the schema's `chain_anchors_guard`; a
 Procrastinate lock on the hourly anchor task; a THREAT_MODEL row for rogue/MITM/replayed TSA tokens; `_key_path` must
 not print owner-chosen Tier-2 key names; the test builder's `owner_handle` breaks under schema round 4; the
-verify-offline runbook's POST needs the CSRF header). Reviewer round 2 is running. Its four
+verify-offline runbook's POST needs the CSRF header). Reviewer round 2 **PASS** (MINORs: `test_the_nightly_task_closes_the_day_through_the_runtime`
+uses a fixed epoch that closes a future day and fails under schema round 4's `transparency_roots_guard`; the runbook's
+pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). Next for T2.4: once
+schema v2 round 4 is merged, merge it in and run one impl-backend round on these eight MINORs, then merge. Its four
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
@@ -287,7 +290,8 @@ directory did; add one app-wide guard (a request validator or a psycopg `DataErr
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
 set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container instead (`reviewer-repo01-pg` on
 55432, password `review`; `bridge-testdb-1`/`-2` on 55433/55434, password `postgres`). Stop stale `next start`
-servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`).
+servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`). A leftover `sb-wt/REQ-AUTH-01-followups/backend/.venv` fragment
+(git no longer lists the worktree) could not be deleted; remove it by hand after a reboot.
 
 Integration branch `claude/eloquent-hypatia-aa3577`: only T2.12's backend is merged (`da0a98d`). Every other branch below
 is pushed, clean, and unmerged. The order of merges matters: schema v2 first, then the branches that contain it.
