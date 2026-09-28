@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     postmark_server_token: SecretStr | None = None
     postmark_message_stream: str = "outbound"
 
+    # SMS (REQ-PROV-04: D1 phone codes). The fake in dev, test and CI; Africa's Talking once the vendor account exists
+    # (gate G1). bridge.integrations.sms.sms_provider_from_settings refuses the fake in production and the vendor in
+    # test.
+    sms_provider: Literal["fake", "africastalking"] = "fake"
+    africastalking_username: str | None = None
+    africastalking_api_key: SecretStr | None = None
+    africastalking_sender_id: str | None = None
+
     # Feature flags (docs/spec/10: default false until the legal gate).
     feature_tier2_enabled: bool = False
     feature_deals_enabled: bool = False
@@ -95,6 +103,12 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        if self.sms_provider == "africastalking" and (
+            not self.africastalking_username or not self.africastalking_api_key
+        ):
+            problems.append(
+                "AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are required when SMS_PROVIDER=africastalking"
+            )
         if self.app_env == "production":
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
