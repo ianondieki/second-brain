@@ -387,8 +387,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
     await _sql(
         conn,
         "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-        " summary, owner_handle) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem',"
-        " 'What it does', 'rls-handle')",
+        " summary) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem', 'What it does')",
         id=draft_version,
         proposal=b.published,
         niche=world.niche_id,

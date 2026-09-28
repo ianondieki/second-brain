@@ -178,7 +178,9 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     problem_statement: Mapped[str | None] = mapped_column(Text)
     impact_claims: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)  # <= 150 words (validated by the Tier-1 sanitiser)
-    owner_handle: Mapped[str | None] = mapped_column(CIText())  # pseudonymous handle shown on Tier-1 cards
+    # The pseudonymous handle shown on Tier-1 cards: the owner's developer_profiles.handle, set by the database when
+    # the version is registered (any value sent is replaced; a draft carries none, and bridge_app cannot update it).
+    owner_handle: Mapped[str | None] = mapped_column(CIText(), server_onupdate=FetchedValue())
     # Registration (docs/spec/06 6.4 item 1). registered_at is set by the database when the version is registered
     # (any value sent is replaced). content_hash, prev_version_hash and manifest_version are fill-once: only the
     # registration job (provenance_worker, bound to the owner) sets them after registration, never changes them.

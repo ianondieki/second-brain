@@ -104,8 +104,15 @@ async def add_proposal(
     moderation_state: str = "clear",
     registered: bool = True,
 ) -> tuple[UUID, UUID]:
-    """A proposal with one version (and its Tier-2 row). Registered versions go draft -> registered like the app."""
+    """A proposal with one version (and its Tier-2 row). Registered versions go draft -> registered like the app,
+    which gives them the owner's developer handle (the owner gets a developer profile if they have none)."""
     proposal_id, version_id = uuid7(), uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO developer_profiles (user_id, handle) VALUES (:owner, :handle) ON CONFLICT (user_id) DO NOTHING",
+        owner=owner,
+        handle=f"dev-{owner.hex}",
+    )
     await _insert(
         conn,
         "INSERT INTO proposals (id, owner_id, moderation_state, title, niche_id) VALUES (:id, :owner,"
@@ -118,8 +125,7 @@ async def add_proposal(
     await _insert(
         conn,
         "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-        " summary, owner_handle) VALUES (:id, :proposal, 1, 'RLS proposal', :niche, 'idea', 'pilot', 'A problem',"
-        " 'What it does', 'rls-handle')",
+        " summary) VALUES (:id, :proposal, 1, 'RLS proposal', :niche, 'idea', 'pilot', 'A problem', 'What it does')",
         id=version_id,
         proposal=proposal_id,
         niche=niche_id,

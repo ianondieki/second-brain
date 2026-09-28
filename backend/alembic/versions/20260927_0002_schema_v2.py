@@ -263,10 +263,11 @@ APP_GRANTS: dict[str, str] = {
         " county_code, maturity, ask, problem_statement, impact_claims, summary, teaser_embedding, embed_model,"
         " embed_version, tier2_policy, raw_download_enabled, published_at, hidden_at, updated_at)"
     ),
-    # registered_at is the database's (set at registration); the registration hashes are provenance_worker's.
+    # registered_at and owner_handle are the database's (set at registration); the registration hashes are
+    # provenance_worker's.
     "proposal_versions": (
         "SELECT, INSERT, DELETE, UPDATE (status, title, niche_id, country, county_code, maturity, ask,"
-        " problem_statement, impact_claims, summary, owner_handle, cert_id, updated_at)"
+        " problem_statement, impact_claims, summary, cert_id, updated_at)"
     ),
     "proposal_problems": "SELECT, INSERT, DELETE",
     "proposal_attachments": "SELECT, INSERT, DELETE, UPDATE (sha256, size_bytes, av_status, rerendered, updated_at)",
@@ -1720,16 +1721,18 @@ $$;
 
 -- A version is inserted as a draft, without registration columns. While a draft, its keys never change and the
 -- registration columns stay empty; registering it needs a linked problem, and the database sets registered_at to
--- now() whatever value is sent (the app never chooses its registration time). Once registered it is never deleted,
--- and an UPDATE may only fill content_hash, prev_version_hash and manifest_version while they are empty (updated_at
--- may move); only provenance_worker holds UPDATE on those columns. SECURITY DEFINER: reads proposal_problems whatever
--- the caller's visibility.
+-- now() and owner_handle to the handle of the proposal owner's developer profile, whatever values are sent (the app
+-- never chooses its registration time, nor the handle a registered version is shown under). Once registered it is
+-- never deleted, and an UPDATE may only fill content_hash, prev_version_hash and manifest_version while they are empty
+-- (updated_at may move); only provenance_worker holds UPDATE on those columns. SECURITY DEFINER: reads
+-- proposal_problems, proposals and developer_profiles whatever the caller's visibility.
 CREATE FUNCTION proposal_versions_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_allowed public.proposal_versions%ROWTYPE;
+    v_handle public.citext;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         IF NEW.status <> 'draft' THEN
@@ -1737,9 +1740,9 @@ BEGIN
                 USING ERRCODE = 'check_violation';
         END IF;
         IF NEW.registered_at IS NOT NULL OR NEW.content_hash IS NOT NULL OR NEW.prev_version_hash IS NOT NULL
-           OR NEW.manifest_version IS NOT NULL THEN
-            RAISE EXCEPTION 'proposal_versions: registered_at and the registration hashes are set at registration'
-                USING ERRCODE = 'check_violation';
+           OR NEW.manifest_version IS NOT NULL OR NEW.owner_handle IS NOT NULL THEN
+            RAISE EXCEPTION 'proposal_versions: registered_at, owner_handle and the registration hashes are set at'
+                ' registration' USING ERRCODE = 'check_violation';
         END IF;
         RETURN NEW;
     END IF;
@@ -1781,9 +1784,19 @@ BEGIN
             RAISE EXCEPTION 'proposal_versions: registering a version needs at least one linked problem'
                 USING ERRCODE = 'check_violation';
         END IF;
+        SELECT d.handle INTO v_handle
+          FROM public.proposals p
+          JOIN public.developer_profiles d ON d.user_id = p.owner_id
+         WHERE p.id = NEW.proposal_id;
+        IF v_handle IS NULL THEN
+            RAISE EXCEPTION 'proposal_versions: registering a version needs the owner''s developer profile (handle)'
+                USING ERRCODE = 'check_violation';
+        END IF;
         NEW.registered_at := now();
-    ELSIF NEW.registered_at IS NOT NULL THEN
-        RAISE EXCEPTION 'proposal_versions: registered_at is set at registration' USING ERRCODE = 'check_violation';
+        NEW.owner_handle := v_handle;
+    ELSIF NEW.registered_at IS NOT NULL OR NEW.owner_handle IS NOT NULL THEN
+        RAISE EXCEPTION 'proposal_versions: registered_at and owner_handle are set at registration'
+            USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;

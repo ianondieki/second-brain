@@ -167,6 +167,7 @@ async def test_bridge_app_cannot_switch_to_any_other_role(app_session_engine: As
 class Developer(NamedTuple):
     user_id: UUID
     published_version: UUID
+    draft_proposal: UUID
     draft_version: UUID
 
 
@@ -183,8 +184,8 @@ async def developer(owner_engine: AsyncEngine) -> Developer:
         user = await w.add_user(conn, f"dev-{tag}@example.test", "Developer")
         problem = await w.add_problem(conn, user, niche)
         _, published_version = await w.add_proposal(conn, user, niche, problem)
-        _, draft_version = await w.add_proposal(conn, user, niche, problem, registered=False)
-    return Developer(user, published_version, draft_version)
+        draft_proposal, draft_version = await w.add_proposal(conn, user, niche, problem, registered=False)
+    return Developer(user, published_version, draft_proposal, draft_version)
 
 
 async def test_as_role_switches_to_a_tier2_role_and_back(app_session_engine: AsyncEngine, developer: Developer) -> None:
@@ -245,9 +246,10 @@ async def rowcount(session: AsyncSession, statement: TextClause, params: dict[st
 async def test_the_database_times_a_registration_and_only_the_bound_worker_fills_its_hashes(
     app_session_engine: AsyncEngine, developer: Developer
 ) -> None:
-    """The app registers a version (status, cert_id) but never chooses registered_at: the trigger sets it and the ORM
-    reads it back on the same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the
-    app role holds no UPDATE on them, and a worker bound to another user matches no row."""
+    """The app registers a version (status, cert_id) but never chooses registered_at or the handle it is shown under:
+    the trigger sets both (the owner's developer handle, never another developer's) and the ORM reads them back on the
+    same flush. Only provenance_worker, bound to the owner, fills the registration hashes; the app role holds no UPDATE
+    on them, and a worker bound to another user matches no row."""
     factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
     digest = hashlib.sha256(b"manifest").digest()
     fill = text(
@@ -255,6 +257,15 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
     )
     async with factory() as session:
         await bind_tenant(session, user_id=developer.user_id)
+        with pytest.raises(DBAPIError, match="owner_handle and the registration hashes are set at registration"):
+            async with session.begin_nested():  # a draft never names a handle, its owner's or another's
+                await session.execute(
+                    text(
+                        "INSERT INTO proposal_versions (id, proposal_id, version_no, owner_handle) VALUES (:id, :p, 9,"
+                        " 'alice')"
+                    ),
+                    {"id": uuid7(), "p": developer.draft_proposal},
+                )
         version = await session.get(ProposalVersion, developer.draft_version)
         assert version is not None
         version.status = VersionStatus.REGISTERED
@@ -262,11 +273,16 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
         await session.flush()
         stamped = (
             await session.execute(
-                text("SELECT registered_at, now() AS now FROM proposal_versions WHERE id = :id"), {"id": version.id}
+                text(
+                    "SELECT v.registered_at, now() AS now, d.handle FROM proposal_versions v JOIN proposals p"
+                    " ON p.id = v.proposal_id JOIN developer_profiles d ON d.user_id = p.owner_id WHERE v.id = :id"
+                ),
+                {"id": version.id},
             )
         ).one()
         assert version.registered_at == stamped.registered_at == stamped.now
-        for column in ("content_hash = :h", "registered_at = now()"):
+        assert version.owner_handle == stamped.handle
+        for column in ("content_hash = :h", "registered_at = now()", "owner_handle = 'alice'"):
             with pytest.raises(ProgrammingError, match="permission denied"):
                 async with session.begin_nested():
                     await session.execute(

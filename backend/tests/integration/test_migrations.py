@@ -116,7 +116,6 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "problem_statement",
         "impact_claims",
         "summary",
-        "owner_handle",
         "cert_id",
         "updated_at",
     },
@@ -711,7 +710,7 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
-    registration = {"registered_at", "content_hash", "prev_version_hash", "manifest_version"}
+    registration = {"registered_at", "owner_handle", "content_hash", "prev_version_hash", "manifest_version"}
     assert not registration & updatable["proposal_versions"]  # the database's and provenance_worker's
     assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
     claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
@@ -1512,8 +1511,9 @@ async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID,
 async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncEngine) -> None:
     """AC-IP-2 (manifest half): the trigger holds for every role, the owner included; only the empty registration
     hashes may be filled, once. Drafts stay editable, and a version is inserted as a draft and registered only with a
-    linked problem. registered_at is the database's: a value sent at registration is replaced by now(), and neither
-    it nor a registration hash can be set on a draft."""
+    linked problem. registered_at and owner_handle are the database's: values sent at registration are replaced by
+    now() and the owner's developer handle (a developer without a profile cannot register), and neither they nor a
+    registration hash can be set on a draft."""
     h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
     async with rolled_back(owner_engine) as conn:
         owner, niche, proposal, version = await _registered_proposal(conn)
@@ -1541,14 +1541,7 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             sa.text("UPDATE proposal_versions SET title = 'Draft edit' WHERE id = :id"), {"id": draft_version}
         )
         second = uuid7()
-        await conn.execute(
-            sa.text(
-                "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask,"
-                " problem_statement, summary, owner_handle)"
-                " VALUES (:id, :p, 2, 'T', :n, 'idea', 'pilot', 'P', 'S', 'h')"
-            ),
-            {"id": second, "p": draft, "n": niche},
-        )
+        await conn.execute(sa.text(NEW_VERSION), {"id": second, "p": draft, "n": 2, "niche": niche})
         await expect_error(
             conn,
             "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :id",
@@ -1563,6 +1556,7 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
         )
         for assignment in (
             "registered_at = now()",
+            "owner_handle = 'someone-else'",
             "content_hash = :h",
             "prev_version_hash = :h",
             "manifest_version = 'm'",
@@ -1570,10 +1564,15 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             await expect_error(
                 conn,
                 f"UPDATE proposal_versions SET {assignment} WHERE id = :id",
-                "registered_at is set at registration|filled after registration",
+                "owner_handle are set at registration|filled after registration",
                 {"id": second, "h": h1},
             )
-        for column, value in (("registered_at", "now()"), ("content_hash", ":h"), ("manifest_version", "'m'")):
+        for column, value in (
+            ("registered_at", "now()"),
+            ("owner_handle", "'someone-else'"),
+            ("content_hash", ":h"),
+            ("manifest_version", "'m'"),
+        ):
             await expect_error(
                 conn,
                 f"INSERT INTO proposal_versions (id, proposal_id, version_no, {column}) VALUES (:id, :p, 3, {value})",
@@ -1581,20 +1580,27 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
                 {"id": uuid7(), "p": draft, "h": h1},
             )
         await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
-        # Registering sets registered_at to the transaction's now(), whatever the writer sends.
-        await conn.execute(
-            sa.text(
-                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t WHERE id = :id"
-            ),
-            {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)},
+        # Registering sets registered_at to the transaction's now() and owner_handle to the owner's developer handle,
+        # whatever the writer sends.
+        register = (
+            "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t,"
+            " owner_handle = 'someone-else' WHERE id = :id"
         )
-        stamped = sa.text("SELECT registered_at = now() FROM proposal_versions WHERE id = :id")
-        assert (await conn.execute(stamped, {"id": draft_version})).scalar_one() is True
+        registration = {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)}
+        handle = "DELETE FROM developer_profiles WHERE user_id = :u RETURNING handle"
+        owner_handle = (await conn.execute(sa.text(handle), {"u": owner})).scalar_one()
+        await expect_error(conn, register, "needs the owner's developer profile", registration)
+        await conn.execute(
+            sa.text("INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)"), {"u": owner, "h": owner_handle}
+        )
+        await conn.execute(sa.text(register), registration)
+        stamped = sa.text("SELECT registered_at = now(), owner_handle::text FROM proposal_versions WHERE id = :id")
+        assert tuple((await conn.execute(stamped, {"id": draft_version})).one()) == (True, owner_handle)
 
 
 NEW_VERSION = (
     "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-    " summary, owner_handle) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S', 'h')"
+    " summary) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S')"
 )
 
 
