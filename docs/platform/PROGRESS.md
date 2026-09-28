@@ -238,6 +238,17 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
 
+**Laptop session 2026-09-28 (in progress).** Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
+`openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). db-migrations is on
+round-3 items 3–8. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
+setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
+headers in `security-headers.test.ts`); impl-frontend is fixing both. T2.6a reviewer round 2 running. Wip `09b4a2e`
+(T2.4) diff reviewed; its suite is being re-run. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
+reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
+set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container instead (`reviewer-repo01-pg` on
+55432, password `review`; `bridge-testdb-1`/`-2` on 55433/55434, password `postgres`). Stop stale `next start`
+servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`).
+
 Integration branch `claude/eloquent-hypatia-aa3577`: only T2.12's backend is merged (`da0a98d`). Every other branch below
 is pushed, clean, and unmerged. The order of merges matters: schema v2 first, then the branches that contain it.
 
