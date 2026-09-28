@@ -2,10 +2,10 @@
 
 Hourly ``anchor_chain_heads``: an RFC 3161 token over the head (last ``event_hash``) of every audit chain that moved
 since its last anchor, into ``chain_anchors``, at most ``MAX_ANCHORS_PER_RUN`` per run in ``anchor_order`` (oldest head
-first, then chain id). The heads come from ``app_audit_chain_heads()`` (ids, sequence numbers
-and hashes only); ``provenance_worker`` executes it and inserts anchors but may not read ``chain_anchors``, so a head
-is known to be anchored when a trial insert of it inside a savepoint conflicts (the savepoint is always rolled back,
-so the append-only table never sees it). A cleaner definer function (``app_unanchored_chain_heads()``) is noted for
+first, then chain id). The heads come from ``app_audit_chain_heads()`` (ids, sequence numbers and hashes only);
+``provenance_worker`` executes it and inserts anchors but may not read ``chain_anchors``, so a head is known to be
+anchored when a trial insert of it inside a savepoint conflicts (the savepoint is always rolled back, so the
+append-only table never sees it). A cleaner definer function (``app_unanchored_chain_heads()``) is noted for
 db-migrations. TSA calls happen outside any transaction.
 
 Nightly ``verify_and_publish_root``: ``audit_reader`` verifies every chain (``bridge.audit.chain``) in one
