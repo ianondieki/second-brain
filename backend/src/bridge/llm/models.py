@@ -3,8 +3,10 @@
 Every runtime LLM call writes one row: tenant, task, model, tokens (incl. cached), cost, latency, status and trace id.
 Rows belong to a user, an organisation, both, or neither (system jobs). Users read their own rows, members their
 organisation's rows and staff ``admin`` every row; the global daily cap reads the platform total through
-``app_llm_spend_usd``. ``inputs`` holds sanitised inputs only (never Tier-2 content without the purpose's consent,
-AC-SEC-6) and is kept 30 days.
+``app_llm_spend_usd``. ``inputs`` holds the sanitised Tier-1 values and, for Tier-2 fields, only their name, tier and
+length: Tier-2 plaintext is never stored here, with or without consent (the LLM layer redacts, AC-SEC-6). It is kept
+30 days, written by the app but readable only by staff admin through ``app_llm_call_inputs(call_id)``: bridge_app holds
+no SELECT on the column, so the mapper never loads it.
 """
 
 from __future__ import annotations
@@ -46,4 +48,4 @@ class LlmCall(IdMixin, CreatedMixin, Base):
     status: Mapped[str] = mapped_column(String(24))
     stop_reason: Mapped[str | None] = mapped_column(String(40))
     trace_id: Mapped[str | None] = mapped_column(String(64))
-    inputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    inputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB, deferred=True, deferred_raiseload=True)
