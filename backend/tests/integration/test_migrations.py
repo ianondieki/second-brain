@@ -274,6 +274,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_delist_org(uuid)": (True, {"bridge_app"}),
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
+    "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
@@ -1409,6 +1410,7 @@ UNREADABLE_COLUMNS: dict[str, str] = {
     "org_claims": "otp_hash",
     "phone_verifications": "otp_hash",
     "users": "subject_salt",
+    "llm_calls": "inputs",  # staff admin reads it through app_llm_call_inputs()
 }
 
 

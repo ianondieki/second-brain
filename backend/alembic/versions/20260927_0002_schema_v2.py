@@ -259,7 +259,12 @@ APP_GRANTS: dict[str, str] = {
     # Confirmed only through app_confirm_phone_otp(); otp_hash is written but never readable (as for org_claims).
     "phone_verifications": ("SELECT (id, user_id, phone_e164, attempts, expires_at, verified_at, created_at), INSERT"),
     "kyc_reviews": "SELECT, INSERT",  # decided only through app_decide_kyc()
-    "llm_calls": "SELECT, INSERT",
+    # inputs (sanitised Tier-1 values; Tier-2 fields only as name, tier and length: the LLM layer never stores Tier-2
+    # plaintext, AC-SEC-6) is written but read only by staff admin, through app_llm_call_inputs().
+    "llm_calls": (
+        "SELECT (id, org_id, user_id, task, purpose, model, input_tokens, output_tokens, cache_read_tokens,"
+        " cache_write_tokens, cost_usd, latency_ms, status, stop_reason, trace_id, created_at), INSERT"
+    ),
 }
 
 # New column grants of bridge_app on revision 0001 tables (dropped with the column on downgrade).
@@ -1360,6 +1365,20 @@ AS $$
      ORDER BY e.chain_id, e.seq DESC
 $$;
 
+-- The sanitised inputs of one LLM call (kept 30 days), for staff admin only: bridge_app holds no SELECT on
+-- llm_calls.inputs, so users and members read their call rows without them. NULL for an unknown call.
+CREATE FUNCTION app_llm_call_inputs(p_call uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_llm_call_inputs: staff admin only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN (SELECT c.inputs FROM public.llm_calls c WHERE c.id = p_call);
+END;
+$$;
+
 -- The platform-wide LLM spend since p_since, for the global daily cap (docs/spec/09); an aggregate only.
 CREATE FUNCTION app_llm_spend_usd(p_since timestamptz) RETURNS numeric
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -1717,6 +1736,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_delist_org(uuid)": ("bridge_app",),
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
+    "app_llm_call_inputs(uuid)": ("bridge_app",),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),
     "app_audit_chain_heads()": ("provenance_worker",),

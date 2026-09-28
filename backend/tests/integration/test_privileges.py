@@ -1011,6 +1011,33 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
 
 
+async def test_llm_call_inputs_are_read_by_staff_admin_only(owner_engine: AsyncEngine) -> None:
+    """A user reads their call rows but not the sanitised inputs; staff admin reads those through the function."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("llm-inputs"), "LLM")
+        admin = await w.add_user(conn, _email("llm-admin"), "Admin", staff_role="admin")
+        moderator = await w.add_user(conn, _email("llm-mod"), "Moderator", staff_role="moderator")
+        call = uuid7()
+        await act(conn, user)
+        await run(
+            conn,
+            "INSERT INTO llm_calls (id, user_id, task, model, status, inputs)"
+            " VALUES (:id, :u, 't', 'm', 'ok', CAST(:inputs AS jsonb))",
+            id=call,
+            u=user,
+            inputs='{"title": "Solar cold rooms"}',
+        )
+        assert await run(conn, "SELECT task FROM llm_calls WHERE id = :id", id=call) == "t"
+        await expect(conn, "SELECT inputs FROM llm_calls WHERE id = :id", "permission denied", id=call)
+        read = "SELECT app_llm_call_inputs(:id)"
+        for caller in (user, moderator, None):
+            await act(conn, caller)
+            await expect(conn, read, "staff admin only", id=call)
+        await act(conn, admin)
+        assert await run(conn, read, id=call) == {"title": "Solar cold rooms"}
+        assert await run(conn, read, id=uuid7()) is None
+
+
 async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
     async with as_app(owner_engine) as conn:
         user = await w.add_user(conn, _email("llm"), "LLM")
