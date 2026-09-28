@@ -6,7 +6,19 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, LargeBinary, SmallInteger, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    SmallInteger,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -118,7 +130,13 @@ class DirectoryInvitation(IdMixin, TimestampsMixin, Base):
     # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
     # RETURNING for server defaults.
     __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
-    __table_args__ = ({"info": {"tenancy": Tenancy.STAFF, "tenant_column": "org_id"}},)
+    __table_args__ = (
+        CheckConstraint(
+            "length(to_address) <= 254 AND to_address ~ '^[^@[:space:]]+@[^@[:space:]]+$'", name="to_address"
+        ),
+        CheckConstraint("reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 500)", name="reason"),
+        {"info": {"tenancy": Tenancy.STAFF, "tenant_column": "org_id"}},
+    )
 
     org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     to_address: Mapped[str] = mapped_column(CIText())

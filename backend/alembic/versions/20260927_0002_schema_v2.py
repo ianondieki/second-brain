@@ -357,6 +357,8 @@ REGISTERED_IS_COMPLETE = (
     "NOT NULL AND problem_statement IS NOT NULL AND summary IS NOT NULL AND owner_handle IS NOT NULL AND "
     "cert_id IS NOT NULL AND registered_at IS NOT NULL)"
 )
+INVITATION_TO_ADDRESS = "length(to_address) <= 254 AND to_address ~ '^[^@[:space:]]+@[^@[:space:]]+$'"
+INVITATION_REASON = "reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 500)"
 LLM_COUNTS_NOT_NEGATIVE = (
     "input_tokens >= 0 AND output_tokens >= 0 AND cache_read_tokens >= 0 AND cache_write_tokens >= 0"
     " AND (latency_ms IS NULL OR latency_ms >= 0)"
@@ -777,6 +779,21 @@ BEGIN
         END IF;
     END LOOP;
 END
+$$;
+"""
+
+# Helpers the tables' CHECK constraints call, so created before the tables (EXECUTE: FUNCTION_GRANTS; the roles that
+# write the tables need it, as a CHECK runs its functions with the writer's privileges).
+CHECK_HELPERS_SQL = r"""
+-- A moderation case's reasons: 1 to p_max codes or short texts, each non-blank and at most 200 characters (what
+-- app_open_moderation_case files, and the bound on a user's report and a staff edit alike).
+CREATE FUNCTION app_reasons_are_valid(p_reasons text[], p_max integer) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT p_reasons IS NOT NULL AND cardinality(p_reasons) BETWEEN 1 AND p_max AND NOT EXISTS (
+        SELECT 1 FROM unnest(p_reasons) AS r(reason)
+         WHERE r.reason IS NULL OR btrim(r.reason) = '' OR length(r.reason) > 200)
 $$;
 """
 
@@ -2120,6 +2137,7 @@ NO_TRUNCATE_TABLES = (*APPEND_ONLY_TABLES, "proposal_versions", "proposal_confid
 # EXECUTE grants (every function above has EXECUTE revoked from PUBLIC first). The Tier-2 roles need the helpers their
 # policies call; app_org_id() and app_is_member() are only called inside definer functions for them.
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
+    "app_reasons_are_valid(text[], integer)": ("bridge_app",),  # ck_moderation_cases_reasons_valid
     "app_is_staff(staff_role[])": ("bridge_app", "tier2_moderation"),
     "app_current_legal_template(legal_template_kind)": ("bridge_app",),
     "app_owns_version(uuid)": ("provenance_worker",),
@@ -2206,6 +2224,7 @@ def upgrade() -> None:
     for name, values in ENUMS.items():
         postgresql.ENUM(*values, name=name).create(bind, checkfirst=False)
     _alter_phase1_tables()
+    _run_sql(CHECK_HELPERS_SQL)
     _create_tables()
     _run_sql(FUNCTIONS_SQL)
     _run_sql("\n".join(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" for table in RLS_TABLES))
@@ -2416,6 +2435,7 @@ def _create_tables() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("app_reasons_are_valid(reasons, 50)", name=op.f("ck_moderation_cases_reasons_valid")),
         sa.ForeignKeyConstraint(["assigned_to"], ["users.id"], name=op.f("fk_moderation_cases_assigned_to_users")),
         sa.ForeignKeyConstraint(["decided_by"], ["users.id"], name=op.f("fk_moderation_cases_decided_by_users")),
         sa.ForeignKeyConstraint(["reporter_id"], ["users.id"], name=op.f("fk_moderation_cases_reporter_id_users")),
@@ -2556,6 +2576,8 @@ def _create_tables() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint(INVITATION_TO_ADDRESS, name=op.f("ck_directory_invitations_to_address")),
+        sa.CheckConstraint(INVITATION_REASON, name=op.f("ck_directory_invitations_reason")),
         sa.ForeignKeyConstraint(["approved_by"], ["users.id"], name=op.f("fk_directory_invitations_approved_by_users")),
         sa.ForeignKeyConstraint(
             ["org_id"],

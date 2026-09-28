@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,8 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
     __table_args__ = (
         Index("ix_moderation_cases_subject", "subject_type", "subject_id"),
         Index("ix_moderation_cases_status_created_at", "status", "created_at"),
+        # 1 to 50 non-blank reasons of at most 200 characters (app_reasons_are_valid, revision 0002).
+        CheckConstraint("app_reasons_are_valid(reasons, 50)", name="reasons_valid"),
         {"info": {"tenancy": Tenancy.STAFF}},
     )
 

@@ -1642,3 +1642,71 @@ async def test_a_ledger_row_cannot_blow_or_offset_the_global_spend(owner_engine:
             ({"latency": -1}, "ck_llm_calls_counts_not_negative"),
         ):
             await expect(conn, LLM_CALL, constraint, id=uuid7(), u=user, **(call | change))
+
+
+REPORT = (
+    "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id)"
+    " VALUES (:id, 'proposal', :subject, CAST(:reasons AS text[]), 'report', :reporter)"
+)
+INVITATION = "INSERT INTO directory_invitations (id, org_id, to_address, reason) VALUES (:id, :org, :address, :reason)"
+
+
+async def test_reports_and_directory_invitations_are_bounded(owner_engine: AsyncEngine) -> None:
+    """What any signed-in user may write into the staff queues is bounded in the table (rate limits stay app-side):
+    a moderation case has 1 to 50 non-blank reasons of at most 200 characters (as app_open_moderation_case files
+    them), for a report and for a staff edit alike; a directory invitation goes to an address of at most 254
+    characters with one @, and its reason, when given, is non-blank and at most 500 characters."""
+    async with as_app(owner_engine) as conn:
+        niche = uuid7()
+        await run(
+            conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Bounds')", id=niche, s=f"b-{niche.hex}"
+        )
+        reporter = await w.add_user(conn, _email("bounds-reporter"), "Reporter")
+        moderator = await w.add_user(conn, _email("bounds-mod"), "Moderator", staff_role="moderator")
+        problem = await w.add_problem(conn, reporter, niche)
+        proposal, _ = await w.add_proposal(conn, reporter, niche, problem)
+        org = await add_org(conn)
+        await act(conn, reporter)
+        report = uuid7()
+        await run(
+            conn,
+            REPORT,
+            id=report,
+            subject=proposal,
+            reasons="{" + ",".join(f"r{i}" for i in range(50)) + "}",
+            reporter=reporter,
+        )
+        for reasons in (
+            "{}",
+            '{"  "}',
+            '{abuse,""}',
+            "{abuse,NULL}",
+            "{" + ",".join(f"r{i}" for i in range(51)) + "}",
+            "{" + "x" * 201 + "}",
+        ):
+            await expect(
+                conn,
+                REPORT,
+                "ck_moderation_cases_reasons_valid",
+                id=uuid7(),
+                subject=proposal,
+                reasons=reasons,
+                reporter=reporter,
+            )
+        await run(conn, INVITATION, id=uuid7(), org=org, address="partnerships@bounds.example.test", reason=None)
+        for address, reason, constraint in (
+            ("no-at-sign.example.test", None, "ck_directory_invitations_to_address"),
+            ("two@at@bounds.example.test", None, "ck_directory_invitations_to_address"),
+            ("a b@bounds.example.test", None, "ck_directory_invitations_to_address"),
+            ("x" * 250 + "@b.test", None, "ck_directory_invitations_to_address"),
+            ("info@bounds.example.test", "   ", "ck_directory_invitations_reason"),
+            ("info@bounds.example.test", "x" * 501, "ck_directory_invitations_reason"),
+        ):
+            await expect(conn, INVITATION, constraint, id=uuid7(), org=org, address=address, reason=reason)
+        await act(conn, moderator)  # the bound holds for a staff edit too
+        await expect(
+            conn,
+            "UPDATE moderation_cases SET reasons = '{}' WHERE id = :id",
+            "ck_moderation_cases_reasons_valid",
+            id=report,
+        )
