@@ -2022,6 +2022,46 @@ BEGIN
 END;
 $$;
 
+-- An anchor names an existing audit event: its chain, sequence number and hash (the hourly job anchors chain heads),
+-- at a TSA time no later than the database clock allows (one minute of skew: the TSA's clock is not ours). Anchors
+-- are append-only and one per chain and sequence number, so a forged one would be permanent and block the real one.
+-- SECURITY DEFINER: provenance_worker, the writer, cannot read audit_events.
+CREATE FUNCTION chain_anchors_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+          FROM public.audit_events e
+         WHERE e.chain_id = NEW.chain_id AND e.seq = NEW.seq AND e.event_hash = NEW.event_hash
+    ) THEN
+        RAISE EXCEPTION 'chain_anchors: an anchor names an existing audit event (chain, sequence number and hash)'
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    IF NEW.tsa_time > pg_catalog.clock_timestamp() + interval '1 minute' THEN
+        RAISE EXCEPTION 'chain_anchors: the TSA time is later than the database clock'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A transparency root closes a Nairobi calendar day (the nightly job publishes the day that just ended, at 00:30 EAT),
+-- so a day that has not ended has no root: a forged root cannot pre-empt today's or a later day's real one.
+CREATE FUNCTION transparency_roots_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.day >= CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date) THEN
+        RAISE EXCEPTION 'transparency_roots: a root closes a Nairobi day that has ended'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- Evidence times are the database's: when an attestation was made, the Master Enterprise Terms or an NDA accepted and
 -- a Tier-2 view started is set to now() on insert, whatever the writer sends (the registered_at rule).
 CREATE FUNCTION evidence_time_guard() RETURNS trigger
@@ -2079,6 +2119,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION evidence_time_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION chain_anchors_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION transparency_roots_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
@@ -2117,6 +2159,12 @@ CREATE TRIGGER org_claims_dns_guard
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
+CREATE TRIGGER chain_anchors_guard
+    BEFORE INSERT ON chain_anchors
+    FOR EACH ROW EXECUTE FUNCTION chain_anchors_guard();
+CREATE TRIGGER transparency_roots_guard
+    BEFORE INSERT ON transparency_roots
+    FOR EACH ROW EXECUTE FUNCTION transparency_roots_guard();
 CREATE TRIGGER attestations_evidence_time
     BEFORE INSERT ON attestations
     FOR EACH ROW EXECUTE FUNCTION evidence_time_guard();
@@ -2182,6 +2230,8 @@ TRIGGER_FUNCTIONS = (
     "org_claims_dns_guard()",
     "phone_verifications_guard()",
     "evidence_time_guard()",
+    "chain_anchors_guard()",
+    "transparency_roots_guard()",
 )
 
 

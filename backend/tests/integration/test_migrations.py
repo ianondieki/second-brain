@@ -291,6 +291,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "org_claims_dns_guard()": (False, set()),
     "phone_verifications_guard()": (False, set()),
     "evidence_time_guard()": (False, set()),
+    "chain_anchors_guard()": (True, set()),
+    "transparency_roots_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -1777,12 +1779,17 @@ async def test_append_only_evidence_refuses_update_and_delete_even_for_the_owner
             ),
             {"id": uuid7(), "u": owner, "v": version, "h": ZERO_HASH},
         )
+        chain = f"test:{uuid4().hex}"  # an anchor names an existing audit event (chain_anchors_guard)
+        await conn.execute(
+            sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'test.x')"),
+            {"id": uuid7(), "c": chain},
+        )
         await conn.execute(
             sa.text(
                 "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
-                " VALUES (:id, 'global', 1, :h, '\\x01', now(), '1')"
+                " SELECT :id, chain_id, seq, event_hash, '\\x01', now(), '1' FROM audit_events WHERE chain_id = :c"
             ),
-            {"id": uuid7(), "h": ZERO_HASH},
+            {"id": uuid7(), "c": chain},
         )
         for table in ("attestations", "chain_anchors"):
             await expect_error(conn, f"UPDATE {table} SET id = id", "append-only evidence")
@@ -1866,6 +1873,8 @@ V2_TRIGGERS = {
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
+    ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
+    ("transparency_roots", "transparency_roots_guard"): ("transparency_roots_guard", ROW | BEFORE | ON_INSERT),
     **{
         (t, f"{t}_evidence_time"): ("evidence_time_guard", ROW | BEFORE | ON_INSERT)
         for t in ("attestations", "legal_acceptances", "nda_acceptances", "document_views")

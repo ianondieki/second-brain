@@ -1523,6 +1523,59 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
 
 
+ANCHOR = (
+    "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
+    " VALUES (:id, :chain, :seq, :hash, '\\x01', CAST(:tsa_time AS timestamptz), 'serial')"
+)
+ROOT = (
+    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id)"
+    " VALUES (CAST(:day AS date), :root, '\\x02', :key)"
+)
+NAIROBI_TODAY = "SELECT CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date)"
+
+
+async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engine: AsyncEngine) -> None:
+    """chain_anchors and transparency_roots are append-only and one per head or day, so a forged row would be
+    permanent and block the real one. provenance_worker (the only writer) may anchor only an existing audit event
+    (its chain, sequence number and hash) at a TSA time no later than the database clock allows (one minute of
+    clock skew), and publish a root only for a Nairobi day that has ended."""
+    chain = f"test:{uuid4().hex}"
+    async with as_app(owner_engine) as conn:
+        for _ in range(2):
+            await run(
+                conn,
+                "INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'test.anchor')",
+                id=uuid7(),
+                c=chain,
+            )
+        events = await conn.execute(
+            text("SELECT seq, event_hash FROM audit_events WHERE chain_id = :c ORDER BY seq"), {"c": chain}
+        )
+        earlier, head = events.all()
+        key = f"test-{uuid4().hex[:8]}"
+        await run(conn, "INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)", k=key, pk=bytes(32))
+        today = await run(conn, NAIROBI_TODAY)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        anchor = {"chain": chain, "seq": head.seq, "hash": head.event_hash, "tsa_time": datetime.now(UTC)}
+        refused = "an anchor names an existing audit event"
+        for change in (
+            {"hash": hashlib.sha256(b"forged").digest()},
+            {"seq": head.seq + 1},
+            {"chain": f"test:{uuid4().hex}"},
+        ):
+            await expect(conn, ANCHOR, refused, id=uuid7(), **(anchor | change))
+        future = datetime.now(UTC) + timedelta(hours=1)
+        await expect(
+            conn, ANCHOR, "TSA time is later than the database clock", id=uuid7(), **(anchor | {"tsa_time": future})
+        )
+        await run(conn, ANCHOR, id=uuid7(), **anchor)
+        await run(conn, ANCHOR, id=uuid7(), **(anchor | {"seq": earlier.seq, "hash": earlier.event_hash}))
+        root = {"root": hashlib.sha256(b"root").digest(), "key": key}
+        for day in (today, today + timedelta(days=1)):
+            await expect(conn, ROOT, "a root closes a Nairobi day that has ended", day=day, **root)
+        await run(conn, ROOT, day=today - timedelta(days=1), **root)
+
+
 async def test_staff_admin_adds_a_niche_without_a_deploy(owner_engine: AsyncEngine) -> None:
     """AC-DIR-5 (the database half of the admin route): app_add_niche() is staff admin only, adds a top-level niche or
     a child of an active top-level one (two levels), refuses a taken or malformed slug, and the app reads the new niche
