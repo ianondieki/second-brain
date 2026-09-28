@@ -59,8 +59,22 @@ sha256sum manifest.json            # or: openssl dgst -sha256 -r manifest.json
 
 The first field must equal `$HASH`. The manifest is RFC 8785 canonical JSON: do not open and re-save it in an editor,
 reformat it or change its line endings; one changed byte gives a different hash (that is the point). To check a file
-against Bridge directly, upload it at `https://<host>/verify` (API: `POST /api/verify` with the raw file as the body);
-the answer is match or no match.
+against Bridge directly, upload it at `https://<host>/verify`; the answer is match or no match.
+
+From the command line, `POST /api/verify` takes the raw file as the body. Like every state-changing API call it needs
+the CSRF double-submit pair: `GET /api/auth/csrf` returns a token and sets it as a cookie (`__Host-bridge_csrf` over
+HTTPS), and the upload sends that cookie back together with the same token in the `X-CSRF-Token` header. Without
+them the answer is `403` with the code `csrf_failed`.
+
+```bash
+curl -fsS -c cookies.txt -o csrf.json "$HOST/api/auth/csrf"         # {"csrf_token": "..."} and the cookie
+TOKEN=$(sed -E 's/.*"csrf_token": *"([^"]+)".*/\1/' csrf.json)
+curl -fsS -b cookies.txt -H "X-CSRF-Token: $TOKEN" -H 'Content-Type: application/octet-stream' \
+  --data-binary @manifest.json "$HOST/api/verify?cert_id=$CERT"      # without ?cert_id= it searches every certificate
+```
+
+The answer holds `"match": true` or `false` and the SHA-256 Bridge computed (`content_hash`). Keep `cookies.txt` for
+further uploads; the token is no secret of yours, it only shows the request came from the client that fetched it.
 
 ## 3. Check the timestamp token
 
