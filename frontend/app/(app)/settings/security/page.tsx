@@ -19,6 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function SecurityPage() {
   const me = await requireMe();
   const t = await getTranslations("security");
+  const tApp = await getTranslations("app");
   const home = homeFor(me.side);
   return (
     <SignedInShell homeHref={home}>
@@ -35,6 +36,7 @@ export default async function SecurityPage() {
               required={me.mfa.required}
               homeHref={home}
               email={me.user.email}
+              productName={tApp("name")}
             />
           </section>
           <PasswordSettings email={me.user.email} />

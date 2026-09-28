@@ -6,6 +6,10 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
+  // One worker locally: signups and logins hash passwords with argon2id (64 MiB, t=3) in the API's single process,
+  // and parallel local workers queue behind each other until tests time out. CI keeps Playwright's default (half
+  // the runner's cores) and its retry. Override with `npm run e2e -- --workers=2`.
+  workers: process.env.CI ? undefined : 1,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",

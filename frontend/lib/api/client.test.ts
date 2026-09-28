@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CSRF_COOKIE, CSRF_HEADER, createApiClient, ensureCsrf, isCsrfFailure, readCookie } from "./client";
+import {
+  type ApiClient,
+  CSRF_COOKIE,
+  CSRF_HEADER,
+  createApiClient,
+  ensureCsrf,
+  fillPath,
+  isCsrfFailure,
+  queryString,
+  readCookie,
+} from "./client";
+import type { paths } from "./schema";
 
 const BASE = "http://api.test";
 const CSRF_URL = `${BASE}/api/auth/csrf`;
@@ -207,5 +218,239 @@ describe("api client CSRF handling", () => {
     });
     await createApiClient({ baseUrl: BASE, fetch: fetchMock }).POST("/api/auth/login", { body });
     expect(seen).toHaveLength(1);
+  });
+});
+
+// createApiClient answers like openapi-fetch (whose types it uses), so settle() and every screen read it unchanged.
+describe("api client requests and answers", () => {
+  const ME = `${BASE}/api/auth/me`;
+
+  function recording(answer: () => Response) {
+    const requests: Request[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(String(input), init);
+      requests.push(request);
+      return answer();
+    });
+    return { client: createApiClient({ baseUrl: `${BASE}/`, fetch: fetchMock }), requests };
+  }
+
+  it("sends a JSON body with its content type, and a GET with neither", async () => {
+    setCsrfCookie("tok");
+    const post = recording(() => json(200, { mfa_required: false, user: {} }));
+    await post.client.POST("/api/auth/login", { body: { email: "a@example.test", password: "a long password" } });
+    expect(post.requests[0].url).toBe(`${BASE}/api/auth/login`);
+    expect(post.requests[0].headers.get("Content-Type")).toBe("application/json");
+    expect(await post.requests[0].json()).toEqual({ email: "a@example.test", password: "a long password" });
+    expect(post.requests[0].credentials).toBe("same-origin");
+
+    const get = recording(() => json(401, { detail: { code: "unauthenticated", message: "x" } }));
+    await get.client.GET("/api/auth/me");
+    expect(get.requests[0].url).toBe(ME);
+    expect(get.requests[0].method).toBe("GET");
+    expect(get.requests[0].headers.get("Content-Type")).toBeNull();
+    expect(get.requests[0].body).toBeNull();
+  });
+
+  it("passes request headers and an abort signal through", async () => {
+    const { client, requests } = recording(() => json(200, {}));
+    const controller = new AbortController();
+    await client.GET("/api/auth/me", { headers: { Accept: "application/json" }, signal: controller.signal });
+    expect(requests[0].headers.get("Accept")).toBe("application/json");
+    controller.abort();
+    expect(requests[0].signal.aborted).toBe(true);
+  });
+
+  it("returns parsed data when ok", async () => {
+    const { client } = recording(() => json(200, { csrf_token: "t" }));
+    const { data, error, response } = await client.GET("/api/auth/me");
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ csrf_token: "t" });
+    expect(error).toBeUndefined();
+  });
+
+  it("returns neither data nor error for an empty answer (204, Content-Length 0, an empty body)", async () => {
+    setCsrfCookie("tok");
+    for (const answer of [
+      () => new Response(null, { status: 204 }),
+      () => new Response("", { status: 200, headers: { "Content-Length": "0" } }),
+      () => new Response("", { status: 200 }),
+    ]) {
+      const { data, error, response } = await recording(answer).client.POST("/api/auth/logout");
+      expect(response.ok).toBe(true);
+      expect(data).toBeUndefined();
+      expect(error).toBeUndefined();
+    }
+    const failed = await recording(() => new Response(null, { status: 503 })).client.GET("/api/auth/me");
+    expect(failed.response.status).toBe(503);
+    expect(failed.error).toBeUndefined();
+    expect(failed.data).toBeUndefined();
+  });
+
+  it("returns the error body parsed as JSON, or as text when it is not JSON", async () => {
+    const detail = { detail: { code: "rate_limited", message: "x" } };
+    const asJson = await recording(() => json(429, detail)).client.GET("/api/auth/me");
+    expect(asJson.error).toEqual(detail);
+    expect(asJson.data).toBeUndefined();
+
+    const asText = await recording(() => new Response("Bad gateway", { status: 502 })).client.GET("/api/auth/me");
+    expect(asText.error).toBe("Bad gateway");
+    expect(asText.response.status).toBe(502);
+  });
+});
+
+describe("fillPath", () => {
+  it("puts each value into its segment, percent-encoded", () => {
+    expect(fillPath("/api/orgs/{org_id}", { org_id: "4f1c-9a" })).toBe("/api/orgs/4f1c-9a");
+    expect(fillPath("/api/orgs/{org_id}", { org_id: "a/b c?d#e%f&g" })).toBe("/api/orgs/a%2Fb%20c%3Fd%23e%25f%26g");
+    expect(fillPath("/api/orgs/{org_id}/members/{user_id}/roles", { user_id: "u 1", org_id: 7 })).toBe(
+      "/api/orgs/7/members/u%201/roles",
+    );
+    expect(fillPath("/api/auth/me")).toBe("/api/auth/me");
+  });
+
+  it("refuses a missing or empty value, and . or .., instead of sending another path", () => {
+    expect(() => fillPath("/api/orgs/{org_id}")).toThrow(/org_id/);
+    for (const org_id of [undefined, null, "", ".", ".."]) {
+      expect(() => fillPath("/api/orgs/{org_id}", { org_id }), String(org_id)).toThrow(TypeError);
+    }
+    expect(fillPath("/api/orgs/{org_id}", { org_id: "..." })).toBe("/api/orgs/...");
+  });
+});
+
+describe("queryString", () => {
+  it("repeats the key for each array item, encodes, and leaves out undefined and null", () => {
+    expect(
+      queryString({ niche: ["agri", "health tech"], cursor: undefined, after: null, q: "maji&safi=1", limit: 20 }),
+    ).toBe("?niche=agri&niche=health%20tech&q=maji%26safi%3D1&limit=20");
+    expect(queryString({ verified: false, page: 0 })).toBe("?verified=false&page=0");
+  });
+
+  it("is empty when nothing is left to send", () => {
+    expect(queryString()).toBe("");
+    expect(queryString({ cursor: undefined, niche: [] })).toBe("");
+  });
+});
+
+/**
+ * Two endpoints Phase 2 screens will call that the frozen schema does not have yet, written in openapi-typescript's
+ * output shape so the client's types and runtime can be tested with query parameters and DELETE today.
+ */
+interface Phase2Paths {
+  "/api/directory/orgs": {
+    get: {
+      parameters: {
+        query?: { niche?: string[]; cursor?: string | null; q?: string };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": { items: string[] } } } };
+    };
+  };
+  "/api/auth/identities/{identity_id}": {
+    delete: {
+      parameters: { query?: never; header?: never; path: { identity_id: string }; cookie?: never };
+      requestBody?: never;
+      responses: { 204: { headers: { [name: string]: unknown }; content?: never } };
+    };
+  };
+}
+
+describe("api client parameters and methods", () => {
+  function recording<Paths = paths>(answer: () => Response = () => json(200, {})) {
+    const requests: Request[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(String(input), init);
+      requests.push(request);
+      return answer();
+    });
+    return { client: createApiClient<Paths>({ baseUrl: BASE, fetch: fetchMock }), requests };
+  }
+
+  it("fills path parameters, one encoded segment each", async () => {
+    const { client, requests } = recording();
+    await client.GET("/api/orgs/{org_id}", { params: { path: { org_id: "a/b c" } } });
+    expect(requests[0].url).toBe(`${BASE}/api/orgs/a%2Fb%20c`);
+  });
+
+  it("sends nothing when a path parameter would leave the path (missing, empty, . or ..)", async () => {
+    const { client, requests } = recording();
+    await expect(client.GET("/api/orgs/{org_id}", { params: { path: { org_id: ".." } } })).rejects.toThrow(TypeError);
+    await expect(client.GET("/api/orgs/{org_id}", { params: { path: { org_id: "" } } })).rejects.toThrow(TypeError);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("sends the query string, arrays as repeated keys, without undefined values", async () => {
+    const { client, requests } = recording<Phase2Paths>(() => json(200, { items: ["x"] }));
+    const { data } = await client.GET("/api/directory/orgs", {
+      params: { query: { niche: ["agri", "fintech"], cursor: undefined, q: "maji safi" } },
+    });
+    expect(requests[0].url).toBe(`${BASE}/api/directory/orgs?niche=agri&niche=fintech&q=maji%20safi`);
+    expect(data?.items).toEqual(["x"]);
+  });
+
+  it("sends PUT, PATCH and DELETE with the CSRF header, credentials and a JSON body where given", async () => {
+    setCsrfCookie("tok-unsafe");
+    const orgs = recording(() => json(200, {}));
+    await orgs.client.PUT("/api/orgs/{org_id}/members/{user_id}/roles", {
+      params: { path: { org_id: "o-1", user_id: "u-2" } },
+      body: { roles: ["reviewer"] },
+    });
+    await orgs.client.PATCH("/api/me/profile", { body: { headline: "Water systems for Kisumu" } });
+    const identities = recording<Phase2Paths>(() => new Response(null, { status: 204 }));
+    const { response } = await identities.client.DELETE("/api/auth/identities/{identity_id}", {
+      params: { path: { identity_id: "id-3" } },
+    });
+    expect(response.status).toBe(204);
+
+    const sent = [...orgs.requests, ...identities.requests];
+    expect(sent.map((r) => `${r.method} ${r.url}`)).toEqual([
+      `PUT ${BASE}/api/orgs/o-1/members/u-2/roles`,
+      `PATCH ${BASE}/api/me/profile`,
+      `DELETE ${BASE}/api/auth/identities/id-3`,
+    ]);
+    for (const request of sent) {
+      expect(request.headers.get(CSRF_HEADER), request.method).toBe("tok-unsafe");
+      expect(request.credentials, request.method).toBe("same-origin");
+    }
+    expect(await sent[0].json()).toEqual({ roles: ["reviewer"] });
+    expect(sent[1].headers.get("Content-Type")).toBe("application/json");
+    expect(sent[2].body).toBeNull();
+  });
+
+  // `npm run typecheck` (tsc) fails when any of these calls compiles, because its @ts-expect-error is then unused.
+  // They are built, never run: the point is that the options the runtime would drop cannot be written at all.
+  it("refuses, at compile time, the options it would not send", () => {
+    const api: ApiClient = createApiClient();
+    const phase2: ApiClient<Phase2Paths> = createApiClient<Phase2Paths>();
+    const refused = [
+      // @ts-expect-error: the org_id path parameter is required
+      () => api.GET("/api/orgs/{org_id}"),
+      // @ts-expect-error: both path parameters are required
+      () => api.PUT("/api/orgs/{org_id}/members/{user_id}/roles", { params: { path: { org_id: "o" } }, body: { roles: [] } }),
+      // @ts-expect-error: header parameters are not sent
+      () => api.GET("/api/orgs/{org_id}", { params: { path: { org_id: "o" }, header: { "X-Org": "o" } } }),
+      // @ts-expect-error: cookie parameters are not sent
+      () => api.GET("/api/auth/me", { params: { cookie: { session: "s" } } }),
+      // @ts-expect-error: this endpoint takes no query
+      () => api.GET("/api/auth/me", { params: { query: { expand: "orgs" } } }),
+      // @ts-expect-error: fetch options other than headers and signal are not sent
+      () => api.GET("/api/auth/me", { cache: "no-store" }),
+      // @ts-expect-error: openapi-fetch's own options do not exist here
+      () => api.GET("/api/auth/me", { parseAs: "text" }),
+      // @ts-expect-error: a GET has no body
+      () => api.GET("/api/auth/me", { body: { a: 1 } }),
+      // @ts-expect-error: no DELETE operation at this path
+      () => api.DELETE("/api/auth/me"),
+      // @ts-expect-error: the body must match the operation's schema
+      () => api.POST("/api/auth/totp/confirm", { body: { code: 123456 } }),
+      // @ts-expect-error: an unknown query parameter
+      () => phase2.GET("/api/directory/orgs", { params: { query: { sort: "name" } } }),
+      // @ts-expect-error: a query value of the wrong type
+      () => phase2.GET("/api/directory/orgs", { params: { query: { niche: "agri" } } }),
+    ];
+    expect(refused).toHaveLength(12);
   });
 });

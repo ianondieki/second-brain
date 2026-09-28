@@ -100,6 +100,10 @@ make check-legacy     # the unchanged local-companion suite, via scripts/run_leg
 make check-e2e        # Playwright smoke; needs the stack running (`make dev` first)
 ```
 
+Locally, Playwright runs one worker (`frontend/playwright.config.ts`): signups and logins hash passwords with
+argon2id in the API's single process, and parallel workers time out waiting for it. CI keeps Playwright's default
+worker count. To try more workers locally: `cd frontend && npm run e2e -- --workers=2`.
+
 After changing an API route or schema, regenerate the OpenAPI document and the frontend's generated types:
 
 ```bash
@@ -117,6 +121,38 @@ cd backend && uv run pytest
 
 Without `TEST_DATABASE_ADMIN_URL`, the same tests start a throwaway pgvector container through testcontainers
 instead (slower, but needs no local Postgres).
+
+### JS budget per route
+
+`docs/spec/07` item 5 allows at most **150 KB of gzipped JavaScript per route, where 1 KB = 1,000 bytes: 150,000
+bytes**. This is the stricter reading of "KB" (150 KiB would be 153,600 bytes), so a route within it is within either
+reading. Counted: the gzip-compressed bodies of the scripts a first visit downloads (the route's `<script src>`
+files). Not counted: response headers, which depend on the protocol, and chunks that load later on demand. Measure
+against a production build, such as the `make dev` web container on port 3000 (not part of `make check`):
+
+```bash
+make budget                                         # /, /login, /signup, /settings/security
+cd frontend && npm run budget -- /signup/check-email /org --allow-skip   # named routes
+```
+
+Set `BUDGET_COOKIE` to a test account's session cookie (for example `__Host-bridge_session=<token>`, copied from the
+browser's storage panel after logging in) so signed-in routes are measured. Without it they redirect, which fails the
+run unless `--allow-skip`. `BUDGET_BASE_URL` points elsewhere (http or https); both are in `frontend/.env.example`.
+The run fails when a route is over, answers with an error, or is skipped. In Git Bash, prefix named routes with
+`MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (`signup`, without the slash, also works).
+
+**Open: whether response headers count (DECISIONS-NEEDED D-28).** Lighthouse's script "transfer size", the
+instrument of AC-UX-3, includes response headers. The script prints that figure too ("with HTTP/1.1 response
+headers"). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
+(152,195) are over 150,000 on 2026-09-28, while their bodies are 147,898 and 148,518 (`/login`: 146,553 bodies,
+149,850 with headers). Behind HTTP/2 in production the headers shrink to a few bytes per script. Until the human
+decides D-28, the bodies count.
+
+Browser targets are pinned in `frontend/package.json` (`browserslist`: Chrome, Edge and Firefox 111+, Safari
+16.4+, the Next.js default). The build already emits modern JavaScript for them: a newer target does not shrink any
+route. The polyfills that Lighthouse's "Legacy JavaScript" audit flags come from Next.js's own polyfill module (about
+0.6 KB gzipped), which no browserslist setting removes; the audit's savings estimate models core-js sizes, not the
+bytes actually sent.
 
 ## 4. Rules that surprise newcomers
 
