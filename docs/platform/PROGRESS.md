@@ -245,7 +245,9 @@ CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers;
 CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_handle`; MAJOR: `document_views` rows need
 no grant and evidence timestamps are caller-set; 11 MINORs). db-migrations is on the combined round-4 fixes (orchestrator
 decision: an upheld dispute leaves the new claimant the only owner/admin). Two items went to the human as **D-32**.
-The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. impl-ai is on the T2.2 SQL ledger. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
+The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
+round-4 CHECKs; 1186 passed); its first full review (reviewer) is running. Carry to T2.9 and Phase 4 as the card notes
+say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
 premise was disputed with the Next source and pinned by an E2E test; D-28 figures updated: `/settings/security` 148,441
@@ -253,7 +255,8 @@ bytes of bodies, 152,118 with headers; 174 Vitest). Round 3: reviewer **PASS** (
 4 MINORs: no test of the 10 s status-check timeout, the Cancel/confirm race untracked, no recovery-code path untracked,
 `next.config.test.ts` needs a longer timeout) and ux-reviewer CHANGES_REQUIRED (MAJOR: the status-unknown notice renders
 off-screen with no focus move; MINORs: reload copy, focus after turn-off and after cancel, no next step for required
-roles). Fix round queued for impl-frontend (the three implementer slots are busy).
+roles). impl-frontend is on that fix round (a step-up "new recovery codes" route is
+a backend follow-up, tracked in the REQ-AUTH-01 card).
 Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
 after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
 confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
