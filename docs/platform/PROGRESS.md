@@ -242,7 +242,7 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 `openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). db-migrations is on
 round-3 items 3–8. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
-headers in `security-headers.test.ts`); impl-frontend is fixing both. T2.6a reviewer round 2 running. Wip `09b4a2e`
+headers in `security-headers.test.ts`); impl-frontend is fixing both. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, being fixed by impl-backend; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
 (T2.4) diff reviewed; its suite is being re-run. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
 set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container instead (`reviewer-repo01-pg` on
@@ -265,7 +265,7 @@ is pushed, clean, and unmerged. The order of merges matters: schema v2 first, th
 Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
 reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
 T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
-D-29 and D-30 (the E2-dispute question). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
+D-29, D-30 (the E2-dispute question) and D-31 (E2 badge copy). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
 are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
 `/api/openapi.json` lists admin routes in production (Phase 8).
 

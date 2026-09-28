@@ -31,6 +31,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in Phase 2 (T2.6b builds the dispute queue either way; only the "uphold" button on an E2 organisation depends on this).
 - Decision:
 
+### D-31 · Badge text for an E2 (legal entity verified) organisation (T2.6a, REQ-DIR-01, AC-DIR-3)
+- Why: `docs/spec/06` 6.2 gives the badge copy for unclaimed ("Listed from public information · not on the platform · not affiliated") and E1 ("Domain verified (pending legal verification)") organisations, but none for E2. A verification badge is a claim to users, and claims text needs you (`CLAUDE.md` stop rule). T2.6a (`feat/REQ-DIR-02-provisional-seed`, `backend/src/bridge/directory/service.py` `BADGE_TEXT`) ships a placeholder tagged `[[COPY-REVIEW]]`: "Legal entity verified". No organisation can reach E2 until T2.6b, so nobody sees it yet.
+- Options: (a) approve "Legal entity verified"; (b) a line that says what was checked, e.g. "Registration and signatory verified" or "Business registration verified (BRS, KRA PIN)"; (c) your own wording, or leave it to the advocate's review at G2.
+- Recommended default: (a) as the placeholder until you answer; it must be approved before T2.6b can approve an E2 claim in staging.
+- Blocks: E2 approvals shown to users (T2.6b); nothing else.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
