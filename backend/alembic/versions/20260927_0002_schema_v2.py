@@ -281,9 +281,6 @@ ROLE_GRANTS: dict[str, dict[str, str]] = {
 
 
 # Generated-column and CHECK expressions of the tables below, verbatim from the ORM models.
-
-
-# Generated-column and CHECK expressions of the tables below, verbatim from the ORM models.
 SEARCH_TSV = (
     "setweight(to_tsvector('simple'::regconfig, coalesce(title, '')), 'A') || "
     "setweight(to_tsvector('simple'::regconfig, coalesce(problem_statement, '')), 'B') || "
