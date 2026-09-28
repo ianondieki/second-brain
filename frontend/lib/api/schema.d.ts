@@ -189,8 +189,8 @@ export interface paths {
          *     cookie; the first callback carrying a code also spends its state server-side, so a replay gets oauth_state.
          *     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
          *     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-         *     consents_version_required, too_many_attempts (10 callbacks a minute from one IP). Success: the return path (or
-         *     /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.
+         *     consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
+         *     Success: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.
          */
         get: operations["oauth_callback_api_auth_oauth__provider__callback_get"];
         put?: never;
