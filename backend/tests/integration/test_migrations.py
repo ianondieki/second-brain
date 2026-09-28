@@ -257,7 +257,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
     "app_owns_version(uuid)": (True, {"provenance_worker"}),
     "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
-    "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
+    "app_tier2_granted(uuid, uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
     "app_decide_kyc(uuid, boolean, text, text, text, text, boolean)": (True, {"bridge_app"}),

@@ -539,6 +539,41 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
         assert list(rows.scalars()) == expected
 
 
+VIEW_INSERT = (
+    "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id, render_kind,"
+    " fingerprint_seed, started_at) VALUES (:id, :p, :v, :owner, :viewer, :org, 'html', :seed,"
+    " now() - interval '30 days')"
+)
+
+
+@pytest.mark.parametrize("broken", ["none", "no_grant", "no_nda"])
+async def test_only_a_granted_viewer_logs_a_view_under_the_granting_org(
+    owner_engine: AsyncEngine, world: w.World, broken: str
+) -> None:
+    """A Tier-2 view is logged only by a viewer the grant lets read that registered version (app_tier2_granted), under
+    the organisation holding the grant: a member without it cannot plant views in the owner's "Who has seen this", nor
+    log a granted view under another organisation of theirs or on a draft; the start time is the database's."""
+    b = world.b
+    async with rolled_back(owner_engine) as conn:
+        scenario = await _grant_scenario(conn, world, broken)
+        await _add_member(conn, world.a.org_id, scenario.reviewer, "{reviewer}")  # also a reviewer of org A
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, scenario.reviewer, None)
+        view = {"p": b.published, "owner": b.user_id, "viewer": scenario.reviewer, "seed": bytes(16)}
+        registered = view | {"v": b.published_version}
+        await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=world.a.org_id, **registered)
+        await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **view, v=scenario.draft_version)
+        if broken != "none":
+            await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **registered)
+            return
+        logged = uuid7()
+        await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **registered)
+        started = await conn.execute(
+            text("SELECT started_at = now() FROM document_views WHERE id = :id"), {"id": logged}
+        )
+        assert started.scalar_one() is True  # the backdated start was replaced
+
+
 async def test_the_owner_reads_their_tier2_through_tier2_reader(app_engine: AsyncEngine, world: w.World) -> None:
     async with app_engine.connect() as conn, conn.begin():
         await _as_tenant(conn, world.b.user_id, None, "proposal_confidential")

@@ -675,14 +675,18 @@ POLICIES: tuple[Policy, ...] = (
         " AND t.kind = 'master_enterprise_terms')))",
     ),
     Policy("document_views", "SELECT", "owner_id = app_user_id() OR viewer_user_id = app_user_id()"),
+    # The access log ("Who has seen this"): a view is logged only by a viewer whom the grant held by that organisation
+    # lets read that registered version's Tier 2 (a render writes its view in the same request), never planted by
+    # another member. The owner's own renders are not logged (org_id is the viewer's organisation).
     Policy(
         "document_views",
         "INSERT",
-        check="viewer_user_id = app_user_id() AND app_is_member(org_id)"
+        check="viewer_user_id = app_user_id() AND app_tier2_granted(proposal_id, version_id, org_id)"
         " AND EXISTS (SELECT 1 FROM proposals p WHERE p.id = document_views.proposal_id"
         " AND p.owner_id = document_views.owner_id)"
         " AND (nda_acceptance_id IS NULL OR EXISTS (SELECT 1 FROM nda_acceptances n"
-        " WHERE n.id = document_views.nda_acceptance_id AND n.user_id = app_user_id()))",
+        " WHERE n.id = document_views.nda_acceptance_id AND n.user_id = app_user_id()"
+        " AND n.proposal_id = document_views.proposal_id AND n.org_id = document_views.org_id))",
     ),
     Policy("document_views", "UPDATE", "viewer_user_id = app_user_id()", "viewer_user_id = app_user_id()"),
     Policy(
@@ -817,8 +821,9 @@ $$;
 -- membership must be on the organisation's verified domain: their email address at exactly that domain, and verified
 -- (an address typed at sign-up proves nothing until its link is followed). The Master
 -- Enterprise Terms count only in their current version and only when accepted by the organisation's approved E2
--- claimant or by an active signatory (never by any other member or an outsider).
-CREATE FUNCTION app_tier2_granted(p_proposal uuid, p_version uuid) RETURNS boolean
+-- claimant or by an active signatory (never by any other member or an outsider). p_org, when given, names the
+-- organisation the grant must be held by (the document_views INSERT policy: a view is logged under that organisation).
+CREATE FUNCTION app_tier2_granted(p_proposal uuid, p_version uuid, p_org uuid DEFAULT NULL) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
@@ -835,6 +840,7 @@ AS $$
            AND v.status = 'registered'                                -- drafts are Tier 0: owner only
            AND p.status = 'published' AND p.moderation_state = 'clear'  -- hidden ("deleted") or held: no new views
            AND g.status = 'active' AND g.tier >= 2 AND g.revoked_at IS NULL
+           AND (p_org IS NULL OR g.org_id = p_org)
            AND (public.app_org_id() IS NULL OR g.org_id = public.app_org_id())
            AND o.verification = 'e2' AND o.suspended_at IS NULL AND o.verified_domain IS NOT NULL
            AND m.user_id = public.app_user_id() AND m.status = 'active'
@@ -2104,7 +2110,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_current_legal_template(legal_template_kind)": ("bridge_app",),
     "app_owns_version(uuid)": ("provenance_worker",),
     "app_subject_digest(uuid, bytea)": ("bridge_app", "provenance_worker"),
-    "app_tier2_granted(uuid, uuid)": ("bridge_app", "tier2_reader"),
+    "app_tier2_granted(uuid, uuid, uuid)": ("bridge_app", "tier2_reader"),
     "app_held_tag_count(uuid)": ("bridge_app",),
     "app_confirm_phone_otp(uuid, bytea)": ("bridge_app",),
     "app_decide_kyc(uuid, boolean, text, text, text, text, boolean)": ("bridge_app",),
