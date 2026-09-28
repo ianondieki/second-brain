@@ -239,13 +239,14 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 ### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
 
 **Laptop session 2026-09-28 (in progress).** Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
-`openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). db-migrations is on
-round-3 items 3–8. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
+`openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). Round-3 items 3–8
+done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); reviewer and
+security-reviewer round 3 are running on `0fd9159`. impl-ai is on the T2.2 SQL ledger. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`); impl-frontend is fixing both. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
 (T2.4) reviewed and verified (1080 passed, `openapi --check` clean). Wip `c509ea6` (T2.2, per-session
 `tier2_llm_assistant` consent) reviewed and verified at `85f444f` (ruff, format, mypy, `openapi --check` clean; 1157
-passed). impl-backend is on the T2.4 fix round (items 1b–12); impl-ai starts the T2.2 SQL ledger when a slot frees.
+passed). impl-backend is on the T2.4 fix round (items 1b–12).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
