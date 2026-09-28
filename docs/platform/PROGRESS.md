@@ -268,7 +268,11 @@ after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user
 confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
 (T2.4) reviewed and verified (1080 passed, `openapi --check` clean). Wip `c509ea6` (T2.2, per-session
 `tier2_llm_assistant` consent) reviewed and verified at `85f444f` (ruff, format, mypy, `openapi --check` clean; 1157
-passed). impl-backend is on the T2.4 fix round (items 1b–12).
+passed). T2.4 fix round done by impl-backend (`8976166`..`f8bbcb6`, 19 commits; plus an ESS issuerSerial bug and an
+anchor-outage stop; 1124 passed; `bridge/provenance` 99%); reviewer and security-reviewer round 2 are running. Its four
+schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
+column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
+`tools/cloudflared.exe` (D-13); they pass in the main checkout.
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
