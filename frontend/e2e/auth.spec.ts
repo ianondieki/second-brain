@@ -290,9 +290,23 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
   await checkScreen(page);
 
+  // While the code is being checked (the answer is held back here), "Cancel setup" ignores presses and looks it.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/auth/totp/confirm", async (route) => {
+    await held;
+    await route.continue();
+  });
   await page.getByLabel("Code from your app").fill(totp(key));
   await page.getByRole("button", { name: "Confirm code" }).click();
+  const cancel = page.getByRole("button", { name: "Cancel setup" });
+  await expect(cancel).toHaveAttribute("aria-disabled", "true");
+  await expect(cancel).toHaveCSS("cursor", "progress");
+  await expect(cancel).toHaveCSS("color", "rgb(74, 88, 102)"); // --ink-soft: 6.8:1 on paper
+  await expect(cancel).toHaveCSS("text-decoration-style", "dotted");
+  release();
   await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10, SERVER_STEP);
+  await page.unroute("**/api/auth/totp/confirm");
   await checkScreen(page);
 
   await page.getByRole("button", { name: "I have saved my codes" }).click();
