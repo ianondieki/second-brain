@@ -1,3 +1,5 @@
 graphify-out/graph.json merge=graphify
 # Shell scripts must keep LF endings on Windows checkouts too (they run in CI and Git Bash).
 *.sh text eol=lf
+# Golden provenance fixtures are compared byte for byte (AC-IP-1): never convert their line endings.
+backend/tests/fixtures/provenance/** -text
