@@ -284,6 +284,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
     "provenance_records_guard()": (False, set()),
+    "proposal_attachments_guard()": (True, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -1552,6 +1553,49 @@ async def test_tier2_of_a_registered_version_is_frozen_except_the_manifest(owner
         )
 
 
+async def test_attachments_of_a_registered_version_change_only_their_scan_state(owner_engine: AsyncEngine) -> None:
+    """A draft's attachments stay editable; once the version is registered the owner (as bridge_app) and every other
+    role may change only av_status, rerendered and updated_at, and nobody deletes the attachment."""
+    h1, h2 = hashlib.sha256(b"attachment-1").digest(), hashlib.sha256(b"attachment-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, _proposal, _registered = await _registered_proposal(conn)
+        problem = await w.add_problem(conn, owner, niche)
+        draft, version = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        attachment = uuid7()
+        by_id = {"id": attachment, "h": h2}
+        await conn.execute(
+            sa.text(
+                "INSERT INTO proposal_attachments (id, owner_id, proposal_id, version_id, content_type, sha256,"
+                " size_bytes) VALUES (:id, :owner, :p, :v, 'application/pdf', :h, 100)"
+            ),
+            {"id": attachment, "owner": owner, "p": draft, "v": version, "h": h1},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})
+        await conn.execute(sa.text("UPDATE proposal_attachments SET sha256 = :h WHERE id = :id"), by_id)  # a draft's
+        await conn.execute(
+            sa.text("UPDATE proposal_versions SET status = 'registered', cert_id = :c WHERE id = :v"),
+            {"v": version, "c": uuid4().hex[:16]},
+        )
+        for assignment in ("sha256 = :h", "size_bytes = 200", "sha256 = NULL"):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_attachments SET {assignment} WHERE id = :id",
+                "changes only its scan state",
+                {"id": attachment, "h": h1},
+            )
+        scanned = await conn.execute(
+            sa.text("UPDATE proposal_attachments SET av_status = 'clean', rerendered = true WHERE id = :id"), by_id
+        )
+        assert scanned.rowcount == 1
+        removed = await conn.execute(sa.text("DELETE FROM proposal_attachments WHERE id = :id"), by_id)
+        assert removed.rowcount == 0  # the DELETE policy covers drafts only
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))  # the trigger holds for every role
+        for sql in ("UPDATE proposal_attachments SET content_type = 'text/plain' WHERE id = :id",):
+            await expect_error(conn, sql, "changes only its scan state", by_id)
+        await expect_error(conn, "DELETE FROM proposal_attachments WHERE id = :id", "never deleted", by_id)
+
+
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
         owner, _niche, _proposal, version = await _registered_proposal(conn)
@@ -1623,6 +1667,10 @@ V2_TRIGGERS = {
     ),
     ("provenance_records", "provenance_records_guard"): (
         "provenance_records_guard",
+        ROW | BEFORE | ON_DELETE | ON_UPDATE,
+    ),
+    ("proposal_attachments", "proposal_attachments_guard"): (
+        "proposal_attachments_guard",
         ROW | BEFORE | ON_DELETE | ON_UPDATE,
     ),
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),

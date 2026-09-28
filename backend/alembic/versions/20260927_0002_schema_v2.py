@@ -1485,6 +1485,40 @@ BEGIN
 END;
 $$;
 
+-- Attachments of a registered version are evidence (their SHA-256s are in its manifest): never deleted, and an UPDATE
+-- may change only av_status, rerendered and updated_at (the scanner and the PDF re-render). A draft's attachments
+-- stay editable. SECURITY DEFINER: reads the version's status whatever the caller's visibility.
+CREATE FUNCTION proposal_attachments_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_allowed public.proposal_attachments%ROWTYPE;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.proposal_versions v WHERE v.id = OLD.version_id AND v.status = 'registered'
+    ) THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'proposal_attachments: an attachment of a registered version is never deleted (AC-IP-2)'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    v_allowed := OLD;
+    v_allowed.av_status := NEW.av_status;
+    v_allowed.rerendered := NEW.rerendered;
+    v_allowed.updated_at := NEW.updated_at;
+    IF NEW IS DISTINCT FROM v_allowed THEN
+        RAISE EXCEPTION 'proposal_attachments: an attachment of a registered version changes only its scan state'
+            ' (AC-IP-2)' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- Registration records: never deleted; an UPDATE may only fill empty signature, key, TSA, OpenTimestamps and evidence
 -- columns and move status forward (hashed -> signed -> timestamped).
 CREATE FUNCTION provenance_records_guard() RETURNS trigger
@@ -1606,6 +1640,7 @@ REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_confidential_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION provenance_records_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION proposal_attachments_guard() FROM PUBLIC;
 
 CREATE TRIGGER proposal_versions_guard
     BEFORE INSERT OR UPDATE OR DELETE ON proposal_versions
@@ -1616,6 +1651,9 @@ CREATE TRIGGER proposal_confidential_guard
 CREATE TRIGGER provenance_records_guard
     BEFORE UPDATE OR DELETE ON provenance_records
     FOR EACH ROW EXECUTE FUNCTION provenance_records_guard();
+CREATE TRIGGER proposal_attachments_guard
+    BEFORE UPDATE OR DELETE ON proposal_attachments
+    FOR EACH ROW EXECUTE FUNCTION proposal_attachments_guard();
 CREATE TRIGGER proposals_guard
     BEFORE INSERT OR UPDATE ON proposals
     FOR EACH ROW EXECUTE FUNCTION proposals_guard();
@@ -1666,6 +1704,7 @@ TRIGGER_FUNCTIONS = (
     "proposal_versions_guard()",
     "proposal_confidential_guard()",
     "provenance_records_guard()",
+    "proposal_attachments_guard()",
     "proposals_guard()",
     "tags_guard()",
     "org_claims_guard()",
