@@ -123,6 +123,11 @@ Schema follow-ups requested by T2.4 (`docs/platform/tasks/REQ-PROV-01.md`, "Sche
 - `ix_provenance_records_content_hash` for `/verify` upload matching without a cert id.
 - Not built: the owner's opt-in to show name and title on `/verify`. The spec says only "unless the owner opts to show name and title" (06 6.4 item 2); which name (handle, display name or D2 legal name), per proposal or per version, and whether withdrawing the opt-in hides the name again are not written down, so the column waits for that decision.
 
+Batch reservations (T2.2 review, M2 and m3 on `feat/REQ-LLM-01-llm-layer`):
+
+- `llm_calls.batch_id` and `custom_id` (`varchar(64)`, both or neither); status `batch_reserved` only with a batch id. Partial unique indexes on `(batch_id, custom_id)`: one reservation per item (`status = 'batch_reserved'`) and one settlement per item (`batch_id IS NOT NULL AND status <> 'batch_reserved'`), so the ledger settles with an untargeted `INSERT ... ON CONFLICT DO NOTHING`.
+- The spend rule is defined once, in the view `llm_spend` (`security_invoker`; `org_id`, `user_id`, `cost_usd`, `created_at`; SELECT bridge_app only): a row counts unless it is a reservation whose item has settled. `app_llm_spend_usd()` sums it as the owner; the tenant monthly sum must read it (under the caller's RLS) instead of `llm_calls`. bridge_app's column SELECT on `llm_calls` adds `batch_id` and `custom_id`.
+
 Notes for the code on this schema:
 
 - OTP digests are HMAC-SHA-256 under a server pepper (T2.10a already does), never bare hashes; bridge_app can write them but never read them back, and the comparison stays in SQL (`app_confirm_phone_otp`, `app_confirm_claim_otp`).
