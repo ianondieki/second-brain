@@ -312,13 +312,16 @@ async def test_subject_digests_are_bound_to_the_caller(
     owner_engine: AsyncEngine, app_session_engine: AsyncEngine, developer: Developer
 ) -> None:
     """A subject digest is a stable pseudonym of its user, so bridge_app computes only the current user's own
-    (app.user_id); staff (any staff role) and the registration job (provenance_worker) compute any user's. Inside the
-    SECURITY DEFINER function current_user is its owner and session_user the login role, so the job is recognised by
-    the role it switched to (the ``role`` setting, which only a membership-checked SET ROLE changes): proven here on a
-    session logged in as bridge_app, exactly as in production, and under the harness's SET ROLE."""
+    (app.user_id); staff admin|moderator (never support) and the registration job (provenance_worker) compute any
+    user's. Inside the SECURITY DEFINER function current_user is its owner and session_user the login role, so the
+    job is recognised by the role it switched to (the ``role`` setting, changed only by a membership-checked SET
+    ROLE): proven here on a session logged in as bridge_app, exactly as in production, and under the harness's SET
+    ROLE. bridge_app holds that membership, so the binding stops a query bug or an ORM load, not SQL the app role
+    itself runs (D-32)."""
     async with owner_engine.begin() as conn:  # committed: the bridge_app session below reads them
         other = await w.add_user(conn, _email("digest-other"), "Other")
-        staff = await w.add_user(conn, _email("digest-support"), "Support", staff_role="support")
+        support = await w.add_user(conn, _email("digest-support"), "Support", staff_role="support")
+        moderator = await w.add_user(conn, _email("digest-mod"), "Moderator", staff_role="moderator")
         salted = "SELECT sha256(subject_salt || uuid_send(id)) FROM users WHERE id = :u"
         expected = {user: await run(conn, salted, u=user) for user in (developer.user_id, other)}
 
@@ -328,7 +331,9 @@ async def test_subject_digests_are_bound_to_the_caller(
         await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=other)
         await act(conn, None)  # no app.user_id: nobody's digest (the NULL-safe check)
         await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=developer.user_id)
-        await act(conn, staff)
+        await act(conn, support)  # support staff see no pseudonyms of other users
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=other)
+        await act(conn, moderator)
         assert await run(conn, SUBJECT_DIGEST, u=other) == expected[other]
         await act(conn, developer.user_id)
         await conn.execute(text("SET LOCAL ROLE provenance_worker"))
