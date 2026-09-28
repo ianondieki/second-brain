@@ -357,6 +357,10 @@ REGISTERED_IS_COMPLETE = (
     "NOT NULL AND problem_statement IS NOT NULL AND summary IS NOT NULL AND owner_handle IS NOT NULL AND "
     "cert_id IS NOT NULL AND registered_at IS NOT NULL)"
 )
+LLM_COUNTS_NOT_NEGATIVE = (
+    "input_tokens >= 0 AND output_tokens >= 0 AND cache_read_tokens >= 0 AND cache_write_tokens >= 0"
+    " AND (latency_ms IS NULL OR latency_ms >= 0)"
+)
 END_REASON_MATCHES_STATE = (
     "(state = 'DECLINED' AND end_reason IN ('NOT_PRIORITY', 'ALREADY_IN_PROGRESS_INTERNALLY', 'BUDGET', "
     "'NOT_RELEVANT', 'NEEDS_MATURITY', 'OTHER', 'BY_DEVELOPER')) OR (state = 'EXPIRED' AND end_reason IN "
@@ -2644,6 +2648,8 @@ def _create_tables() -> None:
         sa.Column("inputs", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("cost_usd BETWEEN 0 AND 100", name=op.f("ck_llm_calls_cost_usd_range")),
+        sa.CheckConstraint(LLM_COUNTS_NOT_NEGATIVE, name=op.f("ck_llm_calls_counts_not_negative")),
         sa.ForeignKeyConstraint(["org_id"], ["organizations.id"], name=op.f("fk_llm_calls_org_id_organizations")),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], name=op.f("fk_llm_calls_user_id_users")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_llm_calls")),

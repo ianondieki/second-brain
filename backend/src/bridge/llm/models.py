@@ -15,11 +15,17 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy
+
+MAX_CALL_COST_USD = 100
+COUNTS_NOT_NEGATIVE = (
+    "input_tokens >= 0 AND output_tokens >= 0 AND cache_read_tokens >= 0 AND cache_write_tokens >= 0"
+    " AND (latency_ms IS NULL OR latency_ms >= 0)"
+)
 
 
 class LlmCall(IdMixin, CreatedMixin, Base):
@@ -31,6 +37,10 @@ class LlmCall(IdMixin, CreatedMixin, Base):
         Index("ix_llm_calls_org_id_created_at", "org_id", "created_at"),
         Index("ix_llm_calls_user_id_created_at", "user_id", "created_at"),
         Index("ix_llm_calls_created_at", "created_at"),
+        # One row is one plausible call: the global daily cap sums every row, so a row must neither blow it (a cost
+        # over 100 USD) nor offset real spend (a negative cost). Token counts and latency are never negative.
+        CheckConstraint(f"cost_usd BETWEEN 0 AND {MAX_CALL_COST_USD}", name="cost_usd_range"),
+        CheckConstraint(COUNTS_NOT_NEGATIVE, name="counts_not_negative"),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "user_id"}},
     )
 

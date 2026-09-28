@@ -1614,3 +1614,31 @@ async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
         await act(conn, None)  # another tenant's (or no tenant's) request still sees the total, never the rows
         assert await run(conn, "SELECT count(*) FROM llm_calls WHERE user_id = :u", u=user) == 0
         assert await run(conn, "SELECT app_llm_spend_usd(:t)", t=since) - before == Decimal("1.25")
+
+
+LLM_CALL = (
+    "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, input_tokens, output_tokens,"
+    " cache_read_tokens, cache_write_tokens, latency_ms) VALUES (:id, :u, 't', 'm', 'ok', :cost, :input, :output,"
+    " :cache_read, :cache_write, :latency)"
+)
+
+
+async def test_a_ledger_row_cannot_blow_or_offset_the_global_spend(owner_engine: AsyncEngine) -> None:
+    """The global daily cap sums every row, so one row a user writes must stay a plausible single call: its cost is
+    0 to 100 USD, and no token count or latency is negative (a negative cost would offset real spend)."""
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("llm-bounds"), "LLM")
+        await act(conn, user)
+        call = {"cost": Decimal("100"), "input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "latency": None}
+        await run(conn, LLM_CALL, id=uuid7(), u=user, **call)  # the bounds themselves are allowed
+        for change, constraint in (
+            ({"cost": Decimal("999999")}, "ck_llm_calls_cost_usd_range"),
+            ({"cost": Decimal("100.000001")}, "ck_llm_calls_cost_usd_range"),
+            ({"cost": Decimal("-5")}, "ck_llm_calls_cost_usd_range"),
+            ({"input": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"output": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"cache_read": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"cache_write": -1}, "ck_llm_calls_counts_not_negative"),
+            ({"latency": -1}, "ck_llm_calls_counts_not_negative"),
+        ):
+            await expect(conn, LLM_CALL, constraint, id=uuid7(), u=user, **(call | change))
