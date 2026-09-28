@@ -1518,8 +1518,9 @@ async def test_one_open_tag_per_developer_and_org_and_a_closed_tag_never_reopens
 
 
 async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(owner_engine: AsyncEngine) -> None:
-    """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash) of every audit chain from
-    app_audit_chain_heads(); provenance_worker cannot read audit_events itself, and no other role may call it."""
+    """The hourly anchor job (REQ-AUD-01) gets the head (seq, event_hash, occurred_at) of every audit chain from
+    app_audit_chain_heads(), and the heads not anchored yet, oldest first, from app_unanchored_chain_heads();
+    provenance_worker cannot read audit_events or chain_anchors itself, and no other role may call either."""
     chains = [f"test:{uuid4().hex}" for _ in range(2)]
     async with as_app(owner_engine) as conn:
         for chain, count in zip(chains, (1, 3), strict=True):
@@ -1533,21 +1534,30 @@ async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(own
                 )
         last = await conn.execute(
             text(
-                "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events"
+                "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash, occurred_at FROM audit_events"
                 " WHERE chain_id = ANY (:c) ORDER BY chain_id, seq DESC"
             ),
             {"c": chains},
         )
-        expected = {row.chain_id: (row.seq, row.event_hash) for row in last.all()}
-        assert {chain: seq for chain, (seq, _) in expected.items()} == {chains[0]: 1, chains[1]: 3}
-        heads = "SELECT chain_id, seq, event_hash FROM app_audit_chain_heads() WHERE chain_id = ANY (:c)"
+        expected = {row.chain_id: (row.seq, row.event_hash, row.occurred_at) for row in last.all()}
+        assert {chain: head[0] for chain, head in expected.items()} == {chains[0]: 1, chains[1]: 3}
+        heads = "SELECT chain_id, seq, event_hash, occurred_at FROM app_audit_chain_heads() WHERE chain_id = ANY (:c)"
+        unanchored = (  # in the function's order (WITH ORDINALITY keeps it through the filter)
+            "SELECT h.chain_id FROM app_unanchored_chain_heads() WITH ORDINALITY AS h(chain_id, seq, event_hash,"
+            " occurred_at, n) WHERE h.chain_id = ANY (:c) ORDER BY h.n"
+        )
         for role in ("bridge_app", "audit_reader", "aggregate_worker", "tier2_reader", "dsr_exporter"):
             await conn.execute(text(f"SET LOCAL ROLE {role}"))
             await expect(conn, heads, "permission denied", c=chains)
+            await expect(conn, unanchored, "permission denied", c=chains)
         await conn.execute(text("SET LOCAL ROLE provenance_worker"))
         found = (await conn.execute(text(heads), {"c": chains})).all()
-        assert {row.chain_id: (row.seq, row.event_hash) for row in found} == expected
+        assert {row.chain_id: (row.seq, row.event_hash, row.occurred_at) for row in found} == expected
         await expect(conn, "SELECT 1 FROM audit_events", "permission denied")
+        assert list((await conn.execute(text(unanchored), {"c": chains})).scalars()) == chains  # oldest head first
+        seq, event_hash, _ = expected[chains[0]]
+        await run(conn, ANCHOR, id=uuid7(), chain=chains[0], seq=seq, hash=event_hash, tsa_time=datetime.now(UTC))
+        assert list((await conn.execute(text(unanchored), {"c": chains})).scalars()) == [chains[1]]
 
 
 ANCHOR = (

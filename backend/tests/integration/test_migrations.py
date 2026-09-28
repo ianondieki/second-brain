@@ -284,6 +284,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
     "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
+    "app_unanchored_chain_heads()": (True, {"provenance_worker"}),
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
     "proposals_guard()": (True, set()),

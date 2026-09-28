@@ -1693,15 +1693,31 @@ END;
 $$;
 
 -- Chain heads for the hourly RFC 3161 anchor (provenance.anchor_chain_heads, REQ-AUD-01): the last event of every
--- audit chain. Only chain ids, sequence numbers and hashes leave the function (no actor, payload or details).
--- EXECUTE is provenance_worker's only, the role that writes chain_anchors.
-CREATE FUNCTION app_audit_chain_heads() RETURNS TABLE (chain_id text, seq bigint, event_hash bytea)
+-- audit chain. Only chain ids, sequence numbers, hashes and the head's time leave the function (no actor, payload or
+-- details). EXECUTE is provenance_worker's only, the role that writes chain_anchors.
+CREATE FUNCTION app_audit_chain_heads()
+    RETURNS TABLE (chain_id text, seq bigint, event_hash bytea, occurred_at timestamptz)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    SELECT DISTINCT ON (e.chain_id) CAST(e.chain_id AS text), e.seq, e.event_hash
+    SELECT DISTINCT ON (e.chain_id) CAST(e.chain_id AS text), e.seq, e.event_hash, e.occurred_at
       FROM public.audit_events e
      ORDER BY e.chain_id, e.seq DESC
+$$;
+
+-- The heads the hourly anchor still has to timestamp: every chain head with no anchor at its sequence number, oldest
+-- head first (then chain id), so a run capped at N anchors takes the longest-waiting ones. provenance_worker cannot
+-- read chain_anchors (it only inserts), hence a definer function; EXECUTE is provenance_worker's only.
+CREATE FUNCTION app_unanchored_chain_heads()
+    RETURNS TABLE (chain_id text, seq bigint, event_hash bytea, occurred_at timestamptz)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT h.chain_id, h.seq, h.event_hash, h.occurred_at
+      FROM public.app_audit_chain_heads() h
+     WHERE NOT EXISTS (
+           SELECT 1 FROM public.chain_anchors a WHERE a.chain_id = h.chain_id AND a.seq = h.seq)
+     ORDER BY h.occurred_at, h.chain_id
 $$;
 
 -- Adds a niche without a deploy (docs/spec/06 6.2, AC-DIR-5: an admin-added niche is selectable in the directory,
@@ -2279,6 +2295,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),
     "app_audit_chain_heads()": ("provenance_worker",),
+    "app_unanchored_chain_heads()": ("provenance_worker",),
 }
 # Revision 0001 helpers the Tier-2 roles' policies call (revoked again on downgrade).
 FUNCTION_GRANTS_0001: dict[str, tuple[str, ...]] = {"app_user_id()": TIER2_ROLES}
