@@ -236,6 +236,26 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
 
+### Handoff (resume from here; updated 2026-09-28 by the cloud session)
+
+Open branches (each merged `claude/eloquent-hypatia-aa3577` at `a9b0e66` with a merge commit; nothing is merged back yet):
+
+| Branch | Last commit | Status | Exact next step |
+|---|---|---|---|
+| `feat/REQ-AUTH-01-phase1-followups` | `39bc276` | in review | reviewer + ux-reviewer on follow-ups 1–4; on PASS merge into the integration branch |
+| `feat/REQ-REPO-01-schema-v2` | `7360411` | in review | reviewer + security-reviewer (T2.1, revision 0002); on PASS merge (unblocks T2.2 ledger store, T2.3, T2.4, T2.6a) |
+| `feat/REQ-LLM-01-llm-layer` | `2f23384` | WIP | finish `c509ea6` (per-session `tier2_llm_assistant` consent, spec 06 §6.3): integration test of `SessionConsentChecker`, a grant helper; after T2.1 merges, the SQL `llm_calls` ledger store; then reviewer |
+| `feat/REQ-AUTH-02-oauth` | `fe119ee` | in review | reviewer + security-reviewer on the backend; buttons and linked accounts come with F4 |
+| `feat/REQ-DIR-02-provisional-seed` | `944cac2` | done (data only) | becomes T2.6a: add the seed loader and directory browse after T2.1 merges |
+
+Environment. Windows laptop: unchanged (`UV_NATIVE_TLS=1`, system Chrome; integration tests start a testcontainer when
+`TEST_DATABASE_ADMIN_URL` is unset). Linux cloud container: start Docker with `dockerd &` (or `sudo dockerd &`), then a
+reusable test server `docker run -d --name bridge-testdb -e POSTGRES_PASSWORD=postgres -p 55432:5432
+pgvector/pgvector:pg16` and `export TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`;
+`uv python install 3.12`, `uv sync --frozen` in `backend/`, `npm ci` in `frontend/`; legacy suite on a Python 3.13 venv
+with `requirements.txt` and a `cloudflared` stub on `PATH` (as in `pr.yml`), then `python scripts/run_legacy_tests.py`.
+Worktrees live in `../sb-wt/<REQ-ID>`. Baselines on `a9b0e66`: backend 579 passed, Vitest 105, legacy 307 OK (Linux).
+
 Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`, on top of `40f1adc`. Decisions applied:
 D-18 (no paid API calls: LLM fakes and synthetic cassettes only), D-20 (OAuth is T2.12), D-21 (provisional directory
 from public organisational data only, source URL and date per row), D-24 (SeaweedFS is the S3 stand-in). Task cards:
