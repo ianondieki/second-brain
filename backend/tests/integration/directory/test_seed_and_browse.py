@@ -343,18 +343,31 @@ def _seed_command(database_url: URL, app_env: str) -> subprocess.CompletedProces
     )
 
 
-async def test_the_seed_command_loads_the_directory_in_test_only(database_url: URL, seeded: Seeded) -> None:
-    first, second = _seed_command(database_url, "test"), _seed_command(database_url, "test")
-    assert (first.returncode, second.returncode) == (0, 0), first.stderr + second.stderr
-    assert first.stdout == second.stdout
-    assert "seed: organizations (provisional directory) = 85 rows" in first.stdout
-    assert "seed: org_niches (provisional directory) = 85 rows" in first.stdout
+async def test_the_seed_command_loads_the_directory_in_test_only(database_url: URL, owner_engine: AsyncEngine) -> None:
+    """The command commits; this test removes the organisations it created itself (none when the module's seed
+    already holds them), so it leaves the database as it found it whatever ran before."""
+    slugs = {str(row["slug"]) for row in load_directory()["orgs"]}
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(text("SELECT slug FROM organizations WHERE slug = ANY(:s)"), {"s": sorted(slugs)})
+        existing = set(found.scalars())
+    try:
+        first, second = _seed_command(database_url, "test"), _seed_command(database_url, "test")
+        assert (first.returncode, second.returncode) == (0, 0), first.stderr + second.stderr
+        assert first.stdout == second.stdout
+        assert "seed: organizations (provisional directory) = 85 rows" in first.stdout
+        assert "seed: org_niches (provisional directory) = 85 rows" in first.stdout
 
-    staging = _seed_command(database_url, "staging")
-    assert staging.returncode == 0, staging.stderr
-    assert "seed: regions = 48 rows" in staging.stdout
-    assert "seed: provisional directory skipped (APP_ENV=staging" in staging.stdout
-    assert "(provisional directory) =" not in staging.stdout
+        staging = _seed_command(database_url, "staging")
+        assert staging.returncode == 0, staging.stderr
+        assert "seed: regions = 48 rows" in staging.stdout
+        assert "seed: provisional directory skipped (APP_ENV=staging" in staging.stdout
+        assert "(provisional directory) =" not in staging.stdout
+    finally:
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM organizations WHERE source = 'seed' AND slug = ANY(:created)"),
+                {"created": sorted(slugs - existing)},
+            )
 
 
 # --- AC-DIR-5/a: niches and org types ---

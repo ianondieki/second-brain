@@ -16,7 +16,13 @@ DRAFT_HEADER = "DRAFT — NOT LEGAL ADVICE — MUST BE REVIEWED BY A KENYAN ADVO
 PLACEHOLDER_BODY = re.compile(re.escape(DRAFT_HEADER) + r"\n\n(\[\[LEGAL-PLACEHOLDER:[a-z0-9-]+\]\]\n)+")
 
 
+async def _organisations(engine: AsyncEngine) -> int:
+    async with engine.connect() as conn:
+        return int((await conn.execute(text("SELECT count(*) FROM organizations"))).scalar_one())
+
+
 async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> None:
+    organisations = await _organisations(owner_engine)  # whatever earlier tests left behind
     async with owner_engine.begin() as conn:
         first = await seed_all(conn, get_settings())
     async with owner_engine.begin() as conn:
@@ -29,12 +35,12 @@ async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> No
         plans = (
             await conn.execute(text("SELECT count(*) FROM plans WHERE code LIKE 'dev_%' OR code LIKE 'org_%'"))
         ).scalar_one()
-        orgs = (await conn.execute(text("SELECT count(*) FROM organizations WHERE source = 'seed'"))).scalar_one()
         legal = (await conn.execute(text("SELECT count(*) FROM legal_templates WHERE version = 'v1'"))).scalar_one()
         ndas = (await conn.execute(text("SELECT count(*) FROM nda_templates WHERE version = 'v1'"))).scalar_one()
     assert (counties, kenya) == (47, 1)
     assert plans == 9
-    assert orgs == 0  # the directory seed arrives in Phase 2 (G6); this seed never creates organisations
+    # The reference seed never creates organisations: the provisional directory is bridge.seed.directory (dev/test).
+    assert await _organisations(owner_engine) == organisations
     assert (legal, ndas) == (5, 2)
 
 
