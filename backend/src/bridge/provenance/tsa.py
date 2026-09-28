@@ -129,7 +129,7 @@ def parse_response(der: bytes, *, digest: bytes, nonce: int) -> TokenInfo:
         return TokenInfo(gen_time, format_serial(tst_info["serial_number"].native), tst_info["policy"].dotted)
     except TsaResponseError:
         raise
-    except (ValueError, TypeError, KeyError, IndexError) as exc:  # malformed DER in any field
+    except Exception as exc:  # untrusted input: malformed DER, odd keys or certificates fail in many library errors
         raise TsaResponseError(f"the response is not a valid TimeStampResp ({type(exc).__name__})") from exc
 
 

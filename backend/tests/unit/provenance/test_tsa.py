@@ -262,3 +262,20 @@ def test_the_client_comes_from_settings() -> None:
     assert both.urls == ("http://a.test/", "http://b.test/")
     only = tsa_client_from_settings(Settings(**values, tsa_url="http://a.test/", tsa_fallback_url=None))
     assert only.urls == ("http://a.test/",)
+
+
+def test_random_corruption_only_ever_raises_tsa_response_error(good_response: bytes) -> None:
+    """Untrusted bytes: whatever breaks inside the ASN.1 or X.509 libraries surfaces as TsaResponseError."""
+    import random
+
+    rng = random.Random(20260928)
+    for _ in range(1500):
+        corrupted = bytearray(good_response)
+        for _ in range(rng.randint(1, 4)):
+            corrupted[rng.randrange(len(corrupted))] = rng.randrange(256)
+        if rng.random() < 0.1:
+            corrupted = corrupted[: rng.randrange(len(corrupted))]
+        try:
+            parse_response(bytes(corrupted), digest=DIGEST, nonce=NONCE)
+        except TsaResponseError:
+            continue
