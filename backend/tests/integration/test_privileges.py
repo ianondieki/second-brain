@@ -18,15 +18,16 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, CursorResult
 from sqlalchemy.exc import DBAPIError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.sql.elements import TextClause
 
 from bridge.db import TIER2_ROLES, as_role, bind_tenant
 from bridge.ids import uuid7
@@ -232,6 +233,12 @@ async def test_as_role_rolls_back_when_the_block_breaks_the_transaction(
         assert (await session.execute(text("SELECT current_user"))).scalar_one() == "bridge_app"
 
 
+async def rowcount(session: AsyncSession, statement: TextClause, params: dict[str, Any] | None = None) -> int:
+    """Rows an UPDATE or DELETE matched, as a session reports it."""
+    result = cast(CursorResult[Any], await session.execute(statement, params or {}))
+    return result.rowcount
+
+
 async def test_the_database_times_a_registration_and_only_the_bound_worker_fills_its_hashes(
     app_session_engine: AsyncEngine, developer: Developer
 ) -> None:
@@ -266,11 +273,11 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
         async with as_role(session, "provenance_worker"):
             assert (await session.execute(text("SELECT count(*) FROM proposal_versions"))).scalar_one() == 0
             touch_all = text("UPDATE proposal_versions SET updated_at = now()")  # no WHERE: the UPDATE policy alone
-            assert (await session.execute(touch_all)).rowcount == 0
-            assert (await session.execute(fill, {"id": version.id, "h": digest})).rowcount == 0
+            assert await rowcount(session, touch_all) == 0
+            assert await rowcount(session, fill, {"id": version.id, "h": digest}) == 0
         await bind_tenant(session, user_id=developer.user_id)
         async with as_role(session, "provenance_worker"):
-            assert (await session.execute(fill, {"id": version.id, "h": digest})).rowcount == 1
+            assert await rowcount(session, fill, {"id": version.id, "h": digest}) == 1
         filled = await session.execute(
             text("SELECT content_hash, manifest_version FROM proposal_versions WHERE id = :id"), {"id": version.id}
         )
