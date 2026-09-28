@@ -861,13 +861,17 @@ async def test_starting_oauth_is_throttled_per_ip(client: httpx.AsyncClient, oth
     assert (await other.post("/api/auth/oauth/github/start", json={"intent": "login"})).status_code == 200
 
 
-async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient) -> None:
-    """Junk callbacks use up the address's budget; the next one, even with a valid flow, reaches no provider."""
+async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    """Ten callbacks a minute from one address may reach the provider; the next, even with a valid flow, reaches
+    none."""
     callback = "/api/auth/oauth/github/callback"
     for _ in range(10):
-        junk = await client.get(callback, params={"code": "c", "state": "junk"})
-        assert landing(junk) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
-    params = await start(client, "github", "signup", **signup_body())
+        response = await round_trip(client, person(), intent="login")
+        assert landing(response) == ("/signup", {"oauth_error": "oauth_no_account", "provider": "github"})
+    params = await start(other, "github", "signup", **signup_body())  # this address has used its ten starts too
+    flow_cookie = other.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    client.cookies.set("__Host-bridge_oauth", flow_cookie)
     with respx.mock(assert_all_called=False) as router, capture_logs() as logs:
         token = fake_github(router, person())
         throttled = await client.get(callback, params={"code": "c", "state": params["state"]})
@@ -876,6 +880,18 @@ async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient) -
     assert not signed_in(throttled)
     assert _deleted(throttled, "__Host-bridge_oauth")
     assert [entry["step"] for entry in logs if entry["event"] == "auth.oauth_throttled"] == ["callback"]
+
+
+async def test_forged_callbacks_do_not_use_up_the_callback_budget(client: httpx.AsyncClient) -> None:
+    """T2.12 follow-up: a page that makes this browser load the callback with a junk state (or none) is refused
+    before the throttle is charged, so it cannot lock the person out of their own sign-in for a minute."""
+    callback = "/api/auth/oauth/github/callback"
+    for params in [{"code": "c", "state": "junk"}, {"code": "c"}, {"error": "access_denied", "state": "x"}] * 4:
+        forged = await client.get(callback, params=params)
+        assert landing(forged) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    response = await round_trip(client, person(), intent="signup", **signup_body())
+    assert landing(response) == ("/dev", {})
+    assert signed_in(response)
 
 
 async def test_no_database_connection_is_held_during_the_provider_call(

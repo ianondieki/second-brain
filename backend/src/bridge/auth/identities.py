@@ -85,7 +85,13 @@ class _Taken(Exception):
 async def allow_request(db: AsyncSession, settings: Settings, step: Literal["start", "callback"], ip: str) -> bool:
     """At most ``REQUESTS_PER_IP_PER_MINUTE`` OAuth starts, and as many callbacks, a minute from one client IP (the
     ``login_attempts`` ledger, HMAC digests only). Each allowed request is recorded; the caller commits. A refusal is
-    logged as ``auth.oauth_throttled`` (not audited: an audit append per junk request would be its own flood)."""
+    logged as ``auth.oauth_throttled`` (not audited: an audit append per junk request would be its own flood).
+
+    A callback is charged only once its ``state`` matched the flow cookie and it carries a code, just before the state
+    is spent and the provider called (T2.12 follow-up): charged earlier, a page loading the callback URL with a junk
+    state in someone's browser would use up that person's budget. The requests refused before that need no limit of
+    their own: they touch no database and never reach the provider, and a 256-bit random state sealed in the cookie
+    is nothing to guess."""
     keys = throttle.ip_keys(settings.secret_key.get_secret_value(), f"oauth_{step}", ip)
     if await throttle.ip_blocked(db, keys, limit=REQUESTS_PER_IP_PER_MINUTE):
         get_logger(__name__).info("auth.oauth_throttled", step=step)
