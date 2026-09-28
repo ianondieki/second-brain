@@ -462,6 +462,12 @@ async def test_org_type_county_niche_and_name_filters(client: httpx.AsyncClient,
     assert mombasa["county-government-mombasa"]["county"] == {"code": "KE-28", "name": "Mombasa"}
 
 
+@pytest.mark.parametrize("q", ["%", "_", "\\"])
+async def test_like_wildcards_in_the_name_search_match_only_themselves(client: httpx.AsyncClient, q: str) -> None:
+    """No legal name contains %, _ or a backslash, so each finds nothing (unescaped, % and _ would match every name)."""
+    assert pairs(await walk(client, q=q)) == []
+
+
 async def test_pagination_walks_every_pair_exactly_once(client: httpx.AsyncClient) -> None:
     whole = pairs(await walk(client, limit=100))
     paged = pairs(await walk(client, limit=7))
