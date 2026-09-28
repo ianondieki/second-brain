@@ -1053,7 +1053,9 @@ END;
 $$;
 
 -- The kyc.purge job (no tenant context): reviews whose ID images are due for deletion, then the bookkeeping once the
--- objects are gone. Only ids leave the function.
+-- objects are gone. Only ids leave the function. Marking is the job's (no user bound) or staff admin's: a signed-in
+-- request never marks a review purged, which would keep its images past the 72 hours. bridge_app can clear
+-- app.user_id, so this stops a request-path bug, not a compromised app role.
 CREATE FUNCTION app_kyc_purge_due() RETURNS SETOF uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1065,16 +1067,19 @@ AS $$
 $$;
 
 CREATE FUNCTION app_mark_kyc_images_purged(p_review uuid) RETURNS boolean
-    LANGUAGE sql VOLATILE SECURITY DEFINER
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    WITH marked AS (
-        UPDATE public.kyc_reviews
-           SET images_purged_at = now(), updated_at = now()
-         WHERE id = p_review AND decided_at IS NOT NULL AND images_purged_at IS NULL AND purge_due_at <= now()
-        RETURNING 1
-    )
-    SELECT EXISTS (SELECT 1 FROM marked)
+BEGIN
+    IF public.app_user_id() IS NOT NULL AND NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_mark_kyc_images_purged: the kyc.purge job (no user bound) or staff admin only'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    UPDATE public.kyc_reviews
+       SET images_purged_at = now(), updated_at = now()
+     WHERE id = p_review AND decided_at IS NOT NULL AND images_purged_at IS NULL AND purge_due_at <= now();
+    RETURN FOUND;
+END;
 $$;
 
 -- Moderation decisions (staff admin or moderator, never on their own content).

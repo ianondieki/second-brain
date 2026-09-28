@@ -592,10 +592,16 @@ async def test_kyc_decisions_are_staff_admin_only_and_raise_d1_to_d2(owner_engin
         assert await run(conn, "SELECT count(*) FROM app_kyc_purge_due() AS r(id) WHERE r.id = :id", id=review) == 0
         await as_owner(conn)
         await run(conn, "UPDATE kyc_reviews SET purge_due_at = now() - interval '1 minute' WHERE id = :id", id=review)
-        await act(conn, None)
+        mark = "SELECT app_mark_kyc_images_purged(:id)"
+        for caller in (subject, moderator):  # a signed-in request never marks images purged (they would be kept)
+            await act(conn, caller)
+            await expect(conn, mark, "the kyc.purge job", id=review)
+        await act(conn, None)  # the kyc.purge job: no user bound
         assert await run(conn, "SELECT count(*) FROM app_kyc_purge_due() AS r(id) WHERE r.id = :id", id=review) == 1
-        assert await run(conn, "SELECT app_mark_kyc_images_purged(:id)", id=review) is True
-        assert await run(conn, "SELECT app_mark_kyc_images_purged(:id)", id=review) is False
+        assert await run(conn, mark, id=review) is True
+        assert await run(conn, mark, id=review) is False
+        await act(conn, admin)  # staff admin may mark by hand (already marked: nothing changes)
+        assert await run(conn, mark, id=review) is False
 
 
 async def test_moderation_state_changes_only_through_staff_and_holds_only_go_up(owner_engine: AsyncEngine) -> None:
