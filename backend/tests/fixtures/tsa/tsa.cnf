@@ -1,0 +1,26 @@
+# Configuration of the local RFC 3161 test TSA (tests/openssl_tsa.py fills in {dir}). Test-only: the CA and TSA keys
+# are generated per test session in a temporary directory and never leave it.
+[ req ]
+distinguished_name = req_dn
+
+[ req_dn ]
+
+[ tsa ]
+default_tsa = tsa_config1
+
+[ tsa_config1 ]
+serial = {dir}/tsaserial
+crypto_device = builtin
+signer_cert = {dir}/tsa.pem
+certs = {dir}/ca.pem
+signer_key = {dir}/tsa.key
+signer_digest = sha256
+default_policy = 1.2.3.4.1
+other_policies = 1.2.3.4.5
+digests = sha256, sha384, sha512
+accuracy = secs:1
+clock_precision_digits = 0
+ordering = no
+tsa_name = no
+ess_cert_id_chain = no
+ess_cert_id_alg = sha256

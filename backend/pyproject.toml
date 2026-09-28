@@ -75,7 +75,7 @@ packages = ["bridge", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*"]
+module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*", "asn1crypto.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
