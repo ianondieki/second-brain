@@ -83,6 +83,15 @@ def test_golden_manifest_bytes_and_hash_are_frozen(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", GOLDEN)
+def test_golden_canonical_bytes_have_no_line_breaks(name: str) -> None:
+    """Git may convert line endings of text files on Windows checkouts; canonical JSON never contains a raw line
+    break (RFC 8785 escapes them inside strings), so the golden bytes are the same on every platform."""
+    stored = (FIXTURES / f"{name}.canonical.json").read_bytes()
+    assert b"\n" not in stored
+    assert b"\r" not in stored
+
+
+@pytest.mark.parametrize("name", GOLDEN)
 def test_recomputing_sha256_from_the_stored_manifest_equals_content_hash(name: str) -> None:
     """AC-IP-1: anyone holding the stored manifest bytes recomputes the registered hash with plain SHA-256."""
     stored = (FIXTURES / f"{name}.canonical.json").read_bytes()
