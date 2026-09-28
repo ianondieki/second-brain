@@ -403,3 +403,41 @@ async def test_a_tsa_outage_leaves_timestamp_pending_until_a_retry_succeeds(
     async with sessions() as s:
         assert await timestamp_manifest(s, built.version_id, built.owner_id, tsa=tsa)
     assert len(await _events(owner_engine, built.version_id)) == 1
+
+
+async def test_only_the_call_that_stores_the_token_writes_the_audit_event(
+    owner_engine: AsyncEngine,
+    sessions: Sessions,
+    wrapper: LocalKeyWrapper,
+    store: InMemoryObjectStore,
+    signer: LocalSigner,
+    tsa: TsaClient,
+    local_tsa: LocalTsa,
+) -> None:
+    """Two workers race on the timestamp step: both read the record before either stores a token and both get a
+    token. While this call waits for its TSA, the other stores its token and writes the event; this call's
+    fill-once UPDATE then affects no row, so it writes no second proposal.version_registered event."""
+    built = await registered_version(owner_engine, wrapper)
+    async with sessions() as s:
+        await hash_manifest(s, built.version_id, built.owner_id, wrapper=wrapper, store=store)
+    async with sessions() as s:
+        await sign_manifest(s, built.version_id, built.owner_id, signer=signer)
+    other_worker: list[bool] = []
+
+    async def slow_tsa(request: httpx.Request) -> httpx.Response:
+        response = local_tsa.handler(request)
+        async with sessions() as s:
+            other_worker.append(await timestamp_manifest(s, built.version_id, built.owner_id, tsa=tsa))
+        return response
+
+    racing = TsaClient(tsa.endpoints, transport=httpx.MockTransport(slow_tsa))
+    async with sessions() as s:
+        assert await timestamp_manifest(s, built.version_id, built.owner_id, tsa=racing) is False
+    assert other_worker == [True]
+    record = await fetch(
+        owner_engine, "SELECT status, tsa_serial FROM provenance_records WHERE version_id = :v", v=built.version_id
+    )
+    assert record.status == ProvenanceStatus.TIMESTAMPED
+    events = await _events(owner_engine, built.version_id)
+    assert len(events) == 1
+    assert events[0].payload["tsa_serial"] == record.tsa_serial  # the event describes the token that was stored
