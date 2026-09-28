@@ -23,7 +23,7 @@ from bridge.llm.ledger import CallStatus
 from bridge.llm.registry import Purpose
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
-from tests.unit.llm.helpers import OWNER, real_registry
+from tests.unit.llm.helpers import OWNER, SESSION, real_registry
 from tests.unit.llm.rig import Rig, registry_with, rig
 from tests.unit.llm.schemas import Verdict, player
 
@@ -31,7 +31,7 @@ CANARY = "CANARY-T2-7f3a9c41"
 TIER1_TEXT = "Public teaser: solar cold rooms for fish traders."
 TASKS = sorted(real_registry().tasks)
 CONSENT_TASKS = [t for t in TASKS if real_registry().task(t).purpose is not Purpose.TIER1_ONLY]
-CTX = CallContext(user_id=OWNER, trace_id="ac-sec-6")
+CTX = CallContext(user_id=OWNER, trace_id="ac-sec-6", session_id=SESSION)
 
 
 def fixture(task: str) -> list[Message]:
@@ -48,7 +48,7 @@ def fixture(task: str) -> list[Message]:
 
 def everything_but(purpose: ConsentPurpose | None) -> StaticConsents:
     """Every consent the owner could hold except the one this task's purpose needs."""
-    return StaticConsents({(OWNER, p) for p in ConsentPurpose if p is not purpose})
+    return StaticConsents({(OWNER, p, SESSION) for p in ConsentPurpose if p is not purpose})
 
 
 def leaks(r: Rig, sent: str, logs: str) -> list[str]:
@@ -117,7 +117,7 @@ async def test_with_the_exact_consent_tier2_reaches_the_model_but_never_the_ledg
     purpose = real_registry().task(task).purpose.consent
     assert purpose is not None
     tape = player("messages_verdict_ok")
-    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose)}))
+    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose, SESSION)}))
     await r.service.complete(task, fixture(task), Verdict, ctx=CTX)
     assert CANARY in sent(tape)  # positive control: the consented purpose does send it
     assert leaks(r, "", capsys.readouterr().out) == []
@@ -130,7 +130,7 @@ async def test_dead_letters_never_carry_tier2_even_with_consent(task: str, capsy
     purpose = real_registry().task(task).purpose.consent
     assert purpose is not None
     tape = player("messages_schema_invalid_twice")
-    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose)}))
+    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose, SESSION)}))
     with pytest.raises(LLMSchemaError):
         await r.service.complete(task, fixture(task), Verdict, ctx=CTX)
     assert r.dead_letters.letters
@@ -141,7 +141,7 @@ async def test_dead_letters_never_carry_tier2_even_with_consent(task: str, capsy
 async def test_withdrawn_consent_blocks_again(task: str) -> None:
     purpose = real_registry().task(task).purpose.consent
     assert purpose is not None
-    consents = StaticConsents({(OWNER, purpose)})
+    consents = StaticConsents({(OWNER, purpose, SESSION)})
     consents.withdraw(OWNER, purpose)
     tape = player()
     r = rig(tape.adapter(), consents=consents)
@@ -200,7 +200,7 @@ async def test_a_consented_replay_is_framed_in_the_assistant_turn(task: str) -> 
     purpose = real_registry().task(task).purpose.consent
     assert purpose is not None
     tape = player("messages_verdict_ok")
-    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose)}))
+    r = rig(tape.adapter(), consents=StaticConsents({(OWNER, purpose, SESSION)}))
     await r.service.complete(task, replay(task), Verdict, ctx=CTX)
     assistant = tape.requests[0].json()["messages"][1]
     assert assistant["role"] == "assistant"

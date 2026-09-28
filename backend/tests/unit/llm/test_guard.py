@@ -9,13 +9,15 @@ from uuid import UUID
 import pytest
 
 from bridge.llm.errors import ConsentRequired, Tier2NotAllowed
-from bridge.llm.guard import SessionConsentChecker, StaticConsents, check_tier2
+from bridge.llm.guard import SessionConsentChecker, StaticConsents, check_tier2, session_consent_source
 from bridge.llm.types import InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
-from tests.unit.llm.helpers import OTHER_OWNER, OWNER, real_registry
+from tests.unit.llm.helpers import OTHER_OWNER, OTHER_SESSION, OWNER, SESSION, real_registry
+from tests.unit.llm.rig import registry_with
 
 ASSISTANT = ConsentPurpose.TIER2_LLM_ASSISTANT
+MODERATION = ConsentPurpose.TIER2_LLM_MODERATION
 
 
 def tier2(name: str = "confidential.method", owner: UUID = OWNER) -> InputField:
@@ -49,22 +51,34 @@ async def test_assistant_needs_the_owners_live_assistant_consent() -> None:
     with pytest.raises(ConsentRequired) as info:
         await check_tier2(task, msgs(tier2()), consents)
     assert info.value.purpose is ASSISTANT
-    consents.grant(OWNER, ASSISTANT)
-    await check_tier2(task, msgs(tier2()), consents)
+    consents.grant(OWNER, ASSISTANT, session_id=SESSION)
+    await check_tier2(task, msgs(tier2()), consents, session_id=SESSION)
+    for other in (OTHER_SESSION, None):  # per session (ADR-002): another session or a job does not count
+        with pytest.raises(ConsentRequired):
+            await check_tier2(task, msgs(tier2()), consents, session_id=other)
     consents.withdraw(OWNER, ASSISTANT)
     with pytest.raises(ConsentRequired):
-        await check_tier2(task, msgs(tier2()), consents)
+        await check_tier2(task, msgs(tier2()), consents, session_id=SESSION)
+
+
+async def test_moderation_consent_is_persistent() -> None:
+    task = registry_with(moderation_prescreen={"purpose": "tier2_llm_moderation"}).task("moderation_prescreen")
+    consents = StaticConsents({(OWNER, ConsentPurpose.TIER2_LLM_MODERATION)})
+    for session in (SESSION, None):
+        await check_tier2(task, msgs(tier2()), consents, session_id=session)
+    assert not await consents.has_live_consent(OWNER, ASSISTANT, session_id=SESSION)
 
 
 async def test_every_owner_must_consent() -> None:
     task = real_registry().task("submission_assistant")
-    consents = StaticConsents({(OWNER, ASSISTANT)})
+    consents = StaticConsents({(OWNER, ASSISTANT, SESSION)})
     with pytest.raises(ConsentRequired) as info:
-        await check_tier2(task, msgs(tier2(), tier2("other.method", OTHER_OWNER)), consents)
+        await check_tier2(task, msgs(tier2(), tier2("other.method", OTHER_OWNER)), consents, session_id=SESSION)
     assert info.value.fields == ("other.method",)
 
 
-async def test_session_checker_reads_consents(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_session_checker_reads_persistent_consents(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Persistent purposes go through bridge.profiles.consents; the per-session query is an integration test."""
     seen: list[tuple[Any, ...]] = []
 
     async def fake(db: Any, user_id: UUID, purpose: ConsentPurpose) -> bool:
@@ -73,8 +87,17 @@ async def test_session_checker_reads_consents(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(consents, "has_live_consent", fake)
     session = object()
-    assert await SessionConsentChecker(session).has_live_consent(OWNER, ASSISTANT)  # type: ignore[arg-type]
-    assert seen == [(session, OWNER, ASSISTANT)]
+    checker = SessionConsentChecker(session)  # type: ignore[arg-type]
+    assert await checker.has_live_consent(OWNER, MODERATION, session_id=None)
+    assert seen == [(session, OWNER, MODERATION)]
+    assert not await checker.has_live_consent(OWNER, ASSISTANT, session_id=None)  # per session: no session, no consent
+
+
+def test_session_consent_source_fits_the_column() -> None:
+    source = session_consent_source(SESSION)
+    assert source.startswith("session:")
+    assert len(source) <= 32  # consents.source is String(32)
+    assert source != session_consent_source(OTHER_SESSION)
 
 
 def test_input_field_validation() -> None:

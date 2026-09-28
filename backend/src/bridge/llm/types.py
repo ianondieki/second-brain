@@ -111,11 +111,14 @@ class Message:
 @dataclass(frozen=True, slots=True)
 class CallContext:
     """Who the call is for. ``org_id`` (else ``user_id``) is the billing subject whose monthly cap applies; neither
-    means a platform call bound by the global cap only. ``trace_id`` joins ledger rows to logs and traces."""
+    means a platform call bound by the global cap only. ``trace_id`` joins ledger rows to logs and traces.
+    ``session_id`` is the login session of an interactive call: per-session consents (``tier2_llm_assistant``) are
+    live only for it; jobs have none."""
 
     org_id: UUID | None = None
     user_id: UUID | None = None
     trace_id: str | None = None
+    session_id: UUID | None = None
 
 
 class LLMOutput(BaseModel):

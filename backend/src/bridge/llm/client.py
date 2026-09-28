@@ -302,7 +302,7 @@ class LLMService:
         """Kill switch and Tier-2 guard: refused calls are recorded with names and lengths only."""
         try:
             self._budget.check_kill_switch()
-            await check_tier2(call.spec, messages, self._consents)
+            await check_tier2(call.spec, messages, self._consents, session_id=call.ctx.session_id)
         except (LLMKillSwitch, Tier2NotAllowed, ConsentRequired) as exc:
             status = (
                 CallStatus.BLOCKED_KILL_SWITCH
