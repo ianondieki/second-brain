@@ -4,21 +4,26 @@ Plain code decides (docs/spec/04 principle 1). For a ``login`` or ``signup`` cal
 
 1. A known identity (provider, subject) signs in its account (MFA pending when TOTP is on), whatever its address is
    now. An account whose address is still unverified is not signed in: a verification link is sent instead.
-2. Otherwise the provider's address decides, and only when the provider verified it: an account with that address
-   and a verified address gets the identity linked and the person signed in; an unverified account gets nothing
-   linked and its owner an emailed link; with no account, ``signup`` creates one (address verified by the provider)
-   and ``login`` sends the person to signup, where the terms and consents are chosen.
-3. An address the provider has not verified never reaches an existing account (account pre-hijacking). ``login``
-   answers ``oauth_email_unverified`` whether or not an account exists. ``signup`` answers "check your email" either
-   way: a new account is created unverified, its identity bound to this browser (``__Host-bridge_signup``), so a
-   verification link opened elsewhere drops the identity (``service.consume_link``); an existing owner gets a link.
+2. Otherwise the provider's address decides, and only when the provider verified it. An account with that address
+   and a verified address is signed in exactly as an emailed link would sign it in (MFA pending when TOTP is on) and
+   nothing is attached to it: no identity, no "added" notice. An account that already holds another identity from
+   this provider is refused (``provider_already_linked``). An unverified account gets nothing and its owner an
+   emailed link. With no account, ``signup`` creates one (address verified by the provider) with the identity
+   attached, and ``login`` sends the person to signup, where the terms and consents are chosen.
+3. An address the provider has not verified never signs in to, creates or is matched to an existing account (account
+   pre-hijacking). ``login`` answers ``oauth_email_unverified`` whether or not an account exists. ``signup`` answers
+   "check your email" either way: a new account is created unverified, its identity bound to this browser
+   (``__Host-bridge_signup``), so a verification link opened elsewhere drops the identity (``service.consume_link``);
+   an existing owner gets a link.
 
-Linking (``link``) completes only in the session that started it, which needed a fresh second factor (TOTP accounts,
-the ADR-002 step-up rule) or a sign-in within the last 15 minutes (other accounts); an identity that belongs to
-another account is refused, and an account holds one identity per provider. Unlinking needs the same proof and
-another way to sign in: a password, another identity, or an emailed link to the verified address, so an account with
-a verified address can always unlink. Each change emails a security notice. Audit events carry ids and the provider
-name only; provider tokens are never stored.
+An identity is attached to an account only when an OAuth signup creates the account, or through ``link`` from
+``/settings/security`` (orchestrator decision, fix round 1 of T2.12). Linking completes only in the session that
+started it, which needed a fresh second factor (TOTP accounts, the ADR-002 step-up rule) or a sign-in within the last
+15 minutes (other accounts); an identity that belongs to another account is refused, and an account holds one
+identity per provider. It does not depend on the provider's address. Unlinking needs the same proof and another way
+to sign in: a password, another identity, or an emailed link to the verified address, so an account with a verified
+address can always unlink. Each change emails a security notice. Audit events carry ids and the provider name only;
+provider tokens are never stored.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from __future__ import annotations
 import hmac
 from dataclasses import dataclass, field
 from datetime import timedelta
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -147,9 +153,9 @@ async def complete(
     if user.status != UserStatus.ACTIVE:
         return failed(flow.intent, "oauth_failed", flow.provider)
     if user.email_verified_at is None:
-        # Both sides must have proven the address before an identity joins an account: the owner gets a link.
+        # Both sides must have proven the address before it signs anyone in: the owner gets a link.
         return Outcome(CHECK_EMAIL, pending=await service.request_magic_link(db, settings, user.email, ip))
-    return await _link_and_sign_in(db, settings, flow, user, ident, user_agent)
+    return await _sign_in_by_address(db, settings, flow, user, user_agent)
 
 
 async def _identity(db: AsyncSession, provider: AuthProvider, subject: str) -> AuthIdentity | None:
@@ -195,8 +201,15 @@ async def _record_link(db: AsyncSession, user: User, identity: AuthIdentity) -> 
 
 
 async def _sign_in(
-    db: AsyncSession, settings: Settings, flow: oauth.Flow, user: User, user_agent: str | None
+    db: AsyncSession,
+    settings: Settings,
+    flow: oauth.Flow,
+    user: User,
+    user_agent: str | None,
+    *,
+    via: Literal["identity", "email", "signup"],
 ) -> Outcome:
+    """A new session (MFA pending when TOTP is on); ``via`` a linked identity, the verified address or a new account."""
     started = await service.start_session(db, settings, user, user_agent)
     await audit(
         db,
@@ -204,7 +217,7 @@ async def _sign_in(
         actor_user_id=user.id,
         subject_type="user",
         subject_id=user.id,
-        payload={"provider": flow.provider.value},
+        payload={"provider": flow.provider.value, "via": via},
     )
     return Outcome("/auth/mfa" if started.mfa_required else flow.return_to, session=started.session)
 
@@ -225,24 +238,19 @@ async def _sign_in_known(
             pending = [service.verification_email(settings, user, token)]
         binding = identity_binding(settings, user.id, identity.id)
         return Outcome(CHECK_EMAIL, check_email=True, binding=binding, pending=pending)
-    return await _sign_in(db, settings, flow, user, user_agent)
+    return await _sign_in(db, settings, flow, user, user_agent, via="identity")
 
 
-async def _link_and_sign_in(
-    db: AsyncSession, settings: Settings, flow: oauth.Flow, user: User, ident: oauth.ProviderIdentity, ua: str | None
+async def _sign_in_by_address(
+    db: AsyncSession, settings: Settings, flow: oauth.Flow, user: User, ua: str | None
 ) -> Outcome:
-    """Provider and account both verified the same address: link, notify, sign in."""
-    user = await service.lock_user(db, user.id)
+    """Provider and account both verified the same address: sign in as an emailed link would, attaching nothing (the
+    second factor, when on, is still to come; an identity joins the account only through ``link``)."""
     await bind_tenant(db, user_id=user.id)
     if await _has_provider(db, user.id, flow.provider):
+        # The account holds another identity from this provider: the address alone does not stand in for it.
         return failed(flow.intent, "provider_already_linked", flow.provider)
-    identity = await _attach(db, user.id, ident)
-    if identity is None:
-        return failed(flow.intent, "oauth_failed", flow.provider)
-    await _record_link(db, user, identity)
-    outcome = await _sign_in(db, settings, flow, user, ua)
-    outcome.pending.append(_notice(settings, user, flow.provider, "added to"))
-    return outcome
+    return await _sign_in(db, settings, flow, user, ua, via="email")
 
 
 async def _create(
@@ -296,7 +304,7 @@ async def _signup_verified(
         user, _ = await _create(db, settings, flow, ident, email, verified=True)
     except _Taken:
         return failed(flow.intent, "oauth_failed", flow.provider)
-    return await _sign_in(db, settings, flow, user, ua)
+    return await _sign_in(db, settings, flow, user, ua, via="signup")
 
 
 async def _signup_unverified(

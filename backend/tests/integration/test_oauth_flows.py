@@ -292,7 +292,7 @@ async def test_a_new_developer_signs_up_with_github(client: httpx.AsyncClient, o
     trail = dict(await audit_trail(owner_engine, profile["user"]["id"]))
     assert trail["auth.signup"]["method"] == "github"
     assert trail["auth.identity_linked"] == {"provider": "github"}
-    assert trail["auth.oauth_login"] == {"provider": "github"}
+    assert trail["auth.oauth_login"] == {"provider": "github", "via": "signup"}
     assert who.email not in json.dumps(trail)
 
 
@@ -336,6 +336,7 @@ async def test_a_linked_account_signs_in_again(client: httpx.AsyncClient, owner_
     assert landing(response) == ("/settings/security", {})
     assert (await me(client))["user"]["id"] == user_id
     assert await identity_rows(owner_engine, who.email) == ["github"]
+    assert ("auth.oauth_login", {"provider": "github", "via": "identity"}) in await audit_trail(owner_engine, user_id)
 
 
 async def test_login_without_an_account_goes_to_signup(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
@@ -348,18 +349,68 @@ async def test_login_without_an_account_goes_to_signup(client: httpx.AsyncClient
     assert count == 0  # terms and consents are chosen on the signup page first
 
 
-async def test_a_verified_provider_address_links_a_verified_account(
-    client: httpx.AsyncClient, other: httpx.AsyncClient
+def added_notices(client: httpx.AsyncClient, address: str, label: str = "Google") -> int:
+    return len([m for m in outbox(client).outbox if m.to == address and f"{label} sign-in was added" in m.text])
+
+
+async def enrol_totp(client: httpx.AsyncClient, password: str | None = PASSWORD) -> str:
+    body = {"password": password} if password else {}
+    secret = str((await client.post("/api/auth/totp/enrol", json=body)).json()["secret"])
+    confirmed = await client.post("/api/auth/totp/confirm", json={"code": totp.code_at(secret, now_counter())})
+    assert confirmed.status_code == 200, confirmed.text
+    return secret
+
+
+async def test_a_verified_provider_address_signs_in_without_linking(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, owner_engine: AsyncEngine
 ) -> None:
+    """Orchestrator decision (fix round 1): a verified provider address signs in like an emailed link would and
+    attaches nothing; the identity joins the account only through an explicit link from settings."""
     address = email()
     await email_account(client, address)
     user_id = (await me(client))["user"]["id"]
-    response = await round_trip(other, person(address), provider="google", intent="login")
-    assert landing(response) == ("/dev", {})
-    assert (await me(other))["user"]["id"] == user_id
-    assert await linked(other) == ["google"]
-    notices = [m for m in outbox(other).outbox if m.to == address and "Google sign-in was added" in m.text]
-    assert len(notices) == 1
+    who = person(address)
+    for intent, body in (("login", {}), ("signup", signup_body())):
+        response = await round_trip(other, who, provider="google", intent=intent, **body)
+        assert landing(response) == ("/dev", {})
+        assert (await me(other))["user"]["id"] == user_id
+    assert await identity_rows(owner_engine, address) == []
+    assert added_notices(other, address) == 0
+    trail = await audit_trail(owner_engine, user_id)
+    assert ("auth.oauth_login", {"provider": "google", "via": "email"}) in trail
+    assert "auth.identity_linked" not in {action for action, _ in trail}
+    # The owner can still add the same Google account explicitly, from settings.
+    response = await round_trip(client, who, provider="google", intent="link")
+    assert landing(response) == ("/settings/security", {"linked": "google"})
+    assert await identity_rows(owner_engine, address) == ["google"]
+    assert added_notices(client, address) == 1
+
+
+async def test_a_totp_account_reached_by_its_address_gets_no_identity(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """The second factor comes before anything else: an abandoned MFA challenge leaves no identity behind, and a
+    completed one does not attach the identity either."""
+    address = email()
+    await email_account(client, address)
+    secret = await enrol_totp(client)
+    who = person(address)
+    abandoned = await round_trip(other, who, provider="google", intent="login")
+    assert landing(abandoned) == ("/auth/mfa", {})
+    assert signed_in(abandoned)
+    assert await identity_rows(owner_engine, address) == []
+    await refresh_csrf(other)
+    link = await other.post("/api/auth/oauth/google/start", json={"intent": "link"})
+    assert refusal(link) == (401, "mfa_required")
+    verified = await other.post("/api/auth/mfa/verify", json={"code": totp.code_at(secret, now_counter() + 1)})
+    assert verified.status_code == 200, verified.text
+    assert await identity_rows(owner_engine, address) == []
+    assert added_notices(other, address) == 0
+    # An explicit link from settings, with the fresh second factor, still works.
+    response = await round_trip(client, who, provider="google", intent="link")
+    assert landing(response) == ("/settings/security", {"linked": "google"})
+    assert await identity_rows(owner_engine, address) == ["google"]
+    assert added_notices(client, address) == 1
 
 
 # ------------------------------------------------------------------ account pre-hijacking
@@ -413,7 +464,8 @@ async def test_a_verified_provider_address_does_not_link_an_unverified_account(
     await client.post("/api/auth/logout")
     await refresh_csrf(client)
     again = await round_trip(client, person(victim), provider="google", intent="login")
-    assert landing(again) == ("/dev", {})  # both sides verified now: linked and signed in
+    assert landing(again) == ("/dev", {})  # both sides verified now: signed in, nothing attached
+    assert await identity_rows(owner_engine, victim) == []
 
 
 async def test_signup_with_an_unverified_provider_address_needs_email_verification(
@@ -578,7 +630,7 @@ async def test_an_account_holds_one_identity_per_provider(client: httpx.AsyncCli
     assert landing(await round_trip(client, person(), intent="link")) == ("/settings/security", {"linked": "github"})
     second = await round_trip(client, person(), intent="link")
     assert landing(second) == ("/settings/security", {"oauth_error": "provider_already_linked", "provider": "github"})
-    # Another GitHub account with the same verified address cannot sign in and add itself either.
+    # Another GitHub account with the same verified address cannot sign in by the address either.
     sign_in = await round_trip(other, person(address), intent="login")
     assert landing(sign_in) == ("/login", {"oauth_error": "provider_already_linked", "provider": "github"})
     assert not signed_in(sign_in)
@@ -836,7 +888,7 @@ async def test_an_identity_attached_concurrently_is_not_attached_twice(
     response = await round_trip(other, raced, intent=intent, **body)
     expected = {
         "link": ("/settings/security", {"oauth_error": "identity_in_use", "provider": "github"}),
-        "login": ("/login", {"oauth_error": "oauth_failed", "provider": "github"}),
+        "login": ("/dev", {}),  # signed in by the verified address, which attaches nothing
         "signup": ("/signup", {"oauth_error": "oauth_failed", "provider": "github"}),
     }
     assert landing(response) == expected[intent]
