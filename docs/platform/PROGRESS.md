@@ -250,7 +250,7 @@ round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the me
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
 `batch_poll` not idempotent, the per-session consent does not check the session is live, a user-bound call with no
 subject skips the plan cap, `httpx2` undeclared, T4.3 deferral (now in PLAN), the wip commit and oversized commits as
-deviations). impl-ai fix round queued for the next free slot. Carry to T2.9 and Phase 4 as the card notes
+deviations). impl-ai is on the fix round. Carry to T2.9 and Phase 4 as the card notes
 say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
@@ -259,8 +259,10 @@ bytes of bodies, 152,118 with headers; 174 Vitest). Round 3: reviewer **PASS** (
 4 MINORs: no test of the 10 s status-check timeout, the Cancel/confirm race untracked, no recovery-code path untracked,
 `next.config.test.ts` needs a longer timeout) and ux-reviewer CHANGES_REQUIRED (MAJOR: the status-unknown notice renders
 off-screen with no focus move; MINORs: reload copy, focus after turn-off and after cancel, no next step for required
-roles). impl-frontend is on that fix round (a step-up "new recovery codes" route is
-a backend follow-up, tracked in the REQ-AUTH-01 card).
+roles). Fixed in `48d7a03`..`a05cc54` (notices take focus via `reveal.ts`; timeout
+test; follow-ups 7 and 8 on the REQ-AUTH-01 card: `DELETE /api/auth/totp/enrol` under `lock_user`, a step-up "new
+recovery codes" route; 180 Vitest; `/settings/security` 148,518 bytes of bodies). Round-4 reviewer and ux-reviewer
+are running; then merge the integration branch in, dispatch CI and merge.
 Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
 after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
 confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
