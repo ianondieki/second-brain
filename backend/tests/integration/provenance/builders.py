@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from bridge.crypto.envelope import DataKey, KeyWrapper, Purpose, new_data_key, seal
 from bridge.ids import uuid7
 from bridge.provenance.service import new_cert_id
-from tests.integration.world import add_problem, add_user
+from tests.integration.world import add_problem, add_templates, add_user
 
 TIER2: dict[str, Any] = {"how": "LoRa sensors report every five minutes.", "pricing": {"setup_kes": 25000}}
 
@@ -157,3 +157,71 @@ async def registered_version(
                 v=version_id,
             )
     return Built(owner_id, proposal_id, version_id, version_no, cert_id, niche_id, problem_id, key, tuple(hashes))
+
+
+async def tier2_grantee(engine: AsyncEngine, built: Built) -> UUID:
+    """A reviewer of an E2 organisation who may read ``built``'s Tier 2: every condition of ``app_tier2_granted``
+    holds (verified domain and an address at it, TOTP, a verified email, the current Master Enterprise Terms accepted
+    by a signatory, the Evaluation NDA for this proposal, an active tier-2 grant from the owner)."""
+    tag = uuid4().hex[:10]
+    domain = f"grantee-{tag}.example.test"
+    reviewer, signatory, org = uuid7(), uuid7(), uuid7()
+    async with engine.begin() as conn:
+        met_id, nda_id = await add_templates(conn, f"grantee-{tag}")  # the newest terms are the current ones
+        for user_id, local in ((reviewer, "reviewer"), (signatory, "signatory")):
+            await _exec(
+                conn,
+                "INSERT INTO users (id, email, display_name, totp_enabled_at, email_verified_at)"
+                " VALUES (:id, :email, :name, now(), now())",
+                id=user_id,
+                email=f"{local}-{tag}@{domain}",
+                name=local.title(),
+            )
+        await _exec(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, verified_domain)"
+            " VALUES (:id, 'company', 'Grantee Ltd', :slug, 'seed', 'e2', :domain)",
+            id=org,
+            slug=f"grantee-{tag}",
+            domain=domain,
+        )
+        for user_id, roles in ((reviewer, "{reviewer}"), (signatory, "{signatory}")):
+            await _exec(
+                conn,
+                "INSERT INTO memberships (id, org_id, user_id, roles)"
+                " VALUES (:id, :org, :user, CAST(:roles AS org_role[]))",
+                id=uuid7(),
+                org=org,
+                user=user_id,
+                roles=roles,
+            )
+        await _exec(
+            conn,
+            "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+            " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+            id=uuid7(),
+            org=org,
+            user=signatory,
+            template=met_id,
+        )
+        await _exec(
+            conn,
+            "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+            " logging_notice_version) SELECT :id, :user, :org, :proposal, id, sha256, 'v1' FROM nda_templates"
+            " WHERE id = :template",
+            id=uuid7(),
+            user=reviewer,
+            org=org,
+            proposal=built.proposal_id,
+            template=nda_id,
+        )
+        await _exec(
+            conn,
+            "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source)"
+            " VALUES (:id, :proposal, :org, :owner, 2, 'active', 'manual')",
+            id=uuid7(),
+            proposal=built.proposal_id,
+            org=org,
+            owner=built.owner_id,
+        )
+    return reviewer

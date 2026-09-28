@@ -32,7 +32,7 @@ from bridge.provenance.tsa import TsaClient
 from bridge.provenance.verify import LOOKUPS_PER_MINUTE, MAX_UPLOAD_BYTES, UPLOADS_PER_MINUTE
 from bridge.storage.objects import InMemoryObjectStore
 from tests.integration.api import sign_in_as
-from tests.integration.provenance.builders import TIER2, Built, registered_version
+from tests.integration.provenance.builders import TIER2, Built, registered_version, tier2_grantee
 from tests.openssl_tsa import LocalTsa
 from tests.unit.provenance.test_certificate import pdf_text
 
@@ -315,4 +315,77 @@ async def test_refused_or_failed_downloads_write_no_audit_event(
     async with client(app_engine, None) as owner:  # no key wrapper: the manifest cannot be opened
         await sign_in_as(owner, app_engine, registered.owner_id, mfa_verified=True)
         assert (await owner.get(f"{base}/manifest.json")).status_code == 503
+    assert await download_events(owner_engine, registered.version_id) == []
+
+
+@pytest.mark.parametrize(
+    ("level", "review", "named"),
+    [
+        ("d0", "approved", False),
+        ("d1", "approved", False),  # an approved review alone does not put the name on: the D2 level does
+        ("d2", "rejected", False),  # nor does D2 without an approved review that holds the name
+        ("d2", "approved", True),
+        ("d3", "approved", True),
+    ],
+)
+async def test_the_certificate_names_the_owner_only_at_d2_or_above(
+    app_engine: AsyncEngine,
+    owner_engine: AsyncEngine,
+    sessions: Sessions,
+    wrapper: LocalKeyWrapper,
+    store: InMemoryObjectStore,
+    level: str,
+    review: str,
+    named: bool,
+) -> None:
+    """The D2 gate (docs/spec/06 6.4 item 2): the verified legal name appears only for a D2 (or D3) developer with an
+    approved KYC review that holds it; everyone else is shown by handle."""
+    built = await registered_version(owner_engine, wrapper, attachments=0)
+    async with sessions() as s:
+        await hash_manifest(s, built.version_id, built.owner_id, wrapper=wrapper, store=store)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE developer_profiles SET verification_level = CAST(:level AS dev_verification) WHERE user_id = :u"
+            ),
+            {"level": level, "u": built.owner_id},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO kyc_reviews (id, user_id, status, verified_legal_name, decided_at)"
+                " VALUES (gen_random_uuid(), :u, CAST(:status AS kyc_status), 'Achieng Otieno', now())"
+            ),
+            {"u": built.owner_id, "status": review},
+        )
+    async with client(app_engine, None) as c:
+        await sign_in_as(c, app_engine, built.owner_id, mfa_verified=True)
+        pdf = await c.get(f"/api/provenance/certificates/{built.cert_id}/certificate.pdf")
+    assert pdf.status_code == 200
+    rendered = pdf_text(pdf.content)
+    assert ("Achieng Otieno (verified legal name)" in rendered) is named
+    assert ("(handle)" in rendered) is not named
+    assert ("Achieng" in rendered) is named
+
+
+async def test_a_tier2_grantee_gets_neither_the_manifest_nor_the_certificate(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, registered: Built, kek: bytes
+) -> None:
+    """A reviewer the owner granted Tier 2 can read the proposal's Tier-2 row as tier2_reader (checked first, so the
+    test cannot pass for the wrong reason), yet the owner-only downloads answer 404: they filter on the owner, and
+    the manifest would otherwise hand over the Tier-2 document outside can_view_tier2 and its NDA-bound views."""
+    reviewer = await tier2_grantee(owner_engine, registered)
+    async with app_engine.connect() as conn, conn.begin():
+        await conn.execute(text("SELECT set_config('app.user_id', :u, true)"), {"u": str(reviewer)})
+        await conn.execute(text("SET LOCAL ROLE tier2_reader"))
+        visible = await conn.execute(
+            text("SELECT count(*) FROM proposal_confidential WHERE version_id = :v"), {"v": registered.version_id}
+        )
+        assert visible.scalar_one() == 1
+    base = f"/api/provenance/certificates/{registered.cert_id}"
+    async with client(app_engine, kek) as c:
+        await sign_in_as(c, app_engine, reviewer, mfa_verified=True)
+        manifest = await c.get(f"{base}/manifest.json")
+        pdf = await c.get(f"{base}/certificate.pdf")
+    assert (manifest.status_code, pdf.status_code) == (404, 404)
+    assert TIER2["how"] not in manifest.text
     assert await download_events(owner_engine, registered.version_id) == []
