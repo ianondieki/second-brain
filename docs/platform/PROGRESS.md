@@ -246,7 +246,8 @@ Open branches (each merged `claude/eloquent-hypatia-aa3577` at `a9b0e66` with a 
 | `feat/REQ-REPO-01-schema-v2` | `7360411` | in review | reviewer + security-reviewer (T2.1, revision 0002); on PASS merge (unblocks T2.2 ledger store, T2.3, T2.4, T2.6a) |
 | `feat/REQ-LLM-01-llm-layer` | `2f23384` | WIP | finish `c509ea6` (per-session `tier2_llm_assistant` consent, spec 06 §6.3): integration test of `SessionConsentChecker`, a grant helper; after T2.1 merges, the SQL `llm_calls` ledger store; then reviewer |
 | `feat/REQ-AUTH-02-oauth` | `fe119ee` | in review | reviewer + security-reviewer on the backend; buttons and linked accounts come with F4 |
-| `feat/REQ-DIR-02-provisional-seed` | `944cac2` | done (data only) | becomes T2.6a: add the seed loader and directory browse after T2.1 merges |
+| `feat/REQ-DIR-02-provisional-seed` | `de3a9b4` | WIP (T2.6a) | merged schema v2 in; impl-backend is adding the seed loader, directory API, niches endpoint and the staff dependency; then reviewer |
+| `feat/REQ-PROV-01-provenance` | `7360411` | WIP (T2.4) | new, based on schema v2; impl-backend is building envelope crypto, object store, manifest, signing, TSA (local openssl CA), pipeline jobs, certificate, `/verify` API, anchors; then reviewer + security-reviewer |
 
 Environment. Windows laptop: unchanged (`UV_NATIVE_TLS=1`, system Chrome; integration tests start a testcontainer when
 `TEST_DATABASE_ADMIN_URL` is unset). Linux cloud container: start Docker with `dockerd &` (or `sudo dockerd &`), then a
