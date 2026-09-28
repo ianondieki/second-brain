@@ -220,10 +220,16 @@ async def _tier2(session: AsyncSession, version_id: UUID) -> _Tier2Row:
 
 
 def _tier2_document(plaintext: bytes) -> dict[str, Any]:
+    """The decrypted Tier-2 JSON object. A decoding failure is raised without the decoder's exception, which holds
+    the plaintext (``UnicodeDecodeError.object``, ``JSONDecodeError.doc``) and would reach the job log."""
+    document: Any = None
     try:
         document = json.loads(plaintext.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RegistrationError("the Tier-2 document is not UTF-8 JSON") from exc
+        decoded = True
+    except (ValueError, RecursionError):  # UnicodeDecodeError and JSONDecodeError are ValueErrors
+        decoded = False
+    if not decoded:
+        raise RegistrationError("the Tier-2 document is not UTF-8 JSON")
     if not isinstance(document, dict):
         raise RegistrationError("the Tier-2 document must be a JSON object")
     return document

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
+import traceback
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -174,6 +176,57 @@ def _with(**changes: Any) -> ManifestInput:
 def test_malformed_inputs_are_refused(changes: dict[str, Any], message: str) -> None:
     with pytest.raises(ManifestError, match=message):
         build_manifest(_with(**changes))
+
+
+SENTINEL = "TIER2-SENTINEL"
+SENTINEL_NUMBER = 777_777_777_777_777_777_777  # beyond 2**53: RFC 8785 refuses it
+LONE_SURROGATE = chr(0xD800)  # json.loads accepts "\ud800"; UTF-8 cannot encode it
+
+
+def exception_chain(exc: BaseException) -> list[BaseException]:
+    found: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in found:
+        found.append(current)
+        current = current.__cause__ or current.__context__
+    return found
+
+
+@pytest.mark.parametrize(
+    ("tier2", "path", "kind"),
+    [
+        ({"pricing": {"account_no": SENTINEL_NUMBER}}, "manifest.tier2.pricing.account_no", "integer"),
+        ({"notes": ["fine", f"{SENTINEL} {LONE_SURROGATE}"]}, "manifest.tier2.notes[1]", "string"),
+        ({f"{SENTINEL} as a key": [float("inf")]}, "manifest.tier2.<key 0>[0]", "number"),
+        ({"ok": 1, f"{SENTINEL}{LONE_SURROGATE}": 1}, "manifest.tier2.<key 1>", "key"),
+        ({"blob": SENTINEL.encode()}, "manifest.tier2.blob", "bytes"),
+    ],
+    ids=["big-integer", "lone-surrogate", "content-like-key", "bad-key", "unsupported-type"],
+)
+def test_canonicalisation_errors_name_the_path_and_type_never_the_value(
+    tier2: dict[str, Any], path: str, kind: str
+) -> None:
+    """Tier-2 values never reach an exception (or the job log that prints it): the error names where the value is
+    and what kind it is. Keys that do not look like field names are numbered, not printed."""
+    with pytest.raises(ManifestError) as info:
+        build_manifest(_with(tier2=tier2))
+    message = str(info.value)
+    assert path in message
+    assert kind in message
+    rendered = "".join(traceback.format_exception(info.value))
+    for secret in (SENTINEL, str(SENTINEL_NUMBER), "inf", "\\ud800", LONE_SURROGATE):
+        assert secret not in rendered
+    # No library exception rides along (as cause or context): those carry the value (UnicodeEncodeError.object).
+    assert [type(e) for e in exception_chain(info.value)] == [ManifestError]
+
+
+def test_a_document_nested_beyond_the_recursion_limit_is_refused_as_a_manifest_error() -> None:
+    deep: Any = SENTINEL
+    for _ in range(sys.getrecursionlimit() + 100):
+        deep = [deep]
+    with pytest.raises(ManifestError, match="manifest is nested too deeply to encode") as info:
+        build_manifest(_with(tier2={"deep": deep}))
+    assert [type(e) for e in exception_chain(info.value)] == [ManifestError]
 
 
 def test_a_version_without_problems_is_refused() -> None:

@@ -8,6 +8,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
+import traceback
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -16,11 +18,14 @@ import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from structlog.testing import capture_logs
 
 from bridge.crypto.envelope import LocalKeyWrapper, Purpose, Sealed, open_sealed
 from bridge.db import bind_tenant
+from bridge.jobs import provenance as provenance_jobs
 from bridge.models.enums import ProvenanceStatus
 from bridge.provenance import service
+from bridge.provenance.manifest import ManifestError
 from bridge.provenance.service import (
     RegistrationError,
     RegistrationPendingError,
@@ -293,6 +298,48 @@ async def test_versions_that_cannot_be_registered_yet_or_at_all(
         await fetch(owner_engine, "SELECT 1 FROM provenance_records WHERE version_id = :v", v=built.version_id) is None
     )
     assert store.objects == {}
+
+
+SENTINEL = "TIER2-SENTINEL"
+SENTINEL_NUMBER = "777777777777777777777"
+
+
+@pytest.mark.parametrize(
+    ("plaintext", "message"),
+    [
+        (b'{"pricing": {"account_no": ' + SENTINEL_NUMBER.encode() + b"}}", "manifest.tier2.pricing.account_no is"),
+        (b'{"notes": ["TIER2-SENTINEL \\ud800"]}', "manifest.tier2.notes[0] is a string that is not valid Unicode"),
+        (b'{"TIER2-SENTINEL key \\ud800": 1}', "manifest.tier2.<key 0> is a key"),
+        (b"\xffTIER2-SENTINEL", "not UTF-8 JSON"),
+        (b'{"TIER2-SENTINEL": ', "not UTF-8 JSON"),
+    ],
+    ids=["big-integer", "lone-surrogate", "bad-key", "not-utf8", "not-json"],
+)
+async def test_a_refused_tier2_document_leaves_no_value_in_the_job_error_or_logs(
+    owner_engine: AsyncEngine,
+    wrapper: LocalKeyWrapper,
+    runtime: provenance_jobs.ProvenanceRuntime,
+    caplog: pytest.LogCaptureFixture,
+    plaintext: bytes,
+    message: str,
+) -> None:
+    """The job fails for good (RegistrationError) with the field path and the kind of value only: neither the
+    message, nor the traceback a worker logs, nor any exception chained to it holds Tier-2 content."""
+    built = await registered_version(owner_engine, wrapper, tier2_plaintext=plaintext)
+    caplog.set_level(logging.DEBUG)
+    with capture_logs() as logs, pytest.raises(RegistrationError) as info:
+        await provenance_jobs.hash_manifest(version_id=str(built.version_id), owner_id=str(built.owner_id))
+    assert message in str(info.value)
+    rendered = "".join(traceback.format_exception(info.value)) + caplog.text + repr(logs)
+    for secret in (SENTINEL, SENTINEL_NUMBER, "\\ud800", "\\xff"):
+        assert secret not in rendered
+    chained: list[type[BaseException]] = []
+    current: BaseException | None = info.value
+    while current is not None:
+        chained.append(type(current))
+        current = current.__cause__ or current.__context__
+    # A decoder's exception keeps the whole plaintext (JSONDecodeError.doc, UnicodeDecodeError.object).
+    assert set(chained) <= {RegistrationError, ManifestError}
 
 
 async def test_signing_waits_for_a_published_key(

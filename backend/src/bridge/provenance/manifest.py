@@ -17,13 +17,16 @@ The manifest is the RFC 8785 (JSON Canonicalization Scheme) serialisation of one
 ``content_hash = SHA-256(canonical bytes)``. Ids are lowercase UUID strings, hashes lowercase hex, lists sorted, so
 the same inputs always give the same bytes; the golden fixtures in ``tests/fixtures/provenance/`` freeze this. Any
 change to the fields or their encoding is a new ``manifest_version`` with new fixtures (ADR-003 consequences).
-Numbers in the Tier-2 document follow RFC 8785 (IEEE 754 doubles; integers beyond 2**53 are refused).
+Numbers in the Tier-2 document follow RFC 8785 (IEEE 754 doubles; integers beyond 2**53 are refused). A refusal
+names the field path and the kind of value, never the value: Tier-2 content must not reach exceptions or job logs.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -166,11 +169,61 @@ def manifest_document(inp: ManifestInput) -> dict[str, Any]:
     }
 
 
+_INT_LIMIT = 2**53 - 1  # RFC 8785 numbers are IEEE 754 doubles
+_FIELD_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _valid_text(value: str) -> bool:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _key_path(path: str, key: object, position: int) -> str:
+    """``path.key`` for a key that looks like a field name; anything else might be content, so ``path.<key n>``."""
+    return f"{path}.{key}" if isinstance(key, str) and _FIELD_NAME.fullmatch(key) else f"{path}.<key {position}>"
+
+
+def _unencodable(value: Any, path: str) -> tuple[str, str] | None:
+    """Where the first value RFC 8785 cannot encode sits, and what kind of value it is: never the value itself."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        return None if _valid_text(value) else (path, "a string that is not valid Unicode")
+    if isinstance(value, int):
+        return None if -_INT_LIMIT <= value <= _INT_LIMIT else (path, "an integer beyond 2**53")
+    if isinstance(value, float):
+        return None if math.isfinite(value) else (path, "a non-finite number")
+    if isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            if (found := _unencodable(item, f"{path}[{index}]")) is not None:
+                return found
+        return None
+    if isinstance(value, dict):
+        for position, (key, item) in enumerate(value.items()):
+            if not isinstance(key, str) or not _valid_text(key):
+                return _key_path(path, key, position), "a key that is not a valid Unicode string"
+            if (found := _unencodable(item, _key_path(path, key, position))) is not None:
+                return found
+        return None
+    return path, f"a value of unsupported type {type(value).__name__}"
+
+
 def canonicalize(document: Mapping[str, Any]) -> bytes:
+    """RFC 8785 bytes of ``document``. A failure names the field path and the kind of value, never the value (Tier-2
+    values would otherwise reach job logs), and carries no library exception, whose attributes hold the value."""
     try:
         return rfc8785.dumps(document)
-    except rfc8785.CanonicalizationError as exc:
-        raise ManifestError(f"the manifest cannot be canonicalised: {exc}") from exc
+    except (ValueError, TypeError, RecursionError):  # CanonicalizationError, UnicodeError (keys), deep nesting
+        pass
+    try:
+        found = _unencodable(document, "manifest")
+    except RecursionError:
+        found = None
+    where, what = found or ("manifest", "nested too deeply to encode")
+    raise ManifestError(f"the manifest cannot be canonicalised: {where} is {what}")
 
 
 def build_manifest(inp: ManifestInput) -> Manifest:
