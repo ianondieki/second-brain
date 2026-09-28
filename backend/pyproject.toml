@@ -23,6 +23,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "pgvector>=0.4",
     "anthropic>=1.8.0",
+    "httpx2>=2.13.1",  # imported by bridge.llm (the anthropic SDK's HTTP client; test transports, cassettes)
 ]
 
 [dependency-groups]
