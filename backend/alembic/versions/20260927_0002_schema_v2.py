@@ -846,12 +846,26 @@ $$;
 
 -- SHA-256(subject_salt || p_data) for one user: owner refs in manifests (p_data = the id's 16 bytes, uuid_send(id)) and
 -- the per-subject salted digests of personal or free text in audit payloads (docs/spec/06 6.4 items 1 and 4). The salt
--- itself never leaves the database (bridge_app holds no SELECT on users.subject_salt). NULL for an unknown user.
+-- itself never leaves the database (bridge_app holds no SELECT on users.subject_salt). A digest is a stable pseudonym
+-- of its subject (and lets a caller test guesses of the data), so it is bound to the caller: bridge_app computes only
+-- the current user's own (app.user_id); staff (app_is_staff(), any staff role) and the registration job compute any
+-- user's. The job is recognised by the role it switched to: inside this function current_user is its owner and
+-- session_user the login role (bridge_app for the app and the worker alike), but the 'role' setting keeps the caller's
+-- SET ROLE, and only a membership-checked SET ROLE changes it (bridge.db.as_role(session, 'provenance_worker')). NULL
+-- for an unknown user (staff and the job; anyone else is refused first).
 CREATE FUNCTION app_subject_digest(p_user_id uuid, p_data bytea) RETURNS bytea
-    LANGUAGE sql STABLE SECURITY DEFINER
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    SELECT pg_catalog.sha256(u.subject_salt || p_data) FROM public.users u WHERE u.id = p_user_id
+BEGIN
+    IF NOT coalesce(p_user_id = public.app_user_id(), false)
+       AND pg_catalog.current_setting('role') <> 'provenance_worker'
+       AND NOT public.app_is_staff() THEN
+        RAISE EXCEPTION 'app_subject_digest: only the current user''s own digest (staff and the registration job'
+            ' excepted)' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN (SELECT pg_catalog.sha256(u.subject_salt || p_data) FROM public.users u WHERE u.id = p_user_id);
+END;
 $$;
 
 -- An E1 organisation sees only how many tags are held for it (docs/spec/06 6.3); members only, 0 for anyone else.

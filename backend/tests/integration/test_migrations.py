@@ -1381,7 +1381,7 @@ async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_th
 ) -> None:
     """Every user gets a random 32-byte salt from the database. bridge_app and provenance_worker get SHA-256(salt ||
     data) from app_subject_digest() (owner refs: data = the id's 16 bytes), never the salt; the ORM creates and loads
-    users without selecting or returning it."""
+    users without selecting or returning it. (Who may compute whose digest: test_privileges.py.)"""
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from bridge.auth.models import User
@@ -1400,14 +1400,14 @@ async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_th
         from_app = (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one()
         await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))
         assert (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one() == from_app
+        unknown = "SELECT app_subject_digest(:id, '\\x00')"
+        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
         await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
         salt = (
             await conn.execute(sa.text("SELECT subject_salt FROM users WHERE id = :id"), {"id": user.id})
         ).scalar_one()
         assert len(salt) == 32
         assert from_app == hashlib.sha256(salt + user.id.bytes).digest()  # bridge.provenance.manifest.owner_ref
-        unknown = "SELECT app_subject_digest(:id, '\\x00')"
-        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
 
 
 # Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.

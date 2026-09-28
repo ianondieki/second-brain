@@ -288,6 +288,54 @@ async def test_the_database_times_a_registration_and_only_the_bound_worker_fills
         await session.rollback()
 
 
+SUBJECT_DIGEST = "SELECT app_subject_digest(:u, uuid_send(:u))"
+DIGEST_REFUSED = "only the current user's own digest"
+
+
+async def test_subject_digests_are_bound_to_the_caller(
+    owner_engine: AsyncEngine, app_session_engine: AsyncEngine, developer: Developer
+) -> None:
+    """A subject digest is a stable pseudonym of its user, so bridge_app computes only the current user's own
+    (app.user_id); staff (any staff role) and the registration job (provenance_worker) compute any user's. Inside the
+    SECURITY DEFINER function current_user is its owner and session_user the login role, so the job is recognised by
+    the role it switched to (the ``role`` setting, which only a membership-checked SET ROLE changes): proven here on a
+    session logged in as bridge_app, exactly as in production, and under the harness's SET ROLE."""
+    async with owner_engine.begin() as conn:  # committed: the bridge_app session below reads them
+        other = await w.add_user(conn, _email("digest-other"), "Other")
+        staff = await w.add_user(conn, _email("digest-support"), "Support", staff_role="support")
+        salted = "SELECT sha256(subject_salt || uuid_send(id)) FROM users WHERE id = :u"
+        expected = {user: await run(conn, salted, u=user) for user in (developer.user_id, other)}
+
+    async with as_app(owner_engine) as conn:
+        await act(conn, developer.user_id)
+        assert await run(conn, SUBJECT_DIGEST, u=developer.user_id) == expected[developer.user_id]
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=other)
+        await act(conn, None)  # no app.user_id: nobody's digest (the NULL-safe check)
+        await expect(conn, SUBJECT_DIGEST, DIGEST_REFUSED, u=developer.user_id)
+        await act(conn, staff)
+        assert await run(conn, SUBJECT_DIGEST, u=other) == expected[other]
+        await act(conn, developer.user_id)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        assert await run(conn, SUBJECT_DIGEST, u=other) == expected[other]
+        assert await run(conn, SUBJECT_DIGEST, u=uuid7()) is None  # an unknown user
+
+    factory = async_sessionmaker(app_session_engine, expire_on_commit=False)
+    digest = text(SUBJECT_DIGEST)
+    async with factory() as session:
+        await bind_tenant(session, user_id=developer.user_id)
+        assert (await session.execute(text("SELECT session_user"))).scalar_one() == "bridge_app"
+        assert (await session.execute(digest, {"u": developer.user_id})).scalar_one() == expected[developer.user_id]
+        with pytest.raises(DBAPIError, match=DIGEST_REFUSED):
+            async with session.begin_nested():
+                await session.execute(digest, {"u": other})
+        async with as_role(session, "provenance_worker"):
+            assert (await session.execute(digest, {"u": other})).scalar_one() == expected[other]
+        with pytest.raises(DBAPIError, match=DIGEST_REFUSED):  # back as bridge_app: bound again
+            async with session.begin_nested():
+                await session.execute(digest, {"u": other})
+        await session.rollback()
+
+
 # --- SECURITY DEFINER functions (privileged changes checked in SQL) ------------------------------------------------
 
 
