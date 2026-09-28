@@ -6,7 +6,8 @@
   filters and cursor pagination; Safaricom, Airtel and Telkom sit under ICT › Networks & Telecommunications.
 - Cards carry no logo or contact; delisted, pending and unknown organisations are never shown (404 by id); signed-out
   callers get 401; the responsiveness score shows only for E2 with >= 10 eligible tags and 60 days after E2.
-- A niche added at run time is selectable in the niches endpoint and the directory at once (no deploy, no cache).
+- A niche staff admin adds through ``POST /api/admin/niches`` is selectable in the niches endpoint and the directory
+  at once (no deploy, no cache).
 
 The NGO/PBO claim-to-E2 clause of AC-DIR-6 is T2.6b (``test_claims.py::test_ngo_e2``).
 """
@@ -413,29 +414,32 @@ async def test_the_seeded_niches_and_org_types_exist(client: httpx.AsyncClient, 
     assert {"school", "university_tvet", "national_govt", "county_govt", "ngo_pbo"} <= kinds
 
 
-async def test_a_niche_added_at_run_time_is_selectable_at_once(
-    client: httpx.AsyncClient, owner_engine: AsyncEngine, seeded: Seeded
+async def test_an_admin_added_niche_is_selectable_at_once(
+    client: httpx.AsyncClient, app_engine: AsyncEngine, owner_engine: AsyncEngine, seeded: Seeded
 ) -> None:
-    """The niches endpoint and the directory read the taxonomy per request: a niche added while the app runs (as the
-    admin route will, once ``app_add_niche`` exists) is offered and browsable without a deploy."""
+    """AC-DIR-5/a end to end: staff admin adds a niche through ``POST /api/admin/niches`` while the app runs; the
+    niches endpoint offers it and the directory browses it on the next request (no deploy, no cache)."""
     slug = f"water-services-{seeded.tag}"
     before = (await client.get("/api/directory/niches")).json()
     assert slug not in {c["slug"] for n in before for c in n["children"]}
     async with owner_engine.begin() as conn:
-        await conn.execute(
-            text(
-                "INSERT INTO niches (id, slug, name_en, isic_code, parent_id)"
-                " SELECT :id, :slug, 'Water services', '3600', id FROM niches WHERE slug = 'public-sector'"
-            ),
-            {"id": uuid7(), "slug": slug},
+        admin_id = await w.add_user(conn, f"niche-admin-{seeded.tag}@example.test", "Admin", staff_role="admin")
+    async with make_client(app_engine) as admin:
+        await sign_in_as(admin, app_engine, admin_id, mfa_verified=True)
+        created = await admin.post(
+            "/api/admin/niches",
+            json={"slug": slug, "name": "Water services", "parent_slug": "public-sector", "isic_code": "3600"},
         )
+    assert created.status_code == 201, created.text
+    async with owner_engine.begin() as conn:  # tagging an organisation is the directory editor's job (later task)
         await conn.execute(
-            text("INSERT INTO org_niches (org_id, niche_id) SELECT :org, id FROM niches WHERE slug = :slug"),
-            {"org": seeded.e1, "slug": slug},
+            text("INSERT INTO org_niches (org_id, niche_id) VALUES (:org, :niche)"),
+            {"org": seeded.e1, "niche": created.json()["id"]},
         )
     tree = (await client.get("/api/directory/niches")).json()
     public = next(n for n in tree if n["slug"] == "public-sector")
     added = next(c for c in public["children"] if c["slug"] == slug)
+    assert added["id"] == created.json()["id"]
     assert added["label"] == "Public sector › Water services"
     assert added["isic_code"] == "3600"
     groups = await walk(client, niche=slug)
