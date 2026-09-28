@@ -273,6 +273,7 @@ TIER2_CASES = (
     "role_viewer",
     "membership_removed",
     "off_domain_member",
+    "email_unverified",
     "no_totp",
     "user_suspended",
     "no_master_enterprise_terms",
@@ -291,16 +292,19 @@ TIER2_CASES = (
 TIER2_READABLE = frozenset({"none", "met_by_the_approved_claimant"})
 
 
-async def _add_user(conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True) -> UUID:
-    user = uuid7()
+async def _add_user(
+    conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True, email_verified: bool = True
+) -> UUID:
+    user, now = uuid7(), datetime.now(UTC)
     await _sql(
         conn,
-        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Member',"
-        " CAST(:status AS user_status), :totp)",
+        "INSERT INTO users (id, email, display_name, status, totp_enabled_at, email_verified_at) VALUES (:id, :email,"
+        " 'Member', CAST(:status AS user_status), :totp, :verified)",
         id=user,
         email=email,
         status=status,
-        totp=datetime.now(UTC) if totp else None,
+        totp=now if totp else None,
+        verified=now if email_verified else None,
     )
     return user
 
@@ -406,6 +410,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
         f"reviewer-{tag}@{'elsewhere.example.test' if broken == 'off_domain_member' else domain}",
         status="suspended" if broken == "user_suspended" else "active",
         totp=broken != "no_totp",
+        email_verified=broken != "email_unverified",
     )
     org = uuid7()
     await _sql(
