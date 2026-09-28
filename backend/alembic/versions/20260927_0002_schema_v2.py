@@ -199,6 +199,7 @@ RLS_TABLES = (
     "phone_verifications",
     "kyc_reviews",
     "llm_calls",
+    "provenance_records",
 )
 
 # Table privileges of bridge_app on this revision's tables; anything not listed is not granted (proposal_confidential,
@@ -503,6 +504,18 @@ POLICIES: tuple[Policy, ...] = (
         check="EXISTS (SELECT 1 FROM proposal_confidential c"
         " WHERE c.version_id = proposal_confidential_embeddings.version_id AND c.owner_id = app_user_id())",
         role="tier2_embed_worker",
+    ),
+    # --- provenance_records (EVIDENCE): public to readers (/verify is anonymous); the registration job, bound to the
+    # owner (one tenant per job), reads and writes only the records of that owner's versions ---
+    Policy("provenance_records", "SELECT", "true"),
+    Policy("provenance_records", "SELECT", "app_owns_version(version_id)", role="provenance_worker"),
+    Policy("provenance_records", "INSERT", check="app_owns_version(version_id)", role="provenance_worker"),
+    Policy(
+        "provenance_records",
+        "UPDATE",
+        "app_owns_version(version_id)",
+        "app_owns_version(version_id)",
+        role="provenance_worker",
     ),
     # --- user tables ---
     Policy("proposal_attachments", "SELECT", "owner_id = app_user_id()"),

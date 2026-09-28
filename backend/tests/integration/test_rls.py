@@ -42,6 +42,7 @@ TABLES = Base.metadata.tables
 TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED}
 TENANT_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") in TENANT_KINDS)
 STAFF_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.STAFF)
+EVIDENCE_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.EVIDENCE)
 PUBLISHED_TABLES = sorted(t for t in TENANT_TABLES if TABLES[t].info["tenancy"] == Tenancy.PUBLISHED)
 RLS_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") in RLS_TENANCIES)
 
@@ -54,7 +55,8 @@ def test_every_table_declares_its_tenancy() -> None:
 def test_every_tenant_table_has_an_rls_fixture() -> None:
     assert sorted(w.TENANT_ROWS) == TENANT_TABLES
     assert sorted(w.STAFF_ROWS) == STAFF_TABLES
-    assert sorted(TENANT_TABLES + STAFF_TABLES) == RLS_TABLES
+    assert EVIDENCE_TABLES == ["provenance_records"]  # a new EVIDENCE table needs its own writer test below
+    assert sorted(TENANT_TABLES + STAFF_TABLES + EVIDENCE_TABLES) == RLS_TABLES
 
 
 @pytest.fixture(scope="module")
@@ -117,7 +119,7 @@ async def test_tenant_a_reads_only_its_own_and_public_rows_of_b(
         assert {r.pub for r in b_rows} == {True, False}, f"{table}: fixture needs public and private rows of B"
 
 
-@pytest.mark.parametrize("table", RLS_TABLES)
+@pytest.mark.parametrize("table", sorted(set(RLS_TABLES) - set(EVIDENCE_TABLES)))  # evidence is public (/verify)
 async def test_no_tenant_context_reads_nothing(app_engine: AsyncEngine, world: w.World, table: str) -> None:
     async with app_engine.connect() as conn, conn.begin():
         await _as_tenant(conn, None, None, table)
@@ -615,6 +617,43 @@ async def test_every_tier2_role_bound_to_developer_a_reads_and_writes_none_of_b(
             seen = await _tier2_owners(conn)
             assert (seen[a.user_id], seen[b.user_id]) == (4, 4)
             assert {a.published_version, b.published_version} <= set((await conn.execute(embeddings)).scalars())
+
+
+# --- EVIDENCE: provenance_records ---------------------------------------------------------------------------------
+
+RECORD_INSERT = (
+    "INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :version, :cert, :hash)"
+)
+
+
+async def test_registration_records_are_public_and_written_only_for_the_bound_owner(
+    owner_engine: AsyncEngine, world: w.World
+) -> None:
+    """/verify reads every record without a signed-in user. The registration job (provenance_worker) bound to
+    developer A reads, inserts and updates only records of A's versions: none of B's."""
+    a, b = world.a, world.b
+    b_record = uuid7()
+    async with rolled_back(owner_engine) as conn:
+        await _sql(conn, RECORD_INSERT, id=b_record, version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, None, None)
+        public = await conn.execute(text("SELECT id FROM provenance_records WHERE id = :id"), {"id": b_record})
+        assert list(public.scalars()) == [b_record]  # anonymous /verify
+        await _as_tenant(conn, a.user_id, None)
+        await conn.execute(text("SET LOCAL ROLE provenance_worker"))
+        await _refused_by_rls(
+            conn, RECORD_INSERT, id=uuid7(), version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32)
+        )
+        a_record = uuid7()
+        await _sql(conn, RECORD_INSERT, id=a_record, version=a.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        seen = await conn.execute(text("SELECT id FROM provenance_records"))
+        assert list(seen.scalars()) == [a_record]
+        touched = await conn.execute(text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test'"))
+        assert touched.rowcount == 1  # no WHERE: the UPDATE policy alone admits A's record only
+        targeted = await conn.execute(
+            text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test' WHERE id = :id"), {"id": b_record}
+        )
+        assert targeted.rowcount == 0
 
 
 # --- aggregate_worker ------------------------------------------------------------------------------------------------

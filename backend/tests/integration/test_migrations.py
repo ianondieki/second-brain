@@ -1554,7 +1554,8 @@ async def test_tier2_of_a_registered_version_is_frozen_except_the_manifest(owner
 
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
-        _owner, _niche, _proposal, version = await _registered_proposal(conn)
+        owner, _niche, _proposal, version = await _registered_proposal(conn)
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})  # the job's owner
         key_id, record = f"test-{uuid4().hex[:8]}", uuid7()
         await conn.execute(
             sa.text("INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)"), {"k": key_id, "pk": bytes(32)}
