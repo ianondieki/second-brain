@@ -19,16 +19,17 @@ Tier 2 and the role set (docs/spec/06 6.1):
   ``dsr_exporter`` WITH INHERIT FALSE, SET TRUE (``roles.sql``), so it can only ``SET LOCAL ROLE`` to one of them
   (``bridge.db.as_role``) after the application check; RLS applies to each role with its own policies.
 - ``tier2_reader`` reads the owner's rows, or rows ``app_tier2_granted(proposal_id, version_id)`` allows: an active
-  Tier >= 2 grant to an E2, unsuspended organisation with a verified domain that the current user belongs to, with an
-  email address at exactly that domain, role reviewer, signatory or admin and TOTP enrolled; a registered version of a
-  published, clear proposal (drafts are never granted); the current Master Enterprise Terms accepted for the
-  organisation by its approved E2 claimant or an active signatory; this person's Evaluation NDA for this proposal; and
-  no WITHDRAWN, DECLINED or TERMINATED engagement. It writes only the owner's rows, and only while the version is a
+  Tier >= 2 grant to an E2, unsuspended organisation with a verified domain that the current user belongs to, with a
+  verified email address at exactly that domain, role reviewer, signatory or admin and TOTP enrolled; a registered
+  version of a published, clear proposal (drafts are never granted); the current Master Enterprise Terms accepted for
+  the organisation by its approved E2 claimant or an active signatory; this person's Evaluation NDA for this proposal;
+  and no WITHDRAWN, DECLINED or TERMINATED engagement. It writes only the owner's rows, and only while the version is a
   draft (trigger).
 - ``provenance_worker``, ``tier2_embed_worker`` and ``dsr_exporter`` read the rows of the user the job is bound to
   (``app.user_id``: one tenant per job); ``tier2_moderation`` reads only in a staff context (``app_is_staff``).
   ``provenance_worker`` also reads the bound owner's registered versions and fills their registration hashes, and
-  reads and writes only the ``provenance_records`` of that owner's versions (``app_owns_version``).
+  reads and writes only the ``provenance_records`` of that owner's versions (``app_owns_version``), inserting a record
+  only for a registered version (a draft is not evidence).
 
 Tenancy classes added to ``bridge.models.base.Tenancy`` (the generated RLS tests cover all three):
 
@@ -36,9 +37,11 @@ Tenancy classes added to ``bridge.models.base.Tenancy`` (the generated RLS tests
   reads and writes; every signed-in user reads published rows clear of moderation holds; staff admin|moderator read
   everything. ``candidate`` problems are readable by staff only.
 - STAFF (``moderation_cases``, ``directory_invitations``, ``proposal_confidential_embeddings``): ``app_is_staff()``
-  reads and updates; the app (or the embed worker) inserts.
+  reads and updates; the app (or the embed worker) inserts. Into ``moderation_cases`` the app inserts only a user's
+  report (``source = 'report'``, ``reporter_id = app.user_id``, open, no classifier output); the system sources file
+  through ``app_open_moderation_case``, which checks the caller against the subject.
 - EVIDENCE (``provenance_records``): bridge_app reads every row (``/verify`` is anonymous); only provenance_worker
-  writes, for versions its bound owner owns.
+  writes, for registered versions its bound owner owns.
 
 Master Enterprise Terms. An organisation's owner, admin or signatory may record an acceptance; so may the claimant of
 their own open E2 claim whose email code is verified, on an organisation that is unclaimed or E1, and only for the
@@ -47,13 +50,21 @@ only with the current version (``app_current_legal_template``: the most recently
 and ``app_tier2_granted`` counts only the current version accepted by the approved E2 claimant or an active signatory.
 
 Privileged changes run only through the SECURITY DEFINER functions below, which check their caller in SQL: moderation
-decisions and holds, claim approval (E1 automatic, E1/E2 by staff admin, always with the domain proven), delisting, D1
-confirmation (the OTP hash is compared in SQL), D2 decisions (staff admin), the KYC image purge bookkeeping, the
-invitation opt-out and the global LLM spend, reissuing a claim's email code, closing a tag, adding a niche (staff
-admin), the per-subject digests (``app_subject_digest``), the LLM call inputs (staff admin) and the audit chain heads
-for the hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``,
-``verification_level``, ``moderation_state``, ``tags.closed_at``, the claim OTP columns, ``registered_at`` or the
-registration hashes, and no SELECT on ``org_claims.otp_hash``, ``phone_verifications.otp_hash``,
+decisions and holds, filing a moderation case from a system source (``app_open_moderation_case``: prescreen and regex
+by the subject's writer or staff, a claim dispute by the disputed claim's claimant or staff admin, the Tier-2
+similarity job in a staff context), claim approval (E1 automatic, E1/E2 by staff admin, always with the domain proven;
+the E1 shortcut for E2 only on the organisation's own verified domain; approving a dispute transfers the organisation:
+earlier approved claims of other claimants are rejected and their memberships removed), marking a claim's DNS TXT
+record verified (``app_mark_claim_dns_verified``; the lookup is the app's and the database trusts its resolution),
+removing a membership (staff admin, with a reason), delisting, D1 confirmation (the OTP hash is compared in SQL), D2
+decisions (staff admin), the KYC image purge bookkeeping, the invitation opt-out and the global LLM spend, reissuing a
+claim's email code, closing a tag, adding a niche (staff admin), the per-subject digests (``app_subject_digest``:
+bridge_app gets only the current user's; staff and the registration job, recognised by its ``SET ROLE
+provenance_worker``, any user's), the LLM call inputs (staff admin) and the audit chain heads for the hourly anchor
+(EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``, ``verification_level``,
+``moderation_state``, ``tags.closed_at``, the claim OTP columns, the claim DNS proof (``dns_token`` is written with
+the claim; both it and ``dns_verified_at`` are write-once by trigger), ``registered_at`` or the registration hashes,
+and no SELECT on ``org_claims.otp_hash``, ``phone_verifications.otp_hash``,
 ``users.subject_salt`` or ``llm_calls.inputs`` (column grants on the rest of each table). ``llm_calls.inputs`` never
 holds Tier-2 plaintext: the LLM layer stores Tier-2 fields only as name, tier and length (AC-SEC-6).
 
@@ -87,12 +98,14 @@ the two brief policies never read each other recursively; ``tags.closed_at`` mar
 and rules above. Templates and acceptances are tied by ``(template id, sha256)`` foreign keys, so an accepted template
 version cannot change; ``nda_templates`` follows its legal body ON UPDATE CASCADE until an acceptance pins it. The
 listed-organisations rule is a second SELECT policy (``bridge_app_select_listed``) next to 0001's, which stays
-untouched.
+untouched. The second and third review rounds (listed in the card) added the rules above: the verified email and
+domain of Tier-2 viewers, the caller binding of the subject digests, reports-only inserts of moderation cases, records
+of registered versions only, the DNS proof through its function and the transfer on an upheld dispute.
 
 Operating rules for the code that uses this schema:
 
 - Switch roles only with ``bridge.db.as_role`` and never commit inside it; write audit events after it returns.
-- Tables some callers may insert into but not read back (``moderation_cases``, ``directory_invitations``,
+- Tables some callers may insert into but not read back (``moderation_cases`` reports, ``directory_invitations``,
   ``llm_calls`` system rows, ``signal_events``, ``legal_acceptances`` by a claimant, the Tier-2 worker tables) need
   inserts without RETURNING; their ORM models set ``eager_defaults=False``.
 - Columns the app writes but never reads (the OTP digests, ``llm_calls.inputs``) are mapped deferred with raiseload;
@@ -100,6 +113,9 @@ Operating rules for the code that uses this schema:
 - ``registered_at`` and ``phone_verifications.expires_at`` are the database's: leave them out and read them back.
 - The OTP functions count an attempt even when they return false: commit after calling them.
 - Jobs bind the user they act for (``bind_tenant``): the Tier-2 worker roles read only that user's rows.
+- Compute another user's subject digest only inside ``as_role(session, "provenance_worker")`` or in a staff context;
+  otherwise ``app_subject_digest`` answers only for ``app.user_id``.
+- File system moderation cases with ``app_open_moderation_case`` (it returns the case id); insert only reports.
 
 Revision ID: 0002
 Revises: 0001
