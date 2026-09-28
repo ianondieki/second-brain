@@ -324,55 +324,89 @@ async def test_app_is_staff_needs_an_active_staff_user_with_totp(owner_engine: A
             assert tuple((await conn.execute(text(check))).one()) == answer, user
 
 
+PHONE_CODE = (
+    "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
+    " VALUES (:id, :u, :phone, :h, now() + interval '10 minutes')"
+)
+
+
+async def _phone_code(conn: AsyncConnection, user: UUID, otp_hash: bytes, phone: str = "+254712345678") -> UUID:
+    code = uuid7()
+    await run(conn, PHONE_CODE, id=code, u=user, phone=phone, h=otp_hash)
+    return code
+
+
 async def test_phone_otp_is_compared_in_sql_and_raises_d0_to_d1(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     right, wrong = otp
+    level = "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u"
+    attempts = "SELECT attempts, verified_at IS NOT NULL AS verified FROM phone_verifications WHERE id = :id"
     async with as_app(owner_engine) as conn:
         user = await w.add_user(conn, _email("phone"), "Phone")
         other = await w.add_user(conn, _email("other"), "Other")
-        await run(conn, "INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)", u=user, h=f"h{user.hex}")
+        locked_user = await w.add_user(conn, _email("locked"), "Locked")
+        no_profile = await w.add_user(conn, _email("no-profile"), "No profile")
+        for developer in (user, locked_user):
+            await run(
+                conn,
+                "INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)",
+                u=developer,
+                h=f"h{developer.hex}",
+            )
         await act(conn, user)
-        code = uuid7()
-        await run(
-            conn,
-            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
-            " VALUES (:id, :u, '+254712345678', :h, now() + interval '10 minutes')",
-            id=code,
-            u=user,
-            h=right,
-        )
+        code = await _phone_code(conn, user, right)
+        second = await _phone_code(conn, user, right, phone="+254722000000")  # another number, still open
         await expect(conn, "UPDATE phone_verifications SET verified_at = now()", "permission denied")
         await expect(conn, "UPDATE developer_profiles SET verification_level = 'd1'", "permission denied")
         confirm = "SELECT app_confirm_phone_otp(:id, :h)"
         assert await run(conn, confirm, id=code, h=wrong) is False
-        assert (
-            await run(conn, "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u", u=user)
-            == "d0"
-        )
+        assert await run(conn, level, u=user) == "d0"
         assert await run(conn, confirm, id=code, h=right) is True
-        assert (
-            await run(conn, "SELECT verification_level::text FROM developer_profiles WHERE user_id = :u", u=user)
-            == "d1"
-        )
-        assert await run(conn, "SELECT attempts FROM phone_verifications WHERE id = :id", id=code) == 2
+        assert await run(conn, level, u=user) == "d1"
+        assert tuple((await conn.execute(text(attempts), {"id": code})).one()) == (2, True)
         assert await run(conn, confirm, id=code, h=right) is False  # a code confirms once
+        # Once D1, a second open code never verifies too; the attempt is still counted.
+        assert await run(conn, confirm, id=second, h=right) is False
+        assert tuple((await conn.execute(text(attempts), {"id": second})).one()) == (1, False)
         await act(conn, other)
         await expect(conn, confirm, "no such code for the current user", id=code, h=right)
         # Five wrong attempts lock a code, even against the right one afterwards.
-        await act(conn, user)
-        locked = uuid7()
-        await run(
-            conn,
-            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
-            " VALUES (:id, :u, '+254712345678', :h, now() + interval '10 minutes')",
-            id=locked,
-            u=user,
-            h=right,
-        )
+        await act(conn, locked_user)
+        locked = await _phone_code(conn, locked_user, right)
         for _ in range(5):
             assert await run(conn, confirm, id=locked, h=wrong) is False
         assert await run(conn, confirm, id=locked, h=right) is False
+        assert await run(conn, level, u=locked_user) == "d0"
+        # Without a developer profile there is nothing to raise: no code verifies.
+        await act(conn, no_profile)
+        orphan = await _phone_code(conn, no_profile, right)
+        assert await run(conn, confirm, id=orphan, h=right) is False
+        assert tuple((await conn.execute(text(attempts), {"id": orphan})).one()) == (1, False)
+
+
+async def test_a_phone_code_expires_ten_minutes_after_it_is_stored(owner_engine: AsyncEngine) -> None:
+    """The database sets expires_at (trigger): a later expiry sent by the application, or none, gives now() + 10 min,
+    for every role."""
+    ttl = "SELECT expires_at - now() FROM phone_verifications WHERE id = :id"
+    async with as_app(owner_engine) as conn:
+        user = await w.add_user(conn, _email("expiry"), "Expiry")
+        await act(conn, user)
+        codes = [uuid7() for _ in range(3)]
+        insert = (
+            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash{col})"
+            " VALUES (:id, :u, '+254712345678', :h{val})"
+        )
+        await run(
+            conn, insert.format(col=", expires_at", val=", now() + interval '1 day'"), id=codes[0], u=user, h=bytes(32)
+        )
+        await run(conn, insert.format(col="", val=""), id=codes[1], u=user, h=bytes(32))
+        await as_owner(conn)
+        await run(
+            conn, insert.format(col=", expires_at", val=", now() + interval '1 year'"), id=codes[2], u=user, h=bytes(32)
+        )
+        for code in codes:
+            assert await run(conn, ttl, id=code) == timedelta(minutes=10)
 
 
 async def test_kyc_decisions_are_staff_admin_only_and_raise_d1_to_d2(owner_engine: AsyncEngine) -> None:

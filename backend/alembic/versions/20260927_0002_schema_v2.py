@@ -778,8 +778,10 @@ AS $$
 $$;
 
 -- D1 (docs/spec/06 6.4 item 8): compares the stored OTP hash for one of the caller's codes, counts the attempt (at most
--- 5, until expiry) and on a match marks the code verified and raises the profile from D0 to D1. Returns whether this
--- call matched. The caller must commit even when it returns false, or the attempt is not counted.
+-- 5, until expiry) and on a match marks the code verified and raises the profile from D0 to D1. Only a D0 profile can
+-- match: once the account is D1 (or without a developer profile) every attempt is counted and fails, so a second open
+-- code for another number never verifies too. Returns whether this call matched. The caller must commit even when it
+-- returns false, or the attempt is not counted.
 CREATE FUNCTION app_confirm_phone_otp(p_verification uuid, p_otp_hash bytea) RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -787,6 +789,7 @@ AS $$
 DECLARE
     v_user uuid := public.app_user_id();
     v_row public.phone_verifications%ROWTYPE;
+    v_level public.dev_verification;
     v_match boolean;
 BEGIN
     SELECT * INTO v_row
@@ -800,7 +803,8 @@ BEGIN
     IF v_row.verified_at IS NOT NULL OR v_row.expires_at <= now() OR v_row.attempts >= 5 THEN
         RETURN false;
     END IF;
-    v_match := p_otp_hash IS NOT NULL AND v_row.otp_hash = p_otp_hash;
+    SELECT verification_level INTO v_level FROM public.developer_profiles WHERE user_id = v_user FOR UPDATE;
+    v_match := coalesce(v_level = 'd0', false) AND p_otp_hash IS NOT NULL AND v_row.otp_hash = p_otp_hash;
     UPDATE public.phone_verifications
        SET attempts = attempts + 1,
            verified_at = CASE WHEN v_match THEN now() END
@@ -1510,6 +1514,18 @@ BEGIN
 END;
 $$;
 
+-- A phone code expires 10 minutes after it is stored, by the database clock: whatever expiry the writer sends is
+-- replaced (D1 codes are never valid longer, however the application's clock runs).
+CREATE FUNCTION phone_verifications_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    NEW.expires_at := now() + interval '10 minutes';
+    RETURN NEW;
+END;
+$$;
+
 -- One claim per claimant and organisation per 24 hours, whatever became of the earlier one: withdrawing and claiming
 -- again cannot reset the OTP attempt and reissue limits. (One open claim per claimant and organisation is also a
 -- partial unique index.) SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
@@ -1533,6 +1549,7 @@ $$;
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION phone_verifications_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_confidential_guard() FROM PUBLIC;
@@ -1556,6 +1573,9 @@ CREATE TRIGGER tags_guard
 CREATE TRIGGER org_claims_guard
     BEFORE INSERT ON org_claims
     FOR EACH ROW EXECUTE FUNCTION org_claims_guard();
+CREATE TRIGGER phone_verifications_guard
+    BEFORE INSERT ON phone_verifications
+    FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
 """
 
 APPEND_ONLY_TABLES = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
@@ -1596,6 +1616,7 @@ TRIGGER_FUNCTIONS = (
     "proposals_guard()",
     "tags_guard()",
     "org_claims_guard()",
+    "phone_verifications_guard()",
 )
 
 
@@ -1887,7 +1908,12 @@ def _create_tables() -> None:
         sa.Column("phone_e164", sa.String(length=16), nullable=False),
         sa.Column("otp_hash", sa.LargeBinary(), nullable=False),
         sa.Column("attempts", sa.SmallInteger(), server_default="0", nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "expires_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("(now() + '00:10:00'::interval)"),
+            nullable=False,
+        ),
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),

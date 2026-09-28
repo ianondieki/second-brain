@@ -7,7 +7,18 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, LargeBinary, Numeric, SmallInteger, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    LargeBinary,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy, TimestampsMixin
@@ -64,7 +75,9 @@ class Consent(IdMixin, CreatedMixin, Base):
 
 class PhoneVerification(IdMixin, CreatedMixin, Base):
     """A D1 phone OTP (``SmsProvider``). The app inserts a row per code sent; ``app_confirm_phone_otp`` compares the
-    stored hash, counts attempts and, on a match, sets ``verified_at`` and raises the profile to D1."""
+    stored hash, counts attempts and, on a match while the profile is still D0, sets ``verified_at`` and raises the
+    profile to D1. ``expires_at`` is set by the database (10 minutes after the insert; a trigger replaces any value
+    sent), so leave it out and read it back."""
 
     __tablename__ = "phone_verifications"
     __table_args__ = (CheckConstraint(r"phone_e164 ~ '^\+[1-9][0-9]{6,14}$'", name="phone_e164"), USER)
@@ -73,7 +86,9 @@ class PhoneVerification(IdMixin, CreatedMixin, Base):
     phone_e164: Mapped[str] = mapped_column(String(16))
     otp_hash: Mapped[bytes] = mapped_column(LargeBinary)
     attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("(now() + '00:10:00'::interval)")
+    )
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
