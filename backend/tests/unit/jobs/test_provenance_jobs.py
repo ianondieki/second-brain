@@ -11,7 +11,9 @@ from typing import Any
 import pytest
 from procrastinate.jobs import Job
 from pydantic import SecretStr
+from sqlalchemy.exc import OperationalError
 
+from bridge.audit.chain import ChainProblem
 from bridge.config import ConfigurationError, Settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.jobs import audit as audit_jobs
@@ -20,6 +22,7 @@ from bridge.jobs.app import IMPORT_PATHS, app
 from bridge.provenance import service
 from bridge.provenance.service import RegistrationError, RegistrationPendingError
 from bridge.provenance.signing import LocalSigner
+from bridge.provenance.transparency import ChainVerificationError
 from bridge.storage.objects import InMemoryObjectStore
 
 KEY = base64.b64encode(bytes(range(32))).decode()
@@ -73,6 +76,30 @@ def test_backoff_is_capped_and_stops_on_permanent_errors() -> None:
     assert backoff.get_retry_decision(exception=RegistrationError("never"), job=job(0)) is None
     assert backoff.get_retry_decision(exception=RuntimeError("db"), job=job(12)) is None
     assert jobs.TIMESTAMP_RETRY.max_attempts == 24 * 14
+
+
+def test_the_nightly_verification_retries_transient_failures_and_never_a_broken_chain() -> None:
+    """A dropped connection or a restarting database is retried with capped, growing delays a bounded number of
+    times; a broken chain (or a missing setting) fails the job at once: no retry could publish a root."""
+    app.perform_import_paths()  # type: ignore[no-untyped-call]
+    retry = audit_jobs.VERIFY_RETRY
+    assert app.tasks[audit_jobs.VERIFY_TASK].retry_strategy is retry
+    transient = OperationalError("SELECT 1", {}, ConnectionResetError("server closed the connection"))
+    delays = []
+    for attempts in range(retry.max_attempts):
+        decision = retry.get_retry_decision(exception=transient, job=job(attempts))
+        assert decision is not None
+        assert decision.retry_at is not None
+        delays.append((decision.retry_at - datetime.now(UTC)).total_seconds())
+    assert delays == sorted(delays)
+    assert delays[0] >= 30
+    assert delays[-1] <= retry.cap + 5
+    assert retry.get_retry_decision(exception=transient, job=job(retry.max_attempts)) is None
+    assert retry.get_retry_decision(exception=TimeoutError(), job=job(0)) is not None
+    broken = ChainVerificationError({"org:x": [ChainProblem(2, None, "event_hash does not match the row's contents")]})
+    assert retry.get_retry_decision(exception=broken, job=job(0)) is None
+    missing = ConfigurationError("audit.verify_chain needs AUDIT_READER_DATABASE_URL")
+    assert retry.get_retry_decision(exception=missing, job=job(0)) is None
 
 
 def test_the_nightly_run_closes_the_nairobi_day_that_ended() -> None:

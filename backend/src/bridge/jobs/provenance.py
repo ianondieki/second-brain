@@ -41,13 +41,21 @@ ANCHOR_TASK = "provenance.anchor_chain_heads"
 
 
 class Backoff(BaseRetryStrategy):
-    """``base * 2**attempts`` seconds, at most ``cap``; never after ``RegistrationError`` or ``max_attempts``."""
+    """``base * 2**attempts`` seconds, at most ``cap``; never after a ``permanent`` error (``RegistrationError`` by
+    default) or ``max_attempts``."""
 
-    def __init__(self, *, base: int, cap: int, max_attempts: int) -> None:
-        self.base, self.cap, self.max_attempts = base, cap, max_attempts
+    def __init__(
+        self,
+        *,
+        base: int,
+        cap: int,
+        max_attempts: int,
+        permanent: tuple[type[BaseException], ...] = (RegistrationError,),
+    ) -> None:
+        self.base, self.cap, self.max_attempts, self.permanent = base, cap, max_attempts, permanent
 
     def get_retry_decision(self, *, exception: BaseException, job: Job) -> RetryDecision | None:
-        if isinstance(exception, RegistrationError) or job.attempts >= self.max_attempts:
+        if isinstance(exception, self.permanent) or job.attempts >= self.max_attempts:
             return None
         return RetryDecision(retry_in={"seconds": min(self.cap, self.base * 2**job.attempts)})
 
