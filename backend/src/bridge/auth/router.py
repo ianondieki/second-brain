@@ -447,8 +447,8 @@ async def unlink_identity(
     email: EmailDep,
     body: UnlinkRequest | None = None,
 ) -> None:
-    """Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409
-    last_sign_in_method when nothing else could sign in."""
+    """Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's
+    other sessions end. 409 last_sign_in_method when nothing else could sign in."""
     try:
         pending = await identities.unlink(db, settings, live, identity_id, body.current_password if body else None)
     except service.AuthError as exc:

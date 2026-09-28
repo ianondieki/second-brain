@@ -385,7 +385,8 @@ async def list_for(db: AsyncSession, user_id: UUID) -> list[AuthIdentity]:
 async def unlink(
     db: AsyncSession, settings: Settings, live: sessions.LiveSession, identity_id: UUID, password: str | None
 ) -> list[PendingEmail]:
-    """Remove one of the signed-in account's identities (404 for anyone else's), keeping a way to sign in."""
+    """Remove one of the signed-in account's identities (404 for anyone else's), keeping a way to sign in. The
+    account's other sessions end, so none opened with the removed identity outlives it."""
     user = await service.lock_user(db, live.user.id)
     stmt = select(AuthIdentity).where(AuthIdentity.id == identity_id, AuthIdentity.user_id == user.id)
     identity = (await db.execute(stmt)).scalar_one_or_none()
@@ -402,6 +403,7 @@ async def unlink(
         raise service.AuthError("last_sign_in_method", 409)
     provider = identity.provider
     await db.delete(identity)
+    await sessions.revoke_all(db, user.id, except_id=live.row.id)  # as a password change does
     await audit(
         db,
         "auth.identity_unlinked",

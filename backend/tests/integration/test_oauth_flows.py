@@ -833,6 +833,21 @@ async def test_unlinking(client: httpx.AsyncClient, other: httpx.AsyncClient, ow
     assert refusal(await client.delete(url)) == (404, "not_found")
 
 
+async def test_unlinking_ends_the_other_sessions(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+    """Removing a sign-in method ends every other session of the account (as a password change does), so a session
+    opened with the removed identity does not outlive it."""
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await refresh_csrf(client)
+    identity_id = (await client.get("/api/me/identities")).json()[0]["id"]
+    assert signed_in(await round_trip(other, who, intent="login"))  # the same GitHub account, another browser
+    await refresh_csrf(other)
+    assert (await other.get("/api/auth/me")).status_code == 200
+    assert (await client.delete(f"/api/auth/identities/{identity_id}")).status_code == 204
+    assert (await other.get("/api/auth/me")).status_code == 401
+    assert (await client.get("/api/auth/me")).status_code == 200  # the session that unlinked carries on
+
+
 async def test_the_last_way_to_sign_in_cannot_be_unlinked(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
     who = person()
     await round_trip(client, who, intent="signup", **signup_body())

@@ -1256,7 +1256,7 @@
     },
     "/api/auth/identities/{identity_id}": {
       "delete": {
-        "description": "Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409\nlast_sign_in_method when nothing else could sign in.",
+        "description": "Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's\nother sessions end. 409 last_sign_in_method when nothing else could sign in.",
         "operationId": "unlink_identity_api_auth_identities__identity_id__delete",
         "parameters": [
           {

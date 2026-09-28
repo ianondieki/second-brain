@@ -36,8 +36,8 @@ export interface paths {
         post?: never;
         /**
          * Unlink Identity
-         * @description Unlink a provider (the same proof as linking: ``current_password`` when the account has one). 409
-         *     last_sign_in_method when nothing else could sign in.
+         * @description Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's
+         *     other sessions end. 409 last_sign_in_method when nothing else could sign in.
          */
         delete: operations["unlink_identity_api_auth_identities__identity_id__delete"];
         options?: never;
