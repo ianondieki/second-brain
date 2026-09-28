@@ -364,9 +364,12 @@ describe("a confirmation whose answer never arrived (the server may have turned 
   const NOT_SHOWN_TURN_OFF =
     "Your recovery codes could not be shown. Keep the Bridge entry in your authenticator app: you need its codes " +
     "to log in. To get recovery codes, turn two-step sign-in off, then set it up again.";
+  // A reload that finds it on says only "Two-step sign-in is on.", so this notice says now that in that case the
+  // recovery codes were not shown and the app entry is the way in.
   const UNKNOWN =
-    "We could not check whether two-step sign-in is on. Reload this page to see, and until then keep the Bridge " +
-    "entry in your authenticator app.";
+    "We could not check whether two-step sign-in is on. Keep the Bridge entry in your authenticator app: if " +
+    "two-step sign-in is on, your recovery codes were not shown, and you need that entry’s codes to log in. " +
+    "Reload this page to see.";
   const LOST: Array<[string, () => unknown]> = [
     ["no connection", () => new TypeError("Failed to fetch")],
     ["500", () => answer(500)],
