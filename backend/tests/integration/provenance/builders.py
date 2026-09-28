@@ -180,7 +180,7 @@ async def tier2_grantee(engine: AsyncEngine, built: Built) -> UUID:
         await _exec(
             conn,
             "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, verified_domain)"
-            " VALUES (:id, 'company', 'Grantee Ltd', :slug, 'seed', 'e2', :domain)",
+            " VALUES (:id, 'company', 'Grantee Ltd', :slug, 'self_signup', 'e2', :domain)",
             id=org,
             slug=f"grantee-{tag}",
             domain=domain,
