@@ -204,7 +204,8 @@ async def test_seeded_rows_are_e0_with_their_source_and_iso_county(owner_engine:
     assert all(r.source_url.startswith("https://") and r.source_retrieved_on for r in rows.values())
     assert all(r.website is None for r in rows.values())  # no contact or logo data beyond the documented fields
     assert rows["safaricom-plc"].county_code == "KE-30"
-    assert rows["safaricom-plc"].official_domains == ["safaricom.co.ke"]
+    assert rows["safaricom-plc"].official_domains == []  # cited only to Wikipedia so far: no automatic E1
+    assert rows["telkom-kenya"].official_domains == ["telkom.co.ke"]
     assert rows["county-government-mombasa"].county_code == "KE-28"
     assert rows["county-government-mombasa"].public_entity is True
     assert rows["amref-health-africa-in-kenya"].county_code is None

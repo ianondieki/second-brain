@@ -7,6 +7,9 @@ logos. Every org in `backend/seed/ke_provisional.yaml` is E0 (unclaimed). Where 
 fetched or a fact could not be confirmed, the row (or the field) was skipped rather than guessed — see
 "Gaps and open questions" per register and the consolidated list at the end.
 
+Updated 2026-09-28: Safaricom PLC and Airtel Networks Kenya Limited now ship with `official_domains: []` (their
+domains were cited only to Wikipedia; see section 1 and open question 10).
+
 ## Question
 
 For `backend/seed/ke_provisional.yaml` (Phase 2 provisional directory seed), which public Kenyan
@@ -31,10 +34,11 @@ list content to an automated fetch; the university rows instead cite CUE's own A
 at December 2020"), corroborated against 2026 news/Wikipedia for continued operation. **Basic education
 was skipped entirely**: no official Ministry of Education page listing named public national schools
 could be found or fetched, and the task card says to skip rather than guess. Official domains are
-recorded only where an official source was actually fetched and shows the domain (telecoms via Wikipedia
-infoboxes plus a direct fetch of `telkom.co.ke`; microfinance banks via CBK's own PDF; four national
-ministries via their own `.go.ke` sites; one county, Kirinyaga, via its own site); every other row carries
-`official_domains: []`.
+recorded only where an official source was actually fetched and shows the domain (Telkom Kenya via a
+direct fetch of `telkom.co.ke`; microfinance banks via CBK's own PDF; four national ministries via their
+own `.go.ke` sites; one county, Kirinyaga, via its own site); every other row carries
+`official_domains: []`, including Safaricom PLC and Airtel Networks Kenya Limited, whose domains were
+seen only in Wikipedia infoboxes (not an official source).
 
 ## Evidence table
 
@@ -45,8 +49,8 @@ ministries via their own `.go.ke` sites; one county, Kirinyaga, via its own site
 | `ca.go.ke`'s licensee register and its 2026-dated PDFs are not machine-fetchable | Fetch of `https://www.ca.go.ke/licensee-register` and of the 2026-07 and 2026-05 register PDFs on `ca.go.ke` returned only a Cloudflare interstitial: "One moment, please... Please wait while your request is being verified..." | https://www.ca.go.ke/licensee-register ; https://www.ca.go.ke/sites/default/files/2026-07/REGISTER%20OF%20TELECOMMUNICATION%20LICENSEES.pdf ; https://www.ca.go.ke/sites/default/files/2026-05/REGISTER%20OF%20UNIFIED%20LICENSING%20FRAMEWORK%20LICENSEES.pdf | 2026-09-27 |
 | An older CA register (mirrored off the main site) lists AIRTEL NETWORKS KENYA LIMITED, JAMII TELECOMMUNICATIONS LIMITED, SAFARICOM PLC and TELKOM KENYA LIMITED as the four Network Facilities Provider Tier One (NFP-T1) licensees | Document header: "REGISTER OF UNIFIED LICENSING FRAMEWORK LICENSEES ... 2022/2023 VER 1. JANUARY 2023"; section "3. NETWORK FACILITIES PROVIDER TIER ONE (1)" lists "1. AIRTEL NETWORKS KENYA LIMITED", "2. JAMII TELECOMMUNICATIONS LIMITED", "3. SAFARICOM PLC", "4. TELKOM KENYA LIMITED" | https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content (PDF, extracted with `pdftotext -layout`; downloaded via the WebFetch tool, converted locally since the tool cannot parse this PDF's compressed text streams) | 2026-09-27 |
 | The same register lists WANANCHI TELECOM LIMITED and LIQUID TELECOMMUNICATIONS KENYA LIMITED under International Gateway Operators / NFP-T2, and POA INTERNET KENYA LIMITED and MAWINGU NETWORKS LIMITED under NFP-T3 (ISPs) | Lines: "11. WANANCHI TELECOM LIMITED", "6. LIQUID TELECOMMUNICATIONS KENYA LIMITED" (International Gateway Operators, also re-listed further in the document); "72. POA INTERNET KENYA LIMITED", "60. MAWINGU NETWORKS LIMITED" (NFP-T3 list, town NANYUKI for Mawingu) | same PDF as above | 2026-09-27 |
-| Safaricom's official domain and full legal name | Infobox "Website" field: "www.safaricom.co.ke"; article text: "Safaricom PLC" | https://en.wikipedia.org/wiki/Safaricom | 2026-09-27 |
-| Airtel Kenya's official domain (used for Airtel Networks Kenya Limited) | Infobox "Website" field: "www.airtelkenya.com" | https://en.wikipedia.org/wiki/Airtel_Kenya | 2026-09-27 |
+| Safaricom's domain and full legal name (Wikipedia only: the domain is **not** seeded until an official source confirms it) | Infobox "Website" field: "www.safaricom.co.ke"; article text: "Safaricom PLC" | https://en.wikipedia.org/wiki/Safaricom | 2026-09-27 |
+| Airtel Kenya's domain (Wikipedia only: **not** seeded for Airtel Networks Kenya Limited until an official source confirms it) | Infobox "Website" field: "www.airtelkenya.com" | https://en.wikipedia.org/wiki/Airtel_Kenya | 2026-09-27 |
 | Telkom Kenya's official domain and current branding | Fetched page footer: "Telkom Kenya © 2026 - All Rights Reserved"; Wikipedia infobox "Website": "http://www.telkom.co.ke/" | https://telkom.co.ke ; https://en.wikipedia.org/wiki/Telkom_Kenya | 2026-09-27 |
 | Airtel's Kenyan licence position is currently unsettled (context, not used to exclude the row) | "Airtel Kenya has asked the Communications Authority of Kenya (CA) for two licenses" including "Network Facilities Provider Tier 1 license"; "The article does not indicate that Airtel Kenya currently holds these licenses; rather, it describes these as pending applications under public consultation" | https://techweez.com/2026/08/31/airtel-kenya-nfp-tier-1-license/ | 2026-09-27 |
 | Jamii, Wananchi, Liquid, Poa Internet and Mawingu official domains | not found on any source actually fetched | — | 2026-09-27 |
@@ -57,7 +61,12 @@ list used here before G6; (2) Airtel Networks Kenya Limited's NFP-T1 status is c
 coverage even though it appears in the January 2023 register and AC-DIR-6 requires it under this niche —
 included per D-21/AC-DIR-6, flagged for G6; (3) no confirmed domain found for Jamii Telecommunications,
 Wananchi Telecom, Liquid Telecommunications Kenya, Poa Internet Kenya or Mawingu Networks — all five ship
-with `official_domains: []`.
+with `official_domains: []`; (4) Safaricom's (`safaricom.co.ke`) and Airtel Kenya's (`airtelkenya.com`)
+domains are cited only to Wikipedia, which is not an official source. A verification attempt on
+2026-09-28 from the build's cloud session could not fetch any official source (web access is blocked
+there), so both rows ship with `official_domains: []` until an official citation is recorded; until then a
+claim on either organisation gets manual E1 review, not the automatic domain match. Telkom Kenya keeps
+`telkom.co.ke`: that domain was fetched directly and its own footer names Telkom Kenya.
 
 ### 2. Microfinance banks (niche `microfinance-saccos`, kind `sacco_mfi`)
 
@@ -155,10 +164,11 @@ seeded NGO/PBO rows ship with `county: null` and `official_domains: []`.
   that the loader will need to map to School/University-TVET), National government, County government and
   Social/NGO — **except Basic education, which is empty by design** (see below); the loader/AC-DIR-5 test
   should not assert a seeded School row until a Ministry of Education source is found.
-- **Claim flow (docs/spec/06.2, `official_domains[]`)**: only Safaricom, Airtel, Telkom, four microfinance
-  banks, four national ministries and one county (Kirinyaga) carry a confirmed domain; every other row's
-  `official_domains: []` means any claim on those orgs falls to **manual E1 review** rather than automatic
-  domain-match E1, which is the safe default per docs/spec/06.2's own fallback rule.
+- **Claim flow (docs/spec/06.2, `official_domains[]`)**: only Telkom, four microfinance banks, four
+  national ministries and one county (Kirinyaga) carry a confirmed domain; every other row's
+  `official_domains: []` (Safaricom's and Airtel's included, until open question 10 is closed) means any
+  claim on those orgs falls to **manual E1 review** rather than automatic domain-match E1, which is the
+  safe default per docs/spec/06.2's own fallback rule.
 - **G6 production list**: this provisional file is explicitly not the production list (per the file's own
   header and `status: provisional-until-G6`); the gaps below are the primary G6 agenda items.
 
@@ -188,3 +198,8 @@ seeded NGO/PBO rows ship with `county: null` and `official_domains: []`.
    own site (out of scope for this pass) or left `null` in the production list too.
 9. The SASRA Schedule I register gives no domain/website column; decide whether SACCO domains are worth
    sourcing individually (e.g., from each SACCO's own site) for the production list.
+10. **Before G6:** cite an official source for `safaricom.co.ke` (Safaricom PLC) and `airtelkenya.com`
+    (Airtel Networks Kenya Limited), such as the operator's own site or a regulator or exchange filing that
+    names the domain, and only then restore them to `official_domains`. Both are cited only to Wikipedia; a
+    verification attempt on 2026-09-28 from the build's cloud session could not fetch any official source
+    (web access is blocked there). Until then the E1 domain match stays manual for both organisations.

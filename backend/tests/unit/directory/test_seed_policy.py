@@ -164,10 +164,13 @@ def test_official_domains_are_bare_hostnames_never_free_mail(data: dict[str, Any
 
 
 def test_safaricom_airtel_and_telkom_sit_under_networks_and_telecommunications(data: dict[str, Any]) -> None:
-    """AC-DIR-6 (seed half)."""
+    """AC-DIR-6 (seed half). Safaricom's and Airtel's domains are cited only to Wikipedia so far, so they carry none
+    (E1 by domain match stays manual for them until an official citation lands); Telkom's comes from its own site."""
     telcos = {r["slug"]: r for r in data["orgs"] if "networks-telecommunications" in r["niches"]}
     assert {"safaricom-plc", "airtel-networks-kenya", "telkom-kenya"} <= set(telcos)
-    assert telcos["safaricom-plc"]["official_domains"] == ["safaricom.co.ke"]
+    assert telcos["safaricom-plc"]["official_domains"] == []
+    assert telcos["airtel-networks-kenya"]["official_domains"] == []
+    assert telcos["telkom-kenya"]["official_domains"] == ["telkom.co.ke"]
 
 
 # --- the loader's own checks (negative cases) ---
@@ -221,7 +224,7 @@ def test_the_loader_rejects_missing_fields_and_duplicate_slugs(
     duplicate["orgs"].append(copy.deepcopy(duplicate["orgs"][0]))
     with pytest.raises(DirectorySeedInvalid, match="duplicate slug 'safaricom-plc'"):
         parse(duplicate, niche_slugs, counties)
-    shared = _with(data, official_domains=["airtelkenya.com"])
+    shared = _with(data, official_domains=["telkom.co.ke"])
     with pytest.raises(DirectorySeedInvalid, match="listed twice"):
         parse(shared, niche_slugs, counties)
     with pytest.raises(DirectorySeedInvalid, match="orgs"):

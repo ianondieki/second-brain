@@ -14,7 +14,7 @@ orgs:
     kind: company
     niches: [networks-telecommunications]
     county: KE-30
-    official_domains: [safaricom.co.ke]
+    official_domains: []  # safaricom.co.ke is cited only to Wikipedia; awaits an official citation before G6
     public_entity: false
     source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
     source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
@@ -25,7 +25,7 @@ orgs:
     kind: company
     niches: [networks-telecommunications]
     county: KE-30
-    official_domains: [airtelkenya.com]
+    official_domains: []  # airtelkenya.com is cited only to Wikipedia; awaits an official citation before G6
     public_entity: false
     source_register: "Communications Authority of Kenya -- Register of Unified Licensing Framework Licensees (2022/2023 Ver 1, January 2023), Network Facilities Provider Tier One"
     source_url: "https://repository.ca.go.ke/server/api/core/bitstreams/4738747b-e721-4afc-9275-ac09f3dabe40/content"
