@@ -240,8 +240,12 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 **Laptop session 2026-09-28 (in progress).** Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
 `openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). Round-3 items 3–8
-done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); reviewer and
-security-reviewer round 3 are running on `0fd9159`. impl-ai is on the T2.2 SQL ledger. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
+done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); round 3 on `0fd9159`: reviewer
+CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers; 4 MINORs) and security-reviewer
+CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_handle`; MAJOR: `document_views` rows need
+no grant and evidence timestamps are caller-set; 11 MINORs). db-migrations is on the combined round-4 fixes (orchestrator
+decision: an upheld dispute leaves the new claimant the only owner/admin). Two items went to the human as **D-32**.
+The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. impl-ai is on the T2.2 SQL ledger. Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
 premise was disputed with the Next source and pinned by an E2E test; D-28 figures updated: `/settings/security` 148,441
@@ -275,7 +279,7 @@ is pushed, clean, and unmerged. The order of merges matters: schema v2 first, th
 Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
 reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
 T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
-D-29, D-30 (the E2-dispute question) and D-31 (E2 badge copy). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
+D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy) and D-32 (digest hardening). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
 are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
 `/api/openapi.json` lists admin routes in production (Phase 8).
 

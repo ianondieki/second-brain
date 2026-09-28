@@ -38,6 +38,17 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: E2 approvals shown to users (T2.6b); nothing else.
 - Decision:
 
+### D-32 · Hardening the per-user digest: a separate login for the registration worker, and HMAC instead of SHA-256(salt ‖ data) (T2.1, REQ-TEN-01, ADR-002)
+- Why: the T2.1 round-3 security review found two limits of `app_subject_digest` (the per-user digest behind owner refs, audit digests and phone digests). (1) The database lets only the caller's own digest through unless the call runs as staff or as the `provenance_worker` role. But the app's login role `bridge_app` may switch to `provenance_worker` (by design, like every Tier-2 role: membership `WITH INHERIT FALSE, SET TRUE`). So an injected SQL expression on the request path can switch roles inside one statement and compute any user's digest. The binding stops query bugs and ORM loads, not injected SQL. The same trust applies to the `app.user_id` setting (threat model TB2). (2) The spec's formula `SHA-256(subject_salt ‖ data)` (`docs/spec/06` 6.4) puts a secret in front of the data, which is open to length extension. `HMAC-SHA-256(key = subject_salt, data)` is the standard construction. Changing it changes the spec.
+- Options:
+  (a) Keep both as they are for Phase 2. Record them as residuals (done in `THREAT_MODEL.md`) and revisit at the Phase 8 security audit.
+  (b) Give the registration worker its own database login `provenance_worker` (detected with `session_user`) and remove `bridge_app`'s SET membership in it. This changes `infra/postgres/roles.sql` and the deploy config, adds one more database URL secret, and needs an ADR-002 addendum.
+  (c) Switch the formula to HMAC (pgcrypto `hmac(data, salt, 'sha256')`) before any digest is stored in staging. This needs a `docs/spec/06` change by you.
+  (d) Both (b) and (c).
+- Recommended default: (a) now. Then (c) before staging (cheap while no real digests exist), and (b) with the Phase 8 hardening.
+- Blocks: nothing in Phase 2. (c) must be decided before real digests are stored (staging, D-22).
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
