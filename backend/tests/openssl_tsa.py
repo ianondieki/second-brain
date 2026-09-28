@@ -1,6 +1,6 @@
 """A local RFC 3161 test TSA for the provenance tests (AC-IP-1). Never DigiCert, FreeTSA or any network service.
 
-At test time: a throwaway root CA (optionally an intermediate with the timeStamping usage, as DigiCert's chain has) and
+At test time: a throwaway root CA (optionally an intermediate CA, limited to timestamping as DigiCert's is) and
 a TSA certificate (critical, sole timeStamping extended key usage) are generated with ``cryptography`` into a
 temporary directory; tokens are then issued with ``openssl ts -reply`` and checked with ``openssl ts -verify``, exactly
 as anyone would check a stored ``.tsr`` offline (docs/runbooks/verify-offline.md). ``LocalTsa.transport()`` is an
@@ -17,6 +17,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -39,6 +40,7 @@ MISSING_OPENSSL = (
     "put any openssl.exe on PATH, or set OPENSSL_BIN to its full path. See docs/runbooks/dev-setup.md."
 )
 KeyType = Literal["rsa", "ec"]
+TIMESTAMPING_ONLY: tuple[ObjectIdentifier, ...] = (ExtendedKeyUsageOID.TIME_STAMPING,)
 PrivateKey = rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
 
 
@@ -111,7 +113,15 @@ def _load_key(path: Path) -> PrivateKey:
 
 
 def _ca(
-    subject: str, key: PrivateKey, issuer: x509.Name, issuer_key: PrivateKey, now: datetime, *, eku: bool
+    subject: str,
+    key: PrivateKey,
+    issuer: x509.Name,
+    issuer_key: PrivateKey,
+    now: datetime,
+    *,
+    intermediate: bool,
+    eku: Sequence[ObjectIdentifier] | None = None,
+    key_cert_sign: bool = True,
 ) -> x509.Certificate:
     builder = (
         x509.CertificateBuilder()
@@ -121,14 +131,16 @@ def _ca(
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=3650))
-        .add_extension(x509.BasicConstraints(ca=True, path_length=0 if eku else 1), critical=True)
-        .add_extension(_usage(sign=False, ca=True), critical=True)
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0 if intermediate else 1), critical=True)
+        .add_extension(_usage(sign=not key_cert_sign, ca=key_cert_sign), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
     )
-    if eku:  # an intermediate limited to timestamping, like DigiCert's "Trusted G4 TimeStamping" CA
+    if intermediate:
         builder = builder.add_extension(
             x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False
-        ).add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        )
+    if eku is not None:
+        builder = builder.add_extension(x509.ExtendedKeyUsage(list(eku)), critical=False)
     return builder.sign(issuer_key, hashes.SHA256())
 
 
@@ -165,21 +177,37 @@ class LocalTsa:
         *,
         key_type: KeyType = "rsa",
         intermediate: bool = False,
+        intermediate_eku: Sequence[ObjectIdentifier] | None = TIMESTAMPING_ONLY,
+        intermediate_key_cert_sign: bool = True,
         valid_from: timedelta = timedelta(days=-1),
         valid_until: timedelta = timedelta(days=3650),
     ) -> LocalTsa:
         """A test TSA. ``valid_from``/``valid_until`` place the TSA certificate's validity relative to now (openssl
-        signs with it either way, so an expired or not-yet-valid certificate can be tested)."""
+        signs with it either way, so an expired or not-yet-valid certificate can be tested).
+
+        ``intermediate`` puts an issuing CA between the root and the TSA certificate. By default it is limited to
+        timestamping, like DigiCert's "Trusted G4 TimeStamping" CA; ``intermediate_eku`` gives it other extended key
+        usages (``None``: no extension, like FreeTSA's CA) and ``intermediate_key_cert_sign=False`` takes away its
+        keyCertSign usage (openssl issues tokens either way: it never checks the chain it sends)."""
         openssl = find_openssl()
         now = datetime.now(UTC)
         root_key, tsa_key = _key(key_type), _key(key_type)
         root_name = _name("Bridge Test TSA Root")
-        root = _ca("Bridge Test TSA Root", root_key, root_name, root_key, now, eku=False)
+        root = _ca("Bridge Test TSA Root", root_key, root_name, root_key, now, intermediate=False)
         chain = [root]
         issuer, issuer_key = root, root_key
         if intermediate:
             issuer_key = _key(key_type)
-            issuer = _ca("Bridge Test TimeStamping CA", issuer_key, root.subject, root_key, now, eku=True)
+            issuer = _ca(
+                "Bridge Test TimeStamping CA",
+                issuer_key,
+                root.subject,
+                root_key,
+                now,
+                intermediate=True,
+                eku=intermediate_eku,
+                key_cert_sign=intermediate_key_cert_sign,
+            )
             chain = [issuer, root]
         tsa = (
             x509.CertificateBuilder()

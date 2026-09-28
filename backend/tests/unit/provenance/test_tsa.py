@@ -253,14 +253,48 @@ def test_a_tsa_certificate_invalid_at_gen_time_is_refused(
         parse(token, tsa.trust)
 
 
-def test_a_chain_through_a_timestamping_intermediate_is_accepted(tmp_path: Path) -> None:
-    """DigiCert's shape: root, an intermediate limited to timestamping, the TSA. The token carries the intermediate;
-    the bundle pins the root (or the intermediate itself)."""
-    tsa = LocalTsa.create(tmp_path / "tsa", intermediate=True)
+@pytest.mark.parametrize(
+    "eku",
+    [
+        # DigiCert's shape: an intermediate limited to timestamping. cryptography's web PKI defaults refuse this chain
+        # ("Neither EKU nor anyEKU could be found": they want TLS client auth), so this case pins the TSA CA policy.
+        [ExtendedKeyUsageOID.TIME_STAMPING],
+        None,  # FreeTSA's shape: a CA that states no extended key usage
+        [ExtendedKeyUsageOID.ANY_EXTENDED_KEY_USAGE],
+    ],
+    ids=["timestamping-only", "no-eku", "any-eku"],
+)
+def test_a_chain_through_an_intermediate_allowed_to_timestamp_is_accepted(tmp_path: Path, eku: Any) -> None:
+    """Root, intermediate, TSA. The token carries the intermediate; the bundle pins the root (or the intermediate
+    itself)."""
+    tsa = LocalTsa.create(tmp_path / "tsa", intermediate=True, intermediate_eku=eku)
     token = tsa.reply(build_request(DIGEST, NONCE))
     assert parse(token, tsa.trust).serial.startswith("0x")
     assert parse(token, TrustBundle.from_pem_file(tsa.directory / "issuer.pem")).serial.startswith("0x")
     assert tsa.verify(token, digest=DIGEST).returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("eku", "key_cert_sign"),
+    [
+        ([ExtendedKeyUsageOID.SERVER_AUTH], True),  # a TLS CA may not vouch for a timestamping certificate
+        ([ExtendedKeyUsageOID.CODE_SIGNING, ExtendedKeyUsageOID.CLIENT_AUTH], True),
+        ([ExtendedKeyUsageOID.TIME_STAMPING], False),  # a CA certificate without keyCertSign issues nothing
+    ],
+    ids=["tls-server-ca", "code-signing-ca", "no-key-cert-sign"],
+)
+def test_a_chain_through_an_intermediate_not_allowed_to_timestamp_is_refused(
+    tmp_path: Path, eku: Any, key_cert_sign: bool
+) -> None:
+    """The root is pinned and every signature is intact, but the intermediate may not issue a TSA certificate: its
+    extended key usage excludes timestamping, or its key usage excludes certificate signing."""
+    tsa = LocalTsa.create(
+        tmp_path / "tsa", intermediate=True, intermediate_eku=eku, intermediate_key_cert_sign=key_cert_sign
+    )
+    token = tsa.reply(build_request(DIGEST, NONCE))
+    assert parse(token, None).serial.startswith("0x")  # a well-formed, correctly signed token
+    with pytest.raises(TsaResponseError, match="does not chain to the CA bundle pinned for this TSA"):
+        parse(token, tsa.trust)
 
 
 def _signing_certificate_attr(signer: cms.SignerInfo) -> Any:
