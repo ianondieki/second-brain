@@ -101,6 +101,6 @@ def test_an_empty_optional_setting_means_unset(monkeypatch: pytest.MonkeyPatch, 
         secret_key=SecretStr("x" * 32),
         data_encryption_key=KEY,
         recovery_code_pepper=SecretStr("p" * 32),
-        _env_file=None,  # type: ignore[call-arg]
+        _env_file=None,
     )
     assert getattr(settings, name) is None
