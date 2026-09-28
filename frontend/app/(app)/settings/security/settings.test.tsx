@@ -218,6 +218,28 @@ describe("the Password section during two-step setup", () => {
     expect(mocks.push).toHaveBeenCalledWith("/org");
   });
 
+  it("replaces the setup steps with a new list for the recovery codes, focus on its current step", async () => {
+    answerWith({
+      "/api/auth/totp/enrol": ok(ENROLMENT),
+      "/api/auth/totp/confirm": ok({ recovery_codes: RECOVERY_CODES }),
+    });
+    securityPage();
+    await startSetup();
+    const setupList = screen.getByRole("list", { name: "Setup steps" });
+
+    fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
+    await screen.findByTestId("recovery-codes");
+
+    // A new stage, not the old list with step 3 sliding up into the space steps 1-2 leave (a layout shift at 360 px).
+    const codesList = screen.getByRole("list", { name: "Setup steps" });
+    expect(codesList).not.toBe(setupList);
+    expect(setupList.isConnected).toBe(false);
+    const current = codesList.querySelector<HTMLElement>(":scope > li[aria-current='step'] h3");
+    expect(current?.textContent).toBe("Save your recovery codes");
+    await waitFor(() => expect(document.activeElement).toBe(current));
+  });
+
   it("comes back when the server has lost the pending setup and it starts again", async () => {
     answerWith({
       "/api/auth/totp/enrol": ok(ENROLMENT),
