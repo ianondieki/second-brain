@@ -30,8 +30,10 @@ from structlog.testing import capture_logs
 
 import bridge.clock
 from bridge.auth import identities, oauth, service, throttle, totp
+from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings, get_settings
 from bridge.db import create_session_factory
+from bridge.models.enums import AuthProvider
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
@@ -856,6 +858,60 @@ async def test_a_state_in_use_by_an_open_transaction_waits_for_it(app_engine: As
         await first.commit()
         assert await racing is False
         await second.commit()
+
+
+async def test_a_spent_state_is_refused_for_as_long_as_its_cookie_lives(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up (spend window): the spent state outlives every cookie that carries it, so a copy of the
+    cookie replayed in its last seconds is still refused before any provider call."""
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    started = datetime.now(UTC)
+    params = await start(client, "github", "login")
+    flow_cookie = client.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    callback = "/api/auth/oauth/github/callback"
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        assert landing(await client.get(callback, params={"code": "a", "state": params["state"]})) == ("/dev", {})
+    last_seconds = started + oauth.FLOW_TTL - timedelta(seconds=5)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: last_seconds)
+    other.cookies.set("__Host-bridge_oauth", flow_cookie)
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, who)
+        replay = await other.get(callback, params={"code": "b", "state": params["state"]})
+    assert landing(replay) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
+
+
+async def test_the_state_spend_window_is_twice_the_flow_lifetime(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up (spend window boundary): a spent state is refused until 2 x FLOW_TTL after it was spent and
+    is unused from then on. The margin over the cookie's lifetime absorbs clock skew between the database, which
+    stamps the record, and the app, which reads it."""
+    settings = oauth_settings()
+    flow = oauth.new_flow(AuthProvider.GITHUB, "login", "/dev", now=datetime.now(UTC))
+    factory = create_session_factory(app_engine)
+    async with factory() as db:
+        assert await identities.spend_state(db, settings, flow)
+        await db.commit()
+    spent = datetime(2026, 1, 5, 9, 30, tzinfo=UTC)  # pin the record's time; the app clock is set from it below
+    digest = keyed_digest(settings.secret_key.get_secret_value(), "oauth_state:value", flow.state)
+    async with owner_engine.begin() as conn:
+        pinned = await conn.execute(
+            text("UPDATE login_attempts SET created_at = :t WHERE email_digest = :d"), {"t": spent, "d": digest}
+        )
+        assert pinned.rowcount == 1
+    window = 2 * oauth.FLOW_TTL
+    for age, first in [(window - timedelta(seconds=1), False), (window, True)]:
+        monkeypatch.setattr(bridge.clock, "utcnow", lambda at=spent + age: at)
+        async with factory() as db:
+            assert await identities.spend_state(db, settings, flow) is first
+            await db.rollback()
 
 
 async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
