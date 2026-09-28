@@ -44,7 +44,9 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    confirmation's answer is lost after the commit, the person has two-step sign-in on and recovery codes they never
    saw; a role that requires two-step sign-in cannot turn it off and set it up again, so today it has no way to get
    codes (`THREAT_MODEL.md` §1, "Recovery codes never seen after a lost confirmation"). Add a CSRF-checked route that
-   issues ten new recovery codes and replaces the old ones in one step, behind the step-up helper (MFA within 12 h),
+   issues ten new recovery codes and replaces the old ones in one step under `lock_user` (like
+   `confirm_totp_enrolment`; `check_second_factor` rewrites the remaining hashes under that lock when a code is spent,
+   so a race test must show a concurrent step-up cannot restore the old hashes), behind the step-up helper (MFA within 12 h),
    with an `auth.recovery_codes_replaced` audit event and a security-notice email ("New recovery codes were
    created."). Then a "Get new recovery codes" action on the "on" screen; the codes-not-shown notices
    (`security.codesNotShown`, `security.codesNotShownTurnOff`) point at it, the latter no longer sending people to
