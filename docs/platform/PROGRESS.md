@@ -251,7 +251,10 @@ round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the me
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
 `batch_poll` not idempotent, the per-session consent does not check the session is live, a user-bound call with no
 subject skips the plan cap, `httpx2` undeclared, T4.3 deferral (now in PLAN), the wip commit and oversized commits as
-deviations). impl-ai is on the fix round. Carry to T2.9 and Phase 4 as the card notes
+deviations). Fix round (`d0e9dc4`..`0c0ac6d`, 1191 passed): M1, m4 (the per-session
+consent now needs the owner's live login session: new `bridge.auth.sessions.is_live`, so T2.2 also needs
+security-reviewer), m5, m6 fixed; m3 half done (missing batch items reported). M2 (batch reservations) and settle-once
+need `llm_calls.batch_id`/`custom_id`, a `batch_reserved` status and a spend rule: sent to db-migrations as item G. Carry to T2.9 and Phase 4 as the card notes
 say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
@@ -279,8 +282,8 @@ Procrastinate lock on the hourly anchor task; a THREAT_MODEL row for rogue/MITM/
 not print owner-chosen Tier-2 key names; the test builder's `owner_handle` breaks under schema round 4; the
 verify-offline runbook's POST needs the CSRF header). Reviewer round 2 **PASS** (MINORs: `test_the_nightly_task_closes_the_day_through_the_runtime`
 uses a fixed epoch that closes a future day and fails under schema round 4's `transparency_roots_guard`; the runbook's
-pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). Next for T2.4: once
-schema v2 round 4 is merged, merge it in and run one impl-backend round on these eight MINORs, then merge. Its four
+pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). impl-backend is on these
+eight MINORs now (compatible with the schema before and after round 4); then merge schema v2 in, re-check, merge. Its four
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
