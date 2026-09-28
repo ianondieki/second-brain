@@ -1,9 +1,10 @@
 """Idempotent reference-data seed: ``python -m bridge.seed`` (docs/spec/08 Migrations; X1-3).
 
 Runs as the owner role (``DATABASE_OWNER_URL`` from the environment or ``backend/.env``) and upserts regions (KE + 47
-counties), niches (two-level ISIC taxonomy), holidays (2026-2027 as observed) and plans (``config/plans.yaml``).
-Running it twice leaves the same rows. It creates no organisations; the directory seed (Phase 2, G6) will refuse to
-set any organisation above ``unclaimed`` outside ``APP_ENV`` test/staging.
+counties), niches (two-level ISIC taxonomy), holidays (2026-2027 as observed), plans (``config/plans.yaml``) and the
+placeholder legal and NDA templates (``seed/legal_templates.yaml``). Running it twice leaves the same rows. It creates
+no organisations; the directory seed (Phase 2, G6) will refuse to set any organisation above ``unclaimed`` outside
+``APP_ENV`` test/staging.
 """
 
 from __future__ import annotations

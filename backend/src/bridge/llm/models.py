@@ -1,0 +1,49 @@
+"""The LLM call ledger (REQ-LLM-01; docs/spec/08 LLM layer, docs/spec/09).
+
+Every runtime LLM call writes one row: tenant, task, model, tokens (incl. cached), cost, latency, status and trace id.
+Rows belong to a user, an organisation, both, or neither (system jobs). Users read their own rows, members their
+organisation's rows and staff ``admin`` every row; the global daily cap reads the platform total through
+``app_llm_spend_usd``. ``inputs`` holds sanitised inputs only (never Tier-2 content without the purpose's consent,
+AC-SEC-6) and is kept 30 days.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy
+
+
+class LlmCall(IdMixin, CreatedMixin, Base):
+    __tablename__ = "llm_calls"
+    # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
+    # RETURNING for server defaults.
+    __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
+    __table_args__ = (
+        Index("ix_llm_calls_org_id_created_at", "org_id", "created_at"),
+        Index("ix_llm_calls_user_id_created_at", "user_id", "created_at"),
+        Index("ix_llm_calls_created_at", "created_at"),
+        {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "user_id"}},
+    )
+
+    org_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    task: Mapped[str] = mapped_column(String(80))  # a key of ai/models.yaml
+    purpose: Mapped[str | None] = mapped_column(String(40))  # consent purpose when the task needs one
+    model: Mapped[str] = mapped_column(String(80))
+    input_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), server_default="0")
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24))
+    stop_reason: Mapped[str | None] = mapped_column(String(40))
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+    inputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

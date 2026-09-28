@@ -150,3 +150,257 @@ class SubscriptionStatus(StrEnum):
 
 
 LIVE_SUBSCRIPTION_STATUSES = (SubscriptionStatus.TRIALING, SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)
+
+
+# --- Schema v2 (revision 0002; docs/spec/06 6.1-6.4, 6.9, 6.12) ---------------------------------------------------
+
+
+class LegalTemplateKind(StrEnum):
+    """Versioned, hashed legal instruments (docs/spec/06 6.9 "Instruments per stage"). Bodies are placeholders
+    until the advocate's review (G2); no LLM-generated contract text."""
+
+    MASTER_ENTERPRISE_TERMS = "master_enterprise_terms"
+    EVALUATION_NDA = "evaluation_nda"
+    MUTUAL_NDA = "mutual_nda"
+    TOS = "tos"
+    AUP = "aup"
+
+
+class NdaKind(StrEnum):
+    EVALUATION = "evaluation"  # per person, per proposal (Tier 2)
+    MUTUAL = "mutual"  # opens the deal room (Tier 3)
+
+
+class ProblemSource(StrEnum):
+    RESEARCH_AGENT = "research_agent"
+    ORG_BRIEF = "org_brief"
+    DEVELOPER = "developer"
+
+
+class ProblemStatus(StrEnum):
+    CANDIDATE = "candidate"  # research output awaiting staff review; never readable by non-staff
+    PENDING_REVIEW = "pending_review"
+    PUBLISHED = "published"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
+class ModerationState(StrEnum):
+    """Changed only by staff through SECURITY DEFINER functions; the app may only raise a hold."""
+
+    CLEAR = "clear"
+    HELD = "held"
+    REJECTED = "rejected"
+
+
+class BriefVisibility(StrEnum):
+    PUBLIC = "public"
+    INVITED = "invited"
+
+
+class BriefStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    CLOSED = "closed"
+
+
+class ProposalStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    HIDDEN = "hidden"  # "deleted" after registration: evidence kept (AC-IP-6)
+    ARCHIVED = "archived"
+
+
+class ProposalMaturity(StrEnum):
+    IDEA = "idea"
+    PROTOTYPE = "prototype"
+    MVP = "mvp"
+    LIVE = "live"
+
+
+class ProposalAsk(StrEnum):
+    SALE = "sale"
+    LICENCE = "licence"
+    CO_BUILD = "co_build"
+    PILOT = "pilot"
+    HIRE = "hire"
+
+
+class Tier2Policy(StrEnum):
+    """The owner's disclosure policy (docs/spec/06 6.1)."""
+
+    AUTO_TAGGED = "auto_tagged"  # auto-grant to orgs I tagged (default)
+    MANUAL = "manual"
+    NICHE_E2 = "niche_e2"  # any E2 org in my niche
+
+
+class VersionStatus(StrEnum):
+    DRAFT = "draft"  # Tier 0, owner only
+    REGISTERED = "registered"  # immutable (AC-IP-2)
+
+
+class AvStatus(StrEnum):
+    PENDING_UPLOAD = "pending_upload"
+    PENDING_SCAN = "pending_scan"
+    CLEAN = "clean"
+    INFECTED = "infected"
+    FAILED = "failed"
+
+
+class OriginalityBand(StrEnum):
+    """Coarse bands only, never numeric scores (docs/spec/06 6.3)."""
+
+    NONE = "none"
+    SOME_OVERLAP = "some_overlap"
+    HIGH_OVERLAP = "high_overlap"
+
+
+class ProvenanceStatus(StrEnum):
+    """Registration pipeline progress; only moves forward (the trigger refuses going back)."""
+
+    HASHED = "hashed"
+    SIGNED = "signed"
+    TIMESTAMPED = "timestamped"
+
+
+class TagStatus(StrEnum):
+    """docs/spec/06 6.9 Codes: a projection of the engagement (the source of truth from Phase 3)."""
+
+    HELD_UNCLAIMED = "held_unclaimed"
+    HELD_PENDING_VERIFICATION = "held_pending_verification"
+    DELIVERED = "delivered"
+    WITHDRAWN = "withdrawn"
+    EXPIRED = "expired"
+    RELEASED = "released"
+
+
+# Statuses an open tag can have. Whether a tag is open is ``tags.closed_at IS NULL`` (revision 0002): a delivered tag
+# closes when its engagement ends, and the closing statuses below always close it.
+OPEN_TAG_STATUSES = (TagStatus.HELD_UNCLAIMED, TagStatus.HELD_PENDING_VERIFICATION, TagStatus.DELIVERED)
+CLOSING_TAG_STATUSES = (TagStatus.WITHDRAWN, TagStatus.EXPIRED, TagStatus.RELEASED)
+
+
+class EngagementOrigin(StrEnum):
+    TAGGED = "tagged"
+    ORG_AGENT_MATCH = "org_agent_match"
+    ORG_BROWSE = "org_browse"
+
+
+class EngagementState(StrEnum):
+    """Every stage and side-branch state of docs/spec/06 6.9, spelled as the spec's codes."""
+
+    ORG_INTEREST = "ORG_INTEREST"
+    SUBMITTED = "SUBMITTED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    INTEREST_CONFIRMED = "INTEREST_CONFIRMED"
+    PROCUREMENT_ROUTE = "PROCUREMENT_ROUTE"
+    CONTACT_MADE = "CONTACT_MADE"
+    NDA_PENDING = "NDA_PENDING"
+    NDA_SIGNED = "NDA_SIGNED"
+    NEGOTIATION = "NEGOTIATION"
+    AGREEMENT_SIGNING = "AGREEMENT_SIGNING"
+    IN_IMPLEMENTATION = "IN_IMPLEMENTATION"
+    DELIVERED = "DELIVERED"
+    SIGN_OFF = "SIGN_OFF"
+    PAYMENT_FINAL = "PAYMENT_FINAL"
+    CLOSED = "CLOSED"
+    DECLINED = "DECLINED"
+    WITHDRAWN = "WITHDRAWN"
+    EXPIRED = "EXPIRED"
+    ON_HOLD = "ON_HOLD"
+    DISPUTED = "DISPUTED"
+    TERMINATED = "TERMINATED"
+    INFO_REQUESTED = "INFO_REQUESTED"
+
+
+# No Tier-2 access for an org with an engagement in one of these states (docs/spec/06 6.1).
+TIER2_BLOCKING_STATES = (EngagementState.WITHDRAWN, EngagementState.DECLINED, EngagementState.TERMINATED)
+
+
+class EngagementEndReason(StrEnum):
+    """docs/spec/06 6.9 ``end_reason``: DECLINED codes, then EXPIRED codes."""
+
+    NOT_PRIORITY = "NOT_PRIORITY"
+    ALREADY_IN_PROGRESS_INTERNALLY = "ALREADY_IN_PROGRESS_INTERNALLY"
+    BUDGET = "BUDGET"
+    NOT_RELEVANT = "NOT_RELEVANT"
+    NEEDS_MATURITY = "NEEDS_MATURITY"
+    OTHER = "OTHER"
+    BY_DEVELOPER = "BY_DEVELOPER"
+    NO_REVIEW = "NO_REVIEW"
+    NO_DECISION = "NO_DECISION"
+    CONTACT_NOT_MADE = "CONTACT_NOT_MADE"
+    NO_DEV_RESPONSE = "NO_DEV_RESPONSE"
+
+
+class GrantStatus(StrEnum):
+    REQUESTED = "requested"
+    ACTIVE = "active"
+    REVOKED = "revoked"
+    DENIED = "denied"
+
+
+class GrantSource(StrEnum):
+    AUTO_TAGGED = "auto_tagged"
+    MANUAL = "manual"
+    NICHE_E2 = "niche_e2"
+    ORG_INTEREST = "org_interest"
+
+
+class RenderKind(StrEnum):
+    HTML = "html"
+    PDF = "pdf"
+    ATTACHMENT = "attachment"
+
+
+class ViewDuration(StrEnum):
+    """Coarse viewing-time buckets shown to the owner ("Who has seen this")."""
+
+    UNDER_1M = "under_1m"
+    UNDER_5M = "under_5m"
+    UNDER_15M = "under_15m"
+    OVER_15M = "over_15m"
+
+
+class ModerationSource(StrEnum):
+    PRESCREEN = "prescreen"
+    REGEX = "regex"
+    REPORT = "report"
+    CLAIM_DISPUTE = "claim_dispute"
+    TIER2_SIMILARITY = "tier2_similarity"
+
+
+class ModerationCaseStatus(StrEnum):
+    OPEN = "open"
+    HELD = "held"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ESCALATED = "escalated"
+
+
+class ClaimLevel(StrEnum):
+    E1 = "e1"
+    E2 = "e2"
+
+
+class ClaimStatus(StrEnum):
+    OTP_SENT = "otp_sent"
+    DNS_PENDING = "dns_pending"
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"  # set only by app_approve_claim_e1() or app_decide_claim()
+    REJECTED = "rejected"  # set only by app_decide_claim()
+    DISPUTED = "disputed"
+    WITHDRAWN = "withdrawn"
+
+
+class DirectoryInvitationStatus(StrEnum):
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    SENT = "sent"
+    REFUSED = "refused"
+
+
+class KycStatus(StrEnum):
+    SUBMITTED = "submitted"
+    APPROVED = "approved"  # set only by app_decide_kyc()
+    REJECTED = "rejected"

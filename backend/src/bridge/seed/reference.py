@@ -17,9 +17,11 @@ from bridge.billing.models import Plan
 from bridge.config import BACKEND_DIR, Settings
 from bridge.directory.models import Niche, Region
 from bridge.ids import uuid7
+from bridge.legal.models import LegalTemplate, NdaTemplate
+from bridge.seed.legal import load_legal_templates, seed_legal_templates
 
 REFERENCE_FILE = BACKEND_DIR / "seed" / "reference.yaml"
-SEED_TABLES = ("regions", "niches", "holidays", "plans")
+SEED_TABLES = ("regions", "niches", "holidays", "plans", "legal_templates", "nda_templates")
 
 
 def load_reference(path: Path = REFERENCE_FILE) -> dict[str, Any]:
@@ -150,7 +152,14 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
 
 
 async def counts(conn: AsyncConnection) -> dict[str, int]:
-    models = {"regions": Region, "niches": Niche, "holidays": Holiday, "plans": Plan}
+    models = {
+        "regions": Region,
+        "niches": Niche,
+        "holidays": Holiday,
+        "plans": Plan,
+        "legal_templates": LegalTemplate,
+        "nda_templates": NdaTemplate,
+    }
     return {
         name: int((await conn.execute(select(func.count()).select_from(model))).scalar_one())
         for name, model in models.items()
@@ -158,11 +167,15 @@ async def counts(conn: AsyncConnection) -> dict[str, int]:
 
 
 async def seed_all(
-    conn: AsyncConnection, settings: Settings, reference: dict[str, Any] | None = None
+    conn: AsyncConnection,
+    settings: Settings,
+    reference: dict[str, Any] | None = None,
+    legal: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     data = reference or load_reference()
     await seed_regions(conn, data["regions"])
     await seed_niches(conn, data["niches"])
     await seed_holidays(conn, data["holidays"])
     await seed_plans(conn, settings)
+    await seed_legal_templates(conn, legal or load_legal_templates())
     return await counts(conn)
