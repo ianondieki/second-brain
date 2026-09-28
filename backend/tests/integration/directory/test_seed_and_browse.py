@@ -270,6 +270,37 @@ async def test_a_claimed_seed_org_keeps_its_verification_when_the_seed_runs_agai
             await transaction.rollback()
 
 
+async def test_a_delisted_seed_org_is_not_refreshed_when_the_seed_runs_again(
+    owner_engine: AsyncEngine, seeded: Seeded
+) -> None:
+    """Delisting is never undone and a delisted organisation keeps what it had: the upsert skips it, niches too."""
+    data = copy.deepcopy(load_directory())
+    row = next(r for r in data["orgs"] if r["slug"] == "mawingu-networks")
+    row.update(legal_name="Mawingu Networks Renamed Limited", county="KE-30", niches=["higher-education"])
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            await conn.execute(
+                text(
+                    "UPDATE organizations SET delisted_at = now(), legal_name = 'Kept' WHERE slug = 'mawingu-networks'"
+                )
+            )
+            await seed_directory(conn, get_settings(), data)
+            org = (
+                await conn.execute(
+                    text(
+                        "SELECT o.legal_name, o.county_code, o.delisted_at IS NOT NULL AS delisted,"
+                        " array_agg(n.slug ORDER BY n.slug) AS niches FROM organizations o"
+                        " JOIN org_niches x ON x.org_id = o.id JOIN niches n ON n.id = x.niche_id"
+                        " WHERE o.slug = 'mawingu-networks' GROUP BY o.id"
+                    )
+                )
+            ).one()
+            assert tuple(org) == ("Kept", "KE-20", True, ["networks-telecommunications"])
+        finally:
+            await transaction.rollback()
+
+
 def _seed_command(database_url: URL, app_env: str) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,

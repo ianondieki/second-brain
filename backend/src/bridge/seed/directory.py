@@ -16,9 +16,10 @@ Counties are stored as ISO 3166-2:KE codes (``organizations.county_code`` refere
 for Nairobi City), which is what the YAML uses; the First-Schedule number (``regions.county_code``, ``047``) is a
 different scheme and is refused.
 
-Idempotent upsert keyed by ``slug``: running it twice leaves the same rows. A row is refreshed only while it is still
-a seed organisation at E0, so a claimed (E1/E2), self-signed-up or delisted organisation keeps what it has (delisting
-and opt-outs are never undone). Rows removed from the file stay in the database (tags may point at them).
+Idempotent upsert keyed by ``slug``: running it twice leaves the same rows. A row (and its niches) is refreshed only
+while it is still a seed organisation at E0 that is not delisted, so a claimed (E1/E2), self-signed-up or delisted
+organisation keeps what it has (delisting and opt-outs are never undone). Rows removed from the file stay in the
+database (tags may point at them).
 """
 
 from __future__ import annotations
@@ -247,7 +248,8 @@ async def directory_counts(conn: AsyncConnection) -> dict[str, int]:
 
 
 async def _upsert(conn: AsyncConnection, org: SeedOrg) -> Any:
-    """Insert the organisation, or refresh it while it is still a seed organisation at E0; its id, or None."""
+    """Insert the organisation, or refresh it while it is still a listed seed organisation at E0 (not delisted); its
+    id, or None when it was left as it is."""
     stmt = insert(Organization).values(
         id=uuid7(),
         kind=org.kind,
@@ -275,7 +277,9 @@ async def _upsert(conn: AsyncConnection, org: SeedOrg) -> Any:
             "county_code": stmt.excluded.county_code,
             "updated_at": func.now(),
         },
-        where=(Organization.source == OrgSource.SEED) & (Organization.verification == OrgVerification.UNCLAIMED),
+        where=(Organization.source == OrgSource.SEED)
+        & (Organization.verification == OrgVerification.UNCLAIMED)
+        & Organization.delisted_at.is_(None),
     )
     return (await conn.execute(stmt.returning(Organization.id))).scalar_one_or_none()
 
@@ -297,7 +301,7 @@ async def seed_directory(
     for org in rows:
         org_id = await _upsert(conn, org)
         if org_id is None:
-            continue  # claimed (E1/E2) or not a seed organisation: left as it is
+            continue  # claimed (E1/E2), delisted or not a seed organisation: left as it is
         wanted = [niche_ids[slug] for slug in org.niches]
         await conn.execute(delete(OrgNiche).where(OrgNiche.org_id == org_id, OrgNiche.niche_id.not_in(wanted)))
         await conn.execute(
