@@ -185,8 +185,9 @@ async def anchor_chain_heads(
     return report
 
 
-# The first statement of the REPEATABLE READ transaction takes its snapshot: the root covers every audit event
-# committed before this time and none after (recorded in transparency_roots once schema v2 has the column).
+# The first statement of the REPEATABLE READ transaction takes its snapshot as it starts, so the root covers the
+# audit events committed by statement_timestamp() (to within that statement's start) and none committed later.
+# Stored in transparency_roots once schema v2 has the column (follow-up on the REQ-PROV-01 card).
 _SNAPSHOT_TIME = text("SELECT statement_timestamp()")
 _READER_HEADS = text(
     "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events ORDER BY chain_id, seq DESC"
