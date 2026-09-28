@@ -969,9 +969,13 @@ async def test_starting_oauth_is_throttled_per_ip(client: httpx.AsyncClient, oth
     assert (await other.post("/api/auth/oauth/github/start", json={"intent": "login"})).status_code == 200
 
 
-async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient, other: httpx.AsyncClient) -> None:
+async def test_oauth_callbacks_are_throttled_per_ip(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ten callbacks a minute from one address may reach the provider; the next, even with a valid flow, reaches
-    none."""
+    none. The app clock stands still, so a slow machine cannot let the first callbacks age out of the minute."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
     callback = "/api/auth/oauth/github/callback"
     for _ in range(10):
         response = await round_trip(client, person(), intent="login")

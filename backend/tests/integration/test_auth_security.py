@@ -500,6 +500,12 @@ def new_ip() -> str:
 NEW_PASSWORD = {"new_password": "a brand new password"}  # no current password: refused (and counted) without argon2
 
 
+def freeze_the_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The throttle window is read from the app clock: standing still, no attempt ages out on a slow machine."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
+
+
 async def test_re_auth_attempts_are_counted_per_ip_not_platform_wide(
     app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -514,6 +520,7 @@ async def test_re_auth_attempts_are_counted_per_ip_not_platform_wide(
     ):
         for browser in (first, second, elsewhere):
             await verified(browser, email())
+        freeze_the_clock(monkeypatch)
         for _ in range(2):
             assert (await first.post("/api/auth/password", json=NEW_PASSWORD)).status_code == 403
         change = {"current_password": PASSWORD, **NEW_PASSWORD}
@@ -522,7 +529,9 @@ async def test_re_auth_attempts_are_counted_per_ip_not_platform_wide(
         assert (await elsewhere.post("/api/auth/password", json=change)).status_code == 204
 
 
-async def test_re_auth_attempts_from_several_ips_share_the_account_budget(app_engine: AsyncEngine) -> None:
+async def test_re_auth_attempts_from_several_ips_share_the_account_budget(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A stolen session used from several addresses still gets five re-auth attempts a minute in all."""
     name = get_settings().session_cookie_name
     async with make_client(app_engine, ip=new_ip()) as here, make_client(app_engine, ip=new_ip()) as there:
@@ -531,6 +540,7 @@ async def test_re_auth_attempts_from_several_ips_share_the_account_budget(app_en
         assert session
         there.cookies.set(name, session)
         await refresh_csrf(there)
+        freeze_the_clock(monkeypatch)
         for browser in (here, here, here, there, there):
             assert (await browser.post("/api/auth/password", json=NEW_PASSWORD)).status_code == 403
         blocked = await there.post("/api/auth/password", json={"current_password": PASSWORD, **NEW_PASSWORD})
