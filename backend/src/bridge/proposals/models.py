@@ -150,6 +150,7 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     __table_args__ = (
         UniqueConstraint("proposal_id", "version_no"),
         UniqueConstraint("proposal_id", "id"),  # target of the (proposal_id, version_id) foreign keys
+        UniqueConstraint("id", "cert_id"),  # target of provenance_records (version_id, cert_id)
         CheckConstraint(
             "status = 'draft' OR (title IS NOT NULL AND niche_id IS NOT NULL AND maturity IS NOT NULL"
             " AND ask IS NOT NULL AND problem_statement IS NOT NULL AND summary IS NOT NULL"

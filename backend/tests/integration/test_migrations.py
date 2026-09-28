@@ -292,6 +292,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "phone_verifications_guard()": (False, set()),
     "evidence_time_guard()": (False, set()),
     "chain_anchors_guard()": (True, set()),
+    "provenance_records_hash_guard()": (True, set()),
     "transparency_roots_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
@@ -1733,6 +1734,36 @@ async def test_attachments_of_a_registered_version_change_only_their_scan_state(
         await expect_error(conn, "DELETE FROM proposal_attachments WHERE id = :id", "never deleted", by_id)
 
 
+# A registration record of a version, with the version's own cert_id (fk_provenance_records_version_cert).
+RECORD_OF_VERSION = (
+    "INSERT INTO provenance_records (id, version_id, cert_id, content_hash)"
+    " SELECT :id, v.id, v.cert_id, :h FROM proposal_versions v WHERE v.id = :v"
+)
+
+
+async def test_a_record_carries_its_versions_cert_id_and_content_hash(owner_engine: AsyncEngine) -> None:
+    """A registration record is the record of its version, for every role: its cert_id is the version's (a composite
+    foreign key), and its content_hash equals the version's once both are set, whichever is written first (the job
+    inserts the record, then fills the version's hashes)."""
+    h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        _owner, _niche, _proposal, first = await _registered_proposal(conn)
+        _other, _niche2, _proposal2, second = await _registered_proposal(conn)
+        cert = sa.text("SELECT cert_id FROM proposal_versions WHERE id = :v")
+        certs = {v: (await conn.execute(cert, {"v": v})).scalar_one() for v in (first, second)}
+        record = "INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :v, :c, :h)"
+        fill = "UPDATE proposal_versions SET content_hash = :h WHERE id = :v"
+        another_cert = {"id": uuid7(), "v": first, "c": certs[second], "h": h1}
+        await expect_error(conn, record, "fk_provenance_records_version_cert", another_cert)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": first, "c": certs[first], "h": h1})  # the job's order
+        await expect_error(conn, fill, "content hash of its provenance record", {"v": first, "h": h2})
+        await conn.execute(sa.text(fill), {"v": first, "h": h1})
+        await conn.execute(sa.text(fill), {"v": second, "h": h1})  # the version's hash first
+        mismatch = {"id": uuid7(), "v": second, "c": certs[second], "h": h2}
+        await expect_error(conn, record, "content hash of its version", mismatch)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": second, "c": certs[second], "h": h1})
+
+
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
         owner, _niche, _proposal, version = await _registered_proposal(conn)
@@ -1741,10 +1772,7 @@ async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner
         await conn.execute(
             sa.text("INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)"), {"k": key_id, "pk": bytes(32)}
         )
-        await conn.execute(
-            sa.text("INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :v, :c, :h)"),
-            {"id": record, "v": version, "c": uuid4().hex[:16], "h": ZERO_HASH},
-        )
+        await conn.execute(sa.text(RECORD_OF_VERSION), {"id": record, "v": version, "h": ZERO_HASH})
         by_id = {"id": record}
         sign = "UPDATE provenance_records SET signature = '\\x01', key_id = :k, status = 'signed' WHERE id = :id"
         await conn.execute(sa.text(sign), {"id": record, "k": key_id})
@@ -1874,6 +1902,10 @@ V2_TRIGGERS = {
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
+    ("provenance_records", "provenance_records_hash_guard"): (
+        "provenance_records_hash_guard",
+        ROW | BEFORE | ON_INSERT,
+    ),
     ("transparency_roots", "transparency_roots_guard"): ("transparency_roots_guard", ROW | BEFORE | ON_INSERT),
     **{
         (t, f"{t}_evidence_time"): ("evidence_time_guard", ROW | BEFORE | ON_INSERT)

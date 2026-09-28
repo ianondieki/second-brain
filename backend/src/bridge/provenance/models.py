@@ -19,6 +19,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -57,6 +58,12 @@ class ProvenanceRecord(IdMixin, CreatedMixin, Base):
         CheckConstraint("octet_length(content_hash) = 32", name="content_hash_length"),
         CheckConstraint("status = 'hashed' OR (signature IS NOT NULL AND key_id IS NOT NULL)", name="signed_has_key"),
         CheckConstraint("status <> 'timestamped' OR (tsa_token IS NOT NULL AND tsa_time IS NOT NULL)", name="tsa"),
+        # The record's cert_id is its version's; its content_hash equals the version's once both are set (triggers).
+        ForeignKeyConstraint(
+            ["version_id", "cert_id"],
+            ["proposal_versions.id", "proposal_versions.cert_id"],
+            name="fk_provenance_records_version_cert",
+        ),
         {"info": {"tenancy": Tenancy.EVIDENCE, "via": "proposal_versions"}},
     )
 

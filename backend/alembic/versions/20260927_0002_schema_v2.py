@@ -1803,6 +1803,13 @@ BEGIN
             RAISE EXCEPTION 'proposal_versions: a registered version is immutable (AC-IP-2)'
                 USING ERRCODE = 'insufficient_privilege';
         END IF;
+        IF OLD.content_hash IS NULL AND NEW.content_hash IS NOT NULL AND EXISTS (
+            SELECT 1 FROM public.provenance_records r
+             WHERE r.version_id = NEW.id AND r.content_hash <> NEW.content_hash
+        ) THEN
+            RAISE EXCEPTION 'proposal_versions: a version''s content hash must be the content hash of its provenance'
+                ' record' USING ERRCODE = 'check_violation';
+        END IF;
         RETURN NEW;
     END IF;
     IF TG_OP = 'DELETE' THEN
@@ -1955,6 +1962,25 @@ BEGIN
     IF NEW IS DISTINCT FROM v_allowed THEN
         RAISE EXCEPTION 'provenance_records: only empty signature, TSA and evidence columns may be filled, and the'
             ' status only moves forward (AC-IP-2)' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A registration record's content hash is its version's: once the version's content_hash is filled, a record must
+-- carry the same (the other order is checked by proposal_versions_guard; the cert_id by a composite foreign key).
+-- SECURITY DEFINER: reads the version whatever the writer's visibility.
+CREATE FUNCTION provenance_records_hash_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM public.proposal_versions v
+         WHERE v.id = NEW.version_id AND v.content_hash IS NOT NULL AND v.content_hash <> NEW.content_hash
+    ) THEN
+        RAISE EXCEPTION 'provenance_records: a record''s content hash must be the content hash of its version'
+            USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;
@@ -2119,6 +2145,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION evidence_time_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION provenance_records_hash_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION chain_anchors_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION transparency_roots_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
@@ -2159,6 +2186,9 @@ CREATE TRIGGER org_claims_dns_guard
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
+CREATE TRIGGER provenance_records_hash_guard
+    BEFORE INSERT ON provenance_records
+    FOR EACH ROW EXECUTE FUNCTION provenance_records_hash_guard();
 CREATE TRIGGER chain_anchors_guard
     BEFORE INSERT ON chain_anchors
     FOR EACH ROW EXECUTE FUNCTION chain_anchors_guard();
@@ -2230,6 +2260,7 @@ TRIGGER_FUNCTIONS = (
     "org_claims_dns_guard()",
     "phone_verifications_guard()",
     "evidence_time_guard()",
+    "provenance_records_hash_guard()",
     "chain_anchors_guard()",
     "transparency_roots_guard()",
 )
@@ -2895,6 +2926,7 @@ def _create_tables() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_proposal_versions")),
         sa.UniqueConstraint("cert_id", name=op.f("uq_proposal_versions_cert_id")),
+        sa.UniqueConstraint("id", "cert_id", name=op.f("uq_proposal_versions_id_cert_id")),
         sa.UniqueConstraint("proposal_id", "id", name=op.f("uq_proposal_versions_proposal_id_id")),
         sa.UniqueConstraint("proposal_id", "version_no", name=op.f("uq_proposal_versions_proposal_id_version_no")),
     )
@@ -3155,6 +3187,11 @@ def _create_tables() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["version_id"], ["proposal_versions.id"], name=op.f("fk_provenance_records_version_id_proposal_versions")
+        ),
+        sa.ForeignKeyConstraint(
+            ["version_id", "cert_id"],
+            ["proposal_versions.id", "proposal_versions.cert_id"],
+            name="fk_provenance_records_version_cert",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_provenance_records")),
         sa.UniqueConstraint("cert_id", name=op.f("uq_provenance_records_cert_id")),

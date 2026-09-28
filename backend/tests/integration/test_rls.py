@@ -687,7 +687,19 @@ async def test_registration_records_are_public_and_written_only_for_the_bound_ow
     a, b = world.a, world.b
     b_record = uuid7()
     async with rolled_back(owner_engine) as conn:
-        await _sql(conn, RECORD_INSERT, id=b_record, version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        certs = await conn.execute(
+            text("SELECT id, cert_id FROM proposal_versions WHERE id = ANY (:ids)"),
+            {"ids": [a.published_version, b.published_version]},
+        )
+        cert = {row.id: row.cert_id for row in certs.all()}  # a record carries its version's cert_id
+        await _sql(
+            conn,
+            RECORD_INSERT,
+            id=b_record,
+            version=b.published_version,
+            cert=cert[b.published_version],
+            hash=bytes(32),
+        )
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
         await _as_tenant(conn, None, None)
         public = await conn.execute(text("SELECT id FROM provenance_records WHERE id = :id"), {"id": b_record})
@@ -699,7 +711,14 @@ async def test_registration_records_are_public_and_written_only_for_the_bound_ow
                 conn, RECORD_INSERT, id=uuid7(), version=version, cert=uuid7().hex[:16], hash=bytes(32)
             )
         a_record = uuid7()
-        await _sql(conn, RECORD_INSERT, id=a_record, version=a.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        await _sql(
+            conn,
+            RECORD_INSERT,
+            id=a_record,
+            version=a.published_version,
+            cert=cert[a.published_version],
+            hash=bytes(32),
+        )
         seen = await conn.execute(text("SELECT id FROM provenance_records"))
         assert list(seen.scalars()) == [a_record]
         touched = await conn.execute(text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test'"))
