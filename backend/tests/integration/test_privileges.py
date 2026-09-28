@@ -1083,7 +1083,8 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     """Staff approve a claim (E1 or E2) only once the email code and the DNS TXT record are verified; for E2 an active
-    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again."""
+    owner, admin or signatory of an organisation already E1 on the claimed domain needs neither again, and only on
+    that domain: the organisation's own signatory claiming another domain proves nothing."""
     right, _ = otp
     decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
     unproven = "domain is not proven"
@@ -1096,13 +1097,9 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         claimant = await w.add_user(conn, _email("prover"), "Prover")
         outsider = await w.add_user(conn, _email("outsider"), "Outsider")
         owner = await w.add_user(conn, _email("e1-owner"), "Owner")
-        await run(
-            conn,
-            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, '{owner,admin}')",
-            id=uuid7(),
-            org=e1,
-            u=owner,
-        )
+        await _add_membership(conn, e1, owner, "{owner,admin}")
+        signatory = await w.add_user(conn, _email("e1-signatory"), "Signatory")
+        await _add_membership(conn, e1, signatory, "{signatory}")
         met = await add_legal_template(conn, "master_enterprise_terms")
         # An E2 claim on an unclaimed organisation: refused until both the code and the DNS record are verified.
         await act(conn, claimant)
@@ -1124,6 +1121,13 @@ async def test_staff_approval_needs_the_claimed_domain_proven(
         await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=capped)
         await act(conn, admin)
         await expect(conn, decide, unproven, id=capped)
+        # The E1 shortcut holds only on the organisation's verified domain: its signatory, terms accepted, claiming E2
+        # on another domain is refused (without the domain equality in app_decide_claim it would be approved).
+        await act(conn, signatory)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=e1, u=signatory, t=met)
+        elsewhere = await _claim(conn, e1, signatory, "elsewhere.example.test", "e2", right)
+        await act(conn, admin)
+        await expect(conn, decide, unproven, id=elsewhere)
         # E2 for an organisation already E1 on the claimed domain: its owner needs no new proof, an outsider does.
         for user in (outsider, owner):
             await act(conn, user)
