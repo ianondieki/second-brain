@@ -256,6 +256,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
     "app_reasons_are_valid(text[], integer)": (False, {"bridge_app"}),
     "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
+    "app_current_nda_template(nda_kind)": (False, {"bridge_app"}),
     "app_owns_version(uuid)": (True, {"provenance_worker"}),
     "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
     "app_tier2_granted(uuid, uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),

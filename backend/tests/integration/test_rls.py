@@ -291,6 +291,7 @@ TIER2_CASES = (
     "met_superseded",
     "no_nda",
     "nda_for_another_proposal",
+    "nda_superseded",
     "engagement_withdrawn",
     "engagement_declined",
     "engagement_terminated",
@@ -329,6 +330,28 @@ async def _add_member(conn: AsyncConnection, org: UUID, user: UUID, roles: str, 
         roles=roles,
         status=status,
     )
+
+
+async def _add_evaluation_nda(conn: AsyncConnection, tag: str) -> UUID:
+    """A new, so current, version of the Evaluation NDA (its legal body and its nda_templates row)."""
+    legal, template = uuid7(), uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, 'evaluation_nda', :version, :body,"
+        " sha256(convert_to(:body, 'UTF8')))",
+        id=legal,
+        version=f"n-{tag}-{legal.hex[-6:]}",
+        body=f"[[LEGAL-PLACEHOLDER:nda-{legal.hex}]]\n",
+    )
+    await _sql(
+        conn,
+        "INSERT INTO nda_templates (id, kind, version, legal_template_id, sha256)"
+        " SELECT :id, 'evaluation', :version, id, sha256 FROM legal_templates WHERE id = :legal",
+        id=template,
+        version=f"n-{tag}-{template.hex[-6:]}",
+        legal=legal,
+    )
+    return template
 
 
 async def _add_master_terms(conn: AsyncConnection, tag: str) -> UUID:
@@ -449,6 +472,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             org=org,
             user=reviewer,
         )
+    nda = await _add_evaluation_nda(conn, tag)  # the current Evaluation NDA
     if broken != "no_nda":
         await _sql(
             conn,
@@ -459,8 +483,10 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
             org=org,
             proposal=b.held if broken == "nda_for_another_proposal" else b.published,
-            template=world.nda_template_id,
+            template=nda,
         )
+    if broken == "nda_superseded":  # a new NDA version needs a new acceptance
+        await _add_evaluation_nda(conn, tag)
     grants = [] if broken == "no_grant" else [b.published]
     if broken == "none":  # nor does a live grant open a draft proposal: its row stays hidden
         grants.append(b.draft)
@@ -473,7 +499,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
             org=org,
             proposal=b.draft,
-            template=world.nda_template_id,
+            template=nda,
         )
     for proposal in grants:
         await _sql(

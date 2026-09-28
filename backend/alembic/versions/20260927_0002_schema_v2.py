@@ -844,6 +844,16 @@ AS $$
     SELECT t.id FROM public.legal_templates t WHERE t.kind = p_kind ORDER BY t.created_at DESC, t.id DESC LIMIT 1
 $$;
 
+-- The current version of an NDA kind: the most recently created nda_templates row of that kind (as for the legal
+-- templates). Publishing a new version supersedes the old: acceptances of a superseded version no longer count
+-- (app_tier2_granted), so a new Evaluation NDA version needs a new acceptance.
+CREATE FUNCTION app_current_nda_template(p_kind nda_kind) RETURNS uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT t.id FROM public.nda_templates t WHERE t.kind = p_kind ORDER BY t.created_at DESC, t.id DESC LIMIT 1
+$$;
+
 -- The database half of can_view_tier2 (docs/spec/06 6.1), used by the tier2_reader SELECT policy: the current user may
 -- read Tier 2 of p_version through an organisation when all of these hold. The application predicate checks the rest
 -- (FEATURE_TIER2_ENABLED, step-up recency) and is the one that answers 403 with the failing condition. The viewer's
@@ -896,9 +906,8 @@ AS $$
            AND EXISTS (
                 SELECT 1
                   FROM public.nda_acceptances na
-                  JOIN public.nda_templates nt ON nt.id = na.nda_template_id
                  WHERE na.user_id = m.user_id AND na.org_id = g.org_id AND na.proposal_id = g.proposal_id
-                   AND nt.kind = 'evaluation')
+                   AND na.nda_template_id = public.app_current_nda_template('evaluation'))
            AND NOT EXISTS (
                 SELECT 1
                   FROM public.engagements e
@@ -2225,6 +2234,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_reasons_are_valid(text[], integer)": ("bridge_app",),  # ck_moderation_cases_reasons_valid
     "app_is_staff(staff_role[])": ("bridge_app", "tier2_moderation"),
     "app_current_legal_template(legal_template_kind)": ("bridge_app",),
+    "app_current_nda_template(nda_kind)": ("bridge_app",),
     "app_owns_version(uuid)": ("provenance_worker",),
     "app_subject_digest(uuid, bytea)": ("bridge_app", "provenance_worker"),
     "app_tier2_granted(uuid, uuid, uuid)": ("bridge_app", "tier2_reader"),
