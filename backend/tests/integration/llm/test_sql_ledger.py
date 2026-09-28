@@ -163,6 +163,41 @@ async def test_organisation_a_reads_none_of_organisation_bs_rows(
     assert await stored(owner_engine, refused) == []
 
 
+async def test_a_call_for_an_organisation_the_bound_user_is_no_active_member_of_is_refused_before_sending(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """A request bound to its user only (no organisation) may call for an organisation that user is an active member
+    of, whatever the role; any other organisation is refused unsent and unrecorded (RLS would refuse the row after the
+    paid call, and would sum none of that organisation's spend)."""
+    refused, allowed, adapter = f"member-x-{people.tag}", f"member-ok-{people.tag}", FakeAdapter([reply()])
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        ctx = CallContext(org_id=people.org_b, user_id=people.a, trace_id=refused)
+        with pytest.raises(LLMConfigError, match="no active member"):
+            await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=ctx)
+    assert adapter.requests == []
+
+    viewer = CallContext(org_id=people.org_a, user_id=people.viewer, trace_id=allowed)
+    async with factory() as db:  # positive control: a viewer is an active member of org_a
+        await bind_tenant(db, user_id=people.viewer)
+        await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=viewer)
+    [row] = await stored(owner_engine, allowed)
+    assert (row["org_id"], row["user_id"], row["status"]) == (people.org_a, people.viewer, "ok")
+    assert len(adapter.requests) == 1
+
+    async with owner_engine.begin() as conn:  # the viewer leaves org_a: a removed member is no active member
+        await conn.execute(
+            text("UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u"),
+            {"o": people.org_a, "u": people.viewer},
+        )
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.viewer)
+        with pytest.raises(LLMConfigError, match="no active member"):
+            await service(db, factory, adapter).complete(TASK, screen(), Verdict, ctx=replace(viewer, trace_id=refused))
+    assert len(adapter.requests) == 1
+    assert await stored(owner_engine, refused) == []
+
+
 async def test_inputs_are_unreadable_by_bridge_app_and_read_by_staff_admin_only(
     factory: Factory, owner_engine: AsyncEngine, people: People
 ) -> None:
