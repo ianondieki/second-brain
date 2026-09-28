@@ -7,8 +7,9 @@ documented fields, so a ``logo`` or ``email`` field fails the whole file before 
 
 Two rules are enforced here, in code:
 
-- The seed loads only when ``APP_ENV`` is ``dev`` or ``test`` (``ensure_loadable``); staging keeps its fixture
-  organisations and gate G6 approves the production list.
+- The seed loads only when ``APP_ENV`` is set explicitly (environment or ``backend/.env``, not the settings default)
+  to ``dev`` or ``test`` (``ensure_loadable``); staging keeps its fixture organisations and gate G6 approves the
+  production list.
 - Every row is E0 (``unclaimed``). A row may name a higher ``verification`` (fixture organisations) only when
   ``APP_ENV`` is ``test`` or ``staging``; anywhere else the loader refuses.
 
@@ -102,16 +103,32 @@ def load_directory(path: Path = DIRECTORY_FILE) -> dict[str, Any]:
     return data
 
 
-def directory_loadable(app_env: str) -> bool:
-    return app_env in LOADABLE_ENVS
+def directory_refusal(settings: Settings) -> str | None:
+    """Why the provisional directory does not load under ``settings``, or None when it does.
 
-
-def ensure_loadable(app_env: str) -> None:
-    if not directory_loadable(app_env):
-        raise DirectorySeedRefused(
-            f"The provisional directory seed does not load with APP_ENV={app_env}: it loads only in dev or test. "
-            "Staging keeps its fixture organisations and the production list waits for gate G6."
+    ``APP_ENV`` must have been provided (environment or ``backend/.env``): the settings default is ``dev``, so a
+    deployment that forgot to set it would otherwise load the directory."""
+    if "app_env" not in settings.model_fields_set:
+        return (
+            "APP_ENV is not set; the provisional directory seed loads only when APP_ENV is set explicitly to dev or "
+            "test (environment or backend/.env), never on the settings default"
         )
+    if settings.app_env not in LOADABLE_ENVS:
+        return (
+            f"APP_ENV={settings.app_env}; the provisional directory seed loads only in dev or test (staging keeps its "
+            "fixture organisations and gate G6 approves the production list)"
+        )
+    return None
+
+
+def directory_loadable(settings: Settings) -> bool:
+    return directory_refusal(settings) is None
+
+
+def ensure_loadable(settings: Settings) -> None:
+    reason = directory_refusal(settings)
+    if reason is not None:
+        raise DirectorySeedRefused(reason)
 
 
 def _https_url(value: Any) -> bool:
@@ -288,7 +305,7 @@ async def seed_directory(
     conn: AsyncConnection, settings: Settings, data: dict[str, Any] | None = None
 ) -> dict[str, int]:
     """Load the provisional directory (after the reference seed: niches and regions must exist); return its counts."""
-    ensure_loadable(settings.app_env)
+    ensure_loadable(settings)
     niche_ids: dict[str, Any] = dict((await conn.execute(select(Niche.slug, Niche.id))).tuples().all())
     counties = set((await conn.execute(select(Region.code).where(Region.kind == RegionKind.COUNTY))).scalars())
     rows = parse_rows(

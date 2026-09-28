@@ -1,8 +1,9 @@
 """AC-DIR-3 (backend half) and the REQ-DIR-02 seed policy: ``backend/seed/ke_provisional.yaml`` holds public
 organisational data only (no logos, no contacts), every row is E0 with an https source URL and a real retrieval date,
 niches and counties are known reference codes (ISO 3166-2:KE, as ``organizations.county_code`` stores them), and the
-loader refuses to run outside ``APP_ENV`` dev/test or to set any verification above ``unclaimed`` outside
-test/staging. The directory card has no logo or contact field and the badge copy is exact."""
+loader refuses to run unless ``APP_ENV`` is set explicitly to dev or test (never on the settings default) or to set any
+verification above ``unclaimed`` outside test/staging. The directory card has no logo or contact field and the badge
+copy is exact."""
 
 from __future__ import annotations
 
@@ -10,24 +11,30 @@ import copy
 import re
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
+from pydantic import SecretStr
 
+from bridge.config import Settings, get_settings
 from bridge.directory.schemas import OrgCard
 from bridge.directory.service import badge_for
 from bridge.models.enums import OrgKind, OrgVerification
+from bridge.seed import __main__ as seed_command
 from bridge.seed.directory import (
     REQUIRED_FIELDS,
     DirectorySeedInvalid,
     DirectorySeedRefused,
     SeedOrg,
+    directory_loadable,
+    directory_refusal,
     ensure_loadable,
     load_directory,
     parse_rows,
 )
-from bridge.seed.reference import load_reference
+from bridge.seed.reference import SEED_TABLES, load_reference
 
 E0_BADGE = "Listed from public information · not on the platform · not affiliated"
 E1_BADGE = "Domain verified (pending legal verification)"
@@ -221,15 +228,62 @@ def test_the_loader_rejects_missing_fields_and_duplicate_slugs(
         parse({"version": 1}, niche_slugs, counties)
 
 
+def settings_with(app_env: str) -> Settings:
+    """The test settings with APP_ENV set explicitly to ``app_env`` (model_copy skips production's own checks)."""
+    return get_settings().model_copy(update={"app_env": app_env})
+
+
+def settings_without_app_env(monkeypatch: pytest.MonkeyPatch, env_file: Path | None = None) -> Settings:
+    monkeypatch.delenv("APP_ENV", raising=False)
+    return Settings(_env_file=env_file)
+
+
 @pytest.mark.parametrize("app_env", ["dev", "test"])
 def test_the_loader_runs_in_dev_and_test(app_env: str) -> None:
-    ensure_loadable(app_env)
+    ensure_loadable(settings_with(app_env))
+    assert directory_loadable(settings_with(app_env))
+    assert directory_refusal(settings_with(app_env)) is None
 
 
 @pytest.mark.parametrize("app_env", ["staging", "production"])
 def test_the_loader_refuses_every_other_environment(app_env: str) -> None:
     with pytest.raises(DirectorySeedRefused, match=f"APP_ENV={app_env}.*dev or test.*G6"):
-        ensure_loadable(app_env)
+        ensure_loadable(settings_with(app_env))
+    assert not directory_loadable(settings_with(app_env))
+
+
+def test_the_loader_refuses_the_settings_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """APP_ENV defaults to dev in the settings; the directory loads only when APP_ENV was actually provided."""
+    settings = settings_without_app_env(monkeypatch)
+    assert settings.app_env == "dev"
+    with pytest.raises(DirectorySeedRefused, match=r"APP_ENV is not set.*explicitly"):
+        ensure_loadable(settings)
+    assert not directory_loadable(settings)
+
+
+def test_app_env_from_the_env_file_counts_as_set(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("APP_ENV=dev\n", encoding="utf-8")
+    ensure_loadable(settings_without_app_env(monkeypatch, env_file))
+
+
+def test_the_seed_command_says_why_it_skipped_the_directory(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = settings_without_app_env(monkeypatch).model_copy(
+        update={"database_owner_url": SecretStr("postgresql+psycopg://owner@localhost/bridge")}
+    )
+
+    async def seeded_reference_only(url: str, given: Settings) -> tuple[dict[str, int], None]:
+        assert given is settings
+        return dict.fromkeys(SEED_TABLES, 1), None
+
+    monkeypatch.setattr(seed_command, "get_settings", lambda: settings)
+    monkeypatch.setattr(seed_command, "run", seeded_reference_only)
+    assert seed_command.main() == 0
+    out = capsys.readouterr().out
+    assert "seed: provisional directory skipped (APP_ENV is not set" in out
+    assert "(provisional directory) =" not in out
 
 
 @pytest.mark.parametrize("level", ["e1", "e2"])

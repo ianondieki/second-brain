@@ -29,7 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from bridge.config import get_settings
+from bridge.config import Settings, get_settings
 from bridge.directory.responsiveness import FixtureResponsiveness, ResponsivenessStats
 from bridge.ids import uuid7
 from bridge.seed.directory import DirectorySeedRefused, load_directory, seed_directory
@@ -218,6 +218,19 @@ async def test_the_directory_seed_refuses_staging_and_production(
         with pytest.raises(DirectorySeedRefused, match=f"APP_ENV={app_env}"):
             await seed_directory(conn, settings)
         await conn.rollback()
+
+
+async def test_the_directory_seed_refuses_the_settings_default(
+    owner_engine: AsyncEngine, seeded: Seeded, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """APP_ENV defaults to dev; without an explicit APP_ENV the loader refuses before it writes anything."""
+    monkeypatch.delenv("APP_ENV", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.app_env == "dev"
+    async with owner_engine.connect() as conn:
+        with pytest.raises(DirectorySeedRefused, match="APP_ENV is not set"):
+            await seed_directory(conn, settings)
+        assert not conn.in_transaction()  # refused before the first statement
 
 
 async def test_a_verified_row_is_refused_in_dev_and_loaded_in_test(owner_engine: AsyncEngine, seeded: Seeded) -> None:
