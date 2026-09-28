@@ -20,7 +20,7 @@ follows in the frontend batch. Deviations:
 
 - `/verify` shows the hash, the timestamp, the TSA serial and the status, plus the Ed25519 signature, its key id and a
   `.tsr` download (`GET /api/verify/{cert_id}/timestamp.tsr`): none is personal data, and offline verification needs
-  them. The owner opt-in to show name and title is **not built**: it needs a schema column (e.g.
+  them (approved by the human in T2.4 review round 1). The owner opt-in to show name and title is **not built**: it needs a schema column (e.g.
   `proposals.verify_shows_owner boolean` or per version) from db-migrations; until then `/verify` never shows them.
 - Upload matching (`POST /api/verify`) takes the raw file as the request body (no multipart dependency), up to 10 MB,
   optionally against one `cert_id`. Lookups (30/min) and uploads (10/min) are limited per client IP on the

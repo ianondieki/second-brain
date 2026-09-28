@@ -33,5 +33,9 @@ Hourly `provenance.anchor_chain_heads` job: an RFC 3161 token over each audit ch
   that just ended. A broken chain publishes nothing and fails the job. It needs `AUDIT_READER_DATABASE_URL` (an
   `audit_reader` login; the dev compose stack has none, so there the job fails closed with a clear message).
 - `GET /api/transparency` lists the signed roots (public, newest first).
+- Review round 1 (T2.4): capped anchor runs take heads oldest first, then by chain id, and stop at the first failed
+  timestamp; `audit.verify_chain` retries transient failures (`VERIFY_RETRY`) but never a broken chain; roots are
+  signed only by a published, unretired key. Schema follow-ups (head `occurred_at`, `transparency_roots.snapshot_at`)
+  are listed on the REQ-PROV-01 card.
 - Tests run on their own database (`tests/integration/provenance/test_transparency.py`): the shared one holds chains
   other tests break on purpose.
