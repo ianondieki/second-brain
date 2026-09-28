@@ -2115,12 +2115,14 @@ $$;
 
 -- One claim per claimant and organisation per 24 hours, whatever became of the earlier one: withdrawing and claiming
 -- again cannot reset the OTP attempt and reissue limits. (One open claim per claimant and organisation is also a
--- partial unique index.) SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
+-- partial unique index.) The database times the claim (created_at := now(), whatever is sent), so a backdated claim
+-- cannot escape the cooldown. SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
 CREATE FUNCTION org_claims_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
+    NEW.created_at := now();
     IF EXISTS (
         SELECT 1 FROM public.org_claims c
          WHERE c.org_id = NEW.org_id AND c.claimant_user_id = NEW.claimant_user_id

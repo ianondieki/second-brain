@@ -953,6 +953,27 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
         await run(conn, new_claim, id=again, org=other_org, u=claimant)
 
 
+async def test_a_claim_is_timed_by_the_database_so_the_cooldown_holds(owner_engine: AsyncEngine) -> None:
+    """The 24-hour cooldown between claims reads created_at, so the database sets it: a claim sent with a backdated
+    created_at is stamped now(), and withdrawing it and claiming again is still refused."""
+    new_claim = (
+        "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, created_at)"
+        " VALUES (:id, :org, :u, 'cool.example.test', 'info@cool.example.test', 'e1', 'otp_sent',"
+        " now() - interval '2 days')"
+    )
+    async with as_app(owner_engine) as conn:
+        org = await add_org(conn)
+        claimant = await w.add_user(conn, _email("cooldown"), "Claimant")
+        await act(conn, claimant)
+        claim = uuid7()
+        await run(conn, new_claim, id=claim, org=org, u=claimant)
+        assert await run(conn, "SELECT created_at = now() FROM org_claims WHERE id = :id", id=claim) is True
+        await run(conn, "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id", id=claim)
+        await expect(
+            conn, new_claim, "one claim per claimant and organisation per 24 hours", id=uuid7(), org=org, u=claimant
+        )
+
+
 async def test_dns_verification_is_marked_only_through_the_function_and_the_token_is_write_once(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
