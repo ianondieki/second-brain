@@ -18,6 +18,6 @@ def conninfo() -> str:
 
 
 # Task modules (loaded by the worker; the API defers through bridge.jobs.outbox and never imports them).
-IMPORT_PATHS = ["bridge.jobs.provenance", "bridge.jobs.audit"]
+IMPORT_PATHS = ["bridge.jobs.provenance", "bridge.jobs.audit", "bridge.jobs.notifications"]
 
 app = App(connector=PsycopgConnector(conninfo=conninfo()), import_paths=IMPORT_PATHS)
