@@ -2,7 +2,8 @@
   "_meta": {
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
-    "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili"
+    "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.* [[SW-REVIEW]] draft Swahili"
   },
   "app": {
     "name": "Bridge",
@@ -241,7 +242,8 @@
     "developer": "Msanidi programu",
     "home": "Nyumbani",
     "companies": "Makampuni",
-    "ideas": "Mawazo yangu"
+    "ideas": "Mawazo yangu",
+    "engagements": "Ushirikiano"
   },
   "companies": {
     "pageTitle": "Makampuni",
@@ -554,5 +556,413 @@
     "detailsLinks": "Viungo: {count}",
     "backToIdea": "Rudi kwenye wazo",
     "noProblemsYet": "Bado hakuna matatizo yaliyoorodheshwa."
+  },
+  "devHome": {
+    "lead": "Kinachokusubiri sasa, kisha mengine yote.",
+    "newProposal": "Pendekezo jipya",
+    "needsYou": "Kinakusubiri",
+    "others": "Ushirikiano wako mwingine",
+    "allEngagements": "Ushirikiano wote",
+    "ideasTitle": "Mawazo yangu",
+    "allIdeas": "Mawazo yangu yote",
+    "empty": "Ushirikiano wako utaonekana hapa ukishawasilisha wazo lako kwa kampuni.",
+    "emptyAction": "Nenda kwa Mawazo yangu",
+    "security": "Kuingia kwa hatua mbili"
+  },
+  "tracker": {
+    "pageTitle": "Ushirikiano",
+    "title": "Ushirikiano",
+    "devLead": "Kila kampuni uliyowasilishia wazo, na hali ilivyo kwa kila moja.",
+    "orgLead": "Mapendekezo ambayo shirika lako linashughulikia, na zamu ni ya nani.",
+    "listLabel": "Ushirikiano",
+    "needsYou": "Kinakusubiri",
+    "needsUs": "Kinatusubiri",
+    "others": "Mengine yote",
+    "emptyDev": "Wasilisha mojawapo ya mawazo yako kwa kampuni ili kuanza ushirikiano.",
+    "emptyDevAction": "Nenda kwa Mawazo yangu",
+    "emptyOrg": "Bado hakuna ushirikiano: huanza msanidi programu anapowasilisha wazo kwa shirika lako.",
+    "emptyOrgAction": "Nenda kwenye ukurasa wa shirika lako",
+    "yourTurn": "Zamu yako",
+    "ourTurn": "Zamu yetu",
+    "withOrg": "Na {org}",
+    "fromDeveloper": "Kutoka kwa {name}",
+    "back": "Ushirikiano wote",
+    "stepperLabel": "Hatua",
+    "group": {
+      "review": "Tathmini",
+      "contact_nda": "Mawasiliano na NDA",
+      "agreement": "Makubaliano",
+      "implementation": "Utekelezaji",
+      "close": "Kufunga"
+    },
+    "chip": {
+      "completed": "Imekamilika",
+      "current": "Inaendelea",
+      "pending": "Inasubiri",
+      "onHold": "Imesimamishwa",
+      "overdue": "Imechelewa",
+      "ended": "Imeisha"
+    },
+    "at": "{date}, {time} EAT",
+    "due": {
+      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho {date}",
+      "today": "Mwisho leo, {date}",
+      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho ulikuwa {date}",
+      "overdueToday": "Imechelewa, mwisho ulikuwa {date}"
+    },
+    "turn": {
+      "you": "Inasubiri: wewe",
+      "other": "Inasubiri: {name}",
+      "both": "Inasubiri: wewe na {name}",
+      "none": "Hakuna kinachosubiri upande wowote kwa sasa.",
+      "ended": "Ushirikiano huu umeisha.",
+      "closed": "Ushirikiano huu umefungwa."
+    },
+    "endedBecause": "Sababu: {reason}",
+    "nextYou": "Hatua yako inayofuata: {step}",
+    "nextThem": "Hatua inayofuata ya {name}: {step}",
+    "endReason": {
+      "NOT_PRIORITY": "Si kipaumbele kwa sasa",
+      "ALREADY_IN_PROGRESS_INTERNALLY": "Tayari inafanyika ndani",
+      "BUDGET": "Bajeti",
+      "NOT_RELEVANT": "Haihusiani na shirika",
+      "NEEDS_MATURITY": "Inahitaji kukomaa kwanza",
+      "OTHER": "Nyingine",
+      "BY_DEVELOPER": "Imekataliwa na msanidi programu",
+      "NO_REVIEW": "Hakuna tathmini kwa wakati",
+      "NO_DECISION": "Hakuna uamuzi kwa wakati",
+      "CONTACT_NOT_MADE": "Mawasiliano ya kwanza hayakufanyika kwa wakati",
+      "NO_DEV_RESPONSE": "Msanidi programu hakujibu kwa wakati"
+    },
+    "endorsements": {
+      "title": "Uidhinishaji wa hatua hii",
+      "by": {
+        "developer": "Uidhinishaji wa Msanidi programu",
+        "org": "Uidhinishaji wa Shirika"
+      },
+      "endorsed": "Imeidhinishwa",
+      "notYet": "Bado haijaidhinishwa",
+      "name": "Jina",
+      "role": "Wadhifa",
+      "time": "Wakati",
+      "method": "Njia",
+      "platform": "Jukwaa"
+    },
+    "role": {
+      "developer": "Msanidi programu",
+      "owner": "Mmiliki",
+      "admin": "Msimamizi",
+      "reviewer": "Mtathmini",
+      "signatory": "Mtia saini",
+      "finance": "Fedha",
+      "system": "Jukwaa"
+    },
+    "method": {
+      "click": "Ndani ya programu",
+      "totp": "Nambari ya programu ya uthibitishaji",
+      "passkey": "Passkey",
+      "auto": "Kiotomatiki"
+    },
+    "party": {
+      "developer": "msanidi programu",
+      "org": "shirika"
+    },
+    "kes": "KES {amount}",
+    "agreement": {
+      "title": "Makubaliano",
+      "earlier": "Matoleo ya awali: {count, plural, one {#} other {#}}",
+      "version": "Toleo {version}",
+      "status": {
+        "draft": "Rasimu",
+        "final": "La mwisho",
+        "signed": "Limesainiwa"
+      },
+      "draftedBy": {
+        "developer": "Limeandaliwa na msanidi programu, {when}",
+        "org": "Limeandaliwa na shirika, {when}"
+      },
+      "ipTerms": "Haki miliki",
+      "deemed": "Kukubaliwa kwa kudhaniwa",
+      "deemedDays": "Baada ya siku {count, plural, one {#} other {#}} bila jibu",
+      "notGiven": "Haijatolewa",
+      "exclusivity": "Upekee",
+      "noExclusivity": "Hakuna",
+      "deemedNever": "Kamwe: kila hatua inahitaji kukubaliwa"
+    },
+    "ipTerms": {
+      "assignment": "Uhamisho",
+      "exclusive_licence": "Leseni ya kipekee",
+      "non_exclusive_licence": "Leseni isiyo ya kipekee",
+      "development_contract": "Mkataba wa uundaji",
+      "revenue_share": "Mgao wa mapato"
+    },
+    "milestone": {
+      "title": "Hatua za kazi",
+      "name": "Hatua {number}: {deliverable}",
+      "state": {
+        "PLANNED": "Imepangwa",
+        "IN_PROGRESS": "Inaendelea",
+        "SUBMITTED_FOR_REVIEW": "Imewasilishwa kwa tathmini",
+        "ACCEPTED": "Imekubaliwa",
+        "CHANGES_REQUESTED": "Mabadiliko yameombwa"
+      },
+      "due": "Mwisho {date}",
+      "window": "Siku {count, plural, one {# ya kazi ya} other {# za kazi za}} kutathmini",
+      "reviewDue": "Tathmini kabla ya {date}",
+      "endorsed": "{party}: {name}, {method}, {when}"
+    },
+    "signature": {
+      "title": "Saini",
+      "by": "Imesainiwa na {name} kwa niaba ya {party}, kwa {method}"
+    },
+    "fingerprint": "Alama {hash}",
+    "document": {
+      "mutual_nda": "NDA ya pande zote",
+      "agreement": "Makubaliano",
+      "acceptance_certificate": "Cheti cha kukubali",
+      "milestone_confirmation": "Uthibitisho wa hatua"
+    },
+    "payment": {
+      "title": "Malipo",
+      "lead": "Shirika hurekodi kiasi lilicholipa na msanidi programu huthibitisha kilichofika. Jukwaa halishiki wala kuhamisha pesa.",
+      "confirmed": "Imethibitishwa",
+      "recorded": "Imerekodiwa",
+      "method": "Njia",
+      "reference": "Kumbukumbu",
+      "paidOn": "Tarehe ya malipo",
+      "recordedAt": "Imerekodiwa",
+      "confirmedAt": "Imethibitishwa na msanidi programu",
+      "notConfirmed": "Bado haijathibitishwa"
+    },
+    "paymentMethod": {
+      "mpesa": "M-Pesa",
+      "bank": "Uhamisho wa benki",
+      "other": "Nyingine"
+    },
+    "contact": {
+      "title": "Mtu wa mawasiliano",
+      "person": "Mtu",
+      "channel": "Njia",
+      "by": "Wasiliana kabla ya"
+    },
+    "channel": {
+      "email": "Barua pepe",
+      "phone": "Simu",
+      "whatsapp": "WhatsApp",
+      "video_call": "Simu ya video",
+      "in_person": "Ana kwa ana"
+    },
+    "history": {
+      "title": "Historia",
+      "chainOk": "Kila tukio hapa chini liko katika mpangilio wake wa asili na halijabadilishwa.",
+      "chainBroken": "Historia haikuweza kukaguliwa: huenda baadhi ya matukio yamebadilishwa.",
+      "actor": "{name}, {role}"
+    },
+    "event": {
+      "create": "Ushirikiano umefunguliwa",
+      "accept_interest": "Nia imekubaliwa",
+      "decline_interest": "Nia imekataliwa",
+      "start_review": "Tathmini imeanza",
+      "decline": "Imekataliwa",
+      "approve": "Imeidhinishwa kuendelea",
+      "withdraw": "Imeondolewa",
+      "mark_contacted": "Mawasiliano ya kwanza yamewekwa",
+      "confirm_contact": "Mawasiliano ya kwanza yamethibitishwa",
+      "send_nda": "NDA ya pande zote imetumwa",
+      "sign_nda": "NDA ya pande zote imesainiwa",
+      "propose_terms": "Masharti yamependekezwa",
+      "mark_final": "Masharti yamewekwa kuwa ya mwisho",
+      "reopen_negotiation": "Masharti yamefunguliwa tena",
+      "sign_agreement": "Makubaliano yamesainiwa",
+      "start_milestone": "Hatua imeanza",
+      "submit_milestone": "Hatua imewasilishwa kwa tathmini",
+      "accept_milestone": "Hatua imekubaliwa",
+      "request_changes": "Mabadiliko yameombwa kwenye hatua",
+      "deliver": "Uwasilishaji wa mwisho umefanywa",
+      "accept_delivery": "Uwasilishaji umekubaliwa",
+      "sign_certificate": "Cheti cha kukubali kimesainiwa",
+      "record_payment": "Malipo ya mwisho yamerekodiwa",
+      "confirm_payment": "Malipo yamethibitishwa",
+      "other": "Hatua imerekodiwa"
+    },
+    "tabs": {
+      "label": "Sehemu za ushirikiano",
+      "tracker": "Ufuatiliaji",
+      "documents": "Nyaraka",
+      "history": "Historia"
+    },
+    "documents": {
+      "title": "Nyaraka",
+      "lead": "Maandishi kamili ambayo kila upande husaini, pamoja na alama ambayo saini zinarejelea.",
+      "empty": "Bado hakuna nyaraka: NDA ya pande zote itaonekana hapa upande mmoja ukiituma.",
+      "emptyAction": "Rudi kwenye ufuatiliaji",
+      "intact": "Inalingana na alama iliyorekodiwa",
+      "changed": "Hailingani na alama iliyorekodiwa",
+      "missing": "Hati hii bado haipatikani."
+    },
+    "stageNow": "Sasa: {stage}",
+    "nothingYet": "Makubaliano, saini na malipo yataonekana hapa ushirikiano unavyoendelea.",
+    "refused": {
+      "notFound": "Ushirikiano huu haupo, au wewe si mmoja wa pande zake.",
+      "mfaSetup": "Washa kuingia kwa hatua mbili ili kuona ushirikiano wa shirika lako.",
+      "bothParties": "Wewe ni mwanachama wa shirika hili, kwa hivyo huwezi kuchukua hatua kwenye ushirikiano huu."
+    },
+    "turnOnMfa": "Washa kuingia kwa hatua mbili",
+    "noOrg": "Akaunti yako bado haijaunganishwa na shirika."
+  },
+  "trackerActions": {
+    "title": "Hatua zako",
+    "busy": "Inashughulikiwa…",
+    "done": "Imekamilika. Ufuatiliaji umesasishwa.",
+    "cancel": "Ghairi",
+    "command": {
+      "accept_interest": "Kubali nia",
+      "decline_interest": "Kataa nia",
+      "start_review": "Anza tathmini",
+      "decline": "Kataa",
+      "approve": "Idhinisha kuendelea",
+      "withdraw": "Ondoa",
+      "mark_contacted": "Weka kuwa mawasiliano ya kwanza yamefanyika",
+      "confirm_contact": "Thibitisha mawasiliano ya kwanza",
+      "send_nda": "Tuma NDA ya pande zote",
+      "sign_nda": "Saini NDA ya pande zote",
+      "propose_terms": "Pendekeza masharti",
+      "mark_final": "Weka masharti kuwa ya mwisho",
+      "reopen_negotiation": "Fungua masharti tena",
+      "sign_agreement": "Saini makubaliano",
+      "start_milestone": "Anza hatua",
+      "submit_milestone": "Wasilisha hatua kwa tathmini",
+      "accept_milestone": "Kubali hatua",
+      "request_changes": "Omba mabadiliko kwenye hatua",
+      "deliver": "Wasilisha kazi ya mwisho",
+      "accept_delivery": "Kubali uwasilishaji",
+      "sign_certificate": "Saini cheti cha kukubali",
+      "record_payment": "Rekodi malipo ya mwisho",
+      "confirm_payment": "Thibitisha malipo"
+    },
+    "milestone": {
+      "start_milestone": "Anza hatua {number}",
+      "submit_milestone": "Wasilisha hatua {number} kwa tathmini",
+      "accept_milestone": "Kubali hatua {number}",
+      "request_changes": "Omba mabadiliko kwenye hatua {number}"
+    },
+    "confirm": {
+      "withdraw": "Ungependa kuondoa pendekezo hili kwa {name}? Ushirikiano utaisha na {name} haitaweza tena kufungua pendekezo kamili.",
+      "decline_interest": "Ungependa kukataa nia ya {name}? Ushirikiano utaisha.",
+      "decline": "Ungependa kukataa pendekezo hili? Ushirikiano utaisha na {name} ataona sababu."
+    },
+    "refusal": {
+      "stale": "Ushirikiano huu umebadilika tangu ulipoufungua. Umesasishwa sasa: ukague kisha ujaribu tena.",
+      "conflict": "Hatua hiyo haiwezekani tena. Ushirikiano umesasishwa kuonyesha ulipofikia.",
+      "stepUp": "Hatua hii inahitaji nambari mpya kutoka kwa programu yako ya uthibitishaji.",
+      "notAllowed": "Hatua hii si yako kuchukua.",
+      "d2": "Kusaini makubaliano kunahitaji uthibitisho wa utambulisho (D2) kwanza.",
+      "dealsOff": "Hatua za makubaliano (NDA, makubaliano, saini na malipo) bado hazijawashwa.",
+      "mfaSetup": "Washa kuingia kwa hatua mbili ili kuchukua hatua kwenye ushirikiano huu.",
+      "signOutside": "Uhamisho au leseni ya kipekee haviwezi kusainiwa ndani ya programu. Fungua masharti tena, au saini nje ya jukwaa.",
+      "paymentMismatch": "Kiasi hicho hakilingani na kile shirika lilichorekodi. Hakuna kilichothibitishwa: zungumza na shirika kuhusu tofauti hiyo.",
+      "invalid": "Baadhi ya maelezo hayakukubaliwa. Kagua fomu kisha ujaribu tena.",
+      "invalidContactBy": "Chagua tarehe ya mawasiliano kuanzia leo, isiyozidi siku tano za kazi mbele.",
+      "attestation": "Toa tarehe kazi ya ndani ilipoanza na uthibitishe kauli.",
+      "reasonText": "Eleza sababu kwa undani zaidi.",
+      "notFound": "Ushirikiano huu haupatikani tena kwako.",
+      "network": "Hatukuweza kufikia seva. Kagua muunganisho wako kisha ujaribu tena.",
+      "generic": "Hitilafu imetokea. Jaribu tena."
+    },
+    "stepUp": {
+      "body": "Thibitisha kwa nambari kutoka kwa programu yako ya uthibitishaji ili kuendelea.",
+      "code": "Nambari ya uthibitishaji",
+      "submit": "Thibitisha na uendelee",
+      "checking": "Inakagua…",
+      "invalid": "Weka nambari ya tarakimu 6 kutoka kwa programu yako ya uthibitishaji.",
+      "notEnrolled": "Hatua hii inahitaji kuingia kwa hatua mbili. Iwashe, kisha urudi kwenye ushirikiano huu.",
+      "turnOn": "Washa kuingia kwa hatua mbili"
+    },
+    "form": {
+      "required": "Jaza sehemu hii.",
+      "choose": "Chagua moja",
+      "date": "Chagua tarehe.",
+      "amount": "Weka kiasi kwa shilingi, kwa mfano 250000.",
+      "days": "Weka idadi ya siku, kwa mfano 5."
+    },
+    "approve": {
+      "lead": "Taja nani atawasiliana na msanidi programu, kwa njia gani na lini. Maelezo ya mawasiliano ya msanidi programu yatatolewa kwa mtu huyo.",
+      "person": "Mtu wa mawasiliano",
+      "channel": "Njia ya mawasiliano",
+      "by": "Wasiliana kabla ya",
+      "byHint": "Isizidi siku tano za kazi kuanzia leo."
+    },
+    "channel": {
+      "email": "Barua pepe",
+      "phone": "Simu",
+      "whatsapp": "WhatsApp",
+      "video_call": "Simu ya video",
+      "in_person": "Ana kwa ana"
+    },
+    "decline": {
+      "lead": "Msanidi programu ataona sababu utakayochagua.",
+      "reason": "Sababu",
+      "other": "Eleza sababu",
+      "otherHint": "Sentensi chache ambazo msanidi programu atasoma.",
+      "started": "Kazi ya ndani ilianza lini?",
+      "attest": "Tunathibitisha kuwa kazi hii ilikuwa tayari inafanyika ndani ya shirika letu kabla hatujaona pendekezo hili.",
+      "attestRequired": "Thibitisha kauli hii ili kutumia sababu hii."
+    },
+    "reason": {
+      "NOT_PRIORITY": "Si kipaumbele kwa sasa",
+      "ALREADY_IN_PROGRESS_INTERNALLY": "Tayari inafanyika ndani",
+      "BUDGET": "Bajeti",
+      "NOT_RELEVANT": "Haituhusu",
+      "NEEDS_MATURITY": "Inahitaji kukomaa kwanza",
+      "OTHER": "Nyingine"
+    },
+    "terms": {
+      "lead": "Toleo jipya la masharti. Upande mwingine huliweka kuwa la mwisho kabla ya yeyote kusaini.",
+      "ip": "Haki miliki",
+      "ipHint": "Uhamisho au leseni ya kipekee husainiwa nje ya jukwaa.",
+      "deemed": "Kukubaliwa kwa kudhaniwa (siku)",
+      "deemedHint": "Siku baada ya hatua kuwasilishwa hadi ihesabiwe kuwa imekubaliwa bila jibu. 0 inamaanisha kamwe.",
+      "exclusivity": "Upekee (si lazima)",
+      "exclusivityHint": "Acha wazi kama hakuna.",
+      "milestone": "Hatua {number}",
+      "deliverable": "Kazi ya kuwasilisha",
+      "amount": "Kiasi (KES)",
+      "due": "Tarehe ya mwisho",
+      "window": "Muda wa tathmini (siku za kazi, si lazima)",
+      "windowHint": "Acha wazi kwa muda wa kawaida.",
+      "remove": "Ondoa hatua {number}",
+      "add": "Ongeza hatua"
+    },
+    "ipTerms": {
+      "assignment": "Uhamisho",
+      "exclusive_licence": "Leseni ya kipekee",
+      "non_exclusive_licence": "Leseni isiyo ya kipekee",
+      "development_contract": "Mkataba wa uundaji",
+      "revenue_share": "Mgao wa mapato"
+    },
+    "payment": {
+      "lead": "Rekodi malipo ya mwisho ambayo shirika lako lilifanya. Msanidi programu huthibitisha kilichofika; jukwaa halishiki wala kuhamisha pesa.",
+      "amount": "Kiasi kilicholipwa (KES)",
+      "method": "Njia",
+      "reference": "Kumbukumbu (si lazima)",
+      "referenceHint": "Kwa mfano nambari ya uthibitisho ya M-Pesa.",
+      "paidOn": "Tarehe ya malipo"
+    },
+    "paymentMethod": {
+      "mpesa": "M-Pesa",
+      "bank": "Uhamisho wa benki",
+      "other": "Nyingine"
+    },
+    "confirmPayment": {
+      "lead": "Weka kiasi kilichokufikia. Lazima kilingane na kile shirika lilichorekodi.",
+      "amount": "Kiasi kilichopokelewa (KES)",
+      "hint": "Shirika lilirekodi KES {value}."
+    },
+    "contact": {
+      "reveal": "Onyesha maelezo ya mawasiliano ya msanidi programu",
+      "name": "Jina",
+      "email": "Barua pepe",
+      "noEmail": "Msanidi programu bado hana barua pepe iliyothibitishwa."
+    }
   }
 }

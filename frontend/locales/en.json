@@ -2,7 +2,8 @@
   "_meta": {
     "review": "[[COPY-REVIEW]] G2/G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
-    "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing"
+    "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*; trackerActions.decline.attest is an attestation (D-39 family); stage labels come from the API (state_machine.STAGE_LABELS)"
   },
   "app": {
     "name": "Bridge",
@@ -241,7 +242,8 @@
     "developer": "Developer",
     "home": "Home",
     "companies": "Companies",
-    "ideas": "My ideas"
+    "ideas": "My ideas",
+    "engagements": "Engagements"
   },
   "companies": {
     "pageTitle": "Companies",
@@ -554,5 +556,413 @@
     "detailsLinks": "Links: {count}",
     "backToIdea": "Back to the idea",
     "noProblemsYet": "No problems are listed yet."
+  },
+  "devHome": {
+    "lead": "What needs you now, then everything else.",
+    "newProposal": "New proposal",
+    "needsYou": "Needs you",
+    "others": "Your other engagements",
+    "allEngagements": "All engagements",
+    "ideasTitle": "My ideas",
+    "allIdeas": "All my ideas",
+    "empty": "Your engagements show here once you pitch one of your ideas to a company.",
+    "emptyAction": "Go to My ideas",
+    "security": "Two-step sign-in"
+  },
+  "tracker": {
+    "pageTitle": "Engagements",
+    "title": "Engagements",
+    "devLead": "Every company you pitched an idea to, and where things stand with each.",
+    "orgLead": "Proposals your organisation is working through, and whose turn it is.",
+    "listLabel": "Engagements",
+    "needsYou": "Needs you",
+    "needsUs": "Needs us",
+    "others": "Everything else",
+    "emptyDev": "Pitch one of your ideas to a company to start an engagement.",
+    "emptyDevAction": "Go to My ideas",
+    "emptyOrg": "No engagements yet: they start when a developer pitches an idea to your organisation.",
+    "emptyOrgAction": "Go to your organisation home",
+    "yourTurn": "Your turn",
+    "ourTurn": "Our turn",
+    "withOrg": "With {org}",
+    "fromDeveloper": "From {name}",
+    "back": "All engagements",
+    "stepperLabel": "Stages",
+    "group": {
+      "review": "Review",
+      "contact_nda": "Contact and NDA",
+      "agreement": "Agreement",
+      "implementation": "Implementation",
+      "close": "Close"
+    },
+    "chip": {
+      "completed": "Completed",
+      "current": "Current",
+      "pending": "Pending",
+      "onHold": "On hold",
+      "overdue": "Overdue",
+      "ended": "Ended"
+    },
+    "at": "{date}, {time} EAT",
+    "due": {
+      "left": "{count, plural, one {# business day left} other {# business days left}}, due {date}",
+      "today": "Due today, {date}",
+      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due {date}",
+      "overdueToday": "Overdue, was due {date}"
+    },
+    "turn": {
+      "you": "Awaiting: you",
+      "other": "Awaiting: {name}",
+      "both": "Awaiting: you and {name}",
+      "none": "Nothing is waiting on either side right now.",
+      "ended": "This engagement has ended.",
+      "closed": "This engagement is closed."
+    },
+    "endedBecause": "Reason: {reason}",
+    "nextYou": "Your next step: {step}",
+    "nextThem": "Next step for {name}: {step}",
+    "endReason": {
+      "NOT_PRIORITY": "Not a current priority",
+      "ALREADY_IN_PROGRESS_INTERNALLY": "Already in progress internally",
+      "BUDGET": "Budget",
+      "NOT_RELEVANT": "Not relevant to the organisation",
+      "NEEDS_MATURITY": "Needs to mature first",
+      "OTHER": "Other",
+      "BY_DEVELOPER": "Declined by the developer",
+      "NO_REVIEW": "No review in time",
+      "NO_DECISION": "No decision in time",
+      "CONTACT_NOT_MADE": "First contact not made in time",
+      "NO_DEV_RESPONSE": "No answer from the developer in time"
+    },
+    "endorsements": {
+      "title": "Endorsements for this stage",
+      "by": {
+        "developer": "Endorsement by Developer",
+        "org": "Endorsement by Enterprise"
+      },
+      "endorsed": "Endorsed",
+      "notYet": "Not endorsed yet",
+      "name": "Name",
+      "role": "Role",
+      "time": "Time",
+      "method": "Method",
+      "platform": "The platform"
+    },
+    "role": {
+      "developer": "Developer",
+      "owner": "Owner",
+      "admin": "Admin",
+      "reviewer": "Reviewer",
+      "signatory": "Signatory",
+      "finance": "Finance",
+      "system": "Platform"
+    },
+    "method": {
+      "click": "In the app",
+      "totp": "Authenticator code",
+      "passkey": "Passkey",
+      "auto": "Automatically"
+    },
+    "party": {
+      "developer": "developer",
+      "org": "organisation"
+    },
+    "kes": "KES {amount}",
+    "agreement": {
+      "title": "Agreement",
+      "earlier": "{count, plural, one {# earlier version} other {# earlier versions}}",
+      "version": "Version {version}",
+      "status": {
+        "draft": "Draft",
+        "final": "Final",
+        "signed": "Signed"
+      },
+      "draftedBy": {
+        "developer": "Drafted by the developer, {when}",
+        "org": "Drafted by the organisation, {when}"
+      },
+      "ipTerms": "Intellectual property",
+      "deemed": "Deemed acceptance",
+      "deemedDays": "After {count, plural, one {# day} other {# days}} without a response",
+      "notGiven": "Not given",
+      "exclusivity": "Exclusivity",
+      "noExclusivity": "None",
+      "deemedNever": "Never: every milestone needs an acceptance"
+    },
+    "ipTerms": {
+      "assignment": "Assignment",
+      "exclusive_licence": "Exclusive licence",
+      "non_exclusive_licence": "Non-exclusive licence",
+      "development_contract": "Development contract",
+      "revenue_share": "Revenue share"
+    },
+    "milestone": {
+      "title": "Milestones",
+      "name": "Milestone {number}: {deliverable}",
+      "state": {
+        "PLANNED": "Planned",
+        "IN_PROGRESS": "In progress",
+        "SUBMITTED_FOR_REVIEW": "Submitted for review",
+        "ACCEPTED": "Accepted",
+        "CHANGES_REQUESTED": "Changes requested"
+      },
+      "due": "Due {date}",
+      "window": "{count, plural, one {# business day to review} other {# business days to review}}",
+      "reviewDue": "Review due by {date}",
+      "endorsed": "{party}: {name}, {method}, {when}"
+    },
+    "signature": {
+      "title": "Signatures",
+      "by": "Signed by {name} for the {party}, with {method}"
+    },
+    "fingerprint": "Fingerprint {hash}",
+    "document": {
+      "mutual_nda": "Mutual NDA",
+      "agreement": "Agreement",
+      "acceptance_certificate": "Acceptance certificate",
+      "milestone_confirmation": "Milestone confirmation"
+    },
+    "payment": {
+      "title": "Payments",
+      "lead": "The organisation records what it paid and the developer confirms what arrived. The platform never holds or moves money.",
+      "confirmed": "Confirmed",
+      "recorded": "Recorded",
+      "method": "Method",
+      "reference": "Reference",
+      "paidOn": "Paid on",
+      "recordedAt": "Recorded",
+      "confirmedAt": "Confirmed by the developer",
+      "notConfirmed": "Not confirmed yet"
+    },
+    "paymentMethod": {
+      "mpesa": "M-Pesa",
+      "bank": "Bank transfer",
+      "other": "Other"
+    },
+    "contact": {
+      "title": "Contact person",
+      "person": "Person",
+      "channel": "How",
+      "by": "Contact by"
+    },
+    "channel": {
+      "email": "Email",
+      "phone": "Phone call",
+      "whatsapp": "WhatsApp",
+      "video_call": "Video call",
+      "in_person": "In person"
+    },
+    "history": {
+      "title": "History",
+      "chainOk": "Every event below is in its original order and unchanged.",
+      "chainBroken": "The history could not be checked: some events may have been altered.",
+      "actor": "{name}, {role}"
+    },
+    "event": {
+      "create": "Engagement opened",
+      "accept_interest": "Interest accepted",
+      "decline_interest": "Interest declined",
+      "start_review": "Review started",
+      "decline": "Declined",
+      "approve": "Approved to proceed",
+      "withdraw": "Withdrawn",
+      "mark_contacted": "First contact marked",
+      "confirm_contact": "First contact confirmed",
+      "send_nda": "Mutual NDA sent",
+      "sign_nda": "Mutual NDA signed",
+      "propose_terms": "Terms proposed",
+      "mark_final": "Terms marked final",
+      "reopen_negotiation": "Terms reopened",
+      "sign_agreement": "Agreement signed",
+      "start_milestone": "Milestone started",
+      "submit_milestone": "Milestone submitted for review",
+      "accept_milestone": "Milestone accepted",
+      "request_changes": "Changes requested on a milestone",
+      "deliver": "Final delivery submitted",
+      "accept_delivery": "Delivery accepted",
+      "sign_certificate": "Acceptance certificate signed",
+      "record_payment": "Final payment recorded",
+      "confirm_payment": "Payment confirmed",
+      "other": "Step recorded"
+    },
+    "tabs": {
+      "label": "Engagement sections",
+      "tracker": "Tracker",
+      "documents": "Documents",
+      "history": "History"
+    },
+    "documents": {
+      "title": "Documents",
+      "lead": "The exact text each party signs, with the fingerprint the signatures refer to.",
+      "empty": "No documents yet: the mutual NDA appears here once one party sends it.",
+      "emptyAction": "Back to the tracker",
+      "intact": "Matches the recorded fingerprint",
+      "changed": "Does not match the recorded fingerprint",
+      "missing": "This document is not available yet."
+    },
+    "stageNow": "Now: {stage}",
+    "nothingYet": "The agreement, signatures and payments appear here as the engagement moves on.",
+    "refused": {
+      "notFound": "This engagement does not exist, or you are not one of its parties.",
+      "mfaSetup": "Turn on two-step sign-in to see your organisation's engagements.",
+      "bothParties": "You belong to this organisation, so you cannot act on this engagement."
+    },
+    "turnOnMfa": "Turn on two-step sign-in",
+    "noOrg": "Your account does not belong to an organisation yet."
+  },
+  "trackerActions": {
+    "title": "Your actions",
+    "busy": "Working…",
+    "done": "Done. The tracker is up to date.",
+    "cancel": "Cancel",
+    "command": {
+      "accept_interest": "Accept the interest",
+      "decline_interest": "Decline the interest",
+      "start_review": "Start the review",
+      "decline": "Decline",
+      "approve": "Approve to proceed",
+      "withdraw": "Withdraw",
+      "mark_contacted": "Mark first contact made",
+      "confirm_contact": "Confirm first contact",
+      "send_nda": "Send the mutual NDA",
+      "sign_nda": "Sign the mutual NDA",
+      "propose_terms": "Propose terms",
+      "mark_final": "Mark the terms final",
+      "reopen_negotiation": "Reopen the terms",
+      "sign_agreement": "Sign the agreement",
+      "start_milestone": "Start a milestone",
+      "submit_milestone": "Submit a milestone for review",
+      "accept_milestone": "Accept a milestone",
+      "request_changes": "Request changes to a milestone",
+      "deliver": "Submit the final delivery",
+      "accept_delivery": "Accept the delivery",
+      "sign_certificate": "Sign the acceptance certificate",
+      "record_payment": "Record the final payment",
+      "confirm_payment": "Confirm the payment"
+    },
+    "milestone": {
+      "start_milestone": "Start milestone {number}",
+      "submit_milestone": "Submit milestone {number} for review",
+      "accept_milestone": "Accept milestone {number}",
+      "request_changes": "Request changes to milestone {number}"
+    },
+    "confirm": {
+      "withdraw": "Withdraw this proposal from {name}? The engagement ends and {name} can no longer open the full proposal.",
+      "decline_interest": "Decline the interest of {name}? The engagement ends.",
+      "decline": "Decline this proposal? The engagement ends and {name} sees the reason."
+    },
+    "refusal": {
+      "stale": "This engagement changed since you opened it. It is refreshed now: check it and try again.",
+      "conflict": "That step is no longer possible. The engagement is refreshed to show where it stands.",
+      "stepUp": "This step needs a fresh code from your authenticator app.",
+      "notAllowed": "This step is not yours to take.",
+      "d2": "Signing an agreement needs identity verification (D2) first.",
+      "dealsOff": "Deal steps (the NDA, the agreement, signatures and payments) are not switched on yet.",
+      "mfaSetup": "Turn on two-step sign-in to act on this engagement.",
+      "signOutside": "An assignment or an exclusive licence cannot be signed in the app. Reopen the terms, or sign outside the platform.",
+      "paymentMismatch": "That amount does not match what the organisation recorded. Nothing was confirmed: talk to the organisation about the difference.",
+      "invalid": "Some details were not accepted. Check the form and try again.",
+      "invalidContactBy": "Choose a contact-by date from today, no more than five business days ahead.",
+      "attestation": "Give the date the internal work started and confirm the statement.",
+      "reasonText": "Explain the reason in more detail.",
+      "notFound": "This engagement is no longer available to you.",
+      "network": "We could not reach the server. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    },
+    "stepUp": {
+      "body": "Confirm with the code from your authenticator app to continue.",
+      "code": "Authenticator code",
+      "submit": "Confirm and continue",
+      "checking": "Checking…",
+      "invalid": "Enter the 6-digit code from your authenticator app.",
+      "notEnrolled": "This step needs two-step sign-in. Turn it on, then come back to this engagement.",
+      "turnOn": "Turn on two-step sign-in"
+    },
+    "form": {
+      "required": "Fill in this field.",
+      "choose": "Choose one",
+      "date": "Choose a date.",
+      "amount": "Enter an amount in shillings, for example 250000.",
+      "days": "Enter a number of days, for example 5."
+    },
+    "approve": {
+      "lead": "Name who will contact the developer, how, and by when. The developer's contact details are shared with that person.",
+      "person": "Contact person",
+      "channel": "How they will make contact",
+      "by": "Contact by",
+      "byHint": "No more than five business days from today."
+    },
+    "channel": {
+      "email": "Email",
+      "phone": "Phone call",
+      "whatsapp": "WhatsApp",
+      "video_call": "Video call",
+      "in_person": "In person"
+    },
+    "decline": {
+      "lead": "The developer sees the reason you choose.",
+      "reason": "Reason",
+      "other": "Explain the reason",
+      "otherHint": "A few sentences the developer will read.",
+      "started": "When did the internal work start?",
+      "attest": "We confirm this work was already in progress inside our organisation before we saw this proposal.",
+      "attestRequired": "Confirm the statement to use this reason."
+    },
+    "reason": {
+      "NOT_PRIORITY": "Not a current priority",
+      "ALREADY_IN_PROGRESS_INTERNALLY": "Already in progress internally",
+      "BUDGET": "Budget",
+      "NOT_RELEVANT": "Not relevant to us",
+      "NEEDS_MATURITY": "Needs to mature first",
+      "OTHER": "Other"
+    },
+    "terms": {
+      "lead": "A new version of the terms. The other party marks it final before either side signs.",
+      "ip": "Intellectual property",
+      "ipHint": "An assignment or an exclusive licence is signed outside the platform.",
+      "deemed": "Deemed acceptance (days)",
+      "deemedHint": "Days after a milestone is submitted until it counts as accepted without a response. 0 means never.",
+      "exclusivity": "Exclusivity (optional)",
+      "exclusivityHint": "Leave empty for none.",
+      "milestone": "Milestone {number}",
+      "deliverable": "Deliverable",
+      "amount": "Amount (KES)",
+      "due": "Due date",
+      "window": "Review window (business days, optional)",
+      "windowHint": "Leave empty for the standard window.",
+      "remove": "Remove milestone {number}",
+      "add": "Add a milestone"
+    },
+    "ipTerms": {
+      "assignment": "Assignment",
+      "exclusive_licence": "Exclusive licence",
+      "non_exclusive_licence": "Non-exclusive licence",
+      "development_contract": "Development contract",
+      "revenue_share": "Revenue share"
+    },
+    "payment": {
+      "lead": "Record the final payment your organisation made. The developer confirms what arrived; the platform never holds or moves money.",
+      "amount": "Amount paid (KES)",
+      "method": "Method",
+      "reference": "Reference (optional)",
+      "referenceHint": "For example the M-Pesa confirmation code.",
+      "paidOn": "Date paid"
+    },
+    "paymentMethod": {
+      "mpesa": "M-Pesa",
+      "bank": "Bank transfer",
+      "other": "Other"
+    },
+    "confirmPayment": {
+      "lead": "Enter the amount that reached you. It must match what the organisation recorded.",
+      "amount": "Amount received (KES)",
+      "hint": "The organisation recorded KES {value}."
+    },
+    "contact": {
+      "reveal": "Show the developer's contact details",
+      "name": "Name",
+      "email": "Email",
+      "noEmail": "The developer has no verified email address yet."
+    }
   }
 }
