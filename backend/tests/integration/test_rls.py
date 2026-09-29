@@ -188,13 +188,22 @@ async def test_org_b_rows_cannot_be_updated_by_a(app_engine: AsyncEngine, world:
         grants = await conn.execute(
             text("UPDATE disclosure_grants SET status = 'active' WHERE owner_id = :id"), {"id": world.b.user_id}
         )
-        assert [r.rowcount for r in (updated, removed, proposals, versions, grants)] == [0] * 5
+        bands = await conn.execute(  # B's originality buckets, published proposal included (readable, not A's)
+            text("DELETE FROM proposal_lsh_bands WHERE proposal_id = ANY (:ids)"),
+            {"ids": [world.b.published, world.b.draft]},
+        )
+        assert [r.rowcount for r in (updated, removed, proposals, versions, grants, bands)] == [0] * 6
         await conn.rollback()
 
 
 async def test_a_cannot_write_into_b_proposals(app_engine: AsyncEngine, world: w.World) -> None:
-    """New rows must belong to the writer: a version, a problem link, a tag or a grant on B's proposal is refused."""
+    """New rows must belong to the writer: a version, a tag, a grant or an originality bucket of B's proposal is
+    refused."""
     statements = (
+        (
+            "INSERT INTO proposal_lsh_bands (proposal_id, band, bucket) VALUES (:proposal, 99, 1)",
+            {"proposal": world.b.published},
+        ),
         (
             "INSERT INTO proposal_versions (id, proposal_id, version_no) VALUES (:id, :proposal, 99)",
             {"id": uuid7(), "proposal": world.b.draft},
@@ -273,6 +282,7 @@ TIER2_CASES = (
     "role_viewer",
     "membership_removed",
     "off_domain_member",
+    "email_unverified",
     "no_totp",
     "user_suspended",
     "no_master_enterprise_terms",
@@ -281,6 +291,7 @@ TIER2_CASES = (
     "met_superseded",
     "no_nda",
     "nda_for_another_proposal",
+    "nda_superseded",
     "engagement_withdrawn",
     "engagement_declined",
     "engagement_terminated",
@@ -291,16 +302,19 @@ TIER2_CASES = (
 TIER2_READABLE = frozenset({"none", "met_by_the_approved_claimant"})
 
 
-async def _add_user(conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True) -> UUID:
-    user = uuid7()
+async def _add_user(
+    conn: AsyncConnection, email: str, *, status: str = "active", totp: bool = True, email_verified: bool = True
+) -> UUID:
+    user, now = uuid7(), datetime.now(UTC)
     await _sql(
         conn,
-        "INSERT INTO users (id, email, display_name, status, totp_enabled_at) VALUES (:id, :email, 'Member',"
-        " CAST(:status AS user_status), :totp)",
+        "INSERT INTO users (id, email, display_name, status, totp_enabled_at, email_verified_at) VALUES (:id, :email,"
+        " 'Member', CAST(:status AS user_status), :totp, :verified)",
         id=user,
         email=email,
         status=status,
-        totp=datetime.now(UTC) if totp else None,
+        totp=now if totp else None,
+        verified=now if email_verified else None,
     )
     return user
 
@@ -316,6 +330,28 @@ async def _add_member(conn: AsyncConnection, org: UUID, user: UUID, roles: str, 
         roles=roles,
         status=status,
     )
+
+
+async def _add_evaluation_nda(conn: AsyncConnection, tag: str) -> UUID:
+    """A new, so current, version of the Evaluation NDA (its legal body and its nda_templates row)."""
+    legal, template = uuid7(), uuid7()
+    await _sql(
+        conn,
+        "INSERT INTO legal_templates (id, kind, version, body, sha256) VALUES (:id, 'evaluation_nda', :version, :body,"
+        " sha256(convert_to(:body, 'UTF8')))",
+        id=legal,
+        version=f"n-{tag}-{legal.hex[-6:]}",
+        body=f"[[LEGAL-PLACEHOLDER:nda-{legal.hex}]]\n",
+    )
+    await _sql(
+        conn,
+        "INSERT INTO nda_templates (id, kind, version, legal_template_id, sha256)"
+        " SELECT :id, 'evaluation', :version, id, sha256 FROM legal_templates WHERE id = :legal",
+        id=template,
+        version=f"n-{tag}-{template.hex[-6:]}",
+        legal=legal,
+    )
+    return template
 
 
 async def _add_master_terms(conn: AsyncConnection, tag: str) -> UUID:
@@ -383,8 +419,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
     await _sql(
         conn,
         "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-        " summary, owner_handle) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem',"
-        " 'What it does', 'rls-handle')",
+        " summary) VALUES (:id, :proposal, 2, 'Next version', :niche, 'idea', 'pilot', 'A problem', 'What it does')",
         id=draft_version,
         proposal=b.published,
         niche=world.niche_id,
@@ -406,6 +441,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
         f"reviewer-{tag}@{'elsewhere.example.test' if broken == 'off_domain_member' else domain}",
         status="suspended" if broken == "user_suspended" else "active",
         totp=broken != "no_totp",
+        email_verified=broken != "email_unverified",
     )
     org = uuid7()
     await _sql(
@@ -436,6 +472,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             org=org,
             user=reviewer,
         )
+    nda = await _add_evaluation_nda(conn, tag)  # the current Evaluation NDA
     if broken != "no_nda":
         await _sql(
             conn,
@@ -446,8 +483,10 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
             org=org,
             proposal=b.held if broken == "nda_for_another_proposal" else b.published,
-            template=world.nda_template_id,
+            template=nda,
         )
+    if broken == "nda_superseded":  # a new NDA version needs a new acceptance
+        await _add_evaluation_nda(conn, tag)
     grants = [] if broken == "no_grant" else [b.published]
     if broken == "none":  # nor does a live grant open a draft proposal: its row stays hidden
         grants.append(b.draft)
@@ -460,7 +499,7 @@ async def _grant_scenario(conn: AsyncConnection, world: w.World, broken: str) ->
             user=reviewer,
             org=org,
             proposal=b.draft,
-            template=world.nda_template_id,
+            template=nda,
         )
     for proposal in grants:
         await _sql(
@@ -533,6 +572,69 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
         )
         expected = [world.b.published_version] if broken in TIER2_READABLE else []
         assert list(rows.scalars()) == expected
+
+
+VIEW_INSERT = (
+    "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id, render_kind,"
+    " fingerprint_seed, started_at, nda_acceptance_id) VALUES (:id, :p, :v, :owner, :viewer, :org, 'html', :seed,"
+    " now() - interval '30 days', :nda)"
+)
+# As the owner: the reviewer's acceptance of the Evaluation NDA for B's published proposal under G, copied for another
+# user or organisation.
+COPY_NDA = (
+    "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+    " logging_notice_version) SELECT :id, :user, :org, proposal_id, nda_template_id, template_sha256,"
+    " logging_notice_version FROM nda_acceptances WHERE user_id = :reviewer AND org_id = :g AND proposal_id = :p"
+)
+
+
+@pytest.mark.parametrize("broken", ["none", "no_grant", "no_nda"])
+async def test_only_a_granted_viewer_logs_a_view_under_the_granting_org(
+    owner_engine: AsyncEngine, world: w.World, broken: str
+) -> None:
+    """A Tier-2 view is logged only by a viewer the grant lets read that registered version (app_tier2_granted), under
+    the organisation holding the grant: a member without it cannot plant views in the owner's "Who has seen this", nor
+    log a granted view under another organisation of theirs or on a draft; the start time is the database's. The NDA
+    acceptance a view names is the viewer's own, for that proposal, under that organisation (round 5): not a
+    colleague's, not one for another proposal, not one under another organisation of the viewer's."""
+    b = world.b
+    async with rolled_back(owner_engine) as conn:
+        scenario = await _grant_scenario(conn, world, broken)
+        await _add_member(conn, world.a.org_id, scenario.reviewer, "{reviewer}")  # also a reviewer of org A
+        ndas: dict[str, UUID] = {}
+        if broken == "none":
+            colleague = await _add_user(conn, f"colleague-{uuid7().hex[-12:]}@example.test")
+            await _add_member(conn, scenario.context, colleague, "{reviewer}")
+            source = {"reviewer": scenario.reviewer, "g": scenario.context, "p": b.published}
+            copies = (("colleague", colleague, scenario.context), ("another_org", scenario.reviewer, world.a.org_id))
+            for name, user, org in copies:
+                ndas[name] = uuid7()
+                await _sql(conn, COPY_NDA, id=ndas[name], user=user, org=org, **source)
+            own = await conn.execute(  # the scenario's: for B's published proposal and for B's draft proposal
+                text("SELECT proposal_id, id FROM nda_acceptances WHERE user_id = :u AND org_id = :g"),
+                {"u": scenario.reviewer, "g": scenario.context},
+            )
+            accepted = dict(own.tuples().all())
+            ndas["own"], ndas["another_proposal"] = accepted[b.published], accepted[b.draft]
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, scenario.reviewer, None)
+        view = {"p": b.published, "owner": b.user_id, "viewer": scenario.reviewer, "seed": bytes(16), "nda": None}
+        registered = view | {"v": b.published_version}
+        await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=world.a.org_id, **registered)
+        await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **view, v=scenario.draft_version)
+        if broken != "none":
+            await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **registered)
+            return
+        for name in ("colleague", "another_proposal", "another_org"):
+            await _refused_by_rls(
+                conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **(registered | {"nda": ndas[name]})
+            )
+        logged = uuid7()
+        await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **(registered | {"nda": ndas["own"]}))
+        started = await conn.execute(
+            text("SELECT started_at = now() FROM document_views WHERE id = :id"), {"id": logged}
+        )
+        assert started.scalar_one() is True  # the backdated start was replaced
 
 
 async def test_the_owner_reads_their_tier2_through_tier2_reader(app_engine: AsyncEngine, world: w.World) -> None:
@@ -634,22 +736,43 @@ async def test_registration_records_are_public_and_written_only_for_the_bound_ow
     owner_engine: AsyncEngine, world: w.World
 ) -> None:
     """/verify reads every record without a signed-in user. The registration job (provenance_worker) bound to
-    developer A reads, inserts and updates only records of A's versions: none of B's."""
+    developer A reads, inserts and updates only records of A's versions: none of B's, and none of A's draft (only a
+    registered version is evidence)."""
     a, b = world.a, world.b
     b_record = uuid7()
     async with rolled_back(owner_engine) as conn:
-        await _sql(conn, RECORD_INSERT, id=b_record, version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        certs = await conn.execute(
+            text("SELECT id, cert_id FROM proposal_versions WHERE id = ANY (:ids)"),
+            {"ids": [a.published_version, b.published_version]},
+        )
+        cert = {row.id: row.cert_id for row in certs.all()}  # a record carries its version's cert_id
+        await _sql(
+            conn,
+            RECORD_INSERT,
+            id=b_record,
+            version=b.published_version,
+            cert=cert[b.published_version],
+            hash=bytes(32),
+        )
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
         await _as_tenant(conn, None, None)
         public = await conn.execute(text("SELECT id FROM provenance_records WHERE id = :id"), {"id": b_record})
         assert list(public.scalars()) == [b_record]  # anonymous /verify
         await _as_tenant(conn, a.user_id, None)
         await conn.execute(text("SET LOCAL ROLE provenance_worker"))
-        await _refused_by_rls(
-            conn, RECORD_INSERT, id=uuid7(), version=b.published_version, cert=uuid7().hex[:16], hash=bytes(32)
-        )
+        for version in (b.published_version, a.draft_version):
+            await _refused_by_rls(
+                conn, RECORD_INSERT, id=uuid7(), version=version, cert=uuid7().hex[:16], hash=bytes(32)
+            )
         a_record = uuid7()
-        await _sql(conn, RECORD_INSERT, id=a_record, version=a.published_version, cert=uuid7().hex[:16], hash=bytes(32))
+        await _sql(
+            conn,
+            RECORD_INSERT,
+            id=a_record,
+            version=a.published_version,
+            cert=cert[a.published_version],
+            hash=bytes(32),
+        )
         seen = await conn.execute(text("SELECT id FROM provenance_records"))
         assert list(seen.scalars()) == [a_record]
         touched = await conn.execute(text("UPDATE provenance_records SET tsa_url = 'https://tsa.example.test'"))

@@ -104,8 +104,15 @@ async def add_proposal(
     moderation_state: str = "clear",
     registered: bool = True,
 ) -> tuple[UUID, UUID]:
-    """A proposal with one version (and its Tier-2 row). Registered versions go draft -> registered like the app."""
+    """A proposal with one version (and its Tier-2 row). Registered versions go draft -> registered like the app,
+    which gives them the owner's developer handle (the owner gets a developer profile if they have none)."""
     proposal_id, version_id = uuid7(), uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO developer_profiles (user_id, handle) VALUES (:owner, :handle) ON CONFLICT (user_id) DO NOTHING",
+        owner=owner,
+        handle=f"dev-{owner.hex}",
+    )
     await _insert(
         conn,
         "INSERT INTO proposals (id, owner_id, moderation_state, title, niche_id) VALUES (:id, :owner,"
@@ -118,8 +125,7 @@ async def add_proposal(
     await _insert(
         conn,
         "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-        " summary, owner_handle) VALUES (:id, :proposal, 1, 'RLS proposal', :niche, 'idea', 'pilot', 'A problem',"
-        " 'What it does', 'rls-handle')",
+        " summary) VALUES (:id, :proposal, 1, 'RLS proposal', :niche, 'idea', 'pilot', 'A problem', 'What it does')",
         id=version_id,
         proposal=proposal_id,
         niche=niche_id,
@@ -345,6 +351,14 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         draft, draft_version = await add_proposal(conn, user_id, niche_id, public_problem, registered=False)
         held, _ = await add_proposal(conn, user_id, niche_id, public_problem, moderation_state="held")
         hidden, _ = await add_proposal(conn, user_id, niche_id, public_problem, status="hidden")
+        for band, proposal in enumerate((published, draft, held, hidden)):  # originality buckets of each teaser
+            await _insert(
+                conn,
+                "INSERT INTO proposal_lsh_bands (proposal_id, band, bucket) VALUES (:proposal, :band, :bucket)",
+                proposal=proposal,
+                band=band,
+                bucket=band + 1,
+            )
         await _insert(
             conn,
             "INSERT INTO proposal_confidential_embeddings (version_id, embed_model, embed_version, full_embedding)"
@@ -559,6 +573,11 @@ TENANT_ROWS: dict[str, Rows] = {
         owners=f"SELECT v.id::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
         f" v.status = 'registered' AND {_PUBLIC_PROPOSAL} AS pub"
         " FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id",
+    ),
+    "proposal_lsh_bands": Rows(
+        key="proposal_lsh_bands.proposal_id::text || proposal_lsh_bands.band::text",
+        owners=f"SELECT l.proposal_id::text || l.band::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
+        f" {_PUBLIC_PROPOSAL} AS pub FROM proposal_lsh_bands l JOIN proposals p ON p.id = l.proposal_id",
     ),
     "proposal_problems": Rows(
         key="proposal_problems.proposal_version_id::text || proposal_problems.problem_id::text",

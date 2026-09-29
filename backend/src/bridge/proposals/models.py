@@ -150,6 +150,7 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     __table_args__ = (
         UniqueConstraint("proposal_id", "version_no"),
         UniqueConstraint("proposal_id", "id"),  # target of the (proposal_id, version_id) foreign keys
+        UniqueConstraint("id", "cert_id"),  # target of provenance_records (version_id, cert_id)
         CheckConstraint(
             "status = 'draft' OR (title IS NOT NULL AND niche_id IS NOT NULL AND maturity IS NOT NULL"
             " AND ask IS NOT NULL AND problem_statement IS NOT NULL AND summary IS NOT NULL"
@@ -178,7 +179,9 @@ class ProposalVersion(IdMixin, TimestampsMixin, Base):
     problem_statement: Mapped[str | None] = mapped_column(Text)
     impact_claims: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)  # <= 150 words (validated by the Tier-1 sanitiser)
-    owner_handle: Mapped[str | None] = mapped_column(CIText())  # pseudonymous handle shown on Tier-1 cards
+    # The pseudonymous handle shown on Tier-1 cards: the owner's developer_profiles.handle, set by the database when
+    # the version is registered (any value sent is replaced; a draft carries none, and bridge_app cannot update it).
+    owner_handle: Mapped[str | None] = mapped_column(CIText(), server_onupdate=FetchedValue())
     # Registration (docs/spec/06 6.4 item 1). registered_at is set by the database when the version is registered
     # (any value sent is replaced). content_hash, prev_version_hash and manifest_version are fill-once: only the
     # registration job (provenance_worker, bound to the owner) sets them after registration, never changes them.
@@ -275,12 +278,14 @@ class ProposalAttachment(IdMixin, TimestampsMixin, Base):
 
 
 class ProposalLshBand(Base):
-    """MinHash LSH buckets over the Tier-1 teaser text only (originality check, REQ-PROP-04)."""
+    """MinHash LSH buckets over the Tier-1 teaser text only (originality check, REQ-PROP-04). Readable exactly when
+    the proposal is (its owner; every signed-in user for a published, clear one; staff), so the check compares
+    against other owners' published teasers only; written and removed only by the proposal's owner (RLS)."""
 
     __tablename__ = "proposal_lsh_bands"
     __table_args__ = (
         Index("ix_proposal_lsh_bands_band_bucket", "band", "bucket"),
-        {"info": {"tenancy": Tenancy.SYSTEM}},
+        {"info": {"tenancy": Tenancy.PUBLISHED, "via": "proposals"}},
     )
 
     proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id", ondelete="CASCADE"), primary_key=True)
@@ -377,6 +382,7 @@ class DocumentView(IdMixin, Base):
     nda_acceptance_id: Mapped[UUID | None] = mapped_column(ForeignKey("nda_acceptances.id"))
     nda_template_version: Mapped[str | None] = mapped_column(String(32))
     render_kind: Mapped[RenderKind] = mapped_column(pg_enum(RenderKind, "render_kind"))
+    # The database's (evidence_time_guard: now() on insert, whatever is sent): leave it out and read it back.
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     duration_bucket: Mapped[ViewDuration | None] = mapped_column(pg_enum(ViewDuration, "view_duration"))
     fingerprint_seed: Mapped[bytes] = mapped_column(LargeBinary)

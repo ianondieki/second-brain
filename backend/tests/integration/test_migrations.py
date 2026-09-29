@@ -116,7 +116,6 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "problem_statement",
         "impact_claims",
         "summary",
-        "owner_handle",
         "cert_id",
         "updated_at",
     },
@@ -134,9 +133,9 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     },
     "document_views": {"duration_bucket"},
     "moderation_cases": {"status", "reasons", "assigned_to", "decided_by", "decided_at", "updated_at"},
-    "org_claims": {  # never the OTP columns: app_reissue_claim_otp() and app_confirm_claim_otp() own them
-        "dns_token",
-        "dns_verified_at",
+    # never the OTP columns (app_reissue_claim_otp(), app_confirm_claim_otp()) nor the DNS proof (dns_token is
+    # written with the claim, dns_verified_at only by app_mark_claim_dns_verified())
+    "org_claims": {
         "registration_no",
         "cr12_date",
         "kra_pin",
@@ -255,10 +254,12 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "audit_block_mutation()": (False, set()),
     # revision 0002
     "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
+    "app_reasons_are_valid(text[], integer)": (False, {"bridge_app"}),
     "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
+    "app_current_nda_template(nda_kind)": (False, {"bridge_app"}),
     "app_owns_version(uuid)": (True, {"provenance_worker"}),
     "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
-    "app_tier2_granted(uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
+    "app_tier2_granted(uuid, uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
     "app_held_tag_count(uuid)": (True, {"bridge_app"}),
     "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
     "app_decide_kyc(uuid, boolean, text, text, text, text, boolean)": (True, {"bridge_app"}),
@@ -268,21 +269,43 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_moderate_problem(uuid, moderation_state, problem_status)": (True, {"bridge_app"}),
     "app_hold_proposal(uuid)": (True, {"bridge_app"}),
     "app_hold_problem(uuid)": (True, {"bridge_app"}),
+    "app_open_moderation_case(text, uuid, text[], moderation_source, jsonb)": (
+        True,
+        {"bridge_app", "tier2_moderation"},  # tier2_moderation: the Tier-2 similarity job
+    ),
     "app_confirm_claim_otp(uuid, bytea)": (True, {"bridge_app"}),
+    "app_mark_claim_dns_verified(uuid)": (True, {"bridge_app"}),
     "app_approve_claim_e1(uuid)": (True, {"bridge_app"}),
     "app_decide_claim(uuid, boolean, text)": (True, {"bridge_app"}),
+    "app_staff_remove_membership(uuid, text)": (True, {"bridge_app"}),
     "app_delist_org(uuid)": (True, {"bridge_app"}),
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
     "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
+    "app_llm_batch_owned(character varying)": (True, {"bridge_app"}),  # batch_poll, before fetching results
+    "app_llm_settle_batch_item(character varying, character varying, uuid, character varying, character varying,"
+    " character varying, integer, integer, integer, integer, numeric, integer, character varying,"
+    " character varying, character varying, jsonb)": (True, {"bridge_app"}),  # batch_poll settles each item
     "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
+    "app_unanchored_chain_heads()": (True, {"provenance_worker"}),
     "app_close_tag(uuid)": (True, {"bridge_app"}),
     "tags_guard()": (False, set()),
     "proposals_guard()": (True, set()),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
     "org_claims_guard()": (True, set()),
+    "org_claims_dns_guard()": (False, set()),
+    "org_claims_status_guard()": (False, set()),
+    "app_claim_competes(uuid, uuid)": (False, set()),  # called only inside the claim functions and org_claims_guard()
+    "app_relabel_open_claims(uuid)": (False, set()),  # the claim functions and memberships_claims_relabel()
+    "app_seat_claimant(uuid, uuid)": (False, set()),  # app_decide_claim() and app_approve_claim_e1()
+    "memberships_claims_relabel()": (True, set()),
+    "llm_calls_batch_guard()": (True, set()),
     "phone_verifications_guard()": (False, set()),
+    "evidence_time_guard()": (False, set()),
+    "chain_anchors_guard()": (True, set()),
+    "provenance_records_hash_guard()": (True, set()),
+    "transparency_roots_guard()": (False, set()),
     "block_mutation()": (False, set()),
     "proposal_versions_guard()": (True, set()),
     "proposal_confidential_guard()": (True, set()),
@@ -704,7 +727,7 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
     assert not org_protected & updatable["organizations"]
     assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
-    registration = {"registered_at", "content_hash", "prev_version_hash", "manifest_version"}
+    registration = {"registered_at", "owner_handle", "content_hash", "prev_version_hash", "manifest_version"}
     assert not registration & updatable["proposal_versions"]  # the database's and provenance_worker's
     assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
     claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
@@ -1361,6 +1384,8 @@ async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engin
             "UPDATE org_claims SET otp_reissues = 0",
             "UPDATE org_claims SET otp_hash = NULL",
             "UPDATE org_claims SET otp_expires_at = now()",
+            "UPDATE org_claims SET dns_verified_at = now()",
+            "UPDATE org_claims SET dns_token = 'x'",
             "DELETE FROM nda_acceptances",
             "INSERT INTO provenance_keys (key_id, public_key) VALUES ('k', '\\x00')",
             "SELECT 1 FROM proposal_confidential",
@@ -1376,7 +1401,7 @@ async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_th
 ) -> None:
     """Every user gets a random 32-byte salt from the database. bridge_app and provenance_worker get SHA-256(salt ||
     data) from app_subject_digest() (owner refs: data = the id's 16 bytes), never the salt; the ORM creates and loads
-    users without selecting or returning it."""
+    users without selecting or returning it. (Who may compute whose digest: test_privileges.py.)"""
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from bridge.auth.models import User
@@ -1395,14 +1420,14 @@ async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_th
         from_app = (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one()
         await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))
         assert (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one() == from_app
+        unknown = "SELECT app_subject_digest(:id, '\\x00')"
+        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
         await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
         salt = (
             await conn.execute(sa.text("SELECT subject_salt FROM users WHERE id = :id"), {"id": user.id})
         ).scalar_one()
         assert len(salt) == 32
         assert from_app == hashlib.sha256(salt + user.id.bytes).digest()  # bridge.provenance.manifest.owner_ref
-        unknown = "SELECT app_subject_digest(:id, '\\x00')"
-        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
 
 
 # Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.
@@ -1503,8 +1528,9 @@ async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID,
 async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncEngine) -> None:
     """AC-IP-2 (manifest half): the trigger holds for every role, the owner included; only the empty registration
     hashes may be filled, once. Drafts stay editable, and a version is inserted as a draft and registered only with a
-    linked problem. registered_at is the database's: a value sent at registration is replaced by now(), and neither
-    it nor a registration hash can be set on a draft."""
+    linked problem. registered_at and owner_handle are the database's: values sent at registration are replaced by
+    now() and the owner's developer handle (a developer without a profile cannot register), and neither they nor a
+    registration hash can be set on a draft."""
     h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
     async with rolled_back(owner_engine) as conn:
         owner, niche, proposal, version = await _registered_proposal(conn)
@@ -1532,14 +1558,7 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             sa.text("UPDATE proposal_versions SET title = 'Draft edit' WHERE id = :id"), {"id": draft_version}
         )
         second = uuid7()
-        await conn.execute(
-            sa.text(
-                "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask,"
-                " problem_statement, summary, owner_handle)"
-                " VALUES (:id, :p, 2, 'T', :n, 'idea', 'pilot', 'P', 'S', 'h')"
-            ),
-            {"id": second, "p": draft, "n": niche},
-        )
+        await conn.execute(sa.text(NEW_VERSION), {"id": second, "p": draft, "n": 2, "niche": niche})
         await expect_error(
             conn,
             "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :id",
@@ -1554,6 +1573,7 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
         )
         for assignment in (
             "registered_at = now()",
+            "owner_handle = 'someone-else'",
             "content_hash = :h",
             "prev_version_hash = :h",
             "manifest_version = 'm'",
@@ -1561,10 +1581,15 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
             await expect_error(
                 conn,
                 f"UPDATE proposal_versions SET {assignment} WHERE id = :id",
-                "registered_at is set at registration|filled after registration",
+                "owner_handle are set at registration|filled after registration",
                 {"id": second, "h": h1},
             )
-        for column, value in (("registered_at", "now()"), ("content_hash", ":h"), ("manifest_version", "'m'")):
+        for column, value in (
+            ("registered_at", "now()"),
+            ("owner_handle", "'someone-else'"),
+            ("content_hash", ":h"),
+            ("manifest_version", "'m'"),
+        ):
             await expect_error(
                 conn,
                 f"INSERT INTO proposal_versions (id, proposal_id, version_no, {column}) VALUES (:id, :p, 3, {value})",
@@ -1572,20 +1597,27 @@ async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncE
                 {"id": uuid7(), "p": draft, "h": h1},
             )
         await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
-        # Registering sets registered_at to the transaction's now(), whatever the writer sends.
-        await conn.execute(
-            sa.text(
-                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t WHERE id = :id"
-            ),
-            {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)},
+        # Registering sets registered_at to the transaction's now() and owner_handle to the owner's developer handle,
+        # whatever the writer sends.
+        register = (
+            "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t,"
+            " owner_handle = 'someone-else' WHERE id = :id"
         )
-        stamped = sa.text("SELECT registered_at = now() FROM proposal_versions WHERE id = :id")
-        assert (await conn.execute(stamped, {"id": draft_version})).scalar_one() is True
+        registration = {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)}
+        handle = "DELETE FROM developer_profiles WHERE user_id = :u RETURNING handle"
+        owner_handle = (await conn.execute(sa.text(handle), {"u": owner})).scalar_one()
+        await expect_error(conn, register, "needs the owner's developer profile", registration)
+        await conn.execute(
+            sa.text("INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)"), {"u": owner, "h": owner_handle}
+        )
+        await conn.execute(sa.text(register), registration)
+        stamped = sa.text("SELECT registered_at = now(), owner_handle::text FROM proposal_versions WHERE id = :id")
+        assert tuple((await conn.execute(stamped, {"id": draft_version})).one()) == (True, owner_handle)
 
 
 NEW_VERSION = (
     "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
-    " summary, owner_handle) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S', 'h')"
+    " summary) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S')"
 )
 
 
@@ -1714,6 +1746,48 @@ async def test_attachments_of_a_registered_version_change_only_their_scan_state(
         await expect_error(conn, "DELETE FROM proposal_attachments WHERE id = :id", "never deleted", by_id)
 
 
+# A registration record of a version, with the version's own cert_id (fk_provenance_records_version_cert).
+RECORD_OF_VERSION = (
+    "INSERT INTO provenance_records (id, version_id, cert_id, content_hash)"
+    " SELECT :id, v.id, v.cert_id, :h FROM proposal_versions v WHERE v.id = :v"
+)
+
+
+async def test_a_record_carries_its_versions_cert_id_and_content_hash(owner_engine: AsyncEngine) -> None:
+    """A registration record is the record of its version, for every role: its cert_id is the version's (a composite
+    foreign key), and its content_hash equals the version's once both are set, whichever is written first (the job
+    inserts the record, then fills the version's hashes)."""
+    h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        _owner, _niche, _proposal, first = await _registered_proposal(conn)
+        _other, _niche2, _proposal2, second = await _registered_proposal(conn)
+        cert = sa.text("SELECT cert_id FROM proposal_versions WHERE id = :v")
+        certs = {v: (await conn.execute(cert, {"v": v})).scalar_one() for v in (first, second)}
+        record = "INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :v, :c, :h)"
+        fill = "UPDATE proposal_versions SET content_hash = :h WHERE id = :v"
+        another_cert = {"id": uuid7(), "v": first, "c": certs[second], "h": h1}
+        await expect_error(conn, record, "fk_provenance_records_version_cert", another_cert)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": first, "c": certs[first], "h": h1})  # the job's order
+        await expect_error(conn, fill, "content hash of its provenance record", {"v": first, "h": h2})
+        await conn.execute(sa.text(fill), {"v": first, "h": h1})
+        await conn.execute(sa.text(fill), {"v": second, "h": h1})  # the version's hash first
+        mismatch = {"id": uuid7(), "v": second, "c": certs[second], "h": h2}
+        await expect_error(conn, record, "content hash of its version", mismatch)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": second, "c": certs[second], "h": h1})
+
+
+async def test_upload_matching_finds_a_record_by_content_hash_through_an_index(owner_engine: AsyncEngine) -> None:
+    """POST /api/verify without a cert id matches an uploaded file's SHA-256 against every record: the lookup uses
+    ix_provenance_records_content_hash rather than scanning the table."""
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL enable_seqscan = off"))  # any usable index is taken over a scan
+        plan = await conn.execute(
+            sa.text("EXPLAIN (COSTS OFF) SELECT cert_id FROM provenance_records WHERE content_hash = :h"),
+            {"h": ZERO_HASH},
+        )
+        assert "ix_provenance_records_content_hash" in " ".join(plan.scalars())
+
+
 async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
     async with rolled_back(owner_engine) as conn:
         owner, _niche, _proposal, version = await _registered_proposal(conn)
@@ -1722,10 +1796,7 @@ async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner
         await conn.execute(
             sa.text("INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)"), {"k": key_id, "pk": bytes(32)}
         )
-        await conn.execute(
-            sa.text("INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :v, :c, :h)"),
-            {"id": record, "v": version, "c": uuid4().hex[:16], "h": ZERO_HASH},
-        )
+        await conn.execute(sa.text(RECORD_OF_VERSION), {"id": record, "v": version, "h": ZERO_HASH})
         by_id = {"id": record}
         sign = "UPDATE provenance_records SET signature = '\\x01', key_id = :k, status = 'signed' WHERE id = :id"
         await conn.execute(sa.text(sign), {"id": record, "k": key_id})
@@ -1760,16 +1831,74 @@ async def test_append_only_evidence_refuses_update_and_delete_even_for_the_owner
             ),
             {"id": uuid7(), "u": owner, "v": version, "h": ZERO_HASH},
         )
+        chain = f"test:{uuid4().hex}"  # an anchor names an existing audit event (chain_anchors_guard)
+        await conn.execute(
+            sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'test.x')"),
+            {"id": uuid7(), "c": chain},
+        )
         await conn.execute(
             sa.text(
                 "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
-                " VALUES (:id, 'global', 1, :h, '\\x01', now(), '1')"
+                " SELECT :id, chain_id, seq, event_hash, '\\x01', now(), '1' FROM audit_events WHERE chain_id = :c"
             ),
-            {"id": uuid7(), "h": ZERO_HASH},
+            {"id": uuid7(), "c": chain},
         )
         for table in ("attestations", "chain_anchors"):
             await expect_error(conn, f"UPDATE {table} SET id = id", "append-only evidence")
             await expect_error(conn, f"DELETE FROM {table}", "append-only evidence")
+
+
+async def test_evidence_times_are_the_databases(owner_engine: AsyncEngine) -> None:
+    """When an attestation was made, the Master Enterprise Terms or an NDA accepted and a Tier-2 view started is
+    evidence: the database sets it to now() on insert, whatever the writer sends (a backdated value is replaced), for
+    every role, the owner included."""
+    backdated = datetime.now(UTC) - timedelta(days=30)
+    async with rolled_back(owner_engine) as conn:
+        owner, _niche, proposal, version = await _registered_proposal(conn)
+        org, attestation, terms, nda, view = uuid7(), uuid7(), uuid7(), uuid7(), uuid7()
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'company', 'Evidence Ltd',"
+                " :slug, 'seed')"
+            ),
+            {"id": org, "slug": f"evidence-{org.hex}"},
+        )
+        met_template, nda_template = await w.add_templates(conn, uuid4().hex[:12])
+        params = {"t": backdated, "u": owner, "org": org, "p": proposal, "v": version, "h": ZERO_HASH}
+        for statement, row in (
+            (
+                "INSERT INTO attestations (id, user_id, version_id, created_it, not_owned_by_employer_or_client,"
+                " no_third_party_confidential, text_version, text_sha256, created_at)"
+                " VALUES (:id, :u, :v, true, true, true, 'v1', :h, :t)",
+                {"id": attestation},
+            ),
+            (
+                "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256, accepted_at)"
+                " SELECT :id, :org, :u, id, sha256, :t FROM legal_templates WHERE id = :template",
+                {"id": terms, "template": met_template},
+            ),
+            (
+                "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+                " logging_notice_version, accepted_at) SELECT :id, :u, :org, :p, id, sha256, 'v1', :t"
+                " FROM nda_templates WHERE id = :template",
+                {"id": nda, "template": nda_template},
+            ),
+            (
+                "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id,"
+                " nda_acceptance_id, render_kind, fingerprint_seed, started_at)"
+                " VALUES (:id, :p, :v, :u, :u, :org, :nda, 'html', :h, :t)",
+                {"id": view, "nda": nda},
+            ),
+        ):
+            await conn.execute(sa.text(statement), params | row)
+        for table, column, row_id in (
+            ("attestations", "created_at", attestation),
+            ("legal_acceptances", "accepted_at", terms),
+            ("nda_acceptances", "accepted_at", nda),
+            ("document_views", "started_at", view),
+        ):
+            stamped = sa.text(f"SELECT {column} = now() FROM {table} WHERE id = :id")
+            assert (await conn.execute(stamped, {"id": row_id})).scalar_one() is True, f"{table}.{column} was backdated"
 
 
 # pg_trigger.tgtype bits: see AUDIT_TRIGGERS.
@@ -1794,7 +1923,22 @@ V2_TRIGGERS = {
     ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
+    ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
+    ("org_claims", "org_claims_status_guard"): ("org_claims_status_guard", ROW | BEFORE | ON_UPDATE),
+    # Round 6: an AFTER trigger on the 0001 table relabels the organisation's open claims on every roster change.
+    ("memberships", "memberships_claims_relabel"): ("memberships_claims_relabel", ROW | ON_INSERT | ON_UPDATE),
+    ("llm_calls", "llm_calls_batch_guard"): ("llm_calls_batch_guard", ROW | BEFORE | ON_INSERT),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
+    ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
+    ("provenance_records", "provenance_records_hash_guard"): (
+        "provenance_records_hash_guard",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("transparency_roots", "transparency_roots_guard"): ("transparency_roots_guard", ROW | BEFORE | ON_INSERT),
+    **{
+        (t, f"{t}_evidence_time"): ("evidence_time_guard", ROW | BEFORE | ON_INSERT)
+        for t in ("attestations", "legal_acceptances", "nda_acceptances", "document_views")
+    },
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
