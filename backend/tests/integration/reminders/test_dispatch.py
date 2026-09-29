@@ -19,6 +19,7 @@ import respx
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.config import get_settings
 from bridge.engagements.calendar import NAIROBI
 from bridge.ids import uuid7
 from bridge.llm.deps import build_runtime
@@ -156,6 +157,14 @@ async def test_the_fixed_text_is_used_and_marked_when_no_model_words_it(owner_en
 FREE_BASE = "https://free-rem.example/v1"
 
 
+def no_email_plans(tmp_path: Any) -> Any:
+    """A copy of plans.yaml whose developer plans do not include daily email reminders."""
+    source = get_settings().plans_file.read_text(encoding="utf-8")
+    path = tmp_path / "plans.yaml"
+    path.write_text(source.replace("daily_email_reminders: true", "daily_email_reminders: false"), encoding="utf-8")
+    return path
+
+
 def free(tag: str) -> Any:
     return settings(
         llm_provider="free",
@@ -284,3 +293,70 @@ async def test_one_recipients_failure_never_stops_the_run(
         monkeypatch.setattr(dispatch, "nudge_one", flaky)
         report = await w.nudges([w.p.signatory, w.p.developer], now=DAY_BEFORE_DUE)
         assert {(o.user_id, o.status) for o in report.outcomes} == {(w.p.signatory, "error"), (w.p.developer, "sent")}
+
+
+async def _demo_on_a_free_slot(w: Any) -> None:
+    w.cfg = free(uuid7().hex[-10:])
+    w.llm = build_runtime(w.cfg)
+    await tracker.as_owner(w.conn)
+    await tracker.run(w.conn, "UPDATE users SET demo_account = true WHERE id = :u", u=w.p.developer)
+
+
+async def _llm_rows(w: Any) -> int:
+    rows = await w.owner_rows("SELECT count(*) FROM llm_calls WHERE user_id = :u", u=w.p.developer)
+    return int(rows[0][0])
+
+
+@pytest.mark.parametrize("closed_by", ["no_consent", "preference_off", "unverified", "plan"])
+async def test_no_llm_call_when_no_email_will_be_sent(owner_engine: AsyncEngine, closed_by: str, tmp_path: Any) -> None:
+    """P6 review MAJOR 2: the facts reach the model only for an email this run sends; the in-app summary never
+    needs the model."""
+    async with as_app(owner_engine) as conn:
+        w = await build(conn, consents=closed_by != "no_consent")
+        await _demo_on_a_free_slot(w)
+        if closed_by == "preference_off":
+            await tracker.run(
+                conn,
+                "INSERT INTO notification_preferences (user_id, kind, channel, enabled)"
+                " VALUES (:u, 'em7', 'email', false)",
+                u=w.p.developer,
+            )
+        elif closed_by == "unverified":
+            await tracker.run(conn, "UPDATE users SET email_verified_at = NULL WHERE id = :u", u=w.p.developer)
+        elif closed_by == "plan":
+            w.cfg = w.cfg.model_copy(update={"plans_file": no_email_plans(tmp_path)})
+        with respx.mock(assert_all_called=False) as router:
+            route = router.post(f"{FREE_BASE}/chat/completions").mock(return_value=chat(WORDED))
+            outcome = (await w.nudges(now=DAY_BEFORE_DUE)).of(w.p.developer)
+        assert outcome is not None
+        assert (outcome.status, outcome.in_app, outcome.email, outcome.email_skipped) == ("sent", True, None, closed_by)
+        assert outcome.wording is None
+        assert not route.called
+        assert await _llm_rows(w) == 0
+        assert w.email.outbox == []
+
+
+async def test_one_llm_call_per_email_not_per_attempt(owner_engine: AsyncEngine) -> None:
+    """P6 review MAJOR 2: a resumed email is sent with the fixed text; the model is asked once per email."""
+    async with as_app(owner_engine) as conn:
+        w = await build(conn)
+        await _demo_on_a_free_slot(w)
+        w.email = FakeEmailProvider([DeliveryError("SMTP 451", transient=True, code=451)])
+        with respx.mock(assert_all_called=True) as router:
+            route = router.post(f"{FREE_BASE}/chat/completions").mock(return_value=chat(WORDED))
+            first = (await w.nudges(now=DAY_BEFORE_DUE)).of(w.p.developer)
+            second = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(minutes=15))).of(w.p.developer)
+            third = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(minutes=30))).of(w.p.developer)
+        assert first is not None
+        assert second is not None
+        assert third is not None
+        assert route.call_count == 1
+        assert await _llm_rows(w) == 1
+        assert (first.email, first.wording and first.wording.source) == (QUEUED, "model")
+        assert second.email == SENT
+        assert second.wording is not None
+        assert (second.wording.source, second.wording.reason) == ("fallback", "retry")
+        assert (third.status, third.wording) == ("already", None)
+        (message,) = w.email.outbox
+        assert message.headers[WORDING_HEADER] == "fallback"
+        assert AI_LABEL not in message.text
