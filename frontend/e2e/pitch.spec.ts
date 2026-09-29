@@ -87,6 +87,11 @@ test.describe("a D1 developer with a published idea", () => {
       await expect(buyerRow.locator("[data-badge='e2']")).toBeVisible();
       await expect(buyerRow.locator("[data-outcome]")).toHaveText("Gets it now");
       await choose(page, listed.name);
+      // The buyer, chosen in the first search, is listed first by name with its outcome, and can be unticked there.
+      const chosen = page.locator("[data-chosen-group]");
+      await expect(chosen.getByRole("heading", { name: "Chosen in other searches" })).toBeVisible();
+      await expect(chosen.getByRole("checkbox", { name: buyer.orgName })).toBeChecked();
+      await expect(chosen.locator("[data-outcome]")).toHaveText("Gets it now");
       const listedRow = page.locator(`[data-org-row="${listed.id}"]`).first();
       await expect(listedRow.locator("[data-badge='e0']")).toBeVisible();
       await expect(listedRow.locator("[data-outcome]")).toHaveText("Saved until they verify");
@@ -147,6 +152,34 @@ test.describe("a D1 developer with a published idea", () => {
     }
   });
 
+  test("sees every choice a link carries by name before pitching it", async ({ page, browser, baseURL }) => {
+    const idea = await publishIdea(page.request, `Maji ${runTag()}`);
+    const buyer = await e2OrgMember(browser, baseURL!);
+    const listed = listedOrg(email);
+    try {
+      // A shared or crafted link: a search for one company, and a choice of another the developer never saw.
+      await page.goto(`/dev/ideas/${idea.id}/pitch?q=${encodeURIComponent(listed.name)}&sel=${buyer.orgId}`);
+      const chosen = page.locator("[data-chosen-group]");
+      await expect(chosen.getByRole("checkbox", { name: buyer.orgName })).toBeChecked();
+      await expect(chosen.locator(`[data-org-row="${buyer.orgId}"] [data-badge='e2']`)).toBeVisible();
+      // Unticked there, it is not sent.
+      await chosen.getByRole("checkbox", { name: buyer.orgName }).uncheck();
+      await page.getByRole("checkbox", { name: listed.name, exact: true }).first().check();
+      await expect(page.getByText(/^1 of \d+ chosen$/)).toBeVisible();
+      await checkScreen(page);
+      await page.locator("[data-primary]").click();
+      const result = page.locator("[data-pitch-result]");
+      await expect(result.getByRole("heading", { name: "Saved until they verify (1)" })).toBeVisible(SERVER_STEP);
+      await expect(result).not.toContainText(buyer.orgName);
+      // A link to an organisation the directory does not list shows nothing and sends nothing.
+      await page.goto(`/dev/ideas/${idea.id}/pitch?sel=0199a000-0000-7000-8000-00000000dead`);
+      await expect(page.locator("[data-chosen-group]")).toHaveCount(0);
+      await expect(page.getByText(/^0 of \d+ chosen$/)).toBeVisible();
+    } finally {
+      await buyer.close();
+    }
+  });
+
   test("hears why nothing was sent when a company was pitched meanwhile", async ({ page }) => {
     const idea = await publishIdea(page.request, `Maji safi ${runTag()}`);
     const listed = listedOrg(email);
@@ -165,6 +198,29 @@ test.describe("a D1 developer with a published idea", () => {
     await expect(row.locator("[data-reason]")).toHaveText(`This idea is already pitched to ${listed.name}.`);
     await expect(page.getByText(/^0 of \d+ chosen$/)).toBeVisible();
     await checkScreen(page);
+
+    // Focus is never hidden under the sticky bar and the tab bar (WCAG 2.4.11): after a refusal the bar stays the
+    // summary and Pitch, both bars fit inside the focus scroll padding, and a focused field lands above them.
+    const covered = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector("[data-action-bar]")!.getBoundingClientRect().height;
+        const tabs = document.querySelector("[data-tab-bar]")!;
+        const tabHeight = getComputedStyle(tabs).position === "fixed" ? tabs.getBoundingClientRect().height : 0;
+        const padding = parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom);
+        return { covered: bar + tabHeight, padding };
+      });
+    const { covered: height, padding } = await covered();
+    expect(height).toBeLessThanOrEqual(padding);
+    // From the bottom of the page, Shift+Tab back up to the search's fields, as a keyboard user would.
+    await page.locator("[data-intent='pitch']").focus();
+    const niche = page.locator("#pitch-niche");
+    for (let i = 0; i < 200 && !(await niche.evaluate((el) => el === document.activeElement)); i++) {
+      await page.keyboard.press("Shift+Tab");
+    }
+    await expect(niche).toBeFocused();
+    const box = await niche.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height - height);
   });
 
   test("cannot pitch a draft, and the picker says why", async ({ page }) => {
