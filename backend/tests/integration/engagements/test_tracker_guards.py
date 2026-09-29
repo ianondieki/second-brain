@@ -39,6 +39,7 @@ from tests.integration.engagements.api_world import (
 )
 
 R = EngagementActorRole
+MILESTONE = uuid7()  # no engagement of these tests has it
 ROUTES: dict[sm.Command, str] = {
     sm.Command.ACCEPT_INTEREST: "accept-interest",
     sm.Command.DECLINE_INTEREST: "decline-interest",
@@ -59,6 +60,12 @@ ROUTES: dict[sm.Command, str] = {
     sm.Command.SIGN_CERTIFICATE: "sign-certificate",
     sm.Command.RECORD_PAYMENT: "record-payment",
     sm.Command.CONFIRM_PAYMENT: "confirm-payment",
+    # The milestone sub-tracker's routes name a milestone; outside IN_IMPLEMENTATION they are 409 like any command
+    # (never 404 for a milestone the engagement cannot have yet).
+    sm.Command.START_MILESTONE: f"milestones/{MILESTONE}/start",
+    sm.Command.SUBMIT_MILESTONE: f"milestones/{MILESTONE}/submit",
+    sm.Command.ACCEPT_MILESTONE: f"milestones/{MILESTONE}/accept",
+    sm.Command.REQUEST_CHANGES: f"milestones/{MILESTONE}/request-changes",
 }
 
 
@@ -94,6 +101,7 @@ async def test_every_actor_and_command_on_a_submitted_engagement_matches_the_tab
         "viewer": (world.viewer, sm.Actor(EngagementParty.ORG, frozenset())),
     }
     ids = [user for user, _ in people.values()]
+    assert set(ROUTES) == set(sm.Command)  # every row of the table is sent
     async with clients(app_engine, deals_on(), *ids) as signed_in:
         lock = (await t.detail(signed_in[0]))["lock_version"]
         for client, (name, (_, actor)) in zip(signed_in, people.items(), strict=True):
