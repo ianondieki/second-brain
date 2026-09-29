@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 from typing import cast
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import String
 
 from bridge.llm import registry
@@ -51,6 +53,32 @@ async def test_in_memory_ledger_sums_by_subject_and_window() -> None:
     assert await ledger.tenant_spent_usd(org_id=None, user_id=USER, since=since) == Decimal(4)
     assert await ledger.global_spent_usd(since=since) == Decimal(7)
     assert await ledger.global_spent_usd(since=NOW - timedelta(days=41)) == Decimal(15)
+
+
+async def test_in_memory_ledger_reserves_and_settles_a_batch_item_once() -> None:
+    """The SQL rules (revision 0002: one reservation and one settlement per item; the llm_spend view counts a
+    reservation until its item settles, then the settled row), kept in memory."""
+    ledger = InMemoryLedger()
+    since = NOW - timedelta(days=1)
+    hold = replace(entry("2", org=ORG), status=CallStatus("batch_reserved"), batch_id="b1", custom_id="i1")
+    await ledger.reserve([hold, replace(hold, id=uuid4(), custom_id="i2")])
+    assert await ledger.tenant_spent_usd(org_id=ORG, user_id=None, since=since) == Decimal(4)
+    with pytest.raises(ValueError, match="reserved"):  # the item is reserved already
+        await ledger.reserve([replace(hold, id=uuid4())])
+    with pytest.raises(ValueError, match="batch_reserved"):  # a reservation is a batch_reserved row
+        await ledger.reserve([replace(hold, id=uuid4(), custom_id="i3", status=CallStatus.OK)])
+    result = replace(hold, id=uuid4(), status=CallStatus.OK, cost_usd=Decimal("1.5"))
+    assert await ledger.settle(result) is True
+    assert await ledger.settle(replace(result, id=uuid4(), status=CallStatus.PROVIDER_ERROR)) is False
+    assert await ledger.tenant_spent_usd(org_id=ORG, user_id=None, since=since) == Decimal("3.5")  # i2 still held
+    assert await ledger.global_spent_usd(since=since) == Decimal("3.5")
+    assert await ledger.settle(replace(result, id=uuid4(), custom_id="i9")) is True  # settles with no reservation
+    assert await ledger.global_spent_usd(since=since) == Decimal(5)
+    with pytest.raises(ValueError, match="batch item"):  # a settlement names its item...
+        await ledger.settle(replace(result, id=uuid4(), batch_id=None, custom_id=None))
+    with pytest.raises(ValueError, match="batch item"):  # ...and is final
+        await ledger.settle(replace(result, id=uuid4(), custom_id="i8", status=CallStatus("batch_reserved")))
+    assert len(ledger.entries) == 4
 
 
 async def test_sinks_keep_what_they_receive() -> None:

@@ -36,6 +36,7 @@ ENTRY = LedgerEntry(
     attempt=2,
     inputs={"fields": []},
     batch_id="b",
+    custom_id="c",
     output={"verdict": "clean"},
     error="e",
 )
@@ -60,6 +61,8 @@ def test_an_entry_maps_to_the_table_columns() -> None:
         "status": "ok",
         "stop_reason": "end_turn",
         "trace_id": "tr",
+        "batch_id": "b",  # a Message Batches item: its batch and custom id
+        "custom_id": "c",
         "inputs": {"fields": []},
     }
     assert row_values(replace(ENTRY, purpose="tier2_llm_assistant"))["purpose"] == "tier2_llm_assistant"
