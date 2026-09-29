@@ -3,6 +3,7 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -39,7 +40,8 @@ export interface CommandFormProps {
   onSubmit: (input: FormInput) => void;
   onCancel: () => void;
   /** approve: the organisation's active members, and who is signed in (the default contact person). */
-  members?: Member[];
+  /** null: the members could not be read, so the form says so instead of offering an empty list. */
+  members?: Member[] | null;
   myUserId?: string;
   /** confirm_payment: the organisation's recorded amount, shown as a hint (never filled in for the developer). */
   recorded?: string | null;
@@ -121,6 +123,21 @@ function focusFirst(errors: Errors, ids: Record<string, string>) {
 }
 
 function ApproveForm(props: CommandFormProps & { today: string }) {
+  const t = useStrings("trackerActions");
+  if (props.members === null) {
+    return (
+      <div data-command-form={props.command} className="flex flex-col items-start gap-4">
+        <Alert className="w-full">{t("approve.membersFailed")}</Alert>
+        <Button variant="secondary" onClick={props.onCancel}>
+          {t("cancel")}
+        </Button>
+      </div>
+    );
+  }
+  return <ApproveFields {...props} members={props.members} />;
+}
+
+function ApproveFields(props: CommandFormProps & { today: string }) {
   const t = useStrings("trackerActions");
   const id = useId();
   const members = props.members ?? [];

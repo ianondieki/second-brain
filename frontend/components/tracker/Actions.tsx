@@ -41,7 +41,8 @@ export interface ActionsProps {
   counterpart: string;
   /** Two-step sign-in is on (the step-up needs a code). */
   enrolled: boolean;
-  members?: Member[];
+  /** approve: the organisation's members; null when they could not be read. */
+  members?: Member[] | null;
   myUserId?: string;
   /** The recorded final payment ("250,000"), for the developer's confirmation hint. */
   recorded?: string | null;

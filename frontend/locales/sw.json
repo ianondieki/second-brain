@@ -1146,7 +1146,8 @@
       "person": "Mtu wa mawasiliano",
       "channel": "Njia ya mawasiliano",
       "by": "Wasiliana kabla ya",
-      "byHint": "Isizidi siku tano za kazi kuanzia leo."
+      "byHint": "Isizidi siku tano za kazi kuanzia leo.",
+      "membersFailed": "Orodha ya wanachama wa shirika lako haikupakia. Pakia ukurasa upya ujaribu tena."
     },
     "channel": {
       "email": "Barua pepe",

@@ -280,6 +280,15 @@ describe("forms for commands with a body", () => {
     expect(screen.getByLabelText("Explain the reason")).toBeTruthy();
   });
 
+  it("says so when the organisation's members could not be read, instead of an empty list", async () => {
+    const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve"], lock_version: 5 });
+    const { runImpl } = renderActions(engagement, { members: null });
+    fireEvent.click(screen.getByRole("button", { name: "Approve to proceed (non-binding)" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("members did not load");
+    expect(screen.queryByLabelText("Contact person")).toBeNull();
+    expect(runImpl).not.toHaveBeenCalled();
+  });
+
   it("approves naming a contact person from the organisation's members", async () => {
     const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve", "decline"], lock_version: 5 });
     const { runImpl } = renderActions(engagement, {

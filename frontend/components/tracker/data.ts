@@ -91,11 +91,15 @@ export async function engagementDocument(id: string, kind: DocumentKind): Promis
   return null;
 }
 
-/** The organisation's active members (the approve form's contact person). */
-export async function orgMembers(orgId: string): Promise<Member[]> {
-  const { data } = await serverApi().GET("/api/orgs/{org_id}/members", {
+/**
+ * The organisation's active members (the approve form's contact person), or null when they could not be read: the
+ * form then says so instead of offering an empty list.
+ */
+export async function orgMembers(orgId: string): Promise<Member[] | null> {
+  const { data, response } = await serverApi().GET("/api/orgs/{org_id}/members", {
     params: { path: { org_id: orgId } },
     ...(await options()),
   });
-  return (data ?? []).map((m) => ({ user_id: m.user_id, display_name: m.display_name }));
+  if (response.status === 401) redirect("/login");
+  return data ? data.map((m) => ({ user_id: m.user_id, display_name: m.display_name })) : null;
 }

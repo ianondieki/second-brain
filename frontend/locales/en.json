@@ -1146,7 +1146,8 @@
       "person": "Contact person",
       "channel": "How they will make contact",
       "by": "Contact by",
-      "byHint": "No more than five business days from today."
+      "byHint": "No more than five business days from today.",
+      "membersFailed": "The list of your organisation's members did not load. Reload the page to try again."
     },
     "channel": {
       "email": "Email",
