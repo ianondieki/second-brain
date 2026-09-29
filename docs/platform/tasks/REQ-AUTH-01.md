@@ -46,6 +46,35 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    column: the start time is sealed with the secret inside its AES-GCM envelope, and the confirmation clears a secret
    begun over 15 minutes ago (or stored without a start time) and answers 409 `no_pending_enrolment`. Tests:
    `backend/tests/integration/test_auth_totp_setup.py` (follow-up 7 section, both race orders).
+   **BLOCKER fixed (P17):** `2494cdf` let the confirmation copy the pending envelope (`"{secret}|{start}"`) into
+   `totp_secret_enc`, so every later TOTP code failed to decode (`binascii.Error`; 5 auth tests failed). The
+   confirmation now seals the secret alone under a fresh nonce and clears `totp_pending_enc`. Test:
+   `test_a_totp_code_passes_a_step_up_after_enrolment` (the stored envelope decrypts to the bare secret; a TOTP-code
+   step-up passes; its replay is refused), red before the fix and green after. Also tested: setup cannot start
+   again while two-step sign-in is on (`test_setup_cannot_start_again_while_two_step_sign_in_is_on`).
+   **Start time in the envelope, not a column** (the Handoff's question for the security-reviewer). Kept in the
+   envelope because:
+   (a) integrity: AES-256-GCM authenticates the whole plaintext, with the user id as associated data, so without
+   `DATA_ENCRYPTION_KEY` nobody can change or extend the start time, keep the secret under another time, or move an
+   envelope to another user. A `timestamptz` column could be rewritten by anyone who can write the row. The gain is
+   small, since such a writer can already clear `totp_enabled_at`, but the envelope gives up nothing for it;
+   (b) atomicity: one column holds the secret and its time, so each writer (start, cancel, confirm, expiry, turn-off)
+   sets or clears both at once. With two columns, every writer would have to keep them in step, and a missed one
+   would leave a secret with a stale or missing time;
+   (c) no schema change: a column needs an Alembic revision (db-migrations only) and a change to `bridge_app`'s
+   column-level UPDATE grant on `users`, for no security gain;
+   (d) fail closed: an envelope without a start time (written before `2494cdf`) counts as expired and is cleared.
+   What it costs: (1) both envelopes share one key and the same associated data, so only their format tells them
+   apart (`secret|start` or `secret`). Mixing them up was the BLOCKER. It is now closed by construction: the
+   confirmation re-seals the bare secret, sign-in reads only `totp_secret_enc`, the test above decrypts the stored
+   active envelope, and an active envelope copied into the pending column has no start time and is refused as
+   expired. A distinct associated-data label per kind (for example `b"totp-pending:" + user_id`) would separate them
+   cryptographically. It is not needed now: secrets pending at deploy would no longer decrypt, so the confirmation
+   would also have to treat such an envelope as expired. It is an option for the security review. (2) SQL cannot see the time, so a sweeper would have to decrypt rows. None is planned: an
+   abandoned secret stays encrypted, sign-in never reads it, and it is refused after 15 minutes. (3) The time is the
+   app clock (`bridge.clock.utcnow`, not the tracker's test clock) in whole seconds. Clock skew between API instances
+   shifts the lifetime by the skew. A start time in the future is accepted, so a slow instance never refuses a fresh
+   setup; forging one needs the key.
    **Open (impl-frontend):** Cancel sends DELETE and acts on its answer: 204 or 409 `no_pending_enrolment` (two-step
    sign-in is off and nothing is pending, so a later confirmation cannot turn it on) to the "cancelled" notice; 409
    `totp_already_enabled` to the "on" screen with the codes-not-shown notice; anything else keeps the setup steps with
@@ -71,7 +100,25 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    `auth.recovery_codes_replaced` audit event (ids only) and the "New recovery codes were created." security notice
    (`[[COPY-REVIEW]]`). Tests: `test_auth_totp_setup.py` (follow-up 8 section), including both race orders with a
    step-up that spends an old code.
+   Added in P17: a cross-site POST answers 403 `csrf_failed` and leaves the hashes alone; a replacement behind a
+   committing turn-off answers 409 `totp_not_enabled` with no codes, audit event or notice. That race is what
+   `lock_user` guards here. The replacement overwrites the whole hash list, so the two step-up races end the same
+   with or without the lock; only the turn-off race tells them apart (mutation-proved).
+   **For the security-reviewer:** a stolen session whose second factor is under 12 h old can replace the codes. The
+   owner's codes then stop working and the owner gets the notice. The thief's codes pass only the second factor, so
+   a later sign-in still needs the password or an emailed link. Asking for the current password too, or a fresher
+   second factor, would narrow this; the card asked for the step-up helper only, so it is left as is.
    **Open (impl-frontend):** the "Get new recovery codes" action on the "on" screen (on 403 `step_up_required` it asks
    for an authenticator code, POST /api/auth/step-up, then retries; the codes are shown once, as at setup); the
    codes-not-shown notices point at it, `security.codesNotShownTurnOff` no longer sends people to turn two-step
    sign-in off; the comment on `onWithoutCodes` goes.
+
+**P17 backend status (2026-09-29, `feat/REQ-AUTH-01-followups-7-8`):** the BLOCKER is fixed and the integration
+branch is merged in. Full backend suite: 3077 passed. `bridge/auth/service.py`: 99% with branches (93% on the merged
+tree before these tests; the Handoff measured 91%). The one line left (273) re-raises when an insert fails while the
+address is still free. New tests reach the auth paths nothing tested: signup refusals, a signup that loses the race
+for its address, magic links to suspended accounts, rehash at login, the new-password policy, a step-up without
+two-step sign-in, the second-factor throttle, a wrong second step. Mutation proofs: 29 mutations, all killed and all
+restored. They cover the fix; the lifetime, expiry-clearing and cancel guards of follow-up 7; the lock, step-up,
+turn-off check, audit, notice and throttle guards of follow-up 8; and the paths the new tests reach. Next:
+security-reviewer (one round) and reviewer on this branch, then the frontend halves (impl-frontend) with ux-reviewer.
