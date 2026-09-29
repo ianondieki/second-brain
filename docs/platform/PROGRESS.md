@@ -390,6 +390,59 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
 
+### Orchestrator rulings re-checked at xhigh (2026-09-29)
+
+The main session ran at medium effort for part of session 2. Every orchestrator ruling and MINOR deferral of the
+session was re-checked at xhigh; sub-agent work kept its own effort and was not redone. Changes are applied as noted.
+
+| # | Ruling or deferral (where) | Keep / change | Reason |
+|---|---|---|---|
+| 1 | Schema v2 Q1–Q5 as recommended (round 6) | keep | the laptop Handoff's recommendations; reviewer and security-reviewer PASS |
+| 2 | Round-6 MINORs deferred: non-owner domain and E2 attributes, deadlocks, settle tenant and `OLD.org_id` tests (REQ-REPO-01 card) | keep, with a condition | reachable only through staff claim decisions; P15 ("queue only") must fix MINORs 1–3 before it lets staff decide claims |
+| 3 | Wip commit `2ca0347` stays in history | keep | no rewrite allowed; its content was verified (951 passed) and reviewed in round 6 |
+| 4 | T2.2 reviewer MINORs 1–4 deferred | keep | test gaps and crash-window edges with no prototype-visible effect |
+| 5 | T2.2 security MINORs 2–5 and 7 deferred (1 and 6 built) | keep, with a note | MINOR 3 (the global-cap error carries platform spend) must be handled when P13 first returns LLM output through an API |
+| 6 | T2.4: the test-only `database_clock_guard` kept | keep | removing a test needs the human |
+| 7 | T2.4 MINORs: `snapshot_at` unsigned, `SET NOT NULL`, head-order test | keep | the security reviewer found no exploit beyond the accepted audit residual |
+| 8 | Schema v2 merged into the waiting branches before round 6 was reviewed | keep | the later schema commits were docs only; each branch re-ran its suite and CI |
+| 9 | P1: tighten 0002's end-reason CHECK inside 0003 | keep | additive, tested, reviewed |
+| 10 | P1: `users` INSERT narrowing (staff_role, status, subject_salt) deferred | keep | pre-existing since Phase 1; the API controls the columns; listed for the Phase 8 audit |
+| 11 | P1: system events by party-bound jobs accepted | keep | tightened to non-viewer roles in review round 1; residual recorded |
+| 12 | P1: deadlines only in the state machine | keep | spec 06 6.9 makes the state machine the single definition |
+| 13 | P1: parties may not write `DISPUTED → CLOSED` | keep | otherwise either party skips the payment gate; the mediator path is after the prototype |
+| 14 | P1 round-2 MINORs: contact after the end; developer made a member later | keep | P5's API refuses one person on both sides (`both_parties`) and distinct signers are enforced |
+| 15 | P2: vulnerability holds reject-only | keep | spec MUST "never made public"; the check re-screens the current text |
+| 16 | D-39 recorded for the attestation wording only | change | the P3 viewer-logging notice and the P5 NDA cover are legal or privacy text too; D-39 now covers all four texts |
+| 17 | P2 MINOR: `proposal_versions` RLS shows older (possibly held) versions to signed-in readers | keep, with a condition | no endpoint serves older versions; any new reader (P10 scout, P12 ranker) reads `current_version_id` only until db-migrations restricts the policy |
+| 18 | Other P2 MINORs: moderation deadlock (500), sanitiser false positives | keep | fail closed; no leak |
+| 19 | P3: non-members get 404, not AC-SEC-2's 403, while the flag is off | change | two MUST criteria conflict (AC-SEC-1/b vs AC-SEC-2), which CLAUDE.md sends to the human; recorded as D-40 with the default applied |
+| 20 | P3: NDA check last; same-origin framing of the render; terms checked loosely in the app, finally by the database | keep | UX order; the database decides last; framing only by the app's own origin |
+| 21 | P3: manual grants, revocation and unlocks after the prototype | keep, with a note | P10's ORG_INTEREST path needs a manual grant (spec 06 6.9 stage 0): build it in P10 |
+| 22 | P3 security MINORs: NDA purpose skips the definer, view snapshots, revocation race, flag-off audit growth, grant after revocation | keep | each fails closed or is latent until a later feature |
+| 23 | P4: EM1 goes to the developer only | keep | spec 06 6.10 makes EM1 the developer's receipt; N01's org side is in-app plus the org digest "Needs us" line, which P6 renders |
+| 24 | P4 merged with the interim engagement hook | keep | consistent under schema v3; the swap to P5's `open_engagement_for_tag` is part of the P5 merge |
+| 25 | P4 MINORs: org level read without a lock, untested cap branch | keep | E1→E2 approvals are after the prototype |
+| 26 | P5 decisions 1–2: TOTP step-up within 12 h for signatures, endorsements and payments | keep | ADR-002 point 2 says exactly this; P9 must seed TOTP for demo developers, signatories and finance seats |
+| 27 | P5 decisions 3, 4, 5, 7, 9: deals flag, who marks final, org signs the certificate first, EM2 sentence, org notification recipients | keep | match spec 06 6.9 and the N-matrix |
+| 28 | P5 decision 6: a payment mismatch answers 409 | keep | AC-TRACK-7's DISPUTED is a side state rescheduled after the prototype (REQUIREMENTS §7) |
+| 29 | P5 decision 8: the decline's OTHER text in job arguments, deferred | change | the security review showed it also reaches the worker's logs; redact it from log records now (with a test); passing only an id stays a follow-up |
+| 30 | P5 security MINORs 1 (control characters in signed text) and 3 (endorsement method invariant) fixed before merge | keep | signed evidence must be exactly what the table and the parties see |
+| 31 | P5 schema needs 1–4 to db-migrations | keep | none blocks the M1 path |
+| 32 | P6: the org digest uses the `reminders` consent | keep | the N23 row names the reminders consent for both versions |
+| 33 | P6: fixed 07:30/08:30 send times, wording at send time, per-user loop, possible resend after a failed commit | keep | prototype scale; recorded in the cards |
+| 34 | P6: its own copy of the next-actor table (`health.whose_turn` mirrors P5's `pending`) | change | spec 06 6.9 makes the state machine the only definition; merge P5 first, then P6 imports `pending` and moves its thresholds to `policy.yaml` before it merges |
+| 35 | P7: platform-wide slot count (revision 0004); production refuses free providers and `LLM_PROVIDER=fake` | keep | D-37 is for local runs; fail closed |
+| 36 | P7: model ids unchanged | change | right that it is the human's call, but it was not recorded: now D-41 (Sonnet 5 legacy, Haiku 4.5 retirement not before 2026-10-15) |
+| 37 | P7 MINORs: `public=True` opt-out, placeholder answers, host patterns, cap overshoot | keep, with a note | the P11 reviewer checks that `public=True` is used only for saved public excerpts |
+| 38 | P8: e2e skips without `E2E_VERIFY_CERT_ID` / `E2E_DATABASE_OWNER_URL` | change (tightened) | a test skipped in CI is a gap; removing both skips is now an M1 exit item (P9 seeds a certificate; CI exports the owner URL) |
+| 39 | P8 part 1: the X-Forwarded-For threat note deferred | change | added now (THREAT_MODEL §7) |
+| 40 | P8 part 2: the JS budget counts every script fetched until idle | keep, with a doc fix | consistent with D-28 (a) and Lighthouse; `docs/runbooks/dev-setup.md` must describe the new method |
+| 41 | Merging into the integration branch without GitHub PRs | keep | PLAN §8's rule is reviewer PASS plus green `pr.yml` by `workflow_dispatch`; PRs only if the owner asks |
+| 42 | Integration push runs not checked after merges | change | the `5ab7a6a` run failed unnoticed (Docker Hub unreachable on the runner before any test; `c305d8a` then passed every job); every integration push run is now checked |
+| 43 | Sanitiser linearity test on thread CPU time | keep | reviewer PASS; the quadratic mutant fails at 8–10 s CPU against a 3 s bound |
+| 44 | Cheap MINORs folded into fix rounds | keep | no extra review round (PLAN §8) |
+| 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
+
 ### Prototype checklist (updated after every task; commit and push after each)
 
 | Item | Status | Notes |
