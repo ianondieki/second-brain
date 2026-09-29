@@ -50,7 +50,7 @@ SECURITY_HEADERS = {
 
 def dev_clock_router(settings: Settings) -> APIRouter | None:
     """The dev/test clock router (REQ-ENG-12): never in production, and only where the image carries the module
-    (``backend/Dockerfile`` deletes it unless built with ``WITH_TEST_CLOCK=true``)."""
+    (``backend/Dockerfile`` deletes it unless built with ``WITH_DEV_TOOLS=true``)."""
     if settings.app_env == "production" or importlib.util.find_spec(TEST_CLOCK_MODULE) is None:
         return None
     router: APIRouter = importlib.import_module(TEST_CLOCK_MODULE).build_router(settings)

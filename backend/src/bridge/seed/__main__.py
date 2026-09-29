@@ -17,19 +17,27 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import sys
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from bridge.config import Settings, get_settings
-from bridge.seed.demo import DemoReport, demo_refusal, seed_demo
-from bridge.seed.demo.data import DEMO_PASSWORD, all_accounts
 from bridge.seed.directory import directory_loadable, directory_refusal, seed_directory
 from bridge.seed.reference import SEED_TABLES, seed_all
 
+if TYPE_CHECKING:
+    from bridge.seed.demo import DemoReport
+
+# The demo seed carries public credentials: the backend image has it only when built with WITH_DEV_TOOLS=true
+# (backend/Dockerfile), and this module imports it only for --demo.
+DEMO_PACKAGE: Final = "bridge.seed.demo"
+DEMO_MISSING: Final = "the demo seed is not in this image (it is built in only with WITH_DEV_TOOLS=true)"
+
 
 async def run(url: str, settings: Settings) -> tuple[dict[str, int], dict[str, int] | None]:
-    engine = create_async_engine(url)
+    engine = create_async_engine(url, hide_parameters=True)
     try:
         async with engine.begin() as connection:
             counts = await seed_all(connection, settings)
@@ -40,7 +48,9 @@ async def run(url: str, settings: Settings) -> tuple[dict[str, int], dict[str, i
 
 
 async def run_demo(owner_url: str, settings: Settings) -> DemoReport:
-    owner = create_async_engine(owner_url)
+    from bridge.seed.demo import seed_demo  # only for --demo, and only where the image has it
+
+    owner = create_async_engine(owner_url, hide_parameters=True)
     app = create_async_engine(settings.database_url.get_secret_value(), pool_pre_ping=True, hide_parameters=True)
     try:
         return await seed_demo(settings, owner_engine=owner, app_engine=app)
@@ -50,6 +60,8 @@ async def run_demo(owner_url: str, settings: Settings) -> DemoReport:
 
 
 def print_demo(report: DemoReport) -> None:
+    from bridge.seed.demo.data import DEMO_PASSWORD, all_accounts  # lazily: see run_demo
+
     for what in report.created:
         print(f"demo: {what}")
     for note in report.notes:
@@ -64,6 +76,15 @@ def print_demo(report: DemoReport) -> None:
         print(f"demo:   {email:30}  {name:16}  {what}")
 
 
+def demo_refusal_reason(settings: Settings) -> str | None:
+    """Why --demo cannot run here: the demo package is not in this image, or the environment refuses it."""
+    if importlib.util.find_spec(DEMO_PACKAGE) is None:
+        return DEMO_MISSING
+    from bridge.seed.demo import demo_refusal  # lazily: see run_demo
+
+    return demo_refusal(settings)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m bridge.seed", description="Seed reference data (idempotent).")
     parser.add_argument("--demo", action="store_true", help="also load the demo dataset (APP_ENV dev or test only)")
@@ -73,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if owner_url is None:
         print("DATABASE_OWNER_URL is not set: the seed runs as the owner role (bridge_owner).", file=sys.stderr)
         return 2
-    if args.demo and (reason := demo_refusal(settings)) is not None:
+    if args.demo and (reason := demo_refusal_reason(settings)) is not None:
         print(f"seed: --demo refused: {reason}", file=sys.stderr)
         return 2
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None

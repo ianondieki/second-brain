@@ -6,11 +6,13 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
-# REQ-ENG-12: the dev/test clock router is not in the image unless it is built for dev, test or staging with
-# --build-arg WITH_TEST_CLOCK=true (infra/docker-compose.dev.yml sets it). bridge.main mounts it only where this module
-# exists and APP_ENV is not production; a production image never carries it.
-ARG WITH_TEST_CLOCK=false
-RUN if [ "$WITH_TEST_CLOCK" != "true" ]; then rm -f src/bridge/testclock.py; fi
+# REQ-ENG-12, REQ-FND-02: dev tools are left out of the image unless it is built for dev, test or staging with
+# --build-arg WITH_DEV_TOOLS=true (infra/docker-compose.dev.yml sets it): the dev/test clock router, and the demo seed
+# and helpers, which carry the demo accounts' public credentials. bridge.main mounts the clock router only where its
+# module exists and APP_ENV is not production; python -m bridge.seed imports the demo seed only for --demo. A
+# production image never carries either.
+ARG WITH_DEV_TOOLS=false
+RUN if [ "$WITH_DEV_TOOLS" != "true" ]; then rm -rf src/bridge/testclock.py src/bridge/demo src/bridge/seed/demo; fi
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY config ./config

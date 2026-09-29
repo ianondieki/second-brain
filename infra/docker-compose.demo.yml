@@ -7,7 +7,7 @@
 # D-36) and the fake embedder (no model download); secrets from infra/demo/backend.env (generated, gitignored) on top
 # of backend/.env (where the owner puts the LLM variables); the migrate step also loads the demo seed
 # (`python -m bridge.seed --demo`); a memory limit per service so the stack fits Docker Desktop's 4 GB (measured
-# figures: README "Run the demo"). The backend image is the dev stack's (WITH_TEST_CLOCK=true: the test-clock router).
+# figures: README "Run the demo"). The backend image is the dev stack's (WITH_DEV_TOOLS=true: the test-clock router and the demo seed).
 name: bridge-demo
 
 x-demo-env: &demo-env

@@ -209,7 +209,7 @@ def test_docker_compose_validates_the_merged_demo_file(tmp_path: Path) -> None:
     assert "clamav" not in merged["services"]
     assert merged["services"]["api"]["environment"]["APP_ENV"] == "dev"
     assert merged["services"]["api"]["environment"]["PROVENANCE_SIGNING_KEY"] == ""
-    assert merged["services"]["api"]["build"]["args"]["WITH_TEST_CLOCK"] == "true"
+    assert merged["services"]["api"]["build"]["args"]["WITH_DEV_TOOLS"] == "true"
 
 
 def test_ci_seeds_the_demo_after_the_egress_lock_and_exports_both_e2e_variables() -> None:

@@ -28,7 +28,7 @@ targets), `.gitignore`, `backend/src/bridge/seed/demo/` (`data.py`, `runtime.py`
 
 - **Stack.** An override of the dev stack as its own project `bridge-demo` (its volumes only are wiped by
   `make demo-reset`): APP_ENV=dev, `FEATURE_TIER2_ENABLED` and `FEATURE_DEALS_ENABLED` true, the fake scanner and
-  embedder, no ClamAV, the dev image (WITH_TEST_CLOCK=true), secrets from the generated `infra/demo/backend.env` over
+  embedder, no ClamAV, the dev image (WITH_DEV_TOOLS=true), secrets from the generated `infra/demo/backend.env` over
   `backend/.env` (where the owner puts the LLM variables), the demo seed in the migrate step after the buckets and the
   signing key, SeaweedFS with explicit volume slots (by default it sized them from the free disk and refused uploads
   on a small Docker disk), and `mem_limit` per service (2.75 GiB in all).
