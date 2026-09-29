@@ -41,6 +41,11 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
     building = engagement(
         milestones=(milestone(days(1)), milestone(days(30), M.PLANNED, seq=2)), last_developer_update_on=days(-6)
     )
+    upcoming = engagement(
+        title="Kiosk app",
+        milestones=(milestone(days(9), seq=1, deliverable="Beta"), milestone(days(12), M.ACCEPTED, seq=2)),
+        last_developer_update_on=MONDAY,
+    )
     tagged = engagement(
         S.SUBMITTED,
         title="Farm data",
@@ -57,12 +62,12 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
         awaiting=frozenset({ORG}),
         last_developer_update_on=days(-1),
     )
-    digest = compose_digest(facts(building, tagged, review, engagement(S.CLOSED)), NO_HOLIDAYS)
+    digest = compose_digest(facts(building, tagged, review, upcoming, engagement(S.CLOSED)), NO_HOLIDAYS)
     message = render_digest(digest, to="org@example.com", base_url=BASE_URL)
     assert message.subject == "Telco A (fixture): progress digest, 5 Oct 2026"
     assert message.tag == "em7_org"
     assert message.text == (
-        "3 active engagements, 1 on track, 1 at risk, 1 off track, 2 awaiting you, 1 new tagged proposal.\n"
+        "4 active engagements, 2 on track, 1 at risk, 1 off track, 2 awaiting you, 1 new tagged proposal.\n"
         "\n"
         "NEEDS US\n"
         "- “Farm data” by Otieno: start the review by 13 Oct 2026.\n"
@@ -78,9 +83,9 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
         "- “Ledger” by Wanjiru (Implementation): Off track. The review of milestone 1 was due 22 Sep 2026 and is"
         " 13 days overdue.\n"
         "- “Solar cold rooms” by Wanjiru (Implementation): At risk. Milestone 1 “Pilot for one county” is due"
-        " 6 Oct 2026 (1 business day left) and not submitted yet. Milestones due: milestone 1 “Pilot for one county”"
-        " due 6 Oct 2026. No update from Wanjiru since 29 Sep 2026.\n"
+        " 6 Oct 2026 (1 business day left) and not submitted yet. No update from Wanjiru since 29 Sep 2026.\n"
         "- “Farm data” by Otieno (Proposal submitted): On track.\n"
+        "- “Kiosk app” by Wanjiru (Implementation): On track. Milestones due: milestone 1 “Beta” due 14 Oct 2026.\n"
         "\n"
         f"Open your organisation's tracker: {BASE_URL}/engagements\n"
         "\n"
@@ -88,7 +93,12 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
         "You get this daily digest for Telco A (fixture) because you turned reminders on.\n"
         f"Manage notifications: {BASE_URL}/settings/notifications · Help: {BASE_URL}/help · Nairobi, Kenya\n"
     )
-    assert digest.health_of() == {review.id: Health.OFF_TRACK, building.id: Health.AT_RISK, tagged.id: Health.ON_TRACK}
+    assert digest.health_of() == {
+        review.id: Health.OFF_TRACK,
+        building.id: Health.AT_RISK,
+        tagged.id: Health.ON_TRACK,
+        upcoming.id: Health.ON_TRACK,
+    }
 
 
 def test_the_organisations_stage_step_and_its_overdue_step_are_its_own() -> None:

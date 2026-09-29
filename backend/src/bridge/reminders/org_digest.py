@@ -133,8 +133,13 @@ def _entry(e: EngagementFact, today: date, holidays: Collection[date]) -> tuple[
     stage = STAGE_LABELS.get(e.state, e.state.value)
     sentences = [f"{_title(e)} ({stage}): {HEALTH_LABELS[a.health]}."]
     sentences += [f"{reason_text(r, e, viewer=ORG)}." for r in a.reasons]
+    named = {r.milestone_seq for r in a.reasons}
     due = sorted(
-        (m for m in e.milestones if m.state in _OPEN_WORK and (m.due_on - today).days <= UPCOMING_DAYS),
+        (
+            m
+            for m in e.milestones
+            if m.state in _OPEN_WORK and (m.due_on - today).days <= UPCOMING_DAYS and m.seq not in named
+        ),
         key=lambda m: (m.due_on, m.seq),
     )
     if due:
