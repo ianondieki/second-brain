@@ -265,7 +265,9 @@ def test_the_sanitiser_is_total_on_non_ascii_tag_names(raw: str) -> None:
 
 
 @settings(max_examples=300, deadline=None)
-@given(st.text(alphabet=st.sampled_from([*BLOCK_PIECES, *UNICODE_FOLDS, "&lt;", "&gt;", "\u200b", "y"]), max_size=60))
+@given(
+    st.lists(st.sampled_from([*BLOCK_PIECES, *UNICODE_FOLDS, "&lt;", "&gt;", "\u200b", "y"]), max_size=40).map("".join)
+)
 def test_the_sanitiser_never_raises_on_tag_like_input(text: str) -> None:
     sanitise(text, max_chars=CAP, base64_run_chars=B64)
 

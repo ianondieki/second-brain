@@ -62,8 +62,10 @@ _IGNORABLE_RANGES = (
     (0x1D173, 0x1D17A),  # musical symbol format controls
     (0xE0000, 0xE0FFF),  # tags and variation selectors 17-256
 )
-_BLOCK_OPENER = re.compile(r"<(script|style)\b", re.IGNORECASE)
-_BLOCK_CLOSERS = {name: re.compile(rf"</{name}\s*>", re.IGNORECASE) for name in ("script", "style")}
+# Tag names fold ASCII letters only, as HTML's do: in Unicode mode re.IGNORECASE also folds U+017F (long s), U+0131
+# (dotless i) and U+0130 (I with dot above) to ASCII letters, so "<\u017fcript>" would open a block with no closer.
+_BLOCK_OPENER = re.compile(r"<(script|style)\b", re.IGNORECASE | re.ASCII)
+_BLOCK_CLOSERS = {name: re.compile(rf"</{name}\s*>", re.IGNORECASE | re.ASCII) for name in ("script", "style")}
 _COMMENTS = re.compile(r"<!--.*?(?:-->|$)", re.DOTALL)
 _TAGS = re.compile(r"<[^<>]*>")
 # A reference definition, with the URL on the same line or the next one.
@@ -87,10 +89,11 @@ def is_ignorable(char: str) -> bool:
 
 def strip_blocks(text: str) -> str:
     r"""Script and style blocks removed, each from its opening tag to the first closing tag of the same name, as the
-    regex ``<(script|style)\b[^>]*>.*?</\1\s*>`` (case-insensitive, dot matching newlines) would, but in linear
-    time: that regex rescans to the end of the text for every opener without a closer. Here an opener with no closer
-    marks its name as having none further on (later openers of that name are skipped at once), and the first ``>``
-    after an opener is found once and reused by every opener before it; an unclosed opener is left for the tag pass."""
+    regex ``<(script|style)\b[^>]*>.*?</\1\s*>`` (ASCII-only case folding, dot matching newlines) would, but in
+    linear time: that regex rescans to the end of the text for every opener without a closer. Here an opener with no
+    closer marks its name as having none further on (later openers of that name are skipped at once), and the first
+    ``>`` after an opener is found once and reused by every opener before it; an unclosed opener is left for the tag
+    pass. Total: no input raises."""
     out: list[str] = []
     kept = position = 0
     unclosed: set[str] = set()
@@ -104,7 +107,10 @@ def strip_blocks(text: str) -> str:
             angle = text.find(">", opener.end())
             if angle == -1:
                 break  # no opening tag can end from here on
-        closer = _BLOCK_CLOSERS[name].search(text, angle + 1)
+        pattern = _BLOCK_CLOSERS.get(name)
+        if pattern is None:  # unreachable with ASCII folding; an unknown name is no block, never an exception
+            continue
+        closer = pattern.search(text, angle + 1)
         if closer is None:
             unclosed.add(name)
             continue
