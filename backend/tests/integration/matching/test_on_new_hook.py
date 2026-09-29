@@ -5,11 +5,14 @@ fails the publication."""
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from bridge.directory.models import Niche
 from bridge.matching import tasks
 from tests.integration.proposals.helpers import (
     Developers,
@@ -74,3 +77,12 @@ async def test_a_publication_never_fails_because_its_scouts_could_not_be_queued(
     assert (row.status, row.moderation_state) == ("published", "clear")
     signals = await rows(owner_engine, "SELECT kind FROM signal_events WHERE item_id = :p", p=created["id"])
     assert [s.kind for s in signals] == ["proposal_published"]  # the rest of the transaction committed
+
+
+async def test_the_callers_own_failure_is_never_swallowed_as_a_queueing_failure(owner_engine: AsyncEngine) -> None:
+    """P10 security review MINOR f: the caller's pending changes flush before the savepoint, so only the defer's own
+    failure is logged and swallowed; the caller's failure reaches the caller."""
+    async with AsyncSession(owner_engine) as session:
+        session.add(Niche(slug=f"orphan-{uuid4().hex[:8]}", name_en="Orphan", parent_id=uuid4()))  # no such parent
+        with pytest.raises(IntegrityError):
+            await tasks.defer_on_new(session, uuid4())
