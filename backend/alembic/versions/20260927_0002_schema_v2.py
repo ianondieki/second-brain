@@ -1523,10 +1523,11 @@ $$;
 -- automatic transfer) and transfers the organisation in the same transaction, the new claimant becoming its only owner
 -- and admin: every earlier approved claim of another claimant becomes rejected, its decision_reason naming this claim,
 -- and those claimants' memberships are removed with no role but viewer (so nobody reactivates them with power); every
--- other active membership loses owner and admin and keeps its other roles (viewer when none is left); every pending
--- invitation issued by anyone but the new claimant (all issued under the old control), or carrying owner or admin, is
--- revoked. Approving a claim that competes with nobody transfers nothing. The new claimant re-promotes people
--- afterwards; staff correct a roster with app_staff_remove_membership. The caller audits every change.
+-- other membership, active or already removed, loses owner and admin and keeps its other roles (viewer when none is
+-- left); every pending invitation issued by anyone but the new claimant (all issued under the old control), or
+-- carrying owner or admin, is revoked. Approving a claim that competes with nobody transfers nothing. The new claimant
+-- re-promotes people afterwards; staff correct a roster with app_staff_remove_membership. The caller audits every
+-- change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1623,7 +1624,7 @@ BEGIN
                SET roles = coalesce(nullif(array_remove(array_remove(m.roles, 'owner'), 'admin'), '{}'),
                                     '{viewer}'::public.org_role[]),
                    updated_at = now()
-             WHERE m.org_id = v_org.id AND m.user_id <> v_claim.claimant_user_id AND m.status = 'active'
+             WHERE m.org_id = v_org.id AND m.user_id <> v_claim.claimant_user_id
                AND m.roles && '{owner,admin}'::public.org_role[];
             UPDATE public.invitations i
                SET revoked_at = now()

@@ -1217,15 +1217,17 @@ async def _prove_domain(conn: AsyncConnection, claim: UUID, otp_hash: bytes) -> 
     assert await run(conn, MARK_DNS, id=claim) is True
 
 
-async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str) -> UUID:
+async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str, status: str = "active") -> UUID:
     membership = uuid7()
     await run(
         conn,
-        "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, CAST(:roles AS org_role[]))",
+        "INSERT INTO memberships (id, org_id, user_id, roles, status)"
+        " VALUES (:id, :org, :u, CAST(:roles AS org_role[]), CAST(:status AS membership_status))",
         id=membership,
         org=org,
         u=user,
         roles=roles,
+        status=status,
     )
     return membership
 
@@ -1258,8 +1260,9 @@ async def test_an_upheld_dispute_transfers_the_organisation(
     and admin: the earlier claimant's approved claim is rejected, naming the claim that superseded it, and their
     membership is removed with no role but viewer (nobody reactivates them with power); every other member loses
     owner and admin but keeps their other roles (viewer when none is left), so the self-signup founder can no longer
-    remove the new owner; and every pending invitation issued under the old control (by anyone but the new claimant),
-    or carrying owner or admin, is revoked. The new claimant re-promotes people afterwards."""
+    remove the new owner; every pending invitation issued under the old control (by anyone but the new claimant),
+    or carrying owner or admin, is revoked; and a membership removed before the dispute loses owner and admin too, so
+    reactivating it restores no power. The new claimant re-promotes people afterwards."""
     right, _ = otp
     async with as_app(owner_engine) as conn:
         admin = await w.add_user(conn, _email("dispute-admin"), "Admin", staff_role="admin")
@@ -1269,6 +1272,7 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         second = await w.add_user(conn, _email("second"), "Second claimant")
         reviewer = await w.add_user(conn, _email("dispute-reviewer"), "Reviewer")
         signer = await w.add_user(conn, _email("dispute-signer"), "Signer")
+        departed = await w.add_user(conn, _email("departed"), "Departed owner")
         await _add_membership(conn, org, founder, "{owner,admin}")  # app_create_organization() at self-signup
         met = await add_legal_template(conn, "master_enterprise_terms")
         elsewhere = await add_org(conn)
@@ -1285,6 +1289,7 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         await _add_membership(conn, org, reviewer, "{reviewer}")
         await _add_membership(conn, org, signer, "{admin,signatory}")
         await _add_membership(conn, org, second, "{admin}")
+        await _add_membership(conn, org, departed, "{owner,admin}", status="removed")  # left before the dispute
         by_first = await _invite(conn, org, first, "{reviewer}")
         accepted = await _invite(conn, org, first, "{viewer}", accepted=True)
         await act(conn, founder)
@@ -1321,6 +1326,7 @@ async def test_an_upheld_dispute_transfers_the_organisation(
             founder: ("active", ["viewer"]),
             signer: ("active", ["signatory"]),
             reviewer: ("active", ["reviewer"]),
+            departed: ("removed", ["viewer"]),
         }
         revoked = await conn.execute(
             text("SELECT id, revoked_at IS NOT NULL AS revoked FROM invitations WHERE org_id = ANY (:orgs)"),
