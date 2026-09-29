@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getNda, getTeaser, orgContext } from "../../data";
 import { EmptyState } from "../../EmptyState";
@@ -71,19 +73,21 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
         <div className="max-w-3xl">
           <TeaserDetails card={card} />
         </div>
-        <FullProposal
-          orgId={org.org_id}
-          orgName={org.org_name}
-          proposalId={card.id}
-          title={title}
-          nda={nda}
-          viewing={first(query.view) === "full"}
-          hrefs={{
-            here: proposalHref(memberships, org.org_id, card.id),
-            view: proposalHref(memberships, org.org_id, card.id, { view: true }),
-            inbox,
-          }}
-        />
+        <ClientStrings strings={await clientStrings(["orgProposal"])}>
+          <FullProposal
+            orgId={org.org_id}
+            orgName={org.org_name}
+            proposalId={card.id}
+            title={title}
+            nda={nda}
+            viewing={first(query.view) === "full"}
+            hrefs={{
+              here: proposalHref(memberships, org.org_id, card.id),
+              view: proposalHref(memberships, org.org_id, card.id, { view: true }),
+              inbox,
+            }}
+          />
+        </ClientStrings>
       </article>
     </SignedInShell>
   );

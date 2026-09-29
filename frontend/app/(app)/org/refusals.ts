@@ -1,4 +1,4 @@
-import { apiErrorCode } from "@/lib/api/errors";
+import { apiErrorCode } from "@/lib/api/error-code";
 
 // Why an organisation screen cannot show something, as a plain sentence and at most one action (docs/spec/07 item 4;
 // REQ-REPO-01, REQ-SEC-01). The API names the first condition that fails (bridge/proposals/access.py, the gate order

@@ -4,20 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
+import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { api } from "@/lib/api/client";
 
-import { ACTION_HREF, REFUSAL_ACTION, refusalOf, type Refusal, type RefusalAction } from "../../refusals";
-
-/** The page's words for this form, formatted on the server (no i18n runtime in the browser). */
-export interface NdaAcceptStrings {
-  accept: string;
-  accepting: string;
-  refusal: Record<Refusal, string>;
-  action: Record<Exclude<RefusalAction, null>, string>;
-}
+import { ACTION_HREF, REFUSAL_ACTION, refusalOf, type Refusal } from "../../refusals";
 
 export interface NdaAcceptProps {
   orgId: string;
@@ -29,13 +22,15 @@ export interface NdaAcceptProps {
   /** Where the marked full proposal opens once accepted. */
   viewHref: string;
   inboxHref: string;
-  strings: NdaAcceptStrings;
+  /** Named in the refusal sentences. */
+  orgName: string;
 }
 
 /**
  * "Accept and view", the step's one primary action (REQ-REPO-01): POST …/nda with the template id, its SHA-256 and the
  * logging-notice version that were shown, then open the marked page. A refusal is one sentence and at most one action;
- * "Show the new version", "Confirm" and "Try again" fetch the page again, which shows the step it now needs.
+ * "Show the new version", "Confirm" and "Try again" fetch the page again, which shows the step it now needs. Words come
+ * from the server-formatted `orgProposal` strings (components/ClientStrings), not an i18n runtime in the browser.
  */
 export function NdaAccept({
   orgId,
@@ -45,8 +40,9 @@ export function NdaAccept({
   noticeVersion,
   viewHref,
   inboxHref,
-  strings,
+  orgName,
 }: NdaAcceptProps) {
+  const t = useStrings("orgProposal");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -82,10 +78,10 @@ export function NdaAccept({
     <Form onSubmit={accept} className="flex flex-col items-start gap-4" aria-busy={busy || undefined}>
       {refusal ? (
         <Alert ref={notice} className="w-full" tone="error">
-          <p data-refusal={refusal}>{strings.refusal[refusal]}</p>
+          <p data-refusal={refusal}>{t(`refusal.${refusal}`, { org: orgName })}</p>
           {action && href ? (
             <Link href={href} className={standaloneLinkClass}>
-              {strings.action[action]}
+              {t(`action.${action}`)}
             </Link>
           ) : action ? (
             <Button
@@ -95,13 +91,13 @@ export function NdaAccept({
                 router.refresh();
               }}
             >
-              {strings.action[action]}
+              {t(`action.${action}`)}
             </Button>
           ) : null}
         </Alert>
       ) : null}
       <SubmitButton variant="primary" busy={busy}>
-        {busy ? strings.accepting : strings.accept}
+        {busy ? t("accepting") : t("accept")}
       </SubmitButton>
     </Form>
   );

@@ -3,27 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { api } from "@/lib/api/client";
-import { apiErrorCode } from "@/lib/api/errors";
-
-export interface StepUpStrings {
-  lead: string;
-  code: string;
-  submit: string;
-  checking: string;
-  invalid: string;
-  failed: string;
-}
+import { apiErrorCode } from "@/lib/api/error-code";
 
 /**
  * The step-up the Tier-2 predicate asks for when the session's second factor is older than 12 hours
  * (step_up_required): a fresh authenticator code (POST /api/auth/step-up), then the page is fetched again and shows
  * the step it now needs. Confirm is the screen's one primary action.
  */
-export function StepUp({ strings }: { strings: StepUpStrings }) {
+export function StepUp() {
+  const t = useStrings("orgProposal");
   const router = useRouter();
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | undefined>();
@@ -34,7 +27,7 @@ export function StepUp({ strings }: { strings: StepUpStrings }) {
     event.preventDefault();
     if (busy) return;
     if (code.length !== 6) {
-      setCodeError(strings.invalid);
+      setCodeError(t("stepUpInvalid"));
       document.getElementById("step-up-code")?.focus();
       return;
     }
@@ -48,7 +41,7 @@ export function StepUp({ strings }: { strings: StepUpStrings }) {
       }
       setCode("");
       if (apiErrorCode(error) === "invalid_code") {
-        setCodeError(strings.invalid);
+        setCodeError(t("stepUpInvalid"));
         document.getElementById("step-up-code")?.focus();
       } else {
         setFailed(true);
@@ -63,16 +56,16 @@ export function StepUp({ strings }: { strings: StepUpStrings }) {
     <Form onSubmit={confirm} className="flex flex-col items-start gap-4">
       {failed ? (
         <Alert className="w-full" tone="error">
-          {strings.failed}
+          {t("refusal.generic")}
         </Alert>
       ) : null}
       <p className="max-w-[60ch] text-ink" data-refusal="step_up_required">
-        {strings.lead}
+        {t("refusal.step_up_required")}
       </p>
       <OtpInput
         id="step-up-code"
         name="code"
-        label={strings.code}
+        label={t("stepUpCode")}
         value={code}
         onChange={(value) => {
           setCode(value);
@@ -81,7 +74,7 @@ export function StepUp({ strings }: { strings: StepUpStrings }) {
         error={codeError}
       />
       <SubmitButton variant="primary" busy={busy}>
-        {busy ? strings.checking : strings.submit}
+        {busy ? t("stepUpChecking") : t("stepUpSubmit")}
       </SubmitButton>
     </Form>
   );

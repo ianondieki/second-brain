@@ -7,11 +7,10 @@ import { renderWithIntl } from "@/test/intl";
 import type { InboxItem } from "./data";
 import { EmptyState } from "./EmptyState";
 import { InboxRow } from "./inbox/InboxRow";
-import { NdaAccept, type NdaAcceptStrings } from "./inbox/[proposalId]/NdaAccept";
+import { NdaAccept } from "./inbox/[proposalId]/NdaAccept";
 import { StepUp } from "./inbox/[proposalId]/StepUp";
 import type { Membership } from "./membership";
 import { OrgPicker } from "./OrgPicker";
-import { REFUSALS } from "./refusals";
 
 const mocks = vi.hoisted(() => ({ post: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 
@@ -37,19 +36,6 @@ const PROPOSAL = "01a0ee62-f783-733e-9321-9f34ec389ac2";
 const SHA = "f0b8733eb8366e8f3f325686f1cc53c8ed7584c70c85dc7671522ffdaf01ad65";
 const ORG_NAME = "Amani Foods";
 
-/** The strings the page formats on the server for the form (English, {org} filled in). */
-const strings: NdaAcceptStrings = {
-  accept: en.orgProposal.accept,
-  accepting: en.orgProposal.accepting,
-  refusal: Object.fromEntries(
-    [...REFUSALS, "generic"].map((r) => [
-      r,
-      (en.orgProposal.refusal as Record<string, string>)[r].replace("{org}", ORG_NAME),
-    ]),
-  ) as NdaAcceptStrings["refusal"],
-  action: en.orgProposal.action,
-};
-
 function renderNda() {
   return renderWithIntl(
     <NdaAccept
@@ -60,7 +46,7 @@ function renderNda() {
       noticeVersion="v1"
       viewHref={`/org/inbox/${PROPOSAL}?view=full`}
       inboxHref="/org/inbox"
-      strings={strings}
+      orgName={ORG_NAME}
     />,
   );
 }
@@ -130,18 +116,9 @@ describe("NdaAccept (REQ-REPO-01)", () => {
 });
 
 describe("StepUp", () => {
-  const stepUpStrings = {
-    lead: en.orgProposal.refusal.step_up_required,
-    code: en.orgProposal.stepUpCode,
-    submit: en.orgProposal.stepUpSubmit,
-    checking: en.orgProposal.stepUpChecking,
-    invalid: en.orgProposal.stepUpInvalid,
-    failed: en.orgProposal.refusal.generic,
-  };
-
   it("confirms a fresh code, then fetches the page again", async () => {
     mocks.post.mockResolvedValue(answer(200));
-    renderWithIntl(<StepUp strings={stepUpStrings} />);
+    renderWithIntl(<StepUp />);
     fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123 456" } });
     const confirm = screen.getByRole("button", { name: "Confirm" });
     await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
@@ -152,7 +129,7 @@ describe("StepUp", () => {
 
   it("keeps a wrong code next to the field", async () => {
     mocks.post.mockResolvedValue(answer(401, "invalid_code"));
-    renderWithIntl(<StepUp strings={stepUpStrings} />);
+    renderWithIntl(<StepUp />);
     fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "000000" } });
     const confirm = screen.getByRole("button", { name: "Confirm" });
     await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));

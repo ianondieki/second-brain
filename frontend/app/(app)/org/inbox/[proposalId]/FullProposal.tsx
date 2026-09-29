@@ -9,8 +9,8 @@ import { Fingerprint } from "@/app/(public)/verify/Fingerprint";
 
 import { tier2Src, type EvaluationNda, type NdaResult } from "../../data";
 import { formatMoment } from "../../format";
-import { ACTION_HREF, REFUSAL_ACTION, REFUSALS, type Refusal, type RefusalAction } from "../../refusals";
-import { NdaAccept, type NdaAcceptStrings } from "./NdaAccept";
+import { ACTION_HREF, REFUSAL_ACTION, type Refusal } from "../../refusals";
+import { NdaAccept } from "./NdaAccept";
 import { StepUp } from "./StepUp";
 
 export interface FullProposalProps {
@@ -23,10 +23,6 @@ export interface FullProposalProps {
   viewing: boolean;
   hrefs: { here: string; view: string; inbox: string };
 }
-
-const ACTIONS = ["enterCode", "turnOnMfa", "stepUp", "newVersion", "reload", "inbox"] as const satisfies ReadonlyArray<
-  Exclude<RefusalAction, null>
->;
 
 /**
  * The Tier-2 area under the teaser, behind "the fold": one of four states, each with at most one primary action
@@ -98,20 +94,7 @@ async function RefusalNotice({
 }) {
   const t = await getTranslations("orgProposal");
   const action = REFUSAL_ACTION[refusal];
-  if (action === "stepUp") {
-    return (
-      <StepUp
-        strings={{
-          lead: t("refusal.step_up_required"),
-          code: t("stepUpCode"),
-          submit: t("stepUpSubmit"),
-          checking: t("stepUpChecking"),
-          invalid: t("stepUpInvalid"),
-          failed: t("refusal.generic"),
-        }}
-      />
-    );
-  }
+  if (action === "stepUp") return <StepUp />;
   // Second-factor steps are the screen's one primary action; "Try again" re-fetches this page (a plain link, no script).
   const primary = action === "enterCode" || action === "turnOnMfa";
   const href =
@@ -152,14 +135,6 @@ async function NdaStep({
   hrefs: FullProposalProps["hrefs"];
 }) {
   const t = await getTranslations("orgProposal");
-  const strings: NdaAcceptStrings = {
-    accept: t("accept"),
-    accepting: t("accepting"),
-    refusal: Object.fromEntries(
-      [...REFUSALS, "generic" as const].map((r) => [r, t(`refusal.${r}`, { org: orgName })]),
-    ) as NdaAcceptStrings["refusal"],
-    action: Object.fromEntries(ACTIONS.map((a) => [a, t(`action.${a}`)])) as NdaAcceptStrings["action"],
-  };
   return (
     <div className="flex flex-col items-start gap-5">
       <div>
@@ -208,7 +183,7 @@ async function NdaStep({
         noticeVersion={nda.logging_notice.version}
         viewHref={hrefs.view}
         inboxHref={hrefs.inbox}
-        strings={strings}
+        orgName={orgName}
       />
     </div>
   );
