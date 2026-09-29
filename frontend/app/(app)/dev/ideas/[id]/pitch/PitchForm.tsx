@@ -7,12 +7,14 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { ClockIcon, SendIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { pitch as pitchCall } from "./calls";
 import {
+  capBinds,
   heldKey,
-  MAX_BATCH,
+  orgKey,
   pitchesLeft,
   pitchHref,
   selectionMax,
@@ -22,12 +24,16 @@ import {
 } from "./picker";
 import type { PitchProblem, PitchRefusal } from "./refusals";
 
-/** One organisation as the picker lists it; its details (type, county, badge, outcome or reason) are drawn on the server. */
+/**
+ * One organisation as the picker lists it. `about` (type, county, badge) and `outcome` (sent now, or saved until it
+ * verifies, or why it cannot be pitched) are drawn on the server.
+ */
 export interface PickerRow {
   id: string;
   name: string;
   available: boolean;
-  details: ReactNode;
+  about: ReactNode;
+  outcome: ReactNode;
 }
 
 export interface PickerGroup {
@@ -42,7 +48,9 @@ export interface PitchFormProps {
   ideaHref: string;
   cap: TagCap;
   groups: PickerGroup[];
-  /** Organisations chosen before this page loaded (the URL's `sel`), including ones this page does not list. */
+  /** Organisations chosen on another page or search, resolved by id on the server: shown first, by name. */
+  chosen?: PickerRow[];
+  /** The URL's `sel`. Only ids shown on this page as available rows (here or under "chosen") become choices. */
   initialSelected: string[];
   /** The search and niche fields, drawn on the server; submitted with the form as a GET, choices included. */
   filters: ReactNode;
@@ -54,20 +62,39 @@ export interface PitchFormProps {
 }
 
 type Problem = PitchProblem | "chooseOne";
-type Shown = { problem: Problem; refusal?: PitchRefusal };
+type Shown = { problem: Problem; refusal?: PitchRefusal; local?: { count: number; limit: number } };
+type Blocked = PitchReason | "gone";
+
+/**
+ * The choices a page starts with: the URL's ids that this page shows as available rows, by name and with their
+ * outcome, up to what one Pitch may hold. Anything else (an id on no row, an unavailable one, one over the cap) is
+ * dropped, so the Pitch never sends an organisation the developer has not seen.
+ */
+export function initialChoices(ids: readonly string[], rows: readonly PickerRow[], cap: TagCap): Set<string> {
+  const shown = new Set(rows.filter((row) => row.available).map((row) => orgKey(row.id)));
+  const out = new Set<string>();
+  for (const id of ids) {
+    if (out.size >= selectionMax(cap)) break;
+    if (shown.has(orgKey(id))) out.add(orgKey(id));
+  }
+  return out;
+}
 
 /**
  * "Pitch to companies" (REQ-PROP-03, docs/spec/06 6.3): the directory by niche with a checkbox per organisation. One GET
- * form holds the search, the niche, the page and the choices, so choices survive a search or the next page; "Pitch"
- * (the screen's one primary action) sends them all at once, 1 to 20 and within the plan's cap. The API refuses a batch
- * whole, so a refusal means nothing was sent: it is one sentence and at most one action, and a 409's organisations are
- * unticked with their reasons. After a Pitch the form gives way to what was sent now and what is saved.
+ * form holds the search, the niche, the page and the choices; choices made on another page or search come back as
+ * their own group, first, each by name with its outcome, and can be unticked there. "Pitch" (the screen's one primary
+ * action) sends them all at once, within the batch of 20 and the plan's cap. The API refuses a batch whole, so a
+ * refusal means nothing was sent: one sentence and at most one action above the list (the sticky bar stays the
+ * summary and Pitch), and a 409's organisations are unticked with their reasons. After a Pitch the form gives way to
+ * what was sent now and what is saved.
  */
 export function PitchForm({
   proposalId,
   ideaHref,
   cap,
   groups,
+  chosen = [],
   initialSelected,
   filters,
   narrowed,
@@ -77,25 +104,29 @@ export function PitchForm({
 }: PitchFormProps) {
   const t = useStrings("pitch");
   const hydrated = useHydrated();
-  // Choices from the URL are only a starting point: an organisation this page shows as unavailable is dropped, and
-  // never more than one Pitch may hold (the plan's pitches left, at most 20), so the Pitch never sends either.
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => initialChoices(initialSelected, groups, cap));
-  const [blocked, setBlocked] = useState<ReadonlyMap<string, PitchReason>>(() => new Map());
+  const rows = [...chosen, ...groups.flatMap((group) => group.rows)];
+  const [capNow, setCapNow] = useState(cap);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => initialChoices(initialSelected, rows, cap));
+  const [blocked, setBlocked] = useState<ReadonlyMap<string, Blocked>>(() => new Map());
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState<Shown | null>(null);
   const [result, setResult] = useState<PitchResult | null>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  const notice = useRef<HTMLDivElement>(null);
   const summaryId = useId();
 
-  // What was sent and saved replaces the form: move focus to its heading, so it is read out and the page starts there.
+  // What was sent and saved replaces the form: its heading takes focus, so it is read out and the page starts there.
   useEffect(() => {
     if (result) resultHeading.current?.focus();
   }, [result]);
+  // A refusal sits above the list, in the page's flow: it takes focus, so it is in view and read out.
+  useEffect(() => {
+    if (shown) notice.current?.focus();
+  }, [shown]);
 
-  const max = selectionMax(cap);
+  const max = selectionMax(capNow);
   const atMax = selected.size >= max;
-  const listed = new Set(groups.flatMap((group) => group.rows.map((row) => row.id)));
-  const offPage = [...selected].filter((id) => !listed.has(id));
+  const locked = !hydrated || busy;
 
   function toggle(id: string, on: boolean) {
     setShown(null);
@@ -107,6 +138,13 @@ export function PitchForm({
     });
   }
 
+  function refuse(ids: Iterable<[string, Blocked]>) {
+    const next = new Map(blocked);
+    for (const [id, why] of ids) next.set(id, why);
+    setBlocked(next);
+    setSelected((current) => new Set([...current].filter((id) => !next.has(id))));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
     if (!(submitter instanceof HTMLElement) || submitter.dataset.intent !== "pitch") return; // search or paging: a GET
@@ -114,6 +152,11 @@ export function PitchForm({
     if (busy) return;
     if (selected.size === 0) {
       setShown({ problem: "chooseOne" });
+      return;
+    }
+    if (selected.size > max) {
+      // The cap fell (a 402 said so): nothing goes out until the choices fit.
+      setShown({ problem: "planLimit", local: { count: max, limit: capNow.limit ?? max } });
       return;
     }
     setBusy(true);
@@ -124,11 +167,10 @@ export function PitchForm({
       setResult(outcome.value);
       return;
     }
-    if (outcome.conflicts.length > 0) {
-      const refused = new Map(blocked);
-      for (const conflict of outcome.conflicts) refused.set(conflict.orgId, conflict.reason);
-      setBlocked(refused);
-      setSelected((current) => new Set([...current].filter((id) => !refused.has(id))));
+    if (outcome.conflicts.length > 0) refuse(outcome.conflicts.map((c) => [c.orgId, c.reason] as [string, Blocked]));
+    if (outcome.gone?.length) refuse(outcome.gone.map((id) => [id, "gone"] as [string, Blocked]));
+    if (outcome.problem === "planLimit" && outcome.limit !== undefined && outcome.used !== undefined) {
+      setCapNow({ ...capNow, limit: outcome.limit, used: outcome.used });
     }
     setShown({ problem: outcome.problem, refusal: outcome });
   }
@@ -137,30 +179,60 @@ export function PitchForm({
     return <PitchDone result={result} ideaHref={ideaHref} againHref={pitchHref(proposalId)} headingRef={resultHeading} />;
   }
 
-  const left = pitchesLeft(cap);
+  const left = pitchesLeft(capNow);
+  const rowProps = (row: PickerRow, rowId: string) => ({
+    rowId,
+    row,
+    checked: selected.has(orgKey(row.id)),
+    reason: blocked.get(orgKey(row.id)),
+    locked: locked || (atMax && !selected.has(orgKey(row.id))),
+    onToggle: toggle,
+  });
   return (
     <>
-      <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max: MAX_BATCH })}</p>
+      <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max })}</p>
       <p className="mt-3 text-ink" data-cap="">
-        {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: cap.limit ?? 0 })}
+        {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: capNow.limit ?? 0 })}
       </p>
       <form method="get" onSubmit={submit} className="mt-6">
-        <div role="search" className="max-w-3xl">
-          {filters}
+        {/* Nothing changes the list while a Pitch is under way. */}
+        <fieldset disabled={busy} className="m-0 max-w-3xl min-w-0 border-0 p-0">
+          <div role="search">{filters}</div>
           {narrowed ? (
             <p className="mt-2">
-              <a href={pitchHref(proposalId, { selected: [...selected] })} className={standaloneLinkClass}>
+              <a
+                href={busy ? undefined : pitchHref(proposalId, { selected: [...selected] })}
+                aria-disabled={busy || undefined}
+                className={standaloneLinkClass}
+              >
                 {t("clear")}
               </a>
             </p>
           ) : null}
+        </fieldset>
+
+        <div className="mt-6 flex flex-col gap-2 empty:hidden">
+          {shown ? <Refused shown={shown} proposalId={proposalId} ideaHref={ideaHref} alertRef={notice} /> : null}
+          {atMax && max > 0 ? (
+            <p role="status" className="text-ink" data-max-reached="">
+              {capBinds(capNow) ? t("maxReachedPlan") : t("maxReachedBatch")}
+            </p>
+          ) : null}
         </div>
 
-        {offPage.map((id) => (
-          <input key={id} type="hidden" name="sel" value={id} />
-        ))}
-
         <div className="mt-8">
+          {chosen.length > 0 ? (
+            <section className="mb-10" aria-labelledby="pitch-chosen" data-chosen-group="">
+              <h2 id="pitch-chosen" className="text-lg text-ink">
+                {t("chosenTitle")}
+              </h2>
+              <ul className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
+                {chosen.map((row) => (
+                  <Row {...rowProps(row, `c-${row.id}`)} key={row.id} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
           {groups.map((group, index) => (
             <section key={group.key} className="mt-10 first:mt-0" aria-labelledby={`pitch-group-${index}`}>
               <h2 id={`pitch-group-${index}`} className="flex flex-col text-lg text-ink">
@@ -171,15 +243,7 @@ export function PitchForm({
               </h2>
               <ul className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
                 {group.rows.map((row) => (
-                  <Row
-                    key={row.id}
-                    rowId={`${index}-${row.id}`}
-                    row={row}
-                    checked={selected.has(row.id)}
-                    reason={blocked.get(row.id)}
-                    locked={!hydrated || busy || (atMax && !selected.has(row.id))}
-                    onToggle={toggle}
-                  />
+                  <Row {...rowProps(row, `${index}-${row.id}`)} key={row.id} />
                 ))}
               </ul>
             </section>
@@ -187,22 +251,25 @@ export function PitchForm({
         </div>
 
         {cursor || nextCursor ? (
-          <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
-            {cursor ? (
-              <button type="submit" name="cursor" value="" className={standaloneLinkClass}>
-                {t("firstPage")}
-              </button>
-            ) : (
-              <span />
-            )}
-            {nextCursor ? (
-              <button type="submit" name="cursor" value={nextCursor} className={standaloneLinkClass}>
-                {t("nextPage")}
-              </button>
-            ) : null}
-          </nav>
+          <fieldset disabled={busy} className="m-0 min-w-0 border-0 p-0">
+            <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
+              {cursor ? (
+                <button type="submit" name="cursor" value="" className={standaloneLinkClass}>
+                  {t("firstPage")}
+                </button>
+              ) : (
+                <span />
+              )}
+              {nextCursor ? (
+                <button type="submit" name="cursor" value={nextCursor} className={standaloneLinkClass}>
+                  {t("nextPage")}
+                </button>
+              ) : null}
+            </nav>
+          </fieldset>
         ) : null}
 
+        {/* The summary and Pitch only: its height stays within the scroll padding of globals.css. */}
         <div
           data-action-bar=""
           className={cn(
@@ -210,11 +277,9 @@ export function PitchForm({
             "px-4 pt-3 pb-4 sm:-mx-6 sm:px-6 lg:bottom-0 lg:mx-0 lg:px-0",
           )}
         >
-          {shown ? <Refused shown={shown} proposalId={proposalId} ideaHref={ideaHref} /> : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p id={summaryId} aria-live="polite" className="text-ink">
-              <span className="font-semibold tabular-nums">{t("chosen", { count: selected.size, max })}</span>
-              {atMax && max > 0 ? <span className="block text-sm text-ink-soft">{t("maxReached")}</span> : null}
+            <p id={summaryId} aria-live="polite" className="font-semibold text-ink tabular-nums">
+              {t("chosen", { count: selected.size, max })}
             </p>
             <Button
               type="submit"
@@ -234,17 +299,6 @@ export function PitchForm({
   );
 }
 
-export function initialChoices(ids: readonly string[], groups: readonly PickerGroup[], cap: TagCap): Set<string> {
-  const unavailable = new Set(groups.flatMap((group) => group.rows.filter((row) => !row.available).map((row) => row.id)));
-  const out = new Set<string>();
-  for (const id of ids) {
-    const key = id.toLowerCase();
-    if (out.size >= selectionMax(cap)) break;
-    if (!unavailable.has(key)) out.add(key);
-  }
-  return out;
-}
-
 function Row({
   rowId,
   row,
@@ -256,13 +310,12 @@ function Row({
   rowId: string;
   row: PickerRow;
   checked: boolean;
-  reason?: PitchReason;
+  reason?: Blocked;
   locked: boolean;
   onToggle: (id: string, on: boolean) => void;
 }) {
   const t = useStrings("pitch");
-  const refused = reason !== undefined;
-  const available = row.available && !refused;
+  const available = row.available && reason === undefined;
   return (
     <li
       data-org-row={row.id}
@@ -288,7 +341,7 @@ function Row({
           checked={checked}
           disabled={!available || (locked && !checked)}
           onChange={(event) => {
-            if (available) onToggle(row.id, event.target.checked); // an unavailable row never joins the Pitch
+            if (available) onToggle(orgKey(row.id), event.target.checked); // an unavailable row never joins the Pitch
           }}
           aria-describedby={`pitch-${rowId}-details`}
           className="absolute top-[1.35rem] left-2 z-[1] size-5 cursor-pointer accent-jacaranda disabled:cursor-not-allowed"
@@ -296,22 +349,36 @@ function Row({
         {row.name}
       </label>
       <div id={`pitch-${rowId}-details`} className="flex flex-col gap-1">
-        {refused ? null : row.details}
-        {refused ? (
+        {row.about}
+        {reason === undefined ? (
+          row.outcome
+        ) : (
           <p className="text-sm text-error" data-reason={reason}>
-            {t(`reason.${reason}`, { name: row.name })}
+            {reason === "gone" ? t("gone", { name: row.name }) : t(`reason.${reason}`, { name: row.name })}
           </p>
-        ) : null}
+        )}
       </div>
     </li>
   );
 }
 
-function Refused({ shown, proposalId, ideaHref }: { shown: Shown; proposalId: string; ideaHref: string }) {
+function Refused({
+  shown,
+  proposalId,
+  ideaHref,
+  alertRef,
+}: {
+  shown: Shown;
+  proposalId: string;
+  ideaHref: string;
+  alertRef: Ref<HTMLDivElement>;
+}) {
   const t = useStrings("pitch");
-  const { problem, refusal } = shown;
+  const { problem, refusal, local } = shown;
   let sentence: string;
-  if (problem === "planLimit" && refusal?.limit !== undefined) {
+  if (problem === "planLimit" && local) {
+    sentence = t("problem.planLimit", local);
+  } else if (problem === "planLimit" && refusal?.limit !== undefined) {
     sentence = t("problem.planLimit", {
       count: Math.max(0, refusal.limit - (refusal.used ?? 0)),
       limit: refusal.limit,
@@ -332,7 +399,7 @@ function Refused({ shown, proposalId, ideaHref }: { shown: Shown; proposalId: st
     action = <Link href={ideaHref} className={standaloneLinkClass}>{t("back")}</Link>;
   }
   return (
-    <Alert tone={problem === "chooseOne" ? "info" : "error"} className="mb-3">
+    <Alert tone={problem === "chooseOne" ? "info" : "error"} ref={alertRef}>
       <p>{sentence}</p>
       {action}
     </Alert>
@@ -364,7 +431,10 @@ function PitchDone({
       </p>
       {sent.length > 0 ? (
         <div className="mt-6">
-          <h3 className="text-lg text-ok">{t("sentTitle", { count: result.sent_count })}</h3>
+          <h3 className="flex items-center gap-2 text-lg text-ok">
+            <SendIcon className="size-5 shrink-0" />
+            {t("sentTitle", { count: result.sent_count })}
+          </h3>
           <ul className="mt-2 border-t border-line">
             {sent.map((tag) => (
               <li key={tag.id} className="border-b border-line py-3 font-semibold [overflow-wrap:anywhere] text-ink">
@@ -377,7 +447,10 @@ function PitchDone({
       ) : null}
       {saved.length > 0 ? (
         <div className="mt-8">
-          <h3 className="text-lg text-ink">{t("savedTitle", { count: result.saved_count })}</h3>
+          <h3 className="flex items-center gap-2 text-lg text-jacaranda">
+            <ClockIcon className="size-5 shrink-0" />
+            {t("savedTitle", { count: result.saved_count })}
+          </h3>
           <ul className="mt-2 border-t border-line">
             {saved.map((tag) => {
               const name = tag.org?.name ?? t("orgUnlisted");

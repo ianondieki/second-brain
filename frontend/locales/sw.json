@@ -3,7 +3,7 @@
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
-    "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.*, tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili"
+    "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili"
   },
   "app": {
     "name": "Bridge",
@@ -439,7 +439,7 @@
     "title": "Wasilisha kwa makampuni",
     "forIdea": "Kwa wazo lako “{title}”",
     "back": "Rudi kwenye wazo lako",
-    "lead": "Chagua hadi makampuni {max}. Makampuni yaliyothibitishwa yanapata wazo lako sasa. Kwa mengine linahifadhiwa hadi yathibitishwe, na hatuwatumii barua pepe kwa niaba yako.",
+    "lead": "Chagua makampuni, hadi {max} kwa wasilisho hili. Makampuni yaliyothibitishwa kikamilifu yanapata wazo lako sasa. Kwa mengine linahifadhiwa hadi yathibitishwe, na hatuwatumii barua pepe kwa niaba yako.",
     "capLeft": "Umebakiwa na mawasilisho {count} kati ya {limit} kwa wazo hili kwenye mpango wako.",
     "capUnlimited": "Mpango wako hauna kikomo cha mawasilisho kwa wazo hili.",
     "capUsed": "Umetumia mawasilisho yote {limit} ya wazo hili kwenye mpango wako.",
@@ -452,6 +452,7 @@
     "noNiche": "Bado hayajapangwa kwa fani",
     "outcomeSent": "Wanalipata sasa",
     "outcomeSaved": "Linahifadhiwa hadi wathibitishwe",
+    "chosenTitle": "Uliyochagua katika utafutaji mwingine",
     "reason": {
       "own_organisation": "Wewe ni mwanachama wa {name}, kwa hivyo huwezi kuliwasilishia.",
       "tagged": "Wazo hili tayari limewasilishwa kwa {name}.",
@@ -460,8 +461,10 @@
       "cooldown": "{name} lilikataa wasilisho lako katika siku 30 zilizopita. Utaweza kuliwasilishia tena baada ya hapo.",
       "unavailable": "{name} haliwezi kupokea mawasilisho kwa sasa."
     },
+    "gone": "{name} halijaorodheshwa tena, kwa hivyo limeondolewa alama.",
     "chosen": "Umechagua {count} kati ya {max}",
-    "maxReached": "Hiyo ndiyo idadi kubwa zaidi unayoweza kuchagua kwa wasilisho moja.",
+    "maxReachedPlan": "Hayo ndiyo mawasilisho yote yaliyobaki kwenye mpango wako kwa wazo hili.",
+    "maxReachedBatch": "Hiyo ndiyo idadi kubwa zaidi ambayo wasilisho moja linaweza kubeba. Wasilisha haya, kisha uchague mengine.",
     "chooseOne": "Chagua angalau kampuni moja ya kuwasilishia.",
     "submit": "Wasilisha",
     "submitting": "Inawasilisha…",

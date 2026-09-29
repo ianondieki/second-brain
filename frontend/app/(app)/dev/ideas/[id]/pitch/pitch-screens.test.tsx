@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
+import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
@@ -9,7 +10,7 @@ import { Pitches } from "../Pitches";
 import { WhoHasSeen } from "../WhoHasSeen";
 import { WithdrawTag } from "../WithdrawTag";
 import type { PitchOutcome } from "./calls";
-import { PitchForm, type PickerGroup, type PitchFormProps } from "./PitchForm";
+import { PitchForm, type PickerGroup, type PickerRow, type PitchFormProps } from "./PitchForm";
 import type { MyTags, PitchResult, ProposalViews, TagOut } from "./picker";
 
 // REQ-PROP-03 (F2 picker), REQ-DIR-04 (held tags), REQ-PROV-03 ("Who has seen this"): the picker's choices and cap,
@@ -51,16 +52,23 @@ const AIRWAVE = "0199a000-0000-7000-8000-00000000000c";
 const OWN = "0199a000-0000-7000-8000-00000000000d";
 const ELSEWHERE = "0199a000-0000-7000-8000-00000000000e";
 
+function row(id: string, name: string, outcome: ReactNode): PickerRow {
+  return { id, name, available: true, about: <p data-about="">{`Company, Nairobi City (${name})`}</p>, outcome };
+}
+
+/** A choice made in another search, resolved by id on the server and shown by name in the "chosen" group. */
+const CHOSEN_ELSEWHERE = row(ELSEWHERE, "Elsewhere Ltd", <p data-outcome="sent">Gets it now</p>);
+
 const GROUPS: PickerGroup[] = [
   {
     key: "ict",
     parent: "ICT",
     name: "Networks & Telecommunications",
     rows: [
-      { id: SAFCELL, name: "Safcell", available: true, details: <p data-outcome="sent">Gets it now</p> },
-      { id: TELMARK, name: "Telmark", available: true, details: <p data-outcome="saved">Saved until they verify</p> },
-      { id: AIRWAVE, name: "Airwave", available: true, details: <p data-outcome="saved">Saved until they verify</p> },
-      { id: OWN, name: "Own Co", available: false, details: <p data-reason="own_organisation">You are a member</p> },
+      row(SAFCELL, "Safcell", <p data-outcome="sent">Gets it now</p>),
+      row(TELMARK, "Telmark", <p data-outcome="saved">Saved until they verify</p>),
+      row(AIRWAVE, "Airwave", <p data-outcome="saved">Saved until they verify</p>),
+      { ...row(OWN, "Own Co", <p data-reason="own_organisation">You are a member</p>), available: false },
     ],
   },
 ];
@@ -128,7 +136,7 @@ describe("the picker", () => {
     expect(screen.getByText("1 of 2 chosen")).toBeTruthy();
     fireEvent.click(box("Telmark"));
     expect(screen.getByText("2 of 2 chosen")).toBeTruthy();
-    expect(screen.getByText("That is the most you can choose for one pitch.")).toBeTruthy();
+    expect(screen.getByText("That is all the pitches your plan has left for this idea.")).toBeTruthy();
     expect(box("Airwave").disabled).toBe(true);
     expect(box("Safcell").disabled).toBe(false); // a chosen one can still be unticked
     fireEvent.click(box("Safcell"));
@@ -141,11 +149,15 @@ describe("the picker", () => {
     expect(screen.getByText("You are a member")).toBeTruthy();
   });
 
-  it("keeps choices made on other pages or searches, and sends them with the ones here", async () => {
+  it("shows choices from other searches first, by name with their outcome, and sends them with the ones here", async () => {
     const pitchImpl = await pitchWith({ ok: false, problem: "network", conflicts: [] });
-    const { container } = renderForm({ initialSelected: [SAFCELL, ELSEWHERE], pitchImpl });
+    const { container } = renderForm({ initialSelected: [SAFCELL, ELSEWHERE], chosen: [CHOSEN_ELSEWHERE], pitchImpl });
+    const chosen = container.querySelector("[data-chosen-group]") as HTMLElement;
+    expect(within(chosen).getByRole("heading", { name: "Chosen in other searches" })).toBeTruthy();
+    expect((within(chosen).getByRole("checkbox", { name: "Elsewhere Ltd" }) as HTMLInputElement).checked).toBe(true);
+    expect(within(chosen).getByText("Gets it now")).toBeTruthy();
+    expect(container.querySelector("input[type=hidden]")).toBeNull(); // nothing chosen out of sight
     expect(box("Safcell").checked).toBe(true);
-    expect(container.querySelector(`input[type=hidden][name=sel][value="${ELSEWHERE}"]`)).not.toBeNull();
     expect(screen.getByText("2 of 3 chosen")).toBeTruthy();
     await clickPitch();
     expect(pitchImpl).toHaveBeenCalledWith(PROPOSAL, [SAFCELL, ELSEWHERE]);
@@ -232,7 +244,7 @@ describe("a refused pitch", () => {
         { orgId: ELSEWHERE, reason: "cooldown" },
       ],
     });
-    renderForm({ initialSelected: [SAFCELL, TELMARK, ELSEWHERE], pitchImpl });
+    renderForm({ initialSelected: [SAFCELL, TELMARK, ELSEWHERE], chosen: [CHOSEN_ELSEWHERE], pitchImpl });
     await clickPitch();
     expect(screen.getByRole("alert").textContent).toBe(
       "Nothing was sent: 2 of the companies you chose cannot be pitched to now, so they are unticked with the reason by each.",
@@ -241,7 +253,16 @@ describe("a refused pitch", () => {
     expect(box("Telmark").disabled).toBe(true);
     expect(screen.getByText(/You have an open pitch with Telmark from another idea/)).toBeTruthy();
     expect(box("Safcell").checked).toBe(true);
-    expect(screen.getByText("1 of 3 chosen")).toBeTruthy(); // the off-page one is dropped too
+    expect(screen.getByText("1 of 3 chosen")).toBeTruthy(); // the chosen one elsewhere is unticked too
+    expect(screen.getByText(/Elsewhere Ltd declined a pitch of yours/)).toBeTruthy();
+    // The refused row keeps its type, county and badge, with the reason below them.
+    const telmark = document.querySelector(`[data-org-row="${TELMARK}"]`) as HTMLElement;
+    expect(within(telmark).getByText("Company, Nairobi City (Telmark)")).toBeTruthy();
+    expect(telmark.querySelector("[data-outcome]")).toBeNull();
+    // The alert is in the page's flow above the list, not in the sticky bar, and takes focus.
+    const alert = screen.getByRole("alert");
+    expect(alert.closest("[data-action-bar]")).toBeNull();
+    expect(document.activeElement).toBe(alert);
   });
 
   it.each([
@@ -295,8 +316,8 @@ describe("after a pitch", () => {
     await clickPitch();
     const heading = screen.getByRole("heading", { name: "Pitched" });
     expect(document.activeElement).toBe(heading);
-    expect(screen.getByRole("heading", { name: "Sent now (1)" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Saved until they verify (2)" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Sent now (1)" }).querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Saved until they verify (2)" }).querySelector("svg")).not.toBeNull();
     expect(
       screen.getByText(
         "Telmark isn't on the platform yet. Your proposal is saved and they'll see it if they join and verify. We don't email them on your behalf.",
@@ -368,6 +389,8 @@ describe("withdrawing a saved pitch", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 });
+
+
 
 describe("the idea's pitches", () => {
   const TAGS: MyTags = {

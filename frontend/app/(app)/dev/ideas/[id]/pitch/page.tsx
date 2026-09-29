@@ -21,9 +21,10 @@ import { myIdeas } from "../../data";
 import { BASE_PATH, ideaHref } from "../../ideas";
 import { isProposalId } from "../../routes";
 import { ideaStatus } from "../../status";
-import { nicheTree, pickerPage } from "./data";
-import { PitchForm, type PickerGroup } from "./PitchForm";
+import { chosenOptions, nicheTree, pickerPage } from "./data";
+import { PitchForm, type PickerGroup, type PickerRow } from "./PitchForm";
 import {
+  orgKey,
   parsePickerQuery,
   pitchesLeft,
   pitchHref,
@@ -92,6 +93,10 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
     return header(<Empty sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
   }
   const groups = await pickerGroups(picker);
+  // Choices made on another page or search, resolved by id so each is shown by name with its outcome (else dropped).
+  const onPage = new Set(groups.flatMap((group) => group.rows.map((row) => row.id)));
+  const offPage = query.selected.filter((id) => !onPage.has(orgKey(id)));
+  const chosen = await Promise.all((await chosenOptions(idea.id, offPage)).map(pickerRow));
   const narrowed = Boolean(query.q || query.niche);
   if (groups.length === 0 && !query.cursor) {
     return header(
@@ -117,6 +122,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
           ideaHref={back}
           cap={picker.cap}
           groups={groups}
+          chosen={chosen}
           initialSelected={query.selected}
           filters={<Filters query={query} niches={niches} />}
           narrowed={narrowed}
@@ -221,29 +227,37 @@ async function pickerGroups(picker: PitchPicker): Promise<PickerGroup[]> {
           key: `${group.niche?.id ?? "none"}-${index}`,
           parent: label?.parent,
           name: label ? label.name : t("noNiche"),
-          rows: await Promise.all(
-            group.orgs.map(async (option) => ({
-              id: option.card.id.toLowerCase(),
-              name: option.card.name,
-              available: option.available,
-              details: <OptionDetails option={option} />,
-            })),
-          ),
+          rows: await Promise.all(group.orgs.map(pickerRow)),
         };
       }),
   );
 }
 
-async function OptionDetails({ option }: { option: PitchOption }) {
-  const t = await getTranslations("pitch");
+/** One organisation as a picker row: type, county and badge, then the outcome or the reason, drawn here. */
+async function pickerRow(option: PitchOption): Promise<PickerRow> {
   const companies = await getTranslations("companies");
   const kinds = await getTranslations("orgKind");
   const { card } = option;
   const kind = kinds(card.kind);
+  return {
+    id: orgKey(card.id),
+    name: card.name,
+    available: option.available,
+    about: (
+      <>
+        <p className="text-sm text-ink-soft">{card.county ? companies("meta", { kind, county: card.county.name }) : kind}</p>
+        <VerificationBadge badge={card.badge} />
+      </>
+    ),
+    outcome: <Outcome option={option} />,
+  };
+}
+
+async function Outcome({ option }: { option: PitchOption }) {
+  const t = await getTranslations("pitch");
+  const { card } = option;
   return (
     <>
-      <p className="text-sm text-ink-soft">{card.county ? companies("meta", { kind, county: card.county.name }) : kind}</p>
-      <VerificationBadge badge={card.badge} />
       {!option.available && option.reason ? (
         <p className="text-sm text-ink" data-reason={option.reason}>
           {t(`reason.${option.reason}`, { name: card.name })}
