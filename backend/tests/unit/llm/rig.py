@@ -15,6 +15,7 @@ from bridge.llm import registry as registry_module
 from bridge.llm.adapter import ModelAdapter
 from bridge.llm.budget import RecordingBudgetListener, StaticCaps
 from bridge.llm.client import LLMService
+from bridge.llm.demo_data import DataRule
 from bridge.llm.guard import StaticConsents
 from bridge.llm.ledger import InMemoryLedger
 from bridge.llm.registry import Registry
@@ -43,6 +44,7 @@ def rig(
     caps: StaticCaps | None = None,
     consents: StaticConsents | None = None,
     nonce: Callable[[], str] = lambda: NONCE,
+    data_rule: DataRule | None = None,
 ) -> Rig:
     ledger, letters, queue = InMemoryLedger(), InMemoryDeadLetters(), InMemoryHumanQueue()
     listener, held = RecordingBudgetListener(), consents or StaticConsents()
@@ -60,6 +62,7 @@ def rig(
         nonce=nonce,
         now=lambda: NOW,
         monotonic=lambda: next(ticks) * 0.25,  # every call takes 250 ms
+        data_rule=data_rule,
     )
     return Rig(service, ledger, letters, queue, listener, held)
 
