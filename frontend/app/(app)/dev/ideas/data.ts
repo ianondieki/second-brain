@@ -76,3 +76,9 @@ export async function editorOptions(): Promise<EditorOptions> {
     problems: problems.data.items,
   };
 }
+
+/** A county's name by its code (KE-30 → Nairobi City), or the code when the list cannot be read. */
+export async function countyName(code: string): Promise<string> {
+  const { data } = await serverApi().GET("/api/directory/filter-options", await options());
+  return data?.counties.find((county) => county.code === code)?.name ?? code;
+}

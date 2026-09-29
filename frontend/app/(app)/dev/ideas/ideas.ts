@@ -45,6 +45,13 @@ export const MAX_ATTACHMENTS = 10;
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export const MATURITIES = ["idea", "prototype", "mvp", "live"] as const satisfies readonly Maturity[];
+/** Message keys under ideaFields.maturityValue.* (next-intl refuses "prototype" as a key segment). */
+export const MATURITY_KEY = {
+  idea: "idea",
+  prototype: "prototypeStage",
+  mvp: "mvp",
+  live: "live",
+} as const satisfies Record<Maturity, string>;
 export const ASKS = ["sale", "licence", "co_build", "pilot", "hire"] as const satisfies readonly Ask[];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -350,4 +357,22 @@ export function fileSizeParts(bytes: number): { value: number; unit: "bytes" | "
   if (bytes < 1000) return { value: bytes, unit: "bytes" };
   if (bytes < 1_000_000) return { value: Math.round(bytes / 1000), unit: "kb" };
   return { value: Math.round(bytes / 100_000) / 10, unit: "mb" };
+}
+
+// --- dates -----------------------------------------------------------------------------------------------------------
+
+/** A day as written in Kenya for the page's language ("29 Sept 2026"), in Nairobi time (the API stores UTC). */
+export function formatDay(locale: string, iso: string): string {
+  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(
+    new Date(iso),
+  );
+}
+
+/** A date and time in Nairobi ("29 September 2026 at 14:06"). */
+export function formatMoment(locale: string, iso: string): string {
+  return new Intl.DateTimeFormat(`${locale}-KE`, {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Africa/Nairobi",
+  }).format(new Date(iso));
 }
