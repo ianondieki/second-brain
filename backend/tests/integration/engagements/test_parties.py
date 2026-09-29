@@ -20,7 +20,8 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from bridge.auth.models import User
 from bridge.engagements import chain
@@ -41,12 +42,14 @@ from tests.integration.engagements.tracker import (
     engage,
     event_params,
     expect,
+    member,
     parties,
     payment_params,
     rowcount,
     run,
     sign_params,
     state_of,
+    tag,
     walk,
 )
 
@@ -312,6 +315,18 @@ async def test_the_main_path_runs_to_closed_only_with_its_evidence(owner_engine:
             engagement, "acceptance_certificate", uuid7(), CERTIFICATE_SHA256, p.developer, "developer"
         )
         await run(conn, SIGN, **other_certificate)  # a different document is not a countersignature
+        await expect(conn, APPEND, "acceptance certificate signed by both", **into_payment | {"id": uuid7()})
+        await as_owner(conn)  # nor is one person signing for both sides (MINOR 7; only the owner could write it)
+        one_person = uuid7()
+        for party in ("org", "developer"):
+            await run(
+                conn,
+                SIGN,
+                **sign_params(
+                    engagement, "acceptance_certificate", one_person, CERTIFICATE_SHA256, p.signatory, party, "passkey"
+                ),
+            )
+        await act(conn, p.developer)
         await expect(conn, APPEND, "acceptance certificate signed by both", **into_payment | {"id": uuid7()})
         await run(
             conn,
@@ -645,3 +660,257 @@ async def test_the_test_clock_moves_forward_only_where_the_owner_enabled_it(owne
         await append(conn, engagement, p.reviewer, "reviewer", "start_review", "SUBMITTED", "UNDER_REVIEW")
         assert await state_of(conn, engagement) == "UNDER_REVIEW"
         assert await chain.verify_chain(conn, engagement) == []
+
+
+# --- Review P1 (MAJOR 1, 4; MINOR 5, 6, 7) --------------------------------------------------------------------------
+
+
+async def refusal(conn: AsyncConnection, sql: str, **params: object) -> str:
+    """The SQLSTATE and primary message of ``sql``'s refusal (it must fail), from a savepoint."""
+    savepoint = await conn.begin_nested()
+    try:
+        await conn.execute(sa.text(sql), params)
+    except DBAPIError as exc:
+        await savepoint.rollback()
+        return f"{exc.orig.sqlstate} {exc.orig.diag.message_primary}"  # type: ignore[union-attr]
+    await savepoint.rollback()
+    raise AssertionError(f"not refused: {sql}")
+
+
+async def test_an_outsider_learns_nothing_from_a_refused_write(owner_engine: AsyncEngine) -> None:
+    """MAJOR 1: before any trigger reads or reports anything about an engagement, a writer who cannot see it (another
+    developer, another organisation's member, a forged org context, no user) gets one refusal, the same as for an
+    engagement that does not exist: a stale or current state, a wrong stage, a wrong hash, an agreement or milestone
+    of it, a payment."""
+    async with as_app(owner_engine) as conn:
+        p = await parties(conn)
+        await act(conn, p.developer)
+        engagement = await engage(conn, p)
+        done = await walk(conn, p, engagement, "AGREEMENT_SIGNING")
+        assert done.agreement is not None
+        missing = uuid7()
+        seen: set[str] = set()
+        for outsider, org in ((p.outsider, None), (p.other_member, p.other_org), (p.other_member, p.org), (None, None)):
+            await act(conn, outsider, org)
+            for target in (engagement, missing):
+                attempts = (
+                    (APPEND, event_params(target, outsider, "developer", "note", "NEGOTIATION", "NEGOTIATION")),
+                    (
+                        APPEND,
+                        event_params(target, outsider, "developer", "sign", "AGREEMENT_SIGNING", "IN_IMPLEMENTATION"),
+                    ),
+                    (ENDORSE, endorse_params(target, "SUBMITTED", "developer", outsider, "developer")),
+                    (ENDORSE, endorse_params(target, "AGREEMENT_SIGNING", "org", outsider, "signatory", "totp")),
+                    (
+                        SIGN,
+                        sign_params(
+                            target,
+                            "agreement",
+                            done.agreement,
+                            CERTIFICATE_SHA256,
+                            outsider or p.outsider,
+                            "developer",
+                            "totp",
+                        ),
+                    ),
+                    (
+                        "INSERT INTO milestones (id, agreement_id, engagement_id, seq, deliverable, amount_kes_minor,"
+                        " due_date, review_window_bd) VALUES (:id, :a, :e, 9, 'X', 1, '2027-01-01', 5)",
+                        {"id": uuid7(), "a": done.agreement, "e": target},
+                    ),
+                    (
+                        "INSERT INTO agreements (id, engagement_id, version, created_by) VALUES (:id, :e, 9, :by)",
+                        {"id": uuid7(), "e": target, "by": outsider or p.outsider},
+                    ),
+                    (
+                        RECORD_PAYMENT,
+                        payment_params(target, outsider or p.outsider, 100) | {"paid_on": date(2099, 1, 1)},
+                    ),
+                )
+                for sql, params in attempts:
+                    seen.add(await refusal(conn, sql, **params))
+        assert len(seen) == 1, seen
+        (only,) = seen
+        assert only.startswith("42501 ")
+        assert "AGREEMENT_SIGNING" not in only
+
+
+async def test_the_main_path_cannot_be_skipped(owner_engine: AsyncEngine) -> None:
+    """MAJOR 4: each main-path state follows only its legal predecessors (the database's backstop of the state
+    machine), a side branch resumes only to the state it left, the parties cannot close a dispute, and DELIVERED,
+    SIGN_OFF and PAYMENT_FINAL need a signed agreement whatever path led there."""
+    async with as_app(owner_engine) as conn:
+        p = await parties(conn)
+        await act(conn, p.developer)
+        engagement = await engage(conn, p)
+        await walk(conn, p, engagement, "UNDER_REVIEW")
+        await act(conn, p.signatory, p.org)
+        for target in ("DELIVERED", "CLOSED", "IN_IMPLEMENTATION", "NDA_SIGNED", "SUBMITTED", "PAYMENT_FINAL"):
+            params = event_params(engagement, p.signatory, "signatory", "skip", "UNDER_REVIEW", target)
+            await expect(conn, APPEND, f"{target} cannot follow UNDER_REVIEW", **params)
+        # A side branch resumes only to the state it was entered from.
+        await append(conn, engagement, p.signatory, "signatory", "hold", "UNDER_REVIEW", "ON_HOLD")
+        params = event_params(engagement, p.signatory, "signatory", "resume", "ON_HOLD", "INTEREST_CONFIRMED")
+        await expect(conn, APPEND, "resumes to UNDER_REVIEW", **params)
+        await append(conn, engagement, p.signatory, "signatory", "resume", "ON_HOLD", "UNDER_REVIEW")
+        await append(conn, engagement, p.signatory, "signatory", "dispute", "UNDER_REVIEW", "DISPUTED")
+        params = event_params(engagement, p.signatory, "signatory", "close", "DISPUTED", "CLOSED")
+        await expect(conn, APPEND, "row-level security", **params)  # a dispute's outcome is not the parties' to write
+        await append(conn, engagement, p.signatory, "signatory", "resume", "DISPUTED", "UNDER_REVIEW")
+        assert await chain.verify_chain(conn, engagement) == []
+
+        # An engagement inserted by the owner in IN_IMPLEMENTATION (as fixtures may) has no signed agreement: it is
+        # neither delivered nor signed off nor paid.
+        await as_owner(conn)
+        later = uuid7()
+        await run(
+            conn,
+            ENGAGE,
+            id=later,
+            p=p.proposal,
+            org=p.other_org,
+            dev=p.developer,
+            v=p.version,
+            origin="tagged",
+            state="IN_IMPLEMENTATION",
+        )
+        await act(conn, p.developer)
+        params = event_params(later, p.developer, "developer", "deliver", "IN_IMPLEMENTATION", "DELIVERED")
+        await expect(conn, APPEND, "DELIVERED needs an agreement signed by both parties", **params)
+
+
+async def test_viewers_write_no_system_events_or_automatic_endorsements(owner_engine: AsyncEngine) -> None:
+    """MINOR 5: a system event or an automatic endorsement comes from a job bound to the developer or to an
+    organisation member who may act (owner, admin, signatory, reviewer, finance), never to a viewer."""
+    async with as_app(owner_engine) as conn:
+        p = await parties(conn)
+        await act(conn, p.developer)
+        engagement = await engage(conn, p)
+        await act(conn, p.viewer, p.org)
+        await expect(
+            conn,
+            APPEND,
+            "row-level security",
+            **event_params(engagement, None, "system", "remind", "SUBMITTED", "SUBMITTED"),
+        )
+        await expect(
+            conn,
+            ENDORSE,
+            "row-level security",
+            **endorse_params(engagement, "SUBMITTED", "org", None, "system", "auto"),
+        )
+        await act(conn, p.finance, p.org)
+        await append(conn, engagement, None, "system", "remind", "SUBMITTED", "SUBMITTED")
+        await run(conn, ENDORSE, **endorse_params(engagement, "SUBMITTED", "org", None, "system", "auto"))
+
+
+async def test_nothing_is_written_to_an_engagement_that_ended(owner_engine: AsyncEngine) -> None:
+    """MINOR 6: once an engagement is in a terminal state, no endorsement, agreement, milestone or signature is added
+    and no agreement or milestone changes."""
+    async with as_app(owner_engine) as conn:
+        p = await parties(conn)
+        await act(conn, p.developer)
+        engagement = await engage(conn, p)
+        done = await walk(conn, p, engagement, "NEGOTIATION")
+        await append(conn, engagement, p.developer, "developer", "withdraw", "NEGOTIATION", "WITHDRAWN")
+        await expect(
+            conn,
+            ENDORSE,
+            "only the stage the engagement is in|row-level security|ended",
+            **endorse_params(engagement, "WITHDRAWN", "developer", p.developer, "developer"),
+        )
+        await expect(
+            conn,
+            SIGN,
+            "row-level security",
+            **sign_params(engagement, "mutual_nda", uuid7(), PDF_SHA256, p.developer, "developer", "passkey"),
+        )
+        await expect(
+            conn,
+            "INSERT INTO agreements (id, engagement_id, version, created_by) VALUES (:id, :e, 2, :by)",
+            "row-level security",
+            id=uuid7(),
+            e=engagement,
+            by=p.developer,
+        )
+        await expect(
+            conn,
+            "INSERT INTO milestones (id, agreement_id, engagement_id, seq, deliverable, amount_kes_minor,"
+            " due_date, review_window_bd) VALUES (:id, :a, :e, 2, 'More', 1, '2027-01-01', 5)",
+            "row-level security",
+            id=uuid7(),
+            a=done.agreement,
+            e=engagement,
+        )
+        await expect(
+            conn,
+            "UPDATE agreements SET ip_terms = 'revenue_share' WHERE id = :a",
+            "row-level security",
+            a=done.agreement,
+        )
+        await expect(
+            conn, "UPDATE milestones SET deliverable = 'Changed' WHERE id = :m", "row-level security", m=done.milestone
+        )
+
+
+async def test_the_parties_are_two_people(owner_engine: AsyncEngine) -> None:
+    """MINOR 7: the developer is never a member of the counterpart organisation, and an agreement or an acceptance
+    certificate counts as signed by both parties only when two different people signed it."""
+    async with as_app(owner_engine) as conn:
+        p = await parties(conn)
+        await member(conn, p.other_org, p.developer, "{reviewer}")
+        await tag(conn, p.proposal, p.other_org, p.developer)
+        await act(conn, p.developer)
+        await expect(
+            conn,
+            ENGAGE,
+            "row-level security",
+            id=uuid7(),
+            p=p.proposal,
+            org=p.other_org,
+            dev=p.developer,
+            v=p.version,
+            origin="tagged",
+            state="SUBMITTED",
+        )
+        await act(conn, p.other_member, p.other_org)  # an interest by its signatory in its own member's proposal
+        await expect(
+            conn,
+            ENGAGE,
+            "the developer may not be a member",
+            id=uuid7(),
+            p=p.proposal,
+            org=p.other_org,
+            dev=p.developer,
+            v=p.version,
+            origin="org_browse",
+            state="ORG_INTEREST",
+        )
+        await as_owner(conn)
+        await expect(
+            conn,
+            ENGAGE,
+            "the developer may not be a member",
+            id=uuid7(),
+            p=p.proposal,
+            org=p.other_org,
+            dev=p.developer,
+            v=p.version,
+            origin="tagged",
+            state="SUBMITTED",
+        )
+
+        await act(conn, p.developer)
+        engagement = await engage(conn, p)
+        done = await walk(conn, p, engagement, "AGREEMENT_SIGNING")
+        assert done.agreement is not None
+        await as_owner(conn)  # one person signing for both sides (only the owner could write it)
+        for party in ("developer", "org"):
+            await run(
+                conn,
+                SIGN,
+                **sign_params(engagement, "agreement", done.agreement, PDF_SHA256, p.signatory, party, "passkey"),
+            )
+        await expect(
+            conn, "UPDATE agreements SET status = 'signed' WHERE id = :a", "once both parties signed", a=done.agreement
+        )

@@ -101,3 +101,23 @@ async def test_the_seed_enables_the_test_clock_outside_production_only(owner_eng
             assert offset == 3
         finally:
             await transaction.rollback()
+
+
+async def test_the_test_clock_stays_disabled_on_the_settings_default(owner_engine: AsyncEngine) -> None:
+    """Review P1, MAJOR 3: only an APP_ENV set explicitly (environment or backend/.env) to dev, test or staging
+    enables the clock; the settings default (dev) does not, so a deployment that forgot APP_ENV fails closed."""
+    settings = get_settings()
+    unset = type(settings).model_construct(_fields_set=set(settings.model_fields_set) - {"app_env"}, **dict(settings))
+    assert unset.app_env == "test"
+    assert "app_env" not in unset.model_fields_set
+    enabled = text("SELECT enabled FROM test_clock")
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            await conn.execute(text("UPDATE test_clock SET enabled = true"))
+            await seed_test_clock(conn, unset)
+            assert (await conn.execute(enabled)).scalar_one() is False
+            await seed_test_clock(conn, settings)  # APP_ENV=test, set by the test configuration
+            assert (await conn.execute(enabled)).scalar_one() is True
+        finally:
+            await transaction.rollback()
