@@ -7,8 +7,9 @@ plus the attempt's upper estimate would pass it; the prototype's lifetime total 
 ``LLM_PROTOTYPE_TOTAL_CAP_USD``, USD 5 in dev and test when unset, none in staging and production unless set; D-37:
 every row of the ledger, and only Anthropic costs money) does the same; the billing subject's monthly cap
 (``plans.limits.llm_monthly_cap_usd``, UTC calendar month) does the same (the 100% hard cap: callers such as scouts
-catch ``LLMBudgetExceeded`` and degrade). The spend caps apply to attempts that cost something: a free slot's
-attempt (estimate 0) spends nothing, so a cap overrun by calls in flight never blocks it. After a call the subject's
+catch ``LLMBudgetExceeded`` and degrade). The spend caps apply to attempts on a paid model (``ModelSpec.paid``: every
+model of ``ai/models.yaml`` has positive prices, and a check without a model counts as paid); a free slot's
+zero-priced model spends nothing, so a cap overrun by calls in flight never blocks it. After a call the subject's
 spend is compared with the soft-cap ratio of ``ai/models.yaml`` (80%): ``BudgetStatus.soft_cap_reached`` is set, and
 ``BudgetListener`` hears the crossing once (the soft-cap email is Phase 4). Concurrent calls may each pass the
 check, so a cap (the request cap included) can be overrun by at most the calls in flight.
@@ -157,7 +158,7 @@ class BudgetGuard:
             sent = await self._ledger.calls_since(model=model.id, since=day_start(now))
             if sent >= model.daily_requests:
                 raise LLMRequestCapReached(model.id)
-        paid = estimate_usd > 0
+        paid = model is None or model.paid  # judged on the model, never on the estimate
         if paid:
             global_cap = self._settings.llm_global_daily_cap_usd
             global_spent = await self._ledger.global_spent_usd(since=day_start(now))

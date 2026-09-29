@@ -150,6 +150,7 @@ class OpenAICompatibleAdapter:
     redirects and times out after ``timeout_seconds``."""
 
     name = "openai_compatible"
+    requires_data_rule = True  # LLMService refuses to serve it without the D-37 rule (bridge.llm.demo_data)
 
     def __init__(self, slot: FreeSlot, *, timeout_seconds: float, http_client: httpx.AsyncClient | None = None) -> None:
         self._slot = slot

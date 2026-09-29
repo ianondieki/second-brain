@@ -25,7 +25,7 @@ from bridge.llm.budget import (
 )
 from bridge.llm.errors import LLMBlocked, LLMBudgetExceeded, LLMKillSwitch, LLMRequestCapReached
 from bridge.llm.ledger import CallStatus, InMemoryLedger, LedgerEntry
-from bridge.llm.registry import ZERO_PRICES, ModelSpec
+from bridge.llm.registry import ZERO_PRICES, ModelSpec, Prices
 from bridge.llm.types import BudgetStatus, CallContext
 from bridge.models.enums import PlanSide
 from tests.unit.llm.helpers import NOW, ORG, USER, settings
@@ -245,6 +245,21 @@ async def test_the_prototype_total_counts_every_day_of_the_ledger() -> None:
     with pytest.raises(LLMBudgetExceeded) as info:
         await g.check(CallContext(), Decimal("0.06"))
     assert (info.value.scope, info.value.spent_usd, info.value.cap_usd) == ("total", Decimal("4.95"), Decimal("5.00"))
+
+
+async def test_a_paid_model_meets_the_spend_caps_even_at_a_zero_estimate() -> None:
+    """P7 review: whether an attempt spends is the model's (its prices), never the estimate's; a call without a model
+    counts as paid (fail closed)."""
+    ledger = InMemoryLedger()
+    ledger.entries.append(entry("1.00", user=USER))
+    g = guard(ledger, llm_global_daily_cap_usd=Decimal("0.50"))
+    paid = ModelSpec("m", False, 1000, Prices(*(Decimal(v) for v in ("1", "5", "0.1", "1.25", "2"))))
+    for model in (paid, None):
+        with pytest.raises(LLMBudgetExceeded) as info:
+            await g.check(CallContext(), Decimal(0), model=model)
+        assert info.value.scope == "global"
+    await g.check(CallContext(), Decimal(0), model=FREE)  # a zero-priced free slot spends nothing
+    assert (paid.paid, FREE.paid) == (True, False)
 
 
 async def test_without_a_total_only_the_daily_and_tenant_caps_apply() -> None:

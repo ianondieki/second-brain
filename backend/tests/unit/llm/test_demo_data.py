@@ -11,16 +11,26 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
+from pydantic import SecretStr
 
+from bridge.config import FreeSlot
 from bridge.llm.client import LLMService
 from bridge.llm.demo_data import DemoDataRule, StaticDemoAccounts
-from bridge.llm.errors import ConsentRequired, LLMBlocked, NotDemoData, Tier2DemoOnly, Tier2NotAllowed
+from bridge.llm.errors import (
+    ConsentRequired,
+    LLMBlocked,
+    LLMConfigError,
+    NotDemoData,
+    Tier2DemoOnly,
+    Tier2NotAllowed,
+)
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.guard import StaticConsents
 from bridge.llm.ledger import CallStatus
+from bridge.llm.openai_adapter import OpenAICompatibleAdapter
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
-from tests.unit.llm.helpers import ORG, OTHER_OWNER, OWNER, SESSION, USER
+from tests.unit.llm.helpers import ORG, OTHER_OWNER, OWNER, SESSION, USER, real_registry
 from tests.unit.llm.rig import Rig, rig, screen
 from tests.unit.llm.schemas import Verdict
 
@@ -164,6 +174,16 @@ async def test_a_demo_accounts_tier2_text_with_consent_is_sent() -> None:
     )
     assert result.parsed.verdict == "clean"
     assert len(adapter.requests) == 1
+
+
+def test_a_free_slot_adapter_is_never_served_without_the_rule() -> None:
+    """P7 review: a service over a free provider's adapter must carry the D-37 rule, whoever builds it."""
+    slot = FreeSlot(1, "https://free.example/v1", SecretStr("k"), "vendor/m", 5, "json_object")
+    adapter = OpenAICompatibleAdapter(slot, timeout_seconds=5.0)
+    reg = real_registry().for_free_slot(slot)
+    with pytest.raises(LLMConfigError, match="D-37 data rule"):
+        rig(adapter, reg=reg)
+    rig(adapter, reg=reg, data_rule=DemoDataRule(StaticDemoAccounts()))
 
 
 async def test_without_a_rule_nothing_changes() -> None:

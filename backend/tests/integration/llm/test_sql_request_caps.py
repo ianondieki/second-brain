@@ -8,6 +8,7 @@ lifetime total reads every tenant's rows through ``app_llm_spend_usd()``.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -79,6 +80,22 @@ async def test_the_count_reads_only_what_the_bound_tenant_may_read(factory: Fact
     async with factory() as db:
         await bind_tenant(db, user_id=people.a)
         assert await SqlLedger(factory, caller=db).calls_since(model=key, since=day_start(clock.utcnow())) == 1
+
+
+async def test_the_count_is_the_slots_model_only(factory: Factory, people: People) -> None:
+    """P7 review mutant M41: the same tenant's rows of another model today are not the slot's."""
+    reg = registry_module.load(get_settings().llm_models_file)
+    one, other = free_slot(people.tag, 10), replace(free_slot(people.tag, 10), number=2, model=f"vendor/o-{people.tag}")
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        for slot, calls in ((one, 1), (other, 2)):
+            svc = service(db, factory, FakeAdapter([reply()] * calls), registry=reg.for_free_slot(slot))
+            for _ in range(calls):
+                await svc.complete(TASK, screen(), Verdict, ctx=CallContext(user_id=people.a))
+        ledger = SqlLedger(factory, caller=db)
+        today = day_start(clock.utcnow())
+        assert await ledger.calls_since(model=free_model_key(one), since=today) == 1
+        assert await ledger.calls_since(model=free_model_key(other), since=today) == 2
 
 
 async def test_the_prototype_total_reads_every_tenants_lifetime_spend(

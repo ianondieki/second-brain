@@ -121,6 +121,8 @@ def test_unknown_task_is_a_config_error() -> None:
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].pop("output"), "prices need"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=-1), "zero or more"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=True), "number"),
+        (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=0), "must be positive"),
+        (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(output=0), "must be positive"),
         (lambda d: d.update(pricing_status="guessed"), "pricing_status"),
         (lambda d: d.pop("pricing_verified_on"), "pricing_verified_on"),
         (lambda d: d.update(pricing_verified_on="yesterday"), "pricing_verified_on"),

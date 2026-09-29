@@ -76,6 +76,12 @@ class ModelSpec:
     prices: Prices
     daily_requests: int | None = None
 
+    @property
+    def paid(self) -> bool:
+        """Whether an attempt on the model can cost anything (the spend caps apply); only free slots are not."""
+        p = self.prices
+        return any(price > 0 for price in (p.input, p.output, p.cache_read, p.cache_write_5m, p.cache_write_1h))
+
 
 @dataclass(frozen=True, slots=True)
 class TaskSpec:
@@ -294,11 +300,15 @@ def _model(model_id: str, raw: Mapping[str, Any]) -> ModelSpec:
     prices = raw["price_usd_per_mtok"]
     if set(prices) != set(_PRICE_KEYS):
         raise ValueError(f"{model_id} prices need exactly {', '.join(_PRICE_KEYS)}")
+    parsed = Prices(*(_decimal(prices[key], f"{model_id}.{key}") for key in _PRICE_KEYS))
+    if parsed.input <= 0 or parsed.output <= 0:
+        # A zero price would take the model out of the spend caps; free slots are priced in code, never here.
+        raise ValueError(f"{model_id} input and output prices must be positive")
     return ModelSpec(
         id=model_id,
         supports_effort=bool(raw["supports_effort"]),
         max_output_tokens=_positive_int(raw["max_output_tokens"], f"{model_id}.max_output_tokens"),
-        prices=Prices(*(_decimal(prices[key], f"{model_id}.{key}") for key in _PRICE_KEYS)),
+        prices=parsed,
     )
 
 

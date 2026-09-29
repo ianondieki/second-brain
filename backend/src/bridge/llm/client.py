@@ -216,6 +216,8 @@ class LLMService:
         monotonic: Callable[[], float] = time.perf_counter,
         data_rule: DataRule | None = None,
     ) -> None:
+        if getattr(adapter, "requires_data_rule", False) and data_rule is None:
+            raise LLMConfigError("a free provider slot's adapter is served only with the D-37 data rule")
         self._adapter = adapter
         self._data_rule = data_rule
         self._registry = registry
