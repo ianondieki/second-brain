@@ -147,10 +147,10 @@ and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, 
 3. The endorsement key adds `stage_round` (the number of times the engagement entered the stage, set by the
    database): a stage entered twice (a disputed first contact goes back to stage 3, 6.9 stage 4) needs fresh
    endorsements, which (engagement, stage, party, milestone) alone would refuse.
-4. `test_clock` has an `enabled` flag only the owner sets (the seed: dev, test and staging) on top of the app-side
+4. `test_clock` has an `enabled` flag only the owner sets (the seed: an explicit dev, test or staging) on top of the app-side
    APP_ENV gate, so a production database refuses to move the clock whatever calls the function. The offset column
    is `clock_offset` (OFFSET is a reserved word); the key is a boolean singleton, not a UUIDv7.
-5. The database also enforces the main path's legal steps (the three preconditions above), D2 for a developer's
+5. The database also enforces the main path's legal steps (the preconditions and predecessor sets), D2 for a developer's
    agreement signature, the internal e-signature's refusal of assignment and exclusive licence, the initial states and
    E2 for new engagements, and the payload shape. These restate AC-TRACK-10, AC-TRACK-7, 6.8 ("Express interest
    requires E2") and 6.4 item 4; the state machine remains the only transition table.
@@ -177,6 +177,49 @@ and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, 
    as a residual in THREAT_MODEL §2 (the "party acts in a role they do not hold" row).
 4. Deadline values stay the state machine's (P5).
 
+## Review round 1 (reviewer and security-reviewer on `3191af5`; fixed in revision 0003 in place)
+
+Each finding got a failing test first (`348f568`, red on `3191af5`: 10 tests), then the fix; the mutation proofs below
+show each test catches its guard.
+
+| Finding | Fix | Tests |
+|---|---|---|
+| MAJOR 1: SECURITY DEFINER BEFORE INSERT triggers ran before RLS WITH CHECK and read, locked (`FOR UPDATE`) and reported another party's engagement (state, stage, agreement status, membership, TOTP) | `tracker_engagement_visible()` (SECURITY INVOKER) fires first on INSERT on all six tracker tables (`<table>_0_visible`; triggers fire in name order): one `insufficient_privilege` refusal, "no engagement of the caller's with that id", for a missing or invisible engagement. The checks that read other users moved to AFTER triggers (after RLS): `engagements_members()` (contact membership, and MINOR 7), `engagement_endorsements_totp()`, `signatures_totp()`. `milestones_guard` reads an agreement only as its own engagement's | `test_parties.py::test_an_outsider_learns_nothing_from_a_refused_write` (12 distinct refusals before, 1 after), `test_serialisation.py::test_an_outsider_takes_no_lock_on_another_partys_engagement` (lock timeout before), `test_migrations.py::test_the_visibility_trigger_fires_first_on_every_tracker_table` |
+| MAJOR 2: milestone writes and finalisation were not serialised | `milestones_guard` reads the agreement `FOR SHARE` on INSERT, UPDATE and DELETE; the finalising UPDATE holds the row's update lock, so each waits for the other | `test_serialisation.py::test_a_milestone_planned_during_finalisation_waits_and_is_refused`, `::test_finalising_while_the_last_milestone_is_deleted_waits_and_fails` |
+| MAJOR 3: the seed enabled the clock on the settings default (`dev`) | `test_clock_enabled(settings)`: `"app_env" in settings.model_fields_set` and dev, test or staging, else disabled (as the directory seed) | `test_seed.py::test_the_test_clock_stays_disabled_on_the_settings_default` |
+| MAJOR 4: UNDER_REVIEW → DELIVERED → CLOSED skipped every evidence gate | `engagement_main_path_predecessors(state)` (internal): each main-path state only from its legal predecessors; ON_HOLD, DISPUTED and INFO_REQUESTED resume only to the state they were entered from; DELIVERED, SIGN_OFF and PAYMENT_FINAL need a signed agreement too; DISPUTED → CLOSED (the mediator's outcome) is refused to the parties by the events INSERT policy | `test_parties.py::test_the_main_path_cannot_be_skipped` |
+| MINOR 5: viewers could write system events and `auto` endorsements | both need the developer or a member with owner, admin, signatory, reviewer or finance | `::test_viewers_write_no_system_events_or_automatic_endorsements` |
+| MINOR 6: tracker writes after the end | `e.ended_at IS NULL` in the INSERT checks of endorsements, agreements, milestones and signatures and the UPDATE checks of agreements and milestones; the endorsement guard refuses a terminal stage | `::test_nothing_is_written_to_an_engagement_that_ended` |
+| MINOR 7: one person on both sides | the tagged INSERT policy refuses an organisation the developer belongs to, and `engagements_members()` refuses any engagement whose developer is an active member (for every role); a signed agreement and PAYMENT_FINAL's certificate need two distinct signers | `::test_the_parties_are_two_people`, and the certificate case in `::test_the_main_path_runs_to_closed_only_with_its_evidence` |
+
+The RLS world's engagement moved to a separate developer (`pitcher-<tenant>`, with a proposal of their own), because a
+tenant's owner can no longer be the developer of an engagement with their own organisation; the tracker rows stay the
+tenant's through its organisation, so the generated RLS tests now exercise the member path.
+
+| Proof | Guard broken | Test (red → restored green) |
+|---|---|---|
+| M14 | no `<table>_0_visible` trigger | `test_an_outsider_learns_nothing_from_a_refused_write`, `test_an_outsider_takes_no_lock_on_another_partys_engagement` |
+| M15 | `milestones_guard` without `FOR SHARE` | both `test_serialisation.py` race tests |
+| M16 | predecessor check skipped | `test_the_main_path_cannot_be_skipped` |
+| M17 | distinct signers not required | `test_the_parties_are_two_people`, `test_the_main_path_runs_to_closed_only_with_its_evidence` |
+| M18 | the clock enables on the settings default | `test_seed.py::test_the_test_clock_stays_disabled_on_the_settings_default` |
+
+Follow-ups recorded from the review (not built):
+
+- A test that the endorsement guard's `FOR UPDATE` serialises an endorsement with a concurrent append.
+- A test of the contact-member rule on UPDATE (a non-member named as contact) through the API path.
+- A test of the payment state window (recording before `IN_IMPLEMENTATION` and after `PAYMENT_FINAL` refused).
+- A test of `app.org_id` narrowing on every tracker table (a member of two organisations scoped to the other one).
+- A test that the owner cannot DELETE a final agreement (the guard refuses it; bridge_app has no DELETE).
+- Milestone endorsements are keyed with `stage_round` although milestones are endorsed only in IN_IMPLEMENTATION;
+  a milestone re-endorsed after a resume would need a round of its own. Revisit with the milestone payment flow.
+- Payments during DISPUTED or ON_HOLD: the INSERT policy's state window does not include them; P5 decides whether a
+  payment can be recorded while paused.
+- A passkey step-up cannot be verified by the database (no passkey table yet): P5 sets `step_up_method` only from
+  the step-up it verified in the request.
+- Commit sizes: the revision commits exceed the ~300-line guidance (one revision file); later rounds keep to it where
+  a file allows.
+
 ## Notes for P5 and P9 (operating rules)
 
 - Append an event instead of writing the state; send `from_state` as the state the command was checked against; map
@@ -186,9 +229,17 @@ and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, 
 - Keep free text and personal data out of payloads: a decline's `OTHER` text and an internal start date's attestation
   text go to a mutable store with their salted digest in the payload.
 - Close the tag when its engagement ends (`app_close_tag`); the projection does not.
-- System events and `auto` endorsements come from a job bound (`bind_tenant`) to the party it acts for.
-- The test-clock router calls `app_set_test_clock` and stays out of the production image; read "now" from
-  `app_clock_now()` in the API and the worker so deadlines, reminders and evidence times agree.
+- System events and `auto` endorsements come from a job bound (`bind_tenant`) to the party it acts for, never to a
+  viewer.
+- Map the tracker's one refusal for an engagement the caller cannot see ("no engagement of the caller's with that
+  id", SQLSTATE 42501) to 404, like any cross-tenant reference.
+- The test-clock router calls `app_set_test_clock`, stays out of the production image and, in staging, is staff-gated
+  (review P1, MAJOR 3: staging has real-looking data and more than one user); read "now" from `app_clock_now()` in the
+  API and the worker so deadlines, reminders and evidence times agree. The seed enables the clock only when `APP_ENV`
+  is set explicitly (backend/.env or the environment) to dev, test or staging.
+- The transition table in `state_machine.py` must stay within the database's backstop: each main-path state from the
+  predecessors in `engagement_main_path_predecessors`, a side branch resuming to the state it left, and no
+  DISPUTED -> CLOSED from a party (the mediator's outcome, after the prototype).
 - The demo seed (P9) sets `users.demo_account` and D2 for the demo developers as the owner; demo engagements are best
   replayed through events so their History tabs are complete.
 
@@ -197,7 +248,7 @@ and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, 
 - Endorsements are not in the hash chain themselves: P5 appends an event for each endorsement so the History tab and
   the chain carry it (AC-TRACK-3); the database does not require the pairing.
 - A dual-endorsement stage is not blocked from being left without both endorsements (the state machine's rule); the
-  three legal steps above are.
+  legal steps above are.
 - `signatures.ip` and `user_agent` are personal data kept with the evidence; their retention belongs to the Phase 8
   retention schedule.
 - "Signed outside the platform" (assignment, exclusive licence) needs a new `step_up_method` value and path later.
