@@ -80,9 +80,11 @@ fallback treated as an answer: 3 red; (M6) the global budget message carrying th
 
 **Open (follow-ups, not built).**
 
-1. Signup still records a `tier2_llm_assistant` decision if a client sends one (`source = "signup"`; the guard counts
-   only `session:` rows and `GET /api/me/consents` no longer shows it). Refuse session-only purposes in
-   `validate_signup` after P17 merges (it touches `auth/`, which P17 is changing); THREAT_MODEL §1 lists the residual.
+1. **Done in P17** (`feat/REQ-AUTH-01-followups-7-8`, REQ-AUTH-01 card): signup refuses session-only purposes,
+   whatever their value, with 422 `consent_session_only` on the email form (`_validate_signup`) and at both steps of an
+   OAuth signup (`_check_consents` at start and callback), through `bridge.auth.service.refuse_session_only`. Was:
+   signup recorded a `tier2_llm_assistant` decision if a client sent one (`source = "signup"`; the guard counted only
+   `session:` rows). The THREAT_MODEL row moved from §2 to §1.
 2. docs/spec/09 says "Sync, streaming": the prototype answers in one response; streaming later.
 3. **Done in review round 1:** a code overlap check (`tier2_overlap_words`). Still open: a paraphrase or a shorter copy
    passes; the Haiku over-disclosure check (docs/spec/09) belongs with REQ-PROP-02's warn-only check.

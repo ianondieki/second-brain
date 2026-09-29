@@ -70,11 +70,11 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    active envelope, and an active envelope copied into the pending column has no start time and is refused as
    expired. A distinct associated-data label per kind (for example `b"totp-pending:" + user_id`) would separate them
    cryptographically. It is not needed now: secrets pending at deploy would no longer decrypt, so the confirmation
-   would also have to treat such an envelope as expired. It is an option for the security review. (2) SQL cannot see the time, so a sweeper would have to decrypt rows. None is planned: an
-   abandoned secret stays encrypted, sign-in never reads it, and it is refused after 15 minutes. (3) The time is the
-   app clock (`bridge.clock.utcnow`, not the tracker's test clock) in whole seconds. Clock skew between API instances
-   shifts the lifetime by the skew. A start time in the future is accepted, so a slow instance never refuses a fresh
-   setup; forging one needs the key.
+   would also have to treat such an envelope as expired. It is an option for the security review. (2) SQL cannot see
+   the time, so a sweeper would have to decrypt rows. None is planned: an abandoned secret stays encrypted, sign-in
+   never reads it, and it is refused after 15 minutes. (3) The time is the app clock (`bridge.clock.utcnow`, not the
+   tracker's test clock) in whole seconds. Clock skew between API instances shifts the lifetime by the skew. A start
+   time in the future is accepted, so a slow instance never refuses a fresh setup; forging one needs the key.
    **Open (impl-frontend):** Cancel sends DELETE and acts on its answer: 204 or 409 `no_pending_enrolment` (two-step
    sign-in is off and nothing is pending, so a later confirmation cannot turn it on) to the "cancelled" notice; 409
    `totp_already_enabled` to the "on" screen with the codes-not-shown notice; anything else keeps the setup steps with
@@ -113,12 +113,29 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    codes-not-shown notices point at it, `security.codesNotShownTurnOff` no longer sends people to turn two-step
    sign-in off; the comment on `onWithoutCodes` goes.
 
-**P17 backend status (2026-09-29, `feat/REQ-AUTH-01-followups-7-8`):** the BLOCKER is fixed and the integration
-branch is merged in. Full backend suite: 3077 passed. `bridge/auth/service.py`: 99% with branches (93% on the merged
-tree before these tests; the Handoff measured 91%). The one line left (273) re-raises when an insert fails while the
-address is still free. New tests reach the auth paths nothing tested: signup refusals, a signup that loses the race
-for its address, magic links to suspended accounts, rehash at login, the new-password policy, a step-up without
-two-step sign-in, the second-factor throttle, a wrong second step. Mutation proofs: 29 mutations, all killed and all
-restored. They cover the fix; the lifetime, expiry-clearing and cancel guards of follow-up 7; the lock, step-up,
-turn-off check, audit, notice and throttle guards of follow-up 8; and the paths the new tests reach. Next:
-security-reviewer (one round) and reviewer on this branch, then the frontend halves (impl-frontend) with ux-reviewer.
+**Session-only consents at signup (P17, REQ-PROP-05 open item 1):** signup refuses any purpose decided for one sign-in
+(`profiles.consents.SESSION_ONLY`, today `tier2_llm_assistant`), whatever its value, with 422 `consent_session_only`
+and the settings API's message, so no `source = "signup"` row of it is written. One check,
+`service.refuse_session_only`, runs in `_validate_signup` (email form) and in `identities._check_consents`, which runs
+at the OAuth start and again at the callback; a flow sealed before the rule lands on
+`/signup?oauth_error=consent_session_only` and creates nothing. The web signup form sends only marketing, reminders,
+whatsapp and profiling, so it is unaffected. Tests: `test_signup_refusals_create_no_account_and_send_nothing`,
+`test_signup_needs_the_terms_and_current_consents`, `test_a_flow_carrying_a_session_only_consent_creates_nothing`.
+Mutations killed: no check on the email path; none on the OAuth path; only granted values refused; the callback
+skipping the check.
+
+**Demo seed (merge of `7e813ce`):** the M1 demo seed sealed its fixed TOTP secrets into `totp_pending_enc` itself, as
+bare secrets, which follow-up 7 treats as expired (17 demo tests errored with 409 `no_pending_enrolment`).
+`service.seal_pending_secret` is now the one writer of the pending envelope; `begin_totp_enrolment` and the seed's
+`enrol_totp` both call it.
+
+**P17 backend status (2026-09-29, `feat/REQ-AUTH-01-followups-7-8`):** the BLOCKER is fixed and the integration branch
+is merged in (last at `7e813ce`). Full backend suite: 3201 passed. `bridge/auth/service.py`: 99% with branches (93% on
+the merged tree before these tests; the Handoff measured 91%). The one line left (283) re-raises when an insert fails
+while the address is still free. New tests reach the auth paths nothing tested: signup refusals, a signup that loses
+the race for its address, magic links to suspended accounts, rehash at login, the new-password policy, a step-up
+without two-step sign-in, the second-factor throttle, a wrong second step. Mutation proofs: 33 mutations, all killed
+and all restored. They cover the fix; the lifetime, expiry-clearing and cancel guards of follow-up 7; the lock,
+step-up, turn-off check, audit, notice and throttle guards of follow-up 8; the session-only signup rule; and the paths
+the new tests reach. Next: security-reviewer (one round) and reviewer on this branch, then the frontend halves
+(impl-frontend) with ux-reviewer.
