@@ -129,9 +129,7 @@ Shared files changed: `components/DevNav.tsx` (My ideas), `components/ui/icons.t
 
 Follow-ups, not built:
 
-- JS budget: the editor routes measure 149,958 bytes gzipped of 150,000 (baseline of a signed-in page 144,578); any
-  addition to step 1 or to the shared shell tips them over. Steps 2 and 3, the picker panels and the API calls load on
-  demand. The Lighthouse CI budget (AC-UX-3) is still to add.
+- JS budget: superseded by review round 1 below (the old figures counted only the HTML's script tags).
 - D1 in e2e: the fake SMS outbox is in-process, so `e2e/support/verification.ts` raises the test developer to D1
   through `E2E_DATABASE_OWNER_URL`; CI does not set it yet, so the publishing test skips there. Either export it in the
   e2e job (the compose Postgres is on 127.0.0.1:5432) or add a dev/test-only way to read fake SMS codes.
@@ -140,4 +138,47 @@ Follow-ups, not built:
 - The certificate PDF link appears only once timestamped (the API answers 404 before the worker has registered the
   version); owners cannot download a "Timestamp pending" certificate meanwhile.
 - Pagination of My ideas (API caps at 200).
+
+## P8 review round 1 (code reviewer CHANGES_REQUIRED, ux-reviewer CHANGES_REQUIRED): fixed
+
+Red tests first (`editor/editor-save.test.tsx`, 33ac9ff), then:
+
+- BLOCKER: a published idea without a draft showed its registered version's file ids; the API drafts copies under new
+  ids, so removing one answered 404 and the editor treated 404 as removed: the file stayed in the next registered
+  version. Every file action now drafts and saves first (`ensureDraft`), works on the draft's own copy (same id, or
+  the same file under its new id), never treats a refusal as removal, and changes the list functionally (44e834e).
+- Leaving the editor within the autosave delay saves (no `replaceState` once gone); publishing waits for a save under
+  way without forcing another; saves never overlap (tested with a slow fake); a failed publish check renders an alert
+  that takes focus (WCAG 4.1.3/3.3.1).
+- MINORs: stepper and statements lock while publishing; file input disabled while sending; names over 1,000 encoded
+  characters refused before sending; 401 `mfa_required` and 429 worded; `aria-current="step"` on the step's button;
+  "Edit idea" once the draft exists; every sanitiser finding per field; no "Save again" after a refusal; the idea
+  page's teaser hint follows the status; textareas keep clear of the tab bar; no layout shift while steps load
+  (steps read with `use()` from `lib/preloadable`, fields enabled from an effect).
+- JS budget (REQ-UX-05): `scripts/js-budget.mjs` counts every script fetched until the network is idle (Playwright),
+  and with `--first-edit` through the first keystroke; `docs/runbooks/dev-setup.md` matches. Signed-in client code
+  reads server-formatted strings (`lib/i18n/client-strings`, `components/ClientStrings`) instead of next-intl's
+  client runtime (about 7 KB); the five plural/select messages in those namespaces became plain arguments (a locale
+  test keeps it so). Sign out uses only the CSRF helper (`lib/api/csrf`, `lib/api/error-code`,
+  `lib/auth/remembered-email` split out and re-exported); the error screen loads when a page fails; client icons come
+  from `components/ui/status-icons`; the editor's first save loads only `save.ts`.
+  Measured 2026-09-30 (production build, gzipped bodies, 1 KB = 1,000 bytes): `/` 138,025; `/login` 147,036;
+  `/signup` 148,618; `/settings/security` 148,324; `/verify` 145,117; `/dev`, `/dev/companies`, `/dev/ideas`
+  140,046 (was 144,578); `/dev/ideas/{id}` 143,815; `/dev/ideas/new` 145,765 (147,753 through the first edit);
+  `/edit` 147,492 (149,480); `/edit?step=2` 147,979 (149,967); `/edit?step=3` 147,876 (147,876). Publishing and
+  adding a file load the remaining calls afterwards (not counted by the method). Headroom on the editor is small:
+  the next screen's shared additions should come with their own cuts. Lighthouse CI budget (AC-UX-3) still to add.
+
+Recorded for the orchestrator:
+
+- `[[COPY-REVIEW]]` the confidentiality notice (`ideaFields.confidentialNotice`) uses the docs/spec/04 4.2 approved
+  phrasing verbatim ("shown to verified people at organisations that accepted our NDA, plus platform staff under
+  logged, owner-notified break-glass"); whether the break-glass qualifier should be worded for developers, or the
+  notice should also say "organisations you tag", is for copy review (the locale test pins the approved phrase).
+- Commit sizes: these P8 commits exceed the ~300-line guideline (whole screens or modules with their tests):
+  c10f865 (353), b7430b3 (333), 46b4465 (369), 44aef13 (541), d97a989 (494), 45587fe (762), d0dd263 (388),
+  78c2da0 (367), 4f77096 (534). Round 1 commits stay under it.
+- Two intermediate commits do not build on their own (the branch head does): f7d2599 (`[id]/page.tsx` still
+  imports `ButtonLink` from `Button` until 78c2da0) and d97a989 (`Attachments.tsx`, `ProblemPicker.tsx` import
+  `../calls` before 45587fe). No history rewrite (never force-push).
 
