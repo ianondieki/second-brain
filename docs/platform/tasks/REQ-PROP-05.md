@@ -123,3 +123,15 @@ fallback treated as an answer: 3 red; (M6) the global budget message carrying th
   `FEATURE_TIER2_ENABLED` is off; refusals audited with purpose `assistant`); `test_feature_flags.py::EXPECTED` lists
   them. `GET` and `DELETE .../assistant/consent` stay open (turning the assistant off always works).
 - THREAT_MODEL: §1 (signup residual), §2 (one user starves others), §5 (flag), §6 (cost loops; tier crossing).
+
+## Round 2 (reviewer PASS and security-reviewer PASS at `b43822c`, 2026-09-29): MINOR follow-ups
+
+- The daily limit counts `llm_calls` rows, but a demo-fallback answer (the fake provider, or a non-demo owner's
+  Tier-1-only draft on a free slot) writes none, so fallbacks are uncounted (no provider cost; each still decrypts
+  Tier 2 and appends an audit event). Count today's `proposal.assistant_suggested` events instead, or write a
+  zero-cost ledger row for a fallback.
+- `shingles()` folds case and compatibility forms but not confusable scripts (Cyrillic or Greek lookalikes pass the
+  overlap check): run `sanitise.detection_skeleton()` on both sides before `casefold()` and add the Cyrillic case.
+- No test asserts that assistant refusals are audited with purpose `assistant` (mutation "always RENDER" survives):
+  assert each refusal's purpose in `test_feature_flags.py`.
+- The signup-residual THREAT_MODEL row sits in the §2 tenancy table, not §1 as this card says: move it or fix the note.
