@@ -8,6 +8,10 @@
 - ``cert-id [--wait SECONDS]``: the certificate id of the exported demo proposal (``E2E_VERIFY_CERT_ID``), waiting up
   to SECONDS until the worker has hashed and signed it, so ``/verify`` shows its evidence. Needs
   ``DATABASE_OWNER_URL``.
+- ``clock [--days N] [--hours N]``: the shared dev/test clock (revision 0003), moved forward by N days and hours when
+  given, through ``app_set_test_clock``, the function the test-clock router calls: only forward, at most 366 days in
+  all, and only where the seed enabled the clock (an explicit ``APP_ENV`` of dev or test). Every tracker deadline,
+  reminder and evidence time follows it. Needs ``DATABASE_OWNER_URL``.
 
 Every command refuses outside ``APP_ENV`` dev and test (``bridge.seed.demo.demo_refusal``), like the demo seed: the
 fixed credentials exist nowhere else.
@@ -19,8 +23,11 @@ import argparse
 import asyncio
 import sys
 import time
+from datetime import timedelta
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from bridge.auth import totp
 from bridge.config import Settings, get_settings
@@ -51,15 +58,41 @@ def _logins() -> int:
     print(f"Demo logins (password for all: {DEMO_PASSWORD}; dev-only, public on purpose):")
     for email, name, what in all_accounts():
         print(f"  {email:30}  {name:16}  {what}")
-    print("Second factor: make demo-totp (or python -m bridge.demo totp <address>).")
+    print("Second factor (TOTP codes): make demo-totp, or make demo-totp EMAIL=<address> for one code.")
+    return 0
+
+
+def _owner_engine(settings: Settings, command: str) -> AsyncEngine:
+    url = settings.database_owner_url
+    if url is None:
+        raise SystemExit(f"DATABASE_OWNER_URL is not set: {command} runs as the owner role")
+    return create_async_engine(url.get_secret_value())
+
+
+async def _clock(settings: Settings, days: int, hours: int) -> int:
+    engine = _owner_engine(settings, "clock")
+    try:
+        async with engine.begin() as conn:
+            if days or hours:
+                current = (await conn.execute(text("SELECT clock_offset FROM test_clock"))).scalar_one()
+                offset = current + timedelta(days=days, hours=hours)
+                try:
+                    await conn.execute(text("SELECT app_set_test_clock(:offset)"), {"offset": offset})
+                except DBAPIError as exc:
+                    print(f"the clock did not move: {str(exc.orig).splitlines()[0]}", file=sys.stderr)
+                    return 1
+            row = (
+                await conn.execute(text("SELECT enabled, clock_offset, app_clock_now() AS now FROM test_clock"))
+            ).one()
+    finally:
+        await engine.dispose()
+    state = "enabled" if row.enabled else "disabled (run python -m bridge.seed with APP_ENV dev or test)"
+    print(f"test clock {state}; offset {row.clock_offset}; app time now {row.now.isoformat()}")
     return 0
 
 
 async def _cert_id(settings: Settings, wait: float) -> str | None:
-    url = settings.database_owner_url
-    if url is None:
-        raise SystemExit("DATABASE_OWNER_URL is not set: cert-id reads as the owner role")
-    engine = create_async_engine(url.get_secret_value())
+    engine = _owner_engine(settings, "cert-id")
     try:
         deadline = time.monotonic() + wait
         while True:
@@ -81,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("logins", help="the demo logins and the shared demo password")
     cert = commands.add_parser("cert-id", help="the exported demo certificate id (E2E_VERIFY_CERT_ID)")
     cert.add_argument("--wait", type=float, default=0.0, help="seconds to wait until it is hashed and signed")
+    clock = commands.add_parser("clock", help="show the dev/test clock, or move it forward")
+    clock.add_argument("--days", type=int, default=0, help="days to move forward (0-366)")
+    clock.add_argument("--hours", type=int, default=0, help="hours to move forward")
     args = parser.parse_args([] if argv is None else argv)
     settings = get_settings()
     if (reason := demo_refusal(settings)) is not None:
@@ -91,6 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "logins":
         return _logins()
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    if args.command == "clock":
+        if args.days < 0 or args.hours < 0:
+            print("the clock only moves forward", file=sys.stderr)
+            return 2
+        return asyncio.run(_clock(settings, args.days, args.hours), loop_factory=loop_factory)
     cert_id = asyncio.run(_cert_id(settings, args.wait), loop_factory=loop_factory)
     if cert_id is None:
         print(

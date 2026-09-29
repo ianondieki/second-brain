@@ -67,7 +67,9 @@ def test_the_seed_command_refuses_demo_before_writing_anything(
     assert "--demo refused" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", [["totp"], ["totp", DEVELOPERS[0].email], ["logins"], ["cert-id"]])
+@pytest.mark.parametrize(
+    "command", [["totp"], ["totp", DEVELOPERS[0].email], ["logins"], ["cert-id"], ["clock", "--days", "1"]]
+)
 @pytest.mark.parametrize("app_env", ["staging", "production"])
 def test_the_demo_helper_refuses_outside_dev_and_test(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], command: list[str], app_env: str
@@ -108,3 +110,9 @@ def test_the_dataset_names_only_fixtures_at_reserved_domains() -> None:
     assert all(org.legal_name.endswith("(fixture)") for org in ORGS)
     assert {org.verification.value for org in ORGS} == {"e2", "e1", "unclaimed"}
     assert all(proposal.owner in {dev.email for dev in DEVELOPERS} for proposal in PROPOSALS)
+
+
+def test_the_clock_only_moves_forward(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(demo_command, "get_settings", lambda: settings_for("dev"))
+    assert demo_command.main(["clock", "--days", "-1"]) == 2
+    assert "only moves forward" in capsys.readouterr().err

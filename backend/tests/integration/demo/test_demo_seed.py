@@ -540,3 +540,31 @@ def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> No
         assert proposal.owner in developers
         assert set(proposal.pitch_to) <= names
         assert (proposal.new_problem is None) != (proposal.links_problem_of is None)
+
+
+async def test_the_clock_helper_moves_the_shared_clock_forward_only_where_enabled(
+    seeded: tuple[DemoReport, DemoReport, DemoReport],
+    owner: AsyncEngine,
+    demo_url: URL,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Last in the module: it moves the module database's clock (and puts it back as the owner)."""
+    owner_url = demo_url.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
+    settings = get_settings().model_copy(update={"database_owner_url": SecretStr(owner_url)})
+    monkeypatch.setattr(demo_command, "get_settings", lambda: settings)
+    try:
+        assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "2", "--hours", "3"]) == 0
+        assert "offset 2 days, 3:00:00" in capsys.readouterr().out
+        offset = await rows(owner, "SELECT extract(epoch FROM clock_offset) FROM test_clock")
+        assert int(offset[0][0]) == (2 * 24 + 3) * 3600
+        assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "400"]) == 1  # at most 366 days
+        unchanged = await rows(owner, "SELECT extract(epoch FROM clock_offset) FROM test_clock")
+        assert int(unchanged[0][0]) == (2 * 24 + 3) * 3600  # the refused move left the offset as it was
+        async with owner.begin() as conn:
+            await conn.execute(text("UPDATE test_clock SET enabled = false"))
+        assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "1"]) == 1  # not where disabled
+        assert "did not move" in capsys.readouterr().err
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = interval '0'"))
