@@ -102,8 +102,14 @@ class EngagementSummary(BaseModel):
     proposal_title: str
     org_id: UUID
     org_name: str
-    developer_id: UUID
-    developer_name: str
+    developer_id: UUID | None = Field(
+        description="The developer's user id; null for the organisation until the developer is named"
+    )
+    developer_name: str = Field(
+        description="The developer's display name; for the organisation, their pseudonymous handle until the"
+        " engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)"
+    )
+    developer_named: bool = Field(description="False while developer_name is the pseudonymous handle")
     origin: EngagementOrigin
     state: EngagementState
     stage_label: str
