@@ -270,3 +270,210 @@ Follow-ups recorded from the review (not built):
 2. A membership of the counterpart organisation granted to the developer after the engagement exists is not refused; such a developer-member could write org endorsements. Refuse in the memberships path while an open engagement exists, or add `e.developer_id <> app_user_id()` to the org branches of the endorsements and events policies. The THREAT_MODEL §2 E row's "the developer is never a member" holds only at engagement insert.
 3. P5 design note: a side state entered from another side state (ON_HOLD → DISPUTED) resumes to ON_HOLD first, then to the main state.
 4. P2 moderation note (cross-card): the vulnerability-hold approve check re-screens the current Tier-1 text with the rules; when the LLM pre-screen lands it must also consult the LLM label (REQ-PROP-02).
+
+## P5 — tracker main path (prototype; `PLAN.md` §8 P5; branch `feat/REQ-ENG-02-tracker`)
+
+- Task: P5 (REQ-ENG-01..03, REQ-ENG-05, REQ-ENG-07..09 main path, REQ-ENG-10 `DECLINED`/`WITHDRAWN`, REQ-ENG-12,
+  REQ-BD-01, REQ-NOT-04). Agent: impl-backend (xhigh); reviewer and security-reviewer (`engagements/`, `auth/` use).
+- Files: `backend/config/policy.yaml`; `bridge/engagements/{policy,state_machine,service,commands,documents,notify,
+  history,schemas,router}.py`; `bridge/notifications/em2.py` and `templates/em2*.j2`; `bridge/jobs/notifications.py`
+  (and its import path in `jobs/app.py`); `bridge/testclock.py`; the routers in `bridge/main.py`; `backend/Dockerfile`
+  (`WITH_TEST_CLOCK`); `infra/docker-compose.dev.yml` (build arg); `backend/openapi.json`; tests below. No Alembic
+  revision (schema needs are listed at the end).
+
+### Design
+
+**The transition table** (`state_machine.py`, pure, 100% branch coverage) is the only definition of the tracker's
+commands. Each row: the party (developer, organisation) and organisation roles that may run it, the states it starts
+from, the state it enters (or none: a same-state event; or, for a signature, the state the second signature enters),
+a fixed end reason, whether it needs the step-up, whether the deals flag gates it, whether it records its party's
+endorsement (of the stage it leaves, or of the one it enters), whether it renews the stage deadline, and the
+notification row it sends the other party.
+
+| Command | Who | From | To |
+|---|---|---|---|
+| `accept_interest` / `decline_interest` | developer | ORG_INTEREST | INTEREST_CONFIRMED (endorsement; EM2) / DECLINED `BY_DEVELOPER` |
+| `start_review` | owner, admin, signatory, reviewer | SUBMITTED | UNDER_REVIEW |
+| `decline` | owner, admin, signatory, reviewer | SUBMITTED, UNDER_REVIEW | DECLINED (organisation reason code) |
+| `approve` | signatory | UNDER_REVIEW | INTEREST_CONFIRMED (contact person, channel, contact-by date ≤ 5 BD; EM2) |
+| `withdraw` | developer | SUBMITTED .. AGREEMENT_SIGNING | WITHDRAWN (tag withdrawn; Tier 2 stops via `app_tier2_granted`) |
+| `mark_contacted` | owner, admin, signatory, reviewer | INTEREST_CONFIRMED | CONTACT_MADE (the organisation's endorsement) |
+| `confirm_contact` | developer | CONTACT_MADE | same (the developer's endorsement) |
+| `send_nda` | developer; owner, admin, signatory | CONTACT_MADE (both endorsed) | NDA_PENDING (the platform mutual NDA) |
+| `sign_nda` | developer; signatory | NDA_PENDING | same; the second signature enters NDA_SIGNED |
+| `propose_terms` | developer; owner, admin, signatory | NDA_SIGNED, NEGOTIATION | NEGOTIATION (a new draft version; renews the 7 BD deadline) |
+| `mark_final` | the party that did not draft the latest version | NEGOTIATION | AGREEMENT_SIGNING (text hash frozen) |
+| `reopen_negotiation` | developer; owner, admin, signatory | AGREEMENT_SIGNING | NEGOTIATION |
+| `sign_agreement` | developer (D2); signatory | AGREEMENT_SIGNING | same; the second signature marks it signed and enters IN_IMPLEMENTATION |
+| `start_milestone`, `submit_milestone` | developer | IN_IMPLEMENTATION | same (sub-tracker; submit is the developer's milestone endorsement) |
+| `accept_milestone`, `request_changes` | owner, admin, signatory, reviewer | IN_IMPLEMENTATION | same (accept is the organisation's milestone endorsement) |
+| `deliver` | developer | IN_IMPLEMENTATION (every milestone accepted) | DELIVERED |
+| `accept_delivery` | owner, admin, signatory, reviewer | DELIVERED | SIGN_OFF (the acceptance certificate) |
+| `sign_certificate` | signatory first, then the developer | SIGN_OFF | same; the countersignature enters PAYMENT_FINAL |
+| `record_payment` | owner, admin, signatory, finance | PAYMENT_FINAL | same (the organisation's endorsement of stage 12) |
+| `confirm_payment` | developer | PAYMENT_FINAL | CLOSED (at the recorded amount only; tag closed) |
+
+Refusals, in order: not a party 404 (`service.resolve_party`; staff admin is not a party; a caller who is both the
+developer and a member 403 `both_parties`); party or role 403; the deals flag off for a deal-stage command 403
+(AC-SEC-7); no fresh step-up where required 403; a stale `lock_version` 409 `stale`; a state the command does not
+start from 409 `illegal_transition`; a precondition 409 (or 403 for `d2_required`, `counterparty_marks_final`);
+invalid input 422. The table is checked against revision 0003's `engagement_main_path_predecessors` in the unit suite.
+
+**Running a command** (`commands.execute`): lock the engagement `FOR UPDATE`, run the checks, apply the command's
+effects, record the endorsement (its id goes into the event payload, so the chain carries every endorsement), append
+the event with `from_state` = the checked state and `stage_deadline_at` from policy.yaml on the business-day calendar
+(`app_clock_now()` and the `holidays` table), refresh the engagement, close the tag when the engagement ends
+(`app_close_tag`; the developer's `withdrawn` status on WITHDRAWN; tagged engagements only), and queue the other
+party's notification in the same transaction. A database refusal maps to 404/403/409; anything else is re-raised.
+
+**Deadlines** (`backend/config/policy.yaml`, validated fail-closed): every stage of the 6.9 "Due rule" column in
+Kenyan business days, falling at 23:59:59 EAT of the due day; INTEREST_CONFIRMED uses the named contact-by date;
+IN_IMPLEMENTATION has none (per milestone). The detail view shows the business days left and whether it is overdue.
+Expiry jobs (EXPIRED) come after the prototype.
+
+**Step-up** (ADR-002): TOTP enrolled and the session's second factor within 12 hours (`auth.deps.ensure_step_up`; the
+client calls `POST /api/auth/step-up` first). `step_up_method` and the endorsement method are always `totp` from that
+verified session, never from the body (the endorsement method is mapped from the request's verified step-up method;
+a command without one raises); `passkey` is never written.
+
+**Documents** (`documents.py`): deterministic texts; the signed hash is the SHA-256 of the text (the schema's "PDF
+hash"). The mutual NDA is a cover naming the engagement's ids plus the seeded `mutual_nda` legal template (placeholder
+until G2); cover wording is `[[COPY-REVIEW]]`. `GET .../documents/{kind}` re-renders a document and reports `intact`.
+
+**Notifications and EM2** (`notify.py`, `jobs/notifications.py`): the outbox job tells the other party in-app (a
+ledger row per recipient and event); entering INTEREST_CONFIRMED sends EM2 once per engagement (dedupe `em2:<id>`) to
+the developer's verified address through the configured provider (Mailpit in dev). Recipients on the organisation's
+side are its named contact and the members who acted on the engagement (the developer cannot read the roster).
+
+**API**: `GET /api/me/engagements`, `GET /api/orgs/{org_id}/engagements`, `GET /api/engagements/{id}` (whose turn,
+the caller's actions, awaiting, contact, current endorsements, agreements with milestones, signatures without IP/UA,
+payments, documents), `GET .../history` (identical for both parties; `chain_verified`), `GET .../documents/{kind}`,
+`GET .../contact` (the named contact only, from INTEREST_CONFIRMED; audit-logged), and one `POST` per command:
+`accept-interest`, `decline-interest`, `start-review`, `decline`, `approve`, `withdraw`, `mark-contacted`,
+`confirm-contact`, `send-nda`, `sign-nda`, `propose-terms`, `mark-final`, `reopen-negotiation`, `sign-agreement`,
+`milestones/{milestone_id}/{start,submit,accept,request-changes}`, `deliver`, `accept-delivery`, `sign-certificate`,
+`record-payment`, `confirm-payment`. Test clock: `GET /api/test-clock`, `POST /api/test-clock/advance` (not in the
+OpenAPI document).
+
+**P4's entry point**: `bridge.engagements.commands.open_engagement_for_tag(db, tag_id) -> Engagement`, called in the
+developer's own transaction (`bind_tenant(db, user_id=<tag developer>)`) right after P4 inserts a `delivered` tag (or a
+held tag becomes delivered on E2 approval); it opens the SUBMITTED engagement (origin `tagged`, the proposal's current
+registered version, the SUBMITTED deadline); the database writes the genesis event. It checks up front and raises
+`OpenRefused` with a code: `tag_not_found`, `tag_not_delivered`, `proposal_not_published` (not published, held or
+hidden by moderation, or no current version), `org_unavailable` (below E2, suspended or delisted), `own_organisation`
+(the developer is a member), `engagement_exists`; the insert runs in a savepoint and a database refusal maps to
+`engagement_exists` (23505) or `refused` (42501, 23514), never a 500. The caller commits and sends EM1. P4's
+`tag_hooks.default_hooks()` calls it through the adapter of `REQ-PROP-03.md` (`OpenRefused` -> 409 `tag_conflict`).
+
+### The P1 notes, done
+
+Appends name the checked state and map the chain's refusal to 409; the engagement is refreshed after every append;
+the database's columns are never sent; free text stays out of payloads (a decline's OTHER text: salted digest in the
+payload, the text in the audit event's details); the tag closes when the engagement ends; no system events or `auto`
+endorsements are written (no jobs act for a party yet); the invisible-engagement refusal maps to 404; the test-clock
+router calls `app_set_test_clock`, is left out of the production image and is staff-gated in staging, and "now" is
+`app_clock_now()`; the table stays inside the predecessor backstop (unit-tested); no DISPUTED transition exists.
+
+### Decisions taken (defaults; for the orchestrator)
+
+1. Step-up is the session's second factor within 12 h (ADR-002), not a code per signature; a recovery-code sign-in
+   counts as the TOTP step-up.
+2. Every endorsement needs the step-up (ADR-002 lists endorsements), so the finance member who records a payment
+   needs TOTP, and the developer needs TOTP from first contact on.
+3. AC-SEC-7 is enforced now: with `FEATURE_DEALS_ENABLED=false` (the default) every command from `send_nda` on is 403.
+   `make demo` (P9) must set `FEATURE_DEALS_ENABLED=true` in the demo environment.
+4. The latest terms version is marked final by the other party (6.9 stage 7: "party who did not upload latest").
+5. The organisation signs the acceptance certificate first; the developer countersigns (6.9 stage 11).
+6. A payment confirmed at a different amount is refused (409) and nothing is recorded; disputes come later.
+7. EM2's `tier2_status` has a third sentence for "shared under NDA, not opened yet" (`[[COPY-REVIEW]]`), because the
+   spec's "has not been shared yet" would be untrue once a grant is live.
+8. The OTHER decline text reaches the developer through the notification job's arguments (kept out of the chain).
+9. The organisation's side is notified through its named contact and the members who acted on the engagement only
+   (the developer cannot read the roster; role seats need schema need 3).
+
+### Orchestrator ruling on P5 (2026-09-29)
+
+Decisions 1–9 above are accepted for the prototype. Decision 8 is recorded as a privacy follow-up: the OTHER
+decline text must not stay in `procrastinate_jobs` arguments (purge finished notification jobs, or pass an id of a
+stored text instead). The schema needs below are db-migrations follow-ups.
+
+### Schema needs (db-migrations follow-ups; not built)
+
+1. A mutable store both parties read for a decline's written reason (and later messages), so the text does not travel
+   in job arguments.
+2. A way to reveal the developer's verified phone to the named contact (`phone_verifications` is the developer's own
+   row): a SECURITY DEFINER function checked like the contact endpoint.
+3. A recipients function for organisation role seats (for example `app_engagement_recipients(engagement, roles)`), so
+   the developer's actions reach the organisation's reviewers and signatories, not only the people who acted.
+4. Round-2 MINOR 2: refuse, in the events, endorsements and signatures policies, an organisation member who is the
+   engagement's developer (the API already refuses them).
+
+### Tests (P5)
+
+- Unit: `tests/unit/engagements/test_state_machine.py` (AC-TRACK-1: every command x state x actor, the backstop,
+  guards, whose turn, actions, business-day deadlines, input checks; 100% branches), `test_policy.py`,
+  `test_documents.py`, `test_notify.py`, `test_commands.py`; `tests/unit/notifications/test_em2.py` (copy, tier2
+  status, escaping, copy-lint); `tests/unit/jobs/test_notification_jobs.py`.
+- Integration: `tests/integration/engagements/test_tracker_path.py` (SUBMITTED -> CLOSED with both parties, History
+  parity, chain verified, documents intact, EM2 once), `test_tracker_guards.py` (API 403/409 per actor, 404
+  non-parties, stale 409, AC-SEC-7, step-up, D2, assignment 409, payment mismatch 409, both sides 403,
+  `open_engagement_for_tag`), `test_tracker_branches.py` (DECLINED reason codes, WITHDRAWN, stage 0),
+  `test_em2_contact.py` (AC-MAIL-1, contact reveal), `test_tracker_edges.py`, `test_withdraw_tier2.py` (after
+  WITHDRAWN the organisation's Tier-2 render is refused by P3's predicate and `app_tier2_granted`); `tests/integration/test_testclock_excluded.py`
+  (REQ-ENG-12, REQ-BD-01).
+
+### Result (P5)
+
+Full backend suite: 2210 passed, 0 failed (P5 adds 14 test modules and one helper), total coverage 98%; `engagements/`
+98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification job 100%. `ruff check`, `ruff
+format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the frontend's `eslint`, `tsc`, `vitest` (244
+passed) and `api:check` (types regenerated), the copy-lint and `check_traceability.py` (0 errors) are clean. The
+legacy suite passes except two `tests/test_adviser_cli.py` checks that need `cloudflared` in this Linux container
+(environmental; untouched by P5). Playwright (`check-e2e`) needs the running stack and was not run here.
+
+### Review round 3 (reviews at `c8b3277`: security-reviewer PASS with 3 MINOR, reviewer CHANGES_REQUIRED with 2 MAJOR)
+
+Each fix has its red test committed first.
+
+- Merged the integration branch (P4 tags and the Pitch, the sanitiser test fix); `openapi.json` and `schema.d.ts`
+  regenerated.
+- MAJOR 1 (AC-TRACK-1): a milestone command outside IN_IMPLEMENTATION is 409 `illegal_transition`, not 404: the
+  command's source states are checked (`state_machine.check_source`) before the milestone is looked up; the milestone
+  routes are in `test_every_actor_and_command_on_a_submitted_engagement_matches_the_table` (every command covered).
+- MAJOR 2: `open_engagement_for_tag` refuses with a code up front and maps the database's refusals (above), so P4's
+  Pitch answers 409 `tag_conflict` instead of a 500 (`test_open_engagement_for_tag_refuses_with_a_code`,
+  `test_open_engagement_for_tag_maps_the_databases_refusals`).
+- P4 hook swap: `interim_open_engagement` deleted; the default hook is the adapter, so a Pitch's engagement carries
+  its SUBMITTED deadline (`test_pitch_opens_engagement.py`); P4's `test_tags.py`, `test_pitch_tier2.py` and
+  `billing/test_caps.py` pass.
+- Security MINOR 1: `deliverable`, `exclusivity` and a payment `reference` refuse C0 control characters and DEL (422);
+  the agreement text escapes line breaks and other control characters in a party's text, so no party can forge a line
+  of the signed document. MINOR 3: the endorsement method comes from the verified step-up (raises if none); a unit
+  test checks every endorsing and signing row needs the step-up.
+- Re-check #29: `bridge.logging.RedactJobArguments` redacts `reason_text` from Procrastinate's log records (the
+  message's `call_string` and the `job` extra's `task_kwargs` and `call_string`), installed at the jobs app's import on
+  Procrastinate's loggers (the worker's own included) and on the root handlers; a real worker run shows the reason in
+  no log record (`test_worker_logs.py`, `unit/test_job_log_redaction.py`). Passing only an id stays a follow-up.
+- Reviewer MINORs: after a reopen `pending(NEGOTIATION)` offers `propose_terms` to both parties (the latest version is
+  final, not a draft); `accept_interest` records the named contact and `contact_role` like `approve`; tests for
+  `invalid_contact_by`, `invalid_contact`, a past milestone due date (`invalid_terms`), no EM2 on a stage-0 decline and
+  the renewed deadline of a second terms version; the review window defaults to policy.yaml's
+  `review_window_bd_default` (the request may omit it); `MilestoneOut.review_due_on` is the Nairobi date of the latest
+  submission plus the review window in business days while the milestone is submitted for review.
+
+### Deviations (P5)
+
+- Commit sizes: eight of P5's first-round commits exceed the ~300 changed-line guide (the state machine with its
+  exhaustive tests 1200, the tracker API 907, the command runner 735, the main-path test 575, the command-runner
+  tests 419, the notifications 412, the policy loader 327, the service 302), because each is one concern whose code
+  and tests only make sense together; the merges and the generated `openapi.json`/`schema.d.ts` are larger still.
+  Round 3's commits are within the guide.
+
+### Follow-ups (not built)
+
+- The schema needs above (decline text store, phone reveal, org recipients, the both-sides policy).
+- Privacy (ruling on decision 8): purge finished `notifications` jobs, or pass an id of the stored decline text
+  instead of the text (with schema need 1).
+- The Playwright paths (AC-TRACK-4) and the tracker screens (P8) on these endpoints; the demo seed (P9) sets
+  `FEATURE_DEALS_ENABLED=true`, TOTP for the demo developers and organisation seats, D2 for the demo developers.
+- Expiry, escalation and auto-confirmation jobs (after the prototype), driven by `app_clock_now()`.

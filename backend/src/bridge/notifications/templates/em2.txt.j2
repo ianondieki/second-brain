@@ -1,0 +1,23 @@
+{#- EM2 approval email, plain text (docs/spec/06 6.10; REQ-NOT-04). Spec copy, verbatim; [[COPY-REVIEW]] only for the
+    footer and the tier2 "shared, not yet opened" sentence (bridge/notifications/em2.py). Autoescape off: plain text. -#}
+{{ company_name }} has approved your proposal "{{ title }}" and will contact you shortly to agree on pursuing the project.
+
+Your contact: {{ contact_person_name }}, {{ contact_person_role }}, via {{ contact_channel }} before {{ contact_by_date }}.
+
+This approval is an expression of interest, not a contract or a commitment to buy; nothing is binding until you both sign an agreement.
+
+What happens next: first contact → NDA → agreement → implementation, all visible on your tracker.
+
+Your disclosure record {{ receipt_id }} ({{ registered_at_eat }}) is attached to this engagement. {{ tier2_status }}
+
+If nobody contacts you by {{ contact_by_date }}, we follow up with {{ company_name }} automatically.
+{%- if public_entity %}
+
+Public bodies may need to run a competitive process, and you may be asked to bid.
+{%- endif %}
+
+Open your tracker: {{ tracker_url }}
+
+--
+Engagement ref {{ engagement_ref }}
+Manage notifications: {{ notifications_url }} · Help: {{ help_url }} · Nairobi, Kenya

@@ -11,13 +11,17 @@ import type { StringTree } from "@/components/ClientStrings";
 export const PLACEHOLDER_NAMES = [
   "count",
   "current",
+  "date",
+  "id",
   "limit",
   "max",
   "name",
+  "org",
   "step",
   "title",
   "total",
   "value",
+  "version",
 ] as const;
 
 /** Namespaces whose client components read server-formatted strings. */
@@ -29,6 +33,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "ideaDelete",
   "pitch",
   "tagWithdraw",
+  "orgProposal",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

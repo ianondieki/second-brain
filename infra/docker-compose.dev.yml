@@ -18,7 +18,10 @@ x-backend-env: &backend-env
   TRUSTED_PROXIES: 127.0.0.1
 
 x-backend: &backend
-  build: ../backend
+  build:
+    context: ../backend
+    args:
+      WITH_TEST_CLOCK: "true"  # REQ-ENG-12: the dev stack carries the test-clock router; a production build never does
   env_file: ../backend/.env
   environment: *backend-env
   depends_on:

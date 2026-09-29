@@ -65,6 +65,18 @@ def test_the_owner_attribution_names_the_handle_certificate_time_and_verify_link
     assert 'href="https://bridge.example.test/verify/Ab3dEf6hJk"' in html
 
 
+def test_the_verify_link_opens_outside_the_frame() -> None:
+    # The web app shows the page in a sandboxed iframe that lets popups escape; /verify refuses to be framed
+    # (X-Frame-Options: DENY), so the link must open a new top-level tab, with no opener and no referrer.
+    html = page()
+    link = re.search(r"<a ([^>]*)>Verify this record</a>", html)
+    assert link is not None
+    attributes = link.group(1)
+    assert 'href="https://bridge.example.test/verify/Ab3dEf6hJk"' in attributes
+    assert 'target="_blank"' in attributes
+    assert 'rel="noopener noreferrer nofollow"' in attributes
+
+
 def test_tier2_sections_links_and_attachment_names_but_never_object_keys() -> None:
     html = page()
     assert '<h2>Approach</h2><div class="text">LoRa mesh relays\nevery 90 s</div>' in html

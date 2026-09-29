@@ -138,7 +138,9 @@ def render_document(*, title: str, document: Mapping[str, Any], owner: OwnerMark
         (
             f'<p class="owner">By {escape(owner.name)} · Certificate {escape(owner.cert_id)} · Registered '
             f"{escape(eat(owner.registered_at, seconds=True))} · "
-            f'<a href="{escape(owner.verify_url, quote=True)}" rel="noopener noreferrer">Verify this record</a></p>'
+            # A new top-level tab: the web app frames this page in a sandbox, and /verify refuses to be framed.
+            f'<a href="{escape(owner.verify_url, quote=True)}" rel="noopener noreferrer nofollow" target="_blank">'
+            "Verify this record</a></p>"
         ),
     ]
     for key, label in SECTIONS:
