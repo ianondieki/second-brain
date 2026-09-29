@@ -154,7 +154,8 @@ class EngagementEvent(IdMixin, Base):
     __table_args__ = (
         UniqueConstraint("engagement_id", "seq"),
         UniqueConstraint("engagement_id", "prev_hash"),
-        CheckConstraint(end_reason_matches("to_state"), name="end_reason_matches_state"),
+        # NULL-safe (NULL IN (...) is NULL, which a CHECK would let through): DECLINED and EXPIRED need their reason.
+        CheckConstraint(f"coalesce({end_reason_matches('to_state')}, false)", name="end_reason_matches_state"),
         CheckConstraint("command ~ '^[a-z][a-z0-9_]{0,39}$'", name="command_is_a_code"),
         # A system event (a job) names no user; every other event names its actor.
         CheckConstraint("(actor_role = 'system') = (actor_user_id IS NULL)", name="actor_matches_role"),

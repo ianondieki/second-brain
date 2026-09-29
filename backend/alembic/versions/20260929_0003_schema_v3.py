@@ -217,7 +217,10 @@ EXPIRED_REASONS = "'NO_REVIEW', 'NO_DECISION', 'CONTACT_NOT_MADE', 'NO_DEV_RESPO
 
 
 def _end_reason_matches(state_column: str) -> str:
-    """Verbatim from bridge.engagements.models.end_reason_matches."""
+    """Verbatim from bridge.engagements.models.end_reason_matches. NULL for DECLINED or EXPIRED without a reason (NULL
+    IN (...) is NULL, which a CHECK lets through), so the events' CHECK wraps it in coalesce(..., false). Revision
+    0002's CHECK on engagements has that gap; the genesis event mirrors a new engagement's state and reason, so no
+    engagement is inserted DECLINED or EXPIRED without its reason any more, and later ones come from events."""
     return (
         f"({state_column} = 'DECLINED' AND end_reason IN ({DECLINED_REASONS}))"
         f" OR ({state_column} = 'EXPIRED' AND end_reason IN ({EXPIRED_REASONS}))"
@@ -1185,7 +1188,10 @@ def _create_tables() -> None:
         sa.CheckConstraint(
             "(actor_role = 'system') = (actor_user_id IS NULL)", name=op.f("ck_engagement_events_actor_matches_role")
         ),
-        sa.CheckConstraint(_end_reason_matches("to_state"), name=op.f("ck_engagement_events_end_reason_matches_state")),
+        sa.CheckConstraint(
+            f"coalesce({_end_reason_matches('to_state')}, false)",
+            name=op.f("ck_engagement_events_end_reason_matches_state"),
+        ),
         sa.CheckConstraint("command ~ '^[a-z][a-z0-9_]{0,39}$'", name=op.f("ck_engagement_events_command_is_a_code")),
         sa.CheckConstraint(
             "app_event_payload_is_valid(payload)", name=op.f("ck_engagement_events_payload_holds_ids_and_codes")

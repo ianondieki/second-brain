@@ -110,7 +110,8 @@ def verify_rows(rows: Iterable[EventRow]) -> list[ChainProblem]:
     return problems
 
 
-_SELECT = text(
+# One engagement's events in chain order, with the payload as the database renders it (bind ``engagement_id``).
+SELECT_CHAIN = text(
     """
     SELECT id, engagement_id, seq, created_at, actor_user_id, actor_role::text, command, from_state::text,
            to_state::text, end_reason::text, stage_deadline_at, payload::text, prev_hash, hash
@@ -121,7 +122,7 @@ _SELECT = text(
 
 async def load_chain(connection: AsyncConnection, engagement_id: UUID) -> list[EventRow]:
     """One engagement's events, as the caller may read them (a party, or staff admin, under RLS)."""
-    result = await connection.execute(_SELECT, {"engagement_id": engagement_id})
+    result = await connection.execute(SELECT_CHAIN, {"engagement_id": engagement_id})
     return [EventRow(*row) for row in result.all()]
 
 
