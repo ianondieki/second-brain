@@ -42,7 +42,7 @@ export async function expectSeparateTargets(targets: Locator) {
   const boxes = [];
   for (const target of await targets.all()) {
     const box = await target.boundingBox();
-    expect(box, await target.textContent()).not.toBeNull();
+    expect(box, (await target.textContent()) ?? "").not.toBeNull();
     boxes.push({ name: (await target.textContent()) ?? "", ...box! });
   }
   expect(boxes.length).toBeGreaterThan(0);
