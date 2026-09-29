@@ -442,6 +442,8 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | 43 | Sanitiser linearity test on thread CPU time | keep | reviewer PASS; the quadratic mutant fails at 8–10 s CPU against a 3 s bound |
 | 44 | Cheap MINORs folded into fix rounds | keep | no extra review round (PLAN §8) |
 | 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
+| 46 | P6 EM7 wording: after two review rounds the free-text fact checker still admitted invented actions ("the other party did sign the mutual NDA") | change (made during the re-check) | the model now chooses among code-rendered variants (opening, fact order, next-step phrasing), so every fact in the email is written by code: docs/spec/09's 100% factual consistency by construction; free wording returns with the REQ-EVAL-01 eval set |
+| 47 | Four implementers ran at once for about an hour (P5, P6, P8 parts 2 and 3) | deviation, recorded | CLAUDE.md allows at most three; the fourth was a small P6 fix round; no new implementer starts until the count is back under three |
 
 ### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
 
