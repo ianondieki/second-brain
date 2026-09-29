@@ -101,13 +101,26 @@ def test_the_owner_passes_every_organisation_condition_but_not_the_flag() -> Non
     assert first_failure(replace(owner, target=None)) == Condition.PROPOSAL_UNAVAILABLE
 
 
-def test_the_owner_is_named_only_once_the_organisation_approved_to_proceed() -> None:
-    assert not Access(TARGET, owner=False, engagement=None).reveals_owner
-    for state in (EngagementState.SUBMITTED, EngagementState.UNDER_REVIEW, EngagementState.ON_HOLD):
-        assert not Access(TARGET, owner=False, engagement=state).reveals_owner
-    for state in (EngagementState.INTEREST_CONFIRMED, EngagementState.NDA_SIGNED, EngagementState.CLOSED):
-        assert Access(TARGET, owner=False, engagement=state).reveals_owner
-    assert EngagementState.ORG_INTEREST not in REVEALED_STATES
+def test_the_owner_is_named_only_from_the_approval_to_proceed_on() -> None:
+    """The main-path states at or after INTEREST_CONFIRMED name the owner once the chain entered one of them (the
+    history is read by ``gather``); PROCUREMENT_ROUTE may come before the approval (public entities), and the side
+    states name the owner only through an earlier approval."""
+    main_after_approval = {
+        EngagementState.INTEREST_CONFIRMED,
+        EngagementState.CONTACT_MADE,
+        EngagementState.NDA_PENDING,
+        EngagementState.NDA_SIGNED,
+        EngagementState.NEGOTIATION,
+        EngagementState.AGREEMENT_SIGNING,
+        EngagementState.IN_IMPLEMENTATION,
+        EngagementState.DELIVERED,
+        EngagementState.SIGN_OFF,
+        EngagementState.PAYMENT_FINAL,
+        EngagementState.CLOSED,
+    }
+    assert main_after_approval == REVEALED_STATES
+    assert Access(TARGET, owner=False).reveals_owner is False
+    assert Access(TARGET, owner=False, engagement=EngagementState.ON_HOLD, reveals_owner=True).reveals_owner
 
 
 def test_email_domain() -> None:

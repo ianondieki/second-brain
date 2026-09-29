@@ -12,7 +12,8 @@ One predicate, one answer: the first condition that fails, or the access with wh
    ``STEP_UP_MAX_AGE_HOURS`` old (the step-up);
 6. the current Master Enterprise Terms were accepted for the organisation;
 7. a live Tier-2 ``disclosure_grant`` for (proposal, organisation) from the owner's policy, never revoked;
-8. no ``WITHDRAWN``, ``DECLINED`` or ``TERMINATED`` engagement for (proposal, organisation);
+8. no ``WITHDRAWN``, ``DECLINED`` or ``TERMINATED`` engagement for (proposal, organisation) (as
+   ``app_tier2_granted``: an ``EXPIRED`` or ``CLOSED`` engagement, also ended, keeps the access);
 9. this person accepted the current Evaluation NDA for this proposal under this organisation.
 
 The NDA is last because it is the one condition the viewer meets on their own: the NDA step is offered only when
@@ -54,12 +55,12 @@ DENIED: Final = "tier2.access_denied"
 VIEWER_ROLES: Final = frozenset({OrgRole.REVIEWER, OrgRole.SIGNATORY, OrgRole.ADMIN})
 ENDED_STATES: Final = frozenset({EngagementState.WITHDRAWN, EngagementState.DECLINED, EngagementState.TERMINATED})
 # The owner's display name replaces their handle on a render once the organisation approved to proceed (docs/spec/06
-# 6.1: "pseudonymous handle until INTEREST_CONFIRMED"). Side states (ON_HOLD, DISPUTED, EXPIRED, ...) keep the handle
-# until the Phase 3 event history can tell whether they came after that stage.
+# 6.1: "pseudonymous handle until INTEREST_CONFIRMED"): once the engagement's event chain (revision 0003) has entered
+# one of these states, whatever state it is in now (a pause, a dispute or an expiry after it keeps the name). Not
+# PROCUREMENT_ROUTE: a public entity determines its route before it approves to proceed.
 REVEALED_STATES: Final = frozenset(
     {
         EngagementState.INTEREST_CONFIRMED,
-        EngagementState.PROCUREMENT_ROUTE,
         EngagementState.CONTACT_MADE,
         EngagementState.NDA_PENDING,
         EngagementState.NDA_SIGNED,
@@ -151,6 +152,7 @@ class Facts:
     master_terms: bool = False
     grant: GrantState = GrantState.NONE
     engagement: EngagementState | None = None
+    owner_named: bool = False  # the engagement has reached one of REVEALED_STATES
     nda_acceptance_id: UUID | None = None
 
 
@@ -197,10 +199,7 @@ class Access:
     engagement: EngagementState | None = None
     nda_acceptance_id: UUID | None = None
     nda_template_version: str | None = None
-
-    @property
-    def reveals_owner(self) -> bool:
-        return self.engagement in REVEALED_STATES
+    reveals_owner: bool = False  # the engagement has reached REVEALED_STATES: the render names the owner
 
 
 # --- facts -----------------------------------------------------------------------------------------------------------
@@ -223,7 +222,11 @@ _MASTER_TERMS = text(
 _GRANTS = text(
     "SELECT status, revoked_at FROM disclosure_grants WHERE proposal_id = :proposal AND org_id = :org AND tier >= 2"
 )
-_ENGAGEMENT = text("SELECT state FROM engagements WHERE proposal_id = :proposal AND org_id = :org")
+_ENGAGEMENT = text(
+    "SELECT e.state, EXISTS (SELECT 1 FROM engagement_events ev WHERE ev.engagement_id = e.id"
+    " AND ev.to_state = ANY (CAST(:revealed AS engagement_state[]))) AS revealed"
+    " FROM engagements e WHERE e.proposal_id = :proposal AND e.org_id = :org"
+)
 _NDA = text(
     "SELECT a.id, t.version FROM nda_acceptances a JOIN nda_templates t ON t.id = a.nda_template_id"
     " WHERE a.user_id = :user AND a.org_id = :org AND a.proposal_id = :proposal"
@@ -281,7 +284,8 @@ async def gather(
     keys = {"org": org_id, "proposal": proposal_id}
     grants = list((await db.execute(_GRANTS, keys)).all())
     nda = (await db.execute(_NDA, keys | {"user": user.id})).one_or_none()
-    state = (await db.execute(_ENGAGEMENT, keys)).scalar_one_or_none()
+    revealed = [state.value for state in REVEALED_STATES]
+    engagement = (await db.execute(_ENGAGEMENT, keys | {"revealed": revealed})).one_or_none()
     facts = Facts(
         enabled=True,
         target=target,
@@ -295,7 +299,8 @@ async def gather(
         mfa_fresh=sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)),
         master_terms=bool((await db.execute(_MASTER_TERMS, {"org": org_id})).scalar_one()),
         grant=_grant_state(grants),
-        engagement=None if state is None else EngagementState(state),
+        engagement=None if engagement is None else EngagementState(engagement.state),
+        owner_named=engagement is not None and bool(engagement.revealed),
         nda_acceptance_id=None if nda is None else nda.id,
     )
     return facts, None if nda is None else nda.version
@@ -332,6 +337,7 @@ async def can_view_tier2(
         engagement=facts.engagement,
         nda_acceptance_id=facts.nda_acceptance_id,
         nda_template_version=nda_version,
+        reveals_owner=facts.owner_named,
     )
 
 
