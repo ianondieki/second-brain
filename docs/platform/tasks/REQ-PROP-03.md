@@ -169,3 +169,19 @@ Follow-ups (not built):
 - Commit sizes: 1156db1 (683 lines) and 60df2af (448, tests) exceed the ~300-line guideline; no history rewrite.
 - Vitest 5: a `vi.fn` implementation that throws or rejects fails the test even when the code under test catches it
   (seen in `chosen.test.ts`); the failed-read case is covered with a 503 answer instead.
+
+## P8 part 4 round 2 (reviewer PASS and ux-reviewer PASS at `2c1ba97`, 2026-09-29): MINOR follow-ups
+
+- `pitch/chosen.test.ts:47`: no test pins that `chosenOptions` matches the picker row by id, not by name (mutation N7,
+  match by name, survives). Add a case where the picker returns a same-name decoy first and assert the target's id and
+  availability.
+- `pitch/data.ts:66`: an off-page choice that the name search cannot reach (more than 100 org × niche rows ahead of
+  it) is dropped without a word. It fails closed; say in one sentence how many choices were dropped, or add the
+  picker-by-ids filter (already a follow-up above).
+- At the cap on phones the limit line sits above the list, so after ticking the last box far down the list it is off
+  screen and only "2 of 2 chosen" shows (role=status is still announced). Add a short cue to the bar summary, or dim
+  the names of rows locked at the cap.
+- Each off-page choice costs two server-side API calls (up to 40 for 20 choices): watch picker TTFB and LCP as the
+  directory grows (picker LCP 1.2–2.5 s on a loaded host).
+- Round-1 MINORs kept: the "Who has seen this" note needs the staff break-glass clause when break-glass ships; the
+  merge commit `2c1ba97` carries git's `# Conflicts:` note after the trailer (pushed; no rewrite).
