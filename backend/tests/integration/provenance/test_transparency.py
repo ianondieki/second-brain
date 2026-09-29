@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import ConfigurationError
 from bridge.db import create_session_factory
+from bridge.engagements.calendar import NAIROBI
 from bridge.ids import uuid7
 from bridge.jobs import audit as audit_jobs
 from bridge.jobs import provenance as provenance_jobs
@@ -167,6 +168,13 @@ async def heads(engine: AsyncEngine) -> list[ChainHead]:
             )
         ).all()
     return [ChainHead(r.chain_id, r.seq, bytes(r.event_hash)) for r in rows]
+
+
+async def database_now(engine: AsyncEngine) -> datetime:
+    """The database's clock: the one the snapshot time and the schema guards read (the host's may differ)."""
+    async with engine.connect() as conn:
+        now: datetime = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+    return now
 
 
 async def anchors(engine: AsyncEngine) -> list[Any]:
@@ -409,6 +417,10 @@ async def test_the_nightly_verification_publishes_a_signed_root(
 async def test_the_nightly_task_closes_the_day_through_the_runtime(
     engines: dict[str, AsyncEngine], fresh_signer: LocalSigner
 ) -> None:
+    """The run closes the Nairobi day before the one it runs in. Run now (by the database clock, which schema v2's
+    transparency_roots_guard reads), the closed day is always yesterday in Nairobi: a day that has ended."""
+    now = await database_now(engines["bridge_owner"])
+    yesterday = now.astimezone(NAIROBI).date() - timedelta(days=1)
     provenance_jobs.use_runtime(
         provenance_jobs.ProvenanceRuntime(
             session_factory=create_session_factory(engines["bridge_app"]),
@@ -417,13 +429,12 @@ async def test_the_nightly_task_closes_the_day_through_the_runtime(
         )
     )
     try:
-        # 21:30 UTC on 1 October 2026 is 00:30 on 2 October in Nairobi: the run closes 1 October.
-        await audit_jobs.verify_chain(timestamp=1_790_890_200)
+        await audit_jobs.verify_chain(timestamp=int(now.timestamp()))
     finally:
         provenance_jobs.use_runtime(None)
     async with engines["bridge_owner"].connect() as conn:
         days = (await conn.execute(text("SELECT day FROM transparency_roots ORDER BY day"))).scalars().all()
-    assert date(2026, 10, 1) in days
+    assert yesterday in days
 
 
 async def test_a_root_names_its_key_after_retirement_and_retired_keys_sign_no_new_root(
@@ -439,11 +450,11 @@ async def test_a_root_names_its_key_after_retirement_and_retired_keys_sign_no_ne
         await register_public_key(conn, old)
     await append(owner, "org:rotation", 2)
     first_day, second_day = date(2026, 8, 1), date(2026, 8, 2)
-    before = datetime.now(UTC)
+    before = await database_now(owner)
     async with create_session_factory(app)() as s:
         first = await verify_and_publish_root(reader, s, old, first_day)
     assert first.published
-    assert before <= first.snapshot_at <= datetime.now(UTC)
+    assert before <= first.snapshot_at <= await database_now(owner)
     async with owner.begin() as conn:
         await conn.execute(text("UPDATE provenance_keys SET retired_at = now() WHERE key_id = :k"), {"k": old.key_id})
 
@@ -480,7 +491,7 @@ async def test_a_broken_chain_publishes_nothing(engines: dict[str, AsyncEngine],
             text("UPDATE audit_events SET action = 'x.forged' WHERE chain_id = 'org:nightly-broken' AND seq = 2")
         )
         await conn.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
-    day = date(2026, 9, 28)
+    day = date(2026, 7, 1)  # a day no other test closes (the nightly task test closes yesterday)
     async with create_session_factory(app)() as s:
         with pytest.raises(ChainVerificationError, match="org:nightly-broken") as info:
             await verify_and_publish_root(reader, s, fresh_signer, day)
