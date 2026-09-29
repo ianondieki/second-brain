@@ -2,7 +2,7 @@
 
 import { useStrings } from "@/components/ClientStrings";
 
-import { LockIcon } from "@/components/ui/icons";
+import { LockIcon } from "@/components/ui/status-icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
 import { LIMITS, linksProblem, type Attachment, type EditorState } from "../ideas";

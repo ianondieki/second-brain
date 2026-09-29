@@ -9,7 +9,7 @@ import { withCsrf } from "@/lib/api/csrf";
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
 import { Button } from "./ui/Button";
-import { AlertIcon } from "./ui/icons";
+import { AlertIcon } from "./ui/status-icons";
 
 /**
  * Ends the session (POST /api/auth/logout). Only 204 (ended) or 401 (already gone) count as signed out; anything

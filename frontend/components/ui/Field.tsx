@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "./cn";
-import { AlertIcon } from "./icons";
+import { AlertIcon } from "./status-icons";
 
 export interface FieldControlProps {
   id: string;
