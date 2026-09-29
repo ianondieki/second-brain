@@ -195,19 +195,21 @@ def exception_chain(exc: BaseException) -> list[BaseException]:
 @pytest.mark.parametrize(
     ("tier2", "path", "kind"),
     [
-        ({"pricing": {"account_no": SENTINEL_NUMBER}}, "manifest.tier2.pricing.account_no", "integer"),
-        ({"notes": ["fine", f"{SENTINEL} {LONE_SURROGATE}"]}, "manifest.tier2.notes[1]", "string"),
+        ({"pricing": {"account_no": SENTINEL_NUMBER}}, "manifest.tier2.<key 0>.<key 0>", "integer"),
+        ({"notes": ["fine", f"{SENTINEL} {LONE_SURROGATE}"]}, "manifest.tier2.<key 0>[1]", "string"),
         ({f"{SENTINEL} as a key": [float("inf")]}, "manifest.tier2.<key 0>[0]", "number"),
         ({"ok": 1, f"{SENTINEL}{LONE_SURROGATE}": 1}, "manifest.tier2.<key 1>", "key"),
-        ({"blob": SENTINEL.encode()}, "manifest.tier2.blob", "bytes"),
+        ({"blob": SENTINEL.encode()}, "manifest.tier2.<key 0>", "bytes"),
+        ({"ok": 1, SENTINEL: {"tier2": SENTINEL_NUMBER}}, "manifest.tier2.<key 1>.<key 0>", "integer"),
     ],
-    ids=["big-integer", "lone-surrogate", "content-like-key", "bad-key", "unsupported-type"],
+    ids=["big-integer", "lone-surrogate", "content-like-key", "bad-key", "unsupported-type", "field-like-key"],
 )
 def test_canonicalisation_errors_name_the_path_and_type_never_the_value(
     tier2: dict[str, Any], path: str, kind: str
 ) -> None:
     """Tier-2 values never reach an exception (or the job log that prints it): the error names where the value is
-    and what kind it is. Keys that do not look like field names are numbered, not printed."""
+    and what kind it is. Keys below ``manifest.tier2`` are the owner's, so they are numbered and never printed, even
+    when they look like field names (or like a manifest field)."""
     with pytest.raises(ManifestError) as info:
         build_manifest(_with(tier2=tier2))
     message = str(info.value)
@@ -218,6 +220,15 @@ def test_canonicalisation_errors_name_the_path_and_type_never_the_value(
         assert secret not in rendered
     # No library exception rides along (as cause or context): those carry the value (UnicodeEncodeError.object).
     assert [type(e) for e in exception_chain(info.value)] == [ManifestError]
+
+
+def test_the_fixed_manifest_fields_are_named_in_errors() -> None:
+    """Outside the Tier-2 document every key is one the manifest defines, so an error names the field."""
+    inp = load_input("manifest_v1_basic")
+    fields = {f: getattr(inp.tier1, f) for f in inp.tier1.__dataclass_fields__}
+    tier1 = Tier1(**{**fields, "summary": f"cooler {LONE_SURROGATE}"})
+    with pytest.raises(ManifestError, match=r"manifest\.tier1\.summary is a string that is not valid Unicode"):
+        build_manifest(_with(tier1=tier1))
 
 
 def test_a_document_nested_beyond_the_recursion_limit_is_refused_as_a_manifest_error() -> None:

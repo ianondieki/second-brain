@@ -19,6 +19,8 @@ the same inputs always give the same bytes; the golden fixtures in ``tests/fixtu
 change to the fields or their encoding is a new ``manifest_version`` with new fixtures (ADR-003 consequences).
 Numbers in the Tier-2 document follow RFC 8785 (IEEE 754 doubles; integers beyond 2**53 are refused). A refusal
 names the field path and the kind of value, never the value: Tier-2 content must not reach exceptions or job logs.
+The keys of the Tier-2 document are the owner's (content too), so below ``manifest.tier2`` a path gives positions
+(``manifest.tier2.<key 0>[1]``); only the fields the manifest itself defines are named.
 """
 
 from __future__ import annotations
@@ -26,7 +28,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import math
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -170,7 +171,28 @@ def manifest_document(inp: ManifestInput) -> dict[str, Any]:
 
 
 _INT_LIMIT = 2**53 - 1  # RFC 8785 numbers are IEEE 754 doubles
-_FIELD_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_TIER2 = "tier2"
+# Every key manifest_document writes outside the Tier-2 document: the only keys an error may name.
+_MANIFEST_FIELDS = frozenset(
+    {
+        "manifest_version",
+        "proposal_id",
+        "version_id",
+        "version_no",
+        "cert_id",
+        "registered_at",
+        "prev_version_hash",
+        "tier1",
+        _TIER2,
+        "attachments",
+        "owners",
+        "attestations",
+        *Tier1.__dataclass_fields__,
+        *AttachmentRef.__dataclass_fields__,
+        *OwnerRef.__dataclass_fields__,
+        *AttestationRef.__dataclass_fields__,
+    }
+)
 
 
 def _valid_text(value: str) -> bool:
@@ -181,13 +203,15 @@ def _valid_text(value: str) -> bool:
     return True
 
 
-def _key_path(path: str, key: object, position: int) -> str:
-    """``path.key`` for a key that looks like a field name; anything else might be content, so ``path.<key n>``."""
-    return f"{path}.{key}" if isinstance(key, str) and _FIELD_NAME.fullmatch(key) else f"{path}.<key {position}>"
+def _key_path(path: str, key: object, position: int, *, owned: bool) -> str:
+    """``path.key`` for a field the manifest defines; ``path.<key n>`` for any key of the owner's Tier-2 document
+    (``owned``), whatever it looks like, and for anything else."""
+    return f"{path}.{key}" if not owned and key in _MANIFEST_FIELDS else f"{path}.<key {position}>"
 
 
-def _unencodable(value: Any, path: str) -> tuple[str, str] | None:
-    """Where the first value RFC 8785 cannot encode sits, and what kind of value it is: never the value itself."""
+def _unencodable(value: Any, path: str, *, owned: bool = False) -> tuple[str, str] | None:
+    """Where the first value RFC 8785 cannot encode sits, and what kind of value it is: never the value itself.
+    ``owned``: ``value`` is (inside) the Tier-2 document, whose keys are never printed."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, str):
@@ -198,14 +222,16 @@ def _unencodable(value: Any, path: str) -> tuple[str, str] | None:
         return None if math.isfinite(value) else (path, "a non-finite number")
     if isinstance(value, list | tuple):
         for index, item in enumerate(value):
-            if (found := _unencodable(item, f"{path}[{index}]")) is not None:
+            if (found := _unencodable(item, f"{path}[{index}]", owned=owned)) is not None:
                 return found
         return None
     if isinstance(value, dict):
         for position, (key, item) in enumerate(value.items()):
+            where = _key_path(path, key, position, owned=owned)
             if not isinstance(key, str) or not _valid_text(key):
-                return _key_path(path, key, position), "a key that is not a valid Unicode string"
-            if (found := _unencodable(item, _key_path(path, key, position))) is not None:
+                return where, "a key that is not a valid Unicode string"
+            below_tier2 = owned or (path == "manifest" and key == _TIER2)
+            if (found := _unencodable(item, where, owned=below_tier2)) is not None:
                 return found
         return None
     return path, f"a value of unsupported type {type(value).__name__}"

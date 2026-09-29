@@ -307,13 +307,14 @@ SENTINEL_NUMBER = "777777777777777777777"
 @pytest.mark.parametrize(
     ("plaintext", "message"),
     [
-        (b'{"pricing": {"account_no": ' + SENTINEL_NUMBER.encode() + b"}}", "manifest.tier2.pricing.account_no is"),
-        (b'{"notes": ["TIER2-SENTINEL \\ud800"]}', "manifest.tier2.notes[0] is a string that is not valid Unicode"),
+        (b'{"pricing": {"account_no": ' + SENTINEL_NUMBER.encode() + b"}}", "manifest.tier2.<key 0>.<key 0> is"),
+        (b'{"notes": ["TIER2-SENTINEL \\ud800"]}', "manifest.tier2.<key 0>[0] is a string that is not valid Unicode"),
         (b'{"TIER2-SENTINEL key \\ud800": 1}', "manifest.tier2.<key 0> is a key"),
+        (b'{"TIER2-SENTINEL": {"n": ' + SENTINEL_NUMBER.encode() + b"}}", "manifest.tier2.<key 0>.<key 0> is an"),
         (b"\xffTIER2-SENTINEL", "not UTF-8 JSON"),
         (b'{"TIER2-SENTINEL": ', "not UTF-8 JSON"),
     ],
-    ids=["big-integer", "lone-surrogate", "bad-key", "not-utf8", "not-json"],
+    ids=["big-integer", "lone-surrogate", "bad-key", "field-like-key", "not-utf8", "not-json"],
 )
 async def test_a_refused_tier2_document_leaves_no_value_in_the_job_error_or_logs(
     owner_engine: AsyncEngine,
