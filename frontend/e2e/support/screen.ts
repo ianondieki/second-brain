@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * The page-level rules every screen keeps (same as e2e/auth.spec.ts): axe finds nothing serious or critical
@@ -32,4 +32,26 @@ export async function expectEmptyState(page: Page, sentence: string, action: str
   await expect(empty.locator("p")).toHaveText(sentence);
   await expect(empty.getByRole("link")).toHaveCount(1);
   await expect(empty.getByRole("link")).toHaveText(action);
+}
+
+/**
+ * Stacked links each keep their own tap area (WCAG 2.2 target size, docs/spec/07 item 6): every box is at least
+ * 44 px tall and no two boxes overlap.
+ */
+export async function expectSeparateTargets(targets: Locator) {
+  const boxes = [];
+  for (const target of await targets.all()) {
+    const box = await target.boundingBox();
+    expect(box, await target.textContent()).not.toBeNull();
+    boxes.push({ name: (await target.textContent()) ?? "", ...box! });
+  }
+  expect(boxes.length).toBeGreaterThan(0);
+  for (const box of boxes) expect(box.height, box.name).toBeGreaterThanOrEqual(44);
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [a, b] = [boxes[i], boxes[j]];
+      const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      expect(overlap, `${a.name} overlaps ${b.name}`).toBe(false);
+    }
+  }
 }

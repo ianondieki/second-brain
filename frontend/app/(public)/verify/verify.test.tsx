@@ -100,6 +100,17 @@ describe("VerifyRecord", () => {
     expect(screen.getByText(en.verify.private)).toBeTruthy();
   });
 
+  it("gives each stacked record link its own 44 px band (no shared tap area)", () => {
+    renderWithIntl(<VerifyRecord record={RECORD} />);
+    const links = within(screen.getByTestId("record-links")).getAllByRole("link");
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      const classes = link.className.split(" ");
+      expect(classes).toEqual(expect.arrayContaining(["inline-flex", "min-h-11", "items-center"]));
+      expect(classes).not.toContain("py-2.5"); // the in-sentence padding that made neighbouring boxes overlap
+    }
+  });
+
   it("says a pending timestamp is pending and offers no token", () => {
     renderWithIntl(<VerifyRecord record={PENDING} />);
     expect(screen.getByTestId("verify-status").textContent).toContain("Timestamp pending");

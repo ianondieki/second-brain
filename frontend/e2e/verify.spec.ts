@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { checkScreen } from "./support/screen";
+import { checkScreen, expectSeparateTargets } from "./support/screen";
 
 // REQ-PROV-02 (F3): the public /verify pages against the compose stack, in both projects (360 px and desktop).
 // A certificate exists only once a proposal is published (T2.3); E2E_VERIFY_CERT_ID names one (the demo seed, P9,
@@ -123,6 +123,8 @@ test("a registered certificate shows its evidence, and no name or title", async 
   }
   await expect(page.getByText("It is not a patent, copyright registration", { exact: false })).toBeVisible();
   await expect(page.locator("[data-primary]")).toHaveText("Check file");
+  // The token and keys links are stacked: each has its own 44 px band (ux-review MAJOR, P8 part 1).
+  await expectSeparateTargets(page.getByTestId("record-links").getByRole("link"));
   await checkScreen(page);
 
   // The published keys and the timestamp token come from the API through the web origin.

@@ -1,7 +1,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon, InfoIcon } from "@/components/ui/icons";
 
@@ -64,16 +64,16 @@ export function VerifyRecord({ record }: { record: CertificateCheck }) {
           </Row>
         </dl>
 
-        <ul className="mt-4 flex flex-col items-start">
+        <ul className="mt-4 flex flex-col items-start" data-testid="record-links">
           {done ? (
             <li>
-              <a href={tokenHref(record.cert_id)} download className={textLinkClass}>
+              <a href={tokenHref(record.cert_id)} download className={standaloneLinkClass}>
                 {t("token")}
               </a>
             </li>
           ) : null}
           <li>
-            <a href={KEYS_HREF} className={textLinkClass}>
+            <a href={KEYS_HREF} className={standaloneLinkClass}>
               {t("keys")}
             </a>
           </li>
