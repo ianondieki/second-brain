@@ -31,6 +31,8 @@ from bridge.models.enums import (
 
 # Dev-only demo credentials (README "Run the demo"); refused outside APP_ENV dev and test.
 DEMO_PASSWORD: Final = "bridge-demo-2026"  # noqa: S105 - public on purpose (dev and test only)
+# Where the password is documented; the commands point here instead of printing it (CodeQL clear-text logging).
+DEMO_LOGINS_DOC: Final = 'README.md, "Run the demo" → Demo logins'
 TOTP_LABEL: Final = "bridge-demo-totp-v1"
 
 

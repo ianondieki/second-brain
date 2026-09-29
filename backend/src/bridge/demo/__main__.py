@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from bridge.auth import totp
 from bridge.config import Settings, get_settings
 from bridge.seed.demo import demo_refusal, exported_cert_id, registration_status, totp_code
-from bridge.seed.demo.data import DEMO_PASSWORD, all_accounts
+from bridge.seed.demo.data import DEMO_LOGINS_DOC, all_accounts
 
 SIGNED = frozenset({"signed", "timestamped"})
 POLL_SECONDS = 2.0
@@ -55,7 +55,7 @@ def _totp(address: str | None) -> int:
 
 
 def _logins() -> int:
-    print(f"Demo logins (password for all: {DEMO_PASSWORD}; dev-only, public on purpose):")
+    print(f"Demo logins (all share the dev-only demo password in {DEMO_LOGINS_DOC}; never printed here):")
     for email, name, what in all_accounts():
         print(f"  {email:30}  {name:16}  {what}")
     print("Second factor (TOTP codes): make demo-totp, or make demo-totp EMAIL=<address> for one code.")

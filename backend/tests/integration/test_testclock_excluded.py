@@ -85,7 +85,7 @@ async def test_the_router_is_not_mounted_when_the_image_left_the_module_out(monk
     assert await probe(get_settings()) == 404
 
 
-REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf ((?:\S+ ?)+); fi$', re.MULTILINE)
+REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf (\S+(?: \S+)*); fi$', re.MULTILINE)
 
 
 def image_removals() -> list[str]:

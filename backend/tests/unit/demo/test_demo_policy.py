@@ -81,13 +81,14 @@ def test_the_demo_helper_refuses_outside_dev_and_test(
     assert "bridge.demo refused" in captured.err
 
 
-def test_the_logins_list_every_demo_account_and_the_password(
+def test_the_logins_list_every_demo_account_and_point_to_the_password_without_printing_it(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(demo_command, "get_settings", lambda: settings_for("dev"))
     assert demo_command.main(["logins"]) == 0
     out = capsys.readouterr().out
-    assert DEMO_PASSWORD in out
+    assert DEMO_PASSWORD not in out  # CodeQL py/clear-text-logging-sensitive-data: the README documents it
+    assert "README.md" in out
     for email, name, _ in all_accounts():
         assert email in out
         assert name in out

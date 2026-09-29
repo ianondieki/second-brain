@@ -60,7 +60,7 @@ async def run_demo(owner_url: str, settings: Settings) -> DemoReport:
 
 
 def print_demo(report: DemoReport) -> None:
-    from bridge.seed.demo.data import DEMO_PASSWORD, all_accounts  # lazily: see run_demo
+    from bridge.seed.demo.data import DEMO_LOGINS_DOC, all_accounts  # lazily: see run_demo
 
     for what in report.created:
         print(f"demo: {what}")
@@ -70,7 +70,7 @@ def print_demo(report: DemoReport) -> None:
         print("demo: already seeded (nothing to add)")
     for key, cert_id in sorted(report.cert_ids.items()):
         print(f"demo: proposal {key} certificate {cert_id}")
-    print(f"demo: every demo login below uses the password {DEMO_PASSWORD} (dev-only, public on purpose)")
+    print(f"demo: every demo login below uses the dev-only demo password in {DEMO_LOGINS_DOC} (never printed)")
     print("demo: second factor: python -m bridge.demo totp <address>  (make demo-totp from the repository)")
     for email, name, what in all_accounts():
         print(f"demo:   {email:30}  {name:16}  {what}")
