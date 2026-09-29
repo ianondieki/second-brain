@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 import pytest
 
@@ -191,3 +192,31 @@ async def test_a_global_budget_through_the_client_gives_the_fixed_message() -> N
 def test_field_reprs_never_print_text() -> None:
     assert SECRET not in repr(DRAFT)
     assert SECRET not in repr(InputField("confidential.approach", SECRET, tier=Tier.TIER2, owner_id=OWNER))
+
+
+def test_copies_tier2_finds_a_run_of_words_whatever_the_case_or_markup() -> None:
+    secret = ["The mesh relays readings every ninety seconds to a solar gateway."]
+    assert assistant.copies_tier2(["It <b>relays READINGS every ninety seconds to a SOLAR</b> hub."], secret, 8)
+    assert not assistant.copies_tier2(["It relays readings every ninety seconds to farmers."], secret, 8)  # 7 words
+    assert not assistant.copies_tier2(["Anything at all."], [], 8)
+
+
+def test_a_teaser_copying_confidential_text_is_not_shown() -> None:
+    secret = "the gateway batches readings every ninety seconds over a LoRa mesh to save power"
+    draft = DraftText(DRAFT.owned, tier1=dict(DRAFT.tier1), tier2={"approach": secret})
+    copied = answer(summary=f"Farmers get alerts because {secret}.")
+    got = assistant.evaluate(result(copied), draft)
+    assert (got.status, got.reason, got.summary) == (SuggestionStatus.NO_SUGGESTION, "rejected:tier2_overlap", None)
+    clean = assistant.evaluate(result(answer()), draft)  # the same draft, a teaser that copies nothing
+    assert clean.status is SuggestionStatus.SUGGESTED
+
+
+def test_the_in_flight_count_is_per_user_and_released() -> None:
+    running = assistant.InFlight()
+    other = UUID(int=9)
+    assert running.claim(OWNER, 1)
+    assert not running.claim(OWNER, 1)
+    assert running.claim(other, 1)
+    running.release(OWNER)
+    assert running.running(OWNER) == 0
+    assert running.claim(OWNER, 1)
