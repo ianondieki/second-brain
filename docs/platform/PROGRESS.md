@@ -253,8 +253,12 @@ set, and a competing E1 claim goes to `pending_review`, so staff approval leaves
 settlements not tied to the reservation's tenant, pre-removed owners keep owner/admin, the view's NDA tie untested).
 security-reviewer round 4 **PASS** (every round-3 finding re-probed as fixed; MINORs: the same claim path
 lets an ousted claimant rejoin through a routine approval; batch items are not scoped to their tenant; anchors have no
-lower time bound). db-migrations is on round 5 (orchestrator decision: whether a claim is a dispute is decided in SQL,
-not by the claimant-settable label; approving a claim on an organisation owned by others is the transfer path). Two items went to the human as **D-32**.
+lower time bound). Round 5 done by db-migrations (`eff9955`..`f55cd81`, 940 passed; orchestrator decision applied:
+whether a claim is a dispute is decided in SQL, not by the claimant-settable label; batch items tenant-scoped;
+anchor lower time bound; item H `app_llm_batch_owned` for T2.2; two deviations accepted: the batch guard compares
+settlements with reservations only, and platform batch rows need an unbound session). Reviewer and security-reviewer
+round 5 are running. Merge note for T2.4: its `_unanchored` trial insert (epoch `tsa_time`) now fails the anchor lower
+bound; switch to `app_unanchored_chain_heads()` when merging. Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
