@@ -13,12 +13,13 @@ Per recipient and period (the Nairobi day; for a weekly digest, its ISO week):
    and the email is finished or not wanted, nothing more happens (no facts are read, no LLM is called).
 2. The facts (``bridge.reminders.facts``) and the composition (``compose_nudge`` / ``compose_digest``). Nothing open
    is quiet: nothing is sent and nothing is recorded, so a later run the same day may still send.
-3. The developer's wording (``word_nudge``: the LLM's two lines or the fixed text; the organisation's digest has no
-   LLM), then the in-app summary (always on) and the email: only with the ``reminders`` consent, a verified address,
-   the kind's email preference on and, for developers, a plan with ``daily_email_reminders``; ``send_email`` checks
-   suppressions. One attempt per run and at most 3 per message (REQ-NOT-06), so the 15-minute runs space the retries
-   of a transient failure; a permanent failure, or the third, ends the message ``failed`` (dead letter). One commit
-   per recipient.
+3. The in-app summary (always on, code-rendered), then the email: only with the ``reminders`` consent, a verified
+   address, the kind's email preference on and, for developers, a plan with ``daily_email_reminders``; ``send_email``
+   checks suppressions. Only an email being sent is worded by the LLM (``word_nudge``; the organisation's digest has
+   none), once per email: a resumed email carries the fixed text, so the facts never reach the model for an in-app
+   summary, a closed email channel or a retry. One attempt per run and at most 3 per message (REQ-NOT-06), so the
+   15-minute runs space the retries of a transient failure; a permanent failure, or the third, ends the message
+   ``failed`` (dead letter). One commit per recipient.
 
 Organisation digests go to members who opted in (the ``reminders`` consent), one per member, organisation and period
 (``daily_key(..., org_id=...)``), cadence from the organisation's plan (``progress_digest``: daily or weekly).
@@ -270,11 +271,6 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
         composed = developer.compose_nudge(await developer_facts(db, r.id, today), holidays)
         if composed.empty:
             return Outcome(r.id, "quiet", email=status, email_skipped=block)
-        client = None
-        if deps.llm is not None:
-            client = routed_client(db, factory=deps.factory, settings=deps.settings, runtime=deps.llm)
-        ctx = CallContext(user_id=r.id, trace_id=f"em7-{today:%Y%m%d}-{r.id.hex[-12:]}")
-        wording = await word_nudge(client, composed, ctx=ctx)
         wrote = not in_app_done and await post_in_app(
             db,
             user_id=r.id,
@@ -285,13 +281,31 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
             dedupe_key=in_key,
             local_date=today,
         )
-        if email_open:
+        wording = None
+        if email_open:  # the model words an email only, and only once (P6 review MAJOR 2)
+            wording = await _word_email(deps, db, r, composed, today=today, resumed=email_row is not None)
             message = developer.render_nudge(composed, wording, to=r.email, base_url=deps.settings.public_base_url)
             status = await _send(deps, db, message, kind=kind, user_id=r.id, org_id=None, key=email_key, period=today)
         await db.commit()
     return Outcome(
         r.id, "sent", email=status, email_skipped=block, in_app=wrote, wording=wording, health=composed.health_of()
     )
+
+
+async def _word_email(
+    deps: Deps, db: AsyncSession, r: Recipient, composed: developer.Nudge, *, today: date, resumed: bool
+) -> developer.Wording:
+    """The email's wording: the model's (when there is an LLM runtime) for a new email, the fixed text for an email
+    being resumed after a failed attempt, so one email costs at most one model call and the facts reach the model
+    only for an email that is being sent."""
+    ctx = CallContext(user_id=r.id, trace_id=f"em7-{today:%Y%m%d}-{r.id.hex[-12:]}")
+    if resumed:
+        log.info("reminders.nudge_worded", source="fallback", reason="retry", trace_id=ctx.trace_id)
+        return developer.fallback_wording(composed, "retry")
+    client = None
+    if deps.llm is not None:
+        client = routed_client(db, factory=deps.factory, settings=deps.settings, runtime=deps.llm)
+    return await word_nudge(client, composed, ctx=ctx)
 
 
 # ------------------------------------------------------------------------------------------ organisations (org EM7)
