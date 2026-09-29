@@ -7,7 +7,6 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementRow } from "@/components/tracker/EngagementRow";
-import { awaitsMe } from "@/components/tracker/model";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
@@ -15,6 +14,7 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
 import { requireMe } from "@/lib/api/server";
 import { homeFor, needsMfaSetup } from "@/lib/auth/routing";
 
+import { homeGroups } from "./home";
 import { myIdeas } from "./ideas/data";
 import { IdeaRow } from "./ideas/IdeaRow";
 import { NEW_PATH } from "./ideas/ideas";
@@ -42,8 +42,7 @@ export default async function DeveloperHome() {
   const t = await getTranslations("devHome");
   const th = await getTranslations("home");
   const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas()]);
-  const waiting = engagements.filter((e) => awaitsMe(e, "developer"));
-  const others = engagements.filter((e) => !awaitsMe(e, "developer"));
+  const { waiting, others } = homeGroups(engagements);
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
   const MfaIcon = mfa === "on" ? CheckIcon : mfa === "required" ? AlertIcon : InfoIcon;
 
