@@ -365,13 +365,13 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-SEC-01-tier2-access` (P3) | `99541b9` | built on schema v3 (2373 passed); reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
-| `feat/REQ-PROP-03-pitch` (P4) | — | impl-backend: directory/repo search, tags, held tags, 402/409, EM1, org inbox; hooks for P3 `grant_on_tag` and P5 `open_engagement_for_tag` | review, merge |
-| `feat/REQ-ENG-02-tracker` (P5) | — | impl-backend: state machine, API, EM2, contact reveal, NDA placeholder, agreement, signatures, payment, test clock router | reviewer + security-reviewer, merge |
-| `feat/REQ-REM-01-reminders` (P6) | — | impl-backend: EM7 nudge (LLM wording + fixed fallback), org digest (facts), jobs on the test clock | review, merge |
-| `feat/REQ-PROP-01-screens` (P8 part 2) | — | impl-frontend: My Ideas list, 3-step editor, proposal page | ux-reviewer + reviewer, merge |
+| `feat/REQ-ENG-02-tracker` (P5) | `c8b3277` | security-reviewer PASS (3 MINOR); reviewer re-running after the container restart; CI green | fix security MINORs 1 and 3 and redact the decline text from worker logs (re-check #29); merge; then P4's hook swap and P6's `pending` switch |
+| `feat/REQ-REM-01-reminders` (P6) | `89851b6` | built (2762 passed on the merged tree); reviewer running | after P5 merges: import P5's `pending`, thresholds to `policy.yaml` (re-check #34); merge |
+| `feat/REQ-PROP-01-screens` (P8 part 2) | `9988462`+ | code reviewer: 1 BLOCKER, 3 MAJOR; ux-reviewer: 2 MAJOR (JS budget, silent publish failure); impl-frontend fixing (resumed after the restart) | re-reviews, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+Merged on 2026-09-29 after P7: P3 Tier-2 access `5ab7a6a` (reviewer PASS, security-reviewer PASS), the sanitiser timing fix `c305d8a`, P4 Pitch and search `6f48205` (reviewer PASS; interim engagement hook until P5); 2657 backend tests on the merged tree. The container restarted once (the files survived; Docker, the test database and two running agents did not: restart `sudo dockerd`, `docker start bridge-testdb`, then resume agents).
 
 Merged on 2026-09-29 after P1: P2 proposals `79dc401` (reviewer PASS round 2), revision 0004 `dd37106` (`app_llm_calls_since`), P7 LLM providers `029caa9` (reviewer PASS; security-reviewer PASS round 2); 2506 backend tests on the merged tree.
 Also merged on 2026-09-29: P1 schema v3 `3bb82b3` (revision 0003; reviewer + security-reviewer PASS round 2) and P8 part 1 `b787d8b` (`/verify`, Companies; reviewer PASS, ux-reviewer PASS round 2); 2084 backend and 244 frontend tests on the merged tree. CI note: `pr.yml`'s gitleaks step scans every branch's commits with the checked-out branch's `.gitleaksignore`, so reviewed fixture fingerprints go on the integration branch and reach feature branches by merge. Decisions opened this session: D-38 (research excerpts), D-39 (attestation wording).
@@ -485,10 +485,10 @@ M2:
 | P0 T2.4, T2.6a, D1, T2.2 → merge | done | 1998 backend tests on the merged tree |
 | P1 schema v3 (prototype) | done (`3bb82b3`) | revision 0003 |
 | P2 proposals | done (`79dc401`) | |
-| P3 Tier-2 access | in review | |
-| P4 directory search + Pitch + EM1 | in progress | |
-| P5 tracker main path + test clock | in progress | impl-backend |
-| P6 reminders | in progress | |
+| P3 Tier-2 access | done (`5ab7a6a`) | |
+| P4 directory search + Pitch + EM1 | done (`6f48205`) | engagement hook swaps to P5's function at the P5 merge |
+| P5 tracker main path + test clock | in review | security PASS |
+| P6 reminders | in review | merges after P5 |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
 | P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
 | P9 `make demo` (basic) | todo | |
