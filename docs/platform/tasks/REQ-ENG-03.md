@@ -118,3 +118,12 @@ skip); copy lint PASS; traceability PASS (0 errors). JS budget (`scripts/js-budg
 ## After the prototype
 
 Phase 7 polish of the stepper, chips and banner; visual snapshots; the remaining side states.
+
+## Round 2 (reviewer PASS and ux-reviewer PASS at `8ea88b1`, 2026-09-29): MINOR follow-ups
+
+- `components/tracker/Actions.tsx:241`: the `stepUpOpen` check in `onConfirmed` is unreachable (Cancel is inert while
+  busy and the unmount guard already stops a retry); drop it or add a test that reaches it.
+- `app/(app)/org/engagements/[id]/page.tsx:29`: no test pins the org link query to `detail.org_id` (reverting to
+  `?org=` passes); pull the choice into a small tested function.
+- The orchestrator turned the tracker e2e's skip into a required `E2E_DATABASE_OWNER_URL` (`2cccd22`, M1 exit); CI ran
+  it green on the demo seed's variables.
