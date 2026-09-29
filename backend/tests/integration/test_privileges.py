@@ -1503,6 +1503,9 @@ async def test_an_ousted_claimant_cannot_rejoin_through_a_new_claim(
         assert await run(conn, CLAIM_STATUS, id=upheld) == "rejected"
         await act(conn, newcomer)
         assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is False
+        await act(conn, demoted)  # a disputed claim is still the claimant's to withdraw
+        withdraw = "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id"
+        assert (await conn.execute(text(withdraw), {"id": refiled[demoted]})).rowcount == 1
 
 
 async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:
