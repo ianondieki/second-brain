@@ -30,7 +30,8 @@ def test_committed_openapi_matches_the_routes() -> None:
 
 
 def production_settings(**overrides: Any) -> Settings:
-    """Settings that pass validation for ``APP_ENV=production`` (Postmark, https, Secure cookies)."""
+    """Settings that pass validation for ``APP_ENV=production`` (Postmark, https, Secure cookies, a real embedder,
+    no LLM key with the kill switch on)."""
     values: dict[str, Any] = {
         "app_env": "production",
         "database_url": SecretStr("postgresql+psycopg://bridge_app:unused@localhost:5432/bridge"),
@@ -41,6 +42,8 @@ def production_settings(**overrides: Any) -> Settings:
         "postmark_server_token": SecretStr("pm-unit-test-token"),
         "public_base_url": "https://bridge.test",
         "cookie_secure": True,
+        "embedder": "bge-m3",  # REQ-EMB-01: production refuses the fake embedder
+        "llm_kill_switch": True,  # REQ-LLM-01: production runs keyless only with every LLM call refused
         "_env_file": None,
     }
     values.update(overrides)

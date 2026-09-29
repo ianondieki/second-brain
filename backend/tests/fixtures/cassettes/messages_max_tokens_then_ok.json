@@ -1,0 +1,65 @@
+{
+  "synthetic": true,
+  "description": "Output cut at max_tokens, then a complete answer at twice the budget.",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_max_01",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"verdict\": \"cle"
+            }
+          ],
+          "stop_reason": "max_tokens",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 1024,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_max_02",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"verdict\": \"clean\", \"reason\": \"No policy issue found in the teaser.\"}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}
