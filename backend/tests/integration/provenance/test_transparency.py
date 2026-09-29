@@ -415,6 +415,7 @@ async def test_the_nightly_verification_publishes_a_signed_root(
     assert listed[0]["day"] == "2026-09-27"
     assert listed[0]["merkle_root"] == report.merkle_root.hex()
     assert listed[0]["key_id"] == fresh_signer.key_id
+    assert datetime.fromisoformat(listed[0]["snapshot_at"]) == report.snapshot_at
     assert len(one) == 1
 
 

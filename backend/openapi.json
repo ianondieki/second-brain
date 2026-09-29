@@ -1072,13 +1072,26 @@
           "signature": {
             "title": "Signature",
             "type": "string"
+          },
+          "snapshot_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot At"
           }
         },
         "required": [
           "day",
           "merkle_root",
           "signature",
-          "key_id"
+          "key_id",
+          "snapshot_at"
         ],
         "title": "TransparencyRoot",
         "type": "object"

@@ -1014,6 +1014,8 @@ export interface components {
             merkle_root: string;
             /** Signature */
             signature: string;
+            /** Snapshot At */
+            snapshot_at: string | null;
         };
         /** UploadCheck */
         UploadCheck: {

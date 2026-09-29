@@ -8,7 +8,7 @@ Public, no session needed:
 - ``GET /api/verify/{cert_id}/timestamp.tsr``: the stored RFC 3161 token, for ``openssl ts -verify``.
 - ``POST /api/verify[?cert_id=]``: upload a file (raw body, <= 10 MB); its SHA-256 is matched against one certificate
   or against every registered manifest. Returns match / no match.
-- ``GET /api/transparency``: the signed nightly Merkle roots over the audit chain heads.
+- ``GET /api/transparency``: the signed nightly Merkle roots over the audit chain heads, each with its snapshot time.
 
 Owner only (404 for anyone else): ``GET /api/provenance/certificates/{cert_id}/certificate.pdf`` (generated on demand,
 never stored) and ``.../manifest.json`` (the registered manifest, decrypted, whose SHA-256 is the content hash). Each
@@ -86,6 +86,7 @@ class TransparencyRoot(BaseModel):
     merkle_root: str
     signature: str  # base64 Ed25519 over "bridge-transparency-root-v1:<day>:<merkle_root>"
     key_id: str
+    snapshot_at: datetime | None  # when the snapshot whose chain heads the root covers was taken (after the day ended)
 
 
 class Transparency(BaseModel):
@@ -211,7 +212,10 @@ async def transparency(db: Db, response: Response, limit: Annotated[int, Query(g
     """The latest signed Merkle roots over the audit chain heads, newest first (REQ-AUD-01)."""
     rows = (
         await db.execute(
-            text("SELECT day, merkle_root, signature, key_id FROM transparency_roots ORDER BY day DESC LIMIT :limit"),
+            text(
+                "SELECT day, merkle_root, signature, key_id, snapshot_at FROM transparency_roots"
+                " ORDER BY day DESC LIMIT :limit"
+            ),
             {"limit": limit},
         )
     ).all()
@@ -223,6 +227,7 @@ async def transparency(db: Db, response: Response, limit: Annotated[int, Query(g
                 merkle_root=bytes(r.merkle_root).hex(),
                 signature=base64.b64encode(bytes(r.signature)).decode("ascii"),
                 key_id=r.key_id,
+                snapshot_at=r.snapshot_at,
             )
             for r in rows
         ]
