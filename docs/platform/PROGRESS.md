@@ -260,7 +260,12 @@ settlements with reservations only, and platform batch rows need an unbound sess
 round-4 finding closed and mutation-proven; new MAJOR: signatories appointed under the ousted control keep
 `{signatory}` after a transfer and can rejoin as owners through the E1 shortcut; MINORs: other open claims keep stale
 labels after an approval, the disputed-claim OTP reissue path is untested, two `app_claim_competes` branches untested).
-security-reviewer round 5 running; round 6 follows both. Merge note for T2.4: its `_unanchored` trial insert (epoch `tsa_time`) now fails the anchor lower
+security-reviewer round 5 **PASS** (MINORs: stale labels in both directions; a non-dispute approval makes an
+admin or signatory an owner who can strip the real owners; one foreign row makes a batch nobody's; a departed member's
+reservation can never settle). db-migrations is on round 6 (orchestrator decisions: transfers also strip `signatory`;
+staff approve only when the stored label matches the SQL decision, otherwise the label is corrected and staff decide
+again; a non-dispute approval never adds `owner` while the organisation has an active owner; a batch belongs to the
+tenant of its first reservation; settlements go through a definer `app_llm_settle_batch_item`, which T2.2 then adopts). Merge note for T2.4: its `_unanchored` trial insert (epoch `tsa_time`) now fails the anchor lower
 bound; switch to `app_unanchored_chain_heads()` when merging. Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
