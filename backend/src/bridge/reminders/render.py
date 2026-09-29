@@ -21,6 +21,7 @@ from typing import Final
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
+from bridge.proposals.sanitise import PHONES
 from bridge.reminders.health import EngagementFact, Health, Reason, ReasonCode
 
 S, M = EngagementState, MilestoneState
@@ -59,10 +60,6 @@ STAGE_LABELS: Final[dict[EngagementState, str]] = {
 
 _URL = re.compile(r"\b[a-z][a-z0-9+.-]{1,15}://\S*|\bwww\d{0,3}\.\S*|\b(?:mailto|tel|sms|callto|whatsapp):\S*", re.I)
 _EMAIL = re.compile(r"[a-z0-9._%+-]+\s*@\s*[a-z0-9-]+(?:\.[a-z0-9-]+)+", re.I)
-_SEP = r"[\s.\-()/,_]*"
-_PHONE = re.compile(
-    rf"(?<![\d+])(?:\(?\+?254\)?|0){_SEP}[17](?:{_SEP}\d){{8}}(?!\d)|(?<![\w+])\+(?:{_SEP}\d){{8,15}}(?!\d)"
-)
 _DOMAIN = re.compile(r"(?<![\w@.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?![\w-])", re.I)
 _SPACE = re.compile(r"\s+")
 _TAG = re.compile(r"</?[a-z!][^<>]*>", re.I)
@@ -86,7 +83,8 @@ def defang(text: str) -> str:
     """``text`` with no auto-linkable contact route (AC-MAIL-5). [[COPY-REVIEW]] placeholders."""
     text = _URL.sub("[link removed]", plain(text))
     text = _EMAIL.sub("[email removed]", text)
-    text = _PHONE.sub("[phone number removed]", text)
+    for pattern in PHONES:  # the Tier-1 sanitiser's phone patterns (mobiles, landlines, E.164)
+        text = pattern.sub("[phone number removed]", text)
     text = _DOMAIN.sub(lambda m: m.group(0).replace(".", "[.]"), text)
     return text.replace("@", "[at]")
 
