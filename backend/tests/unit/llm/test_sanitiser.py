@@ -194,8 +194,9 @@ def test_link_scanning_is_linear_on_pathological_input() -> None:
 
 # Security review 2026-09-29 (MAJOR): sanitising ran before the budget check, synchronously, and was quadratic in the
 # number of unclosed <script>/<style> openers and unbounded in the input length (187 KB took 14 s). Each input below
-# took seconds before the fix; linear work takes milliseconds, so the bound leaves a wide margin for slow runners.
-LINEAR_SECONDS = 1.0
+# took seconds before the fix (16k openers: 9.7 s; one megabyte: 541 s); linear work takes milliseconds. The bound is on
+# this process's CPU time, not the wall clock, so other processes on a loaded runner cannot push a linear run past it.
+LINEAR_SECONDS = 3.0
 PATHOLOGICAL = {
     "unclosed script openers": "<script>x" * 16000,
     "unclosed style openers": "<STYLE>x" * 16000,
@@ -208,12 +209,12 @@ PATHOLOGICAL = {
 
 @pytest.mark.parametrize("raw", PATHOLOGICAL.values(), ids=PATHOLOGICAL.keys())
 def test_script_and_style_scanning_is_linear_on_pathological_input(raw: str) -> None:
-    start = time.perf_counter()
+    start = time.process_time()
     clean(raw)
-    assert time.perf_counter() - start < LINEAR_SECONDS
-    start = time.perf_counter()
+    assert time.process_time() - start < LINEAR_SECONDS
+    start = time.process_time()
     strip_blocks(raw)  # linear on its own, not only thanks to the input cut: the whole megabyte
-    assert time.perf_counter() - start < LINEAR_SECONDS
+    assert time.process_time() - start < LINEAR_SECONDS
 
 
 # The regex the linear scan replaces, kept as the oracle for what a block is.
