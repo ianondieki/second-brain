@@ -20,10 +20,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from bridge.config import get_settings
 from bridge.ids import uuid7
 from bridge.proposals.tag_hooks import TagHooks, default_hooks
-from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, sign_in_as
 from tests.integration.proposals.helpers import Developers, ProposalWorld, published, rows
 
@@ -57,6 +55,7 @@ async def add_org(
     niche_id: UUID | None,
     roles: str | None = "{reviewer}",
     suspended: bool = False,
+    county: str | None = None,
 ) -> Org:
     org_id = uuid7()
     slug = f"{name.lower().replace(' ', '-')}-{org_id.hex[-6:]}"
@@ -66,10 +65,17 @@ async def add_org(
             text(
                 "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, county_code,"
                 " e2_verified_at, suspended_at) VALUES (:id, 'company', :name, :slug, 'admin',"
-                " CAST(:verification AS org_verification), 'KE-30',"
+                " CAST(:verification AS org_verification), :county,"
                 " CASE WHEN :verification = 'e2' THEN now() END, CASE WHEN :suspended THEN now() END)"
             ),
-            {"id": org_id, "name": name, "slug": slug, "verification": verification, "suspended": suspended},
+            {
+                "id": org_id,
+                "name": name,
+                "slug": slug,
+                "verification": verification,
+                "suspended": suspended,
+                "county": county,
+            },
         )
         if niche_id is not None:
             await conn.execute(
@@ -102,8 +108,6 @@ async def add_member(conn: Any, org_id: UUID, roles: str) -> UUID:
 @pytest.fixture
 async def pitch_orgs(owner_engine: AsyncEngine, proposal_world: ProposalWorld) -> PitchOrgs:
     tag = uuid4().hex[:8]
-    async with owner_engine.begin() as conn:
-        await seed_all(conn, get_settings())  # the counties
     niche = proposal_world.niche_id
     return PitchOrgs(
         tag=tag,

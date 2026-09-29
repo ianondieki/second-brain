@@ -5,6 +5,7 @@ active; publishing the next version of an active proposal is not a new proposal.
 from __future__ import annotations
 
 import asyncio
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -18,6 +19,7 @@ from tests.integration.proposals.helpers import (
     rows,
     user_of,
 )
+from tests.integration.proposals.pitch_helpers import Org, add_org, counts, pitch, pitchable
 
 
 async def test_fourth_proposal_402(
@@ -89,3 +91,69 @@ async def test_concurrent_publications_cannot_pass_the_cap_together(
         u=user_of(owner),
     )
     assert active.n == 3
+
+
+# --- AC-PROP-2 and AC-SUB-5 (REQ-BIL-02, REQ-PROP-03): tags per proposal on the real tag route ---
+
+
+async def _orgs(owner_engine: AsyncEngine, n: int, verification: str) -> list[Org]:
+    return [
+        await add_org(owner_engine, f"Cap {verification} {i}", verification=verification, niche_id=None, roles=None)
+        for i in range(n)
+    ]
+
+
+async def test_sixth_tag_402(developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine) -> None:
+    """AC-PROP-2: a Free developer with 5 tags on a proposal tags a 6th org: 402; the first 5 tags persist."""
+    orgs = await _orgs(owner_engine, 6, "unclaimed")
+    dev, proposal_id = await pitchable(developers, proposal_world)
+    assert (await pitch(dev, proposal_id, *orgs[:3])).status_code == 201
+    for org in orgs[3:5]:
+        assert (await pitch(dev, proposal_id, org)).status_code == 201
+    before = await counts(owner_engine, user_of(dev))
+    refused = await pitch(dev, proposal_id, orgs[5])
+    assert refused.status_code == 402, refused.text
+    assert refused.json()["detail"] == {
+        "code": "plan_limit",
+        "message": "This needs a higher plan.",
+        "limit_key": "tags_per_proposal",
+        "limit": 5,
+        "used": 5,
+        "plan": "dev_free",
+        "upgrade": {"plan": "dev_pro_monthly", "url": "/billing/upgrade?plan=dev_pro_monthly"},
+    }
+    assert await counts(owner_engine, user_of(dev)) == before
+    tagged = await rows(owner_engine, "SELECT org_id FROM tags WHERE proposal_id = :p", p=proposal_id)
+    assert {r.org_id for r in tagged} == {org.id for org in orgs[:5]}
+
+
+async def test_a_batch_past_the_cap_creates_nothing(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    orgs = await _orgs(owner_engine, 6, "unclaimed")
+    dev, proposal_id = await pitchable(developers, proposal_world)
+    assert (await pitch(dev, proposal_id, *orgs[:3])).status_code == 201
+    refused = await pitch(dev, proposal_id, *orgs[3:])  # 3 + 3 > 5
+    assert (refused.status_code, refused.json()["detail"]["used"]) == (402, 3)
+    assert (await counts(owner_engine, user_of(dev)))["tags"] == 3
+    whole = await pitch(dev, proposal_id, *_orgs_ids(orgs[3:5]))
+    assert whole.status_code == 201  # 3 + 2 = 5 fits
+    assert whole.json()["cap"] == {"used": 5, "limit": 5, "plan": "dev_free"}
+
+
+def _orgs_ids(orgs: list[Org]) -> list[UUID]:
+    return [org.id for org in orgs]
+
+
+async def test_tags_never_paywalled(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    """AC-SUB-5: the 1st-5th tags to claimed (E2) organisations never return 402, each opening its engagement, and
+    no other paywall (NDA, tracker, messaging) stands in the way of tagging."""
+    orgs = await _orgs(owner_engine, 5, "e2")
+    dev, proposal_id = await pitchable(developers, proposal_world)
+    for org in orgs:
+        response = await pitch(dev, proposal_id, org)
+        assert response.status_code == 201, response.text
+        assert response.json()["tags"][0]["engagement_id"] is not None
+    assert (await counts(owner_engine, user_of(dev)))["engagements"] == 5
