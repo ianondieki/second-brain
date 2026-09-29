@@ -109,7 +109,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
         </div>
       ) : null}
 
-      {version ? <Teaser version={version} /> : null}
+      {version ? <Teaser version={version} status={status} /> : null}
       {version ? <Confidential version={version} /> : null}
       <Certificate idea={idea} />
 
@@ -136,7 +136,16 @@ function noticeFor(status: IdeaStatus, hasChanges: boolean): { key: NoticeKey; t
   return hasChanges ? { key: "changesNotice", tone: "info" } : null;
 }
 
-async function Teaser({ version }: { version: Version }) {
+/** Who sees the teaser now, in the tense of the idea's status. */
+const TEASER_HINT = {
+  draft: "teaserHint",
+  published: "teaserHintPublished",
+  held: "teaserHintHeld",
+  rejected: "teaserHintHidden",
+  hidden: "teaserHintHidden",
+} as const satisfies Record<IdeaStatus, string>;
+
+async function Teaser({ version, status }: { version: Version; status: IdeaStatus }) {
   const f = await getTranslations("ideaFields");
   const { teaser } = version;
   const empty = <span className="text-ink-soft">{f("notGiven")}</span>;
@@ -145,7 +154,7 @@ async function Teaser({ version }: { version: Version }) {
       <h2 id="teaser-heading" className="text-lg text-ink">
         {f("teaserTitle")}
       </h2>
-      <p className="mt-1 text-sm text-ink-soft">{f("teaserHint")}</p>
+      <p className="mt-1 text-sm text-ink-soft">{f(TEASER_HINT[status])}</p>
       <dl className="mt-4 grid gap-x-8 gap-y-4 border-t border-line pt-5 sm:grid-cols-[minmax(9rem,auto)_1fr]">
         <Row label={f("niche")}>{teaser.niche?.label ?? empty}</Row>
         <Row label={f("maturity")}>{teaser.maturity ? f(`maturityValue.${MATURITY_KEY[teaser.maturity]}`) : empty}</Row>

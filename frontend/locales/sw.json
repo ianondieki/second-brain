@@ -379,7 +379,10 @@
     "confidentialBadge": "Siri",
     "confidentialNotice": "Maelezo haya yanaonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura unaorekodiwa na kumjulisha mwenye wazo.",
     "fileSize": "{unit, select, bytes {{value} baiti} kb {{value} KB} other {{value} MB}}",
-    "fileScanning": "Inakaguliwa"
+    "fileScanning": "Inakaguliwa",
+    "teaserHintPublished": "Kila aliyeingia anaweza kuona muhtasari huu.",
+    "teaserHintHeld": "Kila aliyeingia ataona muhtasari huu msimamizi akishaukagua.",
+    "teaserHintHidden": "Hakuna mwingine anayeweza kuona muhtasari huu sasa."
   },
   "ideas": {
     "pageTitle": "Mawazo yangu",

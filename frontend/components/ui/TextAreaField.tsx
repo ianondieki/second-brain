@@ -24,6 +24,8 @@ export function TextAreaField({ id, label, hint, error, meter, className, rows =
             className={cn(
               "min-h-28 w-full min-w-0 rounded-control border border-ink-soft bg-field px-3 py-2.5 text-base text-ink",
               "[field-sizing:content] max-h-[28rem]",
+              // A growing box keeps its last line clear of the fixed tab bar under 1024 px.
+              "scroll-mb-28 lg:scroll-mb-6",
               "aria-invalid:border-error aria-invalid:shadow-[inset_0_0_0_1px_var(--error)]",
               className,
             )}

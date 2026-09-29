@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { lazy, Suspense, useId } from "react";
+import { lazy, Suspense, useId, type ReactNode } from "react";
 
 import { RadioGroup } from "@/components/ui/RadioGroup";
 
@@ -14,7 +14,7 @@ const ProblemPanels = lazy(() => import("./ProblemPanels").then((m) => ({ defaul
 export interface ProblemPickerProps extends Omit<ProblemPanelsProps, "mode" | "errors"> {
   /** Null until the developer chooses: a new idea asks first. */
   mode: ProblemMode | null;
-  errors: ProblemPanelsProps["errors"] & { problems?: string };
+  errors: ProblemPanelsProps["errors"] & { problems?: ReactNode };
 }
 
 /** "Which problem does it solve?": link listed problems or describe a new one (REQ-PROP-01, AC-PROP-5). */

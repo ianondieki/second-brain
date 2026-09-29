@@ -379,7 +379,10 @@
     "confidentialBadge": "Confidential",
     "confidentialNotice": "These details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass.",
     "fileSize": "{unit, select, bytes {{value} bytes} kb {{value} KB} other {{value} MB}}",
-    "fileScanning": "Being checked"
+    "fileScanning": "Being checked",
+    "teaserHintPublished": "Everyone signed in can see this teaser.",
+    "teaserHintHeld": "Everyone signed in will see this teaser once a moderator has checked it.",
+    "teaserHintHidden": "Nobody else can see this teaser now."
   },
   "ideas": {
     "pageTitle": "My ideas",

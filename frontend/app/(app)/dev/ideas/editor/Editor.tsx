@@ -260,9 +260,16 @@ export function Editor(props: EditorProps) {
     ...issues,
     ...(showRequired ? checklist.filter((c) => !issues.some((i) => i.field === c.field)) : []),
   ];
+  /** Every finding for the field, one per line (the sanitiser can find a link and a phone number at once). */
   const errorFor = (field: FieldName) => {
-    const issue = shown.find((i) => i.field === field);
-    return issue ? issueMessage(issue) : undefined;
+    const found = shown.filter((i) => i.field === field);
+    if (found.length === 0) return undefined;
+    if (found.length === 1) return issueMessage(found[0]);
+    return found.map((issue) => (
+      <span key={issue.code} className="block">
+        {issueMessage(issue)}
+      </span>
+    ));
   };
   const words = wordCount(state.summary);
 
@@ -509,7 +516,8 @@ function SaveStatus({ save, onRetry }: { save: Save; onRetry: () => void }) {
         {failed ? <AlertIcon className="size-4 shrink-0" /> : null}
         {text}
       </p>
-      {failed ? (
+      {/* Saving again cannot help when the API refused the content: the marked fields need changes first. */}
+      {failed && save.problem !== "fields" && save.problem !== "validation" ? (
         <Button variant="link" className="text-sm" onClick={onRetry}>
           {t("retrySave")}
         </Button>

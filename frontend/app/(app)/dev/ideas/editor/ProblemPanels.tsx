@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,7 @@ export interface ProblemPanelsProps {
   niches: NicheNode[];
   /** The newest published problems, rendered with the page. */
   initialResults: ProblemCard[];
-  errors: { newTitle?: string; newStatement?: string };
+  errors: { newTitle?: ReactNode; newStatement?: ReactNode };
   onMode: (mode: ProblemMode) => void;
   onLinked: (problems: ProblemRef[]) => void;
   onNewTitle: (value: string) => void;

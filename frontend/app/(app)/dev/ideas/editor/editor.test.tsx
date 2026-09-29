@@ -91,7 +91,10 @@ describe("autosave", () => {
         outcome: {
           ok: false as const,
           problem: "fields" as const,
-          fields: [{ field: "summary" as const, code: "contains_email" }],
+          fields: [
+            { field: "summary" as const, code: "contains_email" },
+            { field: "summary" as const, code: "contains_url" },
+          ],
         },
         held: [],
       })),
@@ -106,6 +109,8 @@ describe("autosave", () => {
     const described = (summary.getAttribute("aria-describedby") ?? "").split(" ");
     const message = described.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
     expect(message).toContain("Remove the email address: the teaser is public");
+    expect(message).toContain("Remove the web address: the teaser is public"); // every finding, not the first
+    expect(screen.queryByRole("button", { name: "Save again" })).toBeNull(); // saving again cannot help
     expect(screen.getByRole("alert").textContent).toContain("Some fields need changes");
   });
 
