@@ -13971,7 +13971,7 @@
     },
     "/api/me/proposals/{proposal_id}/assistant/consent": {
       "delete": {
-        "description": "Turn the writing assistant off (it also ends when you sign out).",
+        "description": "Turn the writing assistant off (it also ends when you sign out). Works from a deleted proposal too.",
         "operationId": "withdraw_assistant_consent_api_me_proposals__proposal_id__assistant_consent_delete",
         "parameters": [
           {
@@ -14195,7 +14195,7 @@
         ]
       },
       "post": {
-        "description": "Turn the writing assistant on for this sign-in only: it may read your confidential (Tier 2) text.",
+        "description": "Turn the writing assistant on for this sign-in only: it may read the confidential (Tier 2) text of your\nproposals until you sign out or turn it off.",
         "operationId": "grant_assistant_consent_api_me_proposals__proposal_id__assistant_consent_post",
         "parameters": [
           {
@@ -14313,7 +14313,9 @@
         },
         "summary": "Grant Assistant Consent",
         "tags": [
-          "assistant"
+          "assistant",
+          "assistant",
+          "tier2"
         ]
       }
     },
@@ -14437,7 +14439,9 @@
         },
         "summary": "Suggest Teaser",
         "tags": [
-          "assistant"
+          "assistant",
+          "assistant",
+          "tier2"
         ]
       }
     },

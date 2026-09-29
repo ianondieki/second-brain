@@ -1211,12 +1211,13 @@ export interface paths {
         put?: never;
         /**
          * Grant Assistant Consent
-         * @description Turn the writing assistant on for this sign-in only: it may read your confidential (Tier 2) text.
+         * @description Turn the writing assistant on for this sign-in only: it may read the confidential (Tier 2) text of your
+         *     proposals until you sign out or turn it off.
          */
         post: operations["grant_assistant_consent_api_me_proposals__proposal_id__assistant_consent_post"];
         /**
          * Withdraw Assistant Consent
-         * @description Turn the writing assistant off (it also ends when you sign out).
+         * @description Turn the writing assistant off (it also ends when you sign out). Works from a deleted proposal too.
          */
         delete: operations["withdraw_assistant_consent_api_me_proposals__proposal_id__assistant_consent_delete"];
         options?: never;
