@@ -282,8 +282,17 @@ async def _apply(step: Step) -> None:
     await db.flush()
 
 
+ENDORSEMENT_METHODS: Final = {
+    StepUpMethod.TOTP: EndorsementMethod.TOTP,
+    StepUpMethod.PASSKEY: EndorsementMethod.PASSKEY,
+}
+
+
 async def _endorse(step: Step, endorsement_id: UUID, stage: EngagementState) -> None:
+    """The party's endorsement, its method the second factor this request verified (never assumed)."""
     party, decision = step.party, step.decision
+    if step.step_up is None:  # the table makes every endorsing row require the step-up; refuse rather than guess
+        raise RuntimeError("an endorsement needs the step-up this request verified")
     step.db.add(
         EngagementEndorsement(
             id=endorsement_id,
@@ -293,7 +302,7 @@ async def _endorse(step: Step, endorsement_id: UUID, stage: EngagementState) -> 
             party=party.actor.party,
             user_id=party.user_id,
             role=decision.role,
-            method=EndorsementMethod.TOTP,  # every endorsing command requires the step-up (verified_step_up)
+            method=ENDORSEMENT_METHODS[step.step_up],
         )
     )
     await step.db.flush()
