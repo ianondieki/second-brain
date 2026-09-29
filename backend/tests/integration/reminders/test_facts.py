@@ -96,14 +96,31 @@ async def test_the_parties_evidence_moves_the_turn(owner_engine: AsyncEngine) ->
         )
         assert (await as_developer(w)).awaiting == frozenset({DEV, ORG})  # confirmed: either sends the NDA
         await tracker.act(conn, p.developer)
-        await tracker.append(conn, w.engagement, p.developer, "developer", "send_nda", "CONTACT_MADE", "NDA_PENDING")
-        nda = uuid7()
+        nda = uuid7()  # the NDA sent, named in the event as P5's send_nda names it
+        sent = {"document_ref": str(nda), "document_sha256": tracker.PDF_SHA256.hex()}
+        await tracker.append(
+            conn, w.engagement, p.developer, "developer", "send_nda", "CONTACT_MADE", "NDA_PENDING", payload=sent
+        )
+        assert (await as_developer(w)).awaiting == frozenset({DEV, ORG})
         await tracker.run(
             conn,
             tracker.SIGN,
             **tracker.sign_params(w.engagement, "mutual_nda", nda, tracker.PDF_SHA256, p.developer, "developer"),
         )
         assert (await as_developer(w)).awaiting == frozenset({ORG})
+
+
+async def test_a_reopened_negotiation_awaits_new_terms_from_either_party(owner_engine: AsyncEngine) -> None:
+    """Whose turn is the state machine's (docs/spec/06 6.9: the only definition): after a reopen the latest version
+    is final, not a draft, so either party proposes the next one (``state_machine.pending``)."""
+    async with as_app(owner_engine) as conn:
+        w = await build(conn, until="AGREEMENT_SIGNING")  # version 1, drafted by the developer, is final
+        await tracker.act(conn, w.p.signatory, w.p.org)
+        await tracker.append(
+            conn, w.engagement, w.p.signatory, "signatory", "reopen_negotiation", "AGREEMENT_SIGNING", "NEGOTIATION"
+        )
+        fact = await as_developer(w)
+        assert (fact.state.value, fact.awaiting) == ("NEGOTIATION", frozenset({DEV, ORG}))
 
 
 async def test_a_recorded_final_payment_is_the_developers_turn(owner_engine: AsyncEngine) -> None:
