@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +20,9 @@ SYSTEM = {"info": {"tenancy": Tenancy.SYSTEM}}
 class User(IdMixin, TimestampsMixin, Base):
     __tablename__ = "users"
     __table_args__ = (SYSTEM,)
+    # subject_salt is a column of the table but not of the mapper: the ORM never selects, returns or writes it (the app
+    # role holds no SELECT on it). Digests come from the database: app_subject_digest(user_id, data).
+    __mapper_args__ = {"exclude_properties": ["subject_salt"]}  # noqa: RUF012
 
     email: Mapped[str] = mapped_column(CIText(), unique=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -35,6 +38,14 @@ class User(IdMixin, TimestampsMixin, Base):
     totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     totp_last_counter: Mapped[int | None] = mapped_column()
     totp_recovery_hashes: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    # Per-subject salt (revision 0002): owner refs SHA-256(subject_salt || user_id) in manifests and salted digests in
+    # audit payloads (docs/spec/06 6.4). Set once by the database; the app neither reads nor updates it and gets the
+    # digests from app_subject_digest(). Unmapped (see __mapper_args__); declared here so the table matches.
+    subject_salt = mapped_column(LargeBinary, server_default=text("gen_random_bytes(32)"), nullable=False)
+    # Revision 0003 (D-37): an account of the seeded demo data, the only data a free LLM provider may receive. Set only
+    # by the owner role (the seed); bridge_app may read it but neither insert nor update it, so never set it in app
+    # code (an INSERT naming the column is refused).
+    demo_account: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
 
 class AuthIdentity(IdMixin, CreatedMixin, Base):

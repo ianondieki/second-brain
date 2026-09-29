@@ -16,10 +16,15 @@ from bridge.billing import plans
 from bridge.billing.models import Plan
 from bridge.config import BACKEND_DIR, Settings
 from bridge.directory.models import Niche, Region
+from bridge.engagements.models import DevTestClock
 from bridge.ids import uuid7
+from bridge.legal.models import LegalTemplate, NdaTemplate
+from bridge.seed.legal import load_legal_templates, seed_legal_templates
 
 REFERENCE_FILE = BACKEND_DIR / "seed" / "reference.yaml"
-SEED_TABLES = ("regions", "niches", "holidays", "plans")
+SEED_TABLES = ("regions", "niches", "holidays", "plans", "legal_templates", "nda_templates")
+# Where the shared dev/test clock may be moved (revision 0003; the test-clock router runs only there too).
+TEST_CLOCK_ENVS = frozenset({"dev", "test", "staging"})
 
 
 def load_reference(path: Path = REFERENCE_FILE) -> dict[str, Any]:
@@ -149,8 +154,29 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
         )
 
 
+def test_clock_enabled(settings: Settings) -> bool:
+    """Whether the seed enables the dev/test clock: only for an ``APP_ENV`` set explicitly (environment or
+    ``backend/.env``) to dev, test or staging. The settings default is ``dev``, so a deployment that forgot to set
+    ``APP_ENV`` would otherwise enable it: it fails closed instead (review P1, MAJOR 3)."""
+    return "app_env" in settings.model_fields_set and settings.app_env in TEST_CLOCK_ENVS
+
+
+async def seed_test_clock(conn: AsyncConnection, settings: Settings) -> None:
+    """Enable the dev/test clock where ``test_clock_enabled`` says so and disable it everywhere else (production, or
+    ``APP_ENV`` not set): only an enabled clock moves (``app_set_test_clock``) and shifts ``app_clock_now()``. The
+    offset is kept, so running the seed again does not reset a moved clock."""
+    await conn.execute(update(DevTestClock).values(enabled=test_clock_enabled(settings)))
+
+
 async def counts(conn: AsyncConnection) -> dict[str, int]:
-    models = {"regions": Region, "niches": Niche, "holidays": Holiday, "plans": Plan}
+    models = {
+        "regions": Region,
+        "niches": Niche,
+        "holidays": Holiday,
+        "plans": Plan,
+        "legal_templates": LegalTemplate,
+        "nda_templates": NdaTemplate,
+    }
     return {
         name: int((await conn.execute(select(func.count()).select_from(model))).scalar_one())
         for name, model in models.items()
@@ -158,11 +184,16 @@ async def counts(conn: AsyncConnection) -> dict[str, int]:
 
 
 async def seed_all(
-    conn: AsyncConnection, settings: Settings, reference: dict[str, Any] | None = None
+    conn: AsyncConnection,
+    settings: Settings,
+    reference: dict[str, Any] | None = None,
+    legal: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     data = reference or load_reference()
     await seed_regions(conn, data["regions"])
     await seed_niches(conn, data["niches"])
     await seed_holidays(conn, data["holidays"])
     await seed_plans(conn, settings)
+    await seed_legal_templates(conn, legal or load_legal_templates())
+    await seed_test_clock(conn, settings)
     return await counts(conn)

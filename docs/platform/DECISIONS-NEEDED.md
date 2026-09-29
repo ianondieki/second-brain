@@ -50,6 +50,17 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
 - Decision:
 
+### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
+- Why: ADR-005 decision 3 allows "at most one retry on the next allowed model" after `stop_reason == "refusal"`. The `docs/spec/09` table allocates exactly one model to each Phase 2 task and lists `claude-opus-5-5` only for the moderator pre-checklist and the eval judge, so any fallback model would be outside the allocation. `backend/ai/models.yaml` therefore ships `fallback_model: null` for all four Phase 2 tasks: a refusal is logged, goes to the human queue and the dead-letter queue, with no retry. `tests/unit/llm/test_registry.py` fails if a fallback is outside the spec 09 allocation of its task.
+- Proposal (needs your approval and a `docs/spec/09` change, since it widens the allocation):
+  1. `moderation_prescreen` and `over_disclosure_check` (Haiku 4.5): fall back to `claude-sonnet-5`, effort `low` (Tier-1 text only; a refusal on a classifier is most likely a false positive).
+  2. `originality_explainer` (Sonnet 5): fall back to `claude-opus-5-5`, effort `medium` (Tier-1 text only; low volume).
+  3. `submission_assistant` (Sonnet 5, Tier-2 text under per-use consent): no fallback; the owner sees "the assistant could not help with this text" and the refusal goes to the human queue.
+- Options: (a) keep no fallbacks (refusal → human queue only); (b) approve the proposal above and amend the `docs/spec/09` allocation; (c) approve only item 1 (classifiers).
+- Recommended default: (a) until you decide; the registry and its test already enforce it. Choosing (b) or (c) is a YAML edit plus the spec 09 table and `SPEC_09_ALLOCATION` in the registry test.
+- Blocks: nothing; refusals are rare and already reach the human queue.
+- Decision:
+
 ### D-30 · Upholding a claim dispute against an E2 organisation (T2.1 schema v2, T2.6b claims, REQ-DIR-03)
 - Why: `docs/spec/06` 6.2 and AC-DIR-2 say a claim on an E2 organisation opens a dispute instead of transferring it, and the platform never rules on legal ownership (6.12). Schema v2 sends such a claim to `disputed`, and staff can uphold a dispute with `app_decide_claim` (it rejects the earlier approved claims and removes those claimants' memberships in the same transaction). Against an **E2** organisation that path is closed on purpose today: an E1-level claim cannot be approved (there is no E2 → E1 step), and an E2-level claim cannot be approved either, because the claimant may accept the Master Enterprise Terms only on an unclaimed or E1 organisation and E2 approval requires that acceptance. So a dispute against an E2 organisation can be rejected but never upheld in the product.
 - Options: (a) allow an E2-level disputed claim to be upheld: the claimant of an open **disputed E2** claim may record the Master Enterprise Terms acceptance on that E2 organisation; staff admin approval keeps E2 (new `e2_verified_at`, new re-verification date) and transfers ownership as for E1 disputes; (b) add a staff-only step `app_staff_revoke_verification(org, reason)` (E2 → unclaimed, held engagements frozen, Tier-2 grants revoked) that staff run first, after which the disputed claim follows the normal E1/E2 path; (c) keep it closed: disputes against E2 organisations are handled off-platform under the 6.12 process (suspend the organisation with `organizations.suspended_at`, which already stops Tier-2 access, and reject the in-app claim with a reason), revisited when real disputes occur; (d) decide at G2 with the advocate, keep (c) until then.
@@ -92,6 +103,71 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing; the OAuth buttons ship in F4.
 - Decision:
 
+### D-38 · Storing short publisher excerpts for the research-agent demo (P11, REQ-RES-01)
+- Why: P11 drafts problems from 19 short verbatim excerpts (12–41 words each) saved in `backend/seed/research_excerpts.yaml` with URL, publisher and date (branch `feat/REQ-RES-01-sources`; method in `research/research-excerpts-2026-09.md`). Six come from official sources (CA, SASRA, the agriculture ministry) and thirteen from Kenyan news sites (Business Daily, Standard, Star, Capital FM). The publishers' terms for storing and showing short excerpts were not reviewed; Business Daily pages show a premium banner although the text was served without a login. This is a legal question, so agents do not decide it.
+- Options: (a) keep all 19 for the local demo only (never hosted), each shown with its source link and date; (b) keep only the six official-source excerpts and replace the news ones with more official sources; (c) have the terms reviewed before any excerpt is shown.
+- Recommended default: (a) for the local prototype, because nothing is hosted (D-36) and each quote is short and attributed; before any hosted release, (c).
+- Blocks: nothing in the prototype; any hosted release of the research cards.
+- Decision:
+
+### D-39 · Legal and privacy wording used by the prototype (P2, P3, P5; REQ-PROV-05, REQ-PROV-03, REQ-ENG-05, REQ-LEG-01)
+- Why: the prototype shows text that is near-legal or a privacy disclosure. Agents do not write legal text (CLAUDE.md), so each is a `[[COPY-REVIEW]]` draft or a seeded placeholder: (1) the three ownership attestations at publish (`backend/src/bridge/proposals/attestations.py`, P2; each acceptance stores the text's version and SHA-256, so a later wording is a new version); (2) the viewer-logging notice shown when an organisation member accepts the Evaluation NDA (P3; docs/spec/10 requires it, recorded in `lawful_basis.md` later); (3) the cover text around the seeded mutual NDA template in the tracker (P5); (4) the seeded Evaluation NDA and mutual NDA templates themselves (Phase 1 placeholders headed "DRAFT — NOT LEGAL ADVICE"). (5) the line above the Evaluation NDA on the organisation's proposal page, which states the legal effect of accepting ("You accept it in your own name and for {org}…", `frontend/locales/en.json` `orgProposal.ndaLead`, P8 part 3). (6) the per-session consent text for the submission assistant (P13: Tier-2 text goes to an LLM for this login session only; a new consent text version). (7) the attestation line in the tracker's decline form (`frontend/locales/en.json` `trackerActions.decline.attest`, P8 part 5); unlike (1), the API stores only a boolean (`DeclineBody.attested`), not the text's version or hash, so a later wording change cannot be traced (backend follow-up on REQ-ENG-03). Broadened on 2026-09-29 from the attestations alone, after the orchestrator's re-check.
+- Options: (a) keep the drafts for the local prototype only and have all seven reviewed with the G2 legal pack before any hosted use; (b) replace any of them now with wording you supply; (c) have an advocate draft them now.
+- Recommended default: (a); nothing is hosted (D-36), each text is versioned and hashed where it is accepted, and the demo labels the templates as drafts.
+- Blocks: nothing in the prototype; any hosted release.
+- Decision:
+
+### D-40 · Tier-2 routes with the flag off: 403 (AC-SEC-2) or 404 for non-members (AC-SEC-1/b) (P3, REQ-SEC-01, REQ-TEN-01)
+- Why: two MUST criteria conflict for one caller. AC-SEC-2 says every Tier-2 endpoint returns 403 while `FEATURE_TIER2_ENABLED=false`, whatever the NDA state; AC-SEC-1/b says a cross-tenant API access returns 404 (enforced for every `/api/orgs/{org_id}/…` route by `test_every_org_route_answers_404_to_a_non_member`). The Tier-2 routes live under `/api/orgs/{org_id}/proposals/{proposal_id}/…`, so a signed-in non-member of that organisation hits both rules. P3 (merged `5ab7a6a`) answers 404 to non-members and 403 `tier2_disabled` to members, the owner and anonymous callers; `test_tier2_flag` checks exactly that. The orchestrator accepted it during the build; the re-check on 2026-09-29 found it should have been recorded here, because it narrows a MUST.
+- Options: (a) keep it: tenancy first (404 to non-members), then the flag (403 to everyone else); (b) the flag wins everywhere: move the Tier-2 routes off `/api/orgs/{org_id}` (e.g. an `org_id` query parameter) so every caller gets 403; (c) amend AC-SEC-2's wording to "every Tier-2 endpoint returns 403 to any caller who may address it", which is what (a) does.
+- Recommended default: (a), with (c) as the wording fix: a non-member learns nothing either way, and 404 hides that the organisation exists in the caller's reach.
+- Blocks: nothing in the prototype (the demo turns the flag on); the Phase 2 exit check of AC-SEC-2.
+- Decision:
+
+### D-41 · Model allocation vs current Anthropic models (REQ-LLM-01, docs/spec/09)
+- Why: `backend/ai/models.yaml` follows the docs/spec/09 allocation (Haiku 4.5, Sonnet 5, Opus 5.5). The price research of 2026-09-29 (`research/anthropic-prices-2026-09.md`) found Sonnet 5 is now listed as legacy (retirement not before 2027-06-30) with Sonnet 5.5 (`claude-sonnet-5-5`) current at the same price, and Haiku 4.5's retirement is "not sooner than October 15, 2026". Changing the allocation is a spec change, so agents do not make it. It matters only with `LLM_PROVIDER=anthropic`: the prototype defaults to free providers and the fake, and a call to a retired model falls back to the labelled fake (D-37), so the demo never errors.
+- Options: (a) keep the spec's allocation for the prototype and revisit before any hosted release; (b) move Sonnet tasks to Sonnet 5.5 now (a `models.yaml` change plus spec 09); (c) also plan Haiku 4.5's successor once one is announced.
+- Recommended default: (a) now, (b) at the next spec review; re-run the cassette evals after any change (docs/spec/09).
+- Blocks: nothing in the prototype.
+- Decision:
+
+### D-42 · CodeQL is red on the integration branch: eight high findings, seven in test code, one required by RFC 2634 (REQ-FND-03, AC-SEC-4)
+- Why: `codeql.yml` runs only on pushes to the integration branch. Branches merge without PRs and `pr.yml` has no CodeQL step, so no feature branch ever ran it. It has failed on every run since the OAuth merge `da0a98d` (2026-09-28, laptop session), and nobody noticed until 2026-09-29. The Phase 1 AC-SEC-4 PASS in PROGRESS.md no longer holds on the head. The findings at severity 7.0 or more (run 36616954865 on `a2d7235`):
+  - Six `py/clear-text-logging-sensitive-data`: `backend/tests/unit/test_job_log_redaction.py:34,35,55` and `test_logging.py:41`. These tests log a secret-looking marker on purpose, to prove the redaction filter removes it.
+  - One `js/incomplete-sanitization`: `frontend/e2e/verify.spec.ts:121`. It escapes only `()` in a regex built from fixed labels, a real but harmless test-code bug.
+  - One `py/weak-sensitive-data-hashing`: `backend/src/bridge/provenance/tsa.py:270`. RFC 2634's ESSCertID requires SHA-1 there; FreeTSA sends the signingCertificate v1 attribute. It hashes the TSA's public certificate only to name it; the pinned chain and the signature carry the trust.
+
+  Leaving paths out of CodeQL, or teaching the gate to accept a finding, weakens a security gate, so it is your decision. The orchestrator drafted (a) and tried to commit it; the session's permission check stopped the commit as a CI bypass. The draft was discarded and nothing changed.
+- Options:
+  - (a) Leave test-only code out of CodeQL. `.github/codeql/codeql-config.yml` would ignore `tests/`, `backend/tests`, `frontend/e2e`, `frontend/test` and `*.test.ts(x)`, and a workflow test would pin that list to test code only. Add a reviewed accepted-findings list to `infra/ci/sarif_gate.py`, with one entry for `tsa.py`. Each entry names an exact rule and file, a result cap and a written reason. Accepted results print as warnings, one more than the cap blocks, and a malformed list fails the gate. Fix the e2e escape properly.
+  - (b) As (a) for the tests, but drop signingCertificate v1 so the SHA-1 goes. FreeTSA sends only v1 today, so the demo TSA would change; that needs research.
+  - (c) Keep the gate and let CodeQL stay red until the Phase 8 audit. Dismissing the alerts in GitHub code scanning does not help: the gate reads the raw SARIF.
+  - (d) With any of these, dispatch `codeql.yml` on each feature branch before merging, so a new finding is caught before it lands.
+- Recommended default: (a) + (d). Until you decide, the orchestrator does (d) only. It does not touch the gate or its configuration, does not rename test markers (that would hide findings, not fix them), and blocks a merge on any CodeQL finding outside these eight.
+- Blocks: AC-SEC-4 on the integration head (Phase 8 audit, any hosted release); nothing the prototype does.
+- Decision:
+
+### D-43 · Scout runs without a database role of its own: the "no Tier-2 grant" part of REQ-SCOUT-02 (P10, prototype)
+- Why: REQ-SCOUT-02 (MUST) says the scout's database role has no Tier-2 grant. In the prototype the worker connects as `bridge_app`, which may `SET ROLE tier2_reader` (revision 0002); a NOLOGIN scout role does not help because `SET ROLE` is checked against the session user. Real isolation needs a separate login role and database URL for the scout worker (another container or process in the 4 GB demo). Found by the M2 planning pass (`docs/platform/prototype-m2-plan.md`).
+- Options: (a) prototype deviation: the scout code never reads Tier 2, enforced by an import-lint test (`bridge.matching` never uses `as_role` or anything under Tier 2) and a prompt-capture red-team test (no Tier-2 marker ever reaches the scout's LLM input); restore the separate role in Phase 4; (b) build the separate login role and worker URL now (a second worker process, more memory, a new secret); (c) drop the LLM rationale from the prototype scout.
+- Recommended default: (a); the prototype is local, the scout reads only Tier 1 and metadata, and both tests fail if that changes.
+- Blocks: nothing in the prototype; REQ-SCOUT-02's Phase 4 exit.
+- Decision:
+
+### D-44 · Plan prices shown by the prototype's plans page (P14; G3 pending)
+- Why: the plans page and the simulated M-Pesa checkout (P14) show `backend/config/plans.yaml`, whose KES prices are placeholders until G3. Pricing text is a stop condition.
+- Options: (a) show the placeholders labelled "Sample prices, not final" `[[COPY-REVIEW]]`, with the checkout labelled "Simulated M-Pesa" (D-36); (b) hide prices and show plan names and limits only; (c) you supply prices now.
+- Recommended default: (a).
+- Blocks: nothing in the prototype; G3 for any hosted release.
+- Decision:
+
+### D-45 · Research problem cards that name an organisation (P11; spec 06 6.5)
+- Why: some saved excerpts name companies (for example Safaricom, Airtel, Starlink). Spec 06 6.5 requires an official source and a defamation checklist for any card naming an organisation; the checklist is legal-adjacent text agents do not write. D-38 covers storing the excerpts only.
+- Options: (a) the research job discards a draft that names an organisation unless it cites an official excerpt; the approval screen shows a plain checklist placeholder `[[COPY-REVIEW]]` and the named organisations, and the admin approves; (b) discard every draft that names an organisation; (c) you supply the checklist wording now.
+- Recommended default: (a) for the local prototype; the checklist wording goes with the G2 legal pack.
+- Blocks: nothing in the prototype; any hosted release.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
@@ -121,6 +197,9 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 | D-23 · Python versions in CI | (a) legacy on 3.13, backend on 3.12 | 2026-09-24 | `PLAN.md` T1.2/T1.3 CI jobs |
 | D-24 · S3-compatible storage in the dev compose stack (MinIO image withdrawn) | (a) SeaweedFS for the local/CI S3 stand-in | 2026-09-27 | `infra/docker-compose.dev.yml` (`s3` service); `docs/platform/research/phase1-versions.md` |
 | D-25 · Four adviser voice-note tests fail on Linux | (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows | 2026-09-27 | `docs/platform/tests_skip_linux.txt`; `.github/workflows/pr.yml` legacy jobs |
+| D-35 · Prototype-first track | A working local prototype with every major feature end to end, for hackathon and recruiter demos: M1 (core flow, about 7–10 days), M2 (all features, about 3–4 weeks); it claims neither the Phase 2 exit nor any gate | 2026-09-29 | `PLAN.md` §8; `PROGRESS.md` Prototype checklist; `REQUIREMENTS.md` §7 |
+| D-36 · Zero spend for the prototype | No hosting, no new accounts, no real emails, SMS or payments; mail goes to Mailpit only; the owner's own LLM keys are the only exception | 2026-09-29 | `PLAN.md` §8 |
+| D-37 · LLM providers for local prototype runs (amends D-18 for local runs only) | OpenAI-compatible adapter (httpx) for the owner's free providers plus the existing Anthropic adapter; provider and model ids only in `ai/models.yaml` and `.env`; free providers are the default, Anthropic only with `LLM_PROVIDER=anthropic`, `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 prototype total; fall back to the fake with a "demo fallback" label; only seeded demo data goes to free providers; tests, `make check` and CI keep fakes and cassettes | 2026-09-29 | `PLAN.md` §8; `docs/platform/research/anthropic-prices-2026-09.md`; `docs/platform/tasks/REQ-LLM-01.md` ("Prototype providers") |
 
 The full entries (why, options, default, what they blocked) are kept below for the record.
 
@@ -299,3 +378,24 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Recommended default: (a), applied now so CI is green; revert if you choose otherwise.
 - Blocks: nothing.
 - Decision: (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows — 2026-09-27
+
+### D-35 · Prototype-first track (the owner's decision, 2026-09-29)
+- Why: the owner wants a working local prototype with every major feature working end to end, for hackathon and recruiter demos, before the remaining Phase 2–8 depth.
+- Decision: build it in two milestones. **M1 (core flow, about 7–10 days):** proposals (Tier 1 teaser + Tier 2 confidential) with the authorship certificate and `/verify`; Tier-2 access (Evaluation NDA, grant, watermarked view, access log, "Who has seen this"); directory browse and simple search; Pitch to company with EM1; the tracker main path `SUBMITTED` → `CLOSED` plus `DECLINED` and `WITHDRAWN` with the test clock; reminders (developer daily nudge and org digest) in Mailpit and in-app; `make demo`. **M2 (all features, about 3–4 weeks):** scout agent with Express interest (`ORG_INTEREST`), research agent over saved public excerpts with admin approval, trending and a transparent ranker, the submission assistant, subscriptions with a fake M-Pesa checkout, minimal admin queues, polished screens, a recorded Playwright walkthrough and the README "Demo" section. If M2 time runs short the cut order is (last first) admin, trending/ranker, assistant, research, subscriptions; the M1 features and the scout are never cut.
+- It does not claim the Phase 2 exit or any gate. Nothing is removed from `REQUIREMENTS.md`; items outside the prototype are rescheduled to "after prototype" (`REQUIREMENTS.md` §7): full claims/E2, invitations, Problem Briefs, the originality check, D2, real payments and eTIMS, WhatsApp, the remaining tracker side states, the full Phase 7 polish and the Phase 8 audit.
+- Working rules for the track: from 2026-09-29 reviews fix BLOCKER and MAJOR findings only, and MINOR findings are logged as follow-ups in the task card instead of new review rounds; the `security-reviewer` runs one round on `auth/`, `tenancy/`, `provenance/`, `engagements/`, `billing/` and the new LLM adapter, then BLOCKER/MAJOR only. Open decisions D-26..D-34 use their recorded default (or the most conservative option where none is recorded) for the prototype, without stopping; the reports list what was applied.
+- Decision: accepted — 2026-09-29
+
+### D-36 · Zero spend for the prototype (the owner's decision, 2026-09-29)
+- Decision: no hosting, no new accounts, no real emails, SMS or payments. Mail goes to Mailpit only; SMS stays on the Fake provider; payments use a `FakePaymentProvider` behind the `PaymentProvider` interface of `docs/spec/05` (no Daraja or Paystack code or accounts). The only permitted cost is the owner's own LLM keys under D-37. `make demo` runs on the owner's laptop (8 GB RAM, Docker Desktop at 4 GB) with ClamAV replaced by a demo-only fake scanner.
+- Decision: accepted — 2026-09-29
+
+### D-37 · LLM providers for local prototype runs (amends D-18 for local runs only; the owner's approval of these providers as vendors, 2026-09-29)
+- Adapter: an OpenAI-compatible adapter implementing the `ModelAdapter` protocol (`bridge/llm/adapter.py`) over `httpx` (no new SDK) for the free providers the owner configures in `backend/.env` (per provider slot: base URL, key, model). `AnthropicAdapter` stays for `ANTHROPIC_API_KEY`.
+- Ids: provider and model ids live only in `backend/ai/models.yaml` and `.env` (`test_no_model_ids_in_code` keeps passing). `models.yaml` chooses the provider per task; the free providers are the default; Anthropic is used only when `LLM_PROVIDER=anthropic`.
+- Caps: free providers are priced at 0 with a per-day request cap. Anthropic: `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 total for the prototype, enforced through the existing `llm_calls` ledger. Anthropic prices were confirmed from the official price page on 2026-09-29 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified"); `models.yaml` records them with `pricing_status` and the source URL, and Anthropic stays disabled unless the prices are marked verified.
+- Failure behaviour: a missing key, a hit cap or a failed call falls back to the deterministic fake and the UI shows a small "demo fallback" label. The demo never errors.
+- Data rule: only seeded demo data may be sent to free providers (they may train on it); Tier-2 content from non-demo users is refused before any call.
+- Tests, `make check` and CI keep using fakes and cassettes only; nothing in CI reaches a provider (AC-SEC-5 unchanged).
+- Keys: agents never ask for a key; every new variable is documented in `backend/.env.example` and listed in the Handoff and the milestone reports.
+- Decision: accepted — 2026-09-29

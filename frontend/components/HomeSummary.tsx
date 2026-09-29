@@ -3,7 +3,8 @@ import { getTranslations } from "next-intl/server";
 
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
 
-import { ButtonLink, textLinkClass } from "./ui/Button";
+import { textLinkClass } from "./ui/Button";
+import { ButtonLink } from "./ui/ButtonLink";
 import { cn } from "./ui/cn";
 import { AlertIcon, CheckIcon, InfoIcon } from "./ui/icons";
 

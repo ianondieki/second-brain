@@ -1,5 +1,4 @@
-import Link from "next/link";
-import type { ButtonHTMLAttributes, ComponentProps, MouseEvent } from "react";
+import type { ButtonHTMLAttributes, MouseEvent } from "react";
 
 import { cn } from "./cn";
 
@@ -32,12 +31,20 @@ export const textLinkClass =
   "py-2.5 font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
   "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
 
+/**
+ * Links that stand on their own line (lists of links, back links, paging, empty-state actions): each gets its own
+ * 44 px band (WCAG 2.2 target size), so stacked links never share or overlap a tap area.
+ */
+export const standaloneLinkClass =
+  "inline-flex min-h-11 items-center font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
+  "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
+
 export function buttonClass(variant: ButtonVariant, className?: string) {
   return cn(base, variants[variant], className);
 }
 
 /** `data-primary` marks the screen's single primary action; Playwright asserts at most one per page. */
-function primaryMark(variant: ButtonVariant) {
+export function primaryMark(variant: ButtonVariant) {
   return variant === "primary" ? { "data-primary": "" } : {};
 }
 
@@ -75,13 +82,4 @@ export function Button({
       {children}
     </button>
   );
-}
-
-export interface ButtonLinkProps extends ComponentProps<typeof Link> {
-  variant?: ButtonVariant;
-}
-
-/** A navigation that looks like a button (for example "Create an account" on the landing page). */
-export function ButtonLink({ variant = "secondary", className, ...rest }: ButtonLinkProps) {
-  return <Link className={buttonClass(variant, className)} {...primaryMark(variant)} {...rest} />;
 }

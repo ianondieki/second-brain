@@ -70,6 +70,21 @@ Generate the two required secrets in `backend/.env` (each must be at least 32 ch
 otherwise): PowerShell `[Convert]::ToBase64String((1..32 | % { Get-Random -Maximum 256 }))`, bash
 `openssl rand -base64 32`. Use one value for `SECRET_KEY` and a separate one for `DATA_ENCRYPTION_KEY`.
 
+For provenance and Tier 2 (Phase 2), also set in `backend/.env`, each a fresh `openssl rand -base64 32` value:
+`TIER2_LOCAL_KEK` (wraps the per-proposal Tier-2 keys) and `PROVENANCE_SIGNING_KEY` (the Ed25519 key the worker signs
+registration manifests with). Both are optional for starting the stack, but anything that needs them fails closed
+with a message naming the variable, and neither is ever generated for you. Production refuses both (KMS only).
+`TSA_CA_BUNDLE` and `TSA_FALLBACK_CA_BUNDLE` (PEM paths of the DigiCert and FreeTSA roots) may stay empty in dev: the
+worker then timestamps without checking the TSA's chain and logs `provenance.tsa_unpinned`. Staging and production
+refuse to timestamp without them; ops supply both before staging (`docs/runbooks/verify-offline.md`, "Operators").
+
+In the compose stack the `api` service never receives `PROVENANCE_SIGNING_KEY` or `AUDIT_READER_DATABASE_URL`, even
+though they sit in `backend/.env`: `infra/docker-compose.dev.yml` overrides both to an empty value for `api`, and an
+empty value means unset (`bridge/config.py`). Only the `worker` (which signs manifests and verifies the audit chains)
+and the `migrate` step (which publishes the public key) get them. The override is plain compose YAML and works the
+same with Docker Desktop on Windows and Docker on Linux or macOS. Outside compose, leave both unset in the
+environment of any process that serves the API.
+
 Start the stack:
 
 ```bash
@@ -77,13 +92,23 @@ make dev
 ```
 
 This builds and starts, all bound to `127.0.0.1`: `web` (Next.js, port 3000), `api` (FastAPI, port 8000), `mailpit`
-(UI on 8025, SMTP on 1025), `postgres` (pgvector, port 5432) and `s3` (SeaweedFS S3 stand-in, port 8333, unused
-until Phase 2 uploads). `make dev-full` additionally starts `clamav` (port 3310; needs ~1.3 GB more RAM), used for
-attachment scanning from Phase 2.
+(UI on 8025, SMTP on 1025), `postgres` (pgvector, port 5432) and `s3` (SeaweedFS S3 stand-in, port 8333, for
+evidence and uploads from Phase 2). `make dev-full` additionally starts `clamav` (port 3310; needs ~1.3 GB more RAM),
+used for attachment scanning from Phase 2.
 
 Migrations and the seed run automatically: the `migrate` one-shot service runs `alembic upgrade head` then
 `python -m bridge.seed` (idempotent: niches, plans, NDA v1, holidays, provisional directory, dev/test only) before
 `api` and `worker` start. Rerun on a running stack with `make migrate`.
+
+When `PROVENANCE_SIGNING_KEY` is set, the `migrate` step also publishes its public half
+(`python -m bridge.provenance register-key --if-configured`, owner role), which `/.well-known/provenance-keys.json`
+serves; outside compose run `uv run python -m bridge.provenance register-key` in `backend/`.
+
+The `migrate` step also creates the `evidence`, `kyc-review` and `uploads` buckets in the `s3` service (SeaweedFS)
+with `python -m bridge.storage ensure-buckets` (idempotent; it waits up to 30 s for SeaweedFS to accept connections).
+No code creates a bucket at first use. Outside compose run `uv run python -m bridge.storage ensure-buckets` in
+`backend/`. With `APP_ENV` staging or production the same command only checks that the buckets exist and exits 2
+naming any that is missing: there infrastructure creates them (Object Lock on `evidence` is set at creation).
 
 Signup and login emails (magic links, TOTP enrolment) never leave the box: they land in Mailpit's UI at
 `http://localhost:8025`, not in a real inbox.
@@ -122,17 +147,34 @@ cd backend && uv run pytest
 Without `TEST_DATABASE_ADMIN_URL`, the same tests start a throwaway pgvector container through testcontainers
 instead (slower, but needs no local Postgres).
 
+The provenance tests (REQ-PROV-01, AC-IP-1) need the `openssl` command line (OpenSSL 1.1.1 or 3.x): they create a
+throwaway root CA and timestamp authority at test time, issue RFC 3161 tokens with `openssl ts -reply` and check the
+stored tokens with `openssl ts -verify`, exactly as `docs/runbooks/verify-offline.md` tells anyone to. They never
+contact DigiCert, FreeTSA or any KMS. The tests look for `openssl` in this order: the `OPENSSL_BIN` environment
+variable (a full path), `PATH`, then on Windows the copies Git for Windows installs
+(`%ProgramFiles%\Git\usr\bin\openssl.exe`, then `%ProgramFiles%\Git\mingw64\bin\openssl.exe`). If none is
+found the tests fail (they are never skipped) with these instructions: Linux, install the `openssl` package; macOS,
+`brew install openssl@3` and put it on `PATH`; Windows, install Git for Windows or set `OPENSSL_BIN`.
+
 ### JS budget per route
 
 `docs/spec/07` item 5 allows at most **150 KB of gzipped JavaScript per route, where 1 KB = 1,000 bytes: 150,000
 bytes**. This is the stricter reading of "KB" (150 KiB would be 153,600 bytes), so a route within it is within either
-reading. Counted: the gzip-compressed bodies of the scripts a first visit downloads (the route's `<script src>`
-files). Not counted: response headers, which depend on the protocol, and chunks that load later on demand. Measure
-against a production build, such as the `make dev` web container on port 3000 (not part of `make check`):
+reading. Counted: the gzip-compressed bodies of **every script the route fetches in a real browser until the
+network is idle** (the script loads the route in Playwright's Chromium): the `<script src>` files, and the chunks
+that load during hydration, such as those of server-rendered lazy components (React.lazy), which are part of the
+first visit. With `--first-edit` the count continues through the first keystroke in the page's first text field, so
+chunks loaded by the first edit count too (the idea editor's save path); it types into the page, so use a test
+account. Not counted: response headers (see D-28 below), and chunks loaded only by a later action, such as publishing
+or adding a file. Each script counts at its gzip size as sent (1 KB = 1,000 bytes, D-28 default (a)), or gzip at the
+default level when a response is not compressed. Measure against a production build, such as the `make dev` web
+container on port 3000 (not part of `make check`); Playwright's Chromium must be installed (`npx playwright install
+chromium`, or `PLAYWRIGHT_BROWSERS_PATH` where it is):
 
 ```bash
 make budget                                         # /, /login, /signup, /settings/security
 cd frontend && npm run budget -- /signup/check-email /org --allow-skip   # named routes
+cd frontend && npm run budget -- /dev/ideas/new --first-edit              # through the first keystroke
 ```
 
 Set `BUDGET_COOKIE` to a test account's session cookie (for example `__Host-bridge_session=<token>`, copied from the
@@ -142,8 +184,8 @@ The run fails when a route is over, answers with an error, or is skipped. In Git
 `MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (`signup`, without the slash, also works).
 
 **Open: whether response headers count (DECISIONS-NEEDED D-28).** Lighthouse's script "transfer size", the
-instrument of AC-UX-3, includes response headers. The script prints that figure too ("with HTTP/1.1 response
-headers"). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
+instrument of AC-UX-3, includes response headers. The script prints that figure too ("with response headers", the
+header sizes Chromium reports). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
 (152,195) are over 150,000 on 2026-09-28, while their bodies are 147,898 and 148,518 (`/login`: 146,553 bodies,
 149,850 with headers). Behind HTTP/2 in production the headers shrink to a few bytes per script. Until the human
 decides D-28, the bodies count.
@@ -165,7 +207,8 @@ bytes actually sent.
 - Secrets live only in the untracked `infra/.env` and `backend/.env` files (both gitignored), with sandbox/test
   values. Every variable the code reads is documented with a one-line comment in the matching `.env.example`.
 - The app fails closed: it refuses to start if `SECRET_KEY` or `DATA_ENCRYPTION_KEY` is missing or under 32
-  characters.
+  characters, and every Tier-2 or provenance action refuses to run without its key (`TIER2_LOCAL_KEK`,
+  `PROVENANCE_SIGNING_KEY` in dev; KMS in production).
 
 ## 5. Troubleshooting
 

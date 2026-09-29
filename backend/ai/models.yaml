@@ -1,0 +1,123 @@
+# Runtime model registry (ADR-005 decision 1; docs/spec/09 model allocation; REQ-LLM-01).
+# This file is the ONLY place a model id appears: code asks bridge.llm.registry, and
+# tests/unit/llm/test_no_model_ids_in_code.py fails the build on a model id anywhere under src/bridge.
+# A change here (model, effort, max_tokens) re-runs the cassette evals (docs/spec/09 Evals).
+version: 1
+
+# Anthropic list prices, VERIFIED on 2026-09-29 from the official price page ("Model pricing" table;
+# docs/platform/research/anthropic-prices-2026-09.md, verdict "verified"; D-37). USD per million tokens. The Anthropic
+# provider stays off unless pricing_status is "verified" (bridge.llm.routing, fail closed); "placeholder-unverified"
+# keeps it off. Prices change: re-fetch the page before any billing or cap figure is frozen.
+pricing_status: verified
+pricing_verified_on: 2026-09-29
+pricing_source: https://platform.claude.com/docs/en/about-claude/pricing
+batch_price_ratio: 0.5          # "a 50% discount on both input and output tokens" (same page, "Batch processing")
+
+budget:
+  soft_cap_ratio: 0.8           # docs/spec/09: soft-cap signal at 80% of the monthly cap (email in Phase 4)
+  chars_per_token: 3            # pre-call estimate: input tokens ~ characters / 3 (conservative for English, Swahili)
+
+sanitiser:
+  max_field_chars: 4000         # default length cap per untrusted field; a task or a field may lower it
+  base64_run_chars: 200         # runs of base64-like characters longer than this are removed (docs/spec/08)
+  base64_segment_chars: 20      # whitespace-separated pieces this long count as one run (MIME-wrapped blocks)
+  max_input_ratio: 8            # the input is cut to this many times the field's cap before cleaning (bounded work)
+
+transport:
+  timeout_seconds: 120
+  max_retries: 2                # the SDK's own retries of 429, 5xx and dropped connections (no tokens billed)
+
+embeddings:                     # REQ-EMB-01: self-hosted on the worker (bridge/llm/embeddings.py)
+  model: BAAI/bge-m3            # 1024 dimensions, multilingual incl. Swahili (ADR-005 decision 6); stored as embed_model
+  version: "1"                  # bump with any change to the weights or encode settings: triggers the re-embed job
+  precision: int8               # fp32 | fp16 | int8 (ADR-007 sizing assumes int8 on CPU); part of embed_version
+  batch_size: 16                # texts per encode call
+  reembed_batch_size: 64        # rows per re-embed batch (bridge/jobs/reembed.py)
+
+# Anthropic models (used only with LLM_PROVIDER=anthropic). Ids as on the models overview and the Sonnet 5 page
+# (research note): Sonnet 5 is legacy since Sonnet 5.5 (retirement not sooner than 2027-06-30); Haiku 4.5 retires not
+# sooner than 2026-10-15; the docs/spec/09 allocation names Sonnet 5 and Haiku 4.5 (a change is a spec change).
+models:
+  claude-sonnet-5:
+    supports_effort: true
+    max_output_tokens: 64000    # placeholder; confirm with the provider's model card
+    price_usd_per_mtok: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write_5m: 2.50, cache_write_1h: 4.00}
+  claude-haiku-4-5:
+    supports_effort: false      # docs/spec/09: effort n/a
+    max_output_tokens: 64000
+    price_usd_per_mtok: {input: 1.00, output: 5.00, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.00}
+  claude-opus-5-5:
+    supports_effort: true       # defaults to medium when unset, so every task states its effort
+    max_output_tokens: 64000    # placeholder
+    # cache reads are 0.05x input on Opus 5.5 (not the usual 0.1x)
+    price_usd_per_mtok: {input: 4.00, output: 20.00, cache_read: 0.20, cache_write_5m: 5.00, cache_write_1h: 8.00}
+
+# Free OpenAI-compatible providers for local prototype runs (D-37). Each slot's base URL, key, model and daily request
+# cap live in backend/.env (LLM_FREE_<N>_*); a task lists the slots that may serve it (free_slots, tried in order; none
+# = never a free provider). A free call is priced at 0, has no effort, carries the output schema in the prompt and no
+# server tools, and only seeded demo data may be sent (bridge.llm.demo_data). There is no batch API: a batch is
+# answered by the deterministic fake, labelled "demo fallback" (bridge.llm.routing).
+free_providers:
+  max_output_tokens: 8192       # a free model's output cap: a task's max_tokens is lowered to it
+
+# Task keys: model, effort (required, even when null: null only for a model without effort), max_tokens, batchable
+# (default false), confidential (default true: no prompt or output text in logs or ledger outputs), purpose
+# (tier1_only | tier2_llm_assistant | tier2_llm_moderation; a Tier-2 field needs the matching live consent),
+# fallback_model + fallback_effort (the one retry after a refusal; null = straight to the human queue; ADR-005's
+# "at most one retry" allows zero, and D-29 proposes fallbacks within the docs/spec/09 allocation only),
+# allowed_tools (server tools the task may use; default none), max_field_chars (optional lower cap),
+# json_schema_format (default true: native output_config.format; false puts the schema in the system prompt and
+# still validates the reply, for citation calls in Phase 5 research: verify compatibility with the provider docs
+# before any live call), free_slots (the free provider slots that may serve the task with LLM_PROVIDER=free, in
+# order; default none).
+tasks:
+  moderation_prescreen:         # injection/spam/moderation classifier at submission, Tier 1 only (REQ-MOD-01)
+    model: claude-haiku-4-5
+    effort: null
+    max_tokens: 1024
+    batchable: false
+    confidential: true
+    purpose: tier1_only
+    fallback_model: null         # D-29
+    fallback_effort: null
+    free_slots: [1, 2, 3]
+  over_disclosure_check:        # teaser over-disclosure check, Tier 1 only, warn only (REQ-PROP-02)
+    model: claude-haiku-4-5
+    effort: null
+    max_tokens: 1024
+    batchable: false
+    confidential: true
+    purpose: tier1_only
+    fallback_model: null         # D-29
+    fallback_effort: null
+    free_slots: [1, 2, 3]
+  originality_explainer:        # overlap explanation, submitter's text vs others' Tier 1 (REQ-PROP-04)
+    model: claude-sonnet-5
+    effort: medium
+    max_tokens: 2048
+    batchable: false
+    confidential: true
+    purpose: tier1_only
+    fallback_model: null         # D-29
+    fallback_effort: null
+    free_slots: [1, 2, 3]
+  submission_assistant:         # Tier-1 vs Tier-2 placement suggestions, per-use consent (REQ-PROP-05)
+    model: claude-sonnet-5
+    effort: medium
+    max_tokens: 4096
+    batchable: false
+    confidential: true
+    purpose: tier2_llm_assistant
+    fallback_model: null         # D-29
+    fallback_effort: null
+    free_slots: [1, 2, 3]
+  reminder_nudge:               # EM7 developer daily reminder: rewords code-computed fact tuples only (REQ-REM-01)
+    model: claude-haiku-4-5
+    effort: null
+    max_tokens: 512
+    batchable: false             # docs/spec/09 "batch nightly": the prototype words each reminder as it is sent
+    confidential: true
+    purpose: tier1_only
+    fallback_model: null         # D-29; a failed call answers with the fixed fallback text
+    fallback_effort: null
+    free_slots: [1, 2, 3]

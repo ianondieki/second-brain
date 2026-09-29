@@ -22,6 +22,12 @@ dependencies = [
     "jinja2>=3.1.6",
     "pyyaml>=6.0.3",
     "pgvector>=0.4",
+    "anthropic>=1.8.0",
+    "httpx2>=2.13.1",  # imported by bridge.llm (the anthropic SDK's HTTP client; test transports, cassettes)
+    "rfc8785>=0.1.4",
+    "asn1crypto>=1.5.1",
+    "reportlab>=5.0.1",
+    "boto3>=1.43.103",
 ]
 
 [dependency-groups]
@@ -35,6 +41,8 @@ dev = [
     "mypy>=2.3",
     "ruff>=0.16.8",
     "types-PyYAML>=6.0.12",
+    "types-reportlab>=5.0.0.20260911",
+    "boto3-stubs[s3]>=1.43.103",
 ]
 
 [build-system]
@@ -55,6 +63,7 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "C4", "SIM", "RUF", "PT", "DTZ", "T20"]
 ignore = ["S101"]  # assert is how pytest checks
+allowed-confusables = ["›"]  # U+203A joins two-level niche labels ("ICT › Networks & Telecommunications", docs/spec/03)
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S311", "S603", "S608"]  # fixture passwords, random ids, subprocess on repo scripts, SQL from table names
@@ -69,7 +78,13 @@ packages = ["bridge", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*"]
+module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*", "asn1crypto.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# REQ-EMB-01: imported lazily by BgeM3Embedder; not a dependency. The worker image installs sentence-transformers
+# (CPU-only torch index) only after the human approves bge-m3 (weights and image size; Docker has 4 GB).
+module = ["sentence_transformers.*", "torch.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

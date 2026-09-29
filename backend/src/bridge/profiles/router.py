@@ -1,21 +1,25 @@
-"""Own profile, consents and plan limits (/api/me); consent texts (/api/consents). REQ-CON-01, REQ-BIL-01."""
+"""Own profile, consents, plan limits and D1 phone verification (/api/me); consent texts (/api/consents).
+REQ-CON-01, REQ-BIL-01, REQ-PROV-04."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from bridge.audit.service import record as audit
-from bridge.auth.deps import CurrentSession, Db, SettingsDep
+from bridge.auth.deps import CurrentSession, Db, SettingsDep, client_ip
 from bridge.billing import entitlements
 from bridge.directory.models import Region
-from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import ConsentPurpose, DevVerification, PlanSide, RegionKind
-from bridge.profiles import consents
+from bridge.profiles import consents, verification
 from bridge.profiles.models import DeveloperProfile
+from bridge.profiles.verification import SmsDep
 
 router = APIRouter(prefix="/api/me", tags=["me"], responses=ERROR_RESPONSES)
 public_router = APIRouter(prefix="/api/consents", tags=["consents"], responses=ERROR_RESPONSES)
@@ -61,6 +65,29 @@ class EntitlementsOut(BaseModel):
     plan: str
     side: PlanSide
     limits: dict[str, Any]
+
+
+class PhoneCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phone: str = Field(min_length=9, max_length=32, description="A Kenyan mobile number: 07.., 01.., 254.. or +254..")
+
+
+class PhoneCodeSent(BaseModel):
+    verification_id: UUID
+    expires_at: datetime
+    phone_masked: str  # "+254******678"
+    attempts_allowed: int
+
+
+class PhoneCodeConfirm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=6, max_length=12, description="The 6-digit code from the SMS (spaces allowed)")
+
+
+class VerificationLevelOut(BaseModel):
+    verification_level: DevVerification
 
 
 def _profile_out(p: DeveloperProfile) -> ProfileOut:
@@ -147,3 +174,41 @@ async def my_entitlements(live: CurrentSession, db: Db, settings: SettingsDep) -
         raise not_found("No developer profile.")
     ent = await entitlements.for_subject(db, settings, user_id=live.user.id)
     return EntitlementsOut(plan=ent.plan_code, side=ent.side, limits=ent.limits)
+
+
+@router.post("/verification/phone", status_code=status.HTTP_201_CREATED, responses={503: {"model": ApiErrorBody}})
+async def request_phone_code(
+    body: PhoneCodeRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep, sms: SmsDep
+) -> PhoneCodeSent:
+    """D1, step 1: text a 6-digit code to a Kenyan mobile number (valid 10 minutes, 5 attempts). Sends are limited
+    per account, number and network: 429 ``resend_too_soon`` or ``too_many_codes``; 503 ``sms_unavailable`` when the
+    SMS could not be sent (ask again after a minute)."""
+    try:
+        sent = await verification.request_code(
+            db, settings, sms, user=live.user, phone=body.phone, ip=client_ip(request)
+        )
+    except verification.VerificationError as exc:
+        await db.rollback()
+        raise exc.api_error() from exc
+    return PhoneCodeSent(
+        verification_id=sent.verification_id,
+        expires_at=sent.expires_at,
+        phone_masked=sent.phone_masked,
+        attempts_allowed=verification.OTP_MAX_ATTEMPTS,
+    )
+
+
+@router.post("/verification/phone/{verification_id}/confirm")
+async def confirm_phone_code(
+    verification_id: UUID, body: PhoneCodeConfirm, live: CurrentSession, db: Db, settings: SettingsDep
+) -> VerificationLevelOut:
+    """D1, step 2: the code from the SMS raises the developer profile to D1. A wrong code is 400 ``invalid_code``
+    with ``attempts_left``; the fifth wrong code locks it (429 ``code_locked``); 400 ``code_expired`` after 10
+    minutes."""
+    try:
+        level = await verification.confirm_code(
+            db, settings, user=live.user, verification_id=verification_id, code=body.code
+        )
+    except verification.VerificationError as exc:
+        raise exc.api_error() from exc
+    return VerificationLevelOut(verification_level=level)

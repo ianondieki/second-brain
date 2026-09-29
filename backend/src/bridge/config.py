@@ -7,17 +7,89 @@ runs with a default key. Every variable is documented in ``backend/.env.example`
 from __future__ import annotations
 
 import base64
+import re
+from dataclasses import dataclass, field
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIN_SECRET_CHARS = 32
 
 AppEnv = Literal["dev", "test", "staging", "production"]
+LLMProvider = Literal["fake", "free", "anthropic"]
+ResponseFormat = Literal["none", "json_object", "json_schema"]
+
+# Free OpenAI-compatible provider slots for local prototype runs (D-37; bridge.llm.openai_adapter). A slot is
+# LLM_FREE_<N>_BASE_URL, _API_KEY, _MODEL and _DAILY_REQUESTS, set together, plus an optional _RESPONSE_FORMAT.
+LLM_FREE_SLOTS: Final = (1, 2, 3)
+FREE_SLOT_PARTS: Final = ("base_url", "api_key", "model", "daily_requests")
+# llm_calls.model is varchar(80) and holds "free<N>:<model>" (bridge.llm.registry.free_model_key).
+FREE_MODEL = re.compile(r"[A-Za-z0-9._:/@+-]{1,74}")
+LOOPBACK_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
+PROTOTYPE_TOTAL_CAP_USD: Final = Decimal("5.00")  # D-37: the local prototype's lifetime LLM spend
+
+# Optional settings: an empty value means unset (None).
+OPTIONAL_SETTINGS = (
+    "database_owner_url",
+    "anthropic_api_key",  # ANTHROPIC_API_KEY= (blank, as in .env.example) means no key
+    "postmark_server_token",
+    "tier2_local_kek",
+    "tier2_kms_key_id",
+    "provenance_signing_key",
+    "provenance_kms_key_id",
+    "tsa_fallback_url",
+    "tsa_ca_bundle",
+    "tsa_fallback_ca_bundle",
+    "s3_endpoint_url",
+    "s3_access_key_id",
+    "s3_secret_access_key",
+    "audit_reader_database_url",
+    "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev), else fake
+    "llm_prototype_total_cap_usd",  # LLM_PROTOTYPE_TOTAL_CAP_USD= is USD 5 in dev and test, none elsewhere
+    *(f"llm_free_{n}_{part}" for n in LLM_FREE_SLOTS for part in (*FREE_SLOT_PARTS, "response_format")),
+)
+
+
+class ConfigurationError(RuntimeError):
+    """A component was asked for whose settings are missing (fail closed at the point of use, never a default)."""
+
+
+@dataclass(frozen=True, slots=True)
+class FreeSlot:
+    """One complete free provider slot (D-37). ``repr`` and ``str`` never show the key."""
+
+    number: int
+    base_url: str
+    api_key: SecretStr = field(repr=False)
+    model: str
+    daily_requests: int
+    response_format: ResponseFormat
+
+    @property
+    def name(self) -> str:
+        return f"free{self.number}"
+
+
+def free_slot_url_problem(url: str) -> str | None:
+    """Why ``url`` may not be a slot's base URL: https only (plain http on loopback, for a local model server), no
+    credentials, query or fragment (a key never sits in a URL, which may reach a log)."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if parts.scheme != "https" and not (parts.scheme == "http" and host in LOOPBACK_HOSTS):
+        return "must be an https URL (plain http only on localhost)"
+    if parts.username is not None or parts.password is not None:
+        return "must not carry credentials (the key goes in its own variable)"
+    if parts.query or parts.fragment or url.endswith(("?", "#")):
+        return "must not carry a query or fragment"
+    if not host:
+        return "must name a host"
+    return None
 
 
 class Settings(BaseSettings):
@@ -61,14 +133,99 @@ class Settings(BaseSettings):
     github_client_secret: SecretStr | None = None
     google_client_id: SecretStr | None = None
     google_client_secret: SecretStr | None = None
+    # SMS (REQ-PROV-04: D1 phone codes). The fake in dev, test and CI; Africa's Talking once the vendor account exists
+    # (gate G1). bridge.integrations.sms.sms_provider_from_settings refuses the fake in production and the vendor in
+    # test.
+    sms_provider: Literal["fake", "africastalking"] = "fake"
+    africastalking_username: str | None = None
+    africastalking_api_key: SecretStr | None = None
+    africastalking_sender_id: str | None = None
 
     # Feature flags (docs/spec/10: default false until the legal gate).
     feature_tier2_enabled: bool = False
     feature_deals_enabled: bool = False
 
+    # Tier-2 envelope encryption (bridge.crypto.envelope; ADR-007): each proposal's data key is wrapped by a key
+    # encryption key. Dev/test: TIER2_LOCAL_KEK (base64 of 32 bytes). Production: KMS only (TIER2_KMS_KEY_ID). Code
+    # that needs the wrapper fails closed when neither is set; no key is ever generated implicitly.
+    tier2_local_kek: SecretStr | None = None
+    tier2_kms_key_id: str | None = None
+
+    # Provenance signing (bridge.provenance.signing; ADR-003): Ed25519. Dev/test: PROVENANCE_SIGNING_KEY (base64 of
+    # the 32-byte raw private key), read by the worker only. Production: KMS only (PROVENANCE_KMS_KEY_ID).
+    provenance_signing_key: SecretStr | None = None
+    provenance_kms_key_id: str | None = None
+
+    # RFC 3161 timestamping (bridge.provenance.tsa; ADR-003): DigiCert primary, FreeTSA fallback. Tests never call
+    # either (tests/egress.py); they run a local openssl test TSA.
+    tsa_url: str = "http://timestamp.digicert.com"
+    tsa_fallback_url: str | None = "https://freetsa.org/tsr"
+    tsa_timeout_seconds: float = 10.0
+    # One timestamp attempt, primary and fallback together: a slow or dripping TSA never holds a worker longer.
+    tsa_deadline_seconds: float = Field(default=30.0, gt=0)
+    # The pinned CA bundle (PEM file) of each TSA: a token must chain to it. Required outside dev and test (the TSA
+    # client fails closed at use without it); ops provide DigiCert's and FreeTSA's before staging.
+    tsa_ca_bundle: Path | None = None
+    tsa_fallback_ca_bundle: Path | None = None
+
+    # Object storage (bridge.storage.objects; ADR-007): AWS S3 in production, SeaweedFS in dev (D-24, S3_ENDPOINT_URL);
+    # "memory" is for tests and is refused in staging and production. Credentials may stay unset where the instance
+    # role provides them.
+    object_store: Literal["s3", "memory"] = "s3"
+    s3_endpoint_url: str | None = None
+    s3_region: str = "af-south-1"
+    s3_access_key_id: SecretStr | None = None
+    s3_secret_access_key: SecretStr | None = None
+    s3_bucket_evidence: str = "evidence"
+    s3_bucket_kyc_review: str = "kyc-review"
+    s3_bucket_uploads: str = "uploads"
+    # Attachment scanning (bridge.storage.scanner; D-36): the prototype's fake scanner (EICAR is infected, anything
+    # else clean) runs only in dev and test; ClamAV returns after the prototype. Uploads fail closed otherwise.
+    attachment_scanner: Literal["fake", "clamav"] = "fake"
+
+    # The nightly audit.verify_chain job reads every audit chain as audit_reader, a separate login (roles.sql). The job
+    # fails closed without it.
+    audit_reader_database_url: SecretStr | None = None
+
     # Config files.
     plans_file: Path = BACKEND_DIR / "config" / "plans.yaml"
     consents_file: Path = BACKEND_DIR / "config" / "consents.yaml"
+
+    # Runtime LLMs (ADR-005; bridge/llm). Dev and test start without a key (the adapter refuses at call time);
+    # production refuses to start without one unless LLM_KILL_SWITCH=1. No test and no make check step reaches
+    # the provider (AC-SEC-5; D-18: no paid calls).
+    anthropic_api_key: SecretStr | None = None
+    llm_kill_switch: bool = False  # LLM_KILL_SWITCH=1 refuses every call with LLMKillSwitch
+    # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
+    llm_global_daily_cap_usd: Decimal = Decimal("0")
+    llm_models_file: Path = BACKEND_DIR / "ai" / "models.yaml"
+    # Providers for local prototype runs (D-37; bridge.llm.routing). fake | free | anthropic; unset is free in dev when
+    # a complete free slot is set, else fake in dev and test, and Anthropic in staging and production, which refuse
+    # the free providers (they may train on what they receive) and the fake. Anthropic runs only when chosen.
+    llm_provider: LLMProvider | None = None
+    # Lifetime spend of this database's ledger across every provider (only Anthropic costs money): the USD 5
+    # prototype total of D-37 in dev and test when unset; staging and production have none unless it is set
+    # (llm_total_cap_usd). 0 refuses every call that costs anything.
+    llm_prototype_total_cap_usd: Decimal | None = None
+    llm_free_1_base_url: str | None = None
+    llm_free_1_api_key: SecretStr | None = None
+    llm_free_1_model: str | None = None
+    llm_free_1_daily_requests: int | None = None
+    llm_free_1_response_format: ResponseFormat | None = None
+    llm_free_2_base_url: str | None = None
+    llm_free_2_api_key: SecretStr | None = None
+    llm_free_2_model: str | None = None
+    llm_free_2_daily_requests: int | None = None
+    llm_free_2_response_format: ResponseFormat | None = None
+    llm_free_3_base_url: str | None = None
+    llm_free_3_api_key: SecretStr | None = None
+    llm_free_3_model: str | None = None
+    llm_free_3_daily_requests: int | None = None
+    llm_free_3_response_format: ResponseFormat | None = None
+
+    # Embeddings (ADR-005 decision 6). bge-m3 runs on the worker from local weights only (never downloaded by code).
+    embedder: Literal["fake", "bge-m3"] = "fake"
+    embedder_model_path: Path | None = None
 
     # Cookie names are fixed (the web app reads the same names). With Secure cookies they carry the __Host- prefix:
     # Secure, Path=/ and no Domain, so a sibling subdomain cannot plant them. Browsers refuse the prefix without
@@ -93,6 +250,95 @@ class Settings(BaseSettings):
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
 
+    # --------------------------------------------------------------------------------------- LLM providers (D-37)
+
+    @property
+    def llm_effective_provider(self) -> LLMProvider:
+        """``LLM_PROVIDER``, or when unset: Anthropic in staging and production, the fake in test (a test that wants
+        a provider says so), else free when a complete free slot is set, else the fake."""
+        if self.llm_provider is not None:
+            return self.llm_provider
+        if self.app_env in ("staging", "production"):
+            return "anthropic"
+        if self.app_env == "test":
+            return "fake"
+        return "free" if self.llm_free_slots() else "fake"
+
+    @property
+    def llm_total_cap_usd(self) -> Decimal | None:
+        """The lifetime spend cap: ``LLM_PROTOTYPE_TOTAL_CAP_USD``, or USD 5 in dev and test when unset (D-37); None
+        (no total) in staging and production unless it is set."""
+        if self.llm_prototype_total_cap_usd is not None:
+            return self.llm_prototype_total_cap_usd
+        return PROTOTYPE_TOTAL_CAP_USD if self.app_env in ("dev", "test") else None
+
+    @property
+    def llm_demo_fallback(self) -> bool:
+        """Whether a missing key, a hit cap, the kill switch or a failed call falls back to the deterministic fake
+        (labelled "demo fallback"): local runs only; staging and production raise the typed error instead."""
+        return self.app_env in ("dev", "test")
+
+    def llm_free_slots(self) -> tuple[FreeSlot, ...]:
+        """The complete free provider slots, in slot order (the validator refuses a half-configured one)."""
+        slots = []
+        for n in LLM_FREE_SLOTS:
+            url, key, model, requests = (getattr(self, f"llm_free_{n}_{part}") for part in FREE_SLOT_PARTS)
+            if not all(_is_given(v) for v in (url, key, model, requests)):
+                continue
+            response_format: ResponseFormat = getattr(self, f"llm_free_{n}_response_format") or "json_object"
+            slots.append(FreeSlot(n, url.rstrip("/"), key, model, requests, response_format))
+        return tuple(slots)
+
+    def _llm_problems(self) -> list[str]:
+        problems: list[str] = []
+        if self.llm_prototype_total_cap_usd is not None and self.llm_prototype_total_cap_usd < 0:
+            problems.append("LLM_PROTOTYPE_TOTAL_CAP_USD must be zero or more")
+        used: list[str] = []  # slots with any value (refused outside local runs)
+        for n in LLM_FREE_SLOTS:
+            prefix = f"LLM_FREE_{n}_"
+            values = [getattr(self, f"llm_free_{n}_{part}") for part in FREE_SLOT_PARTS]
+            present = [_is_given(v) for v in values]
+            fmt_set = getattr(self, f"llm_free_{n}_response_format") is not None
+            if any(present) or fmt_set:
+                used.append(f"{prefix}*")
+            if any(present) and not all(present):
+                # Half a slot is a mistake, not a choice: refuse to start rather than guess.
+                names = [f"{prefix}{part.upper()}" for part in FREE_SLOT_PARTS]
+                problems.append(f"{', '.join(names[:-1])} and {names[-1]} must be set together (or all left empty)")
+                continue
+            if not any(present):
+                if fmt_set:
+                    problems.append(f"{prefix}RESPONSE_FORMAT is set but slot {n} is not")
+                continue
+            url, _, model, requests = values
+            if (url_problem := free_slot_url_problem(url)) is not None:
+                problems.append(f"{prefix}BASE_URL {url_problem}")
+            if not FREE_MODEL.fullmatch(model):
+                problems.append(f"{prefix}MODEL must be 1-74 characters from A-Z a-z 0-9 . _ : / @ + -")
+            if requests < 1:
+                problems.append(f"{prefix}DAILY_REQUESTS must be 1 or more (leave the slot empty to turn it off)")
+        if self.app_env in ("staging", "production"):
+            if self.llm_provider == "free":
+                problems.append(
+                    "LLM_PROVIDER=free is for local runs: staging and production never send data to free"
+                    " providers (D-37)"
+                )
+            if self.llm_provider == "fake" and self.app_env == "production":
+                problems.append("production uses LLM_PROVIDER=anthropic (or leave it empty): the fake answers nothing")
+            if used:
+                where = "staging and production"
+                problems.append(f"{', '.join(used)} are for local runs only: leave them empty in {where}")
+        return problems
+
+    @field_validator(*OPTIONAL_SETTINGS, mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        """``NAME=`` (an empty value, as in ``.env.example`` or a compose override) means unset, never an empty key,
+        URL or path: the component that needs it then fails closed at use."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @model_validator(mode="after")
     def _fail_closed(self) -> Settings:
         problems: list[str] = []
@@ -107,13 +353,27 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        if self.llm_global_daily_cap_usd < 0:
+            problems.append("LLM_GLOBAL_DAILY_CAP_USD must be zero or more")
         for provider in ("github", "google"):
             pair = [getattr(self, f"{provider}_client_{part}") for part in ("id", "secret")]
             if len({_is_set(value) for value in pair}) == 2:
                 # Half a configuration is a mistake, not a choice: refuse to start rather than guess.
                 name = provider.upper()
                 problems.append(f"{name}_CLIENT_ID and {name}_CLIENT_SECRET must be set together (or both left empty)")
+        if self.sms_provider == "africastalking" and (
+            not self.africastalking_username or not self.africastalking_api_key
+        ):
+            problems.append(
+                "AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are required when SMS_PROVIDER=africastalking"
+            )
+        problems.extend(self._key_problems())
+        problems.extend(self._llm_problems())
         if self.app_env == "production":
+            if self.embedder == "fake":
+                problems.append("production embeds with a real model only (EMBEDDER=bge-m3)")
+            if self.anthropic_api_key is None and not self.llm_kill_switch:
+                problems.append("ANTHROPIC_API_KEY is required in production unless LLM_KILL_SWITCH=1")
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
             if not self.public_base_url.startswith("https://"):
@@ -124,9 +384,56 @@ class Settings(BaseSettings):
             raise ValueError("; ".join(problems))
         return self
 
+    def _key_problems(self) -> list[str]:
+        """Tier-2 and provenance key settings: well-formed when set, one source each, KMS only in production."""
+        problems: list[str] = []
+        pairs = (
+            ("TIER2_LOCAL_KEK", self.tier2_local_kek, "TIER2_KMS_KEY_ID", self.tier2_kms_key_id),
+            (
+                "PROVENANCE_SIGNING_KEY",
+                self.provenance_signing_key,
+                "PROVENANCE_KMS_KEY_ID",
+                self.provenance_kms_key_id,
+            ),
+        )
+        for local_name, local, kms_name, kms in pairs:
+            if local is None:
+                continue
+            if decoded_key(local) is None:
+                problems.append(f"{local_name} must be base64 of exactly 32 bytes")
+            if kms:
+                problems.append(f"set {local_name} or {kms_name}, not both")
+            if self.app_env == "production":
+                problems.append(f"{local_name} is for dev and test; production uses KMS ({kms_name})")
+        if self.object_store == "memory" and self.app_env in ("staging", "production"):
+            problems.append("OBJECT_STORE=memory is for tests; staging and production use s3")
+        return problems
+
+
+def decoded_key(value: SecretStr) -> bytes | None:
+    """The 32 raw bytes of a base64 key setting, or None when it is not base64 of exactly 32 bytes."""
+    try:
+        raw = base64.b64decode(value.get_secret_value(), validate=True)
+    except ValueError:
+        return None
+    return raw if len(raw) == 32 else None
+
 
 def _is_set(value: SecretStr | None) -> bool:
     return value is not None and bool(value.get_secret_value().strip())
+
+
+def _is_set_text(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
+
+
+def _is_given(value: str | SecretStr | int | None) -> bool:
+    """A slot value is given when it is not empty (a number, even 0, is given: the range check reports it)."""
+    if isinstance(value, SecretStr):
+        return _is_set(value)
+    if isinstance(value, str):
+        return _is_set_text(value)
+    return value is not None
 
 
 @lru_cache(maxsize=1)

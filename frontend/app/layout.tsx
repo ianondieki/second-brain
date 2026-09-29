@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { pickMessages } from "@/components/IntlScope";
+import { ClientStrings } from "@/components/ClientStrings";
+import { clientStrings } from "@/lib/i18n/client-strings";
 
 import "./globals.css";
 
@@ -25,7 +25,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={locale} className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-paper text-ink">
-        <NextIntlClientProvider messages={await pickMessages(["shell", "errorPage"])}>{children}</NextIntlClientProvider>
+        {/* Sign out and the error screen read server-formatted strings: no next-intl runtime in the browser. */}
+        <ClientStrings strings={await clientStrings(["shell", "errorPage"])}>{children}</ClientStrings>
       </body>
     </html>
   );
