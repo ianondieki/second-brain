@@ -111,6 +111,15 @@ describe("filters from the URL", () => {
     expect(parseFilters({ q: "x".repeat(150) }).q).toHaveLength(100);
   });
 
+  it("cuts a long search at 100 characters without splitting an emoji", () => {
+    const q = parseFilters({ q: `${"a".repeat(99)}😀😀` }).q!;
+    expect(Array.from(q)).toHaveLength(100);
+    expect(q.endsWith("😀")).toBe(true);
+    expect(() => encodeURIComponent(q)).not.toThrow();
+    expect(() => filtersHref({ q })).not.toThrow();
+    expect(parseFilters({ q: "😀".repeat(150) }).q).toBe("😀".repeat(100));
+  });
+
   it("builds links, the API query and the chosen-filter count", () => {
     expect(filtersHref({})).toBe("/dev/companies");
     expect(filtersHref({ q: "maji safi", county: "KE-30", cursor: "c1" })).toBe(

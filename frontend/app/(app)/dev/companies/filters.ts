@@ -55,7 +55,9 @@ export function parseFilters(params: SearchParams): DirectoryFilters {
   const q = first(params.q)
     ?.replace(/\u0000/g, "")
     .trim();
-  if (q) out.q = q.slice(0, 100);
+  // At most 100 characters (the API's limit), cut by code point: slicing UTF-16 units could split an emoji into a
+  // lone surrogate, which encodeURIComponent refuses (URIError) when the query is sent or linked.
+  if (q) out.q = Array.from(q).slice(0, 100).join("");
   const niche = first(params.niche);
   if (niche && niche.length <= 80 && NICHE_SLUG.test(niche)) out.niche = niche;
   const kind = first(params.kind);
