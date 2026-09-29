@@ -17,9 +17,13 @@ text (a scout's org profile) could never hit the prompt cache. The trade-off: wi
 the nonce (a model answer echoing it, replayed as input) could name it; the sanitiser still strips every tag,
 so a block cannot be closed or opened from inside, and the nonce is never shown to an author.
 
-Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger; a failed batch item is
-dead-lettered and reported, not retried (the caller may resubmit it). An item the provider's results lack is recorded
-and reported as a transient provider error, never dropped.
+Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger. Once the provider accepts a
+batch, every item is reserved at its batch-price estimate (``batch_reserved`` rows), so both caps count a batch in
+flight. A poll of the ended batch settles each item once: its final row replaces the reservation in spend, and a
+repeat poll returns the same outcomes without writing, dead-lettering, queueing or counting anything again. A failed
+item is dead-lettered and reported, not retried (the caller may resubmit it). An item the provider's results lack
+stays reserved (the results may have been cut short and the item billed) and is reported as a transient provider
+error by every poll until one finds it.
 """
 
 from __future__ import annotations
@@ -85,8 +89,8 @@ log = get_logger("bridge.llm")
 FINISHED = frozenset({"end_turn", "stop_sequence"})
 MAX_FEEDBACK_ERRORS = 5
 CUSTOM_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
-BATCH_TRANSIENT = frozenset({"missing", "expired", "canceled", "api_error", "overloaded_error", "rate_limit_error"})
-MISSING_ITEM = BatchItemError("missing", "the provider returned no result for it")
+BATCH_TRANSIENT = frozenset({"expired", "canceled", "api_error", "overloaded_error", "rate_limit_error"})
+MISSING_ITEM = "batch item missing (the provider returned no result for it)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +146,15 @@ class _Call:
     spec: TaskSpec
     ctx: CallContext
     trace_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Failure:
+    """Why a batch item's message failed."""
+
+    error: type[LLMCallFailed]
+    status: CallStatus
+    detail: str
 
 
 def declared_fields(output_schema: Mapping[str, Any]) -> frozenset[str]:
@@ -214,7 +227,7 @@ class LLMService:
 
     # ------------------------------------------------------------------------------------------------ recording
 
-    async def _record(
+    def _entry(
         self,
         call: _Call,
         status: CallStatus,
@@ -228,45 +241,62 @@ class LLMService:
         output: Mapping[str, Any] | None = None,
         error: str | None = None,
         batch_id: str | None = None,
-    ) -> None:
+        custom_id: str | None = None,
+    ) -> LedgerEntry:
         usage = response.usage if response is not None else TokenUsage()
-        await self._ledger.record(
-            LedgerEntry(
-                id=uuid7(),
-                created_at=self._now(),
-                org_id=call.ctx.org_id,
-                user_id=call.ctx.user_id,
-                task=call.spec.name,
-                purpose=call.spec.purpose.value,
-                model=model,
-                status=status,
-                stop_reason=response.stop_reason if response is not None else None,
-                input_tokens=usage.input_tokens,
-                output_tokens=usage.output_tokens,
-                cache_read_tokens=usage.cache_read_input_tokens,
-                cache_creation_tokens=usage.cache_creation_input_tokens,
-                cost_usd=cost,
-                latency_ms=latency_ms,
-                trace_id=call.trace_id,
-                attempt=attempt,
-                inputs=inputs,
-                batch_id=batch_id,
-                output=output,
-                error=error,
-            )
-        )
-        log.info(
-            "llm.call",
+        return LedgerEntry(
+            id=uuid7(),
+            created_at=self._now(),
+            org_id=call.ctx.org_id,
+            user_id=call.ctx.user_id,
             task=call.spec.name,
+            purpose=call.spec.purpose.value,
             model=model,
-            status=status.value,
-            attempt=attempt,
+            status=status,
+            stop_reason=response.stop_reason if response is not None else None,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
-            cost_usd=str(cost),
+            cache_read_tokens=usage.cache_read_input_tokens,
+            cache_creation_tokens=usage.cache_creation_input_tokens,
+            cost_usd=cost,
             latency_ms=latency_ms,
             trace_id=call.trace_id,
+            attempt=attempt,
+            inputs=inputs,
+            batch_id=batch_id,
+            custom_id=custom_id,
+            output=output,
+            error=error,
         )
+
+    @staticmethod
+    def _log_call(entry: LedgerEntry) -> None:
+        log.info(
+            "llm.call",
+            task=entry.task,
+            model=entry.model,
+            status=entry.status.value,
+            attempt=entry.attempt,
+            input_tokens=entry.input_tokens,
+            output_tokens=entry.output_tokens,
+            cost_usd=str(entry.cost_usd),
+            latency_ms=entry.latency_ms,
+            trace_id=entry.trace_id,
+        )
+
+    async def _record(self, call: _Call, status: CallStatus, **fields: Any) -> None:
+        """One ledger row (``_entry``'s fields) of a synchronous call, a refused call or a refused batch."""
+        entry = self._entry(call, status, **fields)
+        await self._ledger.record(entry)
+        self._log_call(entry)
+
+    async def _settle(self, call: _Call, status: CallStatus, **fields: Any) -> bool:
+        """A batch item's final row, written once: False, with nothing written or logged, when it had settled."""
+        entry = self._entry(call, status, **fields)
+        if not await self._ledger.settle(entry):
+            return False
+        self._log_call(entry)
+        return True
 
     async def _fail(
         self,
@@ -546,20 +576,13 @@ class LLMService:
                 native_format=spec.json_schema_format,
             )
             inputs[item.custom_id] = prepared.ledger_inputs
-        estimate = sum(
-            (
-                self._registry.estimate_usd(
-                    spec.model,
-                    input_chars=r.text_chars,
-                    max_tokens=r.max_tokens,
-                    batch=True,
-                    cache_writes=r.cache_writes,
-                )
-                for r in requests.values()
-            ),
-            Decimal(0),
-        )
-        await self._check_budget(call, estimate, 0, {"batch_items": inputs}, spec.model)
+        estimates = {
+            custom_id: self._registry.estimate_usd(
+                spec.model, input_chars=r.text_chars, max_tokens=r.max_tokens, batch=True, cache_writes=r.cache_writes
+            )
+            for custom_id, r in requests.items()
+        }
+        await self._check_budget(call, sum(estimates.values(), Decimal(0)), 0, {"batch_items": inputs}, spec.model)
         try:
             batch_id = await self._adapter.batch_create(requests)
         except (LLMProviderError, LLMUnavailable) as exc:
@@ -572,7 +595,8 @@ class LLMService:
                 error=str(exc),
             )
             raise
-        log.info("llm.batch_submitted", task=task, items=len(requests), trace_id=call.trace_id)
+        await self._reserve(call, batch_id, estimates, inputs)
+        log.info("llm.batch_submitted", task=task, batch_id=batch_id, items=len(requests), trace_id=call.trace_id)
         return BatchHandle(
             batch_id=batch_id,
             task=task,
@@ -583,8 +607,33 @@ class LLMService:
             inputs=inputs,
         )
 
+    async def _reserve(
+        self, call: _Call, batch_id: str, estimates: Mapping[str, Decimal], inputs: Mapping[str, Mapping[str, Any]]
+    ) -> None:
+        """Reserve every item of an accepted batch at its estimate: both caps count it until its items settle."""
+        holds = [
+            self._entry(
+                call,
+                CallStatus.BATCH_RESERVED,
+                attempt=1,
+                inputs=inputs[custom_id],
+                model=call.spec.model,
+                cost=estimate,
+                batch_id=batch_id,
+                custom_id=custom_id,
+            )
+            for custom_id, estimate in estimates.items()
+        ]
+        try:
+            await self._ledger.reserve(holds)
+        except Exception:
+            # The provider runs the batch unseen by the caps and the caller gets no handle: name it for an operator.
+            log.error("llm.batch_unreserved", task=call.spec.name, batch_id=batch_id, trace_id=call.trace_id)
+            raise
+
     async def batch_poll[OutputT: LLMOutput](self, handle: BatchHandle, schema: type[OutputT]) -> BatchPoll[OutputT]:
-        """The batch's state; once it has ended, one outcome per submitted item (each recorded at the batch price)."""
+        """The batch's state; once it has ended, one outcome per item. Each item settles once, at the batch price; a
+        repeat poll returns the same outcomes and counts nothing again."""
         spec = self._registry.task(handle.task)
         check_schema(schema)
         ctx = CallContext(org_id=handle.org_id, user_id=handle.user_id, trace_id=handle.trace_id)
@@ -594,86 +643,91 @@ class LLMService:
         if state is not BatchState.ENDED:
             return BatchPoll(state)
         raw = await self._adapter.batch_results(handle.batch_id)
-        found = {custom_id: raw.get(custom_id, MISSING_ITEM) for custom_id in handle.inputs} | raw
-        snapshot = await self._budget.snapshot(ctx)
         outcomes: dict[str, Result[OutputT] | LLMError] = {}
-        total = Decimal(0)
-        for custom_id, item in found.items():
-            inputs = handle.inputs.get(custom_id, {})
-            if isinstance(item, BatchItemError):
-                detail = f"batch item {item.kind} ({item.detail})"
-                await self._record(
-                    call,
-                    CallStatus.PROVIDER_ERROR,
-                    attempt=1,
-                    inputs=inputs,
-                    model=handle.model,
-                    error=detail,
-                    batch_id=handle.batch_id,
+        settled_usd = Decimal(0)
+        for custom_id in [*handle.inputs, *(k for k in raw if k not in handle.inputs)]:
+            item = raw.get(custom_id)
+            if item is None:  # not settled: its reservation keeps counting (fail closed)
+                log.warning(
+                    "llm.batch_item_missing", batch_id=handle.batch_id, custom_id=custom_id, trace_id=call.trace_id
                 )
-                transient = item.kind in BATCH_TRANSIENT or item.detail in BATCH_TRANSIENT
-                outcomes[custom_id] = LLMProviderError(detail, transient=transient)
+                outcomes[custom_id] = LLMProviderError(MISSING_ITEM, transient=True)
                 continue
-            cost = self._registry.cost_usd(handle.model, item.usage, batch=True)
-            total += cost
-            outcomes[custom_id] = await self._batch_outcome(call, handle, item, schema, cost, inputs)
-        budget = await self._budget.after(ctx, snapshot, total)
+            outcome, cost = await self._settle_item(call, handle, custom_id, item, schema)
+            outcomes[custom_id], settled_usd = outcome, settled_usd + cost
+        # Read after settling (the settled rows count, their reservations no longer do); the soft cap hears only what
+        # this poll settled, so a repeat poll adds nothing.
+        now = await self._budget.snapshot(ctx)
+        before = replace(now, spent_usd=now.spent_usd - settled_usd) if now.spent_usd is not None else now
+        budget = await self._budget.after(ctx, before, settled_usd)
         final = {k: replace(v, budget=budget) if isinstance(v, Result) else v for k, v in outcomes.items()}
         return BatchPoll(state, final)
 
-    async def _batch_outcome[OutputT: LLMOutput](
+    async def _settle_item[OutputT: LLMOutput](
         self,
         call: _Call,
         handle: BatchHandle,
-        response: ModelResponse,
+        custom_id: str,
+        item: ModelResponse | BatchItemError,
         schema: type[OutputT],
-        cost: Decimal,
-        inputs: Mapping[str, Any],
-    ) -> Result[OutputT] | LLMError:
-        model = handle.model
-        recorded: dict[str, Any] = {
+    ) -> tuple[Result[OutputT] | LLMError, Decimal]:
+        """Settle one item once. Returns its outcome and the cost this poll settled; an item an earlier poll settled
+        returns the same outcome at no cost, with no row, dead letter or refusal event (and no dead letter id)."""
+        model, inputs = handle.model, handle.inputs.get(custom_id, {})
+        fields: dict[str, Any] = {
             "attempt": 1,
             "inputs": inputs,
             "model": model,
-            "response": response,
-            "cost": cost,
             "batch_id": handle.batch_id,
+            "custom_id": custom_id,
         }
-        failure: tuple[type[LLMCallFailed], CallStatus, str] | None = None
-        parsed: OutputT | None = None
-        if response.stop_reason == "refusal":
-            event = RefusalEvent(
-                call.spec.name, call.trace_id, call.ctx.org_id, call.ctx.user_id, model, response.refusal_category, None
+        if isinstance(item, BatchItemError):  # not billed: settled at no cost
+            detail = f"batch item {item.kind} ({item.detail})"
+            await self._settle(call, CallStatus.PROVIDER_ERROR, error=detail, **fields)
+            transient = item.kind in BATCH_TRANSIENT or item.detail in BATCH_TRANSIENT
+            return LLMProviderError(detail, transient=transient), Decimal(0)
+        cost = self._registry.cost_usd(model, item.usage, batch=True)
+        judged = self._judge(item, schema)
+        if isinstance(judged, _Failure):
+            fresh = await self._settle(call, judged.status, response=item, cost=cost, error=judged.detail, **fields)
+            if not fresh:
+                message = f"task {call.spec.name}: {judged.detail}"
+                return judged.error(message, task=call.spec.name, trace_id=call.trace_id), Decimal(0)
+            if judged.status is CallStatus.REFUSAL:
+                event = RefusalEvent(
+                    call.spec.name, call.trace_id, call.ctx.org_id, call.ctx.user_id, model, item.refusal_category, None
+                )
+                await self._human_queue.refusal(event)
+            failed = await self._fail(
+                call, judged.error, judged.status, model=model, attempts=1, detail=judged.detail, inputs=inputs
             )
-            await self._human_queue.refusal(event)
-            failure = (LLMRefused, CallStatus.REFUSAL, "the model refused")
-        elif response.stop_reason == "max_tokens":
-            failure = (LLMTruncated, CallStatus.MAX_TOKENS, "output cut at max_tokens")
-        elif response.stop_reason not in FINISHED:
-            failure = (
-                LLMUnsupportedStop,
-                CallStatus.UNSUPPORTED_STOP,
-                f"unsupported stop reason {response.stop_reason}",
-            )
-        else:
-            try:
-                parsed = schema.model_validate_json(response.text)
-            except ValidationError as exc:
-                problems = schema_errors(exc, schema.model_json_schema())
-                failure = (LLMSchemaError, CallStatus.SCHEMA_ERROR, f"output failed the schema: {problems}")
-        if failure is not None or parsed is None:
-            error, status, detail = failure or (LLMSchemaError, CallStatus.SCHEMA_ERROR, "no output")
-            await self._record(call, status, error=detail, **recorded)
-            return await self._fail(call, error, status, model=model, attempts=1, detail=detail, inputs=inputs)
-        output = None if call.spec.confidential else parsed.model_dump(mode="json")
-        await self._record(call, CallStatus.OK, output=output, **recorded)
-        return Result(
-            parsed=parsed,
-            stop_reason=response.stop_reason,
-            usage=response.usage,
-            citations=response.citations,
+            return failed, cost
+        output = None if call.spec.confidential else judged.model_dump(mode="json")
+        fresh = await self._settle(call, CallStatus.OK, response=item, cost=cost, output=output, **fields)
+        result = Result(
+            parsed=judged,
+            stop_reason=item.stop_reason,
+            usage=item.usage,
+            citations=item.citations,
             model=model,
             cost_usd=cost,
             attempts=1,
             trace_id=call.trace_id,
         )
+        return result, cost if fresh else Decimal(0)
+
+    @staticmethod
+    def _judge[OutputT: LLMOutput](response: ModelResponse, schema: type[OutputT]) -> OutputT | _Failure:
+        """A batch item's parsed output, or why it failed (batch items are not retried)."""
+        if response.stop_reason == "refusal":
+            return _Failure(LLMRefused, CallStatus.REFUSAL, "the model refused")
+        if response.stop_reason == "max_tokens":
+            return _Failure(LLMTruncated, CallStatus.MAX_TOKENS, "output cut at max_tokens")
+        if response.stop_reason not in FINISHED:
+            detail = f"unsupported stop reason {response.stop_reason}"
+            return _Failure(LLMUnsupportedStop, CallStatus.UNSUPPORTED_STOP, detail)
+        try:
+            return schema.model_validate_json(response.text)
+        except ValidationError as exc:
+            problems = schema_errors(exc, schema.model_json_schema())
+            return _Failure(LLMSchemaError, CallStatus.SCHEMA_ERROR, f"output failed the schema: {problems}")

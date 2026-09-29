@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 from bridge.config import Settings, get_settings
+from bridge.ids import uuid7
 from bridge.llm import registry as registry_module
 from bridge.llm.adapter import BatchItemError, BatchState, ModelRequest, ModelResponse
 from bridge.llm.budget import CapProvider, RecordingBudgetListener, StaticCaps
@@ -74,7 +75,7 @@ class FakeAdapter:
         return reply
 
     async def batch_create(self, requests: Mapping[str, ModelRequest]) -> str:
-        batch_id = f"fake-batch-{len(self._batches) + 1}"
+        batch_id = f"fake-batch-{uuid7().hex}"  # unique, as a provider's is (tests share one database)
         self._batches[batch_id] = dict(requests)
         self.requests.extend(requests.values())
         return batch_id
