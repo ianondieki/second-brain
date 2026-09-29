@@ -408,3 +408,21 @@ router calls `app_set_test_clock`, is left out of the production image and is st
   `open_engagement_for_tag`), `test_tracker_branches.py` (DECLINED reason codes, WITHDRAWN, stage 0),
   `test_em2_contact.py` (AC-MAIL-1, contact reveal), `test_tracker_edges.py`; `tests/integration/test_testclock_excluded.py`
   (REQ-ENG-12, REQ-BD-01).
+
+### Result (P5)
+
+Full backend suite: 2210 passed (the integration branch had 1743 at P1's merge plus the P8 screens' tests), total
+coverage 98%; `engagements/` 98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification
+job 100%. `ruff check`, `ruff format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the frontend's
+`eslint`, `tsc`, `vitest` (244 passed) and `api:check` (types regenerated), the copy-lint and
+`check_traceability.py` (0 errors) are clean. The legacy suite passes except two `tests/test_adviser_cli.py` checks
+that need `cloudflared` in this Linux container (environmental; untouched by P5). Playwright (`check-e2e`) needs
+the running stack and was not run here.
+
+### Follow-ups (not built)
+
+- The schema needs above (decline text store, phone reveal, org recipients, the both-sides policy).
+- Purge finished `notifications` jobs (their arguments can hold a decline's written reason).
+- The Playwright paths (AC-TRACK-4) and the tracker screens (P8) on these endpoints; the demo seed (P9) sets
+  `FEATURE_DEALS_ENABLED=true`, TOTP for the demo developers and organisation seats, D2 for the demo developers.
+- Expiry, escalation and auto-confirmation jobs (after the prototype), driven by `app_clock_now()`.
