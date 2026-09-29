@@ -161,3 +161,19 @@ docs/spec/09's 100% factual consistency; free wording returns with the REQ-EVAL-
   (`PolicyError`); `unit/reminders/test_thresholds.py`.
 - `f1ba9ad`: the facts test writes P5's command names from `sm.Command`.
 
+
+## Review round 4 (reviewer PASS at `b097e8f`, 2026-09-29): MINOR follow-ups
+
+- `4d88143` checked by the reviewer as a pure rename (no other reference to `_review_due`); the orchestrator ruled no
+  separate security-review round is needed for it.
+- Known gap for REQ-ENG-06: `state_machine.pending` names no party for `PROCUREMENT_ROUTE` and `INFO_REQUESTED`, so
+  those states give no stage-deadline reason and no Waiting/Needs-us line (`PROCUREMENT_ROUTE` is still in
+  `health.ASSESSED_STATES`). Unreachable in the prototype (no transition into them); fix with REQ-ENG-06.
+- `reminders/thresholds.py:60`: no test pins full-string matching of the send times (`fullmatch` → `match` survives);
+  add a `"07:30pm"` case to `test_a_broken_reminders_section_is_refused`.
+- The policy passed through `Deps.policy` and `compose_digest(..., policy)` is untested (dispatch.py:311, :407;
+  org_digest.py:134, :150; nudge.py:230 fall back to `get_reminder_policy()`); add one test with a non-default policy,
+  or make the parameters required.
+- `tests/integration/engagements/tracker.py:435`: the walked `send_nda` payload has no `template_id`, which
+  `history.py:379` reads; a walked engagement's `GET .../documents/mutual_nda` would 500 in a test. Add the seeded
+  template's id or narrow the helper's comment.
