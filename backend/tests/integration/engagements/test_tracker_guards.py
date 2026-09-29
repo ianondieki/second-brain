@@ -10,6 +10,8 @@ recorded amount; one person never acts for both sides; and ``open_engagement_for
 from __future__ import annotations
 
 import time
+from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -21,8 +23,10 @@ from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import commands
 from bridge.engagements import state_machine as sm
+from bridge.engagements.calendar import add_business_days, local_date
 from bridge.engagements.commands import OpenRefused, open_engagement_for_tag
 from bridge.engagements.models import Engagement
+from bridge.engagements.policy import get_policy
 from bridge.engagements.service import load
 from bridge.ids import uuid7
 from bridge.models.enums import EngagementActorRole, EngagementEndReason, EngagementParty, EngagementState
@@ -38,6 +42,7 @@ from tests.integration.engagements.api_world import (
     simple_terms,
     walk_to,
 )
+from tests.integration.proposals.helpers import rows
 
 R = EngagementActorRole
 MILESTONE = uuid7()  # no engagement of these tests has it
@@ -395,3 +400,93 @@ async def test_control_characters_are_refused_in_a_partys_text(
         client = s.finance if command == "record-payment" else s.owner
         refused = await t.post(client, command, body)
         assert refused.status_code == 422, refused.text
+
+
+async def test_invalid_inputs_are_422(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Review P5 (MINOR): a contact-by date beyond 5 business days, a contact who is not an active member, and a
+    milestone due before today are refused with their codes, and nothing changes."""
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        await t.ok(s.reviewer, "start-review")
+        too_late = {
+            "contact_user_id": str(world.owner),
+            "contact_channel": "email",
+            "contact_by": str(today + timedelta(days=30)),
+        }
+        refused = await t.post(s.signatory, "approve", too_late)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "invalid_contact_by")
+        outsider = {"contact_user_id": str(world.outsider), "contact_channel": "email", "contact_by": str(today)}
+        refused = await t.post(s.signatory, "approve", outsider)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "invalid_contact")
+        assert (await t.detail(s.dev))["state"] == "UNDER_REVIEW"
+        await walk_to(t, s, world, today, "NDA_SIGNED")
+        past = simple_terms(today)
+        past["milestones"][0]["due_date"] = str(today - timedelta(days=1))
+        refused = await t.post(s.owner, "propose-terms", past)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "invalid_terms")
+        assert (await t.detail(s.dev))["agreements"] == []
+
+
+async def test_a_new_terms_version_renews_the_stage_deadline(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Review P5 (MINOR): a second version in NEGOTIATION is a same-state event that sets a new deadline (each response
+    within 7 business days); a same-state event without renewal (a confirmation) sets none."""
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        await walk_to(t, s, world, today, "NEGOTIATION")
+        await t.ok(s.dev, "propose-terms", simple_terms(today))
+        history = (await s.dev.get(t.path("/history"))).json()
+    proposals = [e for e in history["events"] if e["command"] == "propose_terms"]
+    assert [(e["from_state"], e["to_state"]) for e in proposals] == [
+        ("NDA_SIGNED", "NEGOTIATION"),
+        ("NEGOTIATION", "NEGOTIATION"),
+    ]
+    assert all(e["stage_deadline_at"] is not None for e in proposals)
+    [confirmation] = [e for e in history["events"] if e["command"] == "confirm_contact"]
+    assert confirmation["stage_deadline_at"] is None
+
+
+async def test_milestones_take_the_policys_review_window_and_show_their_review_due_date(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review P5 (MINOR): a milestone without a review window gets policy.yaml's default; a submitted milestone shows
+    the business day its review is due (the submission's Nairobi date plus the window)."""
+    policy = replace(get_policy(), review_window_bd_default=7)
+    monkeypatch.setattr(commands, "get_policy", lambda: policy)
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        await walk_to(t, s, world, today, "NDA_SIGNED")
+        terms = simple_terms(today)
+        terms["milestones"].append(
+            {
+                "deliverable": "Second",
+                "amount_kes_minor": 100,
+                "due_date": str(today + timedelta(days=60)),
+                "review_window_bd": 3,
+            }
+        )
+        drafted = await t.ok(s.owner, "propose-terms", terms)
+        assert [m["review_window_bd"] for m in drafted["agreements"][0]["milestones"]] == [7, 3]
+        await t.ok(s.dev, "mark-final")
+        await t.ok(s.signatory, "sign-agreement")
+        signed = await t.ok(s.dev, "sign-agreement")
+        first, second = (m["id"] for m in signed["agreements"][0]["milestones"])
+        await t.ok(s.dev, f"milestones/{first}/start")
+        submitted = await t.ok(s.dev, f"milestones/{first}/submit")
+        history = (await s.dev.get(t.path("/history"))).json()
+    [submit] = [e for e in history["events"] if e["command"] == "submit_milestone"]
+    submitted_on = local_date(datetime.fromisoformat(submit["created_at"]))
+    holidays = {
+        r.observed_on
+        for r in await rows(owner_engine, "SELECT observed_on FROM holidays WHERE observed_on >= :d", d=submitted_on)
+    }
+    by_id = {m["id"]: m for m in submitted["agreements"][0]["milestones"]}
+    assert by_id[first]["review_due_on"] == str(add_business_days(submitted_on, 7, holidays))
+    assert by_id[second]["review_due_on"] is None
