@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Awaitable, Iterable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Final
@@ -39,6 +39,10 @@ class DemoSeedRefused(RuntimeError):
 
 class DemoSeedError(RuntimeError):
     """A step of the demo seed was refused or answered unexpectedly; nothing after it ran."""
+
+
+class DemoKeysChanged(DemoSeedError):
+    """The demo database was seeded under other keys (its TOTP secrets do not open): always fatal; make demo-reset."""
 
 
 def demo_refusal(settings: Settings) -> str | None:
@@ -147,7 +151,7 @@ class Actor:
 async def next_totp_code(owner: AsyncEngine, email: str) -> str:
     """A code of the account's demo secret that the server will accept now: codes are single use (the counter must
     pass ``totp_last_counter``) and one step of drift is allowed, so wait for the next window when both are spent."""
-    row = await one(owner, "SELECT totp_last_counter FROM users WHERE email = :email", email=email)
+    row = await _one(owner, "SELECT totp_last_counter FROM users WHERE email = :email", email=email)
     last = -1 if row is None or row.totp_last_counter is None else int(row.totp_last_counter)
     while True:
         now = int(time.time() // totp.PERIOD)
@@ -162,7 +166,7 @@ async def signed_in(app: FastAPI, owner: AsyncEngine, email: str) -> AsyncIterat
     """Sign ``email`` in as a browser does: ``POST /api/auth/login`` with the demo password, then, for an account with
     TOTP, ``POST /api/auth/mfa/verify`` with its current code (so the session's second factor is fresh: the ADR-002
     step-up for signing and endorsing). Logs out at the end."""
-    user_id = await user_id_of(owner, email)
+    user_id = await _user_id_of(owner, email)
     if user_id is None:
         raise DemoSeedError(f"no account for {email}")
     transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 0))
@@ -182,38 +186,64 @@ async def signed_in(app: FastAPI, owner: AsyncEngine, email: str) -> AsyncIterat
 
 
 class Actors:
-    """The demo users signed in so far, each signed in on first use only (a run with nothing to do signs nobody in)."""
+    """The demo users signed in so far, each signed in on first use only (a run with nothing to do signs nobody in).
+    A sign-in that failed (a password or second factor changed in the app) is not tried again in the same run."""
 
     def __init__(self, stack: AsyncExitStack, app: FastAPI, owner: AsyncEngine) -> None:
         self._stack, self._app, self._owner = stack, app, owner
         self._signed_in: dict[str, Actor] = {}
+        self._failed: dict[str, DemoSeedError] = {}
 
     async def get(self, email: str) -> Actor:
+        if email in self._failed:
+            raise self._failed[email]
         if email not in self._signed_in:
-            self._signed_in[email] = await self._stack.enter_async_context(signed_in(self._app, self._owner, email))
+            try:
+                self._signed_in[email] = await self._stack.enter_async_context(signed_in(self._app, self._owner, email))
+            except DemoSeedError as exc:
+                self._failed[email] = DemoSeedError(f"{email} could not sign in (password or TOTP changed?): {exc}")
+                raise self._failed[email] from exc
         return self._signed_in[email]
 
 
+async def guarded(report: DemoReport, *, strict: bool, what: str, step: Awaitable[None]) -> None:
+    """Run one step of the seed. On a database the demo was seeded into before (``strict`` false), a step the app
+    refuses because someone used the demo (a password changed, an engagement moved on, a proposal deleted) is left as
+    it is with one line in the report, so ``make demo`` still comes up; on a new database every refusal is an error."""
+    try:
+        await step
+    except DemoSeedError as exc:
+        if strict or isinstance(exc, DemoKeysChanged):
+            raise
+        report.notes.append(f"{what}: left as it is ({exc})")
+
+
 # ---------------------------------------------------------------------------------------------------------- queries
+# Seed only: raw SQL on the engine it is given, which in the seed is the owner role (bridge_owner, no RLS). Never for
+# application code, which reads and writes as bridge_app under Row-Level Security.
 
 
-async def one(engine: AsyncEngine, sql: str, **params: object) -> Any:
+async def _one(engine: AsyncEngine, sql: str, **params: object) -> Any:
+    """Seed only: the one row (or None) of an owner-role query."""
     async with engine.connect() as conn:
         return (await conn.execute(text(sql), params)).one_or_none()
 
 
-async def execute(engine: AsyncEngine, sql: str, **params: object) -> int:
+async def _execute(engine: AsyncEngine, sql: str, **params: object) -> int:
+    """Seed only: run an owner-role statement in its own transaction; the number of rows it changed."""
     async with engine.begin() as conn:
         result = await conn.execute(text(sql), params)
         return int(getattr(result, "rowcount", 0) or 0)
 
 
-async def niche_ids(owner: AsyncEngine) -> dict[str, UUID]:
+async def _niche_ids(owner: AsyncEngine) -> dict[str, UUID]:
+    """Seed only: niche slug -> id."""
     async with owner.connect() as conn:
         rows = (await conn.execute(text("SELECT slug::text, id FROM niches"))).all()
     return {str(slug): UUID(str(niche_id)) for slug, niche_id in rows}
 
 
-async def user_id_of(owner: AsyncEngine, email: str) -> UUID | None:
-    row = await one(owner, "SELECT id FROM users WHERE email = :email", email=email)
+async def _user_id_of(owner: AsyncEngine, email: str) -> UUID | None:
+    """Seed only: the id of the account with this address, or None."""
+    row = await _one(owner, "SELECT id FROM users WHERE email = :email", email=email)
     return None if row is None else UUID(str(row.id))

@@ -6,10 +6,12 @@ reaches its target, each command by the party and role the state machine names, 
 a session whose second factor was just given with the account's demo TOTP code (ADR-002 step-up). Nothing is written
 to the tracker tables directly, so each History tab is the real hash chain.
 
-Resumable and idempotent: at every turn the engagement's state is read and the next step is the first one of the
-path, for that state, that its actor is offered (``actions``); an engagement at its target is left alone. Steps from
-``send_nda`` on need ``FEATURE_DEALS_ENABLED`` (``make demo`` sets it): without it the engagement stops before them
-and the report says so.
+Idempotent and safe on a used demo: only an engagement still exactly as its Pitch opened it (``SUBMITTED``, the
+genesis event alone) is driven; one at its target, or one a person took on in the app (a review started, a decline, a
+withdrawal) or an interrupted run left part way, is left as it is with one line in the report. While driving, the next
+step is the first one of the path, for the current state, that its actor is offered (``actions``). Steps from
+``send_nda`` on need ``FEATURE_DEALS_ENABLED`` (``make demo`` and CI set it): without it the engagement stops before
+them and the report says so.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from bridge.config import Settings
 from bridge.engagements.calendar import add_business_days
 from bridge.models.enums import EngagementState, OrgRole
 from bridge.seed.demo.data import ORGS, PROPOSALS, DemoEngagement, DemoOrg
-from bridge.seed.demo.runtime import Actor, Actors, DemoReport, DemoSeedError, one
+from bridge.seed.demo.runtime import Actor, Actors, DemoReport, DemoSeedError, _one
 
 S = EngagementState
 DEVELOPER: Final = "developer"
@@ -122,7 +124,7 @@ class Driver:
 
     async def today(self) -> date:
         """Today on the app clock (the database clock plus the dev/test clock's offset), in Nairobi."""
-        row = await one(self.owner, "SELECT (app_clock_now() AT TIME ZONE 'Africa/Nairobi')::date AS today")
+        row = await _one(self.owner, "SELECT (app_clock_now() AT TIME ZONE 'Africa/Nairobi')::date AS today")
         return date.fromisoformat(str(row.today))
 
     async def body(self, command: str) -> dict[str, Any] | None:
@@ -191,24 +193,38 @@ class Driver:
         )
 
 
-async def _engagement(owner: AsyncEngine, report: DemoReport, plan: DemoEngagement) -> tuple[UUID, EngagementState]:
-    row = await one(
+async def _engagement(
+    owner: AsyncEngine, report: DemoReport, plan: DemoEngagement
+) -> tuple[UUID, EngagementState, int]:
+    """The plan's engagement: id, state and number of events (1: only the genesis of its Pitch)."""
+    if plan.proposal not in report.proposals or plan.org not in report.orgs:
+        raise DemoSeedError(f"{plan.proposal} or {plan.org} is not there")
+    row = await _one(
         owner,
-        "SELECT id, state::text AS state FROM engagements WHERE proposal_id = :p AND org_id = :o"
-        " ORDER BY created_at DESC LIMIT 1",
+        "SELECT e.id, e.state::text AS state, (SELECT count(*) FROM engagement_events v WHERE v.engagement_id = e.id)"
+        " AS events FROM engagements e WHERE e.proposal_id = :p AND e.org_id = :o ORDER BY e.created_at DESC LIMIT 1",
         p=report.proposals[plan.proposal],
         o=report.orgs[plan.org],
     )
     if row is None:
         raise DemoSeedError(f"no engagement for {plan.proposal} with {plan.org}: its Pitch did not open one")
-    return UUID(str(row.id)), EngagementState(row.state)
+    return UUID(str(row.id)), EngagementState(row.state), int(row.events)
 
 
 async def drive(
     owner: AsyncEngine, actors: Actors, settings: Settings, plan: DemoEngagement, report: DemoReport
 ) -> None:
     """Drive ``plan``'s engagement to its target (see the module docstring)."""
-    engagement_id, state = await _engagement(owner, report, plan)
+    engagement_id, state, events = await _engagement(owner, report, plan)
+    if state == plan.target:
+        return
+    if state != S.SUBMITTED or events > 1:
+        # Someone took it on in the app (a review started, a decline, a withdrawal) or an earlier run stopped part
+        # way: the seed only ever drives the engagement its own Pitch just opened, and never one a person moved.
+        report.notes.append(
+            f"{plan.proposal} with {plan.org} left at {state.value} (the seed only drives a new engagement)"
+        )
+        return
     driver = Driver(owner, actors, report, plan, engagement_id)
     for _ in range(MAX_TURNS):
         if state == plan.target:

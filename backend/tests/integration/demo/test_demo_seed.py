@@ -139,17 +139,12 @@ def demo_settings(**update: Any) -> Settings:
     return get_settings().model_copy(update={**flags, **update})
 
 
-def flags_off() -> Settings:
-    """What CI's e2e stack runs with (make-env.sh): both feature flags off."""
-    return demo_settings(feature_tier2_enabled=False, feature_deals_enabled=False)
-
-
 @pytest.fixture(scope="module")
 async def seeded(
     owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
 ) -> tuple[DemoReport, DemoReport, DemoReport]:
-    """The demo seed with the flags off (as CI's stack), then on (as make demo) twice: the three reports."""
-    first = await seed_demo(flags_off(), owner_engine=owner, app_engine=app, runtime=runtime)
+    """The demo seed as make demo runs it (both flags on), three times: the three reports."""
+    first = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
     second = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
     third = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
     return first, second, third
@@ -172,8 +167,8 @@ async def test_running_the_demo_seed_again_changes_nothing(
 ) -> None:
     first, second, third = seeded
     assert first.created, "the first run seeds"
-    assert second.created, "with the flags on, the second run finishes what the flags held back"
-    assert third.created == []
+    assert first.notes == []
+    assert (second.created, second.notes, third.created, third.notes) == ([], [], [], [])
     assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
         first.users,
         first.orgs,
@@ -185,19 +180,6 @@ async def test_running_the_demo_seed_again_changes_nothing(
     assert again.created == []
     assert again.notes == []
     assert await counts(owner) == before
-
-
-async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
-    seeded: tuple[DemoReport, DemoReport, DemoReport],
-) -> None:
-    first, second, _ = seeded
-    assert first.notes == [
-        "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
-        f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
-        f"{P2.key} with {TELCO_A.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
-    ]
-    assert second.notes == []
-    assert f"{P1.key} with {SACCO_B.legal_name}: send-nda -> NDA_PENDING" in second.created
 
 
 @pytest.mark.parametrize("app_env", ["production", "staging"])

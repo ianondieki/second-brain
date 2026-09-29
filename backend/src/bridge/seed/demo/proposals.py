@@ -11,20 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import Settings
 from bridge.seed.demo.data import PROPOSALS, VIEWED, DemoProposal
-from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, one
+from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _one
 
 # ---------------------------------------------------------------------------------------------------- proposals
 
 
 async def _existing_proposal(owner: AsyncEngine, owner_id: UUID, title: str) -> Any:
-    return await one(
+    """The owner's proposal whose first version carries ``title`` (registered versions never change, so a proposal
+    renamed later is still found), or its draft; hidden (deleted) ones too."""
+    return await _one(
         owner,
-        "SELECT p.id, p.status::text AS status, p.moderation_state::text AS moderation, cv.cert_id,"
-        " p.draft_version_id FROM proposals p"
+        "SELECT p.id, p.status::text AS status, cv.cert_id FROM proposals p"
         " LEFT JOIN proposal_versions cv ON cv.id = p.current_version_id"
-        " LEFT JOIN proposal_versions dv ON dv.id = p.draft_version_id"
-        " WHERE p.owner_id = :owner AND coalesce(p.title, dv.title) = :title AND p.status <> 'hidden'"
-        " ORDER BY p.created_at LIMIT 1",
+        " WHERE p.owner_id = :owner AND EXISTS (SELECT 1 FROM proposal_versions v WHERE v.proposal_id = p.id"
+        " AND v.version_no = 1 AND v.title = :title) ORDER BY p.created_at LIMIT 1",
         owner=owner_id,
         title=title,
     )
@@ -33,7 +33,7 @@ async def _existing_proposal(owner: AsyncEngine, owner_id: UUID, title: str) -> 
 async def _problem_of(owner: AsyncEngine, report: DemoReport, key: str) -> UUID:
     source = next(p for p in PROPOSALS if p.key == key)
     assert source.new_problem is not None
-    row = await one(
+    row = await _one(
         owner,
         "SELECT id FROM problems WHERE created_by = :user AND title = :title AND source = 'developer'",
         user=report.users[source.owner],
@@ -74,6 +74,8 @@ async def ensure_proposal(
     owner: AsyncEngine, actors: Actors, proposal: DemoProposal, niches: dict[str, UUID], report: DemoReport
 ) -> None:
     found = await _existing_proposal(owner, report.users[proposal.owner], proposal.title)
+    if found is not None and found.status == "hidden":
+        raise DemoSeedError(f"{proposal.key} was deleted by its owner")
     if found is not None and found.status == "published":
         proposal_id, cert_id = UUID(str(found.id)), str(found.cert_id)
     else:
@@ -104,8 +106,10 @@ async def ensure_proposal(
 
 async def pitch(owner: AsyncEngine, actors: Actors, proposal: DemoProposal, report: DemoReport) -> None:
     """Tag the proposal's organisations that are not tagged yet (P4's Pitch: E2 delivered, E1 and E0 held)."""
+    if proposal.key not in report.proposals:
+        raise DemoSeedError(f"{proposal.key} is not there to pitch")
     proposal_id = report.proposals[proposal.key]
-    wanted = [report.orgs[name] for name in proposal.pitch_to]
+    wanted = [report.orgs[name] for name in proposal.pitch_to if name in report.orgs]
     async with owner.connect() as conn:
         tagged = set(
             (
@@ -126,13 +130,16 @@ async def pitch(owner: AsyncEngine, actors: Actors, proposal: DemoProposal, repo
 
 async def record_view(owner: AsyncEngine, actors: Actors, settings: Settings, report: DemoReport) -> None:
     """A fixture reviewer accepts the Evaluation NDA and opens the proposal's Tier 2 once, so "Who has seen this" has
-    a row to show. Only with FEATURE_TIER2_ENABLED (make demo sets it; CI's stack leaves it off)."""
+    a row to show. Only with FEATURE_TIER2_ENABLED (make demo and CI's e2e stack set it; the seed notes the skip
+    without it)."""
     proposal, org, reviewer = VIEWED
     if not settings.feature_tier2_enabled:
         report.notes.append("Tier-2 view skipped: FEATURE_TIER2_ENABLED is off")
         return
+    if proposal.key not in report.proposals or org.legal_name not in report.orgs:
+        raise DemoSeedError(f"{proposal.key} or {org.legal_name} is not there")
     proposal_id, org_id = report.proposals[proposal.key], report.orgs[org.legal_name]
-    seen = await one(
+    seen = await _one(
         owner,
         "SELECT 1 FROM document_views WHERE proposal_id = :p AND viewer_user_id = :u LIMIT 1",
         p=proposal_id,

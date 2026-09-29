@@ -10,6 +10,7 @@ from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
 from fastapi import FastAPI
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -29,13 +30,14 @@ from bridge.seed.demo.data import DEMO_PASSWORD, ORGS, DemoDeveloper, DemoOrg, D
 from bridge.seed.demo.runtime import (
     SEED_METHOD,
     Actors,
+    DemoKeysChanged,
     DemoReport,
     DemoSeedError,
-    execute,
-    one,
+    _execute,
+    _one,
+    _user_id_of,
     signed_in,
     totp_code,
-    user_id_of,
 )
 from bridge.tenancy.models import Membership
 
@@ -75,7 +77,7 @@ async def ensure_developer(
     dev: DemoDeveloper,
     report: DemoReport,
 ) -> None:
-    user_id = await user_id_of(owner, dev.email)
+    user_id = await _user_id_of(owner, dev.email)
     if user_id is None:
         user_id = await _create_account(factory, settings, dev.email, dev.display_name, None)
         report.did(f"developer {dev.email}")
@@ -84,9 +86,9 @@ async def ensure_developer(
 
 async def _org_of(owner: AsyncEngine, org: DemoOrg, owner_id: UUID | None) -> UUID | None:
     if owner_id is None:
-        row = await one(owner, "SELECT id FROM organizations WHERE slug = :slug", slug=org.slug)
+        row = await _one(owner, "SELECT id FROM organizations WHERE slug = :slug", slug=org.slug)
     else:
-        row = await one(
+        row = await _one(
             owner,
             "SELECT o.id FROM organizations o JOIN memberships m ON m.org_id = o.id"
             " WHERE m.user_id = :user AND o.legal_name = :name AND 'owner' = ANY (m.roles)",
@@ -103,7 +105,7 @@ async def ensure_org(
         org_id = await _org_of(owner, org, None)
         if org_id is None:
             org_id = uuid7()
-            await execute(
+            await _execute(
                 owner,
                 "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, county_code)"
                 " VALUES (:id, CAST(:kind AS org_kind), :name, :slug, 'admin', 'unclaimed', :county)",
@@ -116,7 +118,7 @@ async def ensure_org(
             report.did(f"organisation {org.legal_name}")
         report.orgs[org.legal_name] = org_id
         return
-    owner_id = await user_id_of(owner, org.owner.email)
+    owner_id = await _user_id_of(owner, org.owner.email)
     if owner_id is None:
         owner_id = await _create_account(factory, settings, org.owner.email, org.owner.display_name, org)
         report.did(f"organisation {org.legal_name} signed up by {org.owner.email}")
@@ -140,7 +142,7 @@ async def _ensure_seat(
 ) -> None:
     """A member added by the organisation's owner (the invitation flow is not built): the account, its consent to
     reminders, and the membership inserted under the owner's Row-Level Security (owners grant protected roles)."""
-    user_id = await user_id_of(owner, seat.email)
+    user_id = await _user_id_of(owner, seat.email)
     async with factory() as db:
         if user_id is None:
             user_id = uuid7()
@@ -160,7 +162,7 @@ async def _ensure_seat(
                 db, settings, user_id=user_id, decisions={ConsentPurpose.REMINDERS: True}, source=SEED_METHOD
             )
             report.did(f"account {seat.email}")
-        member = await one(
+        member = await _one(
             owner, "SELECT id FROM memberships WHERE org_id = :org AND user_id = :user", org=org_id, user=user_id
         )
         if member is None:
@@ -186,14 +188,14 @@ async def owner_facts(owner: AsyncEngine, niches: dict[str, UUID], report: DemoR
     """What staff decide and no application path writes yet: the D-37 demo flag, D2, and each fixture organisation's
     verification level, verified domain, county and niche."""
     emails = sorted(report.users)
-    flagged = await execute(
+    flagged = await _execute(
         owner, "UPDATE users SET demo_account = true WHERE email = ANY(:emails) AND NOT demo_account", emails=emails
     )
     if flagged:
         report.did("demo_account flags")
     for org in ORGS:
         org_id = report.orgs[org.legal_name]
-        changed = await execute(
+        changed = await _execute(
             owner,
             "UPDATE organizations SET verification = CAST(:level AS org_verification), verified_domain = :domain,"
             " official_domains = CAST(:domains AS citext[]), county_code = :county,"
@@ -208,7 +210,7 @@ async def owner_facts(owner: AsyncEngine, niches: dict[str, UUID], report: DemoR
         )
         if changed:
             report.did(f"{org.legal_name} verified {org.verification.value}")
-        added = await execute(
+        added = await _execute(
             owner,
             "INSERT INTO org_niches (org_id, niche_id) VALUES (:org, :niche) ON CONFLICT DO NOTHING",
             org=org_id,
@@ -222,7 +224,7 @@ async def raise_to_d2(owner: AsyncEngine, dev: DemoDeveloper, report: DemoReport
     """D2 (KYC review) has no application path yet: set as staff would, only once D1 is done."""
     if dev.level != DevVerification.D2:
         return
-    changed = await execute(
+    changed = await _execute(
         owner,
         "UPDATE developer_profiles SET verification_level = 'd2', updated_at = now()"
         " WHERE user_id = :user AND verification_level = 'd1'",
@@ -240,13 +242,13 @@ async def accept_master_terms(
     if org.verification != OrgVerification.E2 or signatory is None:
         return
     org_id, user_id = report.orgs[org.legal_name], report.users[signatory.email]
-    current = await one(
+    current = await _one(
         owner,
         "SELECT id, sha256 FROM legal_templates WHERE id = app_current_legal_template('master_enterprise_terms')",
     )
     if current is None:
         raise DemoSeedError("no Master Enterprise Terms template: run the reference seed first")
-    accepted = await one(
+    accepted = await _one(
         owner,
         "SELECT 1 FROM legal_acceptances WHERE org_id = :org AND user_id = :user AND legal_template_id = :template",
         org=org_id,
@@ -269,6 +271,16 @@ async def accept_master_terms(
 # ---------------------------------------------------------------------------------------------------------- TOTP
 
 
+async def _turned_off(db: AsyncSession, user_id: UUID) -> bool:
+    """Whether the account had TOTP once (its ``auth.totp_enabled`` audit event): then its owner turned it off in the
+    app, and the seed leaves it off."""
+    found = await db.execute(
+        text("SELECT 1 FROM audit_events WHERE actor_user_id = :u AND action = 'auth.totp_enabled' LIMIT 1"),
+        {"u": user_id},
+    )
+    return found.first() is not None
+
+
 async def enrol_totp(
     app: FastAPI,
     owner: AsyncEngine,
@@ -287,16 +299,18 @@ async def enrol_totp(
     async with factory() as db:
         await bind_tenant(db, user_id=user_id)
         user = await lock_user(db, user_id)
+        if user.totp_secret_enc is None and await _turned_off(db, user_id):
+            raise DemoSeedError(f"{email} turned two-step sign-in off")
         if user.totp_secret_enc is not None:
             try:
                 stored = decrypt(key, user.totp_secret_enc, user.id.bytes).decode("ascii")
             except InvalidTag as exc:
-                raise DemoSeedError(
+                raise DemoKeysChanged(
                     f"{email}'s TOTP secret does not open with this DATA_ENCRYPTION_KEY: the demo database was"
                     " seeded with other keys; run make demo-reset"
                 ) from exc
-            if stored != secret:
-                raise DemoSeedError(f"{email} has a TOTP secret that is not the demo one; run make demo-reset")
+            if stored != secret:  # its owner turned TOTP off and on again in the app
+                raise DemoSeedError(f"{email} has a TOTP secret of its own, not the demo one")
             return
         user.totp_pending_enc = encrypt(key, secret.encode("ascii"), user.id.bytes)
         await db.commit()
@@ -312,7 +326,7 @@ async def verify_phone(
     owner: AsyncEngine, actors: Actors, dev: DemoDeveloper, sms: SmsProvider, report: DemoReport
 ) -> None:
     """D1 through the phone-code routes; the fake SMS provider keeps the code in memory, where the seed reads it."""
-    level = await one(
+    level = await _one(
         owner,
         "SELECT verification_level::text AS level FROM developer_profiles WHERE user_id = :u",
         u=report.users[dev.email],
