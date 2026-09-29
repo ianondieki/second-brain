@@ -292,8 +292,10 @@ Procrastinate lock on the hourly anchor task; a THREAT_MODEL row for rogue/MITM/
 not print owner-chosen Tier-2 key names; the test builder's `owner_handle` breaks under schema round 4; the
 verify-offline runbook's POST needs the CSRF header). Reviewer round 2 **PASS** (MINORs: `test_the_nightly_task_closes_the_day_through_the_runtime`
 uses a fixed epoch that closes a future day and fails under schema round 4's `transparency_roots_guard`; the runbook's
-pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). impl-backend is on these
-eight MINORs now (compatible with the schema before and after round 4); then merge schema v2 in, re-check, merge. Its four
+pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). Done in `21fdd54`..`9a414c0` (1140
+passed; `bridge/provenance` ~99%; verified against the round-4 schema in a scratch copy: 196 provenance/jobs tests pass).
+Next: merge schema v2 in once it is merged, switch to `app_unanchored_chain_heads()` and write `snapshot_at`, quick
+reviewer re-check (fail-first evidence for the S1 batch/budget tests was uneven), CI, merge. Its four
 schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
 column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
