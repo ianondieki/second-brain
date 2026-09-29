@@ -12,12 +12,15 @@ from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from bridge import __version__
+from bridge.admin.router import router as admin_router
 from bridge.api import health
 from bridge.auth import csrf
 from bridge.auth.router import me_router as identities_router
 from bridge.auth.router import router as auth_router
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
+from bridge.directory.responsiveness import NoResponsivenessData
+from bridge.directory.router import router as directory_router
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
 from bridge.profiles.router import public_router as consents_router
@@ -60,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = settings
+    app.state.responsiveness = NoResponsivenessData()  # the directory score has no data until Phase 3
 
     @app.middleware("http")
     async def csrf_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -90,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(me_router)
     app.include_router(identities_router)
     app.include_router(consents_router)
+    app.include_router(directory_router)
+    app.include_router(admin_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 
