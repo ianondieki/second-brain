@@ -8,10 +8,10 @@ for disputes), and the History (``HistoryOut``) is the same JSON for both partie
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from bridge.engagements.state_machine import Command
 from bridge.models.enums import (
@@ -23,6 +23,7 @@ from bridge.models.enums import (
     EngagementOrigin,
     EngagementParty,
     EngagementState,
+    GrantSource,
     IpTerms,
     MilestoneState,
     PaymentMethod,
@@ -255,3 +256,29 @@ class ContactRevealOut(BaseModel):
     developer_name: str
     email: str | None
     phone: str | None = Field(description="Not revealed in the prototype (the verified phone is the developer's)")
+
+
+class InterestBody(BaseModel):
+    """Express interest (docs/spec/06 6.9 stage 0; REQ-ENG-04): the proposal, where the organisation found it (a
+    scout match, which ``match_id`` names, or the Browse repo) and the contact it names with a channel and a
+    contact-by date."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_id: UUID
+    origin: Literal[EngagementOrigin.ORG_AGENT_MATCH, EngagementOrigin.ORG_BROWSE]
+    match_id: UUID | None = Field(default=None, description="The scout match (required for org_agent_match only).")
+    contact_user_id: UUID
+    channel: ContactChannel
+    contact_by: date
+
+
+class Tier2ShareOut(BaseModel):
+    """Whether the developer shared the full proposal (Tier 2) with the engagement's organisation: a live grant."""
+
+    engagement_id: UUID
+    shared: bool
+    grant_id: UUID | None
+    source: GrantSource | None
+    shared_at: datetime | None
+    counts_as_unlock: bool = Field(description="True for a proposal not tagged to the organisation (REQ-BIL-03).")
