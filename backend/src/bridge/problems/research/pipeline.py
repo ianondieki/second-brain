@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final
@@ -59,7 +59,7 @@ from bridge.logging import get_logger
 from bridge.models.enums import ResearchRunStatus
 from bridge.problems.models import ResearchRun
 from bridge.problems.research import checks, synthesis
-from bridge.problems.research.policy import ResearchPolicy
+from bridge.problems.research.policy import ResearchPolicy, get_research_policy
 from bridge.problems.research.sources import Catalogue, Excerpt
 
 NAIROBI: Final = ZoneInfo("Africa/Nairobi")
@@ -110,9 +110,18 @@ async def clock_now(db: AsyncSession) -> datetime:
 
 
 async def start_run(
-    db: AsyncSession, *, user_id: UUID, niche_slug: str, country: str, catalogue: Catalogue
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    niche_slug: str,
+    country: str,
+    catalogue: Catalogue,
+    policy: ResearchPolicy | None = None,
 ) -> ResearchRun:
-    """A running run of ``niche_slug`` in ``country`` started by ``user_id`` (the caller's transaction)."""
+    """A running run of ``niche_slug`` in ``country`` started by ``user_id`` (the caller's transaction). A running run
+    of the niche younger than ``stale_run_minutes`` refuses it (``run_in_progress``); an older one (its job lost, or
+    its starter no longer a staff admin, so it can never finish) no longer blocks the niche."""
+    policy = policy or get_research_policy()
     if country not in catalogue.allowlists or niche_slug not in catalogue.niches(country):
         raise RunRefused("no_saved_excerpts")
     niche_id = await db.scalar(select(Niche.id).where(Niche.slug == niche_slug))
@@ -126,6 +135,7 @@ async def start_run(
             ResearchRun.country == country,
             ResearchRun.county_code.is_(None),
             ResearchRun.status == ResearchRunStatus.RUNNING,
+            ResearchRun.created_at > func.now() - timedelta(minutes=policy.stale_run_minutes),
         )
     )
     if running:

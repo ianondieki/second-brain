@@ -93,6 +93,7 @@ research:
   archive_after_months: 18           # "auto-archive at 18": such an excerpt is never sent and never counts
   discard_below: "0.40"              # a card below this confidence is discarded
   corroboration_publishers: 3        # distinct publishers for full corroboration (fewer: a share of it)
+  stale_run_minutes: 60              # a running run older than this no longer blocks a new run of its niche
   weights:                           # confidence = sum(weight * term); the four weights add up to 1
     source_quality: "0.35"
     corroboration: "0.25"

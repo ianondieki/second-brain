@@ -38,6 +38,7 @@ def test_the_real_file_has_the_spec_numbers() -> None:
     }
     assert (policy.stale_after_months, policy.archive_after_months) == (12, 18)
     assert (policy.min_excerpts, policy.max_excerpts) == (3, 5)
+    assert policy.stale_run_minutes == 60
 
 
 @pytest.mark.parametrize(

@@ -67,7 +67,8 @@ down to 3 decimals; below 0.40 discarded.
 
 **A run** (`pipeline.py`, job `research.run`). `POST /api/admin/research/runs` inserts a running `research_runs` row
 as the staff admin (national: county runs are Release 2) and queues the job in the same transaction; a second running
-run of the niche is 409. The job binds the run's starter and runs only that admin's running run (idempotent;
+run of the niche is 409 unless the first is older than `stale_run_minutes` (60: its job was lost, or its starter
+lost the admin role, so it can never finish; see the REQ-SCOUT-01 follow-up on `research_runs_guard`). The job binds the run's starter and runs only that admin's running run (idempotent;
 anyone else: nothing), then: the excerpts; the caps before any call (searches and fetches stay 0, under the CHECK's
 25 and 40, AC-RES-3; the input token estimate against `max_input_tokens`, 400k); one call through the routed
 `LLMClient` (`CallContext(user_id=starter)`, `llm_calls` row, caps, D-37 rule: a non-demo admin's call gets the

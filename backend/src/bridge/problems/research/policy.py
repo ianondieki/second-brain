@@ -33,6 +33,7 @@ _INTS: Final[Mapping[str, tuple[int, int]]] = {
     "stale_after_months": (1, 120),
     "archive_after_months": (1, 240),
     "corroboration_publishers": (1, 10),
+    "stale_run_minutes": (5, 1440),
 }
 _KEYS: Final = frozenset({*_INTS, "discard_below", "weights", "source_quality"})
 
@@ -50,6 +51,7 @@ class ResearchPolicy:
     stale_after_months: int
     archive_after_months: int
     corroboration_publishers: int
+    stale_run_minutes: int
     discard_below: Decimal
     weights: Mapping[str, Decimal]
     source_quality: Mapping[str, Decimal]

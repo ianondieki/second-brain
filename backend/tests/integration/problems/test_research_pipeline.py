@@ -380,6 +380,19 @@ async def test_a_second_run_of_a_niche_waits_for_the_first(
     with pytest.raises(RunRefused, match="run_in_progress"):
         await start(app_engine, research_world, "agriculture")
     factory = create_session_factory(app_engine)
+    async with factory() as db:  # a running run older than stale_run_minutes (a lost job) no longer blocks
+        await bind_tenant(db, user_id=research_world.admin)
+        stale = dataclasses.replace(get_research_policy(), stale_run_minutes=0)
+        second = await start_run(
+            db,
+            user_id=research_world.admin,
+            niche_slug=research_world.slugs["agriculture"],
+            country="KE",
+            catalogue=research_world.catalogue,
+            policy=stale,
+        )
+        await db.rollback()
+    assert second.status is ResearchRunStatus.RUNNING
     async with factory() as db:
         await bind_tenant(db, user_id=research_world.admin)
         for slug, code in (("no-such-niche", "no_saved_excerpts"),):
