@@ -306,3 +306,21 @@ then may the provider CHECK admit `mpesa` or `paystack`.
    (P11, P12, P14) start from this section.
 4. The downgrade flag `-x allow_payment_loss=true` is new: an operator runbook for rollbacks should name it (with the
    backup step) when the deploy runbook is written.
+
+## Re-check of the fix round (reviewer PASS and security-reviewer PASS at `1da7349`, 2026-09-29): follow-ups
+
+- `app_trend_aggregates` window edges are microsecond-precise while the output is per day: an observer who knows two
+  of three actors can bisect `p_since` to recover the third actor's event time. Snap `p_since`/`p_now` to
+  Africa/Nairobi day boundaries inside the function (P12, in a later revision), optionally require ≥3 distinct
+  `org_hash` for org-side kinds.
+- `proposal_published` and `proposal_version_published` have one actor each, so they can never reach the 3-actor
+  floor: P12 reads publication facts from `proposals.published_at` / `proposal_versions.registered_at`, not the
+  aggregate (or drop them from the allowlist later). Trending Problems (REQ-TREND-02) needs problem kinds in a later
+  revision or is derived from linked proposals.
+- `published_date` has no lower bound (`0001-01-01` accepted): add a floor such as 1990-01-01 later.
+- `research_runs_guard`: a run whose starter lost staff admin stays `running` forever; later let any staff admin stop
+  a running run with an `abandoned` code.
+- P11 operating rule: collapse whitespace (newlines, tabs) in LLM statements before `app_create_research_candidate`,
+  which refuses control characters.
+- Residual (recorded in THREAT_MODEL §4): activation trusts the INSERT policy for the amount; the REQ-BIL-04 platform
+  path must keep amount = plan price at checkout = provider-reported amount.
