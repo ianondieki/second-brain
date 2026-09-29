@@ -27,6 +27,7 @@ from bridge.models.enums import (
     OrgVerification,
     ProposalAsk,
     ProposalMaturity,
+    StaffRole,
 )
 
 # Dev-only demo credentials (README "Run the demo"); refused outside APP_ENV dev and test.
@@ -56,6 +57,16 @@ class DemoSeat:
     email: str
     display_name: str
     roles: tuple[OrgRole, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DemoStaff:
+    """A platform staff account (docs/spec/03). ``staff_role`` has no application path: the owner role sets it, as
+    staff would, with ``demo_account`` (D-37: a demo staff admin's research calls may go to a free provider)."""
+
+    email: str
+    display_name: str
+    role: StaffRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +190,10 @@ NGO_D = DemoOrg(
     owner=None,
 )
 ORGS: Final = (TELCO_A, SACCO_B, COUNTY_C, NGO_D)
+
+# The staff admin who starts research runs and approves research cards (P11); P15 adds a moderator here.
+STAFF_ADMIN = DemoStaff("admin@staff.example", "Staff Admin (demo)", StaffRole.ADMIN)
+STAFF: Final = (STAFF_ADMIN,)
 
 P1 = DemoProposal(
     key="P1",
@@ -347,4 +362,5 @@ def all_accounts() -> list[tuple[str, str, str]]:
         for seat in people:
             roles = "+".join(role.value for role in seat.roles)
             accounts.append((seat.email, seat.display_name, f"{org.legal_name}: {roles}"))
+    accounts.extend((staff.email, staff.display_name, f"platform staff: {staff.role.value}") for staff in STAFF)
     return accounts

@@ -65,11 +65,14 @@ from bridge.seed.demo.data import (
     P4,
     PROPOSALS,
     SACCO_B,
+    STAFF_ADMIN,
     TELCO_A,
     VIEWED,
     all_accounts,
     totp_secret,
 )
+from bridge.seed.demo.research import SEEDED_ANSWERS
+from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
@@ -513,6 +516,57 @@ async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
         o=report.orgs[org.legal_name],
     )
     assert [v[0] for v in views] == [reviewer.email]
+
+
+# ---------------------------------------------------------------------------------------------------- research
+
+
+async def test_the_staff_admin_approved_one_seeded_research_card_per_niche(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P11: a demo staff admin (staff_role admin, demo account, TOTP through the enrolment path) ran one research run
+    per saved-excerpt niche on the fixed seeded answers and approved each card through the admin API. The cards cite
+    the saved excerpts as seeded examples, no model was called, and the public card says it is a seeded example."""
+    report = seeded[0]
+    admin = report.users[STAFF_ADMIN.email]
+    [staff] = await rows(
+        owner,
+        "SELECT staff_role::text AS role, demo_account, totp_enabled_at IS NOT NULL AS totp FROM users WHERE id = :id",
+        id=admin,
+    )
+    assert (staff.role, staff.demo_account, staff.totp) == ("admin", True, True)
+    cards = await rows(
+        owner,
+        "SELECT p.id, n.slug::text AS niche, p.status::text AS status, p.moderation_state::text AS moderation,"
+        " p.moderator_id, p.ai_generated, r.status::text AS run, r.candidates, r.demo_fallback, r.searches, r.fetches,"
+        " (SELECT array_agg(s.excerpt_ref ORDER BY s.excerpt_ref) FROM problem_sources s WHERE s.problem_id = p.id)"
+        " AS refs FROM problems p JOIN research_runs r ON r.id = p.research_run_id JOIN niches n ON n.id = r.niche_id"
+        " WHERE r.started_by = :admin",
+        admin=admin,
+    )
+    assert sorted(c.niche for c in cards) == sorted(SEEDED_ANSWERS)
+    for card in cards:
+        assert (card.status, card.moderation, card.ai_generated) == ("published", "clear", True)
+        assert card.moderator_id == admin
+        assert (card.run, card.candidates, card.demo_fallback, card.searches, card.fetches) == (
+            "completed",
+            1,
+            False,
+            0,
+            0,
+        )
+        assert card.refs == [f"example:{i}" for i, _ in sorted(SEEDED_ANSWERS[card.niche]["citations"])]
+    calls = await rows(owner, "SELECT count(*) FROM llm_calls WHERE trace_id LIKE 'research:%'")
+    assert calls[0][0] == 0  # nothing was called: the answers are the seed's own
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, AMINA.email) as amina,
+    ):
+        shown = (await amina.call("GET", f"/api/problems/{cards[0].id}")).json()
+    assert shown["seeded_example"] is True
+    assert shown["label"].startswith("Seeded example for the demo (not a live AI result), human-reviewed on ")
+    assert "AI-drafted" not in shown["label"]
+    assert len(shown["citations"]) == 3
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:
