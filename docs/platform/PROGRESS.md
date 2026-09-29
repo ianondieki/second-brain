@@ -313,8 +313,10 @@ real bug: a session signed out or an account suspended during the provider call 
 callback still clears the victim's live flow cookie; the forged-callback test never sends a live cookie;
 `reload_session` should assert nothing is pending; residual text for `TRUSTED_PROXIES`). Reviewer **PASS** (MINORs: per-IP re-auth
 tested only on the password route; "touch no database" wording; `c89ced0`..`daa31ac` each fail the OpenAPI drift check
-because the regeneration landed in `77892bc` — recorded as a deviation, history not rewritten). impl-backend is on the
-combined MINOR round; then CI and merge. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
+because the regeneration landed in `77892bc` — recorded as a deviation, history not rewritten). MINOR round done (`f040615`..`9e392fd`: a
+forged callback keeps the live flow cookie; `reload_session` refuses pending changes; live-cookie and four-route
+per-IP tests; 231 passed, auth 96%; 7 mutants killed; orchestrator read the cookie change). Integration merged in
+(`a24dd47`); CI run 36538966699 dispatched; merge when green. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
