@@ -365,11 +365,15 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-ENG-01-schema-v3` (P1) | `3191af5` | revision 0003 done (tracker tables, `users.demo_account`, `test_clock`); 1728 passed; reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
-| `feat/REQ-PROP-01-proposals` (P2) | — | impl-backend | reviewer, merge |
-| `feat/REQ-DIR-01-screens` (P8 part 1: `/verify`, Companies) | — | impl-frontend | ux-reviewer + reviewer, merge |
+| `feat/REQ-PROP-01-proposals` (P2) | `803062a`+ | built (1823 passed); reviewer CHANGES_REQUIRED (3 MAJOR: `name @host` emails, Unicode confusables, moderation decision not tied to the reviewed version); impl-backend fixing | reviewer re-check, CI, merge |
+| `feat/REQ-SEC-01-tier2-access` (P3) | — | impl-backend (from the P2 head) | merge P2 in, reviewer + security-reviewer, merge |
+| `feat/REQ-LLM-01-providers` (P7) | `ca92383` | built (2185 passed); reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
+| `feat/REQ-LLM-01-calls-since` (revision 0004) | — | db-migrations: `app_llm_calls_since` so P7's free-slot caps count platform-wide | review, merge, then P7 switches to it |
+| `feat/REQ-ENG-02-tracker` (P5) | — | impl-backend: state machine, API, EM2, contact reveal, NDA placeholder, agreement, signatures, payment, test clock router | reviewer + security-reviewer, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+Also merged on 2026-09-29: P1 schema v3 `3bb82b3` (revision 0003; reviewer + security-reviewer PASS round 2) and P8 part 1 `b787d8b` (`/verify`, Companies; reviewer PASS, ux-reviewer PASS round 2); 2084 backend and 244 frontend tests on the merged tree. CI note: `pr.yml`'s gitleaks step scans every branch's commits with the checked-out branch's `.gitleaksignore`, so reviewed fixture fingerprints go on the integration branch and reach feature branches by merge. Decisions opened this session: D-38 (research excerpts), D-39 (attestation wording).
 
 **Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
 variables are set. D-27 (a): Swahili stays off; English copy-lint only. D-28 (a): the JS budget counts gzipped bodies,
@@ -395,14 +399,14 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | P11 source excerpts (research, early) | done (`feat/REQ-RES-01-sources` `0bb707d`) | 19 verbatim dated excerpts, 4 niches; D-38 (publisher terms) open, default (a) local only |
 | P0 schema v2 round 6 → merge | done (`ba42e69`) | reviewer + security-reviewer PASS; CI green |
 | P0 T2.4, T2.6a, D1, T2.2 → merge | done | 1998 backend tests on the merged tree |
-| P1 schema v3 (prototype) | in progress | db-migrations |
-| P2 proposals | in progress | impl-backend |
-| P3 Tier-2 access | todo | |
+| P1 schema v3 (prototype) | done (`3bb82b3`) | revision 0003 |
+| P2 proposals | review fixes | 3 MAJOR being fixed |
+| P3 Tier-2 access | in progress | impl-backend |
 | P4 directory search + Pitch + EM1 | todo | |
-| P5 tracker main path + test clock | todo | |
+| P5 tracker main path + test clock | in progress | impl-backend |
 | P6 reminders | todo | |
-| P7 LLM providers (D-37) | todo | |
-| P8 M1 screens | in progress | part 1 `/verify` + Companies |
+| P7 LLM providers (D-37) | in review | + revision 0004 for platform-wide request counts |
+| P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
 | P9 `make demo` (basic) | todo | |
 | M1 merged, tag `prototype-m1`, M1 report | todo | |
 | P10 scout | todo | M2 |
