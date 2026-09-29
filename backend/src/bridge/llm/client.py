@@ -107,7 +107,8 @@ class BatchItem:
 
 
 class BatchHandle(BaseModel):
-    """What a job stores between ``batch_submit`` and ``batch_poll`` (JSON-serialisable)."""
+    """What a job stores between ``batch_submit`` and ``batch_poll`` (JSON-serialisable). ``demo_fallback``: a local
+    run's batch that the deterministic fake answers (D-37; ``bridge.llm.routing``), holding only its custom ids."""
 
     batch_id: str
     task: str
@@ -116,6 +117,8 @@ class BatchHandle(BaseModel):
     org_id: UUID | None
     user_id: UUID | None
     inputs: dict[str, dict[str, Any]]
+    demo_fallback: bool = False
+    fallback_reason: str | None = None
 
 
 @dataclass(frozen=True)
