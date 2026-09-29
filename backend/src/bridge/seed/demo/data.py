@@ -20,6 +20,8 @@ from typing import Final
 
 from bridge.models.enums import (
     DevVerification,
+    EngagementState,
+    IpTerms,
     OrgKind,
     OrgRole,
     OrgVerification,
@@ -92,6 +94,27 @@ class DemoProposal:
     new_problem: DemoProblem | None = None
     links_problem_of: str | None = None  # another proposal's key: link the problem it described
     pitch_to: tuple[str, ...] = field(default=())  # organisation legal names
+
+
+@dataclass(frozen=True, slots=True)
+class DemoMilestone:
+    deliverable: str
+    amount_kes_minor: int  # KES in cents
+    due_in_days: int  # from the day the terms are proposed (the app clock)
+
+
+@dataclass(frozen=True, slots=True)
+class DemoEngagement:
+    """An engagement opened by a Pitch to an E2 fixture, driven along the main path through the tracker API until it
+    reaches ``target``. Terms and the payment reference are used only when the path gets that far."""
+
+    proposal: str  # proposal key
+    org: str  # organisation legal name
+    target: EngagementState
+    ip_terms: IpTerms = IpTerms.NON_EXCLUSIVE_LICENCE
+    deemed_acceptance_days: int = 10
+    milestones: tuple[DemoMilestone, ...] = ()
+    payment_reference: str = "DEMO-PAYMENT-0001"
 
 
 AMINA = DemoDeveloper("amina@developers.example", "Amina Wanjiru", DevVerification.D2, "+254700000101")
@@ -254,7 +277,7 @@ P3 = DemoProposal(
             "Counties cannot reconcile daily market fees collected in cash, and traders have no proof of payment."
         ),
     ),
-    pitch_to=(COUNTY_C.legal_name, NGO_D.legal_name),
+    pitch_to=(COUNTY_C.legal_name, NGO_D.legal_name, TELCO_A.legal_name),
 )
 P4 = DemoProposal(
     key="P4",
@@ -276,8 +299,37 @@ P4 = DemoProposal(
     architecture="USSD gateway callbacks to one small service with a read-only copy of the loan schedule.",
     pricing="KES 60,000 setup; USSD session costs passed through at the gateway's rate.",
     links_problem_of="P1",
+    pitch_to=(SACCO_B.legal_name,),
 )
 PROPOSALS: Final = (P1, P2, P3, P4)
+
+# The tracker at a few stages (P5): P3 with Telco A stays SUBMITTED from its Pitch (the live walk-through), P4 with
+# SACCO B is INTEREST_CONFIRMED (EM2 to Brian), P1 with SACCO B is in NEGOTIATION on the organisation's draft, and P2
+# with Telco A has run the whole main path to CLOSED (D2 signs the agreement; the payment is recorded, never moved).
+ENGAGEMENTS: Final = (
+    DemoEngagement(proposal=P3.key, org=TELCO_A.legal_name, target=EngagementState.SUBMITTED),
+    DemoEngagement(proposal=P4.key, org=SACCO_B.legal_name, target=EngagementState.INTEREST_CONFIRMED),
+    DemoEngagement(
+        proposal=P1.key,
+        org=SACCO_B.legal_name,
+        target=EngagementState.NEGOTIATION,
+        milestones=(
+            DemoMilestone("Two-branch pilot with the daily call list", 12_000_000, 45),
+            DemoMilestone("Roll-out to every branch and handover", 18_000_000, 120),
+        ),
+    ),
+    DemoEngagement(
+        proposal=P2.key,
+        org=TELCO_A.legal_name,
+        target=EngagementState.CLOSED,
+        ip_terms=IpTerms.NON_EXCLUSIVE_LICENCE,
+        milestones=(
+            DemoMilestone("Sensor kits and alerts at ten pilot sites", 9_000_000, 30),
+            DemoMilestone("Refuelling map and monthly report", 6_000_000, 60),
+        ),
+        payment_reference="DEMO-MPESA-QK12AB34CD",
+    ),
+)
 
 # The certificate exported for the end-to-end tests (E2E_VERIFY_CERT_ID; python -m bridge.demo cert-id).
 EXPORTED_PROPOSAL: Final = P1

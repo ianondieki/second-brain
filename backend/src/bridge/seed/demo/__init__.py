@@ -2,7 +2,8 @@
 
 Loads ``bridge.seed.demo.data`` on top of the reference data: two demo developers, four fixture organisations with
 their seats, four published proposals (Tier 1 and Tier 2, each registered with a certificate id), the problems they
-describe or link, and their tags (delivered to the E2 fixtures, held for the E1 and E0 ones). Dev and test only
+describe or link, their tags (delivered to the E2 fixtures, held for the E1 and E0 ones) and the tracker at
+``SUBMITTED``, ``INTEREST_CONFIRMED``, ``NEGOTIATION`` and ``CLOSED``. Dev and test only
 (``demo_refusal``): staging and production refuse it, and so does an ``APP_ENV`` left to the settings default.
 
 Everything that has an application path goes through it, in process: the accounts through ``create_account`` (what
@@ -11,9 +12,9 @@ signup runs), D1 through the phone-code routes with the fake SMS provider, TOTP 
 organisation's owner under Row-Level Security, the Master Enterprise Terms accepted by the signatory under RLS, and
 drafts, publishing (which queues the T2.4 registration), pitching and the Evaluation NDA through the API. The rest has
 no application path yet and is written as the owner role, as staff would: ``users.demo_account`` (D-37), D2, the
-organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. Each party signs
-in through the login routes with the demo password and its TOTP code. Engagements beyond ``SUBMITTED`` and reminders
-follow when P5 and P6 merge.
+organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. The engagements
+opened by the Pitch are then driven through the tracker API to a few stages (``bridge.seed.demo.engagements``), each
+party signed in with the demo password and its TOTP code. Reminders follow when P6 merges.
 
 Idempotent: every step looks for what it would create (by address, organisation name, proposal title) and skips what
 exists, so running it twice changes nothing. A database seeded under other keys (``DATA_ENCRYPTION_KEY``) is refused
@@ -36,7 +37,8 @@ from bridge.seed.demo.accounts import (
     raise_to_d2,
     verify_phone,
 )
-from bridge.seed.demo.data import DEVELOPERS, EXPORTED_PROPOSAL, ORGS, PROPOSALS
+from bridge.seed.demo.data import DEVELOPERS, ENGAGEMENTS, EXPORTED_PROPOSAL, ORGS, PROPOSALS
+from bridge.seed.demo.engagements import drive
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.runtime import (
     Actors,
@@ -96,6 +98,8 @@ async def seed_demo(
         for proposal in PROPOSALS:
             await pitch(owner_engine, actors, proposal, report)
         await record_view(owner_engine, actors, settings, report)
+        for plan in ENGAGEMENTS:
+            await drive(owner_engine, actors, settings, plan, report)
     return report
 
 

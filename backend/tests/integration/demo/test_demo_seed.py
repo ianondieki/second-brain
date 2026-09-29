@@ -34,7 +34,9 @@ from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.db import create_session_factory
 from bridge.demo import __main__ as demo_command
+from bridge.engagements import notify
 from bridge.integrations.sms import FakeSmsProvider
+from bridge.models.enums import EngagementState
 from bridge.notifications.email import FakeEmailProvider
 from bridge.provenance import service as provenance
 from bridge.provenance.signing import LocalSigner, register_public_key
@@ -54,6 +56,7 @@ from bridge.seed.demo.data import (
     BRIAN,
     COUNTY_C,
     DEMO_PASSWORD,
+    ENGAGEMENTS,
     NGO_D,
     ORGS,
     P1,
@@ -184,13 +187,17 @@ async def test_running_the_demo_seed_again_changes_nothing(
     assert await counts(owner) == before
 
 
-async def test_with_the_flags_off_the_view_is_skipped_and_said(
+async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     seeded: tuple[DemoReport, DemoReport, DemoReport],
 ) -> None:
     first, second, _ = seeded
-    assert first.notes == ["Tier-2 view skipped: FEATURE_TIER2_ENABLED is off"]
+    assert first.notes == [
+        "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
+        f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
+        f"{P2.key} with {TELCO_A.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
+    ]
     assert second.notes == []
-    assert second.created == [f"Tier-2 view of {P1.key} by {VIEWED[2].email}"]
+    assert f"{P1.key} with {SACCO_B.legal_name}: send-nda -> NDA_PENDING" in second.created
 
 
 @pytest.mark.parametrize("app_env", ["production", "staging"])
@@ -445,20 +452,70 @@ async def test_e2_fixtures_get_delivered_tags_and_the_others_held_ones(
     }
     assert tags == {
         (P1.key, SACCO_B.legal_name): "delivered",
-        (P2.key, TELCO_A.legal_name): "delivered",
+        (P2.key, TELCO_A.legal_name): "delivered (closed)",  # the tag closes with its CLOSED engagement
         (P3.key, COUNTY_C.legal_name): "held_pending_verification",
         (P3.key, NGO_D.legal_name): "held_unclaimed",
+        (P3.key, TELCO_A.legal_name): "delivered",
+        (P4.key, SACCO_B.legal_name): "delivered",
     }
-    engagements = await rows(
-        owner,
-        "SELECT o.legal_name, e.state::text FROM engagements e JOIN organizations o ON o.id = e.org_id",
-    )
-    assert sorted(engagements) == [(SACCO_B.legal_name, "SUBMITTED"), (TELCO_A.legal_name, "SUBMITTED")]
     grants = await rows(owner, "SELECT count(*) FROM disclosure_grants WHERE status = 'active'")
-    assert grants[0][0] == 2
+    assert grants[0][0] == 4  # a CLOSED engagement keeps its organisation's access
     assert isinstance(runtime.email_provider, FakeEmailProvider)
-    receipts = [m for m in runtime.email_provider.outbox if m.to == AMINA.email and m.tag == "em1"]
-    assert len(receipts) == 2  # one EM1 per pitch that delivered
+    for developer in (AMINA, BRIAN):
+        receipts = [m for m in runtime.email_provider.outbox if m.to == developer.email and m.tag == "em1"]
+        assert len(receipts) == 2, developer.email  # one EM1 per Pitch that delivered
+
+
+async def test_the_engagements_reach_their_stages_through_the_tracker(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
+) -> None:
+    report = seeded[0]
+    for plan in ENGAGEMENTS:
+        found = (
+            await rows(
+                owner,
+                "SELECT id, state::text AS state FROM engagements WHERE proposal_id = :p AND org_id = :o",
+                p=report.proposals[plan.proposal],
+                o=report.orgs[plan.org],
+            )
+        )[0]
+        assert found.state == plan.target.value, plan
+        chain = await rows(
+            owner,
+            "SELECT seq, command, to_state::text AS to_state FROM engagement_events WHERE engagement_id = :e"
+            " ORDER BY seq",
+            e=found.id,
+        )
+        assert [e.seq for e in chain] == list(range(1, len(chain) + 1))
+        assert chain[0].to_state == "SUBMITTED"
+        assert chain[-1].to_state == plan.target.value
+    closed = next(p for p in ENGAGEMENTS if p.target == EngagementState.CLOSED)
+    signed = await rows(
+        owner,
+        "SELECT s.document_kind::text, s.party::text, s.step_up_method::text FROM signatures s"
+        " JOIN engagements e ON e.id = s.engagement_id WHERE e.proposal_id = :p",
+        p=report.proposals[closed.proposal],
+    )
+    assert set(signed) == {
+        (kind, party, "totp")
+        for kind in ("mutual_nda", "agreement", "acceptance_certificate")
+        for party in ("developer", "org")
+    }
+    paid = await rows(
+        owner,
+        "SELECT r.amount_kes_minor, r.confirmed_amount_kes_minor FROM payment_records r"
+        " JOIN engagements e ON e.id = r.engagement_id WHERE e.proposal_id = :p",
+        p=report.proposals[closed.proposal],
+    )
+    total = sum(m.amount_kes_minor for m in closed.milestones)
+    assert [tuple(r) for r in paid] == [(total, total)]
+    em2 = await rows(
+        owner,
+        "SELECT count(*) FROM procrastinate_jobs WHERE task_name = :t AND args->>'developer_id' = :d",
+        t=notify.TASK,
+        d=str(report.users[BRIAN.email]),
+    )
+    assert em2[0][0] >= 1  # INTEREST_CONFIRMED queued EM2 for Brian (the worker sends it to Mailpit)
 
 
 async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
