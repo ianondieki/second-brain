@@ -263,3 +263,10 @@ Follow-ups recorded from the review (not built):
 - The database trusts the state machine for deadline values (`stage_deadline_at` on an event, from `policy.yaml` on
   the business-day calendar): a same-state event can move a deadline. Every change is an event, so it is visible and
   verifiable in the History tab, but a policy check of the value belongs to P5.
+
+## Round-2 reviews (2026-09-29): reviewer PASS, security-reviewer PASS; MINOR follow-ups (not built)
+
+1. The org owner can still change the contact columns of an ended engagement (the `engagements` UPDATE policy has no `_OPEN`); add `ended_at IS NULL`.
+2. A membership of the counterpart organisation granted to the developer after the engagement exists is not refused; such a developer-member could write org endorsements. Refuse in the memberships path while an open engagement exists, or add `e.developer_id <> app_user_id()` to the org branches of the endorsements and events policies. The THREAT_MODEL §2 E row's "the developer is never a member" holds only at engagement insert.
+3. P5 design note: a side state entered from another side state (ON_HOLD → DISPUTED) resumes to ON_HOLD first, then to the main state.
+4. P2 moderation note (cross-card): the vulnerability-hold approve check re-screens the current Tier-1 text with the rules; when the LLM pre-screen lands it must also consult the LLM label (REQ-PROP-02).
