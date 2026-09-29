@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 import bridge.clock
 from bridge.auth import service, sessions, totp
-from bridge.auth.crypto import decode_key, encrypt
+from bridge.auth.crypto import decode_key, decrypt, encrypt
 from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
 from bridge.profiles.consents import consents_version
@@ -100,7 +100,10 @@ async def enrolled(client: httpx.AsyncClient) -> list[str]:
 async def user_row(owner_engine: AsyncEngine, address: str) -> dict[str, Any]:
     async with owner_engine.connect() as conn:
         row = await conn.execute(
-            text("SELECT id, totp_pending_enc, totp_enabled_at, totp_recovery_hashes FROM users WHERE email = :e"),
+            text(
+                "SELECT id, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_recovery_hashes "
+                "FROM users WHERE email = :e"
+            ),
             {"e": address},
         )
         return dict(row.mappings().one())
@@ -138,6 +141,29 @@ async def blocked_behind(
 
 
 # ------------------------------------------------------------------ follow-up 7: cancel setup, pending-secret lifetime
+
+
+def data_key() -> bytes:
+    return decode_key(get_settings().data_encryption_key.get_secret_value())
+
+
+async def test_a_totp_code_passes_a_step_up_after_enrolment(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """The confirmation stores the secret alone, never the pending envelope with its sealed start time: otherwise every
+    later TOTP code fails to decode (recovery codes do not read the secret, so only a TOTP code shows it)."""
+    address = await verified(client)
+    secret = await begin(client)
+    confirmed_at = now_counter()
+    confirmed = await client.post(CONFIRM, json={"code": totp.code_at(secret, confirmed_at)})
+    assert confirmed.status_code == 200, confirmed.text
+    row = await user_row(owner_engine, address)
+    assert row["totp_pending_enc"] is None
+    assert decrypt(data_key(), row["totp_secret_enc"], row["id"].bytes) == secret.encode("ascii")
+    later = totp.code_at(secret, max(confirmed_at + 1, now_counter()))  # the confirmation spent its own window
+    step_up = await client.post("/api/auth/step-up", json={"code": later})
+    assert step_up.status_code == 200, step_up.text
+    assert error(await client.post("/api/auth/step-up", json={"code": later})) == (401, "invalid_code")  # no replay
 
 
 async def test_cancel_clears_the_pending_secret_and_a_late_confirmation_finds_nothing(

@@ -565,7 +565,10 @@ async def confirm_totp_enrolment(
     if not check.ok:
         raise AuthError("invalid_code", 401)
     now = clock.utcnow()
-    user.totp_secret_enc, user.totp_pending_enc = user.totp_pending_enc, None
+    # Seal the secret alone (a fresh nonce): the pending envelope also carries its start time, which is not a secret
+    # sign-in can decode.
+    user.totp_secret_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
+    user.totp_pending_enc = None
     user.totp_enabled_at = now
     user.totp_last_counter = check.counter
     codes = _issue_recovery_codes(settings, user)
