@@ -23,9 +23,9 @@ REPEATABLE READ snapshot; only when all verify, the day's root is published: a M
 ``SHA-256(0x00 || leaf)``, node ``SHA-256(0x01 || left || right)``) over the chain heads of that snapshot, sorted by
 chain id, where a leaf is ``chain_id (UTF-8) || 0x00 || seq (8 bytes, big-endian) || event_hash``. The root is signed
 (``signing.root_message``) by a published, unretired key and stored in ``transparency_roots`` with that key's id
-(public at ``/api/transparency``; retired keys stay listed at ``/.well-known/provenance-keys.json``). The snapshot
-time is reported and logged; storing it needs a ``transparency_roots`` column (schema follow-up on the REQ-PROV-01
-card). A broken chain publishes nothing and raises ``ChainVerificationError``.
+(public at ``/api/transparency``; retired keys stay listed at ``/.well-known/provenance-keys.json``), with the time of
+the snapshot (``transparency_roots.snapshot_at``; schema v2's ``transparency_roots_guard`` requires it after the day
+ended and not in the future). A broken chain publishes nothing and raises ``ChainVerificationError``.
 """
 
 from __future__ import annotations
@@ -233,7 +233,7 @@ async def anchor_chain_heads(
 
 # The first statement of the REPEATABLE READ transaction takes its snapshot as it starts, so the root covers the
 # audit events committed by statement_timestamp() (to within that statement's start) and none committed later.
-# Stored in transparency_roots once schema v2 has the column (follow-up on the REQ-PROV-01 card).
+# Stored with the root (transparency_roots.snapshot_at).
 _SNAPSHOT_TIME = text("SELECT statement_timestamp()")
 _READER_HEADS = text(
     "SELECT DISTINCT ON (chain_id) chain_id, seq, event_hash FROM audit_events ORDER BY chain_id, seq DESC"
@@ -241,8 +241,8 @@ _READER_HEADS = text(
 _ROOT_EXISTS = text("SELECT 1 FROM transparency_roots WHERE day = :day")
 _KEY = text("SELECT retired_at FROM provenance_keys WHERE key_id = :key_id")
 _INSERT_ROOT = text(
-    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id)"
-    " VALUES (:day, :root, :signature, :key_id) ON CONFLICT DO NOTHING"
+    "INSERT INTO transparency_roots (day, merkle_root, signature, key_id, snapshot_at)"
+    " VALUES (:day, :root, :signature, :key_id, :snapshot_at) ON CONFLICT DO NOTHING"
 )
 
 
@@ -285,7 +285,14 @@ async def verify_and_publish_root(
         signature = await signer.sign(root_message(day, root))
         async with as_role(session, WORKER):
             inserted = await session.execute(
-                _INSERT_ROOT, {"day": day, "root": root, "signature": signature, "key_id": signer.key_id}
+                _INSERT_ROOT,
+                {
+                    "day": day,
+                    "root": root,
+                    "signature": signature,
+                    "key_id": signer.key_id,
+                    "snapshot_at": snapshot_at,
+                },
             )
     published = cast(CursorResult[Any], inserted).rowcount == 1
     log.info(

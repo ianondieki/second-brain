@@ -402,6 +402,7 @@ async def test_the_nightly_verification_publishes_a_signed_root(
         row = (await conn.execute(text("SELECT * FROM transparency_roots WHERE day = :d"), {"d": day})).one()
     assert bytes(row.merkle_root) == report.merkle_root
     assert row.key_id == fresh_signer.key_id
+    assert row.snapshot_at == report.snapshot_at  # the moment of the snapshot whose heads the root covers
     assert verify_signature(fresh_signer.public_key, root_message(day, report.merkle_root), bytes(row.signature))
 
     async with create_session_factory(app)() as s:
