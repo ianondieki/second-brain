@@ -104,3 +104,15 @@ Follow-ups (not built): pin the TSA CA bundles for the demo and run `probe-tsa` 
 the chain is unpinned); audit events for the seed's owner-role writes (`org.verified`, `kyc.decided`; signups already
 write `auth.signup`); give `make dev`'s SeaweedFS the demo's explicit volume slots; the oversized commits recorded
 above.
+
+## P9 re-check (reviewer PASS at `b387adf`, 2026-09-29) and the orchestrator's last fix
+
+- The orchestrator replaced the two remaining `test.skip(!OWNER_DATABASE_URL, …)` in `e2e/org-inbox.spec.ts` and
+  `e2e/pitch.spec.ts` (they came with the P8 merges) with a `beforeAll` that requires `E2E_DATABASE_OWNER_URL`, so a
+  missing variable fails instead of skipping (M1 exit, re-check #38). Checked against the demo stack: 18 passed; with
+  the variable unset the spec fails with the message. The README now says to run `make demo-reset` after an
+  interrupted first start.
+- MINOR follow-ups: the seed cannot tell its own part-way run from a person's action, so an interrupted first seed
+  leaves a showcase engagement mid-path (resume engagements whose events all came from seed sessions, User-Agent
+  `bridge-demo-seed`); no test pins that a fresh database treats refusals as errors (`strict = False` hard-coded passes
+  all 41 demo tests): add one where a `DemoSeedError` on a fresh database propagates out of `seed_demo`.

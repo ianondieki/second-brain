@@ -154,7 +154,9 @@ the seeded demo accounts' data is sent to a free provider.
 **Stop, reset, check.** `make demo-down` stops the demo and keeps its data; `make demo-reset` wipes only the demo's
 data (its own `bridge-demo` project and volumes, whatever `COMPOSE_PROJECT_NAME` says; the dev stack is untouched) and
 starts it fresh. Starting again after using the demo keeps what you did: the seed only adds what is missing and leaves
-any engagement someone moved on, any changed password and any deleted idea as it is (its log says which). `make
+any engagement someone moved on, any changed password and any deleted idea as it is (its log says which). If the
+very first `make demo` was interrupted (the laptop slept, or Docker ran out of memory), run `make demo-reset`: the seed
+never resumes an engagement it did not just open, so a half-driven one stays where it stopped. `make
 demo-logins`, `make demo-stats` (memory per container) and `make demo-logs` help while it runs. The demo uses the dev
 stack's ports, so stop the dev stack (`make down`) before `make demo`. If the demo says `infra/demo/.env` is gone while
 its data exists, run `make demo-reset`. With the demo running, `python infra/demo/demo.py e2e-env` writes the
