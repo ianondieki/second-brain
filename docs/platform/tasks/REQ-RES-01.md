@@ -131,7 +131,7 @@ REQUIREMENTS.md names `integration/problems/test_research_pipeline.py::test_publ
 and `test_research_caps.py` for AC-RES-1..3; the tests above cover them under the names shown (the orchestrator may
 update the register's paths).
 
-## Mutation proofs (each applied alone, the named tests run, the file restored with `git checkout`; 23 of 23 killed)
+## Mutation proofs (each applied alone, the named tests run, the file restored with `git checkout`; 25 of 25 killed)
 
 | # | Mutation | Killed by |
 |---|---|---|
@@ -158,6 +158,8 @@ update the register's paths).
 | M21 | a seeded card labelled "AI-drafted" | `test_filters.py` |
 | M22 | any staff admin executes a run | `test_research_pipeline.py` |
 | M23 | a tampered quote accepted at approval | `test_research_api.py` |
+| M24 | a stale running run still blocks its niche | `test_research_pipeline.py` |
+| M25 | a fresh running run no longer blocks its niche | `test_research_pipeline.py` |
 
 ## Deviations and notes
 
