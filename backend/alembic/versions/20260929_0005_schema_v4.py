@@ -495,6 +495,9 @@ $$;
 -- never free text) only for failed or cancelled. Repeating the recorded outcome changes nothing and returns false (a
 -- repeated query or callback); another outcome is refused. settled_at is the database's (payments_guard). Whether the
 -- provider really took the money is the caller's to check before calling (the provider query): the database cannot.
+-- So it fails closed for real money: a payment of any provider but the fake one is never settled as succeeded here,
+-- by its subject; the revision that widens the provider CHECK must add the platform path (REQ-BIL-04:
+-- webhook_events, the provider's verification, the amount and currency check) on purpose.
 CREATE FUNCTION app_settle_payment(p_payment uuid, p_status payment_status, p_failure_code text DEFAULT NULL)
     RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -516,6 +519,10 @@ BEGIN
         RAISE EXCEPTION 'app_settle_payment: a failure code (a code) only for a failed or cancelled payment'
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
+    IF p_status = 'succeeded' AND v_payment.provider IS DISTINCT FROM 'fake' THEN
+        RAISE EXCEPTION 'app_settle_payment: only the platform settles a real provider''s payment as succeeded'
+            ' (REQ-BIL-04)' USING ERRCODE = 'insufficient_privilege';
+    END IF;
     SELECT * INTO v_payment FROM public.payments p WHERE p.id = p_payment FOR UPDATE;
     IF v_payment.status <> 'pending' THEN
         IF v_payment.status = p_status AND v_payment.failure_code IS NOT DISTINCT FROM p_failure_code THEN
@@ -531,7 +538,9 @@ END;
 $$;
 
 -- Activates the plan a succeeded payment paid for (REQ-BIL-08): the payment's subject only (the same one refusal),
--- only a succeeded payment whose plan is of the subject's side at the amount paid. Activations of one subject are
+-- only a succeeded payment whose plan is of the subject's side. The price is not re-checked: the plan and the amount
+-- were matched when the payment was inserted (INSERT policy) and never change (payments_guard), so a later price
+-- change in plans.yaml never strands a payment that succeeded. Activations of one subject are
 -- serialised (advisory lock), then the payment's row is locked: a payment already linked returns its subscription
 -- (idempotent: a repeated query or callback activates nothing twice, AC-SUB-2). Otherwise the subject's live
 -- subscription (trialing, active or past_due) is cancelled and the new one inserted active from app_clock_now() for a
@@ -564,8 +573,8 @@ BEGIN
     END IF;
     SELECT * INTO v_plan FROM public.plans pl WHERE pl.id = v_payment.plan_id;
     v_side := CASE WHEN v_payment.org_id IS NULL THEN 'developer' ELSE 'org' END;
-    IF v_plan.side IS DISTINCT FROM v_side OR v_plan.price_kes_minor IS DISTINCT FROM v_payment.amount_kes_minor THEN
-        RAISE EXCEPTION 'app_activate_paid_subscription: the payment does not match its plan''s side and price'
+    IF v_plan.side IS DISTINCT FROM v_side THEN
+        RAISE EXCEPTION 'app_activate_paid_subscription: the payment''s plan is not of its subject''s side'
             USING ERRCODE = 'check_violation';
     END IF;
     v_now := public.app_clock_now();
