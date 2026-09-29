@@ -4,6 +4,7 @@ characters, length caps) and the ``<submission nonce=...>`` framing (docs/spec/0
 from __future__ import annotations
 
 import re
+import time
 import unicodedata
 
 import pytest
@@ -188,6 +189,39 @@ def test_links_with_balanced_brackets_and_next_line_definitions(raw: str, expect
 def test_link_scanning_is_linear_on_pathological_input() -> None:
     assert strip_links("[" * 5000) == "[" * 5000
     assert clean("[](" * 1500)  # finishes quickly; nothing to assert beyond not hanging
+
+
+# Security review 2026-09-29 (MAJOR): sanitising ran before the budget check, synchronously, and was quadratic in the
+# number of unclosed <script>/<style> openers and unbounded in the input length (187 KB took 14 s). Each input below
+# took seconds before the fix; linear work takes milliseconds, so the bound leaves a wide margin for slow runners.
+LINEAR_SECONDS = 1.0
+PATHOLOGICAL = {
+    "unclosed script openers": "<script>x" * 16000,
+    "unclosed style openers": "<STYLE>x" * 16000,
+    "openers without a closing angle": "<script " * 16000,
+    "openers of both kinds, one closer at the end": "<script><style>" * 8000 + "</style>",
+    "one megabyte of unclosed openers": "<script>x" * 120000,
+    "one megabyte of prose": "Solar cold rooms help fish traders. " * 30000,
+}
+
+
+@pytest.mark.parametrize("raw", PATHOLOGICAL.values(), ids=PATHOLOGICAL.keys())
+def test_script_and_style_scanning_is_linear_on_pathological_input(raw: str) -> None:
+    start = time.perf_counter()
+    clean(raw)
+    assert time.perf_counter() - start < LINEAR_SECONDS
+
+
+def test_the_input_is_cut_before_cleaning_and_reported_as_truncated() -> None:
+    """A second truncation, of the input, at eight times the field's cap: markup that cleans to nothing cannot make
+    the sanitiser read an unbounded text. Text past the cut never reaches the prompt, and ``truncated`` says so."""
+    raw = "<b></b>" * 200 + "tail"  # 1404 characters that clean to "tail"
+    assert clean(raw, max_chars=1000) == "tail"  # within eight times the cap: nothing is cut
+    cut = sanitise(raw, max_chars=100, base64_run_chars=B64)  # the input is cut at 800 characters
+    assert cut.text == ""
+    assert cut.removed == frozenset({"html", "truncated"})
+    assert cut.truncated
+    assert sanitise(raw, max_chars=100, base64_run_chars=B64, max_input_ratio=16).text == "tail"
 
 
 def test_mime_wrapped_base64_is_removed_but_prose_is_not() -> None:
