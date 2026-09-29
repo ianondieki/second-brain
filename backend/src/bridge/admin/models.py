@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,10 +31,12 @@ class Holiday(IdMixin, CreatedMixin, Base):
 
 
 class ModerationCase(IdMixin, TimestampsMixin, Base):
-    """One item in the moderation queue (Tenancy STAFF): staff admin/moderator read and decide it; the app files it
-    (regex holds, the Tier-1 pre-screen, user reports, claim disputes, the Tier-2 similarity job). ``classifier``
-    holds the pre-screen output over Tier-1 fields only. Changing a subject's ``moderation_state`` is a separate
-    step through ``app_moderate_proposal`` / ``app_moderate_problem``."""
+    """One item in the moderation queue (Tenancy STAFF): staff admin/moderator read and decide it. A user's report is
+    inserted by the app with ``reporter_id`` = that user (open, no classifier); the system sources (regex holds, the
+    Tier-1 pre-screen, claim disputes, the Tier-2 similarity job) file through ``app_open_moderation_case``, which
+    checks the caller against the subject and returns the case id. ``classifier`` holds the pre-screen output over
+    Tier-1 fields only. Changing a subject's ``moderation_state`` is a separate step through
+    ``app_moderate_proposal`` / ``app_moderate_problem``."""
 
     __tablename__ = "moderation_cases"
     # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
@@ -43,6 +45,8 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
     __table_args__ = (
         Index("ix_moderation_cases_subject", "subject_type", "subject_id"),
         Index("ix_moderation_cases_status_created_at", "status", "created_at"),
+        # 1 to 50 non-blank reasons of at most 200 characters (app_reasons_are_valid, revision 0002).
+        CheckConstraint("app_reasons_are_valid(reasons, 50)", name="reasons_valid"),
         {"info": {"tenancy": Tenancy.STAFF}},
     )
 

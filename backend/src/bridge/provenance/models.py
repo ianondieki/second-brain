@@ -19,6 +19,8 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -54,9 +56,16 @@ class ProvenanceRecord(IdMixin, CreatedMixin, Base):
 
     __tablename__ = "provenance_records"
     __table_args__ = (
+        Index("ix_provenance_records_content_hash", "content_hash"),  # /verify upload matching without a cert id
         CheckConstraint("octet_length(content_hash) = 32", name="content_hash_length"),
         CheckConstraint("status = 'hashed' OR (signature IS NOT NULL AND key_id IS NOT NULL)", name="signed_has_key"),
         CheckConstraint("status <> 'timestamped' OR (tsa_token IS NOT NULL AND tsa_time IS NOT NULL)", name="tsa"),
+        # The record's cert_id is its version's; its content_hash equals the version's once both are set (triggers).
+        ForeignKeyConstraint(
+            ["version_id", "cert_id"],
+            ["proposal_versions.id", "proposal_versions.cert_id"],
+            name="fk_provenance_records_version_cert",
+        ),
         {"info": {"tenancy": Tenancy.EVIDENCE, "via": "proposal_versions"}},
     )
 
@@ -110,10 +119,13 @@ class TransparencyRoot(CreatedMixin, Base):
     merkle_root: Mapped[bytes] = mapped_column(LargeBinary)
     signature: Mapped[bytes] = mapped_column(LargeBinary)
     key_id: Mapped[str] = mapped_column(ForeignKey("provenance_keys.key_id"))
+    # When the snapshot whose chain heads the root covers was taken: after the day ended, not in the future (trigger).
+    snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Attestation(IdMixin, CreatedMixin, Base):
-    """Ownership attestations made at a registration (docs/spec/06 6.4 item 7). Append-only."""
+    """Ownership attestations made at a registration (docs/spec/06 6.4 item 7). Append-only; ``created_at`` is the
+    database's (evidence_time_guard: now() on insert, whatever is sent)."""
 
     __tablename__ = "attestations"
     __table_args__ = (
