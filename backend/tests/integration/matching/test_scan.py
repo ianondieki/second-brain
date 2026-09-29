@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
@@ -15,11 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
 from bridge.llm.fakes import FakeLLMClient
+from bridge.matching import digest as digest_module
 from bridge.matching import scan as scan_module
 from bridge.matching.pipeline import Filters, Window, candidates
 from bridge.matching.rationale import ScoutFit
 from bridge.matching.scan import clock_now, run_on_new, run_periodic
-from bridge.models.enums import DeliveryStatus
+from bridge.models.enums import DeliveryStatus, ScoutFrequency
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
     MOMBASA_CODE,
@@ -36,6 +37,7 @@ from tests.integration.matching.scout_world import (
 )
 
 WEEK = timedelta(days=7)
+WEEKLY_TRIGGER = ScoutFrequency.WEEKLY
 
 
 async def weekly(app_engine: AsyncEngine, week: int = 0, **kwargs: Any) -> list[scan_module.Outcome]:
@@ -368,3 +370,42 @@ async def test_exclusions_filter_in_sql_before_the_limit(owner_engine: AsyncEngi
         until = (await db.execute(text("SELECT now()"))).scalar_one()
         page = await candidates(db, filters, Window(until=until, since=until - timedelta(days=1)), limit=1)
     assert [c.proposal_id for c in page.items] == [good]
+
+
+async def test_a_scout_paused_or_gone_since_it_was_due_is_skipped(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = await build(owner_engine)
+    scout = await add_scout(owner_engine, world.org, [world.niche])
+    scan_deps, _ = deps(app_engine)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE scout_agents SET paused_at = now() WHERE id = :s"), {"s": scout})
+    paused = await scan_module.scan(scan_deps, scan_module.Due(scout, world.org.id, world.org.owner), WEEKLY_TRIGGER)
+    assert (paused.status, paused.reason) == ("skipped", "paused")
+    gone = await scan_module.scan(scan_deps, scan_module.Due(uuid4(), world.org.id, world.org.owner), WEEKLY_TRIGGER)
+    assert (gone.status, gone.reason) == ("skipped", "not_found")
+
+    async def boom(*args: Any, **kwargs: Any) -> scan_module.Outcome:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(scan_module, "scan", boom)
+    found = scan_module.Due(scout, world.org.id, world.org.owner)
+    assert (await scan_module._safely(scan_deps, found, WEEKLY_TRIGGER)).reason == "error"
+
+
+async def test_a_recipient_whose_delivery_fails_leaves_the_matches_undigested(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, world.org, [world.niche])
+
+    async def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr(digest_module, "_deliver", broken)
+    outcome = mine(await weekly(app_engine), scout)
+    assert outcome.digest is not None
+    assert outcome.digest.recipients == {}
+    [match] = await matches(owner_engine, scout)
+    assert match.digest_sent_at is None  # the next run's digest lists it

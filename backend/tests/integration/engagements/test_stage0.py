@@ -227,3 +227,45 @@ async def test_the_developer_may_not_be_a_member(owner_engine: AsyncEngine, app_
             f"/api/orgs/{world.org.id}/interest", json=interest(world, proposal, None, today)
         )
         assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "own_organisation")
+
+
+async def test_a_suspended_organisation_cannot_express_interest(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    world = await build(owner_engine)
+    proposal = (await publish(owner_engine, world, "one"))[0]
+    today = await db_today(owner_engine)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE organizations SET suspended_at = now() WHERE id = :o"), {"o": world.org.id})
+    async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
+        refused = await signatory.post(
+            f"/api/orgs/{world.org.id}/interest", json=interest(world, proposal, None, today)
+        )
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "org_unavailable")
+
+
+async def test_n17_by_email_follows_the_developers_preference(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """N17 is mutable: with the n17 email preference off, or an unverified address, it is in-app only."""
+    for change in (
+        "INSERT INTO notification_preferences (user_id, kind, channel, enabled) VALUES (:u, 'n17', 'email', false)",
+        "UPDATE users SET email_verified_at = NULL WHERE id = :u",
+    ):
+        world = await build(owner_engine)
+        proposal = (await publish(owner_engine, world, "one"))[0]
+        today = await db_today(owner_engine)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text(change), {"u": world.developer})
+        async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
+            created = await signatory.post(
+                f"/api/orgs/{world.org.id}/interest", json=interest(world, proposal, None, today)
+            )
+            assert created.status_code == 201
+        provider = FakeEmailProvider()
+        await run_notifications(owner_engine, app_engine, UUID(created.json()["id"]), provider, SETTINGS)
+        assert provider.outbox == []
+        notices = await rows(
+            owner_engine, "SELECT kind FROM in_app_notifications WHERE user_id = :u", u=world.developer
+        )
+        assert [n.kind for n in notices] == ["engagement.n17"]

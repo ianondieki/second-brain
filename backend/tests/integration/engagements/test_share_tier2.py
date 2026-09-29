@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
+from bridge.engagements.interest import tell_organisation
 from bridge.ids import uuid7
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import (
@@ -179,3 +180,41 @@ async def test_an_organisations_request_is_activated_and_keeps_its_source(
     assert (shared["grant_id"], shared["source"]) == (str(requested), "manual")
     [grant] = await grants(owner_engine, proposal)
     assert (grant.status, grant.granted_by) == ("active", world.developer)
+
+
+async def test_a_proposal_no_longer_clear_is_not_shared(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    world = await build(owner_engine)
+    proposal, engagement = await interested(owner_engine, app_engine, world)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE proposals SET moderation_state = 'held' WHERE id = :p"), {"p": proposal})
+    async with clients(app_engine, SETTINGS, world.developer) as (dev,):
+        refused = await dev.post(f"/api/engagements/{engagement}/share-tier2")
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "proposal_unavailable")
+    assert await grants(owner_engine, proposal) == []
+
+
+async def test_the_share_notice_skips_former_members_and_never_raises(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    world = await build(owner_engine)
+    _, engagement = await interested(owner_engine, app_engine, world)
+    async with owner_engine.begin() as conn:  # the named contact left the organisation
+        await conn.execute(
+            text("UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u"),
+            {"o": world.org.id, "u": world.org.owner},
+        )
+    factory = create_session_factory(app_engine)
+    grant = uuid7()
+    await tell_organisation(factory, engagement, world.developer, grant)
+    told = await rows(
+        owner_engine,
+        "SELECT user_id FROM in_app_notifications WHERE kind = 'engagement.tier2_shared' AND link = :l",
+        l=f"/engagements/{engagement}",
+    )
+    assert [t.user_id for t in told] == [world.org.signatory]
+    await tell_organisation(factory, uuid4(), world.developer, grant)  # no such engagement: nothing, no error
+
+    def broken() -> Any:
+        raise RuntimeError("no database")
+
+    await tell_organisation(broken, engagement, world.developer, grant)  # type: ignore[arg-type]
