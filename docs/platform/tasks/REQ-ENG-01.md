@@ -179,8 +179,9 @@ and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, 
 
 ## Review round 1 (reviewer and security-reviewer on `3191af5`; fixed in revision 0003 in place)
 
-Each finding got a failing test first (`348f568`, red on `3191af5`: 10 tests), then the fix; the mutation proofs below
-show each test catches its guard.
+Each finding got a failing test first (`348f568`, red on `3191af5`: 10 tests), then the fix (`60c2a17`, `4bf3cc9`);
+the mutation proofs below show each test catches its guard. After the fixes: full backend suite 1743 passed; `ruff
+check`, `ruff format --check`, `mypy` (strict), `python -m bridge.openapi --check` and `check_traceability.py` clean.
 
 | Finding | Fix | Tests |
 |---|---|---|
