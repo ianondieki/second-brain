@@ -166,7 +166,9 @@ test.describe("a signed-in developer", () => {
     await expect(page.getByRole("heading", { name: "Public teaser" })).toBeVisible();
     await expect(page.getByText(`${title}: milk spoils before collection`)).toBeVisible();
     await expect(page.getByText("Solar chillers with a shared booking queue.")).toBeVisible(); // your own Tier 2
-    await expect(page.locator("[data-primary]")).toHaveText("Edit idea");
+    // A published idea's next step is pitching it (REQ-PROP-03); editing stays one button away.
+    await expect(page.locator("[data-primary]")).toHaveText("Pitch to companies");
+    await expect(page.getByRole("link", { name: "Edit idea" })).toBeVisible();
     await checkScreen(page);
 
     // The new problem is now listed: a second idea can link it from the picker.
