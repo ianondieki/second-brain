@@ -50,6 +50,11 @@ export interface CommandFormProps {
 
 type Errors = Record<string, string | undefined>;
 
+/** Clears one field's error as soon as the field changes (the check runs again on submit). */
+function clearing(setErrors: (update: (errors: Errors) => Errors) => void, key: string) {
+  setErrors((errors) => (errors[key] ? { ...errors, [key]: undefined } : errors));
+}
+
 const IP_TERMS = [
   "non_exclusive_licence",
   "development_contract",
@@ -159,7 +164,10 @@ function ApproveFields(props: CommandFormProps & { today: string }) {
   return (
     <Shell props={props} onSubmit={submit}>
       <p className="max-w-[60ch] text-ink">{t("approve.lead")}</p>
-      <SelectField id={ids.person} label={t("approve.person")} value={person} error={errors.person} onChange={(e) => setPerson(e.target.value)}>
+      <SelectField id={ids.person} label={t("approve.person")} value={person} error={errors.person} onChange={(e) => {
+          setPerson(e.target.value);
+          clearing(setErrors, "person");
+        }}>
         {members.map((m) => (
           <option key={m.user_id} value={m.user_id}>
             {m.display_name}
@@ -186,7 +194,10 @@ function ApproveFields(props: CommandFormProps & { today: string }) {
         min={props.today}
         value={by}
         error={errors.by}
-        onChange={(e) => setBy(e.target.value)}
+        onChange={(e) => {
+          setBy(e.target.value);
+          clearing(setErrors, "by");
+        }}
         className="max-w-[14rem]"
       />
     </Shell>
@@ -229,7 +240,10 @@ function DeclineForm(props: CommandFormProps & { today: string }) {
         label={t("decline.reason")}
         value={reason}
         error={errors.reason}
-        onChange={(e) => setReason(e.target.value as DeclineInput["reason"])}
+        onChange={(e) => {
+          setReason(e.target.value as DeclineInput["reason"]);
+          clearing(setErrors, "reason");
+        }}
       >
         <option value="" disabled>
           {t("form.choose")}
@@ -248,7 +262,10 @@ function DeclineForm(props: CommandFormProps & { today: string }) {
           value={other}
           maxLength={1000}
           error={errors.other}
-          onChange={(e) => setOther(e.target.value)}
+          onChange={(e) => {
+            setOther(e.target.value);
+            clearing(setErrors, "other");
+          }}
         />
       ) : null}
       {reason === "ALREADY_IN_PROGRESS_INTERNALLY" ? (
@@ -260,7 +277,10 @@ function DeclineForm(props: CommandFormProps & { today: string }) {
             max={props.today}
             value={started}
             error={errors.started}
-            onChange={(e) => setStarted(e.target.value)}
+            onChange={(e) => {
+              setStarted(e.target.value);
+              clearing(setErrors, "started");
+            }}
             className="max-w-[14rem]"
           />
           <Checkbox
@@ -268,7 +288,10 @@ function DeclineForm(props: CommandFormProps & { today: string }) {
             label={t("decline.attest")}
             checked={attested}
             error={errors.attested}
-            onChange={(e) => setAttested(e.target.checked)}
+            onChange={(e) => {
+              setAttested(e.target.checked);
+              clearing(setErrors, "attested");
+            }}
           />
         </>
       ) : null}
@@ -335,7 +358,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
         hint={t("terms.ipHint")}
         value={ip}
         error={errors.ip}
-        onChange={(e) => setIp(e.target.value as TermsInput["ip_terms"])}
+        onChange={(e) => {
+          setIp(e.target.value as TermsInput["ip_terms"]);
+          clearing(setErrors, "ip");
+        }}
       >
         <option value="" disabled>
           {t("form.choose")}
@@ -353,7 +379,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
         hint={t("terms.deemedHint")}
         value={deemed}
         error={errors.deemed}
-        onChange={(e) => setDeemed(e.target.value)}
+        onChange={(e) => {
+          setDeemed(e.target.value);
+          clearing(setErrors, "deemed");
+        }}
         className="max-w-[8rem]"
       />
       <TextField
@@ -377,7 +406,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
               value={row.deliverable}
               maxLength={500}
               error={errors[`${key}-deliverable`]}
-              onChange={(e) => update(row.key, { deliverable: e.target.value })}
+              onChange={(e) => {
+                update(row.key, { deliverable: e.target.value });
+                clearing(setErrors, `${key}-deliverable`);
+              }}
             />
             <TextField
               id={rowId(row.key, "amount")}
@@ -385,7 +417,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
               label={t("terms.amount")}
               value={row.amount}
               error={errors[`${key}-amount`]}
-              onChange={(e) => update(row.key, { amount: e.target.value })}
+              onChange={(e) => {
+                update(row.key, { amount: e.target.value });
+                clearing(setErrors, `${key}-amount`);
+              }}
               className="max-w-[14rem]"
             />
             <TextField
@@ -395,7 +430,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
               min={props.today}
               value={row.due}
               error={errors[`${key}-due`]}
-              onChange={(e) => update(row.key, { due: e.target.value })}
+              onChange={(e) => {
+                update(row.key, { due: e.target.value });
+                clearing(setErrors, `${key}-due`);
+              }}
               className="max-w-[14rem]"
             />
             <TextField
@@ -405,7 +443,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
               hint={t("terms.windowHint")}
               value={row.window}
               error={errors[`${key}-window`]}
-              onChange={(e) => update(row.key, { window: e.target.value })}
+              onChange={(e) => {
+                update(row.key, { window: e.target.value });
+                clearing(setErrors, `${key}-window`);
+              }}
               className="max-w-[8rem]"
             />
             {rows.length > 1 ? (
@@ -474,7 +515,10 @@ function PaymentForm(props: CommandFormProps & { today: string }) {
         label={t("payment.amount")}
         value={amount}
         error={errors.amount}
-        onChange={(e) => setAmount(e.target.value)}
+        onChange={(e) => {
+          setAmount(e.target.value);
+          clearing(setErrors, "amount");
+        }}
         className="max-w-[14rem]"
       />
       <SelectField id={`${id}-method`} label={t("payment.method")} value={method} onChange={(e) => setMethod(e.target.value as PaymentInput["method"])}>
@@ -499,7 +543,10 @@ function PaymentForm(props: CommandFormProps & { today: string }) {
         max={props.today}
         value={paidOn}
         error={errors.paidOn}
-        onChange={(e) => setPaidOn(e.target.value)}
+        onChange={(e) => {
+          setPaidOn(e.target.value);
+          clearing(setErrors, "paidOn");
+        }}
         className="max-w-[14rem]"
       />
     </Shell>
@@ -533,7 +580,10 @@ function ConfirmPaymentForm(props: CommandFormProps) {
         hint={props.recorded ? t("confirmPayment.hint", { value: props.recorded }) : undefined}
         value={amount}
         error={error}
-        onChange={(e) => setAmount(e.target.value)}
+        onChange={(e) => {
+          setAmount(e.target.value);
+          setError(undefined);
+        }}
         className="max-w-[14rem]"
       />
     </Shell>

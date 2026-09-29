@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NextIntlClientProvider } from "next-intl";
@@ -291,6 +291,16 @@ describe("forms for commands with a body", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("members did not load");
     expect(screen.queryByLabelText("Contact person")).toBeNull();
     expect(runImpl).not.toHaveBeenCalled();
+  });
+
+  it("clears a field's error as soon as the field changes", async () => {
+    renderActions(orgReview());
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    await screen.findByLabelText("Reason");
+    fireEvent.click(within(document.querySelector("[data-command-form]") as HTMLElement).getByRole("button", { name: "Decline" }));
+    expect(screen.getByText("Fill in this field.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "BUDGET" } });
+    expect(screen.queryByText("Fill in this field.")).toBeNull();
   });
 
   it("approves naming a contact person from the organisation's members", async () => {
