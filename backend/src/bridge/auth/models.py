@@ -42,6 +42,10 @@ class User(IdMixin, TimestampsMixin, Base):
     # audit payloads (docs/spec/06 6.4). Set once by the database; the app neither reads nor updates it and gets the
     # digests from app_subject_digest(). Unmapped (see __mapper_args__); declared here so the table matches.
     subject_salt = mapped_column(LargeBinary, server_default=text("gen_random_bytes(32)"), nullable=False)
+    # Revision 0003 (D-37): an account of the seeded demo data, the only data a free LLM provider may receive. Set only
+    # by the owner role (the seed); bridge_app may read it but neither insert nor update it, so never set it in app
+    # code (an INSERT naming the column is refused).
+    demo_account: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
 
 class AuthIdentity(IdMixin, CreatedMixin, Base):
