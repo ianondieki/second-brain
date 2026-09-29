@@ -12,8 +12,10 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
 import re
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -156,12 +158,77 @@ def test_the_launcher_writes_valid_secrets_once_and_never_overwrites(
     )
     assert set(compose) == {"POSTGRES_SUPERUSER_PASSWORD", "BRIDGE_OWNER_PASSWORD", "BRIDGE_APP_PASSWORD"}
     assert len(set(compose.values())) == 3
+    if os.name == "posix":  # Windows ignores the mode
+        for path in (demo.COMPOSE_ENV, demo.BACKEND_ENV):
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600, path
+
+
+def test_e2e_env_writes_a_private_file_and_prints_the_owner_url_masked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review MINOR (d): the owner password goes to the gitignored frontend/.env.e2e only, never to the terminal."""
+    demo = launcher()
+    compose_env = tmp_path / "infra" / "demo" / ".env"
+    compose_env.parent.mkdir(parents=True)
+    compose_env.write_text("BRIDGE_OWNER_PASSWORD=s3cret-owner-password\n", encoding="utf-8")
+    answers = {
+        "cert-id": "CERT12345678",
+        "postgres": "127.0.0.1:15432",
+        "web": "127.0.0.1:13000",
+        "mailpit": "0.0.0.0:18025",
+    }
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        key = next(k for k in answers if k in command)
+        return subprocess.CompletedProcess(command, 0, answers[key] + "\n", "")
+
+    monkeypatch.setattr(demo, "REPO", tmp_path)
+    monkeypatch.setattr(demo, "COMPOSE_ENV", compose_env)
+    monkeypatch.setattr(demo, "E2E_ENV", tmp_path / "frontend" / ".env.e2e")
+    monkeypatch.setattr(demo, "run", fake_run)
+    monkeypatch.setattr(demo, "volume_exists", lambda _name: True)
+    assert demo.main(["e2e-env"]) == 0
+    out = capsys.readouterr().out
+    assert "s3cret-owner-password" not in out
+    assert "postgresql://bridge_owner:***@127.0.0.1:15432/bridge" in out
+    written = dict(line.split("=", 1) for line in demo.E2E_ENV.read_text(encoding="utf-8").splitlines())
+    assert written == {
+        "E2E_VERIFY_CERT_ID": "CERT12345678",
+        "E2E_DATABASE_OWNER_URL": "postgresql://bridge_owner:s3cret-owner-password@127.0.0.1:15432/bridge",
+        "E2E_BASE_URL": "http://localhost:13000",
+        "E2E_MAILPIT_URL": "http://localhost:18025",
+    }
+    if os.name == "posix":
+        assert stat.S_IMODE(demo.E2E_ENV.stat().st_mode) == 0o600
+    result = subprocess.run(["git", "check-ignore", "-q", "frontend/.env.e2e"], cwd=REPO, check=False)  # noqa: S607
+    assert result.returncode == 0, "frontend/.env.e2e must be gitignored"
 
 
 def test_the_generated_files_are_gitignored() -> None:
     for path in ("infra/demo/.env", "infra/demo/backend.env", "backend/.env"):
         result = subprocess.run(["git", "check-ignore", "-q", path], cwd=REPO, check=False)  # noqa: S607
         assert result.returncode == 0, f"{path} must be gitignored"
+
+
+def test_reset_names_the_demo_project_whatever_the_shell_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review MINOR (a): with COMPOSE_PROJECT_NAME=bridge in the shell, `docker compose down --volumes` without -p would
+    wipe the dev stack's data; every demo command names bridge-demo."""
+    demo = launcher()
+    ran: list[list[str]] = []
+
+    def record(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        ran.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "bridge")
+    monkeypatch.setattr(demo, "run", record)
+    monkeypatch.setattr(demo, "init", list)
+    monkeypatch.setattr(demo, "banner", lambda: None)
+    assert demo.main(["reset", "--yes"]) == 0
+    down = next(command for command in ran if "down" in command)
+    assert down[down.index("-p") + 1] == "bridge-demo"
+    assert "--volumes" in down
+    assert all(command[command.index("-p") + 1] == "bridge-demo" for command in ran if command[1] == "compose")
 
 
 def test_reset_wipes_nothing_unless_confirmed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -181,7 +248,7 @@ def test_extra_compose_files_come_from_the_environment_only(monkeypatch: pytest.
     assert demo.compose_files() == [str(DEV), str(DEMO)]
     monkeypatch.setenv("DEMO_COMPOSE_EXTRA", "/tmp/ca.json")  # noqa: S108 - a path string, never opened
     command = demo.compose("config")
-    assert command[:4] == ["docker", "compose", "--env-file", str(demo.COMPOSE_ENV)]
+    assert command[:6] == ["docker", "compose", "-p", "bridge-demo", "--env-file", str(demo.COMPOSE_ENV)]
     assert command[-3:] == ["-f", "/tmp/ca.json", "config"]  # noqa: S108
 
 

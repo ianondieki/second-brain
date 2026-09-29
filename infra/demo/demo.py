@@ -11,12 +11,13 @@ Bash), macOS and Linux. Python 3.9+ standard library only; needs Docker (Docker 
     python infra/demo/demo.py reminders   # make demo-reminders: send today's reminders now (Mailpit)
     python infra/demo/demo.py stats       # make demo-stats: memory per container (docker stats)
     python infra/demo/demo.py logs        # make demo-logs
-    python infra/demo/demo.py e2e-env     # E2E_VERIFY_CERT_ID and E2E_DATABASE_OWNER_URL for Playwright
+    python infra/demo/demo.py e2e-env     # frontend/.env.e2e: the Playwright variables for this stack
     python infra/demo/demo.py config      # validate the merged compose file (docker compose config)
 
 Secrets: ``init`` (run by ``up``) writes ``infra/demo/.env`` (database passwords, read by compose) and
-``infra/demo/backend.env`` (the app's keys) with random values, once; both are gitignored and never overwritten, and
-``backend/.env`` is created from ``backend/.env.example`` when missing, for the LLM variables. Extra compose files
+``infra/demo/backend.env`` (the app's keys) with random values, once, readable by their owner only (0600); both are
+gitignored and never overwritten, and ``backend/.env`` is created from ``backend/.env.example`` when missing, for the
+LLM variables. Every compose command names the demo's project (``-p bridge-demo``). Extra compose files
 (for example a local CA override that a build machine needs) come from ``DEMO_COMPOSE_EXTRA``, separated by the
 platform's path separator; they are never part of the repository.
 """
@@ -39,6 +40,7 @@ COMPOSE_ENV = DEMO_DIR / ".env"
 BACKEND_ENV = DEMO_DIR / "backend.env"
 BACKEND_DOTENV = REPO / "backend" / ".env"
 BACKEND_EXAMPLE = REPO / "backend" / ".env.example"
+E2E_ENV = REPO / "frontend" / ".env.e2e"  # gitignored by frontend/.gitignore (.env*)
 PROJECT = "bridge-demo"
 URLS = (
     ("Web app", "http://localhost:3000"),
@@ -79,14 +81,20 @@ def backend_env_values() -> dict[str, str]:
     }
 
 
+def _write_private(path: Path, body: str, *, replace: bool) -> None:
+    """Write ``body`` to a file only its owner may read (mode 0600; Windows ignores the mode). Without ``replace``
+    an existing file is an error (``FileExistsError``), never overwritten."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if replace else os.O_EXCL)
+    with os.fdopen(os.open(path, flags, 0o600), "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(body)
+
+
 def _write_once(path: Path, values: dict[str, str]) -> bool:
     """Write ``values`` to ``path`` unless it exists; True when written."""
     if path.exists():
         return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = HEADER + "".join(f"{name}={value}\n" for name, value in values.items())
-    with path.open("x", encoding="utf-8", newline="\n") as handle:
-        handle.write(body)
+    _write_private(path, HEADER + "".join(f"{name}={value}\n" for name, value in values.items()), replace=False)
     return True
 
 
@@ -111,7 +119,9 @@ def compose_files() -> list[str]:
 
 
 def compose(*args: str) -> list[str]:
-    command = ["docker", "compose", "--env-file", str(COMPOSE_ENV)]
+    """A docker compose command for the demo. ``-p`` always names the demo's project, so a COMPOSE_PROJECT_NAME set in
+    the shell (for example ``bridge``, the dev stack's) can never point ``make demo-reset`` at another project."""
+    command = ["docker", "compose", "-p", PROJECT, "--env-file", str(COMPOSE_ENV)]
     for file in compose_files():
         command += ["-f", file]
     return [*command, *args]
@@ -192,15 +202,34 @@ def cmd_stats(_: argparse.Namespace) -> int:
     return run(["docker", "stats", "--no-stream", "--format", table, *names], check=False).returncode
 
 
+def published(service: str, port: int) -> str:
+    """Where the running demo publishes a service's port on this machine, as host:port."""
+    found = run(compose("port", service, str(port)), capture=True).stdout.strip()
+    return found.replace("0.0.0.0", "127.0.0.1")  # an address to connect to
+
+
 def cmd_e2e_env(_: argparse.Namespace) -> int:
-    """The Playwright variables for this stack, as NAME=value lines (export them, or put them in the CI env)."""
+    """Write the Playwright variables for this stack to frontend/.env.e2e (gitignored, mode 0600): the certificate
+    the demo seed registered, the database's owner URL (for the D1 helper) and where the web app and Mailpit are.
+    Only the file's path and the masked URL are printed; the owner password stays in the file."""
     found = run(
         compose("exec", "-T", "api", "python", "-m", "bridge.demo", "cert-id", "--wait", "180"), capture=True
     )
     values = dict(line.split("=", 1) for line in COMPOSE_ENV.read_text(encoding="utf-8").splitlines() if "=" in line)
-    owner = values["BRIDGE_OWNER_PASSWORD"]
-    print(f"E2E_VERIFY_CERT_ID={found.stdout.strip()}")
-    print(f"E2E_DATABASE_OWNER_URL=postgresql://bridge_owner:{owner}@127.0.0.1:5432/bridge")
+    database = published("postgres", 5432)
+    owner_url = f"postgresql://bridge_owner:{values['BRIDGE_OWNER_PASSWORD']}@{database}/bridge"
+    lines = {
+        "E2E_VERIFY_CERT_ID": found.stdout.strip(),
+        "E2E_DATABASE_OWNER_URL": owner_url,
+        "E2E_BASE_URL": "http://" + published("web", 3000).replace("127.0.0.1", "localhost"),
+        "E2E_MAILPIT_URL": "http://" + published("mailpit", 8025).replace("127.0.0.1", "localhost"),
+    }
+    _write_private(E2E_ENV, "".join(f"{name}={value}\n" for name, value in lines.items()), replace=True)
+    print(f"demo: wrote {E2E_ENV.relative_to(REPO)} (gitignored): E2E_VERIFY_CERT_ID={lines['E2E_VERIFY_CERT_ID']}")
+    print(f"demo: E2E_DATABASE_OWNER_URL=postgresql://bridge_owner:***@{database}/bridge")
+    print("Load it before npx playwright test (in frontend/):")
+    print("  bash:       set -a; . ./.env.e2e; set +a")
+    print("  PowerShell: Get-Content .env.e2e | ForEach-Object { $n, $v = $_ -split '=', 2; Set-Item \"env:$n\" $v }")
     return 0
 
 
