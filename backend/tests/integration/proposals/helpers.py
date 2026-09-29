@@ -1,10 +1,11 @@
 """Shared fixtures and helpers for the proposal API tests (REQ-PROP-01/02, REQ-MOD-01, REQ-PROV-01/05, REQ-BIL-02).
 
 ``proposal_world`` is a two-level niche (``Energy <tag> › Solar <tag>``), a published problem by another developer, a
-held problem and a listed directory organisation ("Pwani Telecom Limited <tag>"), written as the owner role.
+held problem and a listed directory organisation ("Pwani<letters> Telecom Limited", source admin so the
+provisional seed counts stay exact), written as the owner role.
 ``developers()`` gives a client signed in as a new developer (D1 by default) with its own in-memory object store and
-throwaway Tier-2 key; pass the provenance fixtures' ``wrapper`` to register what it publishes. Import the fixtures
-into a test module to use them.
+throwaway Tier-2 key; pass the provenance fixtures' ``wrapper`` to register what it publishes. ``moderators()`` gives
+a staff member's client. ``tests/integration/conftest.py`` registers the fixtures for every integration test.
 """
 
 from __future__ import annotations
@@ -73,7 +74,7 @@ async def proposal_world(owner_engine: AsyncEngine) -> ProposalWorld:
         await conn.execute(
             text(
                 "INSERT INTO organizations (id, kind, legal_name, slug, source, verification)"
-                " VALUES (:id, 'company', :name, :slug, 'seed', 'unclaimed')"
+                " VALUES (:id, 'company', :name, :slug, 'admin', 'unclaimed')"
             ),
             {"id": org_id, "name": f"{brand} Telecom Limited", "slug": f"pwani-telecom-{tag}"},
         )
