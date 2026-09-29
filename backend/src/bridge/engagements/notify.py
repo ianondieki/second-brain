@@ -301,9 +301,10 @@ async def deliver(
         people = await _org_people(db, engagement) if party is ORG else []
         if party is DEV:
             await _in_app(db, developer_id, None, notice, event.id)
-            entered = event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state
-            if entered:
-                done = await _send_em2(db, provider, settings, engagement)
+        if event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state:
+            # EM2 goes to the developer whoever moved the engagement there (the signatory's approval, or the
+            # developer's own acceptance of an organisation's interest at stage 0).
+            done = await _send_em2(db, provider, settings, engagement)
         await db.commit()
     for user_id in people:
         async with factory() as db:

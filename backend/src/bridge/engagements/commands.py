@@ -314,7 +314,10 @@ async def _append(step: Step) -> EngagementEvent:
 
 
 async def _open_tag(step: Step) -> Tag | None:
+    """The developer's open tag behind a ``tagged`` engagement (an organisation's interest has none)."""
     engagement = step.engagement
+    if engagement.origin is not EngagementOrigin.TAGGED:
+        return None
     found: Tag | None = await step.db.scalar(
         select(Tag).where(
             Tag.proposal_id == engagement.proposal_id,
