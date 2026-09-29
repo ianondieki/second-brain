@@ -6,9 +6,9 @@ beyond the tag itself. Each is owned by a parallel task and plugged in here, so 
   deadline from ``policy.yaml``). Until P5 merges, ``interim_open_engagement`` below inserts the row the way revision
   0003 allows (the database writes the genesis event); P5 replaces it in ``default_hooks`` and deletes it.
 - ``grant_on_tag``: the owner's Tier-2 policy applied to the organisation (docs/spec/06 6.1, "auto-grant to orgs I
-  tagged"). **P3** (``feat/REQ-SEC-01-tier2-access``) provides ``bridge.proposals.grants.grant_on_tag`` with exactly
-  this signature; until P3 merges, ``grant_nothing_until_p3`` grants nothing (fail closed: no Tier-2 access is ever
-  opened by a placeholder). P3 replaces it in ``default_hooks`` and deletes it.
+  tagged"): P3's ``bridge.proposals.grants.grant_on_tag`` (an active ``auto_tagged`` grant under the default policy,
+  none under ``manual``). A grant opens nothing on its own: ``can_view_tier2`` still needs every other condition,
+  ``FEATURE_TIER2_ENABLED`` included. Held tags never reach this hook, so they grant nothing.
 
 Contract (both): called in the developer's request and transaction, tenant bound to the developer, right after the
 ``delivered`` tag row is inserted (open, for an E2 organisation that is neither suspended nor delisted, on the
@@ -28,6 +28,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.ids import uuid7
+from bridge.proposals import grants
 
 
 class OpenEngagement(Protocol):
@@ -78,13 +79,8 @@ async def interim_open_engagement(
     return engagement_id
 
 
-async def grant_nothing_until_p3(db: AsyncSession, *, owner_id: UUID, proposal_id: UUID, org_id: UUID) -> UUID | None:
-    """INTERIM, replaced by P3's ``bridge.proposals.grants.grant_on_tag``: no grant (fail closed)."""
-    return None
-
-
 def default_hooks() -> TagHooks:
-    return TagHooks(open_engagement=interim_open_engagement, grant_on_tag=grant_nothing_until_p3)
+    return TagHooks(open_engagement=interim_open_engagement, grant_on_tag=grants.grant_on_tag)
 
 
 def get_tag_hooks(request: Request) -> TagHooks:
