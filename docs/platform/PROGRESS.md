@@ -359,7 +359,7 @@ named in the laptop Handoff exists on origin at the recorded commit. The owner r
 about 70 s here. Backend venvs per worktree with `uv sync --frozen --python /usr/bin/python3.12`. Legacy suite:
 Python 3.13 venv at `/home/user/.venv-legacy` with `requirements.txt` and a `cloudflared` stub on PATH
 (`/home/user/bin`); `scripts/run_legacy_tests.py` → 307 OK. Worktrees live in `/home/user/sb-wt/<REQ-ID>`. The Windows
-workarounds in the laptop notes stay in their files.
+workarounds in the laptop notes stay in their files. **Session 2 additions (network Full).** `make dev` builds and runs (all services healthy; about 260 MB of RAM without ClamAV) once the build containers trust this container's egress-proxy CA: an out-of-repo compose override (scratchpad `compose.ccr.json`, generated from the repo Dockerfiles by adding `COPY --from=ccr ca-bundle.crt` and `SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS` after each `FROM`) is passed as a second `-f`; the repo's Dockerfiles are unchanged and the laptop needs no override. Playwright 1.63: a shim at `/home/user/pw-shim` maps `chromium(_headless_shell)-1243/chrome*-linux64` onto the installed 1194 build (`PLAYWRIGHT_BROWSERS_PATH=/home/user/pw-shim`). `npm ci` in `frontend/` is clean.
 
 **In flight.**
 
@@ -391,7 +391,7 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | Item | Status | Notes |
 |---|---|---|
 | D-35/D-36/D-37 recorded; `PLAN.md` §8; `REQUIREMENTS.md` §7; this checklist | done | |
-| Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | Playwright shim and frontend install next |
+| Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | session 2: redone; `make dev` builds (CA override), Playwright shim, `npm ci` |
 | Anthropic price research (D-37) | done | verified 2026-09-29 |
 | P0 schema v2 round 6 → merge | in progress | db-migrations |
 | P0 T2.4, T2.6a, D1, T2.2 → merge | todo | after schema v2 |
