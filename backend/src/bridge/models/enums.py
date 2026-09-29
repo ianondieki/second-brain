@@ -333,6 +333,102 @@ class EngagementEndReason(StrEnum):
     NO_DEV_RESPONSE = "NO_DEV_RESPONSE"
 
 
+# docs/spec/06 6.9 Codes: no event follows one of these (revision 0003 refuses it) and ``engagements.ended_at`` is set
+# exactly while the engagement is in one.
+TERMINAL_STATES = (
+    EngagementState.DECLINED,
+    EngagementState.WITHDRAWN,
+    EngagementState.EXPIRED,
+    EngagementState.TERMINATED,
+    EngagementState.CLOSED,
+)
+
+
+class EngagementActorRole(StrEnum):
+    """Who acted in a tracker row (revision 0003): the developer, an organisation member in one of their roles
+    (``OrgRole`` spellings; viewers never act), or the system (a job; the row names no user)."""
+
+    DEVELOPER = "developer"
+    OWNER = "owner"
+    ADMIN = "admin"
+    REVIEWER = "reviewer"
+    SIGNATORY = "signatory"
+    FINANCE = "finance"
+    SYSTEM = "system"
+
+
+class EngagementParty(StrEnum):
+    """The two sides of an engagement (docs/spec/06 6.9: releasing party / receiving party)."""
+
+    DEVELOPER = "developer"
+    ORG = "org"
+
+
+class EndorsementMethod(StrEnum):
+    CLICK = "click"
+    TOTP = "totp"
+    PASSKEY = "passkey"
+    AUTO = "auto"  # a timed auto-confirmation by a job (docs/spec/06 6.9 stage 4); names no user
+
+
+class ContactChannel(StrEnum):
+    """How the organisation's named contact will reach the developer (docs/spec/06 6.9 stage 3)."""
+
+    EMAIL = "email"
+    PHONE = "phone"
+    WHATSAPP = "whatsapp"
+    VIDEO_CALL = "video_call"
+    IN_PERSON = "in_person"
+
+
+class IpTerms(StrEnum):
+    """docs/spec/06 6.9 stage 8. The internal e-signature refuses ``assignment`` and ``exclusive_licence``."""
+
+    ASSIGNMENT = "assignment"
+    EXCLUSIVE_LICENCE = "exclusive_licence"
+    NON_EXCLUSIVE_LICENCE = "non_exclusive_licence"
+    DEVELOPMENT_CONTRACT = "development_contract"
+    REVENUE_SHARE = "revenue_share"
+
+
+class AgreementStatus(StrEnum):
+    DRAFT = "draft"
+    FINAL = "final"  # frozen: IP terms, deemed-acceptance clause, PDF hash and milestones
+    SIGNED = "signed"  # both parties signed the final PDF
+
+
+class MilestoneState(StrEnum):
+    """docs/spec/06 6.9 milestone sub-tracker, spelled as the spec's codes."""
+
+    PLANNED = "PLANNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    SUBMITTED_FOR_REVIEW = "SUBMITTED_FOR_REVIEW"
+    ACCEPTED = "ACCEPTED"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED"
+
+
+class SignatureDocumentKind(StrEnum):
+    MUTUAL_NDA = "mutual_nda"
+    AGREEMENT = "agreement"
+    ACCEPTANCE_CERTIFICATE = "acceptance_certificate"
+    MILESTONE_CONFIRMATION = "milestone_confirmation"
+
+
+class StepUpMethod(StrEnum):
+    """The step-up that preceded an internal e-signature (docs/spec/06 6.9 SignatureProvider)."""
+
+    TOTP = "totp"
+    PASSKEY = "passkey"
+
+
+class PaymentMethod(StrEnum):
+    """How the organisation says it paid. The platform records payments, it never moves money."""
+
+    MPESA = "mpesa"
+    BANK = "bank"
+    OTHER = "other"
+
+
 class GrantStatus(StrEnum):
     REQUESTED = "requested"
     ACTIVE = "active"

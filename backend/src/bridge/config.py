@@ -177,6 +177,9 @@ class Settings(BaseSettings):
     s3_bucket_evidence: str = "evidence"
     s3_bucket_kyc_review: str = "kyc-review"
     s3_bucket_uploads: str = "uploads"
+    # Attachment scanning (bridge.storage.scanner; D-36): the prototype's fake scanner (EICAR is infected, anything
+    # else clean) runs only in dev and test; ClamAV returns after the prototype. Uploads fail closed otherwise.
+    attachment_scanner: Literal["fake", "clamav"] = "fake"
 
     # The nightly audit.verify_chain job reads every audit chain as audit_reader, a separate login (roles.sql). The job
     # fails closed without it.

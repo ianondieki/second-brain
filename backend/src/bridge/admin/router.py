@@ -6,6 +6,11 @@
   through ``app_add_niche`` (SECURITY DEFINER: staff admin only, new lower-case hyphenated slug, a parent must be an
   active top-level niche); the new niche is selectable in the directory at once. Audited as
   ``directory.niche_added`` with ids only.
+- ``GET /moderation/cases``: the moderation queue, unresolved cases first-in first-out (``?decided=true`` for the
+  decided ones), each with a Tier-1 preview of its proposal or problem (staff admin or moderator; REQ-MOD-01).
+- ``POST /moderation/cases/{case_id}/decision``: approve or reject the version reviewed (``subject_version_id``;
+  409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``; audited as
+  ``moderation.case_decided``.
 """
 
 from __future__ import annotations
@@ -13,14 +18,15 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bridge.admin.deps import StaffAdmin, StaffMember
+from bridge.admin import moderation
+from bridge.admin.deps import StaffAdmin, StaffMember, StaffModerator
 from bridge.audit.service import record as audit
 from bridge.auth.deps import Db
 from bridge.directory.models import Niche
@@ -135,3 +141,23 @@ async def admin_add_niche(body: NicheCreate, staff: StaffAdmin, db: Db) -> Admin
     )
     await db.commit()
     return niche
+
+
+@router.get("/moderation/cases")
+async def moderation_queue(
+    staff: StaffModerator, db: Db, decided: Annotated[bool, Query(description="Decided cases instead")] = False
+) -> moderation.CaseList:
+    return await moderation.list_cases(db, unresolved=not decided)
+
+
+@router.post("/moderation/cases/{case_id}/decision")
+async def decide_case(
+    case_id: UUID, body: moderation.DecisionIn, staff: StaffModerator, db: Db
+) -> moderation.DecisionOut:
+    return await moderation.decide(
+        db,
+        staff_id=staff.live.user.id,
+        case_id=case_id,
+        decision=body.decision,
+        subject_version_id=body.subject_version_id,
+    )

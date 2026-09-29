@@ -14,7 +14,11 @@ const nextConfig: NextConfig = {
   // Exact-case matching of the header and rewrite sources below (see security-headers.ts).
   experimental: { caseSensitiveRoutes: CASE_SENSITIVE_ROUTES },
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
+    return [
+      { source: "/api/:path*", destination: `${apiOrigin}/api/:path*` },
+      // The published provenance keys (REQ-PROV-02): served by the API outside /api, linked from /verify.
+      { source: "/.well-known/provenance-keys.json", destination: `${apiOrigin}/.well-known/provenance-keys.json` },
+    ];
   },
   // nosniff everywhere; the document-only headers on everything but the /_next/static build assets.
   async headers() {

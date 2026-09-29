@@ -25,8 +25,10 @@ from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
+from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.proposals.router import router as proposals_router
 from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
@@ -103,6 +105,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(directory_router)
     app.include_router(admin_router)
     app.include_router(provenance_router)
+    app.include_router(proposals_router)
+    app.include_router(problems_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 
