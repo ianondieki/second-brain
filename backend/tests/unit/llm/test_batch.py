@@ -58,6 +58,11 @@ def settled(r: Rig) -> list[LedgerEntry]:
     return [e for e in r.ledger.entries if e.batch_id is not None and e.status.value != RESERVED]
 
 
+def ids(entries: list[LedgerEntry]) -> list[str]:
+    """The rows' custom ids, sorted (every batch item's row has one)."""
+    return sorted(str(e.custom_id) for e in entries)
+
+
 def total(entries: list[LedgerEntry]) -> Decimal:
     return sum((e.cost_usd for e in entries), Decimal(0))
 
@@ -117,11 +122,11 @@ async def test_submit_poll_and_read_every_outcome() -> None:
     assert tape.exhausted
 
     assert {e.batch_id for e in r.ledger.entries} == {"msgbatch_syn_01"}
-    assert sorted(e.custom_id for e in reserved(r)) == sorted(IDS)
+    assert ids(reserved(r)) == sorted(IDS)
     assert sorted(e.status.value for e in settled(r)) == sorted(
         ["ok", "refusal", "schema_error", "provider_error", "provider_error"]
     )
-    assert sorted(e.custom_id for e in settled(r)) == sorted(IDS)
+    assert ids(settled(r)) == sorted(IDS)
     assert sorted(letter.reason for letter in r.dead_letters.letters) == ["refusal", "schema_error"]
     assert [event.will_retry_on for event in r.human_queue.events] == [None]
 
@@ -209,13 +214,13 @@ async def test_an_item_missing_from_the_results_is_reported_and_stays_reserved_u
         assert isinstance(missing, LLMProviderError)
         assert "batch item missing" in str(missing)
         assert missing.transient  # it may never have run: the caller may resubmit it
-        assert sorted(e.custom_id for e in settled(r)) == ["a", "c"]
+        assert ids(settled(r)) == ["a", "c"]
         assert await spend(r) == (held.cost_usd + total(settled(r)),) * 2  # its estimate still counts
     assert r.dead_letters.letters == []
     adapter.missing = set()
     found = await r.service.batch_poll(handle, Verdict)
     assert isinstance(found.results["b"], Result)
-    assert sorted(e.custom_id for e in settled(r)) == ["a", "b", "c"]
+    assert ids(settled(r)) == ["a", "b", "c"]
     assert await spend(r) == (total(settled(r)),) * 2
 
 
@@ -243,7 +248,7 @@ async def test_submit_reserves_every_item_at_its_batch_estimate() -> None:
             "nightly-1",
         )
         assert (row.input_tokens, row.output_tokens, row.stop_reason) == (0, 0, None)
-        assert row.inputs == handle.inputs[row.custom_id]
+        assert row.inputs == handle.inputs[str(row.custom_id)]
     assert total(rows) > 0
     assert await spend(r) == (total(rows), total(rows))  # both caps count the batch in flight
 
@@ -282,12 +287,17 @@ def costly(stop: str = "end_turn", text: str = json.dumps(OK)) -> ModelResponse:
 
 async def test_a_repeat_poll_returns_every_outcome_and_counts_nothing_twice() -> None:
     reg = batchable()
-    ids = ["ok", "refused", "bad", "errored"]
-    replies = [costly(), costly("refusal", ""), costly(text="not json"), BatchItemError("errored", "invalid_request")]
+    names = ["ok", "refused", "bad", "errored"]
+    replies: list[Reply] = [
+        costly(),
+        costly("refusal", ""),
+        costly(text="not json"),
+        BatchItemError("errored", "invalid_request"),
+    ]
     adapter = FakeAdapter(replies * 2)  # an ended batch's results, fetched on each poll
     real = reg.cost_usd(reg.task(TASK).model, TokenUsage(300, 4000), batch=True) * 3
     r = rig(adapter, reg=reg, caps=StaticCaps(caps={ORG: real}))  # the settled costs reach the cap
-    handle = await r.service.batch_submit(TASK, items(*ids), Verdict, ctx=CTX)
+    handle = await r.service.batch_submit(TASK, items(*names), Verdict, ctx=CTX)
     first = await r.service.batch_poll(handle, Verdict)
     rows, letters = list(r.ledger.entries), list(r.dead_letters.letters)
     refusals, crossings = list(r.human_queue.events), list(r.listener.events)
@@ -297,9 +307,9 @@ async def test_a_repeat_poll_returns_every_outcome_and_counts_nothing_twice() ->
     assert r.ledger.entries == rows
     assert (r.dead_letters.letters, r.human_queue.events, r.listener.events) == (letters, refusals, crossings)
     assert await spend(r) == (real, real)
-    assert sorted(e.custom_id for e in settled(r)) == sorted(ids)  # one settlement per item
-    assert set(again.results) == set(first.results) == set(ids)
-    for custom_id in ids:
+    assert ids(settled(r)) == sorted(names)  # one settlement per item
+    assert set(again.results) == set(first.results) == set(names)
+    for custom_id in names:
         assert type(again.results[custom_id]) is type(first.results[custom_id])
     ok, ok_again = first.results["ok"], again.results["ok"]
     assert isinstance(ok, Result)
@@ -317,3 +327,19 @@ async def test_a_repeat_poll_returns_every_outcome_and_counts_nothing_twice() ->
     errored = again.results["errored"]
     assert isinstance(errored, LLMProviderError)
     assert not errored.transient
+
+
+async def test_another_tenant_polling_the_batch_cannot_settle_its_items() -> None:
+    """A handle naming another tenant's batch (one provider account serves every tenant) is refused at its first
+    item; the owner's reservations keep counting and the owner's own poll settles them, as the owner."""
+    r = rig(FakeAdapter([OK] * 4), reg=batchable())
+    handle = await r.service.batch_submit(TASK, items("a", "b"), Verdict, ctx=CTX)
+    held = total(reserved(r))
+    forged = handle.model_copy(update={"org_id": None, "user_id": OWNER, "trace_id": "forged"})
+    with pytest.raises(ValueError, match="another tenant"):
+        await r.service.batch_poll(forged, Verdict)
+    assert settled(r) == []
+    assert await spend(r) == (held, held)
+    await r.service.batch_poll(handle, Verdict)
+    assert ids(settled(r)) == ["a", "b"]
+    assert {(e.org_id, e.user_id) for e in settled(r)} == {(ORG, None)}

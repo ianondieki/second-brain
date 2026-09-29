@@ -16,7 +16,7 @@ from bridge.llm.ledger import CallStatus, InMemoryLedger, LedgerEntry
 from bridge.llm.models import LlmCall
 from bridge.llm.sinks import DeadLetter, InMemoryDeadLetters, InMemoryHumanQueue, RefusalEvent
 from bridge.llm.types import TRACE_ID, TokenUsage
-from tests.unit.llm.helpers import NOW, ORG, USER
+from tests.unit.llm.helpers import NOW, ORG, OWNER, USER
 
 
 def entry(cost: str, org: object = None, user: object = None, when: object = NOW) -> LedgerEntry:
@@ -79,6 +79,25 @@ async def test_in_memory_ledger_reserves_and_settles_a_batch_item_once() -> None
     with pytest.raises(ValueError, match="batch item"):  # ...and is final
         await ledger.settle(replace(result, id=uuid4(), custom_id="i8", status=CallStatus("batch_reserved")))
     assert len(ledger.entries) == 4
+
+
+async def test_in_memory_ledger_keeps_a_batch_items_rows_with_the_tenant_that_reserved_it() -> None:
+    """As revision 0002 round 5 does: every row of a batch item names the organisation and user of its first row, so
+    another tenant (or the same user without the organisation) can neither settle nor cancel the reservation."""
+    ledger = InMemoryLedger()
+    since = NOW - timedelta(days=1)
+    hold = replace(entry("2", org=ORG, user=USER), status=CallStatus("batch_reserved"), batch_id="b1", custom_id="i1")
+    await ledger.reserve([hold])
+    for org, user in ((None, OWNER), (ORG, None), (None, USER)):
+        stranger = replace(hold, id=uuid4(), org_id=org, user_id=user)
+        with pytest.raises(ValueError, match="another tenant"):
+            await ledger.settle(replace(stranger, status=CallStatus.OK, cost_usd=Decimal(0)))
+        with pytest.raises(ValueError, match="another tenant"):
+            await ledger.reserve([stranger])
+    assert await ledger.tenant_spent_usd(org_id=ORG, user_id=None, since=since) == Decimal(2)
+    assert await ledger.settle(replace(hold, id=uuid4(), status=CallStatus.OK, cost_usd=Decimal(1))) is True
+    assert await ledger.tenant_spent_usd(org_id=ORG, user_id=None, since=since) == Decimal(1)
+    assert len(ledger.entries) == 2
 
 
 async def test_sinks_keep_what_they_receive() -> None:

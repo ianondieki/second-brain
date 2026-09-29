@@ -14,6 +14,7 @@ from typing import Literal
 
 import pytest
 from sqlalchemy import RowMapping
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -194,3 +195,35 @@ async def test_an_item_missing_from_the_results_keeps_its_reservation(
     assert sorted(r["custom_id"] for r in settlements) == ["a", "c"]
     [held] = [r for r in reservations if r["custom_id"] == "b"]
     assert await org_spend(factory, people) - org_before == Decimal(held["cost_usd"]) + total(settlements)
+
+
+async def test_another_tenant_cannot_settle_or_cancel_an_items_reservation(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """Needs revision 0002 round 5 (a batch item's rows keep the tenant of its first row). Organisation B, polling a
+    handle that names A's batch (one provider account serves every tenant), is refused at its first settlement; A's
+    reservations keep counting and A's own poll settles them, as A."""
+    trace = f"batch-cross-{people.tag}"
+    adapter = FakeAdapter([reply()] * len(IDS) * 2)
+    org_before = await org_spend(factory, people)
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        ctx = CallContext(org_id=people.org_a, user_id=people.a, trace_id=trace)
+        handle = await service(db, factory, adapter, registry=BATCHABLE).batch_submit(
+            TASK, items(*IDS), Verdict, ctx=ctx
+        )
+    held = await stored(owner_engine, trace)
+    forged = handle.model_copy(update={"org_id": people.org_b, "user_id": people.b, "trace_id": f"{trace}-b"})
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.b)
+        with pytest.raises(DBAPIError):
+            await service(db, factory, adapter, registry=BATCHABLE).batch_poll(forged, Verdict)
+    assert await stored(owner_engine, f"{trace}-b") == []
+    assert await org_spend(factory, people) - org_before == total(held)  # A's reservations still count
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        await service(db, factory, adapter, registry=BATCHABLE).batch_poll(handle, Verdict)
+    reservations, settlements = split(await stored(owner_engine, trace))
+    assert (reservations, sorted(r["custom_id"] for r in settlements)) == (held, IDS)
+    assert {(r["org_id"], r["user_id"]) for r in settlements} == {(people.org_a, people.a)}
+    assert await org_spend(factory, people) - org_before == total(settlements)
