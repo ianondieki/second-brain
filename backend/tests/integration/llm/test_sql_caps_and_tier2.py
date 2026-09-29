@@ -28,6 +28,7 @@ from bridge.llm.budget import cap_from_limits, day_start, month_start
 from bridge.llm.errors import ConsentRequired, LLMBudgetExceeded, LLMKillSwitch, LLMSchemaError, Tier2NotAllowed
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.guard import grant_session_consent
+from bridge.llm.models import MAX_CALL_COST_USD
 from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import PlanSide
@@ -108,15 +109,21 @@ async def test_a_tier2_sentinel_never_reaches_any_stored_column(
 async def seed_spend(
     owner_engine: AsyncEngine, cost: Decimal, *, org: UUID | None, user: UUID | None, when: datetime | None = None
 ) -> None:
-    """A spend row written as the owner (``when`` defaults to the database's now())."""
+    """``cost`` of spend written as the owner (``when`` defaults to the database's now()), in rows of at most
+    ``MAX_CALL_COST_USD`` (the llm_calls CHECK), so any plan's cap can be seeded."""
+    rows, rest = [], cost
+    while rest > 0:
+        rows.append(min(rest, Decimal(MAX_CALL_COST_USD)))
+        rest -= rows[-1]
     async with owner_engine.begin() as conn:
-        await conn.execute(
-            text(
-                "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, created_at)"
-                " VALUES (:id, :org, :user, 'seed', 'm', 'ok', :cost, coalesce(:when, now()))"
-            ),
-            {"id": uuid7(), "org": org, "user": user, "cost": cost, "when": when},
-        )
+        for part in rows:
+            await conn.execute(
+                text(
+                    "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, created_at)"
+                    " VALUES (:id, :org, :user, 'seed', 'm', 'ok', :cost, coalesce(:when, now()))"
+                ),
+                {"id": uuid7(), "org": org, "user": user, "cost": part, "when": when},
+            )
 
 
 @pytest.mark.parametrize("subject", ["org", "user"])
