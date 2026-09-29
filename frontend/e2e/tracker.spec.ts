@@ -121,8 +121,15 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await checkScreen(devPage);
     await shot(devPage, info, "dev-tracker-submitted");
 
-    // The organisation: "Needs us", then its tracker with its own buttons.
-    await orgPage.goto("/org/engagements");
+    // The organisation: the Inbox row's stage chip opens the tracker; the Engagements list puts it under "Needs us".
+    await orgPage.goto("/org/inbox");
+    const inboxChip = orgPage.locator(`[data-chip='stage'][data-engagement='${dev.engagementId}']`);
+    await expect(inboxChip).toHaveAttribute("href", orgTracker, SERVER_STEP);
+    const orgNav = orgPage.getByRole("navigation", { name: "Organisation" });
+    expect(await orgNav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
+    await orgNav.getByRole("link", { name: "Engagements" }).click();
+    await expect(orgPage).toHaveURL(/\/org\/engagements$/, SERVER_STEP);
+    await expect(orgNav.getByRole("link", { name: "Engagements" })).toHaveAttribute("aria-current", "page");
     const orgRow = orgPage.locator("[data-group='needs'] article").filter({ hasText: dev.title });
     await expect(orgRow).toContainText("From Achieng Otieno");
     await expect(orgRow.locator("[data-chip='turn']")).toHaveText("Our turn");
