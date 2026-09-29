@@ -5,7 +5,7 @@ import { renderWithIntl } from "@/test/intl";
 
 import type { Attachment, AttestationText } from "../ideas";
 import { Attachments } from "./Attachments";
-import { calls, NICHES, PROBLEM, READY, renderEditor, settleLazy, TEXT } from "./fixtures";
+import { calls, NICHES, PROBLEM, READY, renderEditor, settleLazy, TEXT } from "@/test/ideas-editor";
 import { preloadPanels, ProblemPicker, type ProblemPickerProps } from "./ProblemPicker";
 
 // REQ-PROP-01 (F2): the three-step editor. docs/spec/07 items 2 and 6 (one primary action per step; the stepper is an

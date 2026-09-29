@@ -3,7 +3,7 @@ import { vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
-import type { Outcome } from "../calls";
+import type { Outcome } from "@/app/(app)/dev/ideas/calls";
 import {
   type AttestationText,
   type EditorState,
@@ -11,10 +11,10 @@ import {
   type NicheNode,
   type ProblemCard,
   type PublishResult,
-} from "../ideas";
-import type { PublishProblem, SaveProblem } from "../outcomes";
-import { EMPTY_STATE } from "../versions";
-import { Editor, preloadSteps, type EditorProps } from "./Editor";
+} from "@/app/(app)/dev/ideas/ideas";
+import type { PublishProblem, SaveProblem } from "@/app/(app)/dev/ideas/outcomes";
+import { EMPTY_STATE } from "@/app/(app)/dev/ideas/versions";
+import { Editor, preloadSteps, type EditorProps } from "@/app/(app)/dev/ideas/editor/Editor";
 
 // Shared fixtures of the editor's component tests (REQ-PROP-01).
 

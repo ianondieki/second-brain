@@ -5,7 +5,7 @@ import type { Outcome } from "../calls";
 import type { Attachment, MyProposal } from "../ideas";
 import { EMPTY_STATE } from "../versions";
 import type { SaveProblem } from "../outcomes";
-import { calls, READY, renderEditor, SAVED, settleLazy } from "./fixtures";
+import { calls, READY, renderEditor, SAVED, settleLazy } from "@/test/ideas-editor";
 
 // REQ-PROP-01 review round 1: saving and file actions. Saves never overlap and are never lost (leaving the editor
 // saves what was typed); publishing saves first; a file action on a published idea works on the draft's own copies,
