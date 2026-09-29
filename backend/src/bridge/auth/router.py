@@ -404,8 +404,10 @@ async def oauth_callback(
     state: str | None = None,
     error: str | None = None,
 ) -> RedirectResponse:
-    """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow
-    cookie; the first callback carrying a code also spends its state server-side, so a replay gets oauth_state.
+    """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is
+    spent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another
+    state (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also
+    spends its state server-side, so a replay gets oauth_state.
     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
     consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
@@ -415,9 +417,10 @@ async def oauth_callback(
         raise not_found()
     now = clock.utcnow()
     flow = oauth.unseal(settings, request.cookies.get(settings.oauth_cookie_name), now=now)
+    presented = flow is not None and _state_matches(state, flow)
     # The checks up to the throttle touch no database and cannot reach the provider, so a forged callback (a page
     # loading this URL in someone's browser with a junk state) never uses up that person's budget.
-    if flow is None or flow.provider != client.provider.name or not _state_matches(state, flow):
+    if flow is None or flow.provider != client.provider.name or not presented:
         outcome = identities.failed(None, "oauth_state", client.provider.name)
     elif error is not None:
         outcome = identities.failed(flow.intent, "oauth_cancelled", flow.provider)  # never the provider's own text
@@ -449,7 +452,10 @@ async def oauth_callback(
         oauth.web_url(settings, outcome.path, outcome.params), status_code=status.HTTP_302_FOUND, background=tasks
     )
     response.headers["Referrer-Policy"] = "no-referrer"  # the callback URL carries the code and state
-    clear_oauth_flow(response, settings)
+    if flow is None or presented:
+        # Spent or unusable. A sealed, unexpired flow whose state was not presented stays: SameSite=Lax sends the
+        # cookie with a forged top-level GET too, and deleting it would fail the person's genuine return.
+        clear_oauth_flow(response, settings)
     if outcome.session is not None:
         set_session(response, settings, outcome.session.token)
     if outcome.check_email:

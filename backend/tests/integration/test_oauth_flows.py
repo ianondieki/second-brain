@@ -780,6 +780,38 @@ async def test_a_state_mismatch_is_refused_before_any_provider_call(client: http
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": "forged-state"})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert token.call_count == 0
+    assert "__Host-bridge_oauth" not in cookie_names(response)  # another state: the flow in progress stays
+
+
+async def test_a_forged_callback_leaves_the_flow_for_the_genuine_one(client: httpx.AsyncClient) -> None:
+    """Pre-merge MINOR (security review of the T2.12 follow-ups): a page that loads the callback URL in someone's
+    browser (SameSite=Lax sends the flow cookie on a top-level GET) with a junk state, or none, must not delete the
+    flow that person just started, or their genuine return from the provider would fail with oauth_state."""
+    who = person()
+    params = await start(client, "github", "signup", **signup_body())
+    forgeries = [
+        ("github", {"code": "c", "state": "junk"}),
+        ("github", {"code": "c"}),
+        ("github", {"error": "access_denied", "state": "junk"}),
+        ("github", {"code": "c", "state": params["state"] + "x"}),
+        ("google", {"code": "c", "state": "junk"}),  # another provider's callback, also a forged state
+    ]
+    for provider, forged_params in forgeries:
+        forged = await client.get(f"/api/auth/oauth/{provider}/callback", params=forged_params)
+        assert landing(forged) == ("/login", {"oauth_error": "oauth_state", "provider": provider})
+        assert "__Host-bridge_oauth" not in cookie_names(forged)
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        genuine = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(genuine) == ("/dev", {})
+    assert signed_in(genuine)
+    assert _deleted(genuine, "__Host-bridge_oauth")  # spent by the callback that presented its state
+
+
+async def test_an_unreadable_flow_cookie_is_cleared(client: httpx.AsyncClient) -> None:
+    client.cookies.set("__Host-bridge_oauth", "not-a-sealed-flow")
+    response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": "junk"})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert _deleted(response, "__Host-bridge_oauth")
 
 
@@ -923,6 +955,7 @@ async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert token.call_count == 0
+    assert _deleted(response, "__Host-bridge_oauth")
 
 
 async def test_a_flow_for_one_provider_cannot_finish_at_another(client: httpx.AsyncClient) -> None:
@@ -932,6 +965,7 @@ async def test_a_flow_for_one_provider_cannot_finish_at_another(client: httpx.As
         response = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "google"})
     assert token.call_count == 0
+    assert _deleted(response, "__Host-bridge_oauth")  # its state was presented: the flow is spent
 
 
 async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> None:
@@ -944,14 +978,17 @@ async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> Non
     assert "script" not in denied.headers["location"]
     assert "access_denied" not in denied.headers["location"]
     assert denied.headers["referrer-policy"] == "no-referrer"
+    assert _deleted(denied, "__Host-bridge_oauth")
     params = await start(client, "google", "login")
     with respx.mock(assert_all_called=True) as router:
         router.post(GOOGLE_TOKEN).mock(return_value=httpx.Response(500, text="internal detail from the provider"))
         failed = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
     assert landing(failed) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    assert _deleted(failed, "__Host-bridge_oauth")
     params = await start(client, "google", "login")
     missing = await client.get("/api/auth/oauth/google/callback", params={"state": params["state"]})
     assert landing(missing) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    assert _deleted(missing, "__Host-bridge_oauth")
 
 
 # ------------------------------------------------------------------ throttling and connections
