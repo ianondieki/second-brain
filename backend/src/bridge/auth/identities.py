@@ -175,7 +175,10 @@ async def reload_session(db: AsyncSession, live: sessions.LiveSession | None) ->
     the browser's session up again. While the token exchange was in flight the person may have signed out, the
     session may have been revoked or have expired, or the account may have been suspended; the copies read before
     (kept across the commit) would still link to that session or sign in to that account. None when the session is
-    gone, so a ``link`` fails with ``oauth_session``; a sign-in does not depend on it."""
+    gone, so a ``link`` fails with ``oauth_session``; a sign-in does not depend on it. The caller commits first:
+    changes not yet flushed would be dropped silently, so they raise ``RuntimeError`` instead."""
+    if db.new or db.dirty or db.deleted:
+        raise RuntimeError("reload_session would drop unflushed changes: commit before the provider call")
     db.expunge_all()
     fresh = await sessions.lookup(db, live.token) if live is not None else None
     await bind_tenant(db, user_id=fresh.user.id if fresh is not None else None)
