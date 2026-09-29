@@ -34,6 +34,8 @@ from sqlalchemy.sql.elements import TextClause
 
 from bridge.db import TIER2_ROLES, as_role, bind_tenant
 from bridge.ids import uuid7
+from bridge.llm.ledger import NOT_SENT as LEDGER_NOT_SENT
+from bridge.llm.ledger import CallStatus
 from bridge.models.enums import VersionStatus
 from bridge.proposals.models import ProposalVersion
 from tests.integration import world as w
@@ -2188,6 +2190,67 @@ async def test_llm_spend_is_a_platform_total(owner_engine: AsyncEngine) -> None:
         await act(conn, None)  # another tenant's (or no tenant's) request still sees the total, never the rows
         assert await run(conn, "SELECT count(*) FROM llm_calls WHERE user_id = :u", u=user) == 0
         assert await run(conn, "SELECT app_llm_spend_usd(:t)", t=since) - before == Decimal("1.25")
+
+
+CALLS_SINCE = "SELECT app_llm_calls_since(:m, :t)"
+LLM_ROW = (
+    "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, batch_id, custom_id, created_at)"
+    " VALUES (:id, :org, :u, 't', :m, :status, :batch, :item, :at)"
+)
+# The rows of calls that never reached a provider: the in-memory ledger's set (bridge.llm.ledger.NOT_SENT), so the SQL
+# count and the in-memory one cannot drift apart unnoticed.
+NOT_SENT = {status.value for status in LEDGER_NOT_SENT}
+
+
+async def test_llm_calls_since_counts_every_tenants_sent_calls(owner_engine: AsyncEngine) -> None:
+    """app_llm_calls_since(model, since) (revision 0004; a free slot's daily request cap, D-37) counts the model's rows
+    since then that reached a provider, across every tenant and the platform jobs, although the caller reads none of
+    the others' rows: every CallStatus but the blocked_* ones and batch_reserved (a settled item counts once), a
+    blocked_* status added later is left out too and an unknown one counts. Other models and earlier rows are left
+    out; the window starts at p_since inclusive; NULL arguments are refused."""
+    statuses = {status.value for status in CallStatus}
+    assert {status for status in statuses if status.startswith("blocked_")} | {"batch_reserved"} == NOT_SENT
+    sent = statuses - NOT_SENT
+    async with as_app(owner_engine) as conn:
+        a = await w.add_user(conn, _email("calls-a"), "A")
+        b = await w.add_user(conn, _email("calls-b"), "B")
+        outsider = await w.add_user(conn, _email("calls-outsider"), "Outsider")
+        org = await add_org(conn, verification="e1")
+        await _add_membership(conn, org, b, "{owner,admin}")
+        model, other_model = f"free1:test-{uuid4().hex[:12]}", f"free2:test-{uuid4().hex[:12]}"
+        since = await run(conn, "SELECT now() - interval '1 hour'")
+        batch = f"msgbatch_{uuid4().hex[:20]}"
+        # (who binds, the row's organisation and user): a user, a member for their organisation, a platform job.
+        tenants = ((a, None, None, a), (b, org, org, b), (None, None, None, None))
+        for n, (user, bound_org, row_org, row_user) in enumerate(tenants):
+            await act(conn, user, bound_org)
+            row = {"org": row_org, "u": row_user, "m": model, "batch": None, "item": None, "at": since}
+            for status in CallStatus:
+                if status is CallStatus.BATCH_RESERVED:
+                    continue
+                await run(conn, LLM_ROW, id=uuid7(), **(row | {"status": status.value}))
+            item = {"batch": batch, "item": f"item-{n}"}
+            for step in ("batch_reserved", "ok"):  # a reserved item, then its settlement
+                await run(conn, LLM_ROW + " ON CONFLICT DO NOTHING", id=uuid7(), **(row | item | {"status": step}))
+            left_out = (
+                {"status": "blocked_request_cap"},  # a blocked_* status added later
+                {"status": "ok", "m": other_model},
+                {"status": "ok", "at": since - timedelta(microseconds=1)},
+            )
+            for change in (*left_out, {"status": "unknown_status"}):
+                await run(conn, LLM_ROW, id=uuid7(), **(row | change))
+        per_tenant = len(sent) + 2  # every sent status, the settled item, the unknown status
+        for user, bound_org in ((a, None), (b, org), (outsider, None), (None, None)):
+            await act(conn, user, bound_org)
+            assert await run(conn, CALLS_SINCE, m=model, t=since) == 3 * per_tenant
+            assert await run(conn, CALLS_SINCE, m=other_model, t=since) == 3
+            assert await run(conn, CALLS_SINCE, m=model, t=since + timedelta(microseconds=1)) == 0
+        await act(conn, outsider)  # the count, never the rows: the outsider reads none of them
+        assert await run(conn, "SELECT count(*) FROM llm_calls WHERE model = ANY (:ms)", ms=[model, other_model]) == 0
+        await act(conn, a)  # A reads only A's own rows of the model: every status, the settlement and three more
+        assert await run(conn, "SELECT count(*) FROM llm_calls WHERE model = :m", m=model) == len(CallStatus) + 4
+        await expect(conn, "SELECT app_llm_calls_since(CAST(NULL AS varchar), :t)", "name the model", t=since)
+        await expect(conn, "SELECT app_llm_calls_since(:m, CAST(NULL AS timestamptz))", "name the model", m=model)
 
 
 BATCH_CALL = (

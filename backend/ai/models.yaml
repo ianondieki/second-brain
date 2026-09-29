@@ -4,11 +4,14 @@
 # A change here (model, effort, max_tokens) re-runs the cassette evals (docs/spec/09 Evals).
 version: 1
 
-# PLACEHOLDER PRICES, NOT VERIFIED against the provider's public price list. They exist so the ledger and the caps
-# have numbers in tests (D-18: no paid calls). The human confirms or replaces them before the first real call.
-# USD per million tokens. Cache reads ~0.1x input; 5-minute cache writes 1.25x; 1-hour cache writes 2x.
-pricing_status: placeholder-unverified
-batch_price_ratio: 0.5          # Batch API price as a share of the synchronous price (placeholder)
+# Anthropic list prices, VERIFIED on 2026-09-29 from the official price page ("Model pricing" table;
+# docs/platform/research/anthropic-prices-2026-09.md, verdict "verified"; D-37). USD per million tokens. The Anthropic
+# provider stays off unless pricing_status is "verified" (bridge.llm.routing, fail closed); "placeholder-unverified"
+# keeps it off. Prices change: re-fetch the page before any billing or cap figure is frozen.
+pricing_status: verified
+pricing_verified_on: 2026-09-29
+pricing_source: https://platform.claude.com/docs/en/about-claude/pricing
+batch_price_ratio: 0.5          # "a 50% discount on both input and output tokens" (same page, "Batch processing")
 
 budget:
   soft_cap_ratio: 0.8           # docs/spec/09: soft-cap signal at 80% of the monthly cap (email in Phase 4)
@@ -31,11 +34,14 @@ embeddings:                     # REQ-EMB-01: self-hosted on the worker (bridge/
   batch_size: 16                # texts per encode call
   reembed_batch_size: 64        # rows per re-embed batch (bridge/jobs/reembed.py)
 
+# Anthropic models (used only with LLM_PROVIDER=anthropic). Ids as on the models overview and the Sonnet 5 page
+# (research note): Sonnet 5 is legacy since Sonnet 5.5 (retirement not sooner than 2027-06-30); Haiku 4.5 retires not
+# sooner than 2026-10-15; the docs/spec/09 allocation names Sonnet 5 and Haiku 4.5 (a change is a spec change).
 models:
   claude-sonnet-5:
     supports_effort: true
     max_output_tokens: 64000    # placeholder; confirm with the provider's model card
-    price_usd_per_mtok: {input: 3.00, output: 15.00, cache_read: 0.30, cache_write_5m: 3.75, cache_write_1h: 6.00}
+    price_usd_per_mtok: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write_5m: 2.50, cache_write_1h: 4.00}
   claude-haiku-4-5:
     supports_effort: false      # docs/spec/09: effort n/a
     max_output_tokens: 64000
@@ -43,7 +49,16 @@ models:
   claude-opus-5-5:
     supports_effort: true       # defaults to medium when unset, so every task states its effort
     max_output_tokens: 64000    # placeholder
-    price_usd_per_mtok: {input: 5.00, output: 25.00, cache_read: 0.50, cache_write_5m: 6.25, cache_write_1h: 10.00}
+    # cache reads are 0.05x input on Opus 5.5 (not the usual 0.1x)
+    price_usd_per_mtok: {input: 4.00, output: 20.00, cache_read: 0.20, cache_write_5m: 5.00, cache_write_1h: 8.00}
+
+# Free OpenAI-compatible providers for local prototype runs (D-37). Each slot's base URL, key, model and daily request
+# cap live in backend/.env (LLM_FREE_<N>_*); a task lists the slots that may serve it (free_slots, tried in order; none
+# = never a free provider). A free call is priced at 0, has no effort, carries the output schema in the prompt and no
+# server tools, and only seeded demo data may be sent (bridge.llm.demo_data). There is no batch API: a batch is
+# answered by the deterministic fake, labelled "demo fallback" (bridge.llm.routing).
+free_providers:
+  max_output_tokens: 8192       # a free model's output cap: a task's max_tokens is lowered to it
 
 # Task keys: model, effort (required, even when null: null only for a model without effort), max_tokens, batchable
 # (default false), confidential (default true: no prompt or output text in logs or ledger outputs), purpose
@@ -53,7 +68,8 @@ models:
 # allowed_tools (server tools the task may use; default none), max_field_chars (optional lower cap),
 # json_schema_format (default true: native output_config.format; false puts the schema in the system prompt and
 # still validates the reply, for citation calls in Phase 5 research: verify compatibility with the provider docs
-# before any live call).
+# before any live call), free_slots (the free provider slots that may serve the task with LLM_PROVIDER=free, in
+# order; default none).
 tasks:
   moderation_prescreen:         # injection/spam/moderation classifier at submission, Tier 1 only (REQ-MOD-01)
     model: claude-haiku-4-5
@@ -64,6 +80,7 @@ tasks:
     purpose: tier1_only
     fallback_model: null         # D-29
     fallback_effort: null
+    free_slots: [1, 2, 3]
   over_disclosure_check:        # teaser over-disclosure check, Tier 1 only, warn only (REQ-PROP-02)
     model: claude-haiku-4-5
     effort: null
@@ -73,6 +90,7 @@ tasks:
     purpose: tier1_only
     fallback_model: null         # D-29
     fallback_effort: null
+    free_slots: [1, 2, 3]
   originality_explainer:        # overlap explanation, submitter's text vs others' Tier 1 (REQ-PROP-04)
     model: claude-sonnet-5
     effort: medium
@@ -82,6 +100,7 @@ tasks:
     purpose: tier1_only
     fallback_model: null         # D-29
     fallback_effort: null
+    free_slots: [1, 2, 3]
   submission_assistant:         # Tier-1 vs Tier-2 placement suggestions, per-use consent (REQ-PROP-05)
     model: claude-sonnet-5
     effort: medium
@@ -91,3 +110,4 @@ tasks:
     purpose: tier2_llm_assistant
     fallback_model: null         # D-29
     fallback_effort: null
+    free_slots: [1, 2, 3]
