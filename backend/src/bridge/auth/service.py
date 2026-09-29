@@ -524,9 +524,9 @@ async def ensure_fresh_proof(
     await require_reauth(db, settings, user, live, password, ip=ip)
 
 
-def notice_email(settings: Settings, user: User, what: str) -> PendingEmail:
+def notice_email(settings: Settings, user: User, what: str, dedupe_key: str | None = None) -> PendingEmail:
     return PendingEmail(
-        user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice"
+        user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice", dedupe_key
     )
 
 
@@ -660,8 +660,10 @@ async def replace_recovery_codes(
     await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
     codes = _issue_recovery_codes(settings, user)
     await audit(db, "auth.recovery_codes_replaced", actor_user_id=user.id, subject_type="user", subject_id=user.id)
+    # One notice per account and Nairobi day, however many replacements (security review; every one is audited).
+    dedupe = f"auth.recovery_codes_replaced:{user.id}:{local_date(clock.utcnow()).isoformat()}"
     # [[COPY-REVIEW]] plain transactional copy
-    return codes, [notice_email(settings, user, "New recovery codes were created.")]
+    return codes, [notice_email(settings, user, "New recovery codes were created.", dedupe)]
 
 
 async def mfa_required_for(db: AsyncSession, user: User) -> bool:

@@ -423,6 +423,28 @@ async def test_new_recovery_codes_are_audited_and_emailed_without_the_codes(
     assert not any(code in notices[0].text for code in new)
 
 
+async def test_the_new_recovery_codes_notice_goes_out_once_a_day(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """Security review MINOR: repeated replacements send one notice per account and Nairobi day, not one each
+    (every replacement is still audited)."""
+    address = await verified(client)
+    await enrolled(client)
+    for _ in range(3):
+        assert (await client.post(CODES, json=with_password())).status_code == 200
+    notices = [m for m in outbox(client).outbox if m.to == address and "New recovery codes were created." in m.text]
+    assert len(notices) == 1
+    user_id = (await user_row(owner_engine, address))["id"]
+    async with owner_engine.connect() as conn:
+        replaced = await conn.scalar(
+            text(
+                "SELECT count(*) FROM audit_events WHERE actor_user_id = :u AND action = 'auth.recovery_codes_replaced'"
+            ),
+            {"u": user_id},
+        )
+    assert replaced == 3
+
+
 async def test_new_recovery_codes_need_a_recent_second_factor(
     client: httpx.AsyncClient, owner_engine: AsyncEngine
 ) -> None:
