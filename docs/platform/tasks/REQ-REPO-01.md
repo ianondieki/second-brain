@@ -206,3 +206,16 @@ Notes for the code on this schema:
 ## Acceptance criteria and tests
 
 AC-REPO-1 (`integration/proposals/test_access.py::test_predicate_negatives`), AC-REPO-2 (`integration/proposals/test_render_marks.py`), AC-REPO-3 (`integration/test_privileges.py`, `contract/test_search_schemathesis.py`), AC-SEC-1/b (`integration/test_rls.py`), AC-SEC-2 (`integration/test_feature_flags.py::test_tier2_flag`).
+
+## Round 6 reviews (2026-09-29, prototype track): reviewer PASS, security-reviewer PASS; MINOR follow-ups (not built, PLAN §8)
+
+Reviewer (22 mutations red, 4 survivors explained or listed below; 951 passed) and security-reviewer (probes P1–P4) found no BLOCKER or MAJOR.
+
+1. Seat-aware domain rule (both reviewers): `v_owner` is computed before `app_seat_claimant` (`:1653-1657`, used at `:1675`, `:1698`), so a claimant who becomes owner through this approval (an organisation nobody holds, e.g. after the sole owner's erasure) keeps the old control's `verified_domain`. Fix: set the domain when `v_dispute`, a first verification, an active owner, or the claimant had no active membership / no active owner existed.
+2. A first verification of an E0 organisation with an active owner takes a non-owner member's domain (`:1675`, `:1698`). Fix: refuse it in `app_decide_claim` or route it to the owner in T2.6b.
+3. A non-owner's routine E2 approval still rewrites `public_entity`, `registration_no`, `e2_verified_at`, `reverify_due_on` (`:1700-1703`). Fix: the same CASE as the domain, or refuse non-owner E2 claims that change them.
+4. Deadlocks (40P01, fail closed): `app_decide_claim` locks claim → organisation while roster writes lock membership → claim (relabel trigger), and `app_approve_claim_e1` locks its claim then the organisation. Fix: lock the organisation before the claim everywhere, or T2.6b retries on 40P01.
+5. `app_llm_settle_batch_item` (`:2020`): no test pins the tenant a settlement is written under (mutation J2 survives). Add a squatted item to `test_a_batch_item_settles_once_through_the_function_even_after_its_user_left` and assert T's ids.
+6. `memberships_claims_relabel` `OLD.org_id` branch (`:2480`) untested (mutation O survives). Cover a membership move, or refuse `org_id` changes on `memberships`.
+7. A batch tenant settling an item only another tenant reserved gets `check_violation`, not `insufficient_privilege` (`:2504-2516`); optionally map both to `LLMBatchNotOwned`.
+8. Commit `2ca0347` is a 725-line "wip (unverified)" commit; it stays in history (no rewrite; recorded with the earlier wip commits as a deviation). Its content was verified in session 2 (951 passed) and reviewed in round 6.
