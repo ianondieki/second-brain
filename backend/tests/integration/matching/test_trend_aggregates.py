@@ -135,8 +135,9 @@ async def test_aggregates_never_return_hashes_or_organisation_ids_and_ignore_the
             "TABLE(item_id uuid, kind character varying, day date, events integer, actors integer, orgs integer)"
         )
         answers = []
-        for user, org in ((a.reviewer, a.org), (b.owner, b.org), (None, None)):
-            await act(conn, user, org)
+        callers: tuple[tuple[UUID | None, UUID | None], ...] = ((a.reviewer, a.org), (b.owner, b.org), (None, None))
+        for caller, context in callers:
+            await act(conn, caller, context)
             answers.append(await _aggregates(conn, [item], MONDAY - timedelta(days=1), MONDAY + timedelta(days=1)))
         assert answers[0] == answers[1] == answers[2] == {(item, "org_interest", MONDAY.date()): (3, 3, None)}
         values = [value for key, counts in answers[0].items() for value in (*key, *counts)]
