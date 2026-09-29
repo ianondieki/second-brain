@@ -1,94 +1,117 @@
 // The JS budget per route (docs/spec/07 item 5, REQ-UX-05): at most 150 KB of gzipped JavaScript, where
-// 1 KB = 1,000 bytes, so 150,000 bytes. Counted: the gzip-compressed bodies of the scripts a first visit downloads
-// (the route's <script src> files; nomodule scripts are skipped by modern browsers). Not counted: response headers,
-// which depend on the protocol (about 0.4 KB per file over HTTP/1.1, a few bytes with HTTP/2 header compression),
-// and chunks that load later on demand (for example two-step setup after "Turn on"). The HTTP/1.1 header bytes are
-// printed alongside, since Lighthouse's transfer size includes them (DECISIONS-NEEDED D-28).
+// 1 KB = 1,000 bytes, so 150,000 bytes. Counted: every script the route fetches in a real browser until the network
+// is idle, lazily loaded chunks included, each at its gzip-compressed size (the server's gzip, or gzip at the default
+// level when a response is not compressed). With --first-edit the count continues through the first keystroke in the
+// page's first text field (chunks that load on the first edit, such as the idea editor's save calls, count too).
+// Response headers are printed alongside (their HTTP/1.1 size), since Lighthouse's transfer size includes them
+// (DECISIONS-NEEDED D-28).
 //
 // Usage, against a production build (the `make dev` web container, or `npm run build && npm run start`):
-//   npm run budget                                the default routes: / /login /signup /settings/security
-//   npm run budget -- /signup /org --allow-skip   named routes (the leading slash is optional: `signup org`)
+//   npm run budget                                        the default routes: / /login /signup /settings/security
+//   npm run budget -- /dev/ideas/new --first-edit         named routes (the leading slash is optional)
+//   npm run budget -- /org --allow-skip                   a redirect is a skip, not a failure
 // BUDGET_BASE_URL  the web app (default http://localhost:3000; http or https).
 // BUDGET_COOKIE    a Cookie header for signed-in routes, e.g. "__Host-bridge_session=<token>" of a test account.
-// Exits 1 when a route is over the budget, answers with an error, or is skipped because it redirects (a signed-in
-// route without BUDGET_COOKIE) unless --allow-skip is given.
-import { get as httpGet } from "node:http";
-import { get as httpsGet } from "node:https";
-import { gunzipSync, gzipSync } from "node:zlib";
+// Needs Playwright's Chromium (PLAYWRIGHT_BROWSERS_PATH where it is installed). --first-edit types into the page, so
+// it changes the account's data (a new idea's first keystroke creates a draft): test accounts only.
+// Exits 1 when a route is over the budget, fails to load, or is skipped because it redirects (a signed-in route
+// without BUDGET_COOKIE) unless --allow-skip is given.
+import { chromium } from "@playwright/test";
+import { gzipSync } from "node:zlib";
 
 const BUDGET_BYTES = 150_000;
 const DEFAULT_ROUTES = ["/", "/login", "/signup", "/settings/security"];
+const SETTLE_MS = 1500; // after "networkidle", for chunks requested by effects that run once the page is idle
 
-const base = process.env.BUDGET_BASE_URL ?? "http://localhost:3000";
+const base = new URL(process.env.BUDGET_BASE_URL ?? "http://localhost:3000");
 const cookie = process.env.BUDGET_COOKIE;
 const args = process.argv.slice(2);
 const allowSkip = args.includes("--allow-skip");
-const named = args.filter((arg) => arg !== "--allow-skip").map((arg) => (arg.startsWith("/") ? arg : `/${arg}`));
+const firstEdit = args.includes("--first-edit");
+const named = args.filter((arg) => !arg.startsWith("--")).map((arg) => (arg.startsWith("/") ? arg : `/${arg}`));
 const routes = named.length > 0 ? named : DEFAULT_ROUTES;
 
-function fetchRaw(url, headers = {}) {
-  const get = url.protocol === "https:" ? httpsGet : httpGet;
-  return new Promise((resolve, reject) => {
-    get(url, { headers: { "accept-encoding": "gzip", ...headers } }, (res) => {
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => {
-        // The response head as HTTP/1.1 sends it: status line, header lines, blank line.
-        let headerBytes = `HTTP/1.1 ${res.statusCode} ${res.statusMessage}\r\n\r\n`.length;
-        for (let i = 0; i < res.rawHeaders.length; i += 2) {
-          headerBytes += `${res.rawHeaders[i]}: ${res.rawHeaders[i + 1]}\r\n`.length;
-        }
-        resolve({ res, body: Buffer.concat(chunks), headerBytes });
-      });
-    }).on("error", reject);
+function cookies() {
+  if (!cookie) return [];
+  return cookie.split(/;\s*/).filter(Boolean).map((pair) => {
+    const at = pair.indexOf("=");
+    const name = pair.slice(0, at);
+    // __Host- cookies must be Secure; Chromium treats http://localhost as a secure context.
+    return { name, value: pair.slice(at + 1), domain: base.hostname, path: "/", secure: true, sameSite: "Lax" };
   });
 }
 
-/** The bytes on the wire when the server gzips; otherwise what gzip at its default level would send. */
-function gzippedLength({ res, body }) {
-  return res.headers["content-encoding"] === "gzip" ? body.length : gzipSync(body).length;
+async function measure(browser, route) {
+  const context = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await context.addCookies(cookies());
+  const page = await context.newPage();
+  const scripts = new Map();
+  const reads = [];
+  page.on("response", (response) => {
+    const type = response.headers()["content-type"] ?? "";
+    if (response.request().resourceType() !== "script" && !type.includes("javascript")) return;
+    reads.push(
+      (async () => {
+        const body = await response.body().catch(() => null);
+        if (!body) return;
+        const encoded = response.headers()["content-encoding"] === "gzip";
+        const sizes = await response.request().sizes().catch(() => null);
+        const gz = encoded && sizes ? sizes.responseBodySize : gzipSync(body).length;
+        const headerBytes = sizes ? sizes.responseHeadersSize : 0;
+        scripts.set(response.url(), { gz, headerBytes });
+      })(),
+    );
+  });
+  try {
+    const response = await page.goto(new URL(route, base).href, { waitUntil: "networkidle" });
+    const landed = new URL(page.url());
+    if (`${landed.pathname}${landed.search}` !== route) return { skipped: `redirected to ${landed.pathname}` };
+    if (!response || response.status() !== 200) return { failed: `the page answered ${response?.status()}` };
+    await page.waitForTimeout(SETTLE_MS);
+    if (firstEdit) {
+      const field = page.locator("main input[type=text]:enabled, main textarea:enabled").first();
+      if (await field.count()) {
+        await field.focus();
+        await page.keyboard.type("x");
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(SETTLE_MS + 1500); // the editor saves 1.2 s after typing stops
+      }
+    }
+    await Promise.all(reads);
+    const values = [...scripts.values()];
+    return {
+      bytes: values.reduce((sum, s) => sum + s.gz, 0),
+      headerBytes: values.reduce((sum, s) => sum + s.headerBytes, 0),
+      count: values.length,
+    };
+  } catch (error) {
+    return { failed: error instanceof Error ? error.message : String(error) };
+  } finally {
+    await context.close();
+  }
 }
 
-async function measure(route) {
-  const page = await fetchRaw(new URL(route, base), cookie ? { cookie } : {});
-  const status = page.res.statusCode;
-  if (status >= 300 && status < 400) return { skipped: `${status} to ${page.res.headers.location ?? "?"}` };
-  if (status !== 200) return { failed: `the page answered ${status}` };
-  const html = (page.res.headers["content-encoding"] === "gzip" ? gunzipSync(page.body) : page.body).toString();
-  const sources = new Set();
-  for (const [, attributes] of html.matchAll(/<script\b([^>]*)>/gi)) {
-    const src = /\bsrc="([^"]+)"/i.exec(attributes)?.[1];
-    if (src && !/\bnomodule\b/i.test(attributes)) sources.add(src.replaceAll("&amp;", "&"));
-  }
-  let bytes = 0;
-  let headerBytes = 0;
-  for (const src of sources) {
-    const script = await fetchRaw(new URL(src, base));
-    if (script.res.statusCode !== 200) return { failed: `${src} answered ${script.res.statusCode}` };
-    bytes += gzippedLength(script);
-    headerBytes += script.headerBytes;
-  }
-  return { scripts: sources.size, bytes, headerBytes };
-}
-
+const browser = await chromium.launch();
 let failed = false;
 for (const route of routes) {
-  const result = await measure(route);
-  if (result.failed) {
-    failed = true;
-    console.log(`${route}: FAILED (${result.failed})`);
-  } else if (result.skipped) {
-    failed ||= !allowSkip;
-    const hint = allowSkip ? "" : "; set BUDGET_COOKIE for signed-in routes, or pass --allow-skip";
-    console.log(`${route}: ${allowSkip ? "skipped" : "SKIPPED"} (${result.skipped}${hint})`);
-  } else {
-    const verdict = result.bytes <= BUDGET_BYTES ? "ok" : "OVER";
-    failed ||= verdict === "OVER";
-    const withHeaders = result.bytes + result.headerBytes;
-    console.log(
-      `${route}: ${result.bytes} bytes of gzipped JS in ${result.scripts} scripts (budget ${BUDGET_BYTES}): ` +
-        `${verdict}; ${withHeaders} with HTTP/1.1 response headers`,
-    );
+  const result = await measure(browser, route);
+  if (result.skipped) {
+    console.log(`${route}: skipped (${result.skipped})`);
+    if (!allowSkip) failed = true;
+    continue;
   }
+  if (result.failed) {
+    console.log(`${route}: FAILED (${result.failed})`);
+    failed = true;
+    continue;
+  }
+  const over = result.bytes > BUDGET_BYTES;
+  if (over) failed = true;
+  const when = firstEdit ? " through the first edit" : "";
+  console.log(
+    `${route}: ${result.bytes} bytes of gzipped JS in ${result.count} scripts${when} (budget ${BUDGET_BYTES}): ` +
+      `${over ? "OVER" : "ok"}; ${result.bytes + result.headerBytes} with response headers`,
+  );
 }
+await browser.close();
 process.exit(failed ? 1 : 0);
