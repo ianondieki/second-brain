@@ -1,7 +1,10 @@
-"""Revision 0001 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01; docs/spec/08 Migrations and Tenancy).
+"""Revisions 0001 and 0002 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01; docs/spec/08 Migrations and
+Tenancy; AC-IP-2).
 
-Migration round trip and drift, table classification, RLS coverage generated from the ORM metadata, grants and role
-attributes, the RLS helper functions, the append-only hash-chained audit log and the Procrastinate schema.
+Migration round trip and drift (0002 leaves 0001 exactly as it found it), table classification, RLS coverage
+generated from the ORM metadata, the grant matrix of every role, role attributes, the helper and SECURITY DEFINER
+functions, the append-only hash-chained audit log, the evidence triggers of schema v2, the listed-organisations
+policy and the Procrastinate schema.
 """
 
 from __future__ import annotations
@@ -29,15 +32,18 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 import bridge.models.all  # noqa: F401  # registers every table
 from bridge.ids import uuid7
 from bridge.models import Base, Tenancy
+from bridge.models.base import RLS_TENANCIES
+from tests.integration import world as w
 from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
 
 TABLES = Base.metadata.tables
-TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER}
-ROLES = ("bridge_owner", "bridge_app", "aggregate_worker", "audit_reader")
+TIER2_ROLES = ("tier2_reader", "provenance_worker", "tier2_embed_worker", "tier2_moderation", "dsr_exporter")
+RUNTIME_ROLES = ("bridge_app", "aggregate_worker", "audit_reader", *TIER2_ROLES)
+ROLES = ("bridge_owner", *RUNTIME_ROLES)
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 
-# The grant matrix of bridge_app (task card T1.4 and review). Every other privilege on every ORM table must be absent.
-# UPDATE on users and organizations is column-scoped (APP_COLUMN_UPDATES).
+# The grant matrix of bridge_app (task cards T1.4 and T2.1, and review). Every other privilege on every ORM table
+# must be absent. UPDATE is column-scoped where some columns are never the app's to change (APP_COLUMN_UPDATES).
 S, I, U, D = "SELECT", "INSERT", "UPDATE", "DELETE"  # noqa: E741
 APP_COLUMN_UPDATES: dict[str, set[str]] = {
     "users": {
@@ -52,8 +58,94 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "totp_recovery_hashes",
         "updated_at",
     },
-    "organizations": {"legal_name", "website", "regions", "registration_no", "sector_id", "country", "updated_at"},
+    "organizations": {
+        "legal_name",
+        "website",
+        "regions",
+        "registration_no",
+        "sector_id",
+        "country",
+        "updated_at",
+        "county_code",  # revision 0002
+    },
     "developer_profiles": {"headline", "bio", "county_code", "updated_at"},
+    # revision 0002: never moderation_state, owners, keys or decisions
+    "problems": {
+        "title",
+        "statement",
+        "affected_group",
+        "niche_id",
+        "country",
+        "county_code",
+        "embedding",
+        "embed_model",
+        "embed_version",
+        "updated_at",
+    },
+    "problem_briefs": {"visibility", "budget_band", "deadline", "status", "updated_at"},
+    "proposals": {
+        "status",
+        "current_version_id",
+        "draft_version_id",
+        "title",
+        "niche_id",
+        "country",
+        "county_code",
+        "maturity",
+        "ask",
+        "problem_statement",
+        "impact_claims",
+        "summary",
+        "teaser_embedding",
+        "embed_model",
+        "embed_version",
+        "tier2_policy",
+        "raw_download_enabled",
+        "published_at",
+        "hidden_at",
+        "updated_at",
+    },
+    "proposal_versions": {
+        "status",
+        "title",
+        "niche_id",
+        "country",
+        "county_code",
+        "maturity",
+        "ask",
+        "problem_statement",
+        "impact_claims",
+        "summary",
+        "cert_id",
+        "updated_at",
+    },
+    "proposal_attachments": {"sha256", "size_bytes", "av_status", "rerendered", "updated_at"},
+    "tags": {"status", "updated_at"},
+    "disclosure_grants": {
+        "status",
+        "counts_as_unlock",
+        "billing_month",
+        "granted_by",
+        "granted_at",
+        "revoked_at",
+        "revoked_by",
+        "updated_at",
+    },
+    "document_views": {"duration_bucket"},
+    "moderation_cases": {"status", "reasons", "assigned_to", "decided_by", "decided_at", "updated_at"},
+    # never the OTP columns (app_reissue_claim_otp(), app_confirm_claim_otp()) nor the DNS proof (dns_token is
+    # written with the claim, dns_verified_at only by app_mark_claim_dns_verified())
+    "org_claims": {
+        "registration_no",
+        "cr12_date",
+        "kra_pin",
+        "sector_register",
+        "public_entity_requested",
+        "document_keys",
+        "status",
+        "updated_at",
+    },
+    "directory_invitations": {"status", "reason", "approved_by", "sent_at", "updated_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -80,18 +172,146 @@ APP_GRANTS: dict[str, set[str]] = {
     "notification_deliveries": {S, I, U},
     "audit_events": {S, I},
     "event_details": {S, I},
+    # revision 0002
+    "legal_templates": {S},
+    "nda_templates": {S},
+    "provenance_keys": {S},
+    "problems": {S, I, U},
+    "problem_sources": {S, I, D},
+    "problem_briefs": {S, I, U},
+    "brief_invitations": {S, I, D},
+    "proposals": {S, I, U, D},
+    "proposal_versions": {S, I, U, D},
+    "proposal_problems": {S, I, D},
+    "proposal_confidential": set(),  # docs/spec/06 6.1: no privilege at all; the Tier-2 roles only
+    "proposal_confidential_embeddings": set(),
+    "proposal_attachments": {S, I, U, D},
+    "proposal_lsh_bands": {S, I, D},
+    "originality_checks": {S, I},
+    "provenance_records": {S},
+    "chain_anchors": set(),
+    "transparency_roots": {S},
+    "attestations": {S, I},
+    "tags": {S, I, U},
+    "engagements": {S},
+    "disclosure_grants": {S, I, U},
+    "nda_acceptances": {S, I},
+    "legal_acceptances": {S, I},
+    "document_views": {S, I, U},
+    "signal_events": {I},
+    "moderation_cases": {S, I, U},
+    "org_claims": {S, I, U},
+    "directory_invitations": {S, I, U},
+    "phone_verifications": {S, I},
+    "kyc_reviews": {S, I},
+    "llm_calls": {S, I},
+}
+# Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
+ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
+    "aggregate_worker": {"signal_events": {S}},
+    "audit_reader": {"audit_events": {S}, "chain_anchors": {S}},
+    "tier2_reader": {"proposal_confidential": {S, I, U}},
+    "provenance_worker": {
+        "proposal_versions": {S, U},
+        "proposal_confidential": {S, U},
+        "provenance_records": {S, I, U},
+        "provenance_keys": {S},
+        "chain_anchors": {I},
+        "transparency_roots": {I},
+    },
+    "tier2_embed_worker": {"proposal_confidential": {S}, "proposal_confidential_embeddings": {I}},
+    "tier2_moderation": {"proposal_confidential": {S}, "proposal_confidential_embeddings": {S}},
+    "dsr_exporter": {"proposal_confidential": {S}},
+}
+ROLE_COLUMN_UPDATES: dict[str, dict[str, set[str]]] = {
+    "tier2_reader": {"proposal_confidential": {"ciphertext", "nonce", "wrapped_dek", "kms_key_id", "updated_at"}},
+    "provenance_worker": {
+        "proposal_versions": {"content_hash", "prev_version_hash", "manifest_version", "updated_at"},
+        "proposal_confidential": {"manifest_ciphertext", "manifest_nonce", "updated_at"},
+        "provenance_records": {
+            "signature",
+            "key_id",
+            "status",
+            "tsa_token",
+            "tsa_time",
+            "tsa_serial",
+            "tsa_url",
+            "ots_proof",
+            "evidence_s3_key",
+        },
+    },
 }
 
-# (signature, SECURITY DEFINER?) of the helper functions bridge_app may execute.
-APP_FUNCTIONS = (
-    ("uuid7()", False),
-    ("app_user_id()", False),
-    ("app_org_id()", False),
-    ("app_is_member(uuid, org_role[])", True),
-    ("app_create_organization(uuid, org_kind, text, citext, text)", True),
-    ("app_event_accepts_details(uuid)", True),
-)
-TRIGGER_FUNCTIONS = (("audit_events_chain()", True), ("audit_block_mutation()", False))
+# signature -> (SECURITY DEFINER?, roles that may EXECUTE it). Trigger functions: nobody.
+FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
+    "uuid7()": (False, {"bridge_app"}),
+    "app_user_id()": (False, {"bridge_app", *TIER2_ROLES}),
+    "app_org_id()": (False, {"bridge_app"}),
+    "app_is_member(uuid, org_role[])": (True, {"bridge_app"}),
+    "app_create_organization(uuid, org_kind, text, citext, text)": (True, {"bridge_app"}),
+    "app_event_accepts_details(uuid)": (True, {"bridge_app"}),
+    "audit_events_chain()": (True, set()),
+    "audit_block_mutation()": (False, set()),
+    # revision 0002
+    "app_is_staff(staff_role[])": (True, {"bridge_app", "tier2_moderation"}),
+    "app_reasons_are_valid(text[], integer)": (False, {"bridge_app"}),
+    "app_current_legal_template(legal_template_kind)": (False, {"bridge_app"}),
+    "app_current_nda_template(nda_kind)": (False, {"bridge_app"}),
+    "app_owns_version(uuid)": (True, {"provenance_worker"}),
+    "app_subject_digest(uuid, bytea)": (True, {"bridge_app", "provenance_worker"}),
+    "app_tier2_granted(uuid, uuid, uuid)": (True, {"bridge_app", "tier2_reader"}),
+    "app_held_tag_count(uuid)": (True, {"bridge_app"}),
+    "app_confirm_phone_otp(uuid, bytea)": (True, {"bridge_app"}),
+    "app_decide_kyc(uuid, boolean, text, text, text, text, boolean)": (True, {"bridge_app"}),
+    "app_kyc_purge_due()": (True, {"bridge_app"}),
+    "app_mark_kyc_images_purged(uuid)": (True, {"bridge_app"}),
+    "app_moderate_proposal(uuid, moderation_state)": (True, {"bridge_app"}),
+    "app_moderate_problem(uuid, moderation_state, problem_status)": (True, {"bridge_app"}),
+    "app_hold_proposal(uuid)": (True, {"bridge_app"}),
+    "app_hold_problem(uuid)": (True, {"bridge_app"}),
+    "app_open_moderation_case(text, uuid, text[], moderation_source, jsonb)": (
+        True,
+        {"bridge_app", "tier2_moderation"},  # tier2_moderation: the Tier-2 similarity job
+    ),
+    "app_confirm_claim_otp(uuid, bytea)": (True, {"bridge_app"}),
+    "app_mark_claim_dns_verified(uuid)": (True, {"bridge_app"}),
+    "app_approve_claim_e1(uuid)": (True, {"bridge_app"}),
+    "app_decide_claim(uuid, boolean, text)": (True, {"bridge_app"}),
+    "app_staff_remove_membership(uuid, text)": (True, {"bridge_app"}),
+    "app_delist_org(uuid)": (True, {"bridge_app"}),
+    "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
+    "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
+    "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
+    "app_llm_batch_owned(character varying)": (True, {"bridge_app"}),  # batch_poll, before fetching results
+    "app_llm_settle_batch_item(character varying, character varying, uuid, character varying, character varying,"
+    " character varying, integer, integer, integer, integer, numeric, integer, character varying,"
+    " character varying, character varying, jsonb)": (True, {"bridge_app"}),  # batch_poll settles each item
+    "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
+    "app_audit_chain_heads()": (True, {"provenance_worker"}),
+    "app_unanchored_chain_heads()": (True, {"provenance_worker"}),
+    "app_close_tag(uuid)": (True, {"bridge_app"}),
+    "tags_guard()": (False, set()),
+    "proposals_guard()": (True, set()),
+    "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
+    "org_claims_guard()": (True, set()),
+    "org_claims_dns_guard()": (False, set()),
+    "org_claims_status_guard()": (False, set()),
+    "app_claim_competes(uuid, uuid)": (False, set()),  # called only inside the claim functions and org_claims_guard()
+    "app_relabel_open_claims(uuid)": (False, set()),  # the claim functions and memberships_claims_relabel()
+    "app_seat_claimant(uuid, uuid)": (False, set()),  # app_decide_claim() and app_approve_claim_e1()
+    "memberships_claims_relabel()": (True, set()),
+    "llm_calls_batch_guard()": (True, set()),
+    "phone_verifications_guard()": (False, set()),
+    "evidence_time_guard()": (False, set()),
+    "chain_anchors_guard()": (True, set()),
+    "provenance_records_hash_guard()": (True, set()),
+    "transparency_roots_guard()": (False, set()),
+    "block_mutation()": (False, set()),
+    "proposal_versions_guard()": (True, set()),
+    "proposal_confidential_guard()": (True, set()),
+    "provenance_records_guard()": (False, set()),
+    "proposal_attachments_guard()": (True, set()),
+}
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
 # Temporary objects an attacker would plant (one statement each: psycopg sends parameterised queries singly).
@@ -125,7 +345,7 @@ def tenancy(table: sa.Table) -> Tenancy:
 
 
 def tenant_tables() -> list[str]:
-    return sorted(name for name, table in TABLES.items() if tenancy(table) in TENANT_KINDS)
+    return sorted(name for name, table in TABLES.items() if tenancy(table) in RLS_TENANCIES)
 
 
 def event_params(chain: str, actor: UUID | None, **overrides: Any) -> dict[str, Any]:
@@ -246,9 +466,64 @@ def leftover_objects(url: URL) -> list[str]:
         engine.dispose()
 
 
+# The shape of schema public that a revision may change: columns, constraints, indexes, RLS and policies, functions,
+# triggers, enum labels and every ACL (tables, columns, functions). Extension members are left out.
+_NOT_EXTENSION = (
+    "NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = '{catalog}'::regclass AND d.objid = {oid}"
+    " AND d.deptype = 'e')"
+)
+SNAPSHOT: dict[str, str] = {
+    "columns": "SELECT c.relname || '.' || a.attname || ' ' || format_type(a.atttypid, a.atttypmod)"
+    " || CASE WHEN a.attnotnull THEN ' not null' ELSE '' END"
+    " || coalesce(' default ' || pg_get_expr(d.adbin, d.adrelid), '')"
+    " FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid"
+    " LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum"
+    " WHERE c.relnamespace = 'public'::regnamespace AND a.attnum > 0 AND NOT a.attisdropped"
+    " AND " + _NOT_EXTENSION.format(catalog="pg_class", oid="c.oid"),
+    "constraints": "SELECT conrelid::regclass::text || ' ' || conname || ' ' || pg_get_constraintdef(oid)"
+    " FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conrelid <> 0",
+    "indexes": "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'",
+    "rls": "SELECT relname || ' ' || relrowsecurity || ' ' || relforcerowsecurity FROM pg_class"
+    " WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'",
+    "policies": "SELECT tablename || ' ' || policyname || ' ' || cmd || ' ' || roles::text || ' '"
+    " || coalesce(qual, '') || ' ' || coalesce(with_check, '') FROM pg_policies WHERE schemaname = 'public'",
+    "functions": "SELECT p.oid::regprocedure::text || ' ' || p.prosecdef || ' ' || coalesce(p.proconfig::text, '')"
+    " || ' ' || md5(pg_get_functiondef(p.oid)) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace"
+    " AND p.prokind = 'f' AND " + _NOT_EXTENSION.format(catalog="pg_proc", oid="p.oid"),
+    "triggers": "SELECT tgrelid::regclass::text || ' ' || tgname || ' ' || tgfoid::regprocedure::text || ' ' || tgtype"
+    " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid"
+    " WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace",
+    "enums": "SELECT t.typname || ' ' || string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) FROM pg_type t"
+    " JOIN pg_enum e ON e.enumtypid = t.oid WHERE t.typnamespace = 'public'::regnamespace GROUP BY t.typname",
+    "table_acl": "SELECT c.relname || ' ' || a.grantee::regrole::text || ' ' || a.privilege_type FROM pg_class c"
+    " CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relnamespace = 'public'::regnamespace",
+    "column_acl": "SELECT c.relname || '.' || t.attname || ' ' || a.grantee::regrole::text || ' ' || a.privilege_type"
+    " FROM pg_attribute t JOIN pg_class c ON c.oid = t.attrelid CROSS JOIN LATERAL aclexplode(t.attacl) a"
+    " WHERE c.relnamespace = 'public'::regnamespace AND NOT t.attisdropped",
+    "function_acl": "SELECT p.oid::regprocedure::text || ' ' || a.grantee::regrole::text || ' ' || a.privilege_type"
+    " FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.pronamespace = 'public'::regnamespace"
+    " AND " + _NOT_EXTENSION.format(catalog="pg_proc", oid="p.oid"),
+}
+
+
+def schema_snapshot(url: URL) -> dict[str, list[str]]:
+    engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
+    try:
+        with engine.connect() as conn:
+            return {kind: sorted(conn.execute(sa.text(sql)).scalars()) for kind, sql in SNAPSHOT.items()}
+    finally:
+        engine.dispose()
+
+
 def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0001"))
+    at_0001 = schema_snapshot(scratch_url)
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0001"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0002 leaves every object of 0001 exactly as it found it
+        assert after[kind] == at_0001[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "base"))
     assert leftover_objects(scratch_url) == []
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
@@ -347,7 +622,7 @@ async def test_rls_follows_the_declared_tenancy(owner_engine: AsyncEngine, table
         " AS policies FROM pg_class c WHERE c.oid = to_regclass(:t)",
         t=f"public.{table}",
     )
-    if tenancy(TABLES[table]) in TENANT_KINDS:
+    if tenancy(TABLES[table]) in RLS_TENANCIES:
         assert row.relrowsecurity, f"{table}: RLS is not enabled"
         assert not row.relforcerowsecurity, f"{table}: RLS must be ENABLED, not FORCED (owner helpers bypass it)"
         assert row.policies >= 1, f"{table}: no policy"
@@ -366,18 +641,39 @@ HOLDS_PRIVILEGE = (
 
 
 @pytest.mark.parametrize("table", tenant_tables())
-async def test_every_command_granted_to_the_app_has_a_policy(owner_engine: AsyncEngine, table: str) -> None:
-    holds = "SELECT " + HOLDS_PRIVILEGE.format(r="'bridge_app'", t="CAST(:t AS text)", p="CAST(:p AS text)")
-    for privilege in (S, I, U, D):
-        if await scalar(owner_engine, holds, t=table, p=privilege):
-            policies = await scalar(
-                owner_engine,
-                "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = :t"
-                " AND cmd IN (:p, 'ALL') AND 'bridge_app' = ANY (roles)",
-                t=table,
-                p=privilege,
-            )
-            assert policies >= 1, f"bridge_app may {privilege} {table} but no policy covers it"
+async def test_every_command_granted_on_an_rls_table_has_a_policy(owner_engine: AsyncEngine, table: str) -> None:
+    """For every runtime role (bridge_app and the Tier-2 roles alike): a granted command without a policy for that
+    role would silently match no row, so the grant and the policy must come together."""
+    found = await rows(
+        owner_engine,
+        "SELECT r.name AS role, p.name AS privilege, (SELECT count(*) FROM pg_policies pol"
+        " WHERE pol.schemaname = 'public' AND pol.tablename = CAST(:t AS name) AND pol.cmd IN (p.name, 'ALL')"
+        " AND CAST(r.name AS name) = ANY (pol.roles)) AS policies"
+        " FROM unnest(CAST(:roles AS text[])) AS r(name) CROSS JOIN unnest(CAST(:privileges AS text[])) AS p(name)"
+        " WHERE " + HOLDS_PRIVILEGE.format(r="CAST(r.name AS name)", t="CAST(:t AS text)", p="p.name"),
+        t=table,
+        roles=list(RUNTIME_ROLES),
+        privileges=[S, I, U, D],
+    )
+    uncovered = sorted(f"{row.role} may {row.privilege}" for row in found if row.policies == 0)
+    assert uncovered == [], f"{table}: no policy covers {uncovered}"
+
+
+@pytest.mark.parametrize("table", tenant_tables())
+async def test_no_policy_is_granted_to_a_role_without_the_privilege(owner_engine: AsyncEngine, table: str) -> None:
+    """The reverse: every policy names a runtime role that holds its command (no stale or misnamed policy)."""
+    found = await rows(
+        owner_engine,
+        "SELECT pol.policyname, pol.cmd, CAST(r.role AS text) AS role, "
+        + HOLDS_PRIVILEGE.format(r="r.role", t="CAST(:t AS text)", p="pol.cmd")
+        + " AS held FROM pg_policies pol CROSS JOIN LATERAL unnest(pol.roles) AS r(role)"
+        " WHERE pol.schemaname = 'public' AND pol.tablename = CAST(:t AS name)",
+        t=table,
+    )
+    assert found, f"{table}: no policy"
+    for policy in found:
+        assert policy.role in RUNTIME_ROLES, f"{table}.{policy.policyname} is for {policy.role}"
+        assert policy.held, f"{table}.{policy.policyname}: {policy.role} does not hold {policy.cmd}"
 
 
 # --- Grants and roles ---------------------------------------------------------------------------------------------
@@ -426,8 +722,17 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     assert updatable == expected
     for table in APP_COLUMN_UPDATES:  # column-scoped only, never the whole table
         assert await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', :t, 'UPDATE')", t=table) is False
-    assert not {"staff_role", "status", "email"} & updatable["users"]
-    assert not {"verification", "slug", "kind", "source", "public_entity"} & updatable["organizations"]
+    assert not {"staff_role", "status", "email", "subject_salt"} & updatable["users"]
+    org_protected = {"verification", "slug", "kind", "source", "public_entity", "verified_domain", "official_domains"}
+    org_protected |= {"delisted_at", "invitations_opted_out_at", "e2_verified_at", "reverify_due_on", "suspended_at"}
+    assert not org_protected & updatable["organizations"]
+    assert not {"moderation_state", "owner_id"} & (updatable["proposals"] | updatable["problems"])
+    registration = {"registered_at", "owner_handle", "content_hash", "prev_version_hash", "manifest_version"}
+    assert not registration & updatable["proposal_versions"]  # the database's and provenance_worker's
+    assert "closed_at" not in updatable["tags"]  # closing is app_close_tag() or tags_guard(), never reopening
+    claim_protected = {"otp_verified_at", "claimant_user_id", "reviewed_by", "decided_at", "level", "domain"}
+    claim_protected |= {"otp_hash", "otp_expires_at", "otp_attempts", "otp_reissues"}
+    assert not claim_protected & updatable["org_claims"]
     profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
     assert not profile_protected & updatable["developer_profiles"]
 
@@ -471,12 +776,24 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
         assert not await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', 'consents', :p)", p=privilege)
 
 
-async def test_aggregate_worker_has_no_privilege_on_any_table(owner_engine: AsyncEngine) -> None:
-    assert await privileges_of(owner_engine, "aggregate_worker") == {}
-
-
-async def test_audit_reader_reads_only_the_audit_chain(owner_engine: AsyncEngine) -> None:
-    assert await privileges_of(owner_engine, "audit_reader") == {"audit_events": {S}}
+@pytest.mark.parametrize("role", sorted(ROLE_GRANTS))
+async def test_other_runtime_roles_hold_exactly_their_matrix(owner_engine: AsyncEngine, role: str) -> None:
+    """aggregate_worker reads only signal_events; audit_reader only the chain and its anchors; each Tier-2 role only
+    what docs/spec/06 6.1 gives it. UPDATE is column-scoped wherever ROLE_COLUMN_UPDATES says so."""
+    assert set(ROLE_GRANTS) | {"bridge_app"} == set(RUNTIME_ROLES)
+    assert await privileges_of(owner_engine, role) == ROLE_GRANTS[role]
+    for table, columns in ROLE_COLUMN_UPDATES.get(role, {}).items():
+        found = await rows(
+            owner_engine,
+            "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+            " WHERE has_column_privilege(CAST(:role AS name), 'public.' || CAST(:t AS text), c.name, 'UPDATE')",
+            columns=[column.name for column in TABLES[table].columns],
+            role=role,
+            t=table,
+        )
+        assert {row.name for row in found} == columns, f"{role} UPDATE on {table}"
+        whole = "SELECT has_table_privilege(CAST(:role AS name), CAST(:t AS text), 'UPDATE')"
+        assert await scalar(owner_engine, whole, role=role, t=table) is False
 
 
 async def test_roles_are_neither_superuser_nor_bypassrls(owner_engine: AsyncEngine) -> None:
@@ -491,7 +808,7 @@ async def test_roles_are_neither_superuser_nor_bypassrls(owner_engine: AsyncEngi
         assert not row.rolbypassrls, row.rolname
 
 
-@pytest.mark.parametrize("role", ["bridge_app", "aggregate_worker", "audit_reader"])
+@pytest.mark.parametrize("role", RUNTIME_ROLES)
 async def test_runtime_roles_own_nothing(owner_engine: AsyncEngine, role: str) -> None:
     owned = await scalar(
         owner_engine,
@@ -514,8 +831,9 @@ async def test_every_table_is_owned_by_bridge_owner(owner_engine: AsyncEngine) -
     assert {row.owner for row in owners} == {"bridge_owner"}
 
 
-@pytest.mark.parametrize(("signature", "definer"), APP_FUNCTIONS + TRIGGER_FUNCTIONS)
-async def test_helper_functions_are_locked_down(owner_engine: AsyncEngine, signature: str, definer: bool) -> None:
+@pytest.mark.parametrize("signature", sorted(FUNCTIONS))
+async def test_helper_functions_are_locked_down(owner_engine: AsyncEngine, signature: str) -> None:
+    definer, callers = FUNCTIONS[signature]
     (row,) = await rows(
         owner_engine,
         "SELECT prosecdef, proconfig, pg_get_userbyid(proowner) AS owner FROM pg_proc"
@@ -525,12 +843,14 @@ async def test_helper_functions_are_locked_down(owner_engine: AsyncEngine, signa
     assert row.prosecdef is definer
     assert row.owner == "bridge_owner"
     assert row.proconfig == [PINNED_SEARCH_PATH]
-    callers = {"bridge_app"} if (signature, definer) in APP_FUNCTIONS else set()
-    for role in ("public", "bridge_app", "aggregate_worker", "audit_reader"):
-        allowed = await scalar(
-            owner_engine, "SELECT has_function_privilege(:r, :sig, 'EXECUTE')", r=role, sig=signature
-        )
-        assert allowed is (role in callers), f"{role} EXECUTE {signature}"
+    allowed = await rows(
+        owner_engine,
+        "SELECT r.name FROM unnest(CAST(:roles AS text[])) AS r(name)"
+        " WHERE has_function_privilege(r.name, CAST(:sig AS text), 'EXECUTE')",
+        roles=["public", *RUNTIME_ROLES],
+        sig=signature,
+    )
+    assert {row.name for row in allowed} == callers, f"EXECUTE {signature}"
 
 
 async def test_every_function_pins_search_path_with_pg_temp_last(owner_engine: AsyncEngine) -> None:
@@ -541,12 +861,12 @@ async def test_every_function_pins_search_path_with_pg_temp_last(owner_engine: A
         " WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d"
         " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')",
     )
-    assert len(found) > len(APP_FUNCTIONS) + len(TRIGGER_FUNCTIONS)  # includes procrastinate_*
+    assert len(found) > len(FUNCTIONS)  # includes procrastinate_*
     unpinned = sorted(row.signature for row in found if row.proconfig != [PINNED_SEARCH_PATH])
     assert unpinned == []
 
 
-@pytest.mark.parametrize("role", ["bridge_app", "aggregate_worker", "audit_reader"])
+@pytest.mark.parametrize("role", RUNTIME_ROLES)
 async def test_runtime_roles_cannot_create_temporary_objects(owner_engine: AsyncEngine, role: str) -> None:
     privilege = "SELECT has_database_privilege(:r, current_database(), 'TEMPORARY')"
     assert await scalar(owner_engine, privilege, r=role) is False
@@ -1030,6 +1350,668 @@ async def test_events_cannot_name_another_user_as_actor(app_engine: AsyncEngine)
         chained = list((await conn.execute(SELECT_CHAIN, {"chain": chain})).all())
     assert [(row.actor_kind, row.actor_user_id) for row in chained] == accepted
     assert_linked_chain(chained)
+
+
+# --- Schema v2 (revision 0002): protected columns, evidence triggers (AC-IP-2), the directory policy ----------------
+
+
+async def test_schema_v2_protected_columns_and_tables_are_not_the_apps(app_engine: AsyncEngine) -> None:
+    """What only definer functions, workers, staff or the owner may change: bridge_app is refused by its grants."""
+    user_id = uuid7()
+    async with rolled_back(app_engine, user_id) as conn:
+        await add_user(conn, user_id)
+        for sql in (
+            "SELECT subject_salt FROM users",
+            "UPDATE users SET subject_salt = '\\x00'",
+            "UPDATE organizations SET verified_domain = 'x.example'",
+            "UPDATE organizations SET official_domains = '{}'",
+            "UPDATE organizations SET delisted_at = now()",
+            "UPDATE organizations SET suspended_at = now()",
+            "UPDATE organizations SET e2_verified_at = now()",
+            "UPDATE proposals SET moderation_state = 'clear'",
+            "UPDATE proposals SET owner_id = owner_id",
+            "UPDATE problems SET moderation_state = 'clear'",
+            "UPDATE problems SET status = 'published'",
+            "UPDATE org_claims SET otp_verified_at = now()",
+            "UPDATE org_claims SET reviewed_by = NULL",
+            "UPDATE kyc_reviews SET status = 'approved'",
+            "UPDATE phone_verifications SET verified_at = now()",
+            "UPDATE engagements SET state = 'CLOSED'",
+            "UPDATE provenance_records SET status = 'timestamped'",
+            "UPDATE attestations SET created_it = true",
+            "UPDATE tags SET closed_at = NULL",
+            "UPDATE org_claims SET otp_attempts = 0",
+            "UPDATE org_claims SET otp_reissues = 0",
+            "UPDATE org_claims SET otp_hash = NULL",
+            "UPDATE org_claims SET otp_expires_at = now()",
+            "UPDATE org_claims SET dns_verified_at = now()",
+            "UPDATE org_claims SET dns_token = 'x'",
+            "DELETE FROM nda_acceptances",
+            "INSERT INTO provenance_keys (key_id, public_key) VALUES ('k', '\\x00')",
+            "SELECT 1 FROM proposal_confidential",
+            "SELECT 1 FROM proposal_confidential_embeddings",
+            "SELECT 1 FROM signal_events",
+            "SELECT 1 FROM chain_anchors",
+        ):
+            await expect_error(conn, sql, "permission denied")
+
+
+async def test_subject_digests_come_from_the_database_and_the_orm_never_loads_the_salt(
+    owner_engine: AsyncEngine,
+) -> None:
+    """Every user gets a random 32-byte salt from the database. bridge_app and provenance_worker get SHA-256(salt ||
+    data) from app_subject_digest() (owner refs: data = the id's 16 bytes), never the salt; the ORM creates and loads
+    users without selecting or returning it. (Who may compute whose digest: test_privileges.py.)"""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.auth.models import User
+
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        session = AsyncSession(bind=conn)
+        user = User(email=f"{uuid4().hex}@example.test", display_name="Salted")
+        session.add(user)
+        await session.flush()  # INSERT ... RETURNING the server defaults, never subject_salt
+        await act_as(conn, user.id)
+        session.expunge_all()
+        assert (await session.get(User, user.id)) is not None
+        await session.close()
+        digest = "SELECT app_subject_digest(:id, uuid_send(:id))"
+        from_app = (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one()
+        await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))
+        assert (await conn.execute(sa.text(digest), {"id": user.id})).scalar_one() == from_app
+        unknown = "SELECT app_subject_digest(:id, '\\x00')"
+        assert (await conn.execute(sa.text(unknown), {"id": uuid7()})).scalar_one() is None
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
+        salt = (
+            await conn.execute(sa.text("SELECT subject_salt FROM users WHERE id = :id"), {"id": user.id})
+        ).scalar_one()
+        assert len(salt) == 32
+        assert from_app == hashlib.sha256(salt + user.id.bytes).digest()  # bridge.provenance.manifest.owner_ref
+
+
+# Columns bridge_app may never read (column-level SELECT on the rest of the table): OTP digests are compared in SQL.
+# users.subject_salt: digests come from app_subject_digest(), the salt never leaves the database.
+UNREADABLE_COLUMNS: dict[str, str] = {
+    "org_claims": "otp_hash",
+    "phone_verifications": "otp_hash",
+    "users": "subject_salt",
+    "llm_calls": "inputs",  # staff admin reads it through app_llm_call_inputs()
+}
+
+
+@pytest.mark.parametrize(("table", "column"), sorted(UNREADABLE_COLUMNS.items()))
+async def test_bridge_app_reads_every_column_but_the_unreadable_one(
+    owner_engine: AsyncEngine, table: str, column: str
+) -> None:
+    held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), 'SELECT')"
+    assert await scalar(owner_engine, held, t=f"public.{table}", c=column) is False
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'SELECT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
+    readable = await rows(
+        owner_engine,
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, 'SELECT')",
+        columns=[c.name for c in TABLES[table].columns],
+        t=f"public.{table}",
+    )
+    assert {row.name for row in readable} == {c.name for c in TABLES[table].columns} - {column}
+
+
+async def test_otp_digests_are_written_but_never_read_back(owner_engine: AsyncEngine) -> None:
+    """The claimant and the phone owner write their code's digest and read their rows, through SQL and the ORM, but
+    no statement of bridge_app returns the digest (offline brute force of a 6-digit code needs it)."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from bridge.directory.models import OrgClaim
+    from bridge.profiles.models import PhoneVerification
+
+    async with rolled_back(owner_engine) as conn:
+        user, org, claim, code = uuid7(), uuid7(), uuid7(), uuid7()
+        await add_user(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source, verification) VALUES (:id, 'company',"
+                " 'OTP Ltd', :slug, 'seed', 'unclaimed')"
+            ),
+            {"id": org, "slug": f"otp-{org.hex}"},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await act_as(conn, user)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status, otp_hash,"
+                " otp_expires_at) VALUES (:id, :org, :u, 'otp.example.test', 'info@otp.example.test', 'e1', 'otp_sent',"
+                " :h, now() + interval '10 minutes')"
+            ),
+            {"id": claim, "org": org, "u": user, "h": ZERO_HASH},
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash) VALUES (:id, :u, '+254712345678',"
+                " :h)"
+            ),
+            {"id": code, "u": user, "h": ZERO_HASH},
+        )
+        for sql in (
+            "SELECT otp_hash FROM org_claims",
+            "SELECT * FROM org_claims",
+            "SELECT otp_hash FROM phone_verifications",
+            "SELECT * FROM phone_verifications",
+            "SELECT id FROM org_claims WHERE otp_hash IS NOT NULL",
+        ):
+            await expect_error(conn, sql, "permission denied")
+        session = AsyncSession(bind=conn)
+        loaded_claim = await session.get(OrgClaim, claim)
+        loaded_code = await session.get(PhoneVerification, code)
+        assert loaded_claim is not None
+        assert loaded_code is not None
+        assert (loaded_claim.otp_attempts, loaded_code.attempts) == (0, 0)
+        with pytest.raises(sa.exc.InvalidRequestError, match="raiseload"):
+            _ = loaded_claim.otp_hash
+        await session.close()
+
+
+async def _registered_proposal(conn: AsyncConnection) -> tuple[UUID, UUID, UUID, UUID]:
+    """As the owner: (owner, niche, proposal, registered version) of a fresh developer."""
+    niche = uuid7()
+    await conn.execute(
+        sa.text("INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Evidence')"),
+        {"id": niche, "slug": f"evidence-{niche.hex}"},
+    )
+    owner = await w.add_user(conn, f"{uuid4().hex}@example.test", "Owner")
+    problem = await w.add_problem(conn, owner, niche)
+    proposal, version = await w.add_proposal(conn, owner, niche, problem)
+    return owner, niche, proposal, version
+
+
+async def test_registered_versions_refuse_update_and_delete(owner_engine: AsyncEngine) -> None:
+    """AC-IP-2 (manifest half): the trigger holds for every role, the owner included; only the empty registration
+    hashes may be filled, once. Drafts stay editable, and a version is inserted as a draft and registered only with a
+    linked problem. registered_at and owner_handle are the database's: values sent at registration are replaced by
+    now() and the owner's developer handle (a developer without a profile cannot register), and neither they nor a
+    registration hash can be set on a draft."""
+    h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, proposal, version = await _registered_proposal(conn)
+        by_id = {"id": version}
+        for assignment in (
+            "title = 'Edited'",
+            "summary = 'Edited'",
+            "status = 'draft'",
+            "cert_id = 'another'",
+            "registered_at = now() - interval '1 day'",  # now() itself is the value it was registered with
+            "owner_handle = 'someone-else'",
+        ):
+            await expect_error(conn, f"UPDATE proposal_versions SET {assignment} WHERE id = :id", "immutable", by_id)
+        await expect_error(conn, "DELETE FROM proposal_versions WHERE id = :id", "never deleted", by_id)
+        await expect_error(conn, "DELETE FROM proposals WHERE id = :id", "never deleted", {"id": proposal})
+        fill = "UPDATE proposal_versions SET content_hash = :h, manifest_version = 'm1' WHERE id = :id"
+        await conn.execute(sa.text(fill), {"id": version, "h": h1})
+        await expect_error(conn, fill, "immutable", {"id": version, "h": h2})
+        await expect_error(conn, "UPDATE proposal_versions SET content_hash = NULL WHERE id = :id", "immutable", by_id)
+        await expect_error(conn, "TRUNCATE proposal_versions CASCADE", "append-only evidence")
+
+        problem = await w.add_problem(conn, owner, niche)
+        draft, draft_version = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        await conn.execute(
+            sa.text("UPDATE proposal_versions SET title = 'Draft edit' WHERE id = :id"), {"id": draft_version}
+        )
+        second = uuid7()
+        await conn.execute(sa.text(NEW_VERSION), {"id": second, "p": draft, "n": 2, "niche": niche})
+        await expect_error(
+            conn,
+            "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :id",
+            "at least one linked problem",
+            {"id": second, "c": uuid4().hex[:16]},
+        )
+        await expect_error(
+            conn,
+            "INSERT INTO proposal_versions (id, proposal_id, version_no, status) VALUES (:id, :p, 3, 'registered')",
+            "inserted as a draft",
+            {"id": uuid7(), "p": draft},
+        )
+        for assignment in (
+            "registered_at = now()",
+            "owner_handle = 'someone-else'",
+            "content_hash = :h",
+            "prev_version_hash = :h",
+            "manifest_version = 'm'",
+        ):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_versions SET {assignment} WHERE id = :id",
+                "owner_handle are set at registration|filled after registration",
+                {"id": second, "h": h1},
+            )
+        for column, value in (
+            ("registered_at", "now()"),
+            ("owner_handle", "'someone-else'"),
+            ("content_hash", ":h"),
+            ("manifest_version", "'m'"),
+        ):
+            await expect_error(
+                conn,
+                f"INSERT INTO proposal_versions (id, proposal_id, version_no, {column}) VALUES (:id, :p, 3, {value})",
+                "set at registration",
+                {"id": uuid7(), "p": draft, "h": h1},
+            )
+        await conn.execute(sa.text("DELETE FROM proposal_versions WHERE id = :id"), {"id": second})  # drafts may go
+        # Registering sets registered_at to the transaction's now() and owner_handle to the owner's developer handle,
+        # whatever the writer sends.
+        register = (
+            "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = :t,"
+            " owner_handle = 'someone-else' WHERE id = :id"
+        )
+        registration = {"id": draft_version, "c": uuid4().hex[:16], "t": datetime(2001, 1, 1, tzinfo=UTC)}
+        handle = "DELETE FROM developer_profiles WHERE user_id = :u RETURNING handle"
+        owner_handle = (await conn.execute(sa.text(handle), {"u": owner})).scalar_one()
+        await expect_error(conn, register, "needs the owner's developer profile", registration)
+        await conn.execute(
+            sa.text("INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)"), {"u": owner, "h": owner_handle}
+        )
+        await conn.execute(sa.text(register), registration)
+        stamped = sa.text("SELECT registered_at = now(), owner_handle::text FROM proposal_versions WHERE id = :id")
+        assert tuple((await conn.execute(stamped, {"id": draft_version})).one()) == (True, owner_handle)
+
+
+NEW_VERSION = (
+    "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
+    " summary) VALUES (:id, :p, :n, 'T', :niche, 'idea', 'pilot', 'P', 'S')"
+)
+
+
+async def test_proposal_version_pointers_follow_the_version_status(owner_engine: AsyncEngine) -> None:
+    """current_version_id is always a registered version of the proposal and draft_version_id a draft one (trigger,
+    for every role; the composite foreign keys keep both inside the proposal)."""
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, proposal, registered = await _registered_proposal(conn)
+        problem = await w.add_problem(conn, owner, niche)
+        _other, other_draft = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        draft = uuid7()
+        await conn.execute(sa.text(NEW_VERSION), {"id": draft, "p": proposal, "n": 2, "niche": niche})
+        point = "UPDATE proposals SET {column} = :v WHERE id = :id"
+        current, pending = point.format(column="current_version_id"), point.format(column="draft_version_id")
+        await expect_error(conn, current, "registered version of the proposal", {"id": proposal, "v": draft})
+        await expect_error(conn, pending, "draft version of the proposal", {"id": proposal, "v": registered})
+        # Another proposal's version: refused by the trigger (before the composite foreign key would refuse it).
+        await expect_error(conn, current, "registered version of the proposal", {"id": proposal, "v": other_draft})
+        await conn.execute(sa.text(pending), {"id": proposal, "v": draft})
+        # Register the draft first, then point current_version_id at it (the app's order).
+        await conn.execute(
+            sa.text("INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :p)"),
+            {"v": draft, "p": problem},
+        )
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :v"
+            ),
+            {"v": draft, "c": uuid4().hex[:16]},
+        )
+        await conn.execute(
+            sa.text("UPDATE proposals SET current_version_id = :v, draft_version_id = NULL WHERE id = :id"),
+            {"id": proposal, "v": draft},
+        )
+        # An unchanged pointer is not re-checked: a stale draft_version_id never blocks unrelated edits.
+        third = uuid7()
+        await conn.execute(sa.text(NEW_VERSION), {"id": third, "p": proposal, "n": 3, "niche": niche})
+        await conn.execute(sa.text(pending), {"id": proposal, "v": third})
+        await conn.execute(
+            sa.text("INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :p)"),
+            {"v": third, "p": problem},
+        )
+        await conn.execute(
+            sa.text(
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :c, registered_at = now() WHERE id = :v"
+            ),
+            {"v": third, "c": uuid4().hex[:16]},
+        )
+        await conn.execute(sa.text("UPDATE proposals SET title = 'Renamed' WHERE id = :id"), {"id": proposal})
+        await expect_error(conn, pending, "draft version of the proposal", {"id": proposal, "v": registered})
+
+
+async def test_tier2_of_a_registered_version_is_frozen_except_the_manifest(owner_engine: AsyncEngine) -> None:
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, _proposal, version = await _registered_proposal(conn)
+        by_id = {"id": version}
+        await expect_error(
+            conn, "UPDATE proposal_confidential SET ciphertext = '\\x09' WHERE version_id = :id", "immutable", by_id
+        )
+        await expect_error(conn, "DELETE FROM proposal_confidential WHERE version_id = :id", "never deleted", by_id)
+        await expect_error(
+            conn,
+            "UPDATE proposal_confidential SET manifest_ciphertext = '\\x0a' WHERE version_id = :id",
+            "manifest_pair",
+            by_id,
+        )
+        fill = "UPDATE proposal_confidential SET manifest_ciphertext = :m, manifest_nonce = :n WHERE version_id = :id"
+        await conn.execute(sa.text(fill), {"id": version, "m": b"\x0a", "n": b"\x0b"})
+        await expect_error(conn, fill, "immutable", {"id": version, "m": b"\x0c", "n": b"\x0d"})
+        # A draft's Tier 2 stays editable; Tier 2 always belongs to the version's owner and proposal.
+        problem = await w.add_problem(conn, owner, niche)
+        _draft, draft_version = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        await conn.execute(
+            sa.text("UPDATE proposal_confidential SET ciphertext = '\\x09' WHERE version_id = :id"),
+            {"id": draft_version},
+        )
+        stranger = await w.add_user(conn, f"{uuid4().hex}@example.test", "Stranger")
+        await expect_error(
+            conn,
+            "UPDATE proposal_confidential SET owner_id = :u WHERE version_id = :id",
+            "never change",
+            {"id": draft_version, "u": stranger},
+        )
+
+
+async def test_attachments_of_a_registered_version_change_only_their_scan_state(owner_engine: AsyncEngine) -> None:
+    """A draft's attachments stay editable; once the version is registered the owner (as bridge_app) and every other
+    role may change only av_status, rerendered and updated_at, and nobody deletes the attachment."""
+    h1, h2 = hashlib.sha256(b"attachment-1").digest(), hashlib.sha256(b"attachment-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        owner, niche, _proposal, _registered = await _registered_proposal(conn)
+        problem = await w.add_problem(conn, owner, niche)
+        draft, version = await w.add_proposal(conn, owner, niche, problem, registered=False)
+        attachment = uuid7()
+        by_id = {"id": attachment, "h": h2}
+        await conn.execute(
+            sa.text(
+                "INSERT INTO proposal_attachments (id, owner_id, proposal_id, version_id, content_type, sha256,"
+                " size_bytes) VALUES (:id, :owner, :p, :v, 'application/pdf', :h, 100)"
+            ),
+            {"id": attachment, "owner": owner, "p": draft, "v": version, "h": h1},
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})
+        await conn.execute(sa.text("UPDATE proposal_attachments SET sha256 = :h WHERE id = :id"), by_id)  # a draft's
+        await conn.execute(
+            sa.text("UPDATE proposal_versions SET status = 'registered', cert_id = :c WHERE id = :v"),
+            {"v": version, "c": uuid4().hex[:16]},
+        )
+        for assignment in ("sha256 = :h", "size_bytes = 200", "sha256 = NULL"):
+            await expect_error(
+                conn,
+                f"UPDATE proposal_attachments SET {assignment} WHERE id = :id",
+                "changes only its scan state",
+                {"id": attachment, "h": h1},
+            )
+        scanned = await conn.execute(
+            sa.text("UPDATE proposal_attachments SET av_status = 'clean', rerendered = true WHERE id = :id"), by_id
+        )
+        assert scanned.rowcount == 1
+        removed = await conn.execute(sa.text("DELETE FROM proposal_attachments WHERE id = :id"), by_id)
+        assert removed.rowcount == 0  # the DELETE policy covers drafts only
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))  # the trigger holds for every role
+        for sql in ("UPDATE proposal_attachments SET content_type = 'text/plain' WHERE id = :id",):
+            await expect_error(conn, sql, "changes only its scan state", by_id)
+        await expect_error(conn, "DELETE FROM proposal_attachments WHERE id = :id", "never deleted", by_id)
+
+
+# A registration record of a version, with the version's own cert_id (fk_provenance_records_version_cert).
+RECORD_OF_VERSION = (
+    "INSERT INTO provenance_records (id, version_id, cert_id, content_hash)"
+    " SELECT :id, v.id, v.cert_id, :h FROM proposal_versions v WHERE v.id = :v"
+)
+
+
+async def test_a_record_carries_its_versions_cert_id_and_content_hash(owner_engine: AsyncEngine) -> None:
+    """A registration record is the record of its version, for every role: its cert_id is the version's (a composite
+    foreign key), and its content_hash equals the version's once both are set, whichever is written first (the job
+    inserts the record, then fills the version's hashes)."""
+    h1, h2 = hashlib.sha256(b"manifest-1").digest(), hashlib.sha256(b"manifest-2").digest()
+    async with rolled_back(owner_engine) as conn:
+        _owner, _niche, _proposal, first = await _registered_proposal(conn)
+        _other, _niche2, _proposal2, second = await _registered_proposal(conn)
+        cert = sa.text("SELECT cert_id FROM proposal_versions WHERE id = :v")
+        certs = {v: (await conn.execute(cert, {"v": v})).scalar_one() for v in (first, second)}
+        record = "INSERT INTO provenance_records (id, version_id, cert_id, content_hash) VALUES (:id, :v, :c, :h)"
+        fill = "UPDATE proposal_versions SET content_hash = :h WHERE id = :v"
+        another_cert = {"id": uuid7(), "v": first, "c": certs[second], "h": h1}
+        await expect_error(conn, record, "fk_provenance_records_version_cert", another_cert)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": first, "c": certs[first], "h": h1})  # the job's order
+        await expect_error(conn, fill, "content hash of its provenance record", {"v": first, "h": h2})
+        await conn.execute(sa.text(fill), {"v": first, "h": h1})
+        await conn.execute(sa.text(fill), {"v": second, "h": h1})  # the version's hash first
+        mismatch = {"id": uuid7(), "v": second, "c": certs[second], "h": h2}
+        await expect_error(conn, record, "content hash of its version", mismatch)
+        await conn.execute(sa.text(record), {"id": uuid7(), "v": second, "c": certs[second], "h": h1})
+
+
+async def test_upload_matching_finds_a_record_by_content_hash_through_an_index(owner_engine: AsyncEngine) -> None:
+    """POST /api/verify without a cert id matches an uploaded file's SHA-256 against every record: the lookup uses
+    ix_provenance_records_content_hash rather than scanning the table."""
+    async with rolled_back(owner_engine) as conn:
+        await conn.execute(sa.text("SET LOCAL enable_seqscan = off"))  # any usable index is taken over a scan
+        plan = await conn.execute(
+            sa.text("EXPLAIN (COSTS OFF) SELECT cert_id FROM provenance_records WHERE content_hash = :h"),
+            {"h": ZERO_HASH},
+        )
+        assert "ix_provenance_records_content_hash" in " ".join(plan.scalars())
+
+
+async def test_provenance_records_only_fill_empty_columns_and_move_forward(owner_engine: AsyncEngine) -> None:
+    async with rolled_back(owner_engine) as conn:
+        owner, _niche, _proposal, version = await _registered_proposal(conn)
+        await conn.execute(sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(owner)})  # the job's owner
+        key_id, record = f"test-{uuid4().hex[:8]}", uuid7()
+        await conn.execute(
+            sa.text("INSERT INTO provenance_keys (key_id, public_key) VALUES (:k, :pk)"), {"k": key_id, "pk": bytes(32)}
+        )
+        await conn.execute(sa.text(RECORD_OF_VERSION), {"id": record, "v": version, "h": ZERO_HASH})
+        by_id = {"id": record}
+        sign = "UPDATE provenance_records SET signature = '\\x01', key_id = :k, status = 'signed' WHERE id = :id"
+        await conn.execute(sa.text(sign), {"id": record, "k": key_id})
+        refused = "only empty signature"
+        await expect_error(conn, "UPDATE provenance_records SET status = 'hashed' WHERE id = :id", refused, by_id)
+        await conn.execute(sa.text("SET LOCAL ROLE provenance_worker"))  # the worker that fills the TSA columns
+        await conn.execute(
+            sa.text(
+                "UPDATE provenance_records SET tsa_token = '\\x02', tsa_time = now(), tsa_serial = '42',"
+                " tsa_url = 'https://tsa.example.test', status = 'timestamped' WHERE id = :id"
+            ),
+            by_id,
+        )
+        await expect_error(
+            conn, "UPDATE provenance_records SET content_hash = '\\x00' WHERE id = :id", "permission denied", by_id
+        )
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
+        for assignment in ("tsa_token = '\\x03'", "signature = '\\x04'", "content_hash = '\\x05'", "cert_id = 'x'"):
+            await expect_error(conn, f"UPDATE provenance_records SET {assignment} WHERE id = :id", refused, by_id)
+        await expect_error(conn, "DELETE FROM provenance_records WHERE id = :id", "never deleted", by_id)
+        await expect_error(conn, "TRUNCATE provenance_records", "append-only evidence")
+
+
+async def test_append_only_evidence_refuses_update_and_delete_even_for_the_owner(owner_engine: AsyncEngine) -> None:
+    async with rolled_back(owner_engine) as conn:
+        owner, _niche, _proposal, version = await _registered_proposal(conn)
+        await conn.execute(
+            sa.text(
+                "INSERT INTO attestations (id, user_id, version_id, created_it, not_owned_by_employer_or_client,"
+                " no_third_party_confidential, text_version, text_sha256)"
+                " VALUES (:id, :u, :v, true, true, true, 'v1', :h)"
+            ),
+            {"id": uuid7(), "u": owner, "v": version, "h": ZERO_HASH},
+        )
+        chain = f"test:{uuid4().hex}"  # an anchor names an existing audit event (chain_anchors_guard)
+        await conn.execute(
+            sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'test.x')"),
+            {"id": uuid7(), "c": chain},
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
+                " SELECT :id, chain_id, seq, event_hash, '\\x01', now(), '1' FROM audit_events WHERE chain_id = :c"
+            ),
+            {"id": uuid7(), "c": chain},
+        )
+        for table in ("attestations", "chain_anchors"):
+            await expect_error(conn, f"UPDATE {table} SET id = id", "append-only evidence")
+            await expect_error(conn, f"DELETE FROM {table}", "append-only evidence")
+
+
+async def test_evidence_times_are_the_databases(owner_engine: AsyncEngine) -> None:
+    """When an attestation was made, the Master Enterprise Terms or an NDA accepted and a Tier-2 view started is
+    evidence: the database sets it to now() on insert, whatever the writer sends (a backdated value is replaced), for
+    every role, the owner included."""
+    backdated = datetime.now(UTC) - timedelta(days=30)
+    async with rolled_back(owner_engine) as conn:
+        owner, _niche, proposal, version = await _registered_proposal(conn)
+        org, attestation, terms, nda, view = uuid7(), uuid7(), uuid7(), uuid7(), uuid7()
+        await conn.execute(
+            sa.text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'company', 'Evidence Ltd',"
+                " :slug, 'seed')"
+            ),
+            {"id": org, "slug": f"evidence-{org.hex}"},
+        )
+        met_template, nda_template = await w.add_templates(conn, uuid4().hex[:12])
+        params = {"t": backdated, "u": owner, "org": org, "p": proposal, "v": version, "h": ZERO_HASH}
+        for statement, row in (
+            (
+                "INSERT INTO attestations (id, user_id, version_id, created_it, not_owned_by_employer_or_client,"
+                " no_third_party_confidential, text_version, text_sha256, created_at)"
+                " VALUES (:id, :u, :v, true, true, true, 'v1', :h, :t)",
+                {"id": attestation},
+            ),
+            (
+                "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256, accepted_at)"
+                " SELECT :id, :org, :u, id, sha256, :t FROM legal_templates WHERE id = :template",
+                {"id": terms, "template": met_template},
+            ),
+            (
+                "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+                " logging_notice_version, accepted_at) SELECT :id, :u, :org, :p, id, sha256, 'v1', :t"
+                " FROM nda_templates WHERE id = :template",
+                {"id": nda, "template": nda_template},
+            ),
+            (
+                "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id,"
+                " nda_acceptance_id, render_kind, fingerprint_seed, started_at)"
+                " VALUES (:id, :p, :v, :u, :u, :org, :nda, 'html', :h, :t)",
+                {"id": view, "nda": nda},
+            ),
+        ):
+            await conn.execute(sa.text(statement), params | row)
+        for table, column, row_id in (
+            ("attestations", "created_at", attestation),
+            ("legal_acceptances", "accepted_at", terms),
+            ("nda_acceptances", "accepted_at", nda),
+            ("document_views", "started_at", view),
+        ):
+            stamped = sa.text(f"SELECT {column} = now() FROM {table} WHERE id = :id")
+            assert (await conn.execute(stamped, {"id": row_id})).scalar_one() is True, f"{table}.{column} was backdated"
+
+
+# pg_trigger.tgtype bits: see AUDIT_TRIGGERS.
+V2_APPEND_ONLY = ("attestations", "nda_acceptances", "legal_acceptances", "chain_anchors", "transparency_roots")
+V2_TRIGGERS = {
+    ("proposal_versions", "proposal_versions_guard"): (
+        "proposal_versions_guard",
+        ROW | BEFORE | ON_INSERT | ON_DELETE | ON_UPDATE,
+    ),
+    ("proposal_confidential", "proposal_confidential_guard"): (
+        "proposal_confidential_guard",
+        ROW | BEFORE | ON_INSERT | ON_DELETE | ON_UPDATE,
+    ),
+    ("provenance_records", "provenance_records_guard"): (
+        "provenance_records_guard",
+        ROW | BEFORE | ON_DELETE | ON_UPDATE,
+    ),
+    ("proposal_attachments", "proposal_attachments_guard"): (
+        "proposal_attachments_guard",
+        ROW | BEFORE | ON_DELETE | ON_UPDATE,
+    ),
+    ("tags", "tags_guard"): ("tags_guard", ROW | BEFORE | ON_UPDATE),
+    ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
+    ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
+    ("org_claims", "org_claims_status_guard"): ("org_claims_status_guard", ROW | BEFORE | ON_UPDATE),
+    # Round 6: an AFTER trigger on the 0001 table relabels the organisation's open claims on every roster change.
+    ("memberships", "memberships_claims_relabel"): ("memberships_claims_relabel", ROW | ON_INSERT | ON_UPDATE),
+    ("llm_calls", "llm_calls_batch_guard"): ("llm_calls_batch_guard", ROW | BEFORE | ON_INSERT),
+    ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
+    ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
+    ("provenance_records", "provenance_records_hash_guard"): (
+        "provenance_records_hash_guard",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("transparency_roots", "transparency_roots_guard"): ("transparency_roots_guard", ROW | BEFORE | ON_INSERT),
+    **{
+        (t, f"{t}_evidence_time"): ("evidence_time_guard", ROW | BEFORE | ON_INSERT)
+        for t in ("attestations", "legal_acceptances", "nda_acceptances", "document_views")
+    },
+    **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V2_APPEND_ONLY},
+    **{
+        (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
+        for t in (*V2_APPEND_ONLY, "proposal_versions", "proposal_confidential", "provenance_records")
+    },
+}
+
+
+async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine) -> None:
+    """The complete set of triggers on Bridge tables (Procrastinate's own are left to its schema)."""
+    found = await rows(
+        owner_engine,
+        "SELECT c.relname AS table_name, t.tgname, t.tgfoid::regproc::text AS function, t.tgtype, t.tgenabled"
+        " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
+        " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
+    )
+    assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == AUDIT_TRIGGERS | V2_TRIGGERS
+    assert {row.tgenabled for row in found} == {"O"}
+
+
+async def test_listed_organisations_are_readable_by_every_signed_in_user(owner_engine: AsyncEngine) -> None:
+    """The directory: unclaimed, E1 and E2 organisations that are not delisted, and their niches, are readable by
+    every signed-in user; pending self-signup organisations of others, rejected and delisted ones are not."""
+    async with rolled_back(owner_engine) as conn:
+        viewer, creator = uuid7(), uuid7()
+        await add_user(conn, viewer)
+        await add_user(conn, creator)
+        niche = uuid7()
+        await conn.execute(
+            sa.text("INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Directory')"),
+            {"id": niche, "slug": f"dir-{niche.hex}"},
+        )
+        orgs: dict[str, UUID] = {}
+        for name, verification, source, delisted in (
+            ("unclaimed", "unclaimed", "seed", False),
+            ("e1", "e1", "seed", False),
+            ("e2", "e2", "self_signup", False),
+            ("pending", "pending", "self_signup", False),
+            ("rejected", "rejected", "self_signup", False),
+            ("delisted", "unclaimed", "seed", True),
+        ):
+            orgs[name] = uuid7()
+            await conn.execute(
+                sa.text(
+                    "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, created_by,"
+                    " delisted_at) VALUES (:id, 'company', :name, :slug, CAST(:source AS org_source),"
+                    " CAST(:verification AS org_verification), :creator, CASE WHEN :delisted THEN now() END)"
+                ),
+                {
+                    "id": orgs[name],
+                    "name": name,
+                    "slug": f"{name}-{uuid4().hex}",
+                    "source": source,
+                    "verification": verification,
+                    "creator": creator,
+                    "delisted": delisted,
+                },
+            )
+            await conn.execute(
+                sa.text("INSERT INTO org_niches (org_id, niche_id) VALUES (:org, :niche)"),
+                {"org": orgs[name], "niche": niche},
+            )
+        listed = {orgs["unclaimed"], orgs["e1"], orgs["e2"]}
+        ids = {"ids": list(orgs.values())}
+        visible_orgs = sa.text("SELECT id FROM organizations WHERE id = ANY (:ids)")
+        visible_niches = sa.text("SELECT org_id FROM org_niches WHERE org_id = ANY (:ids)")
+        await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
+        assert set((await conn.execute(visible_orgs, ids)).scalars()) == set()  # not signed in: nothing
+        await act_as(conn, viewer)
+        assert set((await conn.execute(visible_orgs, ids)).scalars()) == listed
+        assert set((await conn.execute(visible_niches, ids)).scalars()) == listed
+        edit = sa.text("UPDATE organizations SET website = 'https://evil.example' WHERE id = ANY (:ids)")
+        assert (await conn.execute(edit, ids)).rowcount == 0  # readable is not writable
 
 
 # --- Procrastinate ------------------------------------------------------------------------------------------------
