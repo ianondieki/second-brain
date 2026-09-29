@@ -52,13 +52,18 @@ Branch `feat/REQ-REM-01-reminders` (impl-backend). No schema change, no new envi
   no draft waits. Text and escaped HTML from one model; party text one line, tag-free, defanged; platform links only.
   Subject and in-app summary are code-rendered. Kind `em7`. `[[COPY-REVIEW]]` on all copy.
 - **Wording** (`bridge/reminders/wording.py`; task `reminder_nudge` in `ai/models.yaml`: Haiku 4.5, `free_slots`
-  `[1, 2, 3]`, Tier 1, no tools, not batchable): the model sees only `Nudge.fact_lines` (counts, codes, dates, milestone
-  numbers, the developer's own titles) as one field owned by the developer, and writes `headline` and `next_step`
-  (`NudgeWording`, `demo_fallback()` = `DEMO_TEXT` with `injection_suspected=True`). Its lines are used only when
-  `check_wording` passes; since review round 1 it is an allowlist (`bridge/reminders/grounding.py`, see below).
-  Otherwise the fixed text answers, with the reason (`not_eligible`, `demo_fallback:<reason>`, `llm_error:<code>`,
-  `injection_suspected`, `retry`, `rejected:<check>`), logged `reminders.nudge_worded`, marked in the email header
-  `X-Bridge-Wording: model|fallback`; model wording is labelled "AI-drafted" in the email (docs/spec/09).
+  `[1, 2, 3]`, Tier 1, no tools, not batchable). **Deviation (prototype): the model chooses among code-rendered
+  variants to guarantee docs/spec/09's 100% factual consistency; free wording returns with the REQ-EVAL-01
+  progress-reporter eval set.** The model sees only `Nudge.fact_lines` (today's date, item ids with code briefs: codes,
+  dates, milestone numbers, the developer's own titles; the next step) as one field owned by the developer, and
+  returns ids only (`NudgeWording`): `opening` (one of five fixed neutral phrases), `order` (item ids, every needs-you
+  item listed, none twice, none unknown) and `next_step_variant` (one of four fixed phrasings around the code's next
+  step); `demo_fallback()` is the default choice with `injection_suspected=True`. `check_wording` validates the choice
+  and `choose` renders it: the opening before the code's summary line, the variant around the code's step, each
+  section in the chosen order (nothing dropped). Otherwise the fixed text answers, with the reason (`not_eligible`,
+  `demo_fallback:<reason>`, `llm_error:<code>` including an answer outside the schema, `injection_suspected`,
+  `retry`, `rejected:missing_item|unknown_item|duplicate_item`), logged `reminders.nudge_worded`, marked in the email
+  header `X-Bridge-Wording: model|fallback`; a model's choice is labelled "AI-drafted" in the email (docs/spec/09).
 - **Dispatch** (`bridge/reminders/dispatch.py`): `run_developer_nudges` from 07:30 EAT; per recipient in a session bound
   to them: the day's ledger rows first (done: no facts read, no LLM call), then facts, wording, the in-app summary
   (always on) and the email (the `reminders` consent, a verified address, the `em7`/email preference, a plan with
@@ -124,3 +129,20 @@ retries), `integration/reminders/test_health_agreement.py` (AC-REM-3), `integrat
 - Next (orchestrator, after P5 merges): merge the integration branch, switch `health.whose_turn` to P5's
   `bridge.engagements.state_machine.pending` (docs/spec/06 6.9: the state machine is the only definition) and move the
   thresholds into `config/policy.yaml`, before P6 merges.
+
+## P6 re-review (2026-09-29, at 2f575e7): MAJOR 2 fixed; MAJOR 1 redesigned by ruling
+
+The round-1 allowlist still admitted invented actions and promises built from fact words ("The other party did sign
+the mutual NDA.", "You did sign the mutual NDA.", "The other party did review your work.", "The other party will sign
+the mutual NDA today.", "Will needs you today.", a next step ending "…and the other party did sign it."). Orchestrator
+ruling, to end the patch-a-checker loop: **prototype: the model chooses among code-rendered variants to guarantee
+docs/spec/09's 100% factual consistency; free wording returns with the REQ-EVAL-01 progress-reporter eval set.**
+
+- `285234e` (red), `18a97ff`: `NudgeWording` is ids only (opening, order, next-step variant); code validates and renders
+  every word. `unit/reminders/test_wording.py` holds the thirteen probes of both rounds: none is a valid choice (no
+  free-text field; not an enum value; as an item id, `unknown_item`), a model answering one leaves no trace in the
+  rendered email, and every valid choice renders only the code's sentences (reordered) and the fixed phrases.
+- `6f8abf0`: `bridge/reminders/grounding.py` and `unit/reminders/test_grounding.py` removed (nothing used them: a
+  removed feature, not a skipped test). The round-1 notes above on the allowlist describe code that is gone.
+- THREAT_MODEL row "Reminder wording misstates milestone status" updated.
+
