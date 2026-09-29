@@ -17,7 +17,11 @@ const variants: Record<ButtonVariant, string> = {
   secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-jacaranda-wash",
   link:
     "min-h-11 min-w-11 px-0 font-medium text-jacaranda underline decoration-1 hover:decoration-2 " +
-    "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]",
+    "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))] " +
+    // Busy: quieter but still readable (--ink-soft, 6.8:1 on paper) with a dotted underline, and hover changes
+    // nothing, so a press that would be ignored does not look available.
+    "aria-disabled:text-ink-soft aria-disabled:decoration-dotted " +
+    "aria-disabled:hover:text-ink-soft aria-disabled:hover:decoration-1",
 };
 
 /**

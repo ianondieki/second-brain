@@ -236,6 +236,80 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
 
+### Handoff of the laptop session (2026-09-29; superseded for current state by the Prototype track Handoff at the end of this file; its laptop, Windows and environment notes still apply)
+
+The laptop session (2026-09-28/29) ended with a clean hand-off to a cloud session: every branch is pushed and clean,
+no sub-agent is running, and no review was running at the stop (so none was discarded). The dev containers were
+stopped, not deleted.
+
+**Integration branch** `claude/eloquent-hypatia-aa3577`: T2.12 backend (`da0a98d`), the Phase 1 follow-ups
+(`228e1b6`) and the OAuth MINOR follow-ups (`c2216b2`) are merged. **Merge order:** schema v2 first; then T2.6a, D1,
+T2.4 and T2.2, each after merging the final schema v2 into it (they all carry an older copy), running its suite and a
+CI dispatch (`gh workflow run pr.yml --ref <branch>`).
+
+| Branch | Last commit | Status | Exact next step |
+|---|---|---|---|
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `2ca0347` | WIP, round 6 unverified | Rounds 3–5 are done and reviewed (round 5: reviewer CHANGES_REQUIRED, security-reviewer PASS). `2ca0347` holds all round-6 code and tests in one **wip commit (unverified)**: the red run failed 14 tests as expected; the green run was killed at the stop. Round-6 items: (1) transfers also strip `signatory`; (2) stale labels: a `memberships` trigger (`app_relabel_open_claims`) relabels open claims on roster changes and after approvals, and `app_decide_claim` refuses when the label disagrees with `app_claim_competes`; (3) `app_seat_claimant`: a non-dispute approval never adds `owner` while an active owner exists, and an E1 approval of an E1 org keeps its domain unless the claimant is an owner; (4) `app_llm_batch_owned` judges the tenant of the earliest reservation; (5) `app_llm_settle_batch_item(...)` definer for settlements; (6)/(7) tests for the disputed OTP reissue and two `app_claim_competes` branches; (8) a non-competing E1 claim on an E2 org goes to `pending_review`. Next (db-migrations): run the full suite on `2ca0347` and fix; run the mutation proofs M13/M14b/M16/M17; follow up with clean commits; write the docs (card "Sixth review round", THREAT_MODEL rows, revision docstring); static checks; compatibility grep. The implementer's five questions need the orchestrator: Q1 item (2) deviates from the brief (writing the label and then raising would roll the label back) — recommended: accept; Q2 the E2 shortcut on an org with no active owner adds owner+admin — recommended: accept; Q3 apply "keep the domain unless owner" to E2 approvals by non-owners on another domain too — recommended: yes; Q4 put the stranded-reservation row under THREAT_MODEL §6 D (§4 is payments) — accept; Q5 let the database set reservation `created_at` so a backdated row cannot take a batch — recommended: yes. Then reviewer + security-reviewer round 6, CI, merge |
+| `feat/REQ-PROV-01-provenance` (T2.4) | `9a414c0` | done, waiting for schema v2 | reviewer PASS and security-reviewer PASS (round 2); the eight pre-merge MINORs are fixed (`21fdd54`..`9a414c0`; 1140 passed; `bridge/provenance` ~99%). Next: merge the final schema v2; switch `transparency._unanchored` (trial inserts with an epoch `tsa_time`, now refused by the anchor lower bound) to `app_unanchored_chain_heads()`; write `transparency_roots.snapshot_at`; take the schema branch's versions of the shared T2.1 test files; full suite; quick reviewer re-check (fail-first evidence for the S1 batch/budget tests was uneven); CI; merge |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `c3cb248` | review fixes done, waiting for schema v2 | First full review CHANGES_REQUIRED; fixes `d0e9dc4`..`c3cb248` (M1; m4, the live login session via new `bridge.auth.sessions.is_live`; m5; m6; M2 batch reservations; m3 settle-once; 1241 passed). One test, `test_another_tenant_cannot_settle_or_cancel_an_items_reservation`, fails until schema round 5 is merged in (intended, not skipped). Next (impl-ai): merge the final schema v2; switch the settle path to `app_llm_settle_batch_item`; call `app_llm_batch_owned` in `batch_poll`; full suite; then reviewer round 2 and security-reviewer (`bridge.auth.sessions.is_live` is auth scope). Confirm in review: an item missing from the provider's results stays reserved. D-29 open. Carries to T2.9 and Phase 4 are in the card |
+| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `09ae48e` | done, waiting for schema v2 | reviewer PASS (round 2); its two bad-input MINORs fixed (`a690ebe`, `09ae48e`; 1038 passed). Next: merge the final schema v2, suite, CI, merge. E2 badge copy is D-31 |
+| `feat/REQ-PROV-04-verification` (T2.10a, D1) | `41164de` | done, waiting for schema v2 | reviewer PASS (round 2); the flaky concurrency test made deterministic (`41164de`). Next: merge the final schema v2, suite, CI, merge. Optional: the same lock-and-wait pattern for the two other D1 race tests. The future kyc.purge job must call `app_mark_kyc_images_purged` with no user bound or as staff admin |
+| `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, **BLOCKER** | Backend of follow-ups 7 (`DELETE /api/auth/totp/enrol` under `lock_user`, 15-minute pending secret) and 8 (`POST /api/auth/totp/recovery-codes`, step-up, audit, email). **Do not merge:** `2494cdf` seals `"{secret}|{start}"` into `totp_pending_enc` and `confirm_totp_enrolment` copies that blob into `totp_secret_enc`, so every TOTP code is refused after enrolment (`binascii.Error`; 5 existing auth tests fail; recovery codes still work). Next (impl-backend): in `confirm_totp_enrolment` store only the secret and clear `totp_pending_enc`; add a TOTP-code step-up after enrolment to `test_auth_totp_setup.py`; rerun the auth selection; lift `service.py` coverage from 91% to ≥95%; then security-reviewer (question: start time inside the envelope vs a column) and reviewer; then the frontend halves (impl-frontend: Cancel acts on DELETE's answer; a "Get new recovery codes" action) with ux-reviewer |
+| `feat/REQ-AUTH-02-followups` | `a24dd47` | done (merged `c2216b2`) | reviewer PASS, security-reviewer PASS, MINOR round, CI green. D-34 open; `TRUSTED_PROXIES` start-up check in Phase 8 |
+| `feat/REQ-AUTH-01-phase1-followups` | `b1d1c5c` | done (merged `228e1b6`) | T2.11 carries: `Alert` `announce={false}` when focused; focus after `current_password_required` (`SecuritySettings.tsx:135`) |
+| `feat/REQ-AUTH-02-oauth` (T2.12) | `7ae57b6` | done (merged `da0a98d`) | Buttons and the linked-accounts UI come in F4 |
+
+**Reviews to run next:** schema v2 reviewer + security-reviewer round 6 (after `2ca0347` is verified); T2.2 reviewer
+round 2 + security-reviewer (after the schema merge); T2.4 quick reviewer re-check (after the schema merge); auth
+follow-ups 7-8 security-reviewer + reviewer (after the blocker fix); ux-reviewer on the frontend halves. No review was
+running at the stop, so none was discarded.
+
+**Wip commits to check before building on them:** `2ca0347` (schema round 6, unverified). The earlier wip commits
+`6481de6`, `09b4a2e` and `c509ea6` were reviewed and verified in this session (they stay in history; recorded as a
+deviation with the oversized commits).
+
+**Decisions for the human (open in `DECISIONS-NEEDED.md`):** D-26 (OAuth test apps), D-27 (Swahili banned claims),
+D-28 (JS budget; `/settings/security` is 148,518 bytes of bodies, 152,195 with HTTP/1.1 headers), D-29 (refusal
+fallback models), D-30 (upholding a dispute against an E2 organisation), D-31 (E2 badge copy), D-32 (digest
+hardening), D-33 (`/verify` name-and-title opt-in), D-34 (fresh code to link or unlink). **D-35/D-36/D-37 (prototype
+track): not recorded.** No such entry exists on any branch and there is no prototype plan in the repository; nothing
+of the prototype track was started in this session, and no `make demo` target exists yet.
+
+**Not started in Phase 2:** T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11, the phase exit.
+**Follow-ups (not blocking):** an app-wide guard for U+0000 and lone surrogates in free text (answer 400, not 500);
+report rate limits (T8.4); the ModelPool/TokenPacer port (T4.3); the `TRUSTED_PROXIES` start-up check (Phase 8).
+**Deviations recorded:** wip and oversized commits stay in history; `c89ced0`..`daa31ac` each fail the per-commit
+OpenAPI drift check (regenerated in `77892bc`); `1671c29`'s message describes a change that landed in `6d6ddee`.
+
+**Laptop resource rule.** The laptop has 8 GB RAM and Docker Desktop has 4 GB. `make demo` (when the prototype track
+adds it) must fit there. No heavy parallel work on the laptop: this session ran up to four implementers, two reviewers
+and four Postgres containers at once, which made a test-database `CREATE DATABASE` take 15–40 minutes, `npm ci` time
+out and `uv run` hang. On the laptop, run one implementer or reviewer at a time with one test Postgres.
+
+**Laptop notes.** The testcontainers reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`),
+so set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container: `reviewer-repo01-pg` (port
+55432, password `review`) and `bridge-testdb-1/-2/-3` (ports 55433/55434/55435, password `postgres`) exist and are
+stopped (`docker start <name>`). If `uv run` hangs, use `backend/.venv/Scripts/python.exe -m ...`. Stop stale
+`next start` servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`). `sb-wt/REQ-AUTH-02/frontend/node_modules`
+is half-installed (run `npm ci` again). A leftover `sb-wt/REQ-AUTH-01-followups/backend/.venv` fragment (no longer a
+git worktree) could not be deleted; remove it by hand after a reboot. The legacy `CheckTests` fail in worktrees
+without the untracked `tools/cloudflared.exe` (D-13).
+
+Environment. Windows laptop: nothing new is needed beyond `uv sync` and `npm ci` (dependencies added on branches:
+rfc8785, asn1crypto, reportlab, boto3). Keep `UV_NATIVE_TLS=1` and system Chrome. Integration tests start a
+testcontainer when `TEST_DATABASE_ADMIN_URL` is unset; `openssl` must be on PATH for the TSA tests (Git's
+`usr\bin\openssl.exe` is found automatically). New `.env` keys on branches (documented in `backend/.env.example`):
+`TIER2_LOCAL_KEK`, `PROVENANCE_SIGNING_KEY`, `TSA_*`, `OBJECT_STORE`, `S3_*`, `SMS_PROVIDER`, `AFRICASTALKING_*`;
+`infra/ci/make-env.sh` generates throwaway values. Linux-only (cloud container; the laptop doesn't need any of this):
+start Docker with `dockerd &`; the test server is `docker run -d --name bridge-testdb -e POSTGRES_PASSWORD=postgres -p
+55432:5432 pgvector/pgvector:pg16`, with `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`;
+run the legacy suite on a Python 3.13 venv with `requirements.txt` and a `cloudflared` stub on PATH (the system Python
+makes the runner exit 2). The egress policy denies GHCR blobs (`pkg-containers.githubusercontent.com`) and ordinary
+websites, so `make dev` can't build the API image. Instead, run postgres, mailpit and s3 from compose, and the API
+(uvicorn) plus web (`next build`, then `node .next/standalone/server.js` with static assets copied) on the host.
+Playwright 1.63 wants Chromium 1243 and the container has 1194: point `PLAYWRIGHT_BROWSERS_PATH` at a scratch shim.
+Full CI runs on feature branches through `workflow_dispatch` of `pr.yml`.
+
 Orchestrator: Opus 5.5 (`xhigh`, D-04). Branch `claude/eloquent-hypatia-aa3577`, on top of `40f1adc`. Decisions applied:
 D-18 (no paid API calls: LLM fakes and synthetic cassettes only), D-20 (OAuth is T2.12), D-21 (provisional directory
 from public organisational data only, source URL and date per row), D-24 (SeaweedFS is the S3 stand-in). Task cards:
@@ -247,17 +321,18 @@ Checklist (updated after every task; commit and push after each):
 | Item | Status | Notes |
 |---|---|---|
 | Phase 2 plan: task cards, this checklist, D-26 (OAuth test apps) | done | |
-| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | todo | impl-frontend; item 5 ships with the first `/admin` route |
-| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | todo | db-migrations; security-reviewer |
-| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | todo | impl-ai; fakes and synthetic cassettes only |
+| Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | done (merge `228e1b6`) | reviewer + ux-reviewer PASS round 4; CI green; item 5 ships with the first `/admin` route; follow-ups 7 and 8 open |
+| REQ-AUTH-01 follow-ups 7–8 (Cancel via `DELETE /api/auth/totp/enrol`; new recovery codes) | WIP, BLOCKER (`feat/REQ-AUTH-01-followups-7-8` `97b9454`) | backend written; TOTP codes refused after enrolment, fix first; frontend halves todo |
+| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | WIP (`feat/REQ-REPO-01-schema-v2` `2ca0347`, round 6 unverified) | db-migrations; security-reviewer; rounds 3–5 reviewed |
+| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | review fixes done (`feat/REQ-LLM-01-llm-layer` `c3cb248`); waiting for schema v2 | impl-ai; reviewer round 2 + security-reviewer next |
 | Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | done (merge `23e8104`) | reviewer PASS after 3 rounds (mutation-checked); pr.yml hygiene step + `make check-copy`; D-27 (Swahili claim copy) opened |
 | Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | done (branch `feat/REQ-DIR-02-provisional-seed`, merges with T2.6a) | 85 E0 rows from CA, CBK, SASRA, CUE, TVETA, government and PBORA registers; no contacts; basic education skipped (no official list) |
-| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | todo | security-reviewer |
-| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | todo | |
+| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | done, waiting for schema v2 (`feat/REQ-PROV-01-provenance` `9a414c0`) | reviewer PASS + security-reviewer PASS round 2; pre-merge MINORs fixed |
+| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | done, waiting for schema v2 (`feat/REQ-DIR-02-provisional-seed` `09ae48e`) | reviewer PASS round 2 |
 | T2.6b Claims E1/E2, admin claim queue, MET acceptance (REQ-DIR-03, REQ-ADM-01) | todo | security-reviewer |
 | T2.3 Proposals: editor API, sanitiser, holds, moderation queue, attachments (REQ-PROP-01/02, REQ-MOD-01, REQ-BIL-02) | todo | |
-| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | todo | |
-| T2.12 GitHub + Google OAuth (REQ-AUTH-02) | todo | respx fakes; real apps need D-26; security-reviewer |
+| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | D1 done, waiting for schema v2 (`feat/REQ-PROV-04-verification` `41164de`); D2 and REQ-PROV-05 todo | |
+| T2.12 GitHub + Google OAuth (REQ-AUTH-02) | backend done (merge `da0a98d`); MINOR follow-ups merged (`c2216b2`); UI in F4 | D-26, D-34 open; `TRUSTED_PROXIES` check in Phase 8 |
 | T2.5 Tier-2 access: predicate, NDA, grants, unlocks, renders, access log, flag (REQ-REPO-01, REQ-PROV-03, REQ-BIL-03, REQ-SEC-01) | todo | security-reviewer |
 | T2.7 Pitch to company: tags, held tags, 409, cooldown, EM1, tag privacy (REQ-PROP-03, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02) | todo | |
 | T2.6c Invitations + suppression, delisting (REQ-DIR-04) | todo | |
@@ -268,3 +343,74 @@ Checklist (updated after every task; commit and push after each):
 | T2.11 Frontend polish (frontend-design → impeccable → Playwright 375/1440, chrome-devtools) | todo | |
 | Exit: X2-1 OpenAPI drift, X2-2 coverage ≥95% on `provenance/`, `auth/`, `tenancy/`, every Phase 2 AC | todo | |
 | ECC code review, security-reviewer (Fable) phase pass, traceability, Phase 2 report | todo | |
+
+## Prototype track (D-35, D-36, D-37; started 2026-09-29 in a Linux cloud session)
+
+### Handoff (resume from here; updated 2026-09-29)
+
+Cloud session on a Linux container (4 CPUs, 15 GB RAM), started 2026-09-29 from handoff commit `913c6ae`. Session 2 (a new container, network access Full) resumed from `172b0e4` and redid the Linux setup below (legacy suite 307 OK). Every branch
+named in the laptop Handoff exists on origin at the recorded commit. The owner recorded D-35 (prototype first), D-36
+(zero spend) and D-37 (LLM providers for local runs) on 2026-09-29; the plan is `PLAN.md` §8 and the scheduling note
+`REQUIREMENTS.md` §7. D-26..D-34 stay open and use their recorded defaults for the prototype (list below).
+
+**Linux environment (this container; the laptop needs none of it).** `sudo dockerd &`; one long-lived test server
+`bridge-testdb` (`pgvector/pgvector:pg16`, port 55432, password `postgres`, started with `fsync=off`), used through
+`TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`; the full backend suite takes
+about 70 s here. Backend venvs per worktree with `uv sync --frozen --python /usr/bin/python3.12`. Legacy suite:
+Python 3.13 venv at `/home/user/.venv-legacy` with `requirements.txt` and a `cloudflared` stub on PATH
+(`/home/user/bin`); `scripts/run_legacy_tests.py` → 307 OK. Worktrees live in `/home/user/sb-wt/<REQ-ID>`. The Windows
+workarounds in the laptop notes stay in their files. **Session 2 additions (network Full).** `make dev` builds and runs (all services healthy; about 260 MB of RAM without ClamAV) once the build containers trust this container's egress-proxy CA: an out-of-repo compose override (scratchpad `compose.ccr.json`, generated from the repo Dockerfiles by adding `COPY --from=ccr ca-bundle.crt` and `SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS` after each `FROM`) is passed as a second `-f`; the repo's Dockerfiles are unchanged and the laptop needs no override. Playwright 1.63: a shim at `/home/user/pw-shim` maps `chromium(_headless_shell)-1243/chrome*-linux64` onto the installed 1194 build (`PLAYWRIGHT_BROWSERS_PATH=/home/user/pw-shim`). `npm ci` in `frontend/` is clean.
+
+**In flight.** Merged into the integration branch on 2026-09-29 (session 2): schema v2 `ba42e69` (round 6: reviewer PASS, security-reviewer PASS, CI green), T2.6a `309330b`, D1 `44bd06d`, T2.4 `f5f322b` (re-check: reviewer PASS, security-reviewer PASS, CI green); 1657 backend tests pass on the merged tree, frontend 180. The MINOR follow-ups of each review are in the task cards (REQ-REPO-01, REQ-PROV-01, REQ-LLM-01).
+
+| Branch | Last commit | Status | Next step |
+|---|---|---|---|
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `02f7170`+ | schema v2 merged, 1265 passed, CI green (pre-fix); reviewer round 2 PASS; security-reviewer CHANGES_REQUIRED (MAJOR: sanitiser CPU cost unbounded on long input) | impl-ai fixing the MAJOR (input cap + linear `_BLOCKS` + timing test); then merge integration in, suite, CI, merge |
+| `feat/REQ-ENG-01-schema-v3` (P1) | — | db-migrations writing revision 0003 (tracker tables, `users.demo_account`, `test_clock`) | reviewer + security-reviewer (engagements), merge |
+| `feat/REQ-PROP-01-proposals` (P2) | — | impl-backend | reviewer, merge |
+| `feat/REQ-DIR-01-screens` (P8 part 1: `/verify`, Companies) | — | impl-frontend | ux-reviewer + reviewer, merge |
+| `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
+| `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+**Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
+variables are set. D-27 (a): Swahili stays off; English copy-lint only. D-28 (a): the JS budget counts gzipped bodies,
+1 KB = 1,000 bytes. D-29 (a): no refusal fallback models. D-30 (c): a dispute against an E2 organisation is rejected
+in-app and handled off-platform. D-31 (a): "Legal entity verified" as the `[[COPY-REVIEW]]` placeholder. D-32 (a):
+digest hardening deferred to Phase 8. D-33: `/verify` shows no name or title (the opt-in switch, default 1(c)/2(a)/3(a),
+comes after the prototype). D-34 (a): the 12-hour step-up rule for linking and unlinking.
+
+**LLM variables the owner fills in on the laptop (D-37; names only, never values in chat or git).** The final list is
+set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`,
+`LLM_GLOBAL_DAILY_CAP_USD` (1.00 for the prototype).
+
+**Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
+(`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### Prototype checklist (updated after every task; commit and push after each)
+
+| Item | Status | Notes |
+|---|---|---|
+| D-35/D-36/D-37 recorded; `PLAN.md` §8; `REQUIREMENTS.md` §7; this checklist | done | |
+| Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | session 2: redone; `make dev` builds (CA override), Playwright shim, `npm ci` |
+| Anthropic price research (D-37) | done | verified 2026-09-29 |
+| P11 source excerpts (research, early) | done (`feat/REQ-RES-01-sources` `0bb707d`) | 19 verbatim dated excerpts, 4 niches; D-38 (publisher terms) open, default (a) local only |
+| P0 schema v2 round 6 → merge | done (`ba42e69`) | reviewer + security-reviewer PASS; CI green |
+| P0 T2.4, T2.6a, D1, T2.2 → merge | T2.6a, D1, T2.4 done; T2.2 fixing a security MAJOR | |
+| P1 schema v3 (prototype) | in progress | db-migrations |
+| P2 proposals | in progress | impl-backend |
+| P3 Tier-2 access | todo | |
+| P4 directory search + Pitch + EM1 | todo | |
+| P5 tracker main path + test clock | todo | |
+| P6 reminders | todo | |
+| P7 LLM providers (D-37) | todo | |
+| P8 M1 screens | in progress | part 1 `/verify` + Companies |
+| P9 `make demo` (basic) | todo | |
+| M1 merged, tag `prototype-m1`, M1 report | todo | |
+| P10 scout | todo | M2 |
+| P11 research | todo | M2 |
+| P12 trending + ranker | todo | M2 |
+| P13 submission assistant | todo | M2 |
+| P14 subscriptions + fake M-Pesa | todo | M2 |
+| P15 admin queues | todo | M2 |
+| P16 packaging: polish, walkthrough video, README Demo | todo | M2 |
+| P17 auth follow-ups 7–8 (BLOCKER fix) | todo | after M1 |

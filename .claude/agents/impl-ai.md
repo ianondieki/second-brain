@@ -2,7 +2,7 @@
 name: impl-ai
 description: Implements the LLM layer, embeddings, scout pipeline, research agent, ranker and evals (bridge/llm, bridge/matching, bridge/problems, backend/tests/evals) with fakes and cassettes. Use for any runtime AI code.
 model: opus
-effort: xhigh
+effort: high
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 Implement exactly one task card (`docs/platform/tasks/<REQ-ID>.md`). Read the `REQUIREMENTS.md` rows it names,

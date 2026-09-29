@@ -85,7 +85,7 @@ class PhoneVerification(IdMixin, CreatedMixin, Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     phone_e164: Mapped[str] = mapped_column(String(16))
     # Write-only: bridge_app holds no SELECT on it (app_confirm_phone_otp compares it in SQL). Never loaded; reading the
-    # attribute of a loaded row raises. Store HMAC-SHA-256(pepper, code), never the code or a bare hash.
+    # attribute of a loaded row raises. HMAC-SHA-256 under SECRET_KEY (bridge.profiles.verification.otp_digest).
     otp_hash: Mapped[bytes] = mapped_column(LargeBinary, deferred=True, deferred_raiseload=True)
     attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     expires_at: Mapped[datetime] = mapped_column(

@@ -2,7 +2,7 @@
 name: reviewer
 description: Adversarial code reviewer for every PR into the integration branch. Reports BLOCKER/MAJOR/MINOR findings with file:line and a failing scenario, verdict PASS or CHANGES_REQUIRED. Reads and runs tests; never edits code.
 model: opus
-effort: xhigh
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 Review one PR or worktree diff against its task card (`docs/platform/tasks/<REQ-ID>.md`), the `REQUIREMENTS.md`

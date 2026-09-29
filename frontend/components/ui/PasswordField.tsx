@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "./cn";
@@ -11,26 +12,14 @@ export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputEl
   label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
-  /** Visible text of the toggle ("Show" / "Hide") and its fuller accessible names. */
-  showLabel: string;
-  hideLabel: string;
-  showName: string;
-  hideName: string;
 }
 
-/** Password input with a show/hide toggle (a real button, 44 px target, name contains its visible text). */
-export function PasswordField({
-  id,
-  label,
-  hint,
-  error,
-  showLabel,
-  hideLabel,
-  showName,
-  hideName,
-  className,
-  ...rest
-}: PasswordFieldProps) {
+/**
+ * Password input with a show/hide toggle (a real button, 44 px target, name contains its visible text). The toggle's
+ * words come from the `fields` messages, which every page with a password field provides.
+ */
+export function PasswordField({ id, label, hint, error, className, ...rest }: PasswordFieldProps) {
+  const t = useTranslations("fields");
   const [visible, setVisible] = useState(false);
   return (
     <Field id={id} label={label} hint={hint} error={error}>
@@ -48,7 +37,7 @@ export function PasswordField({
           <button
             type="button"
             aria-controls={id}
-            aria-label={visible ? hideName : showName}
+            aria-label={t(visible ? "hidePasswordName" : "showPasswordName")}
             onClick={() => setVisible((v) => !v)}
             className={
               "absolute inset-y-0.5 right-0.5 inline-flex min-w-11 items-center gap-1.5 rounded-[8px] px-3 " +
@@ -56,7 +45,7 @@ export function PasswordField({
             }
           >
             {visible ? <EyeOffIcon className="size-5" /> : <EyeIcon className="size-5" />}
-            <span>{visible ? hideLabel : showLabel}</span>
+            <span>{t(visible ? "hidePassword" : "showPassword")}</span>
           </button>
         </div>
       )}

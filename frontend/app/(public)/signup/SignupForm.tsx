@@ -203,10 +203,6 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
         value={values.password}
         onChange={(event) => set("password", event.target.value)}
         error={errors.password}
-        showLabel={t("fields.showPassword")}
-        hideLabel={t("fields.hidePassword")}
-        showName={t("fields.showPasswordName")}
-        hideName={t("fields.hidePasswordName")}
       />
 
       {values.side === "org" ? (

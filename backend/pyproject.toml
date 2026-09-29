@@ -22,6 +22,10 @@ dependencies = [
     "jinja2>=3.1.6",
     "pyyaml>=6.0.3",
     "pgvector>=0.4",
+    "rfc8785>=0.1.4",
+    "asn1crypto>=1.5.1",
+    "reportlab>=5.0.1",
+    "boto3>=1.43.103",
 ]
 
 [dependency-groups]
@@ -35,6 +39,8 @@ dev = [
     "mypy>=2.3",
     "ruff>=0.16.8",
     "types-PyYAML>=6.0.12",
+    "types-reportlab>=5.0.0.20260911",
+    "boto3-stubs[s3]>=1.43.103",
 ]
 
 [build-system]
@@ -55,6 +61,7 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "C4", "SIM", "RUF", "PT", "DTZ", "T20"]
 ignore = ["S101"]  # assert is how pytest checks
+allowed-confusables = ["›"]  # U+203A joins two-level niche labels ("ICT › Networks & Telecommunications", docs/spec/03)
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S311", "S603", "S608"]  # fixture passwords, random ids, subprocess on repo scripts, SQL from table names
@@ -69,7 +76,7 @@ packages = ["bridge", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*"]
+module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*", "asn1crypto.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -86,3 +93,5 @@ filterwarnings = ["error::DeprecationWarning:bridge.*"]
 [tool.coverage.run]
 source = ["bridge"]
 branch = true
+# SQLAlchemy's asyncio layer runs through greenlets; without this, lines after an awaited query go unrecorded.
+concurrency = ["greenlet", "thread"]

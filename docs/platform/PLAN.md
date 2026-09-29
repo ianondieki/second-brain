@@ -118,7 +118,7 @@ REQ-IDs: REQ-SCOUT-01, REQ-SCOUT-02, REQ-SCOUT-03, REQ-SCOUT-05, REQ-SCOUT-06, R
 |---|---|---|---|
 | T4.1 Schema v4: scout_agents, agent_runs, agent_matches (real), recommendations/impressions placeholders | REQ-SCOUT-01 | M | First |
 | T4.2 Scout config form + Preview (last 30 days), recipients among Reviewer seats, `entitlement_tier` from subscription, feedback loop (`min_fit` ±5 after 5 signals, suggested exclusions to admin) | REQ-SCOUT-01 | B, F | After T4.1 |
-| T4.3 Pipeline: SQL hard filters → bge-m3 top-200 → Haiku screen → Sonnet rubric `FitAssessment` → deterministic blend (`matching/weights_v1.yaml`); scout DB role without Tier-2 grants; one tenant per run; incremental cursor; cron/`on_new` scheduling per plan; Message Batches | REQ-SCOUT-02 | A, B | After T4.1 |
+| T4.3 Pipeline: SQL hard filters → bge-m3 top-200 → Haiku screen → Sonnet rubric `FitAssessment` → deterministic blend (`matching/weights_v1.yaml`); scout DB role without Tier-2 grants; one tenant per run; incremental cursor; cron/`on_new` scheduling per plan; Message Batches; port the companion's `ModelPool` cooldown and `TokenPacer` per-minute pacing (deferred from T2.2, `tasks/REQ-LLM-01.md`; docs/spec/08, ADR-005 decision 3) | REQ-SCOUT-02 | A, B | After T4.1 |
 | T4.4 Digest EM3/N02 rendered by code (escaped, defanged, authenticated links, no state change on GET), niche label on items, sent only to verified opted-in Reviewer seats; below-E2 behaviour | REQ-SCOUT-03, REQ-SCOUT-07 | I, B | After T4.3 |
 | T4.5 Cost ledger + per-tenant caps, degrade to embedding-only at 100%, soft-cap email at 80% | REQ-SCOUT-05 | B | Parallel |
 | T4.6 Injection defences + `backend/tests/evals/` harness (cassettes per PR, nightly live ≤USD 5), injection gold set with clean twins (`synthetic=true`), scout gold set scaffolding for G-EVAL labels | REQ-SCOUT-06, REQ-EVAL-01 | A, T, S review | Parallel; blocks exit |
@@ -203,7 +203,7 @@ REQ-IDs: REQ-SEC-02, REQ-SEC-03, REQ-ADM-01..03, REQ-LEG-01, REQ-OPS-01.
 | T8.1 Full security review (Fable `security-reviewer`) of every module + scanners at high/critical; fix BLOCKER/MAJOR | REQ-SEC-03 | S, B | First; may loop |
 | T8.2 DSR endpoints: export (JSON + certificate PDFs ≤72 h via SLA job), rectification, erasure with legal-hold exceptions and pseudonymisation; `audit.verify_chain` still passes | REQ-SEC-02 | B, S review | Parallel |
 | T8.3 Admin console complete: claims queue SLA, moderation, research approval, invitations, directory editing, plans/prices, refunds, feature flags, audit viewer, dead-letter queue, LLM cost ledger; support impersonation audited + owner notified; harvesting heuristics | REQ-ADM-01 | B, F | Parallel |
-| T8.4 Disputes A–F: automatic legal hold, evidence pack (hashed, TSA-stamped, chain proof, s.106B certificate), takedown/counter-notice 48 h SLA, Report button everywhere | REQ-ADM-02, REQ-ADM-03 | B, F, S review | After T8.2 |
+| T8.4 Disputes A–F: automatic legal hold, evidence pack (hashed, TSA-stamped, chain proof, s.106B certificate), takedown/counter-notice 48 h SLA, Report button everywhere (with an application rate limit on reports: the database accepts any number, T2.1 round-3 review) | REQ-ADM-02, REQ-ADM-03 | B, F, S review | After T8.2 |
 | T8.5 Legal placeholders (`DRAFT — NOT LEGAL ADVICE …` headers, `[[LEGAL-PLACEHOLDER:<id>]]`), `docs/legal/LAUNCH_GATE.md`, `lawful_basis.md`, `/subprocessors`, ODPC number slot, DPIA outline; replace with G2 texts when supplied | REQ-LEG-01 | D | Parallel; never legal text by agents |
 | T8.6 Ops: Terraform + `docker-compose.prod.yml` + Caddy, `main.yml` (GHCR, staging, manual-approval production), SSM secrets, backups + restore drill, observability (OTel, Sentry, Better Stack, healthchecks.io), load test on digest/reminder workers, runbooks (incident, rollback, breach 72 h, DSR, secret rotation) | REQ-OPS-01 | I, B, D | After G1 values |
 | T8.7 Brand (G5) and email DNS (G7) applied; production directory seed per G6; staging deploy; `docs/spec/14` E2E scenarios (a)–(e) on staging | REQ-OPS-01 | F, I, T | Last |
@@ -260,4 +260,65 @@ work is incremental from Phase 1 (`ux-reviewer` from Phase 2) so Phase 7 is cons
 Budget (DECISIONS-NEEDED D-01, decided at G0 on 2026-09-24): Max subscription, usage tracked via `/cost`, no USD cap.
 After every phase the human pastes `/cost` output into `PROGRESS.md`. Stop and ask if a phase would exhaust the
 weekly usage limit. Orchestrator (D-04): Opus 5.5 at `xhigh` for Phases 1–7; Fable 5.1 for the `security-reviewer`
+and the Phase 8 audit.
+
+## 8. Prototype track (D-35, D-36, D-37; added 2026-09-29)
+
+The owner's decisions D-35 (prototype first), D-36 (zero spend) and D-37 (LLM providers for local runs) put a working
+local prototype ahead of the remaining Phase 2–8 depth. The prototype is for hackathon and recruiter demos: every major
+feature works end to end on seeded data, in the thinnest version that works. It **does not claim the Phase 2 exit or
+any gate**, and it changes no MUST requirement: nothing is removed from `REQUIREMENTS.md`; what the prototype leaves
+out is rescheduled to "after prototype" (`REQUIREMENTS.md` §7) and returns to its phase afterwards.
+
+**Ground rules on top of §1.** Branches per REQ-ID, small commits, merge only on `reviewer` PASS plus green CI (`pr.yml`
+through `workflow_dispatch` on the feature branch), `make check` green, `check_traceability.py` at 0 errors. From
+2026-09-29: reviews fix BLOCKER and MAJOR findings only; MINOR findings go to the task card as follow-ups instead of new
+review rounds. The `security-reviewer` runs one round on each change to `auth/`, `tenancy/`, `provenance/`,
+`engagements/`, `billing/` and the new LLM adapter, then BLOCKER/MAJOR only. Effort: `high` for `impl-frontend`,
+`impl-integrations`, `impl-ai` and `reviewer`; `xhigh` for `db-migrations` and for security-sensitive code, which
+`impl-backend` (kept at `xhigh`) implements: the Tier-2 predicate, the tracker guards, auth, billing and the LLM
+provider adapter. Open decisions D-26..D-34 use their recorded default for the prototype (the reports list them). The
+work runs in a Linux cloud container; the owner's laptop only runs the finished demo, so `make demo` must fit in Docker
+Desktop's 4 GB.
+
+**LLM rules (D-37).** Free OpenAI-compatible providers are the default per task in `backend/ai/models.yaml`; Anthropic
+only with `LLM_PROVIDER=anthropic`, `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 prototype total through the `llm_calls`
+ledger, with prices verified on 2026-09-29 (`research/anthropic-prices-2026-09.md`). A missing key, a hit cap or a
+failed call falls back to the fake with a "demo fallback" label. Only seeded demo data goes to free providers; Tier-2
+content from non-demo users is refused. Tests, `make check` and CI use fakes and cassettes only.
+
+### M1 — core flow (about 7–10 days)
+
+| Task | Scope (thinnest version that works end to end) | REQ-IDs (prototype part) | Agent | Order / notes |
+|---|---|---|---|---|
+| P0 In-flight Phase 2 work | Schema v2 round 6, then T2.4, T2.6a, D1 and T2.2 as each passes (Handoff order; each merges the final schema v2) | REQ-REPO-01, REQ-PROV-01/02/04, REQ-DIR-01/02, REQ-LLM-01, REQ-EMB-01 | M, B, A, R, S | First |
+| P1 Schema v3 (prototype) | Tracker tables: `engagement_events` (hash chain, INSERT-only), engagement columns (`stage_deadline_at`, `lock_version`, contact fields, `ended_at`), endorsements, agreements with milestones, signatures, payment records; `users.demo_account` (seed only) for the D-37 data rule | REQ-ENG-01, REQ-ENG-02 | M | After schema v2 merges; one revision |
+| P2 Proposals (T2.3 minimal) | Draft, edit and publish API; Tier-1 sanitiser and moderation hold; Tier-2 fields encrypted per proposal; linked Problem or "Describe a new problem"; attestations; D1 required; publishing registers the version (T2.4); attachments scanned by the demo fake scanner | REQ-PROP-01, REQ-PROP-02, REQ-MOD-01, REQ-PROV-01, REQ-PROV-05 | B | After T2.4 |
+| P3 Tier-2 access (T2.5 minimal) | `can_view_tier2`, Evaluation NDA acceptance, auto-grant to tagged orgs, watermarked server-side HTML render (tiled overlay + `view_id` metadata), `document_views`, "Who has seen this", `FEATURE_TIER2_ENABLED` | REQ-REPO-01, REQ-PROV-03, REQ-SEC-01 | B, S | After P2 |
+| P4 Directory search + Pitch (T2.7, T2.8 minimal) | Directory search; Browse repo keyword search on Tier 1; picker grouped by niche with E0/E1/E2; tags (E2 → `SUBMITTED` engagement, E0/E1 held); plan cap 402; one open tag per (developer, org) 409; EM1 | REQ-PROP-03, REQ-REPO-02, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02, REQ-DIR-04 (held tags, no invitations) | B | After P2 and T2.6a |
+| P5 Tracker main path | Transition table `SUBMITTED` → … → `CLOSED` plus `DECLINED` and `WITHDRAWN`; party and role guards (403/409); deadlines from `policy.yaml` on the business-day calendar; EM2 on `INTEREST_CONFIRMED`; contact reveal; platform mutual NDA placeholder; agreement form (IP terms, milestones); signatures with step-up; milestone acceptance; delivery; sign-off; payment recorded by the org and confirmed by the developer (no money handled); test clock router (dev/test/staging only, excluded from the production image) | REQ-ENG-01..03, REQ-ENG-05, REQ-ENG-07..09 (main path), REQ-ENG-10 (`DECLINED`, `WITHDRAWN`), REQ-ENG-12, REQ-BD-01, REQ-NOT-04 | B, S | After P1 and P4 |
+| P6 Reminders | Developer daily nudge (EM7: LLM wording, fixed fallback text) and org digest (code-rendered fact tuples), in Mailpit and in-app; driven by the test clock | REQ-REM-01, REQ-REM-02, REQ-NOT-06 | B | After P5 |
+| P7 LLM providers (D-37) | OpenAI-compatible `httpx` adapter, provider per task in `models.yaml`, free-provider daily request caps, Anthropic caps, fallback to the fake with a "demo fallback" label, demo-data-only rule | REQ-LLM-01 | B, S | After T2.2 merges |
+| P8 M1 screens (basic) | Developer: Home, My Ideas (editor, proposal page with certificate, `/verify` link, Who has seen this), Pitch picker, Engagements tracker, Companies. Org: Inbox (tagged), Tier-2 view behind the NDA, Engagements tracker. Public `/verify`. Clean at 375 and 1440 px | REQ-PROP-01, REQ-PROP-03, REQ-REPO-01, REQ-ENG-03, REQ-PROV-02, REQ-DIR-01 | F, U | Per backend merge |
+| P9 `make demo` (basic) | Stack without ClamAV (demo-only fake scanner), `python -m bridge.seed --demo` (demo developers, fixture orgs such as "Telco A (fixture)", proposals, problems; refuses `APP_ENV=production`), fixed dev-only demo passwords, a TOTP helper for the demo org seats; fits in 4 GB | REQ-FND-02, REQ-DIR-02 | B, D | Last in M1 |
+
+M1 exit: the M1 story works end to end on `make demo`; merged; the integration branch tagged `prototype-m1`; the M1
+report in `PROGRESS.md`.
+
+### M2 — all features (about 3–4 weeks)
+
+| Task | Scope | REQ-IDs (prototype part) | Agent | Cut order |
+|---|---|---|---|---|
+| P10 Scout agent (f) | Org sets niches and keywords; matching by niche and keyword rules (embeddings stay the fake; no bge-m3 download); the LLM writes the "why this matches" summary; Express interest → `ORG_INTEREST` → developer accepts → `INTEREST_CONFIRMED` (EM2) | REQ-SCOUT-01, REQ-SCOUT-02, REQ-SCOUT-03, REQ-ENG-04 | M, A, B | Never cut |
+| P11 Research agent (g) | The LLM drafts problems from 3–5 short public source excerpts saved in the repo with URL and date (fetched once at build time; no live scraping at runtime); each problem cites its sources; admin approves before it shows | REQ-RES-01, REQ-RES-02 | Rs, A | 4th to cut |
+| P12 Trending + ranker (h) | Transparent weighted score with "why recommended" chips | REQ-TREND-01, REQ-TREND-02, REQ-PERS-01 | A, B | 2nd to cut |
+| P13 Submission assistant (i) | The LLM suggests a clearer teaser (demo users only; per-use consent) | REQ-PROP-05 | A | 3rd to cut |
+| P14 Subscriptions (j) | Plans page, one paywall, fake M-Pesa checkout through a new `FakePaymentProvider` behind the `PaymentProvider` interface of `docs/spec/05` (succeeds after a short delay; no Daraja or Paystack code or accounts) | REQ-BIL-08, REQ-BIL-04 (interface only) | I, B, S | 5th to cut |
+| P15 Admin (k) | Minimal moderation, claims and research-approval queues | REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 (queue only) | B, F | 1st to cut |
+| P16 Packaging | Polished screens for every feature at 375 and 1440 px; `make demo` complete; a Playwright script that walks the whole story and records a video and screenshots into `docs/demo/` (screenshots committed, videos kept out of git); README "Demo" section (3-minute script, demo logins, LLM variable names, Windows with Docker Desktop at 4 GB, Mermaid architecture diagram, screenshots, "real vs simulated vs planned" table) | REQ-UX-01..04 (prototype part), REQ-FND-02 | F, D, U | Never cut |
+| P17 Auth follow-ups 7–8 | Fix the BLOCKER (TOTP codes refused after enrolment) per the Handoff, then security-reviewer + reviewer, then the frontend halves with ux-reviewer | REQ-AUTH-01 | B, F, S, R, U | After M1 |
+
+**After prototype** (rescheduled, not removed; `REQUIREMENTS.md` §7): full claims and E2 verification flows,
+invitations, Problem Briefs, the originality check, D2, real payments and eTIMS, WhatsApp, the remaining tracker side
+states (`EXPIRED`, `ON_HOLD`, `DISPUTED`, `TERMINATED`, `INFO_REQUESTED`, `PROCUREMENT_ROUTE`), the full Phase 7 polish
 and the Phase 8 audit.
