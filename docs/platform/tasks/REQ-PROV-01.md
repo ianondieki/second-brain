@@ -108,13 +108,11 @@ adapters), `bridge/provenance/{manifest,signing,tsa,service,transparency}.py`, `
 
 ## Schema follow-ups for db-migrations (schema v2; none blocks T2.4)
 
-1. `app_audit_chain_heads()` also returns each head's `occurred_at`, so capped anchor runs take the oldest heads
-   first (the query selects `h.*` and `anchor_order` uses the column when present; until then the order is chain id).
-   Better still, `app_unanchored_chain_heads()` returning only heads without an anchor at their `seq`, with
-   `occurred_at`, replacing the trial-insert probe (REQ-AUD-01 card).
-2. `transparency_roots.snapshot_at timestamptz NOT NULL`: the moment of the REPEATABLE READ snapshot whose heads the
-   root covers (`RootReport.snapshot_at` is computed and logged today). `/api/transparency` then serves it (a route
-   contract change: regenerate `backend/openapi.json` and the frontend types).
+1. Done in schema v2 and used since the final merge: `app_unanchored_chain_heads()` (heads without an anchor at their
+   `seq`, with `occurred_at`) replaced the trial-insert probe.
+2. Done except NOT NULL: schema v2 has `transparency_roots.snapshot_at` (nullable until T2.4's insert sends it, per
+   the REQ-REPO-01 card); T2.4 now writes it on every root and `/api/transparency` serves it. Left for db-migrations:
+   `SET NOT NULL`.
 3. An index on `provenance_records.content_hash` (upload matching without a cert id scans the table).
 4. The owner's opt-in to show name and title on `/verify` (REQ-PROV-02 card), e.g. `proposals.verify_shows_owner`.
 
@@ -124,3 +122,41 @@ owner's own id, which the caller-bound function allows; the only `provenance_rec
 `registered` check (line 276) in the same transaction, under the version's advisory lock (line 272).
 `tests/integration/provenance/builders.tier2_grantee` sets `email_verified_at`, which round 3's `app_tier2_granted`
 requires.
+
+## Notes (T2.4, final schema v2 merge, 2026-09-29)
+
+- Merged `origin/feat/REQ-REPO-01-schema-v2` at `4dd313a` (round 6 `108a0f3` plus its docs): no conflicts, and the
+  shared T2.1 files (revision, models, `world.py`, `test_migrations.py`, `test_privileges.py`, `test_rls.py`) are
+  identical to the schema branch's. On the merged schema nine anchor tests failed: `chain_anchors_guard` refuses a
+  `tsa_time` earlier than the anchored event, so the trial-insert probe (an epoch time) raised.
+- **Anchors** (`dc2dfb6`): the run reads `app_unanchored_chain_heads()` with `ORDER BY occurred_at, chain_id COLLATE
+  "C" LIMIT <cap>` (code-point order, the one `anchor_order` uses, so the capped subset is the same whatever the
+  database collation) and `count(*) OVER ()`; `AnchorReport.heads` is now every head waiting when the run started.
+  The test trigger `database_clock_guard` stays (it duplicates `chain_anchors_guard`'s one-minute bound).
+- **Snapshot time** (`b2ac826`, `ffb6000`): `verify_and_publish_root` writes `transparency_roots.snapshot_at`;
+  `GET /api/transparency` serves it (nullable, as the column is; `backend/openapi.json` and
+  `frontend/lib/api/schema.d.ts` regenerated). The root's signature does not cover it (the signed message stays
+  `bridge-transparency-root-v1:<day>:<root>`; the table is append-only); the runbook says so.
+- **Flake** (`73077c4`): the nightly retry test compared two delays capped at 900 s at microsecond resolution
+  (`retry_at` is "now + delay" when the decision is made); it failed once under coverage. Whole seconds now, and the
+  exact schedule is asserted.
+- Full backend suite 1197 passed; `bridge/provenance` 99% (`--cov=bridge.provenance`); ruff, ruff format, mypy
+  --strict, `bridge.openapi --check`, frontend typecheck, eslint and vitest (105), legacy 307 OK; traceability PASS.
+
+Fail-first for the anchor-run guards (security review round 2: S1 refused anchors, S2 lock, batches, budget). Each
+mutation was applied alone to `bridge/provenance/transparency.py` (the lock to `bridge/jobs/provenance.py`), the
+test run, and the file restored; all 13 transparency and 8 job tests pass again afterwards.
+
+| Guard | Mutation | Test | Result |
+|---|---|---|---|
+| S1 savepoint per anchor | `begin_nested()` → `nullcontext()` | `test_an_anchor_the_database_refuses_is_skipped_and_the_others_land` | fails (`InFailedSqlTransaction`) |
+| S1 run fails when every token is refused | drop the `AnchorRejectedError` raise | `test_a_run_whose_every_anchor_is_refused_fails` | fails (did not raise) |
+| S1 one minute ahead of the worker | `timestamp(...)` without `max_ahead` | `test_the_anchor_takes_no_token_more_than_a_minute_ahead_of_the_worker` | fails (did not raise) |
+| stop at the first failed timestamp | `break` → `continue` | `test_a_tsa_outage_anchors_nothing_and_fails_the_run` | fails (3 calls, not 1) |
+| S2 batches | never store mid-run | `test_anchors_are_stored_batch_by_batch` | fails (0 stored, not 2) |
+| S2 batches | `>= batch` → `> batch` | same | fails (3 stored, not 2) |
+| S2 batches | store after every token | same | fails (3 stored, not 2) |
+| S2 budget | never check the budget | `test_a_run_takes_no_timestamp_once_its_time_budget_is_spent` | fails (4 calls, not 3) |
+| S2 budget | `time.monotonic()` instead of the run's clock | same | fails (budget spent at once) |
+| S2 budget | a spent budget before any timestamp does not fail the run | same | fails (did not raise) |
+| S2 lock | drop `lock=ANCHOR_LOCK` | `unit/jobs/test_provenance_jobs.py::test_hourly_anchor_runs_never_overlap` | fails (lock `None`) |

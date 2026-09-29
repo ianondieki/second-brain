@@ -148,6 +148,8 @@ curl -fsS "$HOST/api/transparency"
 
 Each root is signed over `bridge-transparency-root-v1:<YYYY-MM-DD>:<merkle_root hex>`; check it exactly as in step 4
 with that message. Keeping copies of these roots over time lets anyone detect a later rewrite of the audit history.
+`snapshot_at` is when the snapshot whose chain heads the root covers was taken (after that day ended in Nairobi): the
+root includes the audit events committed by then. It is informational; the signature does not cover it.
 
 ## What Bridge checks before it stores a token
 
