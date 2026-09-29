@@ -30,7 +30,9 @@ async function expectOrgNav(page: Page, current: "Home" | "Inbox") {
 }
 
 test.describe("an organisation member", () => {
-  test.skip(!OWNER_DATABASE_URL, "needs E2E_DATABASE_OWNER_URL to verify the test organisation and the developer");
+  test.beforeAll(() => {
+    expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL verifies the test organisation and the developer").toBeTruthy();
+  });
   test.setTimeout(120_000);
 
   let member: OrgMember;

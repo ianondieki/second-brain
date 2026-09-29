@@ -31,3 +31,11 @@ AC-DIR-3 (`unit/directory/test_seed_policy.py`, `frontend/e2e/directory.spec.ts`
 - Safaricom PLC and Airtel Networks Kenya Limited ship with `official_domains: []`: their domains were cited only to
   Wikipedia and await an official citation before G6 (research note, open question 10); E1 by domain match stays
   manual for them until then.
+
+## Demo fixtures (P9, 2026-09-29)
+
+`python -m bridge.seed --demo` (REQ-FND-02 card) adds four fixture organisations named "(fixture)" at `.example`
+domains: E2, E2, E1 and E0. They do not come from `ke_provisional.yaml` and do not pass through this loader (which
+keeps refusing any level above `unclaimed` outside test and staging): three are signed up through the app and raised
+to E1/E2 by the owner role, as staff would, and the E0 one is inserted with `source = admin`. The demo seed refuses
+staging and production, so the provisional directory's production path is unchanged.

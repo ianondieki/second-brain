@@ -278,7 +278,7 @@ Follow-ups recorded from the review (not built):
 - Files: `backend/config/policy.yaml`; `bridge/engagements/{policy,state_machine,service,commands,documents,notify,
   history,schemas,router}.py`; `bridge/notifications/em2.py` and `templates/em2*.j2`; `bridge/jobs/notifications.py`
   (and its import path in `jobs/app.py`); `bridge/testclock.py`; the routers in `bridge/main.py`; `backend/Dockerfile`
-  (`WITH_TEST_CLOCK`); `infra/docker-compose.dev.yml` (build arg); `backend/openapi.json`; tests below. No Alembic
+  (`WITH_TEST_CLOCK`, since P9 `WITH_DEV_TOOLS`); `infra/docker-compose.dev.yml` (build arg); `backend/openapi.json`; tests below. No Alembic
   revision (schema needs are listed at the end).
 
 ### Design

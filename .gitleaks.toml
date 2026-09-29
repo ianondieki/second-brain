@@ -12,6 +12,7 @@ regexes = [
   '''test-recovery-pepper-0123456789abcdef012345''',
   '''dGVzdC1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGVmMDE=''',
   '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',  # RFC 6238 Appendix B test vector (base32 of "12345678901234567890")
+  '''bridge-demo-2026''',  # the public dev-only demo password (backend/src/bridge/seed/demo/data.py; refused outside dev/test)
 ]
 paths = [
   '''legacy/''',

@@ -140,7 +140,7 @@ test.describe("a signed-in developer", () => {
   });
 
   test("publishes at D1, gets a certificate and hides the idea", async ({ page }) => {
-    test.skip(!OWNER_DATABASE_URL, "needs E2E_DATABASE_OWNER_URL to raise the test developer to D1");
+    expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL raises the test developer to D1").toBeTruthy();
     makeD1(email);
     // Unique per run: published problems stay listed on the stack, and the picker search must find this one only.
     const title = `Maziwa baridi ${Date.now().toString(36)}`;
