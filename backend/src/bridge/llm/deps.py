@@ -1,11 +1,12 @@
 """The app's LLM wiring (REQ-LLM-01): the default ``LLMClient`` of a request or a job.
 
 The registry (``ai/models.yaml``) and the adapter are built once at startup (``build_runtime``, stored on
-``app.state`` by the lifespan). Each request gets a fresh ``LLMService`` (one nonce per request) over the SQL stores,
-all acting as the request's bound tenant: the ``llm_calls`` ledger (``SqlLedger``, rows committed on their own), the
-monthly caps of the subject's plan (``EntitlementsCaps``) and the consent table (``SessionConsentChecker``). A job
-calls ``sql_service`` with its own session after ``bind_tenant``. Dead letters, refusals and soft-cap crossings go to
-the logging in-memory sinks until their tables and hooks exist (T2.3, Phase 4). Unit tests use ``FakeLLMClient``.
+``app.state`` by the lifespan). Each signed-in request (``CurrentSession``; 401 otherwise) gets a fresh
+``LLMService`` (one nonce per request) over the SQL stores, all acting as the request's bound tenant: the
+``llm_calls`` ledger (``SqlLedger``, rows committed on their own), the monthly caps of the subject's plan
+(``EntitlementsCaps``) and the consent table (``SessionConsentChecker``). A job calls ``sql_service`` with its own
+session after ``bind_tenant``. Dead letters, refusals and soft-cap crossings go to the logging in-memory sinks until
+their tables and hooks exist (T2.3, Phase 4). Unit tests use ``FakeLLMClient``.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bridge.auth.deps import Db, SettingsDep
+from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.config import Settings
 from bridge.llm import registry as registry_module
 from bridge.llm.adapter import ModelAdapter
@@ -53,7 +54,10 @@ def sql_service(
     )
 
 
-def get_llm(request: Request, db: Db, settings: SettingsDep) -> LLMClient:
+def get_llm(request: Request, db: Db, settings: SettingsDep, live: CurrentSession) -> LLMClient:
+    """A request's client: only for a signed-in session with its second factor done (``CurrentSession``: 401
+    otherwise), which binds ``db`` to the user first, so a request never makes an unbound, platform-scope call."""
+    del live  # required for its checks and its tenant binding
     state = request.app.state
     return sql_service(
         db,
