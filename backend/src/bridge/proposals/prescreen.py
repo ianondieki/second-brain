@@ -94,13 +94,23 @@ _NEGATIVE = re.compile(
     r"|exploit(?:s|ing)?\s+(?:its\s+|their\s+)?(?:customers|users|farmers|members|staff|workers))\b",
     re.IGNORECASE,
 )
+# Security vocabulary in a technical context only: "vulnerable households", "climate vulnerability", "we hacked
+# together a prototype" and "exploit market gaps" are ordinary development language, not vulnerability reports.
+_TECH_TARGET = (
+    r"(?:apps?|systems?|portals?|apis?|websites?|sites?|platforms?|networks?|servers?|firmware|software|devices?"
+    r"|routers?|gateways?|logins?|databases?|ussd|sims?|pos|atms?|wallets?|sessions?|endpoints?|tills?|cards?|pins?"
+    r"|otps?|accounts?|modems?|meters?)"
+)
 _VULNERABILITY = re.compile(
-    r"\b(?:vulnerab(?:le|ility|ilities)|exploit(?:s|ed|ing|able)?|(?:zero|0)[\s-]?day|cve-\d{4}-\d{3,}"
+    rf"\b(?:(?:security\s+)vulnerabilit(?:y|ies)|vulnerabilit(?:y|ies)\s+(?:in|on|of)\s+(?:[\w-]+\s+){{0,4}}?{_TECH_TARGET}"
+    rf"|exploit(?:s|ed|ing)?\s+(?:the\s+|a\s+|an\s+|their\s+|its\s+|this\s+)?(?:[\w-]+\s+){{0,2}}?"
+    rf"(?:{_TECH_TARGET}|bugs?|flaws?|holes?)|exploitable|(?:zero|0)[\s-]?day|cve-\d{{4}}-\d{{3,}}"
     r"|sql\s*injection|sqli|xss|cross[\s-]site\s+(?:scripting|request\s+forgery)|csrf|remote\s+code\s+execution"
     r"|rce|privilege\s+escalation|(?:auth(?:entication)?|login|security|otp|2fa|mfa|pin|paywall|verification)\s+bypass"
     r"|bypass(?:es|ed|ing)?\s+(?:the\s+|their\s+|its\s+|any\s+)?(?:auth(?:entication)?|login|security|otp|2fa|mfa"
-    r"|pins?|verification|paywall)|data\s+(?:breach|leak)(?:es|s)?|breached|security\s+(?:hole|flaw|loophole|gap"
-    r"|weakness|bug)s?|backdoors?|hack(?:ed|able)|unpatched"
+    r"|pins?|verification|paywall)|data\s+(?:breach|leak)(?:es|s)?|security\s+(?:hole|flaw|loophole|gap"
+    r"|weakness|bug)s?|backdoors?|hackable|(?:was|were|been|got)\s+(?:hacked|compromised)|unpatched"
+    rf"|{_TECH_TARGET}\s+(?:was|were|been|got)\s+breached"
     r"|leak(?:ed|s|ing)?\s+(?:\w+\s+)?(?:credentials|passwords|pins|records))\b",
     re.IGNORECASE,
 )

@@ -73,6 +73,9 @@ async def test_neutral_mentions_are_not_held(summary: str) -> None:
         "We found a vulnerability in the agent app.",
         "An SQL injection in the portal exposes balances.",
         "Exploit the USSD session to read any account.",
+        "Their portal has a security vulnerability.",
+        "The agent system was hacked last year.",
+        "This bug is exploitable from any phone.",
         "A zero-day in the router firmware.",
         "CVE-2024-12345 affects the payment gateway.",
         "Bypass the OTP on the login page.",
@@ -84,6 +87,22 @@ async def test_security_vulnerability_content_is_held(text: str) -> None:
     result = await screen(problem_statement=text)
     assert result.hold
     assert SECURITY_VULNERABILITY in result.reasons
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cash transfers for vulnerable households in Turkana.",
+        "Climate vulnerability assessments for county planners.",
+        "We hacked together a prototype over a weekend.",
+        "Exploit market gaps in rural cold chains.",
+        "A hackathon winner, now piloting with two SACCOs.",
+        "The contract was breached by neither party.",
+    ],
+)
+async def test_ordinary_development_language_is_not_held(text: str) -> None:
+    result = await screen(summary=text)
+    assert result.reasons == ()
 
 
 async def test_both_reasons_and_labels_only_in_the_classifier() -> None:
