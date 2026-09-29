@@ -4,7 +4,6 @@ import { cache } from "react";
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import {
-  isProposalId,
   type AttestationText,
   type County,
   type MyProposal,
@@ -12,6 +11,7 @@ import {
   type NicheNode,
   type ProblemCard,
 } from "./ideas";
+import { isProposalId } from "./routes";
 
 // Server-side calls for the My ideas screens (signed in only). Each call is bounded, so a hung API ends in the
 // route's error page instead of a page that never renders.

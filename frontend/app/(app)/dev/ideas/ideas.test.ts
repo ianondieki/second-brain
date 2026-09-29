@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { publish, saveDraft, searchProblems, uploadAttachment } from "./calls";
 import { draftBody } from "./draft";
 import {
-  EMPTY_STATE,
   editHref,
   linksProblem,
-  parseStep,
   publishChecklist,
   wordCount,
   type EditorState,
@@ -14,7 +12,8 @@ import {
 } from "./ideas";
 import { attachmentType, fileSizeParts } from "./files";
 import { hasUnpublishedChanges, ideaStatus } from "./status";
-import { stateFromVersion } from "./versions";
+import { parseStep } from "./routes";
+import { EMPTY_STATE, stateFromVersion } from "./versions";
 import { fieldIssues, saveRefusal } from "./outcomes";
 import { publishRefusal, uploadRefusal } from "./refusals";
 

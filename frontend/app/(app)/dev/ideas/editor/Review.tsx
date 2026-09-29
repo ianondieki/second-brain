@@ -14,7 +14,6 @@ import {
   FIELD_STEP,
   ideaHref,
   linkLines,
-  nicheLabel,
   type Attestations,
   type AttestationText,
   type EditorState,
@@ -24,6 +23,16 @@ import {
 } from "../ideas";
 import type { PublishProblem, SaveProblem } from "../outcomes";
 import { useIssueMessage } from "./issues";
+
+/** A niche's label ("ICT › Networks & Telecoms") by id, for showing a chosen niche. */
+export function nicheLabel(niches: readonly NicheNode[], id: string): string | undefined {
+  for (const parent of niches) {
+    if (parent.id === id) return parent.label;
+    const child = parent.children.find((c) => c.id === id);
+    if (child) return child.label;
+  }
+  return undefined;
+}
 
 export interface ReviewProps {
   state: EditorState;

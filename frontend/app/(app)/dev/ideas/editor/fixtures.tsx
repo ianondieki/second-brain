@@ -5,7 +5,6 @@ import { renderWithIntl } from "@/test/intl";
 
 import type { Outcome } from "../calls";
 import {
-  EMPTY_STATE,
   type AttestationText,
   type EditorState,
   type MyProposal,
@@ -14,6 +13,7 @@ import {
   type PublishResult,
 } from "../ideas";
 import type { PublishProblem, SaveProblem } from "../outcomes";
+import { EMPTY_STATE } from "../versions";
 import { Editor, preloadSteps, type EditorProps } from "./Editor";
 
 // Shared fixtures of the editor's component tests (REQ-PROP-01).

@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Outcome } from "../calls";
-import { EMPTY_STATE, type Attachment, type MyProposal } from "../ideas";
+import type { Attachment, MyProposal } from "../ideas";
+import { EMPTY_STATE } from "../versions";
 import type { SaveProblem } from "../outcomes";
 import { calls, READY, renderEditor, SAVED, settleLazy } from "./fixtures";
 

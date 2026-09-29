@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { EditorScreen } from "../../editor/EditorScreen";
-import { parseStep } from "../../ideas";
+import { parseStep } from "../../routes";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("ideaEditor");

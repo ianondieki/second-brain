@@ -1,6 +1,27 @@
-import { EMPTY_STATE, type EditorState, type MyProposal, type Version } from "./ideas";
+import type { EditorState, MyProposal, Version } from "./ideas";
 
 // Loading a version into the editor happens on the server (EditorScreen); kept out of the editor's bundle.
+
+/** A new idea's fields. */
+export const EMPTY_STATE: EditorState = {
+  title: "",
+  nicheId: "",
+  countyCode: "",
+  maturity: "",
+  ask: "",
+  problemStatement: "",
+  summary: "",
+  impactClaims: "",
+  problemMode: null,
+  problems: [],
+  newProblemTitle: "",
+  newProblemStatement: "",
+  approach: "",
+  architecture: "",
+  pricing: "",
+  notes: "",
+  links: "",
+};
 
 /** The version the editor continues: the draft when there is one, else the published one (the first save copies it
  * into the next version). */

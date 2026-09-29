@@ -54,11 +54,6 @@ export const MATURITY_KEY = {
 } as const satisfies Record<Maturity, string>;
 export const ASKS = ["sale", "licence", "co_build", "pilot", "hire"] as const satisfies readonly Ask[];
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function isProposalId(value: string): boolean {
-  return UUID.test(value);
-}
-
 export function ideaHref(id: string): string {
   return `${BASE_PATH}/${encodeURIComponent(id)}`;
 }
@@ -71,11 +66,6 @@ export function editHref(id: string, step?: Step): string {
 
 export type Step = 1 | 2 | 3;
 export const STEPS = [1, 2, 3] as const satisfies readonly Step[];
-
-export function parseStep(value: string | string[] | undefined): Step {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw === "2" ? 2 : raw === "3" ? 3 : 1;
-}
 
 export type ProblemMode = "pick" | "new";
 
@@ -101,26 +91,6 @@ export interface EditorState {
   /** One link per line. */
   links: string;
 }
-
-export const EMPTY_STATE: EditorState = {
-  title: "",
-  nicheId: "",
-  countyCode: "",
-  maturity: "",
-  ask: "",
-  problemStatement: "",
-  summary: "",
-  impactClaims: "",
-  problemMode: null,
-  problems: [],
-  newProblemTitle: "",
-  newProblemStatement: "",
-  approach: "",
-  architecture: "",
-  pricing: "",
-  notes: "",
-  links: "",
-};
 
 /** The non-empty lines of the links box. */
 export function linkLines(links: string): string[] {
@@ -222,16 +192,4 @@ export function publishChecklist(state: EditorState): FieldIssue[] {
   }
   if (linksProblem(state.links)) issues.push({ field: "links", code: linksProblem(state.links)! });
   return issues;
-}
-
-// --- niches ------------------------------------------------------------------------------------------
-
-/** A niche's label ("ICT › Networks & Telecoms") by id, for showing a chosen niche. */
-export function nicheLabel(niches: readonly NicheNode[], id: string): string | undefined {
-  for (const parent of niches) {
-    if (parent.id === id) return parent.label;
-    const child = parent.children.find((c) => c.id === id);
-    if (child) return child.label;
-  }
-  return undefined;
 }
