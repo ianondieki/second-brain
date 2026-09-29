@@ -1,6 +1,6 @@
 import { apiErrorCode, detailOf } from "@/lib/api/error-code";
 
-import { isPitchReason, type PitchReason } from "./picker";
+import { isPitchReason, orgKey, type PitchReason } from "./picker";
 
 // What a Pitch or a withdrawal can answer, as the screens word it (REQ-PROP-03). The API's `detail.message` is never
 // shown: every case has its own [[COPY-REVIEW]] string (pitch.problem.*, tagWithdraw.problem.*), so it can be translated
@@ -28,6 +28,8 @@ export interface PitchRefusal {
   problem: PitchProblem;
   /** 409 `tag_conflict`: the organisations that cannot be pitched to, in the order asked, with the reason code. */
   conflicts: PitchConflict[];
+  /** 404 with `org_ids`: the organisations that left the directory. */
+  gone?: string[];
   /** 402 `plan_limit`: the plan's pitches per idea and how many are used. */
   limit?: number;
   used?: number;
@@ -48,7 +50,7 @@ function conflictsOf(detail: Record<string, unknown> | undefined): PitchConflict
   for (const item of list) {
     if (typeof item !== "object" || item === null) continue;
     const { org_id: orgId, reason } = item as Record<string, unknown>;
-    if (typeof orgId === "string" && isPitchReason(reason)) out.push({ orgId: orgId.toLowerCase(), reason });
+    if (typeof orgId === "string" && isPitchReason(reason)) out.push({ orgId: orgKey(orgId), reason });
   }
   return out;
 }
@@ -69,7 +71,10 @@ export function pitchRefusal(status: number, body: unknown): PitchRefusal {
   }
   if (status === 404) {
     // The proposal is not the caller's (or was deleted), or some organisations left the directory (`org_ids`).
-    return { problem: Array.isArray(detail?.org_ids) ? "orgsGone" : "notFound", conflicts: [] };
+    const ids = detail?.org_ids;
+    if (!Array.isArray(ids)) return { problem: "notFound", conflicts: [] };
+    const gone = ids.filter((id): id is string => typeof id === "string").map(orgKey);
+    return { problem: "orgsGone", conflicts: [], gone };
   }
   if (status === 409 && code === "proposal_not_public") return { problem: "notPublic", conflicts: [] };
   if (status === 409 && code === "tag_conflict") {

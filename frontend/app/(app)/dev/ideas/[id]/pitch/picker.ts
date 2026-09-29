@@ -39,6 +39,20 @@ export function isPitchReason(value: unknown): value is PitchReason {
   return typeof value === "string" && REASONS.has(value);
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * An organisation's id as the picker keys it (lower case): the URL, the API's cards, a refusal's ids and the chosen
+ * set all compare through this one helper, so an id in another case can never slip past a check.
+ */
+export function orgKey(id: string): string {
+  return id.toLowerCase();
+}
+
+export function isOrgId(value: string): boolean {
+  return UUID.test(value);
+}
+
 export function pitchHref(proposalId: string, query: PickerQuery = { selected: [] }): string {
   const params = new URLSearchParams();
   if (query.q) params.set("q", query.q);
@@ -59,7 +73,6 @@ export interface PickerQuery {
   selected: string[];
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NICHE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -86,8 +99,8 @@ export function parsePickerQuery(params: SearchParams): PickerQuery {
   if (cursor && cursor.length <= 2000) out.cursor = cursor;
   const seen = new Set<string>();
   for (const id of all(params.sel)) {
-    const lower = id.toLowerCase();
-    if (!UUID.test(id) || seen.has(lower)) continue;
+    const lower = orgKey(id);
+    if (!isOrgId(id) || seen.has(lower)) continue;
     seen.add(lower);
     out.selected.push(lower);
     if (out.selected.length === MAX_BATCH) break;
@@ -111,6 +124,12 @@ export function pitchesLeft(cap: TagCap): number | null {
 export function selectionMax(cap: TagCap): number {
   const left = pitchesLeft(cap);
   return left === null ? MAX_BATCH : Math.min(MAX_BATCH, left);
+}
+
+/** True when the plan's pitches left, not the batch limit, is what stops more choices. */
+export function capBinds(cap: TagCap): boolean {
+  const left = pitchesLeft(cap);
+  return left !== null && left <= MAX_BATCH;
 }
 
 // --- tags --------------------------------------------------------------------------------------------------------------

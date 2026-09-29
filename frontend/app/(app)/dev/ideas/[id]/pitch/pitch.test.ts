@@ -7,6 +7,7 @@ import {
   canWithdraw,
   heldKey,
   MAX_BATCH,
+  orgKey,
   parsePickerQuery,
   pickerApiQuery,
   pitchesLeft,
@@ -62,6 +63,14 @@ describe("the picker's URL", () => {
       cursor: undefined,
       limit: 30,
     });
+  });
+});
+
+describe("an organisation's id", () => {
+  it("is compared in one case everywhere (the URL, cards, refusals and choices go through orgKey)", () => {
+    expect(orgKey(ORG_A.toUpperCase())).toBe(ORG_A);
+    expect(orgKey(ORG_A)).toBe(ORG_A);
+    expect(pitchRefusal(404, error("not_found", { org_ids: [ORG_B.toUpperCase(), 7] })).gone).toEqual([ORG_B]);
   });
 });
 
