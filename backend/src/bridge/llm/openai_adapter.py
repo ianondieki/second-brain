@@ -166,7 +166,7 @@ class OpenAICompatibleAdapter:
             raise self._error(f"unreachable ({type(exc).__name__})", transient=True) from None
         try:
             return from_reply(json.loads(raw), self._key)
-        except (_Malformed, ValueError):
+        except (_Malformed, ValueError, RecursionError):  # RecursionError: nesting deeper than the parser's limit
             raise self._error("sent a malformed reply", transient=False) from None
 
     async def _post(self, body: Mapping[str, Any], headers: Mapping[str, str]) -> bytes:

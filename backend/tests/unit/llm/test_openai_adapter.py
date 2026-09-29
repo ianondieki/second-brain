@@ -273,6 +273,9 @@ async def test_transport_errors_are_transient(exc: Exception) -> None:
         httpx.Response(200, json={"choices": [{"message": "x"}]}),
         httpx.Response(200, json={"choices": [{"message": {"content": 7}, "finish_reason": "stop"}]}),
         httpx.Response(200, json={"choices": [{"message": {"content": [SECRET_BODY]}, "finish_reason": "stop"}]}),
+        httpx.Response(200, content=b"[" * 200_000 + b"]" * 200_000),  # nesting past the parser's recursion limit
+        httpx.Response(200, content=b'{"n": ' + b"9" * 5000 + b"}"),  # an integer past Python's digit limit
+        httpx.Response(200, content=b"\xff\xfe not utf-8"),
     ],
 )
 async def test_a_malformed_reply_is_a_quiet_provider_error(response: httpx.Response) -> None:
