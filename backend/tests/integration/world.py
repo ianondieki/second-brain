@@ -200,6 +200,56 @@ async def add_problem(
     return problem_id
 
 
+async def add_tracker_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID) -> None:
+    """Revision 0003: one row of each tracker table on an engagement in SUBMITTED (its genesis event is the
+    database's), written as the owner like every fixture: an endorsement of the current stage, a draft agreement with
+    a milestone, a signature and an unconfirmed payment record."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_endorsements (id, engagement_id, stage, party, user_id, role, method)"
+        " VALUES (:id, :engagement, 'SUBMITTED', 'developer', :user, 'developer', 'click')",
+        id=uuid7(),
+        engagement=engagement_id,
+        user=developer_id,
+    )
+    agreement_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO agreements (id, engagement_id, version, created_by) VALUES (:id, :engagement, 1, :user)",
+        id=agreement_id,
+        engagement=engagement_id,
+        user=developer_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO milestones (id, agreement_id, engagement_id, seq, deliverable, amount_kes_minor, due_date,"
+        " review_window_bd) VALUES (:id, :agreement, :engagement, 1, 'Pilot build', 5000000, :due, 5)",
+        id=uuid7(),
+        agreement=agreement_id,
+        engagement=engagement_id,
+        due=datetime(2027, 1, 29, tzinfo=UTC).date(),
+    )
+    await _insert(
+        conn,
+        "INSERT INTO signatures (id, engagement_id, document_kind, document_ref, document_sha256, signer_user_id,"
+        " party, step_up_method) VALUES (:id, :engagement, 'mutual_nda', :ref, :sha, :user, 'developer', 'passkey')",
+        id=uuid7(),
+        engagement=engagement_id,
+        ref=uuid7(),
+        sha=bytes(32),
+        user=developer_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO payment_records (id, engagement_id, amount_kes_minor, method, reference, paid_on, recorded_by)"
+        " VALUES (:id, :engagement, 5000000, 'mpesa', 'RLS0FIXTURE', :paid, :user)",
+        id=uuid7(),
+        engagement=engagement_id,
+        paid=datetime(2026, 1, 15, tzinfo=UTC).date(),
+        user=developer_id,
+    )
+
+
 async def build(conn: AsyncConnection, tag: str) -> World:
     """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
     niche_id, plan_id = uuid7(), uuid7()
@@ -399,16 +449,18 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             org=org_id,
             user=user_id,
         )
+        engagement_id = uuid7()
         await _insert(
             conn,
             "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state)"
             " VALUES (:id, :proposal, :org, :user, :version, 'tagged', 'SUBMITTED')",
-            id=uuid7(),
+            id=engagement_id,
             proposal=published,
             org=org_id,
             user=user_id,
             version=published_version,
         )
+        await add_tracker_rows(conn, engagement_id, user_id)
         await _insert(
             conn,
             "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source)"
@@ -608,6 +660,22 @@ TENANT_ROWS: dict[str, Rows] = {
     "document_views": _rows("document_views", "t.id::text", "t.org_id", "t.viewer_user_id"),
     "org_claims": _rows("org_claims", "t.id::text", "t.org_id", "t.claimant_user_id"),
     "llm_calls": _rows("llm_calls", "t.id::text", "t.org_id", "t.user_id", where="t.task = 'rls.fixture'"),
+    # revision 0003: the tracker's rows belong to their engagement's developer and organisation
+    **{
+        table: Rows(
+            key=f"{table}.id::text",
+            owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+            f" FROM {table} t JOIN engagements e ON e.id = t.engagement_id",
+        )
+        for table in (
+            "engagement_events",
+            "engagement_endorsements",
+            "agreements",
+            "milestones",
+            "signatures",
+            "payment_records",
+        )
+    },
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).
