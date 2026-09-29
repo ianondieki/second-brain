@@ -39,12 +39,12 @@ Branch `feat/REQ-REM-01-reminders` (impl-backend). No schema change, no new envi
   of a submitted milestone (due its review window in BD after the `submit_milestone` event), the stage deadline of each
   awaited party; `off_track` past 7 days or at 2+ `request_changes` events; `repo_cold` only with a linked repo, in
   implementation, on a business day (never in Release 1). Side and terminal states are not assessed.
-  `whose_turn` mirrors P5's `state_machine.pending`. Thresholds are code constants (`DUE_SOON_BD` 2,
-  `OFF_TRACK_AFTER_DAYS` 7, `REWORK_LOOPS_OFF_TRACK` 2, `COLD_AFTER_BD` 3, `QUIET_AFTER_DAYS` 5).
+  Whose turn it is comes from P5's `state_machine.pending`; the thresholds are `policy.yaml`'s `reminders` section
+  (below).
 - **Facts** (`bridge/reminders/facts.py`): one query set for both reminders, read as the recipient under RLS: stage,
-  deadline and times on `app_clock_now()` as Nairobi dates, milestones of the signed agreement, signatures of the
-  stage's document since the stage began, the developer's contact confirmation, the recorded final payment, who
-  proposed the latest terms, submission dates and rework loops from the tracker's events, the developer's latest
+  deadline and times on `app_clock_now()` as Nairobi dates; the tracker's facts and the signed agreement's milestones
+  through P5's `bridge.engagements.service.load`, whose turn from `state_machine.pending`, each milestone's review date
+  from `history.review_due_dates`, rework loops from `sm.Command.REQUEST_CHANGES` events; the developer's latest
   action (event, non-automatic endorsement or signature), the developer's drafts (5 newest).
 - **Nudge** (`bridge/reminders/nudge.py`, `render.py`, `templates/em7.html.j2`): Needs you (open milestones due within
   14 days, else the stage's action), Waiting on the other party, Health with one-line reasons, Drafts not published,
@@ -86,10 +86,9 @@ retries), `integration/reminders/test_health_agreement.py` (AC-REM-3), `integrat
 **Open (for the orchestrator).**
 
 1. `send_after_hour` per user needs a column (db-migrations); every developer uses 07:30 EAT meanwhile.
-2. Thresholds and start times are code constants until P5's `backend/config/policy.yaml` merges; then a `reminders:`
-   section there. `whose_turn` should then call P5's `state_machine.pending`/`whose_turn` instead of the mirror.
-3. The facts read P5's command names `submit_milestone` and `request_changes` (payload `milestone_id`): keep them
-   stable, or change `facts.py` with them.
+2. Done after P5 merged (see below): the thresholds and start times are in `policy.yaml`; whose turn is
+   `state_machine.pending`.
+3. Done: the facts use P5's `sm.Command` names and `history.review_due_dates`; the facts test writes them from the enum.
 4. Each 15-minute run lists every active user and binds each (RLS allows no cross-tenant listing); fine for the
    prototype; later a SECURITY DEFINER list of candidates (db-migrations) or a per-day skip.
 5. docs/spec/09 says reminder wording is a nightly batch: the prototype words each nudge when it is sent (free slots
@@ -145,4 +144,20 @@ docs/spec/09's 100% factual consistency; free wording returns with the REQ-EVAL-
 - `6f8abf0`: `bridge/reminders/grounding.py` and `unit/reminders/test_grounding.py` removed (nothing used them: a
   removed feature, not a skipped test). The round-1 notes above on the allowlist describe code that is gone.
 - THREAT_MODEL row "Reminder wording misstates milestone status" updated.
+
+## After P5 merged (2026-09-29)
+
+- `07778a4`: the integration branch (P5 tracker, P8 My Ideas) merged in; conflicts in `bridge/jobs/app.py`
+  `IMPORT_PATHS` and its assertion, both sides kept (`bridge.jobs.notifications`, `bridge.jobs.reminders`).
+- `a7770ed` (red), `3b12693`: facts through `bridge.engagements.service.load` and `state_machine.pending` (docs/spec/06
+  6.9: the only definition); the mirrored `health.whose_turn` table and its unit tests are removed. A reopened
+  negotiation, whose latest version is final, now awaits new terms from either party. The walk test helper names the
+  sent NDA and the accepted delivery's certificate in their events as P5's commands do.
+- `4d88143`: `history._review_due` became public `review_due_dates`, which the
+  reminders call instead of their own computation (equivalent); a rename in `engagements/`, no behaviour change.
+- `7930615` (red), `a4ac6dc`: `backend/config/policy.yaml` section `reminders` (due_soon_bd 2, off_track_after_days 7,
+  rework_loops_off_track 2, cold_after_bd 3, quiet_after_days 5, upcoming_days 14, developer_send_after "07:30",
+  organisation_send_after "08:30"), loaded by `bridge/reminders/thresholds.py` and validated like P5's loader
+  (`PolicyError`); `unit/reminders/test_thresholds.py`.
+- `f1ba9ad`: the facts test writes P5's command names from `sm.Command`.
 
