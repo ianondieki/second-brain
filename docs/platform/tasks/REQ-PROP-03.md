@@ -61,8 +61,12 @@ API only (the picker screen is P8). Branch `feat/REQ-PROP-03-pitch`.
     `async def open_engagement(db, *, developer_id, proposal_id, version_id, org_id, tag_id): try: return (await
     commands.open_engagement_for_tag(db, tag_id)).id` / `except commands.OpenRefused as exc: raise ApiError(409,
     "tag_conflict", exc.message) from exc` (the Pitch's own checks make `engagement_exists` a lost race only).
-  - P3 plugs `bridge.proposals.grants.grant_on_tag` (same signature: `(db, *, owner_id, proposal_id, org_id) -> UUID |
-    None`) into `default_hooks()` and deletes `grant_nothing_until_p3` (today: no grant, fail closed).
+  - P3's `bridge.proposals.grants.grant_on_tag` (`(db, *, owner_id, proposal_id, org_id) -> UUID | None`) is plugged
+    in since P3 merged (the interim no-grant is gone): a delivered tag gets an active `auto_tagged` grant under the
+    default policy. `integration/proposals/test_pitch_tier2.py` proves the whole path: before the Pitch the E2
+    reviewer who meets every other condition is refused (`grant_required`); after it they accept the Evaluation NDA
+    and read the marked Tier-2 page (flag on, one `document_views` row); the E1 and E0 tags of the same Pitch have no
+    grant and the E1 reviewer is refused (`org_not_e2`). Red against the no-grant hook, green now.
 - Tests: `integration/proposals/test_tags.py` (`test_mixed_tags` AC-PROP-1/a with the EM1 clause,
   `test_a_second_pitch_sends_its_own_em1`, `test_duplicate_org_409` AC-PROP-7, `test_tag_requires_d1` AC-IP-5,
   `test_what_cannot_be_pitched`, `test_a_held_tag_can_be_withdrawn_and_a_delivered_one_cannot`,
