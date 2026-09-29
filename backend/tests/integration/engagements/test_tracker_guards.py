@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.auth import totp
 from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
+from bridge.engagements import commands
 from bridge.engagements import state_machine as sm
 from bridge.engagements.commands import OpenRefused, open_engagement_for_tag
 from bridge.engagements.models import Engagement
@@ -303,3 +304,64 @@ async def test_open_engagement_for_tag_opens_one_engagement_per_delivered_tag(
         with pytest.raises(OpenRefused) as withdrawn:
             await open_engagement_for_tag(db, held.tag)
         assert withdrawn.value.code == "tag_not_delivered"
+
+
+@pytest.mark.parametrize(
+    ("change", "code"),
+    [
+        ("UPDATE proposals SET moderation_state = 'held' WHERE id = :proposal", "proposal_not_published"),
+        ("UPDATE proposals SET status = 'hidden', hidden_at = now() WHERE id = :proposal", "proposal_not_published"),
+        ("UPDATE organizations SET suspended_at = now() WHERE id = :org", "org_unavailable"),
+        ("UPDATE organizations SET delisted_at = now() WHERE id = :org", "org_unavailable"),
+        ("UPDATE organizations SET verification = 'e1' WHERE id = :org", "org_unavailable"),
+        (
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (gen_random_uuid(), :org, :developer,"
+            " '{reviewer}')",
+            "own_organisation",
+        ),
+    ],
+)
+async def test_open_engagement_for_tag_refuses_with_a_code(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, change: str, code: str
+) -> None:
+    """Review P5, MAJOR 2: every refusal is an ``OpenRefused`` with a code (never a raw database error, a 500 through
+    P4), and the caller's transaction stays usable."""
+    world = await build(owner_engine)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text(change), {"proposal": world.proposal, "org": world.org, "developer": world.developer})
+    async with create_session_factory(app_engine)() as db:
+        await bind_tenant(db, user_id=world.developer)
+        with pytest.raises(OpenRefused) as refused:
+            await open_engagement_for_tag(db, world.tag)
+        assert refused.value.code == code
+        assert (await db.execute(text("SELECT 1"))).scalar_one() == 1  # still usable
+
+
+async def test_open_engagement_for_tag_maps_the_databases_refusals(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The database's backstop behind the application's checks: a concurrent duplicate (23505, the unique index) is
+    ``engagement_exists``; an insert the policy refuses (42501) is ``refused``."""
+    world = await build(owner_engine)
+    await open_engagement(app_engine, world)
+
+    async def none(*_: object) -> None:
+        return None
+
+    monkeypatch.setattr(commands, "_existing_engagement", none)  # the other request committed after our check
+    async with create_session_factory(app_engine)() as db:
+        await bind_tenant(db, user_id=world.developer)
+        with pytest.raises(OpenRefused) as duplicate:
+            await open_engagement_for_tag(db, world.tag)
+        assert duplicate.value.code == "engagement_exists"
+        assert (await db.execute(text("SELECT 1"))).scalar_one() == 1
+
+    suspended = await build(owner_engine)
+    monkeypatch.setattr(commands, "_organisation_refusal", none)  # a check that let an unavailable org through
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE organizations SET suspended_at = now() WHERE id = :o"), {"o": suspended.org})
+    async with create_session_factory(app_engine)() as db:
+        await bind_tenant(db, user_id=suspended.developer)
+        with pytest.raises(OpenRefused) as policy:
+            await open_engagement_for_tag(db, suspended.tag)
+        assert policy.value.code == "refused"
