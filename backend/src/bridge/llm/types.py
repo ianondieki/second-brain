@@ -182,7 +182,9 @@ class BudgetStatus:
 
 @dataclass(frozen=True)
 class Result[OutputT: LLMOutput]:
-    """``parsed`` is the validated output. ``usage`` and ``cost_usd`` add up every attempt, including retries."""
+    """``parsed`` is the validated output. ``usage`` and ``cost_usd`` add up every attempt, including retries.
+    ``demo_fallback`` is true when no model wrote ``parsed`` (a local run's deterministic fake, D-37;
+    ``bridge.llm.demo_fallback``), with the reason in ``fallback_reason``."""
 
     parsed: OutputT
     stop_reason: str
@@ -193,3 +195,5 @@ class Result[OutputT: LLMOutput]:
     attempts: int
     trace_id: str
     budget: BudgetStatus = field(default_factory=BudgetStatus)
+    demo_fallback: bool = False
+    fallback_reason: str | None = None
