@@ -111,8 +111,8 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Decision:
 
 ### D-39 · Legal and privacy wording used by the prototype (P2, P3, P5; REQ-PROV-05, REQ-PROV-03, REQ-ENG-05, REQ-LEG-01)
-- Why: the prototype shows text that is near-legal or a privacy disclosure. Agents do not write legal text (CLAUDE.md), so each is a `[[COPY-REVIEW]]` draft or a seeded placeholder: (1) the three ownership attestations at publish (`backend/src/bridge/proposals/attestations.py`, P2; each acceptance stores the text's version and SHA-256, so a later wording is a new version); (2) the viewer-logging notice shown when an organisation member accepts the Evaluation NDA (P3; docs/spec/10 requires it, recorded in `lawful_basis.md` later); (3) the cover text around the seeded mutual NDA template in the tracker (P5); (4) the seeded Evaluation NDA and mutual NDA templates themselves (Phase 1 placeholders headed "DRAFT — NOT LEGAL ADVICE"). (5) the line above the Evaluation NDA on the organisation's proposal page, which states the legal effect of accepting ("You accept it in your own name and for {org}…", `frontend/locales/en.json` `orgProposal.ndaLead`, P8 part 3). Broadened on 2026-09-29 from the attestations alone, after the orchestrator's re-check.
-- Options: (a) keep the drafts for the local prototype only and have all five reviewed with the G2 legal pack before any hosted use; (b) replace any of them now with wording you supply; (c) have an advocate draft them now.
+- Why: the prototype shows text that is near-legal or a privacy disclosure. Agents do not write legal text (CLAUDE.md), so each is a `[[COPY-REVIEW]]` draft or a seeded placeholder: (1) the three ownership attestations at publish (`backend/src/bridge/proposals/attestations.py`, P2; each acceptance stores the text's version and SHA-256, so a later wording is a new version); (2) the viewer-logging notice shown when an organisation member accepts the Evaluation NDA (P3; docs/spec/10 requires it, recorded in `lawful_basis.md` later); (3) the cover text around the seeded mutual NDA template in the tracker (P5); (4) the seeded Evaluation NDA and mutual NDA templates themselves (Phase 1 placeholders headed "DRAFT — NOT LEGAL ADVICE"). (5) the line above the Evaluation NDA on the organisation's proposal page, which states the legal effect of accepting ("You accept it in your own name and for {org}…", `frontend/locales/en.json` `orgProposal.ndaLead`, P8 part 3). (6) the per-session consent text for the submission assistant (P13: Tier-2 text goes to an LLM for this login session only; a new consent text version). (7) the attestation line in the tracker's decline form (`frontend/locales/en.json` `trackerActions.decline.attest`, P8 part 5); unlike (1), the API stores only a boolean (`DeclineBody.attested`), not the text's version or hash, so a later wording change cannot be traced (backend follow-up on REQ-ENG-03). Broadened on 2026-09-29 from the attestations alone, after the orchestrator's re-check.
+- Options: (a) keep the drafts for the local prototype only and have all seven reviewed with the G2 legal pack before any hosted use; (b) replace any of them now with wording you supply; (c) have an advocate draft them now.
 - Recommended default: (a); nothing is hosted (D-36), each text is versioned and hashed where it is accepted, and the demo labels the templates as drafts.
 - Blocks: nothing in the prototype; any hosted release.
 - Decision:
@@ -145,6 +145,27 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
   - (d) With any of these, dispatch `codeql.yml` on each feature branch before merging, so a new finding is caught before it lands.
 - Recommended default: (a) + (d). Until you decide, the orchestrator does (d) only. It does not touch the gate or its configuration, does not rename test markers (that would hide findings, not fix them), and blocks a merge on any CodeQL finding outside these eight.
 - Blocks: AC-SEC-4 on the integration head (Phase 8 audit, any hosted release); nothing the prototype does.
+- Decision:
+
+### D-43 · Scout runs without a database role of its own: the "no Tier-2 grant" part of REQ-SCOUT-02 (P10, prototype)
+- Why: REQ-SCOUT-02 (MUST) says the scout's database role has no Tier-2 grant. In the prototype the worker connects as `bridge_app`, which may `SET ROLE tier2_reader` (revision 0002); a NOLOGIN scout role does not help because `SET ROLE` is checked against the session user. Real isolation needs a separate login role and database URL for the scout worker (another container or process in the 4 GB demo). Found by the M2 planning pass (`docs/platform/prototype-m2-plan.md`).
+- Options: (a) prototype deviation: the scout code never reads Tier 2, enforced by an import-lint test (`bridge.matching` never uses `as_role` or anything under Tier 2) and a prompt-capture red-team test (no Tier-2 marker ever reaches the scout's LLM input); restore the separate role in Phase 4; (b) build the separate login role and worker URL now (a second worker process, more memory, a new secret); (c) drop the LLM rationale from the prototype scout.
+- Recommended default: (a); the prototype is local, the scout reads only Tier 1 and metadata, and both tests fail if that changes.
+- Blocks: nothing in the prototype; REQ-SCOUT-02's Phase 4 exit.
+- Decision:
+
+### D-44 · Plan prices shown by the prototype's plans page (P14; G3 pending)
+- Why: the plans page and the simulated M-Pesa checkout (P14) show `backend/config/plans.yaml`, whose KES prices are placeholders until G3. Pricing text is a stop condition.
+- Options: (a) show the placeholders labelled "Sample prices, not final" `[[COPY-REVIEW]]`, with the checkout labelled "Simulated M-Pesa" (D-36); (b) hide prices and show plan names and limits only; (c) you supply prices now.
+- Recommended default: (a).
+- Blocks: nothing in the prototype; G3 for any hosted release.
+- Decision:
+
+### D-45 · Research problem cards that name an organisation (P11; spec 06 6.5)
+- Why: some saved excerpts name companies (for example Safaricom, Airtel, Starlink). Spec 06 6.5 requires an official source and a defamation checklist for any card naming an organisation; the checklist is legal-adjacent text agents do not write. D-38 covers storing the excerpts only.
+- Options: (a) the research job discards a draft that names an organisation unless it cites an official excerpt; the approval screen shows a plain checklist placeholder `[[COPY-REVIEW]]` and the named organisations, and the admin approves; (b) discard every draft that names an organisation; (c) you supply the checklist wording now.
+- Recommended default: (a) for the local prototype; the checklist wording goes with the G2 legal pack.
+- Blocks: nothing in the prototype; any hosted release.
 - Decision:
 
 ## Decided

@@ -1,0 +1,159 @@
+"""The demo seed: ``python -m bridge.seed --demo`` (P9 ``make demo``; REQ-FND-02, REQ-DIR-02).
+
+Loads ``bridge.seed.demo.data`` on top of the reference data: two demo developers, four fixture organisations with
+their seats, four published proposals (Tier 1 and Tier 2, each registered with a certificate id), the problems they
+describe or link, their tags (delivered to the E2 fixtures, held for the E1 and E0 ones) and the tracker at
+``SUBMITTED``, ``INTEREST_CONFIRMED``, ``NEGOTIATION`` and ``CLOSED``. Dev and test only
+(``demo_refusal``): staging and production refuse it, and so does an ``APP_ENV`` left to the settings default.
+
+Everything that has an application path goes through it, in process: the accounts through ``create_account`` (what
+signup runs), D1 through the phone-code routes with the fake SMS provider, TOTP through ``POST /api/auth/totp/confirm``
+(only the random secret of enrolment is replaced by the account's fixed demo secret), members added by the
+organisation's owner under Row-Level Security, the Master Enterprise Terms accepted by the signatory under RLS, and
+drafts, publishing (which queues the T2.4 registration), pitching and the Evaluation NDA through the API. The rest has
+no application path yet and is written as the owner role, as staff would: ``users.demo_account`` (D-37), D2, the
+organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. The engagements
+opened by the Pitch are then driven through the tracker API to a few stages (``bridge.seed.demo.engagements``), each
+party signed in with the demo password and its TOTP code. Every account holds the reminders consent (P6).
+
+Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
+would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
+changes nothing. On a database the demo was seeded into before, a step the app refuses because someone used the demo
+(a password or second factor changed, a proposal deleted, an engagement taken on or ended) is left as it is with one
+line in the report instead of failing the start (``guarded``); only a new database treats refusals as errors. A
+database seeded under other keys (``DATA_ENCRYPTION_KEY``) is refused with a pointer to ``make demo-reset``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable
+from contextlib import AsyncExitStack
+
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from bridge.config import Settings
+from bridge.seed.demo.accounts import (
+    accept_master_terms,
+    enrol_totp,
+    ensure_developer,
+    ensure_org,
+    owner_facts,
+    raise_to_d2,
+    verify_phone,
+)
+from bridge.seed.demo.data import (
+    DEVELOPERS,
+    ENGAGEMENTS,
+    EXPORTED_PROPOSAL,
+    ORGS,
+    PROPOSALS,
+    DemoDeveloper,
+    all_accounts,
+)
+from bridge.seed.demo.engagements import drive
+from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
+from bridge.seed.demo.runtime import (
+    Actors,
+    DemoKeysChanged,
+    DemoReport,
+    DemoRuntime,
+    DemoSeedError,
+    DemoSeedRefused,
+    _niche_ids,
+    _one,
+    demo_refusal,
+    ensure_demo_allowed,
+    guarded,
+    in_process_app,
+    totp_code,
+)
+
+__all__ = [
+    "DemoKeysChanged",
+    "DemoReport",
+    "DemoRuntime",
+    "DemoSeedError",
+    "DemoSeedRefused",
+    "demo_refusal",
+    "ensure_demo_allowed",
+    "exported_cert_id",
+    "registration_status",
+    "seed_demo",
+    "totp_code",
+]
+
+
+async def seed_demo(
+    settings: Settings, *, owner_engine: AsyncEngine, app_engine: AsyncEngine, runtime: DemoRuntime | None = None
+) -> DemoReport:
+    """Load the demo dataset (idempotent). ``owner_engine`` logs in as bridge_owner, ``app_engine`` as bridge_app."""
+    ensure_demo_allowed(settings)
+    runtime = runtime or DemoRuntime.from_settings(settings)
+    report = DemoReport()
+    niches = await _niche_ids(owner_engine)
+    missing = sorted(({o.niche for o in ORGS} | {p.niche for p in PROPOSALS}) - set(niches))
+    if missing:
+        raise DemoSeedError(f"niches {missing} are missing: run the reference seed (python -m bridge.seed) first")
+    strict = not await _seeded_before(owner_engine)  # a new database: every refusal is an error
+    async with in_process_app(settings, app_engine, runtime) as (app, factory), AsyncExitStack() as stack:
+
+        async def step(what: str, awaitable: Awaitable[None]) -> None:
+            await guarded(report, strict=strict, what=what, step=awaitable)
+
+        for dev in DEVELOPERS:
+            await step(dev.email, ensure_developer(owner_engine, factory, settings, dev, report))
+        for org in ORGS:
+            await step(org.legal_name, ensure_org(owner_engine, factory, settings, org, report))
+        await step("owner-role facts", owner_facts(owner_engine, niches, report))
+        for email in list(report.users):
+            await step(f"TOTP of {email}", enrol_totp(app, owner_engine, factory, settings, email, report))
+        actors = Actors(stack, app, owner_engine)  # each signs in (password, then TOTP) on first use
+        for dev in DEVELOPERS:
+            if dev.email in report.users:
+                await step(f"{dev.email} verification", _verify(owner_engine, actors, dev, runtime, report))
+        for org in ORGS:
+            await step(f"{org.legal_name} terms", accept_master_terms(owner_engine, factory, org, report))
+        for proposal in PROPOSALS:
+            if proposal.owner in report.users:
+                await step(proposal.key, ensure_proposal(owner_engine, actors, proposal, niches, report))
+        for proposal in PROPOSALS:
+            await step(f"{proposal.key} pitch", pitch(owner_engine, actors, proposal, report))
+        await step("Tier-2 view", record_view(owner_engine, actors, settings, report))
+        for plan in ENGAGEMENTS:
+            await step(f"{plan.proposal} with {plan.org}", drive(owner_engine, actors, settings, plan, report))
+    return report
+
+
+async def _seeded_before(owner_engine: AsyncEngine) -> bool:
+    """Whether any demo account exists already: then the demo may have been used, and the run only tops it up."""
+    emails = [email for email, _, _ in all_accounts()]
+    return await _one(owner_engine, "SELECT 1 FROM users WHERE email = ANY(:emails) LIMIT 1", emails=emails) is not None
+
+
+async def _verify(
+    owner: AsyncEngine, actors: Actors, dev: DemoDeveloper, runtime: DemoRuntime, report: DemoReport
+) -> None:
+    await verify_phone(owner, actors, dev, runtime.sms_provider, report)
+    await raise_to_d2(owner, dev, report)
+
+
+async def exported_cert_id(owner_engine: AsyncEngine) -> str | None:
+    """The certificate id of the exported demo proposal (E2E_VERIFY_CERT_ID), or None before the demo seed ran."""
+    row = await _one(
+        owner_engine,
+        "SELECT v.cert_id FROM proposals p JOIN users u ON u.id = p.owner_id"
+        " JOIN proposal_versions v ON v.id = p.current_version_id"
+        " WHERE u.email = :email AND p.status = 'published' AND EXISTS (SELECT 1 FROM proposal_versions f"
+        " WHERE f.proposal_id = p.id AND f.version_no = 1 AND f.title = :title)",
+        email=EXPORTED_PROPOSAL.owner,
+        title=EXPORTED_PROPOSAL.title,
+    )
+    return None if row is None else str(row.cert_id)
+
+
+async def registration_status(owner_engine: AsyncEngine, cert_id: str) -> str | None:
+    """How far the T2.4 registration of a certificate got (hashed, signed, timestamped), or None before hashing."""
+    row = await _one(
+        owner_engine, "SELECT status::text AS status FROM provenance_records WHERE cert_id = :c", c=cert_id
+    )
+    return None if row is None else str(row.status)

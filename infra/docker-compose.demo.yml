@@ -1,0 +1,61 @@
+# The local demo (P9 `make demo`; REQ-FND-02): an override of docker-compose.dev.yml, always used as its second file:
+#   docker compose --env-file infra/demo/.env -f infra/docker-compose.dev.yml -f infra/docker-compose.demo.yml up
+# `make demo` (infra/demo/demo.py) runs exactly that, after writing the two throwaway secret files on first run.
+#
+# What changes from the dev stack: its own project (containers and volumes named bridge-demo-*, so `make demo-reset`
+# never touches the dev stack's data); APP_ENV=dev with both feature flags on, the fake attachment scanner (no ClamAV,
+# D-36) and the fake embedder (no model download); secrets from infra/demo/backend.env (generated, gitignored) on top
+# of backend/.env (where the owner puts the LLM variables); the migrate step also loads the demo seed
+# (`python -m bridge.seed --demo`); a memory limit per service so the stack fits Docker Desktop's 4 GB (measured
+# figures: README "Run the demo"). The backend image is the dev stack's (WITH_DEV_TOOLS=true: the test-clock router and the demo seed).
+name: bridge-demo
+
+x-demo-env: &demo-env
+  APP_ENV: dev
+  FEATURE_TIER2_ENABLED: "true"
+  FEATURE_DEALS_ENABLED: "true"
+  ATTACHMENT_SCANNER: fake
+  EMBEDDER: fake
+  SMS_PROVIDER: fake
+  PUBLIC_BASE_URL: http://localhost:3000
+
+services:
+  postgres:
+    mem_limit: 512m
+
+  mailpit:
+    mem_limit: 128m
+
+  s3:
+    mem_limit: 384m
+    # Explicit volume slots: by default SeaweedFS derives them from the free disk (1 GB volumes, seven per bucket),
+    # so a Docker disk with less than about 21 GB free refuses the third bucket's first upload. 64 slots of 128 MB.
+    command: ["server", "-s3", "-dir=/data", "-ip.bind=0.0.0.0", "-master.volumeSizeLimitMB=128", "-volume.max=64"]
+
+  migrate:
+    # Later files win: the generated demo secrets override any in backend/.env, so the demo database always opens
+    # with the keys it was seeded under (TOTP secrets, Tier-2 data keys). backend/.env is optional here.
+    env_file: !override
+      - {path: ../backend/.env, required: false}
+      - {path: demo/backend.env, required: true}
+    environment: *demo-env
+    mem_limit: 512m
+    # Buckets and the signing key before the demo seed: publishing queues registrations the worker then runs.
+    command: ["sh", "-c", "alembic upgrade head && python -m bridge.storage ensure-buckets && python -m bridge.provenance register-key --if-configured && python -m bridge.seed --demo"]
+
+  api:
+    env_file: !override
+      - {path: ../backend/.env, required: false}
+      - {path: demo/backend.env, required: true}
+    environment: *demo-env
+    mem_limit: 512m
+
+  worker:
+    env_file: !override
+      - {path: ../backend/.env, required: false}
+      - {path: demo/backend.env, required: true}
+    environment: *demo-env
+    mem_limit: 384m
+
+  web:
+    mem_limit: 384m

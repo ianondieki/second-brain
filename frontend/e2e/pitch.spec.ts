@@ -43,7 +43,9 @@ function pitchRow(page: Page, name: string): Locator {
 }
 
 test.describe("a D1 developer with a published idea", () => {
-  test.skip(!OWNER_DATABASE_URL, "needs E2E_DATABASE_OWNER_URL for D1 and the E2 organisation");
+  test.beforeAll(() => {
+    expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL raises the developer to D1 and verifies the E2 organisation").toBeTruthy();
+  });
   test.setTimeout(150_000);
 
   let email = "";

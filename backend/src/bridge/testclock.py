@@ -7,7 +7,7 @@ which ``python -m bridge.seed`` does for an explicit ``APP_ENV`` of dev, test or
 and evidence time follows ``app_clock_now()``, so moving the clock moves them all, for the API and the worker alike.
 
 Three fences keep it out of production: this module is deleted from the backend image unless the image is built with
-``WITH_TEST_CLOCK=true`` (``backend/Dockerfile``; the dev stack sets it), ``bridge.main`` mounts the router only when
+``WITH_DEV_TOOLS=true`` (``backend/Dockerfile``; the dev stack sets it), ``bridge.main`` mounts the router only when
 ``APP_ENV`` is not production and the module exists, and a production database never has the clock enabled. In
 staging (real-looking data, several users) only staff admin may use it; in dev and test any signed-in user may.
 The routes are left out of the OpenAPI document.
