@@ -18,6 +18,7 @@ of this text), and no "signed outside the platform" path for assignments and exc
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -54,6 +55,22 @@ class MilestoneTerms:
     amount_kes_minor: int
     due_date: date
     review_window_bd: int
+
+
+# A C0 control, DEL, NEL or a Unicode line or paragraph separator inside a value would start a new line of the signed
+# text (or rewrite one on a terminal): each is written as a visible escape instead (security review P5, MINOR 1).
+_BREAKS = re.compile("[\x00-\x1f\x7f\x85\u2028\u2029]")
+
+
+def _inline(value: str) -> str:
+    """A party's words on one line: controls and line breaks escaped (``\\n``, ``\\x1b``, ``\\u2028``)."""
+
+    def escape(match: re.Match[str]) -> str:
+        char = match.group()
+        named = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}.get(char)
+        return named or (f"\\x{ord(char):02x}" if ord(char) < 0x100 else f"\\u{ord(char):04x}")
+
+    return _BREAKS.sub(escape, value)
 
 
 def _lines(*lines: str) -> str:
@@ -110,13 +127,13 @@ def agreement(
         f"Agreement: {agreement_id} version {version}",
         f"Engagement: {engagement_id}",
         f"IP terms: {ip_terms.value} ({IP_TERMS_LABELS[ip_terms]})",
-        f"Exclusivity: {exclusivity.strip() if exclusivity else 'none'}",
+        f"Exclusivity: {_inline(exclusivity.strip()) if exclusivity else 'none'}",
         f"Deemed acceptance: {clause}",
         f"Milestones: {len(milestones)}",
     ]
     for m in sorted(milestones, key=lambda m: m.seq):
         lines.append(
-            f"M{m.seq}: {m.deliverable.strip()} | {kes(m.amount_kes_minor)} | due {m.due_date.isoformat()}"
+            f"M{m.seq}: {_inline(m.deliverable.strip())} | {kes(m.amount_kes_minor)} | due {m.due_date.isoformat()}"
             f" | review window {m.review_window_bd} business days"
         )
     lines.append("The platform records payments the parties make; it never holds or moves money.")

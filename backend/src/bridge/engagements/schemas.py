@@ -31,6 +31,9 @@ from bridge.models.enums import (
 )
 
 NO_NUL = r"^[^\x00]*$"  # PostgreSQL text cannot hold NUL
+# One line of text: no C0 control (line breaks included) and no DEL, so a party's words cannot forge a line of a
+# signed text or a record (security review P5, MINOR 1).
+ONE_LINE = r"^[^\x00-\x1f\x7f]*$"
 MAX_KES_MINOR = 10**13  # KES 100 billion: a typo guard, far above any engagement
 
 
@@ -54,7 +57,7 @@ class DeclineBody(CommandBody):
 
 
 class MilestoneBody(BaseModel):
-    deliverable: str = Field(min_length=1, max_length=500, pattern=NO_NUL)
+    deliverable: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
     amount_kes_minor: int = Field(gt=0, le=MAX_KES_MINOR)
     due_date: date
     review_window_bd: int = Field(default=5, ge=1, le=60)
@@ -63,14 +66,14 @@ class MilestoneBody(BaseModel):
 class TermsBody(CommandBody):
     ip_terms: IpTerms
     deemed_acceptance_days: int = Field(ge=0, le=90, description="0: milestones are never deemed accepted")
-    exclusivity: str | None = Field(default=None, max_length=500, pattern=NO_NUL)
+    exclusivity: str | None = Field(default=None, max_length=500, pattern=ONE_LINE)
     milestones: list[MilestoneBody] = Field(min_length=1, max_length=20)
 
 
 class PaymentBody(CommandBody):
     amount_kes_minor: int = Field(gt=0, le=MAX_KES_MINOR)
     method: PaymentMethod
-    reference: str | None = Field(default=None, max_length=64, pattern=NO_NUL)
+    reference: str | None = Field(default=None, max_length=64, pattern=ONE_LINE)
     paid_on: date
 
 
