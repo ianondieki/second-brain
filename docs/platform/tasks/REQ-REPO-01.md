@@ -377,12 +377,19 @@ Built (F4/F5, organisation; REQ-PROP-03's Inbox with this card's NDA step and Ti
 - JS (production build, `scripts/js-budget.mjs`, until network idle): `/org` and `/org/inbox` 140,046 B; the proposal
   page in every state 142,702 B (budget 150,000).
 
-Follow-ups, not built:
+Fixed on this branch: the render's "Verify this record" link now opens a new top-level tab (`target="_blank"`,
+`rel="noopener noreferrer nofollow"`; the frame's sandbox lets popups escape), since `/verify` refuses to be framed
+(`X-Frame-Options: DENY`) (`unit/proposals/test_render.py::test_the_verify_link_opens_outside_the_frame`, red first).
 
-- The render's "Verify this record" link has no `target="_blank"`: inside the frame it navigates to `/verify/…`, which
-  the web app serves with `X-Frame-Options: DENY`, so the frame shows a blocked page (backend `render.py`).
-- A refusal between the NDA step and the frame (a grant revoked meanwhile) shows the API's JSON error inside the frame;
-  the page shows the right sentence on the next load.
-- The stage chip becomes the tracker link (`/org/engagements/{id}`) when REQ-ENG-03's screen exists; the empty
-  Inbox's action becomes "Set up Scout Agent" (docs/spec/07 item 4) once scouts exist.
-- axe cannot run inside the script-less sandboxed frame; the e2e check of the viewing state waits for it (about 30 s, measured).
+Follow-ups (P8 part 3, not built):
+
+1. A refusal between the NDA step and the frame (for example a grant revoked meanwhile) shows the API's JSON error
+   inside the frame; the page shows the right sentence on the next load. Fix: the page checks with a cheap Tier-2
+   probe before framing, or the render route answers refusals as a small HTML page.
+2. The empty Inbox's action is "Back to home"; docs/spec/07 item 4 wants "Set up Scout Agent" once scouts exist.
+3. The stage chip names the stage only; it becomes the link to the engagement's tracker when REQ-ENG-03's
+   organisation screen lands (done by the tracker screen, not here).
+4. axe cannot run inside the script-less sandboxed frame, so the e2e axe check of the viewing state waits about 30 s
+   (measured) before it passes; exclude the frame in `checkScreen` (an option) if suite time matters.
+5. `e2e/support/org-scene.ts` repeats the D1 SQL of `e2e/support/verification.ts`; fold them into one helper.
+6. Stage labels on the organisation side reuse `ideaFields.maturityValue.*`: renaming those keys changes both sides.
