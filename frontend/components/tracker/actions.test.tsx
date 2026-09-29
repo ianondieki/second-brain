@@ -263,12 +263,12 @@ describe("forms for commands with a body", () => {
       ],
       myUserId: "u-rita",
     });
-    fireEvent.click(screen.getByRole("button", { name: "Approve to proceed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve to proceed (non-binding)" }));
     await waitFor(() => expect(screen.getByLabelText("Contact person")).toBeTruthy());
     fireEvent.change(screen.getByLabelText("Contact person"), { target: { value: "u-otieno" } });
     fireEvent.change(screen.getByLabelText("How they will make contact"), { target: { value: "phone" } });
     fireEvent.change(screen.getByLabelText("Contact by"), { target: { value: "2026-10-01" } });
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Approve to proceed" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Approve to proceed (non-binding)" })));
     expect(runImpl.mock.calls[0][0]).toEqual({
       path: "/api/engagements/{engagement_id}/approve",
       params: { engagement_id: engagement.id },

@@ -143,7 +143,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await step(orgPage, "Start the review");
     await expect(orgPage.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");
 
-    await formStep(orgPage, "Approve to proceed", async () => {
+    await formStep(orgPage, "Approve to proceed (non-binding)", async () => {
       await expect(orgPage.getByLabel("Contact person")).toHaveValue(/.+/);
       await orgPage.getByLabel("How they will make contact").selectOption("email");
     });
