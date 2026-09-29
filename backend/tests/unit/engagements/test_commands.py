@@ -20,12 +20,14 @@ from bridge.engagements import state_machine as sm
 from bridge.engagements.policy import get_policy
 from bridge.errors import ApiError
 from bridge.models.enums import (
+    EndorsementMethod,
     EngagementActorRole,
     EngagementParty,
     EngagementState,
     IpTerms,
     PaymentMethod,
     SignatureDocumentKind,
+    StepUpMethod,
 )
 
 NOW = datetime(2026, 10, 5, 9, tzinfo=UTC)
@@ -202,3 +204,55 @@ def test_database_refusals_map_to_404_403_and_409() -> None:
     assert service.db_refusal(refusal("42601")) is None  # a bug: re-raised
     error = service.api_error(sm.Conflict("illegal_transition", "no"))
     assert (error.status_code, cast(dict[str, Any], error.detail)["code"]) == (409, "illegal_transition")
+
+
+def test_every_endorsing_and_signing_row_needs_the_step_up() -> None:
+    """Security review P5, MINOR 3: the method recorded for an endorsement or signature is always the step-up this
+    request verified, so every row that endorses or signs must require it."""
+    for command, row in sm.TABLE.items():
+        if row.endorse is not None or command in sm.SIGNING_COMMANDS:
+            assert row.step_up, command
+
+
+class _Db:
+    def __init__(self) -> None:
+        self.added: list[object] = []
+
+    def add(self, row: object) -> None:
+        self.added.append(row)
+
+    async def flush(self) -> None:
+        return None
+
+
+@dataclass
+class _Engagement:
+    id: UUID = ID
+
+
+async def test_the_endorsement_method_is_the_verified_step_up() -> None:
+    party = service.Party(ID, cast(Any, None), sm.Actor(EngagementParty.DEVELOPER, sm.DEVELOPER), ID)
+    db = _Db()
+    for method, expected in (
+        (StepUpMethod.TOTP, EndorsementMethod.TOTP),
+        (StepUpMethod.PASSKEY, EndorsementMethod.PASSKEY),
+    ):
+        verified = step(
+            sm.Command.CONFIRM_CONTACT, db=db, party=cast(Any, party), engagement=_Engagement(), step_up=method
+        )
+        verified.party = cast(Any, _PartyWithUser(party))
+        await commands._endorse(verified, ID, EngagementState.CONTACT_MADE)
+        assert db.added[-1].method is expected  # type: ignore[attr-defined]
+    unverified = step(
+        sm.Command.CONFIRM_CONTACT, db=db, party=cast(Any, _PartyWithUser(party)), engagement=_Engagement()
+    )
+    with pytest.raises(RuntimeError, match="step-up"):
+        await commands._endorse(unverified, ID, EngagementState.CONTACT_MADE)
+
+
+class _PartyWithUser:
+    """A Party whose user id needs no session."""
+
+    def __init__(self, party: service.Party) -> None:
+        self.actor = party.actor
+        self.user_id = ID
