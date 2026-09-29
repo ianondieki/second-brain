@@ -24,7 +24,6 @@ import { ideaStatus } from "../../status";
 import { nicheTree, pickerPage } from "./data";
 import { PitchForm, type PickerGroup } from "./PitchForm";
 import {
-  MAX_BATCH,
   parsePickerQuery,
   pitchesLeft,
   pitchHref,
@@ -110,7 +109,6 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
 
   return header(
     <>
-      <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max: MAX_BATCH })}</p>
       <ClientStrings strings={await clientStrings(["pitch"])}>
         <PitchForm
           // A new search or page is a new form: choices come from the URL, nothing else carries over.

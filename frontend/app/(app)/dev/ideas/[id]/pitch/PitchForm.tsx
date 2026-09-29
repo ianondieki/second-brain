@@ -12,6 +12,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import { pitch as pitchCall } from "./calls";
 import {
   heldKey,
+  MAX_BATCH,
   pitchesLeft,
   pitchHref,
   selectionMax,
@@ -137,6 +138,7 @@ export function PitchForm({
   const left = pitchesLeft(cap);
   return (
     <>
+      <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max: MAX_BATCH })}</p>
       <p className="mt-3 text-ink" data-cap="">
         {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: cap.limit ?? 0 })}
       </p>
@@ -338,8 +340,8 @@ function PitchDone({
   const saved = result.tags.filter((tag) => heldKey(tag.status) !== null);
   const left = pitchesLeft(result.cap);
   return (
-    <section aria-labelledby="pitch-result" className="mt-8" data-pitch-result="">
-      <h2 id="pitch-result" ref={headingRef} tabIndex={-1} className="text-xl text-ink focus:outline-none">
+    <section aria-labelledby="pitch-result" className="mt-8 max-w-3xl" data-pitch-result="">
+      <h2 id="pitch-result" ref={headingRef} tabIndex={-1} className="text-lg text-ink focus:outline-none">
         {t("resultTitle")}
       </h2>
       <p className="mt-2 text-ink" data-cap="">
