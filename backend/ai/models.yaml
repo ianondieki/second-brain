@@ -121,3 +121,13 @@ tasks:
     fallback_model: null         # D-29; a failed call answers with the fixed fallback text
     fallback_effort: null
     free_slots: [1, 2, 3]
+  scout_fit_rationale:          # scout "why this matches" and a bounded fit score for the top matches (REQ-SCOUT-02, P10)
+    model: claude-sonnet-5       # docs/spec/09 "Scout fit scoring & rationale (<= 15)"; Tier 1 + metadata only (D-43)
+    effort: medium
+    max_tokens: 1024
+    batchable: false             # docs/spec/09 "Batch, cached rubric": the prototype asks per match, cached per scout and
+    confidential: true           # version (a proposal is matched once per scout), at most limits.model_top_n per run
+    purpose: tier1_only
+    fallback_model: null         # D-29; a failed call keeps the deterministic score and the code's "Matched on" line
+    fallback_effort: null
+    free_slots: [1, 2, 3]

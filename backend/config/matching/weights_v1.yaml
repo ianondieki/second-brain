@@ -1,0 +1,44 @@
+# Scout matching, version 1 (REQ-SCOUT-02; docs/spec/06 6.8 "deterministic = 50·cosine + 30·(niche/region/maturity/
+# budget match) + 10·tagged-this-org + 10·evidence"; final = 0.6·deterministic + 0.4·LLM). Loaded and validated by
+# bridge/matching/config.py: a missing or unknown key, or a value out of range, stops the scan (fail closed).
+#
+# Prototype deviation (prototype-m2-plan.md §6; the README lists it as simulated): the embedder is the fake, so a
+# cosine similarity would be meaningless. Its 50 points go to keyword overlap instead: the scout's include keywords
+# found in the proposal's Tier-1 teaser. Niche, county and maturity are hard filters (SQL), so the 30 "match" points
+# rate how closely the niche matches. Proposals carry no budget yet, so the budget band is recorded and not applied.
+version: 1
+
+deterministic:            # points, summing to 100
+  keywords: 50            # include keywords found in the Tier-1 teaser (replaces 50·cosine)
+  niche: 30               # the scout's niche itself, or a child of a parent niche the scout chose
+  tagged: 10              # the developer tagged this organisation (a delivered tag)
+  evidence: 10            # Tier-1 evidence: impact claims written (half) and a linked published problem (half)
+
+keywords:
+  saturation: 2           # include keywords found for full marks (a scout listing fewer needs all of them)
+  none_listed: 1.0        # the keyword share when the scout lists no include keywords (the niche decides alone)
+
+niche:
+  exact: 1.0              # the proposal's niche is one the scout chose
+  via_parent: 0.7         # the proposal's niche is a child of a parent niche the scout chose
+
+final:
+  model_weight: 0.4       # final = 0.4·model + 0.6·deterministic when the model answered (else the deterministic)
+
+limits:
+  scan_per_run: 500       # proposals one run reads (the cursor continues in the next run)
+  matches_per_run: 50     # matches one run stores (highest deterministic scores first)
+  model_top_n: 10         # the model writes "why this matches" for this many (the rest get the code's line)
+  digest_items: 10        # EM3 lists at most this many (docs/spec/06 6.8: <= 10)
+  top_3_items: 3          # plans with scout_digest top_3
+  first_run_days: 30      # a scout's first scan, and Preview, cover this many days
+  preview_items: 10       # Preview shows this many (at most the plan's digest size)
+
+schedule:
+  scan_after: "07:00"     # EAT: daily and weekly scans start at this time, then run once per Nairobi day or ISO week
+
+budget_bands:             # the scout form's budget band codes (KES). [[COPY-REVIEW]] labels
+  - {code: under_500k, label: "Under KES 500,000"}
+  - {code: 500k_2m, label: "KES 500,000 to 2 million"}
+  - {code: 2m_10m, label: "KES 2 million to 10 million"}
+  - {code: over_10m, label: "Over KES 10 million"}
