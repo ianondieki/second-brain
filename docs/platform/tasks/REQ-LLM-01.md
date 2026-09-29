@@ -52,9 +52,11 @@ OpenAI-compatible providers or Anthropic; tests, `make check` and CI use fakes, 
 
 **New environment variables (names only; documented in `backend/.env.example`):**
 
-- `LLM_PROVIDER` (`fake` | `free` | `anthropic`; empty: `free` when a complete slot is set in dev and test, else `fake`;
-  `anthropic` in staging and production). The test conftest pins `fake`.
-- `LLM_PROTOTYPE_TOTAL_CAP_USD` (default and `.env.example` 5.00).
+- `LLM_PROVIDER` (`fake` | `free` | `anthropic`; empty: `free` in dev when a complete slot is set, else `fake`; always
+  `fake` under `APP_ENV=test`; `anthropic` in staging and production, which refuse `free` and (production) `fake`). The
+  test conftest blanks it and every `LLM_FREE_*` variable, so a shell or `backend/.env` never leaks into tests.
+- `LLM_PROTOTYPE_TOTAL_CAP_USD` (`.env.example` 5.00; unset: USD 5 in dev and test, no total in staging and production
+  unless set; `Settings.llm_total_cap_usd`).
 - `LLM_FREE_1_BASE_URL`, `LLM_FREE_1_API_KEY`, `LLM_FREE_1_MODEL`, `LLM_FREE_1_DAILY_REQUESTS`,
   `LLM_FREE_1_RESPONSE_FORMAT`
 - `LLM_FREE_2_BASE_URL`, `LLM_FREE_2_API_KEY`, `LLM_FREE_2_MODEL`, `LLM_FREE_2_DAILY_REQUESTS`,
@@ -87,33 +89,39 @@ Existing variables it relies on: `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`, `LLM_GL
   attempt, one request, one ledger row). No batch API.
 - Caps (`budget.py`): before every attempt, a free slot refuses once today's rows of its model that reached the provider
   hit its cap (`LLMRequestCapReached`, a `blocked_budget` row; retries count), via `LedgerStore.calls_since`.
-  `LLM_PROTOTYPE_TOTAL_CAP_USD` refuses once the ledger's lifetime spend (`app_llm_spend_usd`, every tenant; only
-  Anthropic costs money) plus the estimate would pass it (scope `total`). The spend caps apply only to attempts that cost
-  something, so an overrun (calls in flight) never blocks a zero-priced free call.
+  The prototype total (`Settings.llm_total_cap_usd`) refuses once the ledger's lifetime spend (`app_llm_spend_usd`, every
+  tenant; only Anthropic costs money) plus the estimate would pass it (scope `total`). The spend caps apply to attempts
+  on a paid model (`ModelSpec.paid`; every `ai/models.yaml` model must have positive input and output prices; a check
+  without a model counts as paid), so an overrun (calls in flight) never blocks a zero-priced free slot.
 - Data rule (`demo_data.py`, in the free slot's `LLMService` after the consent guard, before anything is sanitised,
   budgeted or sent): another account's Tier-2 text is refused (`Tier2DemoOnly`, a `Tier2NotAllowed`: `blocked_tier2`
-  row); a call with no user, a non-demo user or a non-demo field owner raises `NotDemoData` (unrecorded) and is answered
-  by the fake. `SqlDemoAccounts` reads `users.demo_account` in its own session as the caller's tenant; a missing column
-  (the integration branch before schema v3), row or privilege reads as "not a demo account". An organisation's call is
-  judged by its bound member. The Anthropic service has no rule (T2.2 rules unchanged).
-- Demo fallback (`demo_fallback.py`): an answer built from the output schema alone (its `demo_fallback()` classmethod
-  when it has one, else `false`, the first enum member, the lowest allowed number, the fewest items, a fixed text
-  `[[COPY-REVIEW]]`), deterministic and reading no input. `Result.demo_fallback` and `Result.fallback_reason`;
-  `DemoFallbackFlag` is the base for API responses that return LLM output.
+  row); a call with no user, a non-demo user, a non-demo field owner or an ownerless field not marked public platform
+  data (`InputField.public`, Tier 1 only, e.g. saved research excerpts) raises `NotDemoData` (unrecorded) and is answered
+  by the fake. `SqlDemoAccounts` reads `users.demo_account` in its own session as the caller's tenant; a missing column,
+  row or privilege reads as "not a demo account". An organisation's call is judged by its bound member. The Anthropic
+  service has no rule (T2.2 rules unchanged); `LLMService` refuses a free adapter (`requires_data_rule`) without it.
+- Demo fallback (`demo_fallback.py`): the output schema's own `demo_fallback()` classmethod, a fixed placeholder its
+  author chose as the safe answer (a classifier holds; text fields may use `DEMO_TEXT` `[[COPY-REVIEW]]`), which must be
+  of the schema and set `injection_suspected=True`; the layer invents nothing, and on local runs the router refuses a
+  schema without one (`LLMConfigError`) before routing. Deterministic and reading no input. `Result.demo_fallback` and
+  `Result.fallback_reason`; `DemoFallbackFlag` is the base for API responses that return LLM output.
 - Routing (`routing.py`, `RoutedLLMClient`; `deps.routed_client` is `LLMDep`; `app.state.llm_runtime`): `fake` answers
   every call with the fake; `free` takes the first slot the task lists that is configured and under today's cap;
   `anthropic` uses the T2.2 service only with verified prices. In dev and test a missing slot or key, unverified prices,
   non-demo data, a hit cap, the kill switch, an unavailable provider, a provider error or a failed call (refused,
-  truncated, schema failure, unsupported stop) answers with the fake, flagged, logged as `llm.demo_fallback`. Rule
-  refusals are never faked (consent guard, `Tier2DemoOnly` also when every slot is capped, `LLMConfigError`,
-  `LLMBatchNotOwned`); the fallback runs the consent guard itself where the service did not (the fake, a route with no
-  provider, the kill switch). In staging and production errors propagate as in T2.2; the fake provider and unverified
-  prices raise `LLMUnavailable`.
+  truncated, schema failure, unsupported stop) answers with the schema's placeholder, flagged, logged as
+  `llm.demo_fallback`. Rule refusals are never faked (consent guard, `Tier2DemoOnly` also when every slot is capped,
+  `LLMConfigError`, `LLMBatchNotOwned`); the fallback runs the subject check and the consent guard itself where the
+  service did not (the fake, a route with no provider, the kill switch) and records its refusals (`blocked_tier2`,
+  `blocked_consent`). In staging and production errors propagate as in T2.2; the fake provider and unverified prices
+  raise `LLMUnavailable`. The free adapter ignores proxy and netrc settings from the environment, maps `eos` to
+  `end_turn` and strips one surrounding code fence; every adapter's client is closed in the app's lifespan.
 - Batches: free providers and the fake have no batch API. The simplest safe option: a batch outside the Anthropic route
   (or its fallback) gets a `demo_fallback` handle holding only the custom ids (`BatchHandle.demo_fallback`,
   `fallback_reason`), checked as a real batch (batchable, ids, consent guard, D-37 Tier-2 refusal); polling it returns the
-  fake answer per item, statelessly (restart-safe, reads nothing). Callers that want a free model's answer call
-  `complete` per item. No task is batchable today.
+  fake answer per item, statelessly (restart-safe, reads nothing). A real batch handle is polled only with
+  `LLM_PROVIDER=anthropic` (`LLMUnavailable` otherwise). Callers that want a free model's answer call `complete` per
+  item. No task is batchable today.
 
 **Tests.** `unit/llm/test_provider_settings.py` (slot validation, half slots, URLs, staging and production refuse free,
 `.env.example` names), `unit/llm/test_openai_adapter.py` (wire and reply mapping, errors, key hiding, redirects, size and
@@ -132,17 +140,37 @@ schema-v3 column added in a rolled-back transaction).
    (RLS), so a slot's daily cap is per tenant (each demo account may use the whole cap). A platform-wide count needs a
    SECURITY DEFINER `app_llm_calls_since(p_model varchar, p_since timestamptz) RETURNS bigint` (rows of that model since
    then, excluding the `blocked_*` and `batch_reserved` statuses), EXECUTE to `bridge_app`; `calls_since` then calls it.
-   It could ride with schema v3 (not merged) or a later revision.
-2. **Schema v3.** Until `users.demo_account` is merged and `seed --demo` sets it, every account reads as non-demo, so a
-   free slot is never called (every call is answered by the fake). No change is needed here when it merges.
+   In flight as revision 0004 (`feat/REQ-LLM-01-calls-since`); once it merges into the integration branch, P7 merges it
+   and switches `SqlLedger.calls_since` to the function.
+2. **Schema v3** is merged (`users.demo_account`); a free slot serves only accounts `seed --demo` marks.
 3. **API plumbing.** No route returns LLM output yet. P6 (EM7 wording), P10 (scout summary) and P13 (assistant) must
    extend `DemoFallbackFlag` and set it from `Result.demo_fallback`; the UI label is a frontend task.
-4. **Callers that decide on an output** (the moderation pre-screen, P2) must treat `demo_fallback` as "no verdict" or give
-   their schema a `demo_fallback()` that returns the safe answer (hold for a human): the generic fallback picks the first
-   enum member.
+4. **Every output schema used on a local run needs a `demo_fallback()`** placeholder (the safe answer, e.g. "hold",
+   with `injection_suspected=True`), and callers that decide on an output treat `demo_fallback` as "no verdict".
 5. The prototype total counts this database's ledger: resetting the demo database resets it.
 6. Model ids (research note): Sonnet 5 is legacy since Sonnet 5.5 (retirement not before 2027-06-30); Haiku 4.5 retires
    not before 2026-10-15. The `docs/spec/09` allocation names both, so they are kept; moving to Sonnet 5.5 is a spec
    change for the human.
 7. The free adapter does not retry a 429 (the call falls back); `ModelPool`/`TokenPacer` stay with T4.3.
-8. PLAN §8: one `security-reviewer` round on the new LLM adapter, then BLOCKER/MAJOR only.
+8. PLAN §8: one `security-reviewer` round on the new LLM adapter, then BLOCKER/MAJOR only (done: see below).
+
+### P7 review round 1 (reviewer PASS with MINORs; security-reviewer CHANGES_REQUIRED, 2 MAJOR), fixed 2026-09-29
+
+- **MAJOR 1** (`083549e`): an ownerless field was treated as demo data, so a demo caller could send another user's
+  Tier-1 text to a free provider. An ownerless field is now `NotDemoData` unless marked `public` (Tier 1 only).
+  `unit/llm/test_routing.py::test_an_ownerless_field_never_reaches_a_free_provider` (respx sees no call).
+- **MAJOR 2** (`0adf393`): the generic fallback fabricated a permissive verdict (first enum member,
+  `injection_suspected=False`). The layer now invents nothing: the schema's own `demo_fallback()` (with
+  `injection_suspected=True`) or `LLMConfigError`, checked before routing on local runs. THREAT_MODEL refusal row updated.
+- **MINORs done:** production refuses `LLM_PROVIDER=fake`; the USD 5 total is dev and test only unless set (`fb490a5`);
+  `trust_env=False`, adapters closed in the lifespan, `eos`, one code fence stripped (`65ff167`); the router's
+  refusals recorded, real batch handles polled on Anthropic only, a `capture_logs` test for `llm.demo_fallback` (N9)
+  (`1a1bd74`); `paid` judged on the model with positive YAML prices, a free adapter refused without the data rule,
+  `calls_since` pinned to its model for one tenant (M41) (`139de1b`); `.env.example` says the cap is per account for now.
+- **Follow-ups (not built):**
+  1. Extend `test_no_model_ids_in_code` to free-provider model families and hosts (for example `llama-`, `gemini-`,
+     `gpt-`, `mistral`, `qwen`, and provider hostnames) so they stay in `.env` only.
+  2. A cap can be overshot by the calls in flight (each attempt checks before sending; concurrent attempts may all
+     pass): bounded by the concurrency of one account's requests; revisit with the platform-wide count or a row lock.
+  3. Commit sizes: `5412dbb` (router and its tests, about 690 lines) exceeded the ~300-line guideline; later rounds split
+     tests from code.
