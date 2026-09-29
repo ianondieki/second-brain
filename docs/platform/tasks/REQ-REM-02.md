@@ -19,3 +19,26 @@ quoted, attributed and defanged; no link leaves the platform.
 
 AC-REM-2 (`unit/reminders/test_org_digest.py`), AC-REM-3 (`integration/reminders/test_health_agreement.py`), the
 AC-MAIL-5 checks on this digest (escaped, defanged, platform links only) in `unit/reminders/test_org_digest.py`.
+
+## Prototype P6 (2026-09-29): built
+
+- `bridge/reminders/org_digest.py` (no LLM import; a test checks): `compose_digest(OrgFacts)` per active engagement:
+  stage, health with the same `assess` as the developer's reminder and its reasons from the organisation's side,
+  open milestones due within 14 days not already named by a reason, "No update from {developer} since {date}" after
+  5 quiet days (the developer's latest event, non-automatic endorsement or signature; the engagement's start if none),
+  never a percentage. Sections: Needs us (the organisation's action, or each submitted milestone to review), New tagged
+  proposals (tagged, `SUBMITTED`, created within the period), Overdue (every overdue reason), Engagements (worst
+  first). Kind `em7_org`; subject "{org}: progress digest, {date}" or "…weekly progress digest, week of {Monday}".
+- Dispatch (`run_org_digests`, from 08:30 EAT): each active member who holds the `reminders` consent, per organisation
+  (bound to the member and the organisation), cadence from the organisation's plan (`progress_digest`: `daily`, else
+  weekly = one per ISO week dated its Monday), keys `daily_key("em7_org", channel, user, period, org_id=org)`; in-app
+  always for them, email with a verified address and the `em7_org`/email preference on. Removed members and quiet
+  organisations get nothing.
+
+Tests: `unit/reminders/test_org_digest.py` (AC-REM-2; the full text is the fixed layout filled with the facts; AC-MAIL-5
+on this digest: a bare domain, an email and a Kenyan phone number are never auto-linkable; health agreement),
+`integration/reminders/test_org_dispatch.py`, `integration/reminders/test_health_agreement.py` (AC-REM-3).
+
+**Open.** N23 says "org members opted in to the progress digest"; no separate digest opt-in exists, so the prototype
+uses the `reminders` consent ("Send me reminders about my proposals and engagements by email") as the opt-in, for
+every role. A dedicated opt-in (a consent purpose or a default-off preference) is a product decision.
