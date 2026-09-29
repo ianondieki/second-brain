@@ -576,8 +576,15 @@ async def test_tier2_needs_every_condition_of_a_live_grant(
 
 VIEW_INSERT = (
     "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id, render_kind,"
-    " fingerprint_seed, started_at) VALUES (:id, :p, :v, :owner, :viewer, :org, 'html', :seed,"
-    " now() - interval '30 days')"
+    " fingerprint_seed, started_at, nda_acceptance_id) VALUES (:id, :p, :v, :owner, :viewer, :org, 'html', :seed,"
+    " now() - interval '30 days', :nda)"
+)
+# As the owner: the reviewer's acceptance of the Evaluation NDA for B's published proposal under G, copied for another
+# user or organisation.
+COPY_NDA = (
+    "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+    " logging_notice_version) SELECT :id, :user, :org, proposal_id, nda_template_id, template_sha256,"
+    " logging_notice_version FROM nda_acceptances WHERE user_id = :reviewer AND org_id = :g AND proposal_id = :p"
 )
 
 
@@ -587,22 +594,43 @@ async def test_only_a_granted_viewer_logs_a_view_under_the_granting_org(
 ) -> None:
     """A Tier-2 view is logged only by a viewer the grant lets read that registered version (app_tier2_granted), under
     the organisation holding the grant: a member without it cannot plant views in the owner's "Who has seen this", nor
-    log a granted view under another organisation of theirs or on a draft; the start time is the database's."""
+    log a granted view under another organisation of theirs or on a draft; the start time is the database's. The NDA
+    acceptance a view names is the viewer's own, for that proposal, under that organisation (round 5): not a
+    colleague's, not one for another proposal, not one under another organisation of the viewer's."""
     b = world.b
     async with rolled_back(owner_engine) as conn:
         scenario = await _grant_scenario(conn, world, broken)
         await _add_member(conn, world.a.org_id, scenario.reviewer, "{reviewer}")  # also a reviewer of org A
+        ndas: dict[str, UUID] = {}
+        if broken == "none":
+            colleague = await _add_user(conn, f"colleague-{uuid7().hex[-12:]}@example.test")
+            await _add_member(conn, scenario.context, colleague, "{reviewer}")
+            source = {"reviewer": scenario.reviewer, "g": scenario.context, "p": b.published}
+            copies = (("colleague", colleague, scenario.context), ("another_org", scenario.reviewer, world.a.org_id))
+            for name, user, org in copies:
+                ndas[name] = uuid7()
+                await _sql(conn, COPY_NDA, id=ndas[name], user=user, org=org, **source)
+            own = await conn.execute(  # the scenario's: for B's published proposal and for B's draft proposal
+                text("SELECT proposal_id, id FROM nda_acceptances WHERE user_id = :u AND org_id = :g"),
+                {"u": scenario.reviewer, "g": scenario.context},
+            )
+            accepted = dict(own.tuples().all())
+            ndas["own"], ndas["another_proposal"] = accepted[b.published], accepted[b.draft]
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
         await _as_tenant(conn, scenario.reviewer, None)
-        view = {"p": b.published, "owner": b.user_id, "viewer": scenario.reviewer, "seed": bytes(16)}
+        view = {"p": b.published, "owner": b.user_id, "viewer": scenario.reviewer, "seed": bytes(16), "nda": None}
         registered = view | {"v": b.published_version}
         await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=world.a.org_id, **registered)
         await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **view, v=scenario.draft_version)
         if broken != "none":
             await _refused_by_rls(conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **registered)
             return
+        for name in ("colleague", "another_proposal", "another_org"):
+            await _refused_by_rls(
+                conn, VIEW_INSERT, id=uuid7(), org=scenario.context, **(registered | {"nda": ndas[name]})
+            )
         logged = uuid7()
-        await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **registered)
+        await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **(registered | {"nda": ndas["own"]}))
         started = await conn.execute(
             text("SELECT started_at = now() FROM document_views WHERE id = :id"), {"id": logged}
         )
