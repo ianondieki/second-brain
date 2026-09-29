@@ -1,7 +1,7 @@
 """Directory API (REQ-DIR-01, REQ-DIR-02): /api/directory/*. Signed-in users only; unknown or unlisted ids get 404.
 
-- ``GET /orgs``: listed organisations grouped under niche headings, filtered by org type, county, niche and name,
-  cursor-paginated.
+- ``GET /orgs``: listed organisations grouped under niche headings, filtered by org type, county, niche and keywords
+  (each word of ``q`` matches the name, a niche or its parent, or the county), cursor-paginated.
 - ``GET /orgs/{org_id}``: one card.
 - ``GET /niches``: the two-level niche taxonomy for pickers (directory filter, proposal editor, scout form).
 - ``GET /filter-options``: org types and counties for the filters.
@@ -54,7 +54,15 @@ async def browse(
     kind: Annotated[list[OrgKind] | None, Query(description="Org type; repeat for several")] = None,
     county: Annotated[list[CountyCode] | None, Query(description="ISO 3166-2:KE county code; repeat")] = None,
     niche: Annotated[list[NicheSlug] | None, Query(description="Niche slug (a parent includes its children)")] = None,
-    q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=NO_NUL, description="Name contains")] = None,
+    q: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=100,
+            pattern=NO_NUL,
+            description="Keywords: each word matches the name, a niche or the county",
+        ),
+    ] = None,
     cursor: Annotated[str | None, Query(max_length=2000)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> DirectoryPage:
