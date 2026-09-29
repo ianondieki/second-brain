@@ -321,6 +321,14 @@ export function commandRequest(
   return { path: `${PREFIX}/${COMMAND_SEGMENT[command]}`, params: { engagement_id: engagementId }, body };
 }
 
+/** `path` with the page's query ("?org=…", kept for members of several organisations) and any other values. */
+export function withQuery(path: string, query = "", extra: Record<string, string> = {}): string {
+  const params = new URLSearchParams(query);
+  for (const [key, value] of Object.entries(extra)) params.set(key, value);
+  const text = params.toString();
+  return text ? `${path}?${text}` : path;
+}
+
 // --------------------------------------------------------------------------------------------- formatting
 
 /** KES from minor units, as people read it: "250,000" or "1,250.50" (the currency code comes from the message). */

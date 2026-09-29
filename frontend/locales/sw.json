@@ -700,7 +700,7 @@
     "emptyDev": "Wasilisha mojawapo ya mawazo yako kwa kampuni ili kuanza ushirikiano.",
     "emptyDevAction": "Nenda kwa Mawazo yangu",
     "emptyOrg": "Bado hakuna ushirikiano: huanza msanidi programu anapowasilisha wazo kwa shirika lako.",
-    "emptyOrgAction": "Nenda kwenye ukurasa wa shirika lako",
+    "emptyOrgAction": "Fungua Kikasha",
     "yourTurn": "Zamu yako",
     "ourTurn": "Zamu yetu",
     "withOrg": "Na {org}",
@@ -927,7 +927,8 @@
       "bothParties": "Wewe ni mwanachama wa shirika hili, kwa hivyo huwezi kuchukua hatua kwenye ushirikiano huu."
     },
     "turnOnMfa": "Washa kuingia kwa hatua mbili",
-    "noOrg": "Akaunti yako bado haijaunganishwa na shirika."
+    "notMember": "Akaunti yako si mwanachama wa shirika hili.",
+    "openOwn": "Fungua ushirikiano wako"
   },
   "trackerActions": {
     "title": "Hatua zako",

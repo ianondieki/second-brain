@@ -26,6 +26,7 @@ import {
   stepperSteps,
   type Detail,
   type DocumentKind,
+  withQuery,
 } from "./model";
 import { Stepper } from "./Stepper";
 import { DueText } from "./When";
@@ -52,14 +53,17 @@ export interface EngagementScreenProps {
   doc: DocumentKind | null;
   /** "/dev/engagements" or "/org/engagements". */
   basePath: string;
+  /** "?org=<id>" when an organisation member of several chose one (kept on every link), else "". */
+  query?: string;
 }
+
 
 /**
  * One engagement's tracker, the same for both parties (docs/spec/06 6.9; AC-TRACK-3): the whose-turn banner, the
  * 5-group stepper, the caller's buttons (from the API's `actions` only), then the Tracker, Documents and History tabs.
  * Only the buttons and the contact reveal differ between the developer and the organisation.
  */
-export async function EngagementScreen({ detail, me, tab, doc, basePath }: EngagementScreenProps) {
+export async function EngagementScreen({ detail, me, tab, doc, basePath, query = "" }: EngagementScreenProps) {
   const t = await getTranslations("tracker");
   const locale = await getLocale();
   const finished = isFinished(detail.state) && detail.state !== "CLOSED";
@@ -76,7 +80,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath }: Engag
   return (
     <ClientStrings strings={await clientStrings(["trackerActions"])}>
       <p className="-mt-2 mb-4">
-        <Link href={basePath} className={standaloneLinkClass}>
+        <Link href={withQuery(basePath, query)} className={standaloneLinkClass}>
           {t("back")}
         </Link>
       </p>
@@ -123,7 +127,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath }: Engag
           {TABS.map((name) => (
             <li key={name}>
               <Link
-                href={name === "tracker" ? href : `${href}?tab=${name}`}
+                href={withQuery(href, query, name === "tracker" ? {} : { tab: name })}
                 aria-current={name === tab ? "page" : undefined}
                 className={cn(
                   "-mb-px inline-flex min-h-11 items-center border-b-2 px-3 font-semibold no-underline",
@@ -139,7 +143,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath }: Engag
 
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
-        {tab === "documents" ? <DocumentsTab detail={detail} doc={doc} href={href} /> : null}
+        {tab === "documents" ? <DocumentsTab detail={detail} doc={doc} href={href} query={query} /> : null}
         {tab === "history" && history ? <HistoryList history={history} /> : null}
       </div>
     </ClientStrings>
@@ -169,14 +173,24 @@ async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
   );
 }
 
-async function DocumentsTab({ detail, doc, href }: { detail: Detail; doc: DocumentKind | null; href: string }) {
+async function DocumentsTab({
+  detail,
+  doc,
+  href,
+  query,
+}: {
+  detail: Detail;
+  doc: DocumentKind | null;
+  href: string;
+  query: string;
+}) {
   const t = await getTranslations("tracker");
   const kinds = documentKinds(detail);
   if (kinds.length === 0) {
     return (
       <div data-empty-state="" className="flex flex-col items-start gap-3">
         <p className="text-ink">{t("documents.empty")}</p>
-        <Link href={href} className={standaloneLinkClass}>
+        <Link href={withQuery(href, query)} className={standaloneLinkClass}>
           {t("documents.emptyAction")}
         </Link>
       </div>
@@ -194,7 +208,7 @@ async function DocumentsTab({ detail, doc, href }: { detail: Detail; doc: Docume
         {kinds.map((kind) => (
           <li key={kind}>
             <Link
-              href={`${href}?tab=documents&doc=${kind}`}
+              href={withQuery(href, query, { tab: "documents", doc: kind })}
               aria-current={kind === shown ? "page" : undefined}
               className={cn(standaloneLinkClass, kind === shown && "text-ink no-underline")}
             >

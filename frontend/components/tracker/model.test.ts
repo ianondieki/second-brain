@@ -17,6 +17,7 @@ import {
   stepperSteps,
   toMinor,
   turnOf,
+  withQuery,
   type ChipKind,
 } from "./model";
 
@@ -227,5 +228,16 @@ describe("the Documents tab", () => {
       documents: [{ kind: "acceptance_certificate", ref: "r2", sha256: "cd" }],
     });
     expect(documentKinds(later)).toEqual(["mutual_nda", "agreement", "acceptance_certificate"]);
+  });
+});
+
+describe("tracker links", () => {
+  it("keep the chosen organisation and add the tab", () => {
+    expect(withQuery("/org/engagements/e1")).toBe("/org/engagements/e1");
+    expect(withQuery("/org/engagements/e1", "?org=o1")).toBe("/org/engagements/e1?org=o1");
+    expect(withQuery("/org/engagements/e1", "?org=o1", { tab: "documents", doc: "agreement" })).toBe(
+      "/org/engagements/e1?org=o1&tab=documents&doc=agreement",
+    );
+    expect(withQuery("/dev/engagements/e1", "", { tab: "history" })).toBe("/dev/engagements/e1?tab=history");
   });
 });

@@ -700,7 +700,7 @@
     "emptyDev": "Pitch one of your ideas to a company to start an engagement.",
     "emptyDevAction": "Go to My ideas",
     "emptyOrg": "No engagements yet: they start when a developer pitches an idea to your organisation.",
-    "emptyOrgAction": "Go to your organisation home",
+    "emptyOrgAction": "Open the Inbox",
     "yourTurn": "Your turn",
     "ourTurn": "Our turn",
     "withOrg": "With {org}",
@@ -927,7 +927,8 @@
       "bothParties": "You belong to this organisation, so you cannot act on this engagement."
     },
     "turnOnMfa": "Turn on two-step sign-in",
-    "noOrg": "Your account does not belong to an organisation yet."
+    "notMember": "Your account is not a member of this organisation.",
+    "openOwn": "Open your engagements"
   },
   "trackerActions": {
     "title": "Your actions",

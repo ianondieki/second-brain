@@ -11,10 +11,13 @@ export async function EngagementList({
   items,
   mine,
   basePath,
+  query = "",
 }: {
   items: Summary[];
   mine: Party;
   basePath: string;
+  /** "?org=<id>" to keep on the rows' links, else "". */
+  query?: string;
 }) {
   const t = await getTranslations("tracker");
   const waiting = items.filter((item) => awaitsMe(item, mine));
@@ -33,7 +36,7 @@ export async function EngagementList({
           <ul className="mt-2 border-b border-line">
             {group.items.map((item) => (
               <li key={item.id}>
-                <EngagementRow item={item} mine={mine} href={`${basePath}/${encodeURIComponent(item.id)}`} />
+                <EngagementRow item={item} mine={mine} href={`${basePath}/${encodeURIComponent(item.id)}${query}`} />
               </li>
             ))}
           </ul>
