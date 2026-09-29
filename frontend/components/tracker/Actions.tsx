@@ -88,6 +88,28 @@ export function Actions(props: ActionsProps) {
     if (notice) noticeRef.current?.focus();
   }, [notice]);
 
+  // Focus follows what opened (WCAG 2.4.3): a form or confirmation takes it on its heading (the step-up on its code
+  // field), and Cancel gives it back to the button that opened it.
+  const root = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<string | null>(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (mode.kind === "form" || mode.kind === "confirm") heading.current?.focus();
+    if (mode.kind === "list" && returnFocus.current) {
+      returnFocus.current = false;
+      const button = root.current?.querySelector<HTMLElement>(`[data-action-key="${opener.current}"]`);
+      button?.focus();
+    }
+  }, [mode.kind]);
+
+  function cancel() {
+    stepUpOpen.current = false;
+    setNotice(null);
+    returnFocus.current = true;
+    setMode({ kind: "list" });
+  }
+
   function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
     return commandRequest(item.command, props.engagementId, props.lockVersion, { milestoneId: item.milestone?.id, input });
   }
@@ -118,6 +140,7 @@ export function Actions(props: ActionsProps) {
 
   function press(item: ActionItem) {
     setNotice(null);
+    opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
     else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
     else void run(item, requestFor(item));
@@ -129,19 +152,19 @@ export function Actions(props: ActionsProps) {
     </Alert>
   ) : null;
 
-  if (props.items.length === 0 && mode.kind === "list") {
-    return message ? <div aria-live="polite">{message}</div> : null;
-  }
-
+  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons.
+  const listNotice = mode.kind === "list" ? message : null;
   return (
+    <div ref={root} className="flex flex-col gap-4">
+      {listNotice}
+      {props.items.length === 0 && mode.kind === "list" ? null : (
     <section aria-labelledby="actions-heading" data-actions="" className="flex flex-col gap-4">
-      <h2 id="actions-heading" className="text-lg text-ink">
+      <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
         {mode.kind === "list" ? t("title") : label(mode.item)}
       </h2>
 
       {mode.kind === "list" ? (
         <>
-          {message}
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {props.items.map((item) => (
               <li key={`${item.command}-${item.milestone?.id ?? ""}`}>
@@ -152,6 +175,7 @@ export function Actions(props: ActionsProps) {
                     aria-disabled={busy || undefined}
                     onClick={() => !busy && press(item)}
                     data-command={item.command}
+                    data-action-key={keyOf(item)}
                   >
                     {label(item)}
                   </button>
@@ -162,6 +186,7 @@ export function Actions(props: ActionsProps) {
                     className="w-full sm:w-auto"
                     onClick={() => press(item)}
                     data-command={item.command}
+                    data-action-key={keyOf(item)}
                     data-milestone={item.milestone?.seq}
                   >
                     {busy && item.primary ? t("busy") : label(item)}
@@ -186,7 +211,7 @@ export function Actions(props: ActionsProps) {
             >
               {busy ? t("busy") : label(mode.item)}
             </button>
-            <Button variant="secondary" onClick={() => setMode({ kind: "list" })}>
+            <Button variant="secondary" onClick={cancel}>
               {t("cancel")}
             </Button>
           </div>
@@ -202,10 +227,7 @@ export function Actions(props: ActionsProps) {
             members={props.members}
             myUserId={props.myUserId}
             recorded={props.recorded}
-            onCancel={() => {
-              setNotice(null);
-              setMode({ kind: "list" });
-            }}
+            onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
           />
         </Suspense>
@@ -214,10 +236,7 @@ export function Actions(props: ActionsProps) {
       {mode.kind === "stepUp" ? (
         <StepUp
           enrolled={props.enrolled}
-          onCancel={() => {
-            stepUpOpen.current = false;
-            setMode({ kind: "list" });
-          }}
+          onCancel={cancel}
           onConfirmed={async () => {
             if (!stepUpOpen.current) return;
             stepUpOpen.current = false;
@@ -227,6 +246,8 @@ export function Actions(props: ActionsProps) {
         />
       ) : null}
     </section>
+      )}
+    </div>
   );
 
   function label(item: ActionItem): string {
@@ -234,6 +255,11 @@ export function Actions(props: ActionsProps) {
       ? t(`milestone.${item.command as "start_milestone"}`, { number: item.milestone.seq })
       : t(`command.${item.command}`);
   }
+}
+
+/** A button's identity across renders: its command, and its milestone for the sub-tracker's. */
+function keyOf(item: ActionItem): string {
+  return item.milestone ? `${item.command}:${item.milestone.id}` : item.command;
 }
 
 function endingKey(command: ActionItem["command"]): "withdraw" | "decline_interest" | "decline" {

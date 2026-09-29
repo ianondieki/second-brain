@@ -412,7 +412,10 @@ function TermsForm(props: CommandFormProps & { today: string }) {
               <Button
                 variant="link"
                 className="self-start"
-                onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
+                onClick={() => {
+                  setRows((current) => current.filter((r) => r.key !== row.key));
+                  document.getElementById(`${id}-add`)?.focus(); // the removed row's button goes away with it
+                }}
               >
                 {t("terms.remove", { number: index + 1 })}
               </Button>
@@ -422,6 +425,7 @@ function TermsForm(props: CommandFormProps & { today: string }) {
       })}
       {rows.length < 20 ? (
         <Button
+          id={`${id}-add`}
           variant="secondary"
           className="self-start"
           onClick={() =>

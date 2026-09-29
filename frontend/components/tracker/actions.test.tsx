@@ -1,7 +1,11 @@
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { NextIntlClientProvider } from "next-intl";
+
+import { ClientStrings, type StringTree } from "@/components/ClientStrings";
 import { createApiClient } from "@/lib/api/client";
+import en from "@/locales/en.json";
 import { detail, inImplementation } from "@/test/engagement";
 import { renderWithIntl } from "@/test/intl";
 
@@ -351,5 +355,63 @@ describe("the contact reveal", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
     expect(revealImpl).toHaveBeenCalledWith("e1");
     expect(screen.getByRole("link", { name: "achieng@example.com" }).getAttribute("href")).toBe("mailto:achieng@example.com");
+  });
+});
+
+describe("focus follows the actions (WCAG 2.4.3)", () => {
+  it("moves to a form's heading when it opens, and back to its button on Cancel", async () => {
+    renderActions(detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve", "decline"] }), {
+      members: [{ user_id: "u1", display_name: "Rita Wanjiru" }],
+      myUserId: "u1",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Decline" }));
+    await screen.findByLabelText("Reason");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Decline" }));
+  });
+
+  it("moves to a confirmation's heading, and back to Withdraw on Cancel", () => {
+    renderActions(detail({ actions: ["withdraw"] }));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Withdraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Withdraw" }));
+  });
+
+  it("moves to the code field when a step asks for a fresh code", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
+    renderActions(detail({ state: "NDA_PENDING", actions: ["sign_nda"] }), { runImpl });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
+    expect(document.activeElement).toBe(screen.getByLabelText("Authenticator code"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sign the mutual NDA" }));
+  });
+
+  it("moves to Add a milestone after a milestone is removed", async () => {
+    renderActions(detail({ state: "NDA_SIGNED", actions: ["propose_terms"] }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose terms" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add a milestone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove milestone 2" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add a milestone" }));
+  });
+
+  it("keeps Done, with focus, when the step leaves no buttons", async () => {
+    const engagement = detail({ state: "PAYMENT_FINAL", actions: ["deliver"], lock_version: 7 });
+    const { rerender } = renderActions(engagement);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Submit the final delivery" })));
+    const done = screen.getByRole("status");
+    expect(document.activeElement).toBe(done);
+    // The refreshed page brings the engagement with no buttons left for this party.
+    rerender(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <ClientStrings strings={en as unknown as Record<string, StringTree>}>
+          <Actions engagementId={engagement.id} lockVersion={8} items={[]} counterpart="Telco A (fixture)" enrolled />
+        </ClientStrings>
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("status")).toBe(done);
+    expect(document.activeElement).toBe(done);
+    expect(document.querySelector("[data-actions]")).toBeNull();
   });
 });
