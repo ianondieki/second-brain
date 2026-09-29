@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant
+from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days
 from bridge.ids import uuid7
 from bridge.models.enums import EngagementParty, MilestoneState
@@ -144,7 +145,7 @@ async def test_milestones_carry_rework_loops_and_submission_dates_from_the_event
                 w.engagement,
                 p.reviewer,
                 "reviewer",
-                "request_changes",
+                sm.Command.REQUEST_CHANGES.value,
                 "IN_IMPLEMENTATION",
                 "IN_IMPLEMENTATION",
                 payload={"milestone_id": str(milestone)},
@@ -155,7 +156,7 @@ async def test_milestones_carry_rework_loops_and_submission_dates_from_the_event
             w.engagement,
             p.developer,
             "developer",
-            "submit_milestone",
+            sm.Command.SUBMIT_MILESTONE.value,
             "IN_IMPLEMENTATION",
             "IN_IMPLEMENTATION",
             payload={"milestone_id": str(milestone)},
