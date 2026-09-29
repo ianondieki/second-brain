@@ -37,7 +37,8 @@ async def test_newest_first_paged_and_readable_by_any_member(
     for item in whole["items"]:
         assert set(item) == ITEM_KEYS
         assert item["engagement"]["state"] == "SUBMITTED"
-    walked, cursor = [], None
+    walked: list[str] = []
+    cursor: str | None = None
     while True:
         page = (await viewer.get(url, params={"limit": 1, **({"cursor": cursor} if cursor else {})})).json()
         walked.extend(item["tag_id"] for item in page["items"])
