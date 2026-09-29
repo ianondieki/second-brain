@@ -47,7 +47,7 @@ async def test_contact_details_in_the_teaser_are_rejected(
     assert await rows(owner_engine, "SELECT id FROM proposals WHERE owner_id = :u", u=user_of(owner)) == []
 
 
-async def test_a_vulnerability_naming_an_org_is_held_until_a_moderator_approves_it(
+async def test_a_vulnerability_naming_an_org_is_held_and_never_approved(
     developers: Developers,
     moderators: Staff,
     proposal_world: ProposalWorld,
@@ -86,10 +86,27 @@ async def test_a_vulnerability_naming_an_org_is_held_until_a_moderator_approves_
     assert (case["source"], case["status"], case["subject_state"]) == ("regex", "open", "held")
     assert case["preview"]["title"] == "Cold-chain alerts"
 
-    decided = await moderator.post(f"/api/admin/moderation/cases/{case['id']}/decision", json={"decision": "approve"})
+    # REQ-PROP-02: vulnerability content is never made public, so a moderator can only reject it.
+    url = f"/api/admin/moderation/cases/{case['id']}/decision"
+    refused = await moderator.post(url, json={"decision": "approve"})
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "cannot_approve_vulnerability")
+    assert (await reader.get(f"/api/proposals/{pid}")).status_code == 404
+    assert await visible_to(app_engine, user_of(reader), pid) == 0
+    [still] = await cases_about(moderator, pid)
+    assert (still["status"], still["subject_state"]) == ("open", "held")
+
+    # A false positive is released by the author: a corrected version is re-screened, then a moderator approves it.
+    clean = "An SMS goes out when a cooler warms up."
+    await owner.patch(f"/api/me/proposals/{pid}", json={"teaser": {"summary": clean}})
+    second = (await publish(owner, pid)).json()
+    assert (second["version_no"], second["moderation"]["state"]) == (2, "held")
+    [case] = await cases_about(moderator, pid)
+    assert "new_version_of_moderated_proposal" in case["reasons"]
+    decided = await moderator.post(url, json={"decision": "approve"})
     assert decided.status_code == 200, decided.text
     assert decided.json() == {"id": case["id"], "status": "approved", "subject_state": "clear"}
-    assert (await reader.get(f"/api/proposals/{pid}")).status_code == 200
+    card = await reader.get(f"/api/proposals/{pid}")
+    assert (card.status_code, card.json()["teaser"]["summary"]) == (200, clean)
     assert await visible_to(app_engine, user_of(reader), pid) == 1
     [signal] = await rows(owner_engine, "SELECT kind FROM signal_events WHERE item_id = :p", p=pid)
     assert signal.kind == "proposal_published"
@@ -138,6 +155,10 @@ async def test_a_held_new_problem_is_not_public_but_the_clean_teaser_is(
     [case] = await cases_about(moderator, problem_id)
     assert case["reasons"] == ["new_developer_problem", "security_vulnerability"]
     assert case["subject_state"] == "held"
+    url = f"/api/admin/moderation/cases/{case['id']}/decision"
+    refused = await moderator.post(url, json={"decision": "approve"})
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "cannot_approve_vulnerability")
+    assert (await moderator.post(url, json={"decision": "reject"})).json()["subject_state"] == "rejected"
 
 
 async def test_a_new_version_of_a_rejected_proposal_goes_back_to_the_moderators(

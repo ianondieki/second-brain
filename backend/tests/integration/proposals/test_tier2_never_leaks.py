@@ -51,7 +51,7 @@ async def test_tier2_never_reaches_tier1_responses_logs_or_audit(
     reader = await developers(level="d0")
     moderator = await moderators()
     with capture_logs() as logs:
-        body = draft_body(proposal_world, summary=f"A vulnerability in {proposal_world.org_brand} gateways, fixed.")
+        body = draft_body(proposal_world, summary=f"Unlike the corrupt {proposal_world.org_brand}, we report outages.")
         body["new_problem"] = {"title": "Gateways fail quietly", "statement": "Nobody hears when a gateway dies."}
         created = await create(owner, body)
         pid = created["id"]
