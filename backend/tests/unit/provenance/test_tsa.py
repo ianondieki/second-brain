@@ -593,6 +593,8 @@ def test_outside_dev_and_test_every_tsa_url_needs_its_bundle(local_tsa: LocalTsa
             "email_provider": "postmark",
             "postmark_server_token": SecretStr("token"),
             "public_base_url": "https://bridge.example",
+            "embedder": "bge-m3",  # REQ-EMB-01 and REQ-LLM-01: what production also needs to start
+            "llm_kill_switch": True,
         }
     with pytest.raises(ConfigurationError, match="needs TSA_CA_BUNDLE"):
         tsa_client_from_settings(_settings(**env, tsa_fallback_url=None))

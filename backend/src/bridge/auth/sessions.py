@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +62,26 @@ async def lookup(db: AsyncSession, token: str) -> LiveSession | None:
     if touched:
         row.last_seen_at = now
     return LiveSession(token, row, user, touched)
+
+
+async def is_live(db: AsyncSession, session_id: UUID, *, user_id: UUID) -> bool:
+    """True when ``session_id`` (``sessions.id``) is a live, fully signed-in login session of ``user_id``: the rule of
+    ``lookup`` (not revoked, not expired, the user active) plus the second factor done (not ``mfa_pending``, as
+    ``current_session`` requires), by id instead of cookie token. The per-session Tier-2 consent asks it
+    (``bridge.llm.guard``); ``sessions`` and ``users`` have no RLS, so a session bound to any tenant reads the row."""
+    found = await db.execute(
+        select(Session.id)
+        .join(User, User.id == Session.user_id)
+        .where(
+            Session.id == session_id,
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+            Session.expires_at > clock.utcnow(),
+            Session.mfa_pending.is_(False),
+            User.status == UserStatus.ACTIVE,
+        )
+    )
+    return found.first() is not None
 
 
 async def revoke(db: AsyncSession, row: Session) -> None:
