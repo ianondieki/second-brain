@@ -2156,24 +2156,29 @@ END;
 $$;
 
 -- An anchor names an existing audit event: its chain, sequence number and hash (the hourly job anchors chain heads),
--- at a TSA time no later than the database clock allows (one minute of skew: the TSA's clock is not ours). Anchors
--- are append-only and one per chain and sequence number, so a forged one would be permanent and block the real one.
--- SECURITY DEFINER: provenance_worker, the writer, cannot read audit_events.
+-- at a TSA time between that event's occurred_at and the database clock (one minute of skew either way: the TSA's
+-- clock is not ours). Anchors are append-only and one per chain and sequence number, so a forged one would be
+-- permanent and block the real one. SECURITY DEFINER: provenance_worker, the writer, cannot read audit_events.
 CREATE FUNCTION chain_anchors_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
+DECLARE
+    v_occurred timestamptz;
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-          FROM public.audit_events e
-         WHERE e.chain_id = NEW.chain_id AND e.seq = NEW.seq AND e.event_hash = NEW.event_hash
-    ) THEN
+    SELECT e.occurred_at INTO v_occurred
+      FROM public.audit_events e
+     WHERE e.chain_id = NEW.chain_id AND e.seq = NEW.seq AND e.event_hash = NEW.event_hash;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'chain_anchors: an anchor names an existing audit event (chain, sequence number and hash)'
             USING ERRCODE = 'foreign_key_violation';
     END IF;
     IF NEW.tsa_time > pg_catalog.clock_timestamp() + interval '1 minute' THEN
         RAISE EXCEPTION 'chain_anchors: the TSA time is later than the database clock'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.tsa_time < v_occurred - interval '1 minute' THEN
+        RAISE EXCEPTION 'chain_anchors: the TSA time is earlier than the anchored event'
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;

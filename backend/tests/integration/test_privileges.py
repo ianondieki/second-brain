@@ -1707,9 +1707,10 @@ NAIROBI_TODAY = "SELECT CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date)"
 async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engine: AsyncEngine) -> None:
     """chain_anchors and transparency_roots are append-only and one per head or day, so a forged row would be
     permanent and block the real one. provenance_worker (the only writer) may anchor only an existing audit event
-    (its chain, sequence number and hash) at a TSA time no later than the database clock allows (one minute of
-    clock skew), and publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended
-    and no later than now (``snapshot_at``, when given)."""
+    (its chain, sequence number and hash) at a TSA time no later than the database clock allows and no earlier than
+    the anchored event (one minute of clock skew either way: a real head anchored ten years back is refused), and
+    publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended and no later than
+    now (``snapshot_at``, when given)."""
     chain = f"test:{uuid4().hex}"
     async with as_app(owner_engine) as conn:
         for _ in range(2):
@@ -1738,6 +1739,10 @@ async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engi
         future = datetime.now(UTC) + timedelta(hours=1)
         await expect(
             conn, ANCHOR, "TSA time is later than the database clock", id=uuid7(), **(anchor | {"tsa_time": future})
+        )
+        long_ago = datetime.now(UTC) - timedelta(days=3650)
+        await expect(
+            conn, ANCHOR, "TSA time is earlier than the anchored event", id=uuid7(), **(anchor | {"tsa_time": long_ago})
         )
         await run(conn, ANCHOR, id=uuid7(), **anchor)
         await run(conn, ANCHOR, id=uuid7(), **(anchor | {"seq": earlier.seq, "hash": earlier.event_hash}))
