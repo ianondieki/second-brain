@@ -440,3 +440,29 @@ async def test_a_replacement_behind_a_committing_step_up_leaves_only_the_new_cod
     assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(
         list(issued.json()["recovery_codes"])
     )
+
+
+async def test_a_replacement_behind_a_committing_turn_off_answers_totp_not_enabled(
+    client: httpx.AsyncClient, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    """Two-step sign-in turned off in another tab while new codes are asked for: the replacement re-reads the user
+    under ``lock_user``, so it finds two-step sign-in off, writes no codes, no audit event and no notice."""
+    address = await verified(client)
+    await enrolled(client)
+    async with create_session_factory(app_engine)() as first:
+        live = await live_session(first, client)
+        await service.disable_totp(first, get_settings(), live)
+        replace = await blocked_behind(first, client.post(CODES))
+        await first.commit()
+    assert error(await replace) == (409, "totp_not_enabled")
+    row = await user_row(owner_engine, address)
+    assert (row["totp_enabled_at"], row["totp_recovery_hashes"]) == (None, [])
+    async with owner_engine.connect() as conn:
+        replaced = await conn.execute(
+            text(
+                "SELECT count(*) FROM audit_events WHERE actor_user_id = :u AND action = 'auth.recovery_codes_replaced'"
+            ),
+            {"u": row["id"]},
+        )
+        assert replaced.scalar_one() == 0
+    assert not [m for m in outbox(client).outbox if m.to == address and "New recovery codes" in m.text]
