@@ -282,6 +282,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
     "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
+    "app_llm_batch_owned(character varying)": (True, {"bridge_app"}),  # batch_poll, before fetching results
     "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "app_unanchored_chain_heads()": (True, {"provenance_worker"}),

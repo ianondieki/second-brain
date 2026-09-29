@@ -1857,6 +1857,37 @@ CREATE FUNCTION app_llm_spend_usd(p_since timestamptz) RETURNS numeric
 AS $$
     SELECT coalesce(sum(c.cost_usd), 0) FROM public.llm_spend c WHERE c.created_at >= p_since
 $$;
+
+-- Whether every llm_calls row of a Message Batches batch belongs to the caller's bound tenant: the rows it could have
+-- written (the llm_calls INSERT policy and the round-5 tenant scoping), that is a row naming a user names the current
+-- user (app.user_id), a row naming an organisation names one the current user is an active member of (the bound one
+-- when app.org_id is set), and a platform job's row (no user, no organisation) belongs only to a caller with nothing
+-- bound. False for a batch with no row. batch_poll calls it before fetching a batch's results: one provider account
+-- serves every tenant, and bridge_app cannot read other tenants' rows or system rows. SECURITY DEFINER: judges every
+-- row of the batch whatever the caller may read (each half of the union uses one of the partial unique indexes).
+CREATE FUNCTION app_llm_batch_owned(p_batch_id varchar) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    WITH batch AS (
+        SELECT c.org_id, c.user_id
+          FROM public.llm_calls c
+         WHERE c.batch_id = p_batch_id AND c.status = 'batch_reserved'
+        UNION ALL
+        SELECT c.org_id, c.user_id
+          FROM public.llm_calls c
+         WHERE c.batch_id = p_batch_id AND c.status <> 'batch_reserved'
+    )
+    SELECT count(*) > 0 AND coalesce(bool_and(coalesce(
+               CASE
+                   WHEN b.user_id IS NULL AND b.org_id IS NULL
+                       THEN public.app_user_id() IS NULL AND public.app_org_id() IS NULL
+                   ELSE (b.user_id IS NULL OR b.user_id = public.app_user_id())
+                        AND (b.org_id IS NULL OR (public.app_is_member(b.org_id)
+                             AND (public.app_org_id() IS NULL OR b.org_id = public.app_org_id())))
+               END, false)), false)
+      FROM batch b
+$$;
 """
 
 # Trigger functions: evidence immutability (AC-IP-2) and append-only tables. None is executable by any runtime role.
@@ -2438,6 +2469,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_opt_out_org_invitations(uuid)": ("bridge_app",),
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
     "app_llm_call_inputs(uuid)": ("bridge_app",),
+    "app_llm_batch_owned(character varying)": ("bridge_app",),  # batch_poll, before fetching a batch's results
     "app_add_niche(text, text, text, text)": ("bridge_app",),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),

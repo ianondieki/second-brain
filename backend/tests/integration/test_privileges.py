@@ -1983,6 +1983,41 @@ async def test_a_batch_item_belongs_to_its_tenant(owner_engine: AsyncEngine) -> 
         assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(104)
 
 
+BATCH_OWNED = "SELECT app_llm_batch_owned(:b)"
+
+
+async def test_a_batch_is_owned_only_by_its_tenant(owner_engine: AsyncEngine) -> None:
+    """For batch_poll (one provider account serves every tenant, and bridge_app cannot read other tenants' rows or
+    system rows): app_llm_batch_owned(batch_id) is true only when every llm_calls row of the batch belongs to the
+    caller's bound tenant, the rows it could have written: its own user, organisations it is an active member of (the
+    bound one when app.org_id is set), and a platform job's rows (no user, no organisation) only with nothing bound. A
+    batch with no row, or with one row of anybody else, is owned by nobody."""
+    async with as_app(owner_engine) as conn:
+        owner = await w.add_user(conn, _email("batch-owner"), "Owner")
+        other = await w.add_user(conn, _email("batch-other"), "Other")
+        org, elsewhere = await add_org(conn, verification="e1"), await add_org(conn, verification="e1")
+        for membership in (elsewhere, org):
+            await _add_membership(conn, membership, owner, "{owner,admin}")
+        mine, jobs, mixed, unknown = (f"msgbatch_{uuid4().hex[:20]}" for _ in range(4))
+        row = {"status": "batch_reserved", "cost": Decimal(1)}
+        await act(conn, owner, org)
+        for batch, item, tenant in ((mine, "a", org), (mine, "b", None), (mixed, "a", org)):  # org and user rows
+            await run(conn, TENANT_BATCH_CALL, id=uuid7(), **row, org=tenant, u=owner, batch=batch, item=item)
+        await act(conn, None)  # a platform job: rows with no user and no organisation
+        for batch in (jobs, mixed):
+            await run(conn, TENANT_BATCH_CALL, id=uuid7(), **row, org=None, u=None, batch=batch, item="z")
+        for user, scope, owned in (
+            (owner, org, {mine}),
+            (owner, None, {mine}),  # a request not scoped to one organisation
+            (owner, elsewhere, set()),  # scoped to another organisation of the owner's
+            (other, None, set()),
+            (None, None, {jobs}),
+        ):
+            await act(conn, user, scope)
+            for batch in (mine, jobs, mixed, unknown):
+                assert await run(conn, BATCH_OWNED, b=batch) is (batch in owned), (user, scope, batch)
+
+
 LLM_CALL = (
     "INSERT INTO llm_calls (id, user_id, task, model, status, cost_usd, input_tokens, output_tokens,"
     " cache_read_tokens, cache_write_tokens, latency_ms) VALUES (:id, :u, 't', 'm', 'ok', :cost, :input, :output,"
