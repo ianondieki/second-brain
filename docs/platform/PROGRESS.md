@@ -301,8 +301,10 @@ column) went to db-migrations with round 4. The legacy `CheckTests` fail in work
 `tools/cloudflared.exe` (D-13); they pass in the main checkout.
 OAuth MINOR follow-ups done on `feat/REQ-AUTH-02-followups` (`c89ced0`..`77892bc`; 765 passed; `bridge/auth` 96%; fixed a
 real bug: a session signed out or an account suspended during the provider call still linked or signed in).
-`TRUSTED_PROXIES` warning left for Phase 8. The 12 h link/unlink residual is **D-34**. security-reviewer is running; the
-reviewer follows. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
+`TRUSTED_PROXIES` warning left for Phase 8. The 12 h link/unlink residual is **D-34**. security-reviewer **PASS** (MINORs: a forged
+callback still clears the victim's live flow cookie; the forged-callback test never sends a live cookie;
+`reload_session` should assert nothing is pending; residual text for `TRUSTED_PROXIES`). Reviewer running; one small
+fix round follows, then CI and merge. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
