@@ -61,6 +61,7 @@ def test_the_facts_state_counts_as_units_the_checker_can_match() -> None:
         # more of the same kinds
         ("Two drafts need you today.", "invented_number"),  # the count is the things', not drafts'
         ("Three things need you today.", "invented_number"),
+        ("Two parties need you today.", "invented_number"),
         ("Milestone 2 needs you today.", "invented_number"),
         ("Two things need you, worth KES 50,000.", "invented_number"),
         ("It was due in October.", "invented_date"),  # a month without its day

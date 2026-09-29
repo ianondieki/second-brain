@@ -202,23 +202,45 @@ def compose_nudge(facts: DeveloperFacts, holidays: Collection[date]) -> Nudge:
         health.append(HealthRow(e.id, a.health, line))
     drafts = tuple(quote(title, fallback="Untitled draft") for title in facts.drafts)
     step = _next_step(pairs, drafts)
-    counts = [health_row.health for health_row in health]
-    status = ", ".join(
-        f"{HEALTH_LABELS[h].lower()} {counts.count(h)}"
-        for h in (Health.OFF_TRACK, Health.AT_RISK, Health.ON_TRACK)
-        if counts.count(h)
+    return Nudge(
+        facts.user_id,
+        facts.today,
+        tuple(needs_you),
+        tuple(waiting),
+        tuple(health),
+        drafts,
+        step,
+        _fact_lines(facts.today, needs_you, waiting, health, pairs, drafts, step),
     )
+
+
+def _fact_lines(
+    today: date,
+    needs_you: list[str],
+    waiting: list[str],
+    health: list[HealthRow],
+    pairs: list[tuple[EngagementFact, Assessment]],
+    drafts: tuple[str, ...],
+    step: str,
+) -> tuple[str, ...]:
+    """What the model may reword, stated as units ``bridge.reminders.grounding`` matches whole: each count with its
+    noun (and status), the dates, the developer's own titles. Counts of zero are left out."""
+    counts = [row.health for row in health]
     overdue = sum(1 for _, a in pairs for r in a.reasons if r.code in OVERDUE_CODES)
-    fact_lines = (
-        f"Date: {eat_date(facts.today)}",
-        f"Things that need the developer: {len(needs_you)}",
-        f"Engagements waiting on the other party: {len(waiting)}",
-        *([f"Engagement health: {status}"] if status else []),
-        *([f"Overdue items: {overdue}"] if overdue else []),
-        f"Drafts not published: {len(drafts)}",
-        f"Suggested next step: {step}",
-    )
-    return Nudge(facts.user_id, facts.today, tuple(needs_you), tuple(waiting), tuple(health), drafts, step, fact_lines)
+    lines = [f"Today is {eat_date(today)}."]
+    if needs_you:
+        lines.append(f"{plural(len(needs_you), 'thing')} need{'s' if len(needs_you) == 1 else ''} the developer.")
+    if waiting:
+        lines.append(f"{plural(len(waiting), 'engagement')} wait{'s' if len(waiting) == 1 else ''} on the other party.")
+    for status in (Health.OFF_TRACK, Health.AT_RISK, Health.ON_TRACK):
+        if counts.count(status):
+            lines.append(f"{plural(counts.count(status), 'engagement')} {HEALTH_LABELS[status].lower()}.")
+    if overdue:
+        lines.append(f"{plural(overdue, 'item')} overdue.")
+    if drafts:
+        lines.append(f"{plural(len(drafts), 'draft')} unpublished.")
+    lines.append(f"Suggested next step: {step}")
+    return tuple(lines)
 
 
 def summary(nudge: Nudge) -> str:

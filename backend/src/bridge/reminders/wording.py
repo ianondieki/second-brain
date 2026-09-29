@@ -13,16 +13,17 @@ reason is kept (``Wording.reason``, logged ``reminders.nudge_worded``):
 - ``demo_fallback:<reason>``: the router's placeholder (fake provider, no slot, not demo data, a cap, the kill switch,
   a failed call; ``bridge.llm.demo_fallback``): a placeholder is never a wording;
 - ``llm_error:<code>``: a typed LLM error (staging and production raise instead of falling back);
-- ``injection_suspected`` or ``rejected:<check>``: the reply flags an injection, or fails ``check_wording``: not one
-  plain line within its length, a link or contact detail, a number, month, weekday, relative day, name or status the
-  facts do not hold, a percentage, or a next step that lost the suggested step's numbers.
+- ``injection_suspected`` or ``rejected:<check>``: the reply flags an injection, or fails ``check_wording``: each line
+  is one line of plain text within its length (any whitespace but a space, any control or invisible character, a
+  link, a contact detail or a symbol is refused), then grounded word by word in the facts
+  (``bridge.reminders.grounding``: an allowlist of neutral words plus the facts' words, with counts, milestones and
+  dates matched as whole units), and the next step keeps the suggested step's title, dates and numbers.
 
 A caller's mistake (``LLMConfigError``) is a bug and propagates.
 """
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from typing import Final, Self
 
@@ -34,6 +35,7 @@ from bridge.llm.errors import LLMConfigError, LLMError
 from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message
 from bridge.logging import get_logger
 from bridge.proposals.sanitise import contact_findings
+from bridge.reminders.grounding import Grounding
 from bridge.reminders.nudge import Nudge, Wording, fallback_wording
 
 TASK: Final = "reminder_nudge"
@@ -50,79 +52,6 @@ SYSTEM: Final = (
     " date, weekday, name, amount, link, deadline, status or promise that is not in them, and never give a percentage."
     " Write plain text: no markdown, no links, no emoji, no greeting by name."
 )
-_NUMBER = re.compile(r"\d+")
-_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
-_NUMBER_WORDS: Final = {
-    word: str(n)
-    for n, word in enumerate(
-        [
-            "zero",
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-            "ten",
-            "eleven",
-            "twelve",
-            "thirteen",
-            "fourteen",
-            "fifteen",
-        ]
-    )
-}
-_MONTHS: Final = {
-    **{
-        m: n
-        for n, m in enumerate(
-            ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1
-        )
-    },
-    **{
-        m: n
-        for n, m in enumerate(
-            [
-                "january",
-                "february",
-                "march",
-                "april",
-                "may",
-                "june",
-                "july",
-                "august",
-                "september",
-                "october",
-                "november",
-                "december",
-            ],
-            start=1,
-        )
-    },
-    "sept": 9,
-}
-_BANNED_WORDS: Final = frozenset(
-    [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-        "tomorrow",
-        "yesterday",
-        "tonight",
-        "weekend",
-        "percent",
-    ]
-)
-_STATUSES: Final = ("on track", "at risk", "off track", "overdue", "late", "behind")
-_MARKUP: Final = re.compile(r"https?:|www\.|@|\]\(|[<>`*#|]|\[")
-_ALLOWED_NAMES: Final = frozenset({"I", "NDA"})
 
 
 class NudgeWording(LLMOutput):
@@ -147,57 +76,29 @@ def messages(nudge: Nudge) -> list[Message]:
     ]
 
 
-def _line_problem(field: str, text: str, limit: int) -> str | None:
+def _line_problem(field: str, text: str, limit: int, grounding: Grounding) -> str | None:
     if not text or len(text) > limit:
         return f"{field}_length"
-    if any(unicodedata.category(ch)[0] == "C" for ch in text):
+    if any(unicodedata.category(ch)[0] == "C" or (ch.isspace() and ch != " ") for ch in text):
         return f"{field}_not_one_line"
-    if _MARKUP.search(text) or contact_findings(text):
+    if contact_findings(text):
         return f"{field}_link_or_contact"
+    if grounding.symbol(text):
+        return f"{field}_symbol"
     return None
-
-
-def _months(text: str) -> set[int]:
-    return {_MONTHS[w.lower()] for w in _WORD.findall(text) if w.lower() in _MONTHS}
-
-
-def _names(text: str) -> set[str]:
-    """Capitalised words that do not start a sentence (names, places, organisations)."""
-    found: set[str] = set()
-    for sentence in re.split(r"(?<=[.!?:;])\s+", text):
-        words = _WORD.findall(sentence)
-        found |= {w for w in words[1:] if w[:1].isupper() and w not in _ALLOWED_NAMES}
-    return found
 
 
 def check_wording(output: NudgeWording, nudge: Nudge) -> str | None:
     """Why the model's lines cannot be used (see the module docstring), or None when they can."""
     if output.injection_suspected:
         return "injection_suspected"
+    grounding = Grounding.of("\n".join(nudge.fact_lines))
     headline, step = output.headline.strip(), output.next_step.strip()
-    problem = _line_problem("headline", headline, MAX_HEADLINE_CHARS) or _line_problem(
-        "next_step", step, MAX_NEXT_STEP_CHARS
-    )
-    if problem:
-        return problem
-    facts = "\n".join(nudge.fact_lines)
-    written = f"{headline} {step}"
-    lower = written.lower()
-    numbers = set(_NUMBER.findall(facts))
-    words = [w.lower() for w in _WORD.findall(written)]
-    if "%" in written or any(w in _BANNED_WORDS for w in words):
-        return "invented_day_or_percentage"
-    if not set(_NUMBER.findall(written)) <= numbers or any(
-        _NUMBER_WORDS[w] not in numbers for w in words if w in _NUMBER_WORDS
-    ):
-        return "invented_number"
-    if not _months(written) <= _months(facts):
-        return "invented_date"
-    if any(re.search(rf"\b{status}\b", lower) and status not in facts.lower() for status in _STATUSES):
-        return "invented_status"
-    if not _names(written) <= set(_WORD.findall(facts)):
-        return "invented_name"
-    if not set(_NUMBER.findall(nudge.next_step)) <= set(_NUMBER.findall(step)):
+    for field, text, limit in (("headline", headline, MAX_HEADLINE_CHARS), ("next_step", step, MAX_NEXT_STEP_CHARS)):
+        problem = _line_problem(field, text, limit, grounding) or grounding.problem(text)
+        if problem is not None:
+            return problem
+    if not grounding.covers(nudge.next_step, step):
         return "next_step_changed"
     return None
 
