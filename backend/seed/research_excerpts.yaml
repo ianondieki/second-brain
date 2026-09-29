@@ -1,0 +1,197 @@
+# Public source excerpts for the research agent (REQ-RES-01/02), Kenya.
+# Fetched ONCE on 2026-09-29 at build time; no runtime scraping. Method, sources and caveats:
+# docs/platform/research/research-excerpts-2026-09.md
+# `quote` is copied verbatim (whitespace-normalised) from the fetched page text; `published_date` is the date
+# the page itself states (ISO 8601). No personal data about private individuals. Fair-use excerpts only (<=60 words).
+# `source_type` maps to the section 6.5 quality tiers: official 1.0, filing 0.9, news/ngo 0.8.
+excerpts:
+- id: ke-tel-001
+  niche: networks-telecommunications
+  country: KE
+  url: https://www.businessdailyafrica.com/bd/corporate/technology/safaricom-grip-loosens-as-airtel-starlink-gain-ground-5412426
+  publisher: Business Daily
+  source_type: news
+  published_date: '2026-04-03'
+  retrieved_at: '2026-09-29'
+  quote: As of December 2025, M-Pesa’s share in the mobile money market had slimmed to 89 percent from 91 percent at the end of 2024, as Airtel Money raised its share from 8.9 percent to 11 percent.
+  topic: Mobile money market share shifting from M-Pesa to Airtel Money
+- id: ke-tel-002
+  niche: networks-telecommunications
+  country: KE
+  url: https://www.businessdailyafrica.com/bd/corporate/companies/safaricom-takes-another-hit-as-interconnection-rates-fall-by-27pc-5374494
+  publisher: Business Daily
+  source_type: news
+  published_date: '2026-02-27'
+  retrieved_at: '2026-09-29'
+  quote: The Communications Authority of Kenya (CA) has set a four-year glide path that will see the Mobile Termination Rate (MTR) per minute decline from the previous Sh0.41 to Sh0.37 that took effect on Sunday and further to Sh0.3 by March 2029.
+  topic: CA phased cut to mobile termination rates to March 2029
+- id: ke-tel-003
+  niche: networks-telecommunications
+  country: KE
+  url: https://www.businessdailyafrica.com/bd/corporate/technology/starlink-rivals-face-sh15m-licence-under-new-telecoms-rules-5415310
+  publisher: Business Daily
+  source_type: news
+  published_date: '2026-04-07'
+  retrieved_at: '2026-09-29'
+  quote: Satellite communication providers, including Starlink, will from this week be required to obtain a licence costing at least Sh15 million and pay up to 0.4 percent of their annual gross turnover to the Kenyan government under expanded telecommunications rules.
+  topic: New satellite licensing cost under revised telecom market structure
+- id: ke-tel-004
+  niche: networks-telecommunications
+  country: KE
+  url: https://www.capitalfm.co.ke/business/2026/01/airtel-pushes-for-call-rate-reforms-as-treasury-defends-single-bidder-safaricom-sale/
+  publisher: Capital FM Kenya
+  source_type: news
+  published_date: '2026-01-16'
+  retrieved_at: '2026-09-29'
+  quote: Airtel told lawmakers that the current MTR regime disproportionately disadvantages smaller operators.
+  topic: Smaller operators say termination charges hinder competition
+- id: ke-tel-005
+  niche: networks-telecommunications
+  country: KE
+  url: https://www.ca.go.ke/consumers-enjoy-lower-calling-rates-following-drop-interconnection-rates
+  publisher: Communications Authority of Kenya
+  source_type: official
+  published_date: '2023-11-19'
+  retrieved_at: '2026-09-29'
+  quote: In the latest review, the Authority has capped the MTRs and FTRs at KES. 0.41 per minute with effect from 1st March 2024.
+  topic: CA cap on mobile and fixed termination rates from March 2024 (background)
+- id: ke-agr-001
+  niche: agriculture
+  country: KE
+  url: https://www.standardmedia.co.ke/rift-valley/article/2001556174/state-cuts-fertiliser-and-maize-seed-after-dry-spell-causes-massive-losses
+  publisher: The Standard
+  source_type: news
+  published_date: '2026-08-26'
+  retrieved_at: '2026-09-29'
+  quote: The drought has also raised concerns about food security, with national food production projected to decline by between 30 and 40 per cent this year following crop failure in key grain-growing areas.
+  topic: Drought crop failure and projected fall in food production
+- id: ke-agr-002
+  niche: agriculture
+  country: KE
+  url: https://www.the-star.co.ke/news/2026-08-23-ruto-cuts-fertiliser-price-to-sh2000-in-new-relief-for-farmers
+  publisher: The Star
+  source_type: news
+  published_date: '2026-08-23'
+  retrieved_at: '2026-09-29'
+  quote: The Ministry of Agriculture and Fisheries has announced plans to import 25 million 90-kilogramme bags of maize to boost national stocks.
+  topic: Planned maize imports after reduced production
+- id: ke-agr-003
+  niche: agriculture
+  country: KE
+  url: https://kilimo.go.ke/ps-ronoh-flags-off-99000-metric-tonnes-of-subsidised-fertiliser-at-the-port-of-mombasa/
+  publisher: Ministry of Agriculture and Livestock Development
+  source_type: official
+  published_date: '2026-09-08'
+  retrieved_at: '2026-09-29'
+  quote: Through the Government subsidy, farmers will access the fertiliser at KSh 2,000 per 50 kilogram bag.
+  topic: Subsidised fertiliser price per 50 kg bag
+- id: ke-agr-004
+  niche: agriculture
+  country: KE
+  url: https://kilimo.go.ke/strengthening-integrity-in-kenyas-subsidized-fertilizer-program/
+  publisher: Ministry of Agriculture and Livestock Development
+  source_type: official
+  published_date: '2025-02-06'
+  retrieved_at: '2026-09-29'
+  quote: The Subsidized Fertilizer Program has been a transformative force in enhancing agricultural production in Kenya. However, corruption in its distribution would undermine its success.
+  topic: Integrity risk in subsidised fertiliser distribution (background)
+- id: ke-hlt-001
+  niche: health
+  country: KE
+  url: https://www.capitalfm.co.ke/business/2026/01/audit-fake-claims-cost-sha-sh11bn-in-losses/
+  publisher: Capital FM Kenya
+  source_type: news
+  published_date: '2026-01-28'
+  retrieved_at: '2026-09-29'
+  quote: Kenya lost Sh11 billion through fraudulent claims submitted to the Social Health Authority (SHA), an audit by the Ministry of Health has revealed.
+  topic: Audit finds Sh11 billion fraudulent SHA claims
+- id: ke-hlt-002
+  niche: health
+  country: KE
+  url: https://www.the-star.co.ke/news/2026-01-28-duale-sha-blocked-sh11bn-in-suspected-fraudulent-claims
+  publisher: The Star
+  source_type: news
+  published_date: '2026-01-28'
+  retrieved_at: '2026-09-29'
+  quote: Speaking on the reforms, Duale said the government has rejected fraudulent health insurance claims amounting to Sh11.6 billion, citing this as evidence that tighter controls are beginning to yield results.
+  topic: Health CS says SHA rejected fraudulent claims (differs from 'lost' framing)
+- id: ke-hlt-003
+  niche: health
+  country: KE
+  url: https://www.standardmedia.co.ke/health/health-science/article/2001556702/hospitals-get-one-more-month-on-sha-digital-compliance-rules
+  publisher: The Standard
+  source_type: news
+  published_date: '2026-09-01'
+  retrieved_at: '2026-09-29'
+  quote: Healthcare providers are required to integrate their systems with the national digital health infrastructure to facilitate electronic processing of claims and secure exchange of patient information.
+  topic: Providers must integrate systems with national digital health infrastructure
+- id: ke-hlt-004
+  niche: health
+  country: KE
+  url: https://www.standardmedia.co.ke/health/health-science/article/2001558860/health-care-providers-have-until-september-30-to-renew-sha-contracts
+  publisher: The Standard
+  source_type: news
+  published_date: '2026-09-28'
+  retrieved_at: '2026-09-29'
+  quote: SHA has warned that facilities that fail to execute new agreements under the 2026–2029 contracting cycle before the deadline will not be allowed to offer services to beneficiaries from October 1.
+  topic: SHA 2026-2029 provider contract renewal deadline
+- id: ke-hlt-005
+  niche: health
+  country: KE
+  url: https://www.the-star.co.ke/news/2026-07-01-sha-shifts-level-4-public-hospitals-to-taifa-care-hmis
+  publisher: The Star
+  source_type: news
+  published_date: '2026-07-01'
+  retrieved_at: '2026-09-29'
+  quote: Under the new arrangement, all Level 4 public healthcare facilities will be required to submit new claims exclusively through the platform.
+  topic: Level 4 public hospitals move to Taifa Care HMIS for claims
+- id: ke-sac-001
+  niche: microfinance-saccos
+  country: KE
+  url: https://capitalfm.africa/saccos-deposits-rise-11-12pc-to-sh832-74bn-as-assets-hit-sh1-21tn/
+  publisher: Capital FM Kenya
+  source_type: news
+  published_date: '2026-09-28'
+  retrieved_at: '2026-09-29'
+  quote: Higher deposits helped drive total assets held by regulated Saccos to Sh1.21 trillion from Sh1.076 trillion, representing a 12.5 percent increase.
+  topic: Regulated SACCO assets growth in 2025
+- id: ke-sac-002
+  niche: microfinance-saccos
+  country: KE
+  url: https://www.businessdailyafrica.com/bd/corporate/companies/sacco-loans-default-rate-falls-to-5-9pc-on-improved-payment-5378710
+  publisher: Business Daily
+  source_type: news
+  published_date: '2026-03-03'
+  retrieved_at: '2026-09-29'
+  quote: The share of bad loans among saccos supervised by the Sacco Societies Regulatory Authority (Sasra) has dropped to near the recommended maximum threshold of five percent, pointing to improved repayment among customers.
+  topic: SACCO non-performing loan ratio near 5 percent benchmark
+- id: ke-sac-003
+  niche: microfinance-saccos
+  country: KE
+  url: https://www.sasra.go.ke/2026/07/16/strengthening-cyber-resilience-in-the-sacco-industry/
+  publisher: SACCO Societies Regulatory Authority (SASRA)
+  source_type: official
+  published_date: '2026-07-16'
+  retrieved_at: '2026-09-29'
+  quote: The Authority remains committed to supporting secure digital transformation and protecting SACCO members’ funds in an increasingly technology-driven financial sector.
+  topic: SASRA focus on cyber resilience in SACCOs
+- id: ke-sac-004
+  niche: microfinance-saccos
+  country: KE
+  url: https://www.sasra.go.ke/2026/06/15/sasra-conducts-the-2026-regulatory-policy-and-legal-roundtable-for-deposit-taking-saccos/
+  publisher: SACCO Societies Regulatory Authority (SASRA)
+  source_type: official
+  published_date: '2026-06-15'
+  retrieved_at: '2026-09-29'
+  quote: Discussions focused on governance, Risk-Based SACCO Supervision, quality of regulatory data, financial reporting, audit concerns, cybersecurity, responsible use of technology and compliance with applicable laws and standards.
+  topic: Regulatory issues for deposit-taking SACCOs
+- id: ke-sac-005
+  niche: microfinance-saccos
+  country: KE
+  url: https://www.sasra.go.ke/2026/06/25/cs-oparanya-calls-on-sasra-to-strengthen-capacity-and-prepare-for-expanded-mandate/
+  publisher: SACCO Societies Regulatory Authority (SASRA)
+  source_type: official
+  published_date: '2026-06-25'
+  retrieved_at: '2026-09-29'
+  quote: The Cabinet Secretary called on the Authority to strengthen its institutional capacity, embrace technology and prepare for the proposed expansion of its regulatory mandate.
+  topic: Proposed expansion of SASRA regulatory mandate
