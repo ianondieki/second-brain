@@ -443,6 +443,36 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | 44 | Cheap MINORs folded into fix rounds | keep | no extra review round (PLAN §8) |
 | 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
 
+### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
+
+P9:
+
+- Demo TSA: the seeded/test TSA is a local openssl test TSA (serial 0x01). The demo must label timestamps as from a
+- Reset demo DB before screenshots: provenance test builders write "Provenance niche" into shared DBs.
+- --demo seed must export a certificate id so e2e/verify.spec.ts removes its E2E_VERIFY_CERT_ID skip.
+- P1 hand-offs: seed demo_account + D2 for demo developers as the owner; test clock enabled only with explicit APP_ENV.
+- Production config needs EMBEDDER=bge-m3 and an Anthropic key or LLM_KILL_SWITCH=1; demo runs APP_ENV=dev with the fake embedder (no bge-m3 download).
+- Docker builds here need the scratchpad CA override (compose.ccr.json); the laptop does not.
+- Demo needs TIER2_LOCAL_KEK set (else Tier-2 endpoints 503) and ATTACHMENT_SCANNER=fake (dev/test only; demo uses APP_ENV=dev).
+- P7: callers acting on an LLM verdict (moderation pre-screen etc.) must treat demo_fallback as "no verdict" / hold.
+- Revision 0004 (db-migrations, after P1 merges): app_llm_calls_since(p_model, p_since) SECURITY DEFINER, excluding blocked_* and batch_reserved, EXECUTE bridge_app; then P7's free-slot cap becomes platform-wide.
+- LLM vars for the M1 report: LLM_PROVIDER, LLM_PROTOTYPE_TOTAL_CAP_USD, LLM_FREE_<N>_{BASE_URL,API_KEY,MODEL,DAILY_REQUESTS,RESPONSE_FORMAT} (N=1..3), ANTHROPIC_API_KEY, LLM_KILL_SWITCH, LLM_GLOBAL_DAILY_CAP_USD.
+- P5: FEATURE_DEALS_ENABLED=true for the demo (else every command from send_nda answers 403); FEATURE_TIER2_ENABLED=true too. Test clock needs image built WITH_TEST_CLOCK=true (dev compose sets it). Step-up = TOTP within 12 h: demo org seats need the TOTP helper.
+- e2e: CI pr.yml e2e job must export E2E_DATABASE_OWNER_URL (proposal-wizard D1 publish test skips without it) and E2E_VERIFY_CERT_ID from the demo seed; remove both skips in P9.
+- P6: seed must grant the 'reminders' consent to demo accounts (else no nudge emails); reminders CLI: python -m bridge.reminders run --now (refuses production). After P5 merges, P6 whose_turn should call P5's state machine; thresholds to policy.yaml.
+- M1 EXIT ITEM (re-check #38): remove the e2e skips — E2E_VERIFY_CERT_ID (verify.spec.ts, seed exports a certificate id) and E2E_DATABASE_OWNER_URL (proposal-wizard D1 publish) — CI pr.yml e2e job must provide both.
+- Re-check #26: seed TOTP for demo developers, org signatories, reviewers and finance seats (ADR-002 step-up ≤12 h for signatures, endorsements, payments); TOTP helper prints current codes for the demo logins.
+- APP_ENV=dev for make demo (fake scanner, test clock, free LLM providers and demo fallback all require dev/test); build api image WITH_TEST_CLOCK=true.
+- Re-check #42: after every merge, check the integration push run of pr.yml.
+
+M2:
+
+- P10 scout: ORG_INTEREST needs a manual Tier-2 grant by the developer (spec 6.9 stage 0) — build it; read proposal_versions only via current_version_id (P2 MINOR: older held versions readable by RLS); scout never reads Tier 2; demo_fallback() on every LLM schema; InputField owner set.
+- P11 research: public=True only for saved public excerpts (reviewer to check); D-38 excerpts; allowlist domains from the researcher (capitalfm.co.ke, capitalfm.africa, kilimo.go.ke, www.sasra.go.ke, www.ca.go.ke, businessdailyafrica.com, standardmedia.co.ke, the-star.co.ke); stale fixtures ke-tel-005, ke-agr-004; don't merge ke-hlt-001/002 numbers.
+- P12 ranker: read current_version_id only.
+- P13 assistant: handle LLMBudgetExceeded scope global with a fixed message (T2.2 security MINOR 3); demo_fallback = no suggestion.
+- P15 admin: if staff can decide claims, fix schema v2 round-6 MINORs 1–3 (seat-aware domain rule, first verification by non-owner, E2 attributes by non-owner) first; else keep the claims queue read-only.
+
 ### Prototype checklist (updated after every task; commit and push after each)
 
 | Item | Status | Notes |
@@ -462,7 +492,7 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
 | P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
 | P9 `make demo` (basic) | todo | |
-| M1 merged, tag `prototype-m1`, M1 report | todo | |
+| M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |
 | P11 research | todo | M2 |
 | P12 trending + ranker | todo | M2 |
