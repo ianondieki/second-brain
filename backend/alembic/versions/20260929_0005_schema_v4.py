@@ -567,11 +567,14 @@ END;
 $$;
 
 -- Cross-organisation trend aggregates (REQ-TREND-01; docs/spec/06 6.6, docs/spec/08 Tenancy): signal_events in
--- [p_since, p_now), at most 400 days, per item, kind and Africa/Nairobi day. events counts each actor once per item
--- and day (signals without an actor once per day: 1 event/account/item/day); actors is the item and kind's distinct
--- actors over the window; orgs its distinct organisations only when there are 3 or more (else NULL), so a small count
--- never singles an organisation out. No actor hash, organisation hash or organisation id is ever returned. Owned by
--- bridge_owner (the revision's docstring says why not aggregate_worker); it reads signal_events and nothing else.
+-- [p_since, p_now), at most 400 days, per item, kind and Africa/Nairobi day, of the listed kinds only
+-- (proposal_published, proposal_version_published, scout_match, org_interest: adding a kind is a revision), whose item
+-- is a published proposal clear of moderation holds, and only for an item and kind with at least 3 distinct actors in
+-- the window (fewer: no row at all, so no count ever describes one or two accounts). events counts each actor once
+-- per item and day (signals without an actor once per day: 1 event/account/item/day); actors is the item and kind's
+-- distinct actors over the window; orgs its distinct organisations only when there are 3 or more (else NULL). No
+-- actor hash, organisation hash or organisation id is ever returned. Owned by bridge_owner (the revision's docstring
+-- and D-46 say why not aggregate_worker); it reads signal_events and the proposals' visibility, nothing else.
 CREATE FUNCTION app_trend_aggregates(p_since timestamptz, p_now timestamptz)
     RETURNS TABLE (item_id uuid, kind varchar, day date, events integer, actors integer, orgs integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -588,6 +591,9 @@ BEGIN
                s.actor_hash AS s_actor, s.org_hash AS s_org
           FROM public.signal_events s
          WHERE s.ts >= p_since AND s.ts < p_now
+           AND s.kind = ANY ('{proposal_published,proposal_version_published,scout_match,org_interest}'::text[])
+           AND EXISTS (SELECT 1 FROM public.proposals p
+                        WHERE p.id = s.item_id AND p.status = 'published' AND p.moderation_state = 'clear')
     ), per_day AS (
         SELECT g.s_item, g.s_kind, g.s_day, count(DISTINCT coalesce(g.s_actor, '\x'::bytea)) AS d_events
           FROM signals g
@@ -596,6 +602,7 @@ BEGIN
         SELECT g.s_item, g.s_kind, count(DISTINCT g.s_actor) AS i_actors, count(DISTINCT g.s_org) AS i_orgs
           FROM signals g
          GROUP BY g.s_item, g.s_kind
+        HAVING count(DISTINCT g.s_actor) >= 3
     )
     SELECT d.s_item, d.s_kind, d.s_day, d.d_events::integer, i.i_actors::integer,
            CASE WHEN i.i_orgs >= 3 THEN i.i_orgs::integer END
