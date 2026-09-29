@@ -7,7 +7,8 @@ REQ-SCOUT-01 and REQ-SCOUT-02 (``scout_agents``, ``agent_runs``, ``agent_matches
 "Revision 0005" section of ``docs/platform/tasks/REQ-SCOUT-01.md``. Additive: 5 new tables, 5 new enum types, three new
 columns on ``problems`` and ``problem_sources``, one trigger on ``problems``, and bridge_app's INSERT on ``problems``
 and ``problem_sources`` narrowed to every column but the new ones (the table-wide grants are restored on downgrade).
-Nothing of revisions 0001 to 0004 is changed or dropped. D-43: the scout has no database role of its own in the
+Nothing of revisions 0001 to 0004 is changed or dropped. The upgrade is additive; the downgrade is destructive (it drops
+payment records: see ``downgrade()``). D-43: the scout has no database role of its own in the
 prototype (the worker is bridge_app; the scout code never reads Tier 2, enforced by P10's import-lint and prompt tests).
 
 Who writes what (RLS; bridge_app; ``app.org_id`` narrows every organisation predicate when set):
@@ -24,13 +25,19 @@ Who writes what (RLS; bridge_app; ``app.org_id`` narrows every organisation pred
   scout exists or what it matched.
 - ``agent_runs`` (ORG): members read; an acting member (owner, admin, signatory or reviewer: a job binds the
   ``act_as_user_id`` that ``app_scouts_due`` names) inserts a running run and updates its status, counts and error code;
-  no DELETE. ``error_code`` is a code, never free text; a failed run carries one, no other does.
+  no DELETE (runs go only with their scout). ``error_code`` is a code, never free text; a failed run carries one, no
+  other does. ``started_at`` is the database's clock (default ``app_clock_now()``): bridge_app's INSERT is
+  column-scoped without it, so a run is never forward- or back-dated.
 - ``agent_matches`` (ORG only): members read; an acting member inserts a match for the current registered version of a
   published, clear proposal (read under the caller's own RLS), with no feedback and no digest time; UPDATE of the
-  feedback columns (the caller's own ``feedback_by``) and ``digest_sent_at`` only. UNIQUE (scout_id, proposal_id): a
+  feedback columns and ``digest_sent_at`` only; a feedback is given as oneself and, once given, changed or cleared
+  only by its author (``agent_matches_feedback_guard``, every role; other members and the digest job still write
+  ``digest_sent_at``). UNIQUE (scout_id, proposal_id): a
   proposal is matched once per scout across runs (AC-SCOUT-6).
 - ``research_runs`` (STAFF): staff admin only (read, insert as ``started_by``, update); CHECK searches <= 25 and
-  fetches <= 40 (AC-RES-3). Candidates come only from ``app_create_research_candidate``.
+  fetches <= 40 (AC-RES-3). ``research_runs_guard`` (every role): only the starter changes a run's status, a finished
+  run never changes again (never back to running), and its niche, region, starter and start never change. Candidates
+  come only from ``app_create_research_candidate``.
 - ``payments`` (ORG_OR_USER): the user, or the organisation's owner, admin or finance member, reads; inserts a pending
   payment (as ``initiated_by``) for an active, non-default plan of the subject's side at exactly its price; no UPDATE
   or DELETE grant. Provider ``fake`` only (CHECK); ``provider_ref`` platform-generated and unique; no phone column.
@@ -53,22 +60,30 @@ SECURITY DEFINER functions (pinned search_path, EXECUTE revoked from PUBLIC and 
   completed, not failed) in the same Africa/Nairobi day or ISO week as ``p_now``; on_new: only for a published, clear
   proposal the scout has not matched yet. Nothing else is returned.
 - ``app_create_research_candidate(run, title, statement, affected_group, county, confidence, named_orgs, sources)``:
-  staff admin only, on the caller's own running run; a title of 1 to 90 characters and a statement of at most 120
-  words; confidence 0.40 to 1; 1 to 10 sources, each an object of string values with an https URL, a published date
-  (YYYY-MM-DD), a retrieval time and a quote (optional publisher, source type of the 6.5 tiers, excerpt ref; nothing
-  else); a card naming organisations needs an official source. Inserts the candidate (``created_by`` NULL, so the same
-  admin may approve it through ``app_moderate_problem``) and its sources in one call, niche and country from the run.
+  staff admin only, on the caller's own running run; a title of 1 to 90 characters, a statement of at most 120 words
+  and 1500 characters, an affected group of at most 200, no control characters in them or in named organisations;
+  confidence 0.40 to 1; 1 to 10 sources, each an object of string values with an https URL on an ASCII host, a
+  published date (YYYY-MM-DD), a retrieval time between that date and now, and a quote (optional publisher, source
+  type of the 6.5 tiers, excerpt ref; nothing else; no control characters; any malformed date or time is the same
+  refusal); a card naming organisations needs an official source. Inserts the candidate (``created_by`` NULL, so the
+  same admin may approve it through ``app_moderate_problem``) and its sources in one call, niche and country from the
+  run.
 - ``app_settle_payment(payment, status, failure_code)``: the payment's subject only (one refusal, the same for a
   payment that does not exist); pending -> succeeded, failed or cancelled once; repeating the same outcome is a no-op
-  (false); another outcome is refused.
+  (false); another outcome is refused. Fails closed for real money: a payment of any provider but ``fake`` is never
+  settled as succeeded here (the revision that widens the provider CHECK adds the platform path, REQ-BIL-04).
 - ``app_activate_paid_subscription(payment)``: the subject only; a succeeded payment whose plan is of the subject's
-  side at the paid amount; serialised per subject; cancels the subject's live subscription and inserts the new one
+  side (the price is not re-checked: plan and amount were matched at INSERT and never change, so a later price change
+  never strands a paid payment); serialised per subject; cancels the subject's live subscription and inserts the new one
   from ``app_clock_now()`` (a month or a year, per the plan's interval), linking the payment; a linked payment returns
   its subscription (idempotent).
 - ``app_trend_aggregates(p_since, p_now)``: signal_events in [p_since, p_now) (at most 400 days) per item, kind and
-  Africa/Nairobi day: ``events`` counts each actor once per item and day (actor-less signals once per day); ``actors``
-  is the item and kind's distinct actors over the window; ``orgs`` its distinct organisations only when there are 3 or
-  more, else NULL. It never returns an actor hash, an organisation hash or an organisation id.
+  Africa/Nairobi day, only of the kinds ``proposal_published``, ``proposal_version_published``, ``scout_match`` and
+  ``org_interest`` (adding one is a revision), only for published proposals clear of moderation holds, and only for an
+  item and kind with at least 3 distinct actors in the window (else no row): ``events`` counts each actor once per
+  item and day (actor-less signals once per day); ``actors`` is the item and kind's distinct actors over the window;
+  ``orgs`` its distinct organisations only when there are 3 or more, else NULL. It never returns an actor hash, an
+  organisation hash or an organisation id.
 
 Owner of ``app_trend_aggregates``: ``bridge_owner``, not ``aggregate_worker`` (docs/spec/08 reads aggregates under
 that role). ``ALTER FUNCTION ... OWNER TO aggregate_worker`` needs the migration role to be able to ``SET ROLE``
@@ -76,13 +91,17 @@ that role). ``ALTER FUNCTION ... OWNER TO aggregate_worker`` needs the migration
 no membership in it and ``prepare_db.sql`` lets nobody but the owner create in ``public``; granting either would give a
 runtime role an owned object (``test_runtime_roles_own_nothing``) and a login path to CREATE. bridge_app cannot switch
 to ``aggregate_worker`` either (it is a member of the Tier-2 roles only). So the definer runs as the owner, reads
-``signal_events`` only, and returns counts only; the query is the whole of its privilege.
+``signal_events`` (and the proposals' visibility) only, and returns counts only; the query is the whole of its
+privilege. Recorded as D-46 (``DECISIONS-NEEDED.md``): keep this for the prototype; own it as ``aggregate_worker``
+at Phase 4.
 
 Operating rules for the code that uses this schema:
 
 - The scan job calls ``app_scouts_due`` with no user bound, then binds each ``act_as_user_id`` with the scout's
   organisation (``bind_tenant``) for its run: runs, matches and the cursor are written under that binding.
-- Leave ``agent_runs.started_at`` out (``app_clock_now()``, so due-ness follows the test clock).
+- ``agent_runs.started_at`` is the database's (``app_clock_now()``, so due-ness follows the test clock).
+- Never accept a client-supplied id or reference for a new row (scout, run, match, payment, ``provider_ref``): a
+  unique key refusal would tell the caller that another tenant's row exists.
 - Research runs bind the staff admin who started them; create candidates only through ``app_create_research_candidate``.
 - Payments: insert pending at the plan's price, query the provider, then ``app_settle_payment`` and
   ``app_activate_paid_subscription`` (refresh the ORM rows afterwards: the functions changed them). The database cannot
