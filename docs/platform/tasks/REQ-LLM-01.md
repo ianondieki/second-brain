@@ -25,3 +25,10 @@ AC-SEC-6 (`unit/llm/test_no_tier2_in_llm_calls.py`; against the stored `llm_call
   - The settings API still offers `tier2_llm_assistant`: `GET /api/me/consents` lists it and `PUT /api/me/consents` records it with `source = "settings"`, which the guard never counts; after a per-session grant, `GET` shows it as granted although it is live only in that session. T2.9 removes it from the settings API and page (or shows it as "this session only") and records the opt-in only through `grant_session_consent` from the assistant.
   - The consent wording (`config/consents.yaml`: "Let the writing assistant read my confidential (Tier 2) text to suggest improvements.") does not say the opt-in lasts one login session and ends at sign-out; new wording is a new text version `[[COPY-REVIEW]]`.
   - An audit event on grant and on withdrawal: `grant_session_consent`/`withdraw_session_consent` only add the consent row; the T2.9 endpoint checks the text version shown, writes the audit event (as `consent.changed` does in the settings route) and commits.
+
+## Review round 2 (2026-09-29, prototype track): reviewer PASS; MINOR follow-ups (not built, PLAN §8)
+
+1. `sql_ledger.py:208` — the exact-subject half of `batch_owned` has no test (a handle naming the owner without its organisation). Add `test_a_handle_naming_the_owner_without_its_organisation_is_refused` to `tests/integration/llm/test_sql_batches.py`.
+2. `budget.py:174` — soft-cap crossings are judged on a snapshot that includes in-flight batch reservations and `batch_submit` never calls `after()`, so a crossing can be missed. Judge the crossing on spend without reservations, or re-check when reservations are released (before the Phase 4 soft-cap email).
+3. `client.py:630` — if writing the reservations fails after `batch_create`, the provider batch runs unpolled and uncounted. Cancel the batch through the adapter (or retry the reservation) and add a unit test.
+4. `client.py:700` — the settlement commits before the dead-letter/human-queue event; a crash in between loses it. When T2.3 turns the sinks into tables, write both in one transaction or make the sinks idempotent on `(batch_id, custom_id)`.
