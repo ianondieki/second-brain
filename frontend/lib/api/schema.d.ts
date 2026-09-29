@@ -1065,11 +1065,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Consents */
+        /**
+         * Get Consents
+         * @description Your decision on each purpose the settings page offers. The writing assistant's opt-in
+         *     (``tier2_llm_assistant``) is not listed: it lasts one sign-in and is given in the proposal editor.
+         */
         get: operations["get_consents_api_me_consents_get"];
         /**
          * Set Consents
-         * @description Record decisions; each names the text version it was made on (409 if the wording changed since).
+         * @description Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose
+         *     decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``.
          */
         put: operations["set_consents_api_me_consents_put"];
         post?: never;
@@ -1189,6 +1194,54 @@ export interface paths {
         head?: never;
         /** Save Draft */
         patch: operations["save_draft_api_me_proposals__proposal_id__patch"];
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/assistant/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assistant Consent
+         * @description Whether the writing assistant is on for this sign-in, with the wording to show before turning it on.
+         */
+        get: operations["assistant_consent_api_me_proposals__proposal_id__assistant_consent_get"];
+        put?: never;
+        /**
+         * Grant Assistant Consent
+         * @description Turn the writing assistant on for this sign-in only: it may read your confidential (Tier 2) text.
+         */
+        post: operations["grant_assistant_consent_api_me_proposals__proposal_id__assistant_consent_post"];
+        /**
+         * Withdraw Assistant Consent
+         * @description Turn the writing assistant off (it also ends when you sign out).
+         */
+        delete: operations["withdraw_assistant_consent_api_me_proposals__proposal_id__assistant_consent_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/assistant/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Teaser
+         * @description One suggested clearer teaser and which fields might move between Tier 1 and Tier 2. Nothing is saved.
+         */
+        post: operations["suggest_teaser_api_me_proposals__proposal_id__assistant_suggestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/me/proposals/{proposal_id}/attachments": {
@@ -1898,6 +1951,67 @@ export interface components {
              * @description The engagement's lock_version when the caller last read it
              */
             lock_version: number;
+        };
+        /** AssistantConsentIn */
+        AssistantConsentIn: {
+            /**
+             * Version
+             * @description The consents.yaml version whose wording was shown
+             */
+            version: string;
+        };
+        /** AssistantConsentOut */
+        AssistantConsentOut: {
+            /**
+             * Granted
+             * @description True while the assistant is on for this sign-in
+             */
+            granted: boolean;
+            /**
+             * Purpose
+             * @default tier2_llm_assistant
+             * @constant
+             */
+            purpose: "tier2_llm_assistant";
+            /**
+             * Scope
+             * @default this_session
+             * @constant
+             */
+            scope: "this_session";
+            /** Text */
+            text: string;
+            /** Version */
+            version: string;
+        };
+        /** AssistantSuggestionOut */
+        AssistantSuggestionOut: {
+            /**
+             * Ai Drafted
+             * @description True when a model wrote the teaser or a reason (label it 'AI-drafted')
+             */
+            ai_drafted: boolean;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /**
+             * Message
+             * @description Why there is no suggestion, in plain words
+             */
+            message: string | null;
+            /** Placement */
+            placement: components["schemas"]["PlacementHintOut"][];
+            status: components["schemas"]["SuggestionStatus"];
+            teaser: components["schemas"]["SuggestedTeaserOut"] | null;
+            /**
+             * Version Id
+             * Format: uuid
+             * @description The version the suggestion was made for
+             */
+            version_id: string;
         };
         /** AttachmentOut */
         AttachmentOut: {
@@ -2827,6 +2941,11 @@ export interface components {
          * @enum {string}
          */
         ModerationState: "clear" | "held" | "rejected";
+        /**
+         * Move
+         * @enum {string}
+         */
+        Move: "to_tier1" | "to_tier2";
         /** MyOrgOut */
         MyOrgOut: {
             org: components["schemas"]["OrgOut"];
@@ -3317,6 +3436,21 @@ export interface components {
             tags: components["schemas"]["TagOut"][];
         };
         /**
+         * PlacementField
+         * @enum {string}
+         */
+        PlacementField: "title" | "problem_statement" | "impact_claims" | "summary" | "approach" | "architecture" | "pricing" | "notes";
+        /** PlacementHintOut */
+        PlacementHintOut: {
+            field: components["schemas"]["PlacementField"];
+            move: components["schemas"]["Move"];
+            /**
+             * Reason
+             * @description AI-drafted; plain text
+             */
+            reason: string;
+        };
+        /**
          * PlanSide
          * @enum {string}
          */
@@ -3635,6 +3769,18 @@ export interface components {
          * @enum {string}
          */
         StepUpMethod: "totp" | "passkey";
+        /** SuggestedTeaserOut */
+        SuggestedTeaserOut: {
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * SuggestionStatus
+         * @enum {string}
+         */
+        SuggestionStatus: "suggested" | "no_suggestion" | "demo_fallback" | "injection_suspected" | "unavailable";
         /** TagCap */
         TagCap: {
             /**
@@ -10412,6 +10558,395 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyProposalOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    assistant_consent_api_me_proposals__proposal_id__assistant_consent_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConsentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    grant_assistant_consent_api_me_proposals__proposal_id__assistant_consent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantConsentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConsentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    withdraw_assistant_consent_api_me_proposals__proposal_id__assistant_consent_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConsentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    suggest_teaser_api_me_proposals__proposal_id__assistant_suggestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSuggestionOut"];
                 };
             };
             /** @description Bad Request */
