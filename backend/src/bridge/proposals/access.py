@@ -24,9 +24,10 @@ claimant or an active signatory; RLS hides the claims from a reviewer, so this m
 version was accepted, and a refusal by the database after every condition here passed is reported as that condition.
 
 Every refusal answers 403 (404 for 2 and 3) and appends a ``tier2.access_denied`` audit event naming the condition,
-committed before the error is raised. Every route tagged ``tier2`` runs ``tier2_gate`` first: tenancy, then the flag
-(a signed-in non-member of the path's organisation gets 404 as on every organisation route, AC-SEC-1; anyone else
-gets 403 ``tier2_disabled`` while the flag is off, whatever their NDA state, AC-SEC-2). Nothing Tier-2 is read
+committed before the error is raised. Every route tagged ``tier2`` runs ``tier2_gate`` first: a session waiting
+for its second factor gets 401 ``mfa_required``; then tenancy, then the flag (a signed-in non-member of the path's
+organisation gets 404 as on every organisation route, AC-SEC-1; anyone else gets 403 ``tier2_disabled`` while the flag
+is off, whatever their NDA state, AC-SEC-2). Nothing Tier-2 is read
 before the predicate passes, and the Tier-2 row itself is then read as ``tier2_reader``, whose policy is
 ``app_tier2_granted`` again. On the owner's own route (no organisation in the path) the owner is the only viewer.
 """
@@ -413,9 +414,13 @@ async def tier2_gate(
     live: Annotated[sessions.LiveSession | None, Depends(optional_session)],
 ) -> None:
     """Router dependency of every route tagged ``tier2``, before anything else (the path's other parameters
-    included). Tenancy first: a signed-in caller who is not an active member of the path's organisation gets 404, as
-    on every organisation route (AC-SEC-1). Then the flag (AC-SEC-2): while ``FEATURE_TIER2_ENABLED`` is off, everyone
-    else gets 403 ``tier2_disabled``, members whatever their NDA state and anonymous callers alike."""
+    included). A session still waiting for its second factor gets 401 ``mfa_required`` first, as from
+    ``current_session``: nothing is looked up or audited for it (security review of P3). Then tenancy: a signed-in
+    caller who is not an active member of the path's organisation gets 404, as on every organisation route
+    (AC-SEC-1). Then the flag (AC-SEC-2): while ``FEATURE_TIER2_ENABLED`` is off, everyone else gets 403
+    ``tier2_disabled``, members whatever their NDA state and anonymous callers alike."""
+    if live is not None and live.row.mfa_pending:
+        raise ApiError(401, "mfa_required", "Enter the code from your authenticator app.")
     org_param = "org_id" in request.path_params
     org_id, proposal_id = _path_uuid(request, "org_id"), _path_uuid(request, "proposal_id")
     purpose = Purpose.NDA if request.url.path.endswith("/nda") else Purpose.RENDER
