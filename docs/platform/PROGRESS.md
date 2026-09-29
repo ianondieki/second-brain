@@ -238,8 +238,8 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
 
-**Laptop session 2026-09-28 (in progress).** A network outage killed five running agents mid-task; all were resumed from their
-pushed state. Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
+**Laptop session 2026-09-28 (in progress).** Two network outages killed running agents mid-task (five, then four); all were
+resumed from their pushed state. Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
 `openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). Round-3 items 3–8
 done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); round 3 on `0fd9159`: reviewer
 CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers; 4 MINORs) and security-reviewer
