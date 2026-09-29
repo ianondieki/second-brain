@@ -365,13 +365,12 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-PROP-03-screens` (P8 part 4) | `2c1ba97` | fix round done and integration (org screens) merged in; reviewer PASS round 2 (2 MINORs for the card) | ux-reviewer re-check, CI, merge |
 | `feat/REQ-ENG-03-tracker-screens` (P8 part 5) | `2515cb7` | impl-frontend: developer and org Engagements lists and tracker (stepper, chips, whose-turn banner, endorsement rows, actions from the API with step-up), developer Home | merges integration after parts 3–4; ux-reviewer + reviewer, merge |
 | `feat/REQ-FND-02-demo` (P9) | `4443470` | done: `make demo` (project `bridge-demo`, stdlib launcher `infra/demo/demo.py`, generated gitignored secrets), `seed --demo` (4 proposals with real certificates, fixtures Telco A/SACCO B E2, County C E1, NGO D E0, engagements at SUBMITTED, INTEREST_CONFIRMED, NEGOTIATION, CLOSED), TOTP helper, reminders, CI e2e exports, the two e2e skips removed; about 420 MiB seeded; full Playwright 60/60 on it | reviewer + security-reviewer running; CI + CodeQL dispatched; merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
-Merged after P6: P8 part 3 org screens `2491f24` (reviewer PASS round 2, ux-reviewer PASS; MINORs on the card). Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
+Then P8 part 4 Pitch screens (reviewer PASS and ux-reviewer PASS round 2; MINORs on the card). Merged after P6: P8 part 3 org screens `2491f24` (reviewer PASS round 2, ux-reviewer PASS; MINORs on the card). Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
 
 Merged after P4: P8 part 2 My Ideas `ebcbd1a` (reviewer PASS and ux-reviewer PASS round 2; CI green after moving a test fixture out of `app/`, which broke the web image build; a lint rule now refuses test imports in app code). Still to build for M1: the Engagements tracker screens (after P5), Home, P9 `make demo`.
 
@@ -499,7 +498,7 @@ M2:
 | P5 tracker main path + test clock | done (`1b2e6b9`) | P4's hook opens tracked engagements |
 | P6 reminders | done (`28783cf`) | whose turn from P5's state machine; thresholds in `policy.yaml` |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
-| P8 M1 screens | parts 1–3 merged (`b787d8b`, `ebcbd1a`, `2491f24`); part 4 re-review after its fix round; part 5 (tracker, Home) in progress | |
+| P8 M1 screens | parts 1–4 merged (`b787d8b`, `ebcbd1a`, `2491f24`, part 4 on 2026-09-29); part 5 (tracker, Home) in progress | |
 | P9 `make demo` (basic) | in review (`4443470`) | demo TSA is the real DigiCert/FreeTSA (free, hash only); offline shows "Timestamp pending" |
 | M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |
