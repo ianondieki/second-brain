@@ -365,9 +365,9 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-PROP-03-screens` (P8 part 4) | `fafb888` | fix round done: a "Chosen in other searches" group shows every off-page choice by name with its outcome (unresolvable ids are dropped); alerts moved out of the sticky bar; the lead and limit line follow the plan cap; MINORs (a)–(h) | merging integration (org screens); then reviewer + ux-reviewer re-check, CI, merge |
+| `feat/REQ-PROP-03-screens` (P8 part 4) | `2c1ba97` | fix round done and integration (org screens) merged in; reviewer PASS round 2 (2 MINORs for the card) | ux-reviewer re-check, CI, merge |
 | `feat/REQ-ENG-03-tracker-screens` (P8 part 5) | `2515cb7` | impl-frontend: developer and org Engagements lists and tracker (stepper, chips, whose-turn banner, endorsement rows, actions from the API with step-up), developer Home | merges integration after parts 3–4; ux-reviewer + reviewer, merge |
-| `feat/REQ-FND-02-demo` (P9) | — | impl-backend: `make demo`, `seed --demo`, TOTP helper, CI e2e env, the two e2e skips removed | reviewer, CI, merge; then the M1 exit |
+| `feat/REQ-FND-02-demo` (P9) | `4443470` | done: `make demo` (project `bridge-demo`, stdlib launcher `infra/demo/demo.py`, generated gitignored secrets), `seed --demo` (4 proposals with real certificates, fixtures Telco A/SACCO B E2, County C E1, NGO D E0, engagements at SUBMITTED, INTEREST_CONFIRMED, NEGOTIATION, CLOSED), TOTP helper, reminders, CI e2e exports, the two e2e skips removed; about 420 MiB seeded; full Playwright 60/60 on it | reviewer + security-reviewer running; CI + CodeQL dispatched; merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
@@ -500,7 +500,7 @@ M2:
 | P6 reminders | done (`28783cf`) | whose turn from P5's state machine; thresholds in `policy.yaml` |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
 | P8 M1 screens | parts 1–3 merged (`b787d8b`, `ebcbd1a`, `2491f24`); part 4 re-review after its fix round; part 5 (tracker, Home) in progress | |
-| P9 `make demo` (basic) | in progress | |
+| P9 `make demo` (basic) | in review (`4443470`) | demo TSA is the real DigiCert/FreeTSA (free, hash only); offline shows "Timestamp pending" |
 | M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |
 | P11 research | todo | M2 |
