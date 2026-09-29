@@ -217,6 +217,16 @@ async def test_stage_0_the_developer_accepts_an_organisations_interest(
         assert accepted["due"]["due_on"] == str(today + timedelta(days=2))
         history = (await dev.get(t.path("/history"))).json()
         assert history == (await sig.get(t.path("/history"))).json()
+        accepted_event = history["events"][-1]
+        assert accepted_event["command"] == "accept_interest"
+        # The named contact is recorded like an approval's (review P5, MINOR); the developer cannot read the roster,
+        # so the role is the one recorded when the interest was expressed, else "member".
+        assert {k: v for k, v in accepted_event["payload"].items() if k.startswith("contact")} == {
+            "contact_user_id": str(world.owner),
+            "contact_role": "member",
+            "contact_channel": "video_call",
+            "contact_by": str(today + timedelta(days=2)),
+        }
         [endorsement] = history["endorsements"]
         assert (endorsement["stage"], endorsement["party"], endorsement["role"], endorsement["method"]) == (
             "ORG_INTEREST",
@@ -246,3 +256,8 @@ async def test_stage_0_the_developer_declines_an_organisations_interest(
             "org_agent_match",
         )
     assert await tag_of(owner_engine, world) == ("delivered", False)  # an org-origin engagement has no tag of its own
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, engagement, provider)
+    assert provider.outbox == []  # no EM2: the engagement never entered INTEREST_CONFIRMED
+    [notice] = await in_app(owner_engine, world.signatory, engagement)
+    assert notice["kind"] == "engagement.n17"
