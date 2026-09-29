@@ -333,7 +333,8 @@ Expiry jobs (EXPIRED) come after the prototype.
 
 **Step-up** (ADR-002): TOTP enrolled and the session's second factor within 12 hours (`auth.deps.ensure_step_up`; the
 client calls `POST /api/auth/step-up` first). `step_up_method` and the endorsement method are always `totp` from that
-verified session, never from the body; `passkey` is never written.
+verified session, never from the body (the endorsement method is mapped from the request's verified step-up method;
+a command without one raises); `passkey` is never written.
 
 **Documents** (`documents.py`): deterministic texts; the signed hash is the SHA-256 of the text (the schema's "PDF
 hash"). The mutual NDA is a cover naming the engagement's ids plus the seeded `mutual_nda` legal template (placeholder
@@ -357,9 +358,12 @@ OpenAPI document).
 **P4's entry point**: `bridge.engagements.commands.open_engagement_for_tag(db, tag_id) -> Engagement`, called in the
 developer's own transaction (`bind_tenant(db, user_id=<tag developer>)`) right after P4 inserts a `delivered` tag (or a
 held tag becomes delivered on E2 approval); it opens the SUBMITTED engagement (origin `tagged`, the proposal's current
-registered version, the SUBMITTED deadline); the database writes the genesis event. Raises `OpenRefused` with a code
-(`tag_not_found`, `tag_not_delivered`, `proposal_not_published`, `engagement_exists`). The caller commits and sends
-EM1.
+registered version, the SUBMITTED deadline); the database writes the genesis event. It checks up front and raises
+`OpenRefused` with a code: `tag_not_found`, `tag_not_delivered`, `proposal_not_published` (not published, held or
+hidden by moderation, or no current version), `org_unavailable` (below E2, suspended or delisted), `own_organisation`
+(the developer is a member), `engagement_exists`; the insert runs in a savepoint and a database refusal maps to
+`engagement_exists` (23505) or `refused` (42501, 23514), never a 500. The caller commits and sends EM1. P4's
+`tag_hooks.default_hooks()` calls it through the adapter of `REQ-PROP-03.md` (`OpenRefused` -> 409 `tag_conflict`).
 
 ### The P1 notes, done
 
@@ -384,6 +388,8 @@ router calls `app_set_test_clock`, is left out of the production image and is st
 7. EM2's `tier2_status` has a third sentence for "shared under NDA, not opened yet" (`[[COPY-REVIEW]]`), because the
    spec's "has not been shared yet" would be untrue once a grant is live.
 8. The OTHER decline text reaches the developer through the notification job's arguments (kept out of the chain).
+9. The organisation's side is notified through its named contact and the members who acted on the engagement only
+   (the developer cannot read the roster; role seats need schema need 3).
 
 ### Orchestrator ruling on P5 (2026-09-29)
 
@@ -424,6 +430,44 @@ format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the fronte
 passed) and `api:check` (types regenerated), the copy-lint and `check_traceability.py` (0 errors) are clean. The
 legacy suite passes except two `tests/test_adviser_cli.py` checks that need `cloudflared` in this Linux container
 (environmental; untouched by P5). Playwright (`check-e2e`) needs the running stack and was not run here.
+
+### Review round 3 (reviews at `c8b3277`: security-reviewer PASS with 3 MINOR, reviewer CHANGES_REQUIRED with 2 MAJOR)
+
+Each fix has its red test committed first.
+
+- Merged the integration branch (P4 tags and the Pitch, the sanitiser test fix); `openapi.json` and `schema.d.ts`
+  regenerated.
+- MAJOR 1 (AC-TRACK-1): a milestone command outside IN_IMPLEMENTATION is 409 `illegal_transition`, not 404: the
+  command's source states are checked (`state_machine.check_source`) before the milestone is looked up; the milestone
+  routes are in `test_every_actor_and_command_on_a_submitted_engagement_matches_the_table` (every command covered).
+- MAJOR 2: `open_engagement_for_tag` refuses with a code up front and maps the database's refusals (above), so P4's
+  Pitch answers 409 `tag_conflict` instead of a 500 (`test_open_engagement_for_tag_refuses_with_a_code`,
+  `test_open_engagement_for_tag_maps_the_databases_refusals`).
+- P4 hook swap: `interim_open_engagement` deleted; the default hook is the adapter, so a Pitch's engagement carries
+  its SUBMITTED deadline (`test_pitch_opens_engagement.py`); P4's `test_tags.py`, `test_pitch_tier2.py` and
+  `billing/test_caps.py` pass.
+- Security MINOR 1: `deliverable`, `exclusivity` and a payment `reference` refuse C0 control characters and DEL (422);
+  the agreement text escapes line breaks and other control characters in a party's text, so no party can forge a line
+  of the signed document. MINOR 3: the endorsement method comes from the verified step-up (raises if none); a unit
+  test checks every endorsing and signing row needs the step-up.
+- Re-check #29: `bridge.logging.RedactJobArguments` redacts `reason_text` from Procrastinate's log records (the
+  message's `call_string` and the `job` extra's `task_kwargs` and `call_string`), installed at the jobs app's import on
+  Procrastinate's loggers (the worker's own included) and on the root handlers; a real worker run shows the reason in
+  no log record (`test_worker_logs.py`, `unit/test_job_log_redaction.py`). Passing only an id stays a follow-up.
+- Reviewer MINORs: after a reopen `pending(NEGOTIATION)` offers `propose_terms` to both parties (the latest version is
+  final, not a draft); `accept_interest` records the named contact and `contact_role` like `approve`; tests for
+  `invalid_contact_by`, `invalid_contact`, a past milestone due date (`invalid_terms`), no EM2 on a stage-0 decline and
+  the renewed deadline of a second terms version; the review window defaults to policy.yaml's
+  `review_window_bd_default` (the request may omit it); `MilestoneOut.review_due_on` is the Nairobi date of the latest
+  submission plus the review window in business days while the milestone is submitted for review.
+
+### Deviations (P5)
+
+- Commit sizes: eight of P5's first-round commits exceed the ~300 changed-line guide (the state machine with its
+  exhaustive tests 1200, the tracker API 907, the command runner 735, the main-path test 575, the command-runner
+  tests 419, the notifications 412, the policy loader 327, the service 302), because each is one concern whose code
+  and tests only make sense together; the merges and the generated `openapi.json`/`schema.d.ts` are larger still.
+  Round 3's commits are within the guide.
 
 ### Follow-ups (not built)
 
