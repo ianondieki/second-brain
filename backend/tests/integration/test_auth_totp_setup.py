@@ -241,3 +241,152 @@ async def test_a_confirmation_behind_a_committing_cancel_finds_nothing_pending(
     assert row["totp_enabled_at"] is None
     assert row["totp_pending_enc"] is None
     assert row["totp_recovery_hashes"] == []
+
+
+# ------------------------------------------------------------------ follow-up 8: new recovery codes
+
+
+def freeze_the_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The throttle window is read from the app clock: standing still, no attempt ages out on a slow machine."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
+
+
+async def test_new_recovery_codes_replace_the_old_ones_and_sign_in_once_each(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """THREAT_MODEL §1 "Recovery codes never seen after a lost confirmation": the person gets ten new codes."""
+    address = await verified(client)
+    old = await enrolled(client)
+    issued = await client.post(CODES)
+    assert issued.status_code == 200, issued.text
+    new = list(issued.json()["recovery_codes"])
+    assert len(set(new)) == 10
+    assert not set(new) & set(old)
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(new)
+    assert error(await client.post("/api/auth/step-up", json={"code": old[1]})) == (401, "invalid_code")
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    login = await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
+    assert login.json()["mfa_required"] is True
+    await refresh_csrf(client)
+    assert (await client.post("/api/auth/mfa/verify", json={"code": new[0]})).status_code == 200
+    await refresh_csrf(client)  # the second step rotates the session, and with it the CSRF binding
+    assert error(await client.post("/api/auth/step-up", json={"code": new[0]})) == (401, "invalid_code")
+    assert (await client.post("/api/auth/step-up", json={"code": new[1]})).status_code == 200
+
+
+async def test_new_recovery_codes_are_audited_and_emailed_without_the_codes(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = await verified(client)
+    await enrolled(client)
+    new = list((await client.post(CODES)).json()["recovery_codes"])
+    user_id = (await user_row(owner_engine, address))["id"]
+    async with owner_engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT subject_type, subject_id, payload FROM audit_events "
+                "WHERE actor_user_id = :u AND action = 'auth.recovery_codes_replaced'"
+            ),
+            {"u": user_id},
+        )
+        assert [tuple(row) for row in rows] == [("user", user_id, {})]  # ids only, never the codes
+    notices = [m for m in outbox(client).outbox if m.to == address and "New recovery codes were created." in m.text]
+    assert len(notices) == 1
+    assert not any(code in notices[0].text for code in new)
+
+
+async def test_new_recovery_codes_need_a_recent_second_factor(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = await verified(client)
+    old = await enrolled(client)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE sessions SET mfa_verified_at = now() - interval '13 hours' "
+                "WHERE user_id = (SELECT id FROM users WHERE email = :e)"
+            ),
+            {"e": address},
+        )
+    assert error(await client.post(CODES)) == (403, "step_up_required")
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old)
+
+
+async def test_new_recovery_codes_need_two_step_sign_in_on(client: httpx.AsyncClient) -> None:
+    await verified(client)
+    await enrolled(client)
+    assert (await client.post("/api/auth/totp/disable")).status_code == 204  # the second factor stays fresh (12 h)
+    assert error(await client.post(CODES)) == (409, "totp_not_enabled")
+
+
+async def test_new_recovery_codes_are_throttled_per_client_ip(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shared = new_ip()
+    async with (
+        make_client(app_engine, ip=shared) as first,
+        make_client(app_engine, ip=shared) as second,
+        make_client(app_engine, ip=new_ip()) as elsewhere,
+    ):
+        for browser in (first, second, elsewhere):
+            await verified(browser)
+            await enrolled(browser)
+        monkeypatch.setattr(service, "REAUTH_IP_LIMIT", 2)
+        freeze_the_clock(monkeypatch)
+        for _ in range(2):
+            assert (await first.post(CODES)).status_code == 200
+        assert error(await second.post(CODES)) == (429, "too_many_attempts")  # another account, the same address
+        assert (await elsewhere.post(CODES)).status_code == 200
+
+
+async def test_new_recovery_codes_from_several_ips_share_the_account_budget(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stolen session used from several addresses still gets five replacements a minute in all."""
+    name = get_settings().session_cookie_name
+    async with make_client(app_engine, ip=new_ip()) as here, make_client(app_engine, ip=new_ip()) as there:
+        await verified(here)
+        await enrolled(here)
+        session = here.cookies.get(name)
+        assert session
+        there.cookies.set(name, session)
+        await refresh_csrf(there)
+        freeze_the_clock(monkeypatch)
+        for browser in (here, here, here, there, there):
+            assert (await browser.post(CODES)).status_code == 200
+        assert error(await there.post(CODES)) == (429, "too_many_attempts")
+
+
+async def test_a_step_up_behind_a_committing_replacement_cannot_restore_the_old_codes(
+    client: httpx.AsyncClient, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    """The step-up loaded the user (and its old hashes) before it waited; under ``lock_user`` it re-reads them, so the
+    old code fails and the spent-code rewrite cannot put the old hashes back."""
+    address = await verified(client)
+    old = await enrolled(client)
+    async with create_session_factory(app_engine)() as first:
+        live = await live_session(first, client)
+        new, _ = await service.replace_recovery_codes(first, get_settings(), live, ip=new_ip())
+        step_up = await blocked_behind(first, client.post("/api/auth/step-up", json={"code": old[0]}))
+        await first.commit()
+    assert error(await step_up) == (401, "invalid_code")
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(new)
+
+
+async def test_a_replacement_behind_a_committing_step_up_leaves_only_the_new_codes(
+    client: httpx.AsyncClient, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    address = await verified(client)
+    old = await enrolled(client)
+    async with create_session_factory(app_engine)() as first:
+        live = await live_session(first, client)
+        await service.complete_mfa(first, get_settings(), live, old[0], new_ip(), rotate=False)
+        replace = await blocked_behind(first, client.post(CODES))
+        await first.commit()
+    issued = await replace
+    assert issued.status_code == 200, issued.text
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(
+        list(issued.json()["recovery_codes"])
+    )
