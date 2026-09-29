@@ -193,9 +193,11 @@ describe("actions become buttons, and buttons become requests", () => {
 
 describe("formatting", () => {
   it("writes moments in Nairobi time with EAT parts", () => {
-    expect(eatParts("2026-09-23T11:05:00Z")).toEqual({ date: expect.stringMatching(/^23 Sept? 2026$/), time: "14:05" });
-    expect(eatParts("2026-09-23T22:30:00Z").date).toMatch(/^24 Sept? 2026$/); // after midnight in Nairobi
-    expect(formatDate("2026-10-02")).toMatch(/^2 Oct 2026$/);
+    expect(eatParts("2026-09-23T11:05:00Z")).toEqual({ date: "23 Sep 2026", time: "14:05" });
+    expect(eatParts("2026-09-23T22:30:00Z").date).toBe("24 Sep 2026"); // after midnight in Nairobi
+    expect(formatDate("2026-10-02")).toBe("2 Oct 2026");
+    expect(formatDate("2026-09-25")).toBe("25 Sep 2026");
+    expect(eatParts("2026-09-23T11:05:00Z", "sw").date).toMatch(/^23 Sep 2026$/);
   });
 
   it("reads and writes shillings", () => {

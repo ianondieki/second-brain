@@ -108,7 +108,7 @@ describe("the whose-turn banner", () => {
 
   it("says overdue in words, not colour alone", () => {
     renderWithIntl(<WhoseTurn detail={detail({ due: { due_on: "2026-09-25", business_days_left: -2, overdue: true } })} />);
-    expect(screen.getByText("Overdue by 2 business days, was due 25 Sept 2026")).toBeTruthy();
+    expect(screen.getByText("Overdue by 2 business days, was due 25 Sep 2026")).toBeTruthy();
   });
 });
 
@@ -142,7 +142,7 @@ describe("dual endorsement rows (AC-TRACK-3)", () => {
     expect(org.textContent).toContain("Endorsed");
     expect(org.textContent).toContain("Rita Wanjiru");
     expect(org.textContent).toContain("Signatory");
-    expect(org.textContent).toMatch(/23 Sept? 2026, 14:05 EAT/);
+    expect(org.textContent).toMatch(/23 Sep 2026, 14:05 EAT/);
     expect(org.textContent).toContain("Authenticator code");
     expect(dev.getAttribute("data-endorsed")).toBe("false");
     expect(dev.textContent).toContain("Not endorsed yet");
@@ -222,7 +222,7 @@ describe("the History tab", () => {
     expect([...events].map((e) => e.getAttribute("data-event"))).toEqual(["start_review", "create"]);
     expect(events[0].textContent).toContain("Review started");
     expect(events[0].textContent).toContain("Rita Wanjiru, Signatory");
-    expect(events[0].textContent).toMatch(/24 Sept? 2026, 09:30 EAT/);
+    expect(events[0].textContent).toMatch(/24 Sep 2026, 09:30 EAT/);
     expect(events[1].textContent).toContain("Engagement opened");
     expect(document.querySelector("[data-chain='verified']")).not.toBeNull();
   });
