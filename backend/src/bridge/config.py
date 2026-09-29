@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     github_client_secret: SecretStr | None = None
     google_client_id: SecretStr | None = None
     google_client_secret: SecretStr | None = None
+    # SMS (REQ-PROV-04: D1 phone codes). The fake in dev, test and CI; Africa's Talking once the vendor account exists
+    # (gate G1). bridge.integrations.sms.sms_provider_from_settings refuses the fake in production and the vendor in
+    # test.
+    sms_provider: Literal["fake", "africastalking"] = "fake"
+    africastalking_username: str | None = None
+    africastalking_api_key: SecretStr | None = None
+    africastalking_sender_id: str | None = None
 
     # Feature flags (docs/spec/10: default false until the legal gate).
     feature_tier2_enabled: bool = False
@@ -113,6 +120,12 @@ class Settings(BaseSettings):
                 # Half a configuration is a mistake, not a choice: refuse to start rather than guess.
                 name = provider.upper()
                 problems.append(f"{name}_CLIENT_ID and {name}_CLIENT_SECRET must be set together (or both left empty)")
+        if self.sms_provider == "africastalking" and (
+            not self.africastalking_username or not self.africastalking_api_key
+        ):
+            problems.append(
+                "AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are required when SMS_PROVIDER=africastalking"
+            )
         if self.app_env == "production":
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
