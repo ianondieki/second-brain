@@ -86,15 +86,20 @@ test.describe("a signed-in developer", () => {
     await expectEmptyState(page, "The list changed after this page loaded.", "First page");
   });
 
-  test("opens an organisation's page, and an unknown one reads as not listed", async ({ page }) => {
-    await page.goto("/dev/companies");
+  test("opens an organisation's page and returns to the same list; an unknown one reads as not listed", async ({
+    page,
+  }) => {
+    await page.goto("/dev/companies?county=KE-30");
     const first = rows(page).first();
     const name = (await first.getByRole("link").textContent())?.trim() ?? "";
     await first.getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(name, SERVER_STEP);
+    await expect(page).toHaveURL(/\/dev\/companies\/[0-9a-f-]{36}\?county=KE-30$/);
     await expect(page.locator("[data-badge]")).toHaveCount(1);
     await expect(page.getByRole("term")).toContainText(["Organisation type", "County", "Niches"]);
     await checkScreen(page);
+    await page.getByRole("link", { name: "All companies" }).click();
+    await expect(page).toHaveURL(/\/dev\/companies\?county=KE-30$/, SERVER_STEP);
 
     await page.goto("/dev/companies/00000000-0000-4000-8000-000000000000");
     await expectEmptyState(page, "This organisation is not in the directory.", "All companies");

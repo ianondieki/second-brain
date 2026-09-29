@@ -44,7 +44,7 @@ export function DirectoryResults(props: ResultsProps) {
   return (
     <div>
       {page.groups.map((group, index) => (
-        <Group key={`${group.niche?.id ?? "none"}-${index}`} group={group} />
+        <Group key={`${group.niche?.id ?? "none"}-${index}`} group={group} filters={filters} />
       ))}
       {filters.cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
@@ -66,7 +66,7 @@ export function DirectoryResults(props: ResultsProps) {
   );
 }
 
-function Group({ group }: { group: DirectoryGroup }) {
+function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFilters }) {
   const t = useTranslations("companies");
   const label = group.niche ? splitNicheLabel(group.niche.label) : null;
   return (
@@ -79,7 +79,7 @@ function Group({ group }: { group: DirectoryGroup }) {
       </h2>
       <div className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
         {group.orgs.map((org) => (
-          <OrgRow key={org.id} org={org} />
+          <OrgRow key={org.id} org={org} filters={filters} />
         ))}
       </div>
     </section>

@@ -10,6 +10,7 @@ import {
   browseQuery,
   filtersHref,
   isOrgId,
+  orgHref,
   parseFilters,
   splitNicheLabel,
   type DirectoryPage,
@@ -126,6 +127,13 @@ describe("filters from the URL", () => {
     expect(activeFilterCount({ q: "x", niche: "ict", county: "KE-30" })).toBe(2);
   });
 
+  it("links an organisation's page with the list's query, so its back link returns to the same list", () => {
+    expect(orgHref("0199a000-0000-7000-8000-0000000000aa")).toBe("/dev/companies/0199a000-0000-7000-8000-0000000000aa");
+    expect(orgHref("0199a000-0000-7000-8000-0000000000aa", { q: "tel", county: "KE-30", cursor: "c1" })).toBe(
+      "/dev/companies/0199a000-0000-7000-8000-0000000000aa?q=tel&county=KE-30&cursor=c1",
+    );
+  });
+
   it("splits a two-level niche heading and checks organisation ids", () => {
     expect(splitNicheLabel("ICT › Networks & Telecoms")).toEqual({ parent: "ICT", name: "Networks & Telecoms" });
     expect(splitNicheLabel("Public sector")).toEqual({ name: "Public sector" });
@@ -180,6 +188,13 @@ describe("DirectoryResults", () => {
     ]);
     expect(screen.getByText(E2_TEXT)).toBeTruthy();
     expect(screen.getByText(E1_TEXT)).toBeTruthy();
+  });
+
+  it("links each organisation with the list's filters and page", () => {
+    renderWithIntl(<DirectoryResults kind="page" page={PAGE} filters={{ county: "KE-30", cursor: "c1" }} />);
+    expect(screen.getByRole("link", { name: "Telkom Kenya Limited" }).getAttribute("href")).toBe(
+      "/dev/companies/0199a000-0000-7000-8000-0000000000aa?county=KE-30&cursor=c1",
+    );
   });
 
   it("pages forward with the filters kept, and back to the first page from a later one", () => {

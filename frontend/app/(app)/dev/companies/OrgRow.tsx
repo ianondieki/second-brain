@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { BASE_PATH, type OrgCard } from "./filters";
+import { orgHref, type DirectoryFilters, type OrgCard } from "./filters";
 import { VerificationBadge } from "./VerificationBadge";
 
 /**
@@ -9,7 +9,7 @@ import { VerificationBadge } from "./VerificationBadge";
  * which is the card's one chip (docs/spec/07 item 2: at most two). The niche is the group heading above; never a
  * logo (docs/spec/04 principle 4). The response record shows only when the API sends one (E2, enough history).
  */
-export function OrgRow({ org }: { org: OrgCard }) {
+export function OrgRow({ org, filters = {} }: { org: OrgCard; filters?: DirectoryFilters }) {
   const t = useTranslations("companies");
   const kinds = useTranslations("orgKind");
   const kind = kinds(org.kind);
@@ -17,7 +17,7 @@ export function OrgRow({ org }: { org: OrgCard }) {
     <article className="flex min-w-0 flex-col gap-1 border-t border-line py-4" data-org={org.slug}>
       <h3 className="text-base leading-snug">
         <Link
-          href={`${BASE_PATH}/${org.id}`}
+          href={orgHref(org.id, filters)}
           className={
             "-my-2 inline-flex min-h-11 items-center py-2 font-semibold [overflow-wrap:anywhere] text-ink " +
             "underline decoration-transparent decoration-1 underline-offset-[0.2em] hover:decoration-jacaranda"

@@ -78,11 +78,23 @@ export function isNarrowed(filters: DirectoryFilters): boolean {
 }
 
 /** A link to the directory with these filters (and cursor, when given): /dev/companies?q=…&niche=… */
-export function filtersHref({ q, niche, kind, county, cursor }: DirectoryFilters): string {
+export function filtersHref(filters: DirectoryFilters): string {
+  return withQuery(BASE_PATH, filters);
+}
+
+/**
+ * An organisation's page, carrying the list's search, filters and page (/dev/companies/{id}?county=…), so its
+ * "All companies" link returns to the same list rather than the first page of everything.
+ */
+export function orgHref(orgId: string, filters: DirectoryFilters = {}): string {
+  return withQuery(`${BASE_PATH}/${encodeURIComponent(orgId)}`, filters);
+}
+
+function withQuery(path: string, { q, niche, kind, county, cursor }: DirectoryFilters): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries({ q, niche, kind, county, cursor })) if (value) query.set(key, value);
   const text = query.toString();
-  return text ? `${BASE_PATH}?${text}` : BASE_PATH;
+  return text ? `${path}?${text}` : path;
 }
 
 /** The query for GET /api/directory/orgs. */
