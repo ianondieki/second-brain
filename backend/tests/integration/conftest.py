@@ -168,3 +168,6 @@ async def audit_reader_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
 
 # Proposal fixtures shared by the proposal, billing, admin and profile API tests (REQ-PROP-01, REQ-BIL-02, REQ-MOD-01).
 from tests.integration.proposals.helpers import developers, moderators, proposal_world  # noqa: E402, F401
+
+# Pitch fixtures shared by the proposal, billing and directory tests (REQ-PROP-03, REQ-BIL-02, REQ-DIR-04).
+from tests.integration.proposals.pitch_helpers import member_client, pitch_orgs  # noqa: E402, F401
