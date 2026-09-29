@@ -1031,16 +1031,52 @@ async def test_oauth_callbacks_are_throttled_per_ip(
     assert [entry["step"] for entry in logs if entry["event"] == "auth.oauth_throttled"] == ["callback"]
 
 
-async def test_forged_callbacks_do_not_use_up_the_callback_budget(client: httpx.AsyncClient) -> None:
+async def test_forged_callbacks_do_not_use_up_the_callback_budget(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """T2.12 follow-up: a page that makes this browser load the callback with a junk state (or none) is refused
-    before the throttle is charged, so it cannot lock the person out of their own sign-in for a minute."""
+    before the throttle is charged, so it cannot lock the person out of their own sign-in for a minute. Nine of the
+    ten callbacks a minute are used up first, so any one refusal below that charged the throttle would refuse the
+    genuine callback at the end. Covered with and without a live flow cookie; with the flow's own state, the
+    provider's error and a missing or oversized code are refused uncharged too (they never reach the provider)."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
+    settings, ip = oauth_settings(), new_ip()
+    async with create_session_factory(app_engine)() as db:
+        for _ in range(identities.REQUESTS_PER_IP_PER_MINUTE - 1):
+            assert await identities.allow_request(db, settings, "callback", ip)
+        await db.commit()
     callback = "/api/auth/oauth/github/callback"
-    for params in [{"code": "c", "state": "junk"}, {"code": "c"}, {"error": "access_denied", "state": "x"}] * 4:
-        forged = await client.get(callback, params=params)
-        assert landing(forged) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
-    response = await round_trip(client, person(), intent="signup", **signup_body())
-    assert landing(response) == ("/dev", {})
-    assert signed_in(response)
+    forgeries = [
+        {"code": "c", "state": "junk"},
+        {"code": "c"},
+        {"error": "access_denied", "state": "junk"},
+        {"code": "c", "state": "x" * 4096},
+    ]
+    refused_state = ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    async with make_client(app_engine, settings=settings, ip=ip) as client:
+        for params in forgeries:  # no flow cookie
+            assert landing(await client.get(callback, params=params)) == refused_state
+        state = (await start(client, "github", "login"))["state"]
+        for params in forgeries:  # a live flow cookie, which stays
+            assert landing(await client.get(callback, params=params)) == refused_state
+        cancelled = await client.get(callback, params={"error": "access_denied", "state": state})
+        assert landing(cancelled) == ("/login", {"oauth_error": "oauth_cancelled", "provider": "github"})
+        for code in (None, "c" * 4096):
+            state = (await start(client, "github", "login"))["state"]
+            params = {"state": state} if code is None else {"state": state, "code": code}
+            failed = await client.get(callback, params=params)
+            assert landing(failed) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+        response = await round_trip(client, person(), intent="signup", **signup_body())  # the tenth this minute
+        assert landing(response) == ("/dev", {})
+        assert signed_in(response)
+        await refresh_csrf(client)  # the new session carries its own CSRF binding
+        state = (await start(client, "github", "login"))["state"]
+        with respx.mock(assert_all_called=False) as router:
+            token = fake_github(router, person())
+            over = await client.get(callback, params={"code": "c", "state": state})
+        assert landing(over) == ("/login", {"oauth_error": "too_many_attempts", "provider": "github"})
+        assert token.call_count == 0
 
 
 async def test_no_database_connection_is_held_during_the_provider_call(
