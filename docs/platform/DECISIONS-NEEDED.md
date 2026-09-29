@@ -50,6 +50,17 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
 - Decision:
 
+### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
+- Why: ADR-005 decision 3 allows "at most one retry on the next allowed model" after `stop_reason == "refusal"`. The `docs/spec/09` table allocates exactly one model to each Phase 2 task and lists `claude-opus-5-5` only for the moderator pre-checklist and the eval judge, so any fallback model would be outside the allocation. `backend/ai/models.yaml` therefore ships `fallback_model: null` for all four Phase 2 tasks: a refusal is logged, goes to the human queue and the dead-letter queue, with no retry. `tests/unit/llm/test_registry.py` fails if a fallback is outside the spec 09 allocation of its task.
+- Proposal (needs your approval and a `docs/spec/09` change, since it widens the allocation):
+  1. `moderation_prescreen` and `over_disclosure_check` (Haiku 4.5): fall back to `claude-sonnet-5`, effort `low` (Tier-1 text only; a refusal on a classifier is most likely a false positive).
+  2. `originality_explainer` (Sonnet 5): fall back to `claude-opus-5-5`, effort `medium` (Tier-1 text only; low volume).
+  3. `submission_assistant` (Sonnet 5, Tier-2 text under per-use consent): no fallback; the owner sees "the assistant could not help with this text" and the refusal goes to the human queue.
+- Options: (a) keep no fallbacks (refusal → human queue only); (b) approve the proposal above and amend the `docs/spec/09` allocation; (c) approve only item 1 (classifiers).
+- Recommended default: (a) until you decide; the registry and its test already enforce it. Choosing (b) or (c) is a YAML edit plus the spec 09 table and `SPEC_09_ALLOCATION` in the registry test.
+- Blocks: nothing; refusals are rare and already reach the human queue.
+- Decision:
+
 ### D-30 · Upholding a claim dispute against an E2 organisation (T2.1 schema v2, T2.6b claims, REQ-DIR-03)
 - Why: `docs/spec/06` 6.2 and AC-DIR-2 say a claim on an E2 organisation opens a dispute instead of transferring it, and the platform never rules on legal ownership (6.12). Schema v2 sends such a claim to `disputed`, and staff can uphold a dispute with `app_decide_claim` (it rejects the earlier approved claims and removes those claimants' memberships in the same transaction). Against an **E2** organisation that path is closed on purpose today: an E1-level claim cannot be approved (there is no E2 → E1 step), and an E2-level claim cannot be approved either, because the claimant may accept the Master Enterprise Terms only on an unclaimed or E1 organisation and E2 approval requires that acceptance. So a dispute against an E2 organisation can be rejected but never upheld in the product.
 - Options: (a) allow an E2-level disputed claim to be upheld: the claimant of an open **disputed E2** claim may record the Master Enterprise Terms acceptance on that E2 organisation; staff admin approval keeps E2 (new `e2_verified_at`, new re-verification date) and transfers ownership as for E1 disputes; (b) add a staff-only step `app_staff_revoke_verification(org, reason)` (E2 → unclaimed, held engagements frozen, Tier-2 grants revoked) that staff run first, after which the disputed claim follows the normal E1/E2 path; (c) keep it closed: disputes against E2 organisations are handled off-platform under the 6.12 process (suspend the organisation with `organizations.suspended_at`, which already stops Tier-2 access, and reject the in-app claim with a reason), revisited when real disputes occur; (d) decide at G2 with the advocate, keep (c) until then.
@@ -97,6 +108,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Options: (a) keep all 19 for the local demo only (never hosted), each shown with its source link and date; (b) keep only the six official-source excerpts and replace the news ones with more official sources; (c) have the terms reviewed before any excerpt is shown.
 - Recommended default: (a) for the local prototype, because nothing is hosted (D-36) and each quote is short and attributed; before any hosted release, (c).
 - Blocks: nothing in the prototype; any hosted release of the research cards.
+- Decision:
+
+### D-39 · Wording of the three ownership attestations at publish (P2, REQ-PROV-05, REQ-PROP-01)
+- Why: publishing a proposal records three ownership attestations (docs/spec/06 6.4; REQ-PROV-05). Their text is near-legal: it states what the developer affirms about authorship and rights. The prototype uses draft wording paraphrasing the spec's three statements, tagged `[[COPY-REVIEW]]`, in `backend/src/bridge/proposals/attestations.py` (branch `feat/REQ-PROP-01-proposals`); each acceptance stores the text's version and SHA-256, so a later wording is a new version, not an edit. Agents do not write legal text.
+- Options: (a) keep the draft wording for the local prototype only and have it reviewed (G2 legal pack) before any hosted use; (b) replace it now with wording you supply; (c) have an advocate draft it now.
+- Recommended default: (a); nothing is hosted (D-36), and the stored version and hash keep earlier acceptances traceable when the text changes.
+- Blocks: nothing in the prototype; any hosted release.
 - Decision:
 
 ## Decided

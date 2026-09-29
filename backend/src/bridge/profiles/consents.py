@@ -94,5 +94,16 @@ async def current(db: AsyncSession, user_id: UUID) -> dict[ConsentPurpose, bool]
     return state
 
 
+async def latest(db: AsyncSession, user_id: UUID, purpose: ConsentPurpose) -> Consent | None:
+    """The current decision on one purpose (its latest row, ordered as in ``current``), or None if never decided."""
+    rows = await db.execute(
+        select(Consent)
+        .where(Consent.user_id == user_id, Consent.purpose == purpose)
+        .order_by(Consent.created_at.desc(), Consent.id.desc())
+        .limit(1)
+    )
+    return rows.scalar_one_or_none()
+
+
 async def has_live_consent(db: AsyncSession, user_id: UUID, purpose: ConsentPurpose) -> bool:
     return (await current(db, user_id))[purpose]

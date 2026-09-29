@@ -7,6 +7,7 @@ runs with a default key. Every variable is documented in ``backend/.env.example`
 from __future__ import annotations
 
 import base64
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -22,6 +23,7 @@ AppEnv = Literal["dev", "test", "staging", "production"]
 # Optional settings: an empty value means unset (None).
 OPTIONAL_SETTINGS = (
     "database_owner_url",
+    "anthropic_api_key",  # ANTHROPIC_API_KEY= (blank, as in .env.example) means no key
     "postmark_server_token",
     "tier2_local_kek",
     "tier2_kms_key_id",
@@ -137,6 +139,19 @@ class Settings(BaseSettings):
     plans_file: Path = BACKEND_DIR / "config" / "plans.yaml"
     consents_file: Path = BACKEND_DIR / "config" / "consents.yaml"
 
+    # Runtime LLMs (ADR-005; bridge/llm). Dev and test start without a key (the adapter refuses at call time);
+    # production refuses to start without one unless LLM_KILL_SWITCH=1. No test and no make check step reaches
+    # the provider (AC-SEC-5; D-18: no paid calls).
+    anthropic_api_key: SecretStr | None = None
+    llm_kill_switch: bool = False  # LLM_KILL_SWITCH=1 refuses every call with LLMKillSwitch
+    # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
+    llm_global_daily_cap_usd: Decimal = Decimal("0")
+    llm_models_file: Path = BACKEND_DIR / "ai" / "models.yaml"
+
+    # Embeddings (ADR-005 decision 6). bge-m3 runs on the worker from local weights only (never downloaded by code).
+    embedder: Literal["fake", "bge-m3"] = "fake"
+    embedder_model_path: Path | None = None
+
     # Cookie names are fixed (the web app reads the same names). With Secure cookies they carry the __Host- prefix:
     # Secure, Path=/ and no Domain, so a sibling subdomain cannot plant them. Browsers refuse the prefix without
     # Secure, so plain-http setups (COOKIE_SECURE=false) get the bare names.
@@ -183,6 +198,8 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY must be base64 of exactly 32 bytes")
         if self.email_provider == "postmark" and not self.postmark_server_token:
             problems.append("POSTMARK_SERVER_TOKEN is required when EMAIL_PROVIDER=postmark")
+        if self.llm_global_daily_cap_usd < 0:
+            problems.append("LLM_GLOBAL_DAILY_CAP_USD must be zero or more")
         for provider in ("github", "google"):
             pair = [getattr(self, f"{provider}_client_{part}") for part in ("id", "secret")]
             if len({_is_set(value) for value in pair}) == 2:
@@ -197,6 +214,10 @@ class Settings(BaseSettings):
             )
         problems.extend(self._key_problems())
         if self.app_env == "production":
+            if self.embedder == "fake":
+                problems.append("production embeds with a real model only (EMBEDDER=bge-m3)")
+            if self.anthropic_api_key is None and not self.llm_kill_switch:
+                problems.append("ANTHROPIC_API_KEY is required in production unless LLM_KILL_SWITCH=1")
             if self.email_provider != "postmark":
                 problems.append("production sends email through Postmark only (EMAIL_PROVIDER=postmark)")
             if not self.public_base_url.startswith("https://"):

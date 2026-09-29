@@ -361,12 +361,11 @@ Python 3.13 venv at `/home/user/.venv-legacy` with `requirements.txt` and a `clo
 (`/home/user/bin`); `scripts/run_legacy_tests.py` → 307 OK. Worktrees live in `/home/user/sb-wt/<REQ-ID>`. The Windows
 workarounds in the laptop notes stay in their files. **Session 2 additions (network Full).** `make dev` builds and runs (all services healthy; about 260 MB of RAM without ClamAV) once the build containers trust this container's egress-proxy CA: an out-of-repo compose override (scratchpad `compose.ccr.json`, generated from the repo Dockerfiles by adding `COPY --from=ccr ca-bundle.crt` and `SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS` after each `FROM`) is passed as a second `-f`; the repo's Dockerfiles are unchanged and the laptop needs no override. Playwright 1.63: a shim at `/home/user/pw-shim` maps `chromium(_headless_shell)-1243/chrome*-linux64` onto the installed 1194 build (`PLAYWRIGHT_BROWSERS_PATH=/home/user/pw-shim`). `npm ci` in `frontend/` is clean.
 
-**In flight.** Merged into the integration branch on 2026-09-29 (session 2): schema v2 `ba42e69` (round 6: reviewer PASS, security-reviewer PASS, CI green), T2.6a `309330b`, D1 `44bd06d`, T2.4 `f5f322b` (re-check: reviewer PASS, security-reviewer PASS, CI green); 1657 backend tests pass on the merged tree, frontend 180. The MINOR follow-ups of each review are in the task cards (REQ-REPO-01, REQ-PROV-01, REQ-LLM-01).
+**In flight.** Merged into the integration branch on 2026-09-29 (session 2): schema v2 `ba42e69` (round 6: reviewer PASS, security-reviewer PASS, CI green), T2.6a `309330b`, D1 `44bd06d`, T2.4 `f5f322b` (re-check: reviewer PASS, security-reviewer PASS, CI green), T2.2 (reviewer PASS round 2; security-reviewer PASS after two sanitiser fixes: bounded input and a linear, total block scan; CI green); 1657 backend tests pass on the merged tree, frontend 180. The MINOR follow-ups of each review are in the task cards (REQ-REPO-01, REQ-PROV-01, REQ-LLM-01).
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-LLM-01-llm-layer` (T2.2) | `02f7170`+ | schema v2 merged, 1265 passed, CI green (pre-fix); reviewer round 2 PASS; security-reviewer CHANGES_REQUIRED (MAJOR: sanitiser CPU cost unbounded on long input) | impl-ai fixing the MAJOR (input cap + linear `_BLOCKS` + timing test); then merge integration in, suite, CI, merge |
-| `feat/REQ-ENG-01-schema-v3` (P1) | — | db-migrations writing revision 0003 (tracker tables, `users.demo_account`, `test_clock`) | reviewer + security-reviewer (engagements), merge |
+| `feat/REQ-ENG-01-schema-v3` (P1) | `3191af5` | revision 0003 done (tracker tables, `users.demo_account`, `test_clock`); 1728 passed; reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
 | `feat/REQ-PROP-01-proposals` (P2) | — | impl-backend | reviewer, merge |
 | `feat/REQ-DIR-01-screens` (P8 part 1: `/verify`, Companies) | — | impl-frontend | ux-reviewer + reviewer, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
@@ -395,7 +394,7 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | Anthropic price research (D-37) | done | verified 2026-09-29 |
 | P11 source excerpts (research, early) | done (`feat/REQ-RES-01-sources` `0bb707d`) | 19 verbatim dated excerpts, 4 niches; D-38 (publisher terms) open, default (a) local only |
 | P0 schema v2 round 6 → merge | done (`ba42e69`) | reviewer + security-reviewer PASS; CI green |
-| P0 T2.4, T2.6a, D1, T2.2 → merge | T2.6a, D1, T2.4 done; T2.2 fixing a security MAJOR | |
+| P0 T2.4, T2.6a, D1, T2.2 → merge | done | 1998 backend tests on the merged tree |
 | P1 schema v3 (prototype) | in progress | db-migrations |
 | P2 proposals | in progress | impl-backend |
 | P3 Tier-2 access | todo | |
