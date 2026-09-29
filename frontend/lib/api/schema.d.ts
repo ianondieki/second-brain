@@ -761,6 +761,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/proposals/{proposal_id}/tier2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tier2 Preview
+         * @description Your proposal's full version as organisations see it, marked for you (not logged as a view).
+         */
+        get: operations["tier2_preview_api_me_proposals__proposal_id__tier2_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who Has Seen
+         * @description "Who has seen this": every organisation view of your proposal's full version, newest first.
+         */
+        get: operations["who_has_seen_api_me_proposals__proposal_id__views_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/verification/phone": {
         parameters: {
             query?: never;
@@ -907,6 +947,50 @@ export interface paths {
          * @description Role changes are access-policy changes: owner only (404 for non-members first), then a fresh second factor.
          */
         put: operations["set_member_roles_api_orgs__org_id__members__user_id__roles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/proposals/{proposal_id}/nda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Evaluation Nda
+         * @description The Evaluation NDA to accept before opening this proposal, with the viewer-logging notice.
+         */
+        get: operations["evaluation_nda_api_orgs__org_id__proposals__proposal_id__nda_get"];
+        put?: never;
+        /**
+         * Accept Evaluation Nda
+         * @description Accept the Evaluation NDA for this proposal, in your name and your organisation's (once per version).
+         */
+        post: operations["accept_evaluation_nda_api_orgs__org_id__proposals__proposal_id__nda_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/proposals/{proposal_id}/tier2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tier2 Page
+         * @description The full proposal as a marked page for you (one logged view each time); never cached.
+         */
+        get: operations["tier2_page_api_orgs__org_id__proposals__proposal_id__tier2_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1516,6 +1600,33 @@ export interface components {
             plan: string;
             side: components["schemas"]["PlanSide"];
         };
+        /**
+         * EvaluationNdaOut
+         * @description The Evaluation NDA to show before a proposal's Tier 2, and whether you accepted this version for it.
+         */
+        EvaluationNdaOut: {
+            /** Acceptance Id */
+            acceptance_id: string | null;
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Body */
+            body: string;
+            /** Is Placeholder */
+            is_placeholder: boolean;
+            logging_notice: components["schemas"]["LoggingNotice"];
+            /**
+             * Sha256
+             * @description Hex SHA-256 of the body; send it back to accept
+             */
+            sha256: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Version */
+            version: string;
+        };
         /** FilterOptions */
         FilterOptions: {
             /** Counties */
@@ -1576,6 +1687,13 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
             verification: components["schemas"]["OrgVerification"];
+        };
+        /** LoggingNotice */
+        LoggingNotice: {
+            /** Text */
+            text: string;
+            /** Version */
+            version: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1714,6 +1832,45 @@ export interface components {
             cap: components["schemas"]["TagCap"];
             /** Items */
             items: components["schemas"]["TagOut"][];
+        };
+        /**
+         * NdaAcceptIn
+         * @description Exactly what was shown: a newer NDA version or notice is refused (409 ``nda_outdated``).
+         */
+        NdaAcceptIn: {
+            /** Logging Notice Version */
+            logging_notice_version: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+        };
+        /** NdaAcceptanceOut */
+        NdaAcceptanceOut: {
+            /**
+             * Acceptance Id
+             * Format: uuid
+             */
+            acceptance_id: string;
+            /**
+             * Accepted At
+             * Format: date-time
+             */
+            accepted_at: string;
+            /** Logging Notice Version */
+            logging_notice_version: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Version */
+            version: string;
         };
         /**
          * NewProblemIn
@@ -2128,6 +2285,16 @@ export interface components {
          * @enum {string}
          */
         ProposalStatus: "draft" | "published" | "hidden" | "archived";
+        /**
+         * ProposalViews
+         * @description Who opened your proposal's full version, newest first (at most 500).
+         */
+        ProposalViews: {
+            /** Items */
+            items: components["schemas"]["ViewOut"][];
+            /** Note */
+            note: string;
+        };
         /** ProvenanceKey */
         ProvenanceKey: {
             /**
@@ -2231,6 +2398,11 @@ export interface components {
              */
             status: "hidden" | "deleted";
         };
+        /**
+         * RenderKind
+         * @enum {string}
+         */
+        RenderKind: "html" | "pdf" | "attachment";
         /**
          * Responsiveness
          * @description E2 only, once there are at least 10 eligible tags and 60 days have passed since E2 verification.
@@ -2567,6 +2739,44 @@ export interface components {
          * @enum {string}
          */
         VersionStatus: "draft" | "registered";
+        /**
+         * ViewDuration
+         * @description Coarse viewing-time buckets shown to the owner ("Who has seen this").
+         * @enum {string}
+         */
+        ViewDuration: "under_1m" | "under_5m" | "under_15m" | "over_15m";
+        /** ViewOrg */
+        ViewOrg: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+        };
+        /** ViewOut */
+        ViewOut: {
+            duration: components["schemas"]["ViewDuration"] | null;
+            /** Nda Version */
+            nda_version: string | null;
+            org: components["schemas"]["ViewOrg"];
+            render_kind: components["schemas"]["RenderKind"];
+            /** Version No */
+            version_no: number;
+            /**
+             * View Id
+             * Format: uuid
+             */
+            view_id: string;
+            /**
+             * Viewed At
+             * Format: date-time
+             */
+            viewed_at: string;
+            /** Viewer Name */
+            viewer_name: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -7105,6 +7315,203 @@ export interface operations {
             };
         };
     };
+    tier2_preview_api_me_proposals__proposal_id__tier2_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marked page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    who_has_seen_api_me_proposals__proposal_id__views_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalViews"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     request_phone_code_api_me_verification_phone_post: {
         parameters: {
             query?: never;
@@ -7972,6 +8379,331 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    evaluation_nda_api_orgs__org_id__proposals__proposal_id__nda_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationNdaOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    accept_evaluation_nda_api_orgs__org_id__proposals__proposal_id__nda_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NdaAcceptIn"];
+            };
+        };
+        responses: {
+            /** @description Already accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NdaAcceptanceOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NdaAcceptanceOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    tier2_page_api_orgs__org_id__proposals__proposal_id__tier2_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marked page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": components["schemas"]["ApiErrorBody"];
                 };
             };
         };
