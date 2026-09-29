@@ -21,7 +21,15 @@ export const PLACEHOLDER_NAMES = [
 ] as const;
 
 /** Namespaces whose client components read server-formatted strings. */
-export const CLIENT_STRING_NAMESPACES = ["shell", "errorPage", "ideaEditor", "ideaFields", "ideaDelete"] as const;
+export const CLIENT_STRING_NAMESPACES = [
+  "shell",
+  "errorPage",
+  "ideaEditor",
+  "ideaFields",
+  "ideaDelete",
+  "pitch",
+  "tagWithdraw",
+] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 
 const PLACEHOLDERS = Object.fromEntries(PLACEHOLDER_NAMES.map((name) => [name, `{${name}}`]));
