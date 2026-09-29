@@ -89,3 +89,18 @@ def test_a_decline_carries_its_reason_attestation_and_text() -> None:
     composed = notify.compose(other, "Telco A", "T", reason_text="We are merging this unit.")
     assert composed is not None
     assert composed[1].body.endswith("Reason: other. Their reason: We are merging this unit.")
+
+
+def test_an_organisations_interest_tells_the_developer_n17() -> None:
+    """REQ-ENG-04: the genesis of an ORG_INTEREST engagement, by an organisation member, is N17 to the developer."""
+    genesis = event("create", EngagementActorRole.SIGNATORY, EngagementState.ORG_INTEREST)
+    composed = notify.compose(genesis, "Telco A (fixture)", "Cold-chain alerts")
+    assert composed is not None
+    party, notice = composed
+    assert (party, notice.kind, notice.title) == (DEV, "engagement.n17", "Organisation interested")
+    assert notice.body == 'Telco A (fixture) is interested in "Cold-chain alerts". Accept or decline on your tracker.'
+    assert notice.link == f"/engagements/{ENGAGEMENT}"
+    assert notify.is_interest(genesis)
+    for role in (EngagementActorRole.DEVELOPER, EngagementActorRole.SYSTEM):  # nobody opens stage 0 but the org
+        assert not notify.is_interest(event("create", role, EngagementState.ORG_INTEREST))
+    assert not notify.is_interest(event("create", EngagementActorRole.SIGNATORY, EngagementState.SUBMITTED))
