@@ -97,7 +97,8 @@ Existing variables it relies on: `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`, `LLM_GL
   redirects never followed; replies over 2 MB, malformed or nested past the parser's limit refused. No retries (one
   attempt, one request, one ledger row). No batch API.
 - Caps (`budget.py`): before every attempt, a free slot refuses once today's rows of its model that reached the provider
-  hit its cap (`LLMRequestCapReached`, a `blocked_budget` row; retries count), via `LedgerStore.calls_since`.
+  hit its cap (`LLMRequestCapReached`, a `blocked_budget` row; retries count), via `LedgerStore.calls_since`: platform-wide
+  in SQL (`app_llm_calls_since`, revision 0004; every tenant's rows, the number only), `NOT_SENT` in memory.
   The prototype total (`Settings.llm_total_cap_usd`) refuses once the ledger's lifetime spend (`app_llm_spend_usd`, every
   tenant; only Anthropic costs money) plus the estimate would pass it (scope `total`). The spend caps apply to attempts
   on a paid model (`ModelSpec.paid`; every `ai/models.yaml` model must have positive input and output prices; a check
@@ -145,12 +146,11 @@ schema-v3 column added in a rolled-back transaction).
 
 **Open (for the orchestrator).**
 
-1. **Platform-wide request count (db-migrations).** `SqlLedger.calls_since` counts the rows the bound tenant may read
-   (RLS), so a slot's daily cap is per tenant (each demo account may use the whole cap). A platform-wide count needs a
-   SECURITY DEFINER `app_llm_calls_since(p_model varchar, p_since timestamptz) RETURNS bigint` (rows of that model since
-   then, excluding the `blocked_*` and `batch_reserved` statuses), EXECUTE to `bridge_app`; `calls_since` then calls it.
-   In flight as revision 0004 (`feat/REQ-LLM-01-calls-since`); once it merges into the integration branch, P7 merges it
-   and switches `SqlLedger.calls_since` to the function.
+1. **Platform-wide request count: done.** Revision 0004 (`app_llm_calls_since(p_model, p_since)`, SECURITY DEFINER,
+   EXECUTE `bridge_app`) is merged; `SqlLedger.calls_since` calls it, so every account shares a slot's daily cap
+   (`integration/llm/test_sql_request_caps.py::test_two_demo_accounts_share_a_slots_daily_cap`,
+   `::test_a_slots_cap_counts_every_accounts_calls`). `integration/test_privileges.py` takes `NOT_SENT` from
+   `bridge.llm.ledger`, so the SQL rule and the in-memory one cannot drift apart unnoticed (0004 review MINOR).
 2. **Schema v3** is merged (`users.demo_account`); a free slot serves only accounts `seed --demo` marks.
 3. **API plumbing.** No route returns LLM output yet. P6 (EM7 wording), P10 (scout summary) and P13 (assistant) must
    extend `DemoFallbackFlag` and set it from `Result.demo_fallback`; the UI label is a frontend task.
@@ -175,11 +175,12 @@ schema-v3 column added in a rolled-back transaction).
   `trust_env=False`, adapters closed in the lifespan, `eos`, one code fence stripped (`65ff167`); the router's
   refusals recorded, real batch handles polled on Anthropic only, a `capture_logs` test for `llm.demo_fallback` (N9)
   (`1a1bd74`); `paid` judged on the model with positive YAML prices, a free adapter refused without the data rule,
-  `calls_since` pinned to its model for one tenant (M41) (`139de1b`); `.env.example` says the cap is per account for now.
+  `calls_since` pinned to its model for one tenant (M41) (`139de1b`). Revision 0004 merged and `calls_since` switched to
+  it (platform-wide); `.env.example` says so.
 - **Follow-ups (not built):**
   1. Extend `test_no_model_ids_in_code` to free-provider model families and hosts (for example `llama-`, `gemini-`,
      `gpt-`, `mistral`, `qwen`, and provider hostnames) so they stay in `.env` only.
   2. A cap can be overshot by the calls in flight (each attempt checks before sending; concurrent attempts may all
-     pass): bounded by the concurrency of one account's requests; revisit with the platform-wide count or a row lock.
+     pass): bounded by the calls in flight across the platform; revisit with a row lock or an advisory lock per slot.
   3. Commit sizes: `5412dbb` (router and its tests, about 690 lines) exceeded the ~300-line guideline; later rounds split
      tests from code.

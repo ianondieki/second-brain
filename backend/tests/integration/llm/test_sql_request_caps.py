@@ -1,9 +1,10 @@
 """REQ-LLM-01 P7 (D-37) against PostgreSQL: a free slot's daily request count and the prototype's lifetime total are
 read from the ``llm_calls`` ledger, as ``bridge_app`` under Row-Level Security.
 
-The request count reads the rows the bound tenant may read (RLS): today's rows of the slot's model that reached the
-provider, never blocked ones. A platform-wide count needs a SECURITY DEFINER count (open in the REQ-LLM-01 card). The
-lifetime total reads every tenant's rows through ``app_llm_spend_usd()``.
+A slot's quota is the provider's, shared by every account, so the request count is platform-wide:
+``app_llm_calls_since(model, since)`` (revision 0004, SECURITY DEFINER) counts every tenant's rows of the slot's model
+today that reached the provider, never blocked ones, although the caller reads none of the others' rows. The lifetime
+total reads every tenant's rows through ``app_llm_spend_usd()``.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from dataclasses import replace
 from decimal import Decimal
 
 import pytest
+import respx
 from pydantic import SecretStr
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -21,6 +24,7 @@ from bridge.db import bind_tenant
 from bridge.ids import uuid7
 from bridge.llm import registry as registry_module
 from bridge.llm.budget import LEDGER_START, day_start
+from bridge.llm.deps import build_runtime, routed_client
 from bridge.llm.errors import LLMBudgetExceeded, LLMRequestCapReached
 from bridge.llm.fakes import FakeAdapter
 from bridge.llm.registry import free_model_key
@@ -28,7 +32,9 @@ from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext
 from tests.integration.llm.conftest import People
 from tests.integration.llm.helpers import OK, TASK, reply, service, stored
+from tests.integration.llm.test_routed_client import BASE, chat, free_settings
 from tests.unit.llm.rig import screen
+from tests.unit.llm.routing_rig import demo_screen
 from tests.unit.llm.schemas import Verdict
 
 Factory = async_sessionmaker[AsyncSession]
@@ -67,9 +73,43 @@ async def test_a_free_slot_counts_todays_sent_rows_and_refuses_at_its_cap(
     ]
 
 
-async def test_the_count_reads_only_what_the_bound_tenant_may_read(factory: Factory, people: People) -> None:
-    """RLS: user B's rows of the same slot are not in user A's count (the platform-wide count is open)."""
-    slot = free_slot(people.tag, 10)
+async def test_two_demo_accounts_share_a_slots_daily_cap(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """Through the app's router: seeded demo accounts A and B use up a two-request slot, so A's next call is answered
+    by the labelled fake (request_cap) without a request, although A reads none of B's rows."""
+    async with owner_engine.begin() as conn:  # as the demo seed does (the owner role sets demo_account)
+        await conn.execute(
+            text("UPDATE users SET demo_account = true WHERE id IN (:a, :b)"), {"a": people.a, "b": people.b}
+        )
+    cfg = free_settings(people.tag).model_copy(update={"llm_free_1_daily_requests": 2})
+    runtime = build_runtime(cfg)
+    key = free_model_key(runtime.free[0].slot)
+    results = []
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post(f"{BASE}/chat/completions").mock(return_value=chat())
+        for user in (people.a, people.b, people.a):
+            async with factory() as db:
+                await bind_tenant(db, user_id=user)
+                client = routed_client(db, factory=factory, settings=cfg, runtime=runtime)
+                results.append(await client.complete(TASK, demo_screen(user), Verdict, ctx=CallContext(user_id=user)))
+    assert route.call_count == 2
+    assert [(r.demo_fallback, r.fallback_reason) for r in results] == [
+        (False, None),
+        (False, None),
+        (True, "request_cap"),
+    ]
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        assert await SqlLedger(factory, caller=db).calls_since(model=key, since=day_start(clock.utcnow())) == 2
+
+
+async def test_a_slots_cap_counts_every_accounts_calls(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """The per-attempt check in the service: A's call and B's call use a two-request cap up, so A's next call is
+    refused before sending (a blocked_budget row)."""
+    slot = free_slot(people.tag, 2)
     key = free_model_key(slot)
     reg = registry_module.load(get_settings().llm_models_file).for_free_slot(slot)
     for user in (people.a, people.b):
@@ -77,9 +117,18 @@ async def test_the_count_reads_only_what_the_bound_tenant_may_read(factory: Fact
             await bind_tenant(db, user_id=user)
             svc = service(db, factory, FakeAdapter([reply()]), registry=reg)
             await svc.complete(TASK, screen(), Verdict, ctx=CallContext(user_id=user))
+    trace = f"shared-{people.tag}"
+    adapter = FakeAdapter([reply()])
     async with factory() as db:
         await bind_tenant(db, user_id=people.a)
-        assert await SqlLedger(factory, caller=db).calls_since(model=key, since=day_start(clock.utcnow())) == 1
+        assert await SqlLedger(factory, caller=db).calls_since(model=key, since=day_start(clock.utcnow())) == 2
+        with pytest.raises(LLMRequestCapReached):
+            await service(db, factory, adapter, registry=reg).complete(
+                TASK, screen(), Verdict, ctx=CallContext(user_id=people.a, trace_id=trace)
+            )
+    assert adapter.requests == []
+    [row] = await stored(owner_engine, trace)
+    assert (row["status"], row["model"]) == ("blocked_budget", key)
 
 
 async def test_the_count_is_the_slots_model_only(factory: Factory, people: People) -> None:

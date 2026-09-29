@@ -151,8 +151,8 @@ class LedgerStore(Protocol):
     async def global_spent_usd(self, *, since: datetime) -> Decimal: ...
 
     async def calls_since(self, *, model: str, since: datetime) -> int:
-        """Attempts on ``model`` since ``since`` that reached the provider (every row but ``NOT_SENT`` ones), as far as
-        the store can see (a free slot's daily request cap, D-37)."""
+        """Attempts on ``model`` since ``since`` that reached the provider (every row but ``NOT_SENT`` ones), across
+        every tenant: a free slot's daily request quota is shared by the platform (D-37)."""
         ...
 
 

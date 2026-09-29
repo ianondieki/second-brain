@@ -205,5 +205,5 @@ def test_every_new_variable_is_documented_by_name_only() -> None:
     assert assigned["LLM_GLOBAL_DAILY_CAP_USD"] == "1.00"
     assert assigned["LLM_PROTOTYPE_TOTAL_CAP_USD"] == "5.00"
     text = " ".join(" ".join(example).split())
-    assert "per account until the platform-wide count lands" in text  # the cap is per tenant for now (RLS)
+    assert "per UTC day through this slot across every account (platform-wide" in text  # app_llm_calls_since
     assert Path(BACKEND_DIR / ".env.example").is_file()
