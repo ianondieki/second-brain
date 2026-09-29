@@ -154,11 +154,18 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
         )
 
 
+def test_clock_enabled(settings: Settings) -> bool:
+    """Whether the seed enables the dev/test clock: only for an ``APP_ENV`` set explicitly (environment or
+    ``backend/.env``) to dev, test or staging. The settings default is ``dev``, so a deployment that forgot to set
+    ``APP_ENV`` would otherwise enable it: it fails closed instead (review P1, MAJOR 3)."""
+    return "app_env" in settings.model_fields_set and settings.app_env in TEST_CLOCK_ENVS
+
+
 async def seed_test_clock(conn: AsyncConnection, settings: Settings) -> None:
-    """Enable the dev/test clock in dev, test and staging databases and disable it anywhere else (production): only
-    an enabled clock moves (``app_set_test_clock``) and shifts ``app_clock_now()``. The offset is kept, so running the
-    seed again does not reset a moved clock."""
-    await conn.execute(update(DevTestClock).values(enabled=settings.app_env in TEST_CLOCK_ENVS))
+    """Enable the dev/test clock where ``test_clock_enabled`` says so and disable it everywhere else (production, or
+    ``APP_ENV`` not set): only an enabled clock moves (``app_set_test_clock``) and shifts ``app_clock_now()``. The
+    offset is kept, so running the seed again does not reset a moved clock."""
+    await conn.execute(update(DevTestClock).values(enabled=test_clock_enabled(settings)))
 
 
 async def counts(conn: AsyncConnection) -> dict[str, int]:
