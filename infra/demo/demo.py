@@ -8,6 +8,7 @@ Bash), macOS and Linux. Python 3.9+ standard library only; needs Docker (Docker 
     python infra/demo/demo.py totp [ADDRESS]   # make demo-totp: current TOTP codes of the demo logins
     python infra/demo/demo.py logins      # the demo logins and the shared demo password
     python infra/demo/demo.py clock [--days N] [--hours N]  # make demo-clock: show or move the dev/test clock
+    python infra/demo/demo.py reminders   # make demo-reminders: send today's reminders now (Mailpit)
     python infra/demo/demo.py stats       # make demo-stats: memory per container (docker stats)
     python infra/demo/demo.py logs        # make demo-logs
     python infra/demo/demo.py e2e-env     # E2E_VERIFY_CERT_ID and E2E_DATABASE_OWNER_URL for Playwright
@@ -131,7 +132,7 @@ def banner() -> None:
         print(f"  {label:<{width}}  {url}")
     print()
     run(compose("exec", "-T", "api", "python", "-m", "bridge.demo", "logins"), check=False)
-    print("Move the app's clock (deadlines, reminders): make demo-clock DAYS=3")
+    print("Move the app's clock (deadlines): make demo-clock DAYS=3; send today's reminders now: make demo-reminders")
 
 
 def cmd_up(_: argparse.Namespace) -> int:
@@ -165,6 +166,13 @@ def cmd_totp(args: argparse.Namespace) -> int:
 def cmd_clock(args: argparse.Namespace) -> int:
     moves = ["--days", str(args.days), "--hours", str(args.hours)]
     return run(compose("exec", "-T", "api", "python", "-m", "bridge.demo", "clock", *moves), check=False).returncode
+
+
+def cmd_reminders(_: argparse.Namespace) -> int:
+    """One pass of the developer nudge (EM7) and the organisation digest at the shared clock's time, as the worker's
+    jobs run them, without waiting for 07:30/08:30 EAT (python -m bridge.reminders refuses production)."""
+    command = compose("exec", "-T", "worker", "python", "-m", "bridge.reminders", "run", "--now")
+    return run(command, check=False).returncode
 
 
 def cmd_logins(_: argparse.Namespace) -> int:
@@ -218,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     clock.add_argument("--days", type=int, default=0)
     clock.add_argument("--hours", type=int, default=0)
     clock.set_defaults(func=cmd_clock)
+    commands.add_parser("reminders", help="send today's reminders now").set_defaults(func=cmd_reminders)
     commands.add_parser("logs", help="follow the demo's logs").set_defaults(func=cmd_logs)
     commands.add_parser("stats", help="memory and CPU per demo container").set_defaults(func=cmd_stats)
     commands.add_parser("e2e-env", help="Playwright variables for this stack").set_defaults(func=cmd_e2e_env)

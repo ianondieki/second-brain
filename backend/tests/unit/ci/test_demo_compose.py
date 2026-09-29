@@ -236,3 +236,26 @@ def test_ci_runs_the_stack_with_both_feature_flags_on() -> None:
         text = (REPO / "frontend" / "e2e" / name).read_text(encoding="utf-8")
         assert "test.skip(!CERT_ID" not in text, name
         assert "test.skip(!OWNER_DATABASE_URL" not in text, name
+
+
+def test_the_helpers_run_inside_the_stack(monkeypatch: pytest.MonkeyPatch) -> None:
+    """demo-totp, demo-clock and demo-reminders run the backend's own commands in the running containers, so the
+    laptop needs no Python environment of the backend."""
+    demo = launcher()
+    ran: list[list[str]] = []
+
+    def record(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        ran.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(demo, "run", record)
+    monkeypatch.setattr(demo, "volume_exists", lambda _name: True)
+    assert demo.main(["totp", "reviewer@telco-a.example"]) == 0
+    assert demo.main(["clock", "--days", "3"]) == 0
+    assert demo.main(["reminders"]) == 0
+    tails = [command[command.index("exec") :] for command in ran]
+    assert tails == [
+        ["exec", "-T", "api", "python", "-m", "bridge.demo", "totp", "reviewer@telco-a.example"],
+        ["exec", "-T", "api", "python", "-m", "bridge.demo", "clock", "--days", "3", "--hours", "0"],
+        ["exec", "-T", "worker", "python", "-m", "bridge.reminders", "run", "--now"],
+    ]
