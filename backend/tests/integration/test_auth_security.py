@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 import bridge.clock
-from bridge.auth import totp
+from bridge.auth import service, totp
 from bridge.config import get_settings
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
@@ -490,6 +490,97 @@ async def test_a_wrong_current_password_is_refused_and_throttled(client: httpx.A
         codes.append((response.status_code, response.json()["detail"]["code"]))
     assert codes[0] == (403, "current_password_required")
     assert codes[-1] == (429, "too_many_attempts")
+
+
+def new_ip() -> str:
+    n = uuid4().int
+    return f"10.{n >> 16 & 255}.{n >> 8 & 255}.{n & 255}"
+
+
+NEW_PASSWORD = {"new_password": "a brand new password"}  # no current password: refused (and counted) without argon2
+
+
+def freeze_the_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The throttle window is read from the app clock: standing still, no attempt ages out on a slow machine."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
+
+
+RE_AUTH_ROUTES = {"password": 204, "totp_enrol": 200, "oauth_link": 200, "oauth_unlink": 204}  # success status
+WITH_GITHUB = {
+    "public_base_url": "https://web.test",
+    "github_client_id": SecretStr("gh-test-client"),
+    "github_client_secret": SecretStr("gh-test-secret"),
+}
+
+
+async def add_github_identity(owner_engine: AsyncEngine, address: str) -> None:
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO auth_identities (id, user_id, provider, subject) "
+                "SELECT gen_random_uuid(), id, 'github', :s FROM users WHERE email = :e"
+            ),
+            {"s": uuid4().hex, "e": address},
+        )
+
+
+async def re_auth(route: str, browser: httpx.AsyncClient, password: str | None) -> httpx.Response:
+    """One call to a route that checks the current password (none given: refused, and counted, without argon2)."""
+    proof = {"current_password": password} if password else {}
+    if route == "password":
+        return await browser.post("/api/auth/password", json={**proof, **NEW_PASSWORD})
+    if route == "totp_enrol":
+        return await browser.post("/api/auth/totp/enrol", json={"password": password} if password else {})
+    if route == "oauth_link":
+        return await browser.post("/api/auth/oauth/github/start", json={"intent": "link", **proof})
+    identity_id = (await browser.get("/api/me/identities")).json()[0]["id"]
+    return await browser.request("DELETE", f"/api/auth/identities/{identity_id}", json=proof or None)
+
+
+@pytest.mark.parametrize("route", list(RE_AUTH_ROUTES))
+async def test_re_auth_attempts_are_counted_per_ip_not_platform_wide(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    """T2.12 follow-up: re-auth attempts were counted under one constant address, so 100 a minute anywhere refused
+    every account's password change, TOTP enrolment, OAuth link and unlink. Now each client IP has its own budget,
+    at each of the four routes (a route that passed a constant address would refuse the browser elsewhere)."""
+    monkeypatch.setattr(service, "REAUTH_IP_LIMIT", 2)
+    settings, shared = get_settings().model_copy(update=WITH_GITHUB), new_ip()
+    async with (
+        make_client(app_engine, settings, ip=shared) as first,
+        make_client(app_engine, settings, ip=shared) as second,
+        make_client(app_engine, settings, ip=new_ip()) as elsewhere,
+    ):
+        for browser in (first, second, elsewhere):
+            address = email()
+            await verified(browser, address)
+            if route == "oauth_unlink":
+                await add_github_identity(owner_engine, address)
+        freeze_the_clock(monkeypatch)
+        for _ in range(2):
+            assert (await re_auth(route, first, None)).status_code == 403
+        blocked = await re_auth(route, second, PASSWORD)  # another account, the same address
+        assert (blocked.status_code, blocked.json()["detail"]["code"]) == (429, "too_many_attempts")
+        assert (await re_auth(route, elsewhere, PASSWORD)).status_code == RE_AUTH_ROUTES[route]
+
+
+async def test_re_auth_attempts_from_several_ips_share_the_account_budget(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stolen session used from several addresses still gets five re-auth attempts a minute in all."""
+    name = get_settings().session_cookie_name
+    async with make_client(app_engine, ip=new_ip()) as here, make_client(app_engine, ip=new_ip()) as there:
+        await verified(here, email())
+        session = here.cookies.get(name)
+        assert session
+        there.cookies.set(name, session)
+        await refresh_csrf(there)
+        freeze_the_clock(monkeypatch)
+        for browser in (here, here, here, there, there):
+            assert (await browser.post("/api/auth/password", json=NEW_PASSWORD)).status_code == 403
+        blocked = await there.post("/api/auth/password", json={"current_password": PASSWORD, **NEW_PASSWORD})
+        assert (blocked.status_code, blocked.json()["detail"]["code"]) == (429, "too_many_attempts")
 
 
 async def test_a_password_less_account_needs_a_recent_sign_in(

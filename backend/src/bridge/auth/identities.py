@@ -18,7 +18,8 @@ Plain code decides (docs/spec/04 principle 1). For a ``login`` or ``signup`` cal
 
 An identity is attached to an account only when an OAuth signup creates the account, or through ``link`` from
 ``/settings/security`` (orchestrator decision, fix round 1 of T2.12), which does not depend on the provider's
-address. Linking completes only in the session that started it, which gave a fresh second factor when TOTP is on (the
+address. Linking completes only in the session that started it, still live when the provider has answered
+(``reload_session``), which gave a fresh second factor when TOTP is on (the
 ADR-002 step-up rule) and the current password when the account has one (throttled like a login); a password-less
 account without TOTP needs a sign-in within the last 15 minutes instead. An identity that belongs to another account
 is refused, and an account holds one identity per provider. Unlinking needs the same proof and another way to sign
@@ -85,7 +86,13 @@ class _Taken(Exception):
 async def allow_request(db: AsyncSession, settings: Settings, step: Literal["start", "callback"], ip: str) -> bool:
     """At most ``REQUESTS_PER_IP_PER_MINUTE`` OAuth starts, and as many callbacks, a minute from one client IP (the
     ``login_attempts`` ledger, HMAC digests only). Each allowed request is recorded; the caller commits. A refusal is
-    logged as ``auth.oauth_throttled`` (not audited: an audit append per junk request would be its own flood)."""
+    logged as ``auth.oauth_throttled`` (not audited: an audit append per junk request would be its own flood).
+
+    A callback is charged only once its ``state`` matched the flow cookie and it carries a code, just before the state
+    is spent and the provider called (T2.12 follow-up): charged earlier, a page loading the callback URL with a junk
+    state in someone's browser would use up that person's budget. The requests refused before that need no limit of
+    their own: they charge no throttle row and never reach the provider, and a 256-bit random state sealed in the
+    cookie is nothing to guess."""
     keys = throttle.ip_keys(settings.secret_key.get_secret_value(), f"oauth_{step}", ip)
     if await throttle.ip_blocked(db, keys, limit=REQUESTS_PER_IP_PER_MINUTE):
         get_logger(__name__).info("auth.oauth_throttled", step=step)
@@ -109,7 +116,7 @@ async def spend_state(db: AsyncSession, settings: Settings, flow: oauth.Flow) ->
 
 
 async def ensure_fresh_proof(
-    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
 ) -> None:
     """Adding or removing a sign-in method: a second factor within STEP_UP_MAX_AGE_HOURS when TOTP is on (the
     ADR-002 step-up rule), and the current password when the account has one (``service.require_reauth``, throttled
@@ -120,7 +127,7 @@ async def ensure_fresh_proof(
             raise service.AuthError("step_up_required", 403)
         if user.password_hash is None:
             return
-    await service.require_reauth(db, settings, user, live, password)
+    await service.require_reauth(db, settings, user, live, password, ip=ip)
 
 
 def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
@@ -136,6 +143,8 @@ async def begin(
     provider: AuthProvider,
     req: OAuthStartRequest,
     live: sessions.LiveSession | None,
+    *,
+    ip: str,
 ) -> oauth.Flow:
     """Check the request and create the flow to seal into the cookie. Raises ``service.AuthError``."""
     now = clock.utcnow()
@@ -144,7 +153,7 @@ async def begin(
             raise service.AuthError("unauthenticated", 401)
         if live.row.mfa_pending:
             raise service.AuthError("mfa_required", 401)
-        await ensure_fresh_proof(db, settings, live.user, live, req.current_password)
+        await ensure_fresh_proof(db, settings, live.user, live, req.current_password, ip=ip)
         return oauth.new_flow(provider, "link", "/settings/security", now=now, session=csrf.binding_for(live.token))
     signup: OAuthSignup | None = None
     if req.intent == "signup":
@@ -159,6 +168,21 @@ async def begin(
 
 
 # ------------------------------------------------------------------------------------------------ callback
+
+
+async def reload_session(db: AsyncSession, live: sessions.LiveSession | None) -> sessions.LiveSession | None:
+    """After the provider call, before ``complete`` (T2.12 follow-up): forget every row read before the call and look
+    the browser's session up again. While the token exchange was in flight the person may have signed out, the
+    session may have been revoked or have expired, or the account may have been suspended; the copies read before
+    (kept across the commit) would still link to that session or sign in to that account. None when the session is
+    gone, so a ``link`` fails with ``oauth_session``; a sign-in does not depend on it. The caller commits first:
+    changes not yet flushed would be dropped silently, so they raise ``RuntimeError`` instead."""
+    if db.new or db.dirty or db.deleted:
+        raise RuntimeError("reload_session would drop unflushed changes: commit before the provider call")
+    db.expunge_all()
+    fresh = await sessions.lookup(db, live.token) if live is not None else None
+    await bind_tenant(db, user_id=fresh.user.id if fresh is not None else None)
+    return fresh
 
 
 async def complete(
@@ -411,7 +435,13 @@ async def list_for(db: AsyncSession, user_id: UUID) -> list[AuthIdentity]:
 
 
 async def unlink(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, identity_id: UUID, password: str | None
+    db: AsyncSession,
+    settings: Settings,
+    live: sessions.LiveSession,
+    identity_id: UUID,
+    password: str | None,
+    *,
+    ip: str,
 ) -> list[PendingEmail]:
     """Remove one of the signed-in account's identities (404 for anyone else's), keeping a way to sign in. The
     account's other sessions end, so none opened with the removed identity outlives it."""
@@ -420,7 +450,7 @@ async def unlink(
     identity = (await db.execute(stmt)).scalar_one_or_none()
     if identity is None:
         raise service.AuthError("not_found", 404)
-    await ensure_fresh_proof(db, settings, user, live, password)
+    await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
     others = (
         select(func.count())
         .select_from(AuthIdentity)

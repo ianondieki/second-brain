@@ -287,7 +287,9 @@ async def set_password(
     """Set or change the password: the current one is required when set; a password-less account needs a sign-in
     within the last 15 minutes. Other sessions end; the account gets a notice."""
     try:
-        pending = await service.set_password(db, settings, live, body.current_password, body.new_password)
+        pending = await service.set_password(
+            db, settings, live, body.current_password, body.new_password, ip=client_ip(request)
+        )
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -296,9 +298,11 @@ async def set_password(
 
 
 @router.post("/totp/enrol")
-async def totp_enrol(body: TotpEnrolRequest, live: CurrentSession, db: Db, settings: SettingsDep) -> TotpEnrolResponse:
+async def totp_enrol(
+    body: TotpEnrolRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
+) -> TotpEnrolResponse:
     try:
-        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password)
+        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -367,7 +371,7 @@ async def oauth_start(
     if not await identities.allow_request(db, settings, "start", client_ip(request)):
         raise _fail(service.AuthError("too_many_attempts", 429))
     try:
-        flow = await identities.begin(db, settings, client.provider.name, body, live)
+        flow = await identities.begin(db, settings, client.provider.name, body, live, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -400,25 +404,30 @@ async def oauth_callback(
     state: str | None = None,
     error: str | None = None,
 ) -> RedirectResponse:
-    """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL and spends the flow
-    cookie; the first callback carrying a code also spends its state server-side, so a replay gets oauth_state.
+    """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is
+    spent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another
+    state (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also
+    spends its state server-side, so a replay gets oauth_state.
     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-    consents_version_required, too_many_attempts (10 callbacks a minute from one IP). Success: the return path (or
-    /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER."""
+    consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
+    Success: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER."""
     client = oauth.configured(settings, provider)
     if client is None:
         raise not_found()
     now = clock.utcnow()
     flow = oauth.unseal(settings, request.cookies.get(settings.oauth_cookie_name), now=now)
-    if not await identities.allow_request(db, settings, "callback", client_ip(request)):
-        outcome = identities.failed(flow.intent if flow else None, "too_many_attempts", client.provider.name)
-    elif flow is None or flow.provider != client.provider.name or not _state_matches(state, flow):
+    presented = flow is not None and _state_matches(state, flow)
+    # The checks up to the throttle charge no throttle row and never reach the provider, so a forged callback (a page
+    # loading this URL in someone's browser with a junk state) never uses up that person's budget.
+    if flow is None or flow.provider != client.provider.name or not presented:
         outcome = identities.failed(None, "oauth_state", client.provider.name)
     elif error is not None:
         outcome = identities.failed(flow.intent, "oauth_cancelled", flow.provider)  # never the provider's own text
     elif not code or len(code) > MAX_CALLBACK_PARAM_CHARS:
         outcome = identities.failed(flow.intent, "oauth_failed", flow.provider)
+    elif not await identities.allow_request(db, settings, "callback", client_ip(request)):
+        outcome = identities.failed(flow.intent, "too_many_attempts", flow.provider)
     elif not await identities.spend_state(db, settings, flow):
         outcome = identities.failed(None, "oauth_state", flow.provider)  # a replay, like a missing cookie
     else:
@@ -434,7 +443,7 @@ async def oauth_callback(
                 settings,
                 flow,
                 ident,
-                live=live,
+                live=await identities.reload_session(db, live),  # it may have ended during the provider call
                 ip=client_ip(request),
                 user_agent=request.headers.get("user-agent"),
             )
@@ -443,7 +452,10 @@ async def oauth_callback(
         oauth.web_url(settings, outcome.path, outcome.params), status_code=status.HTTP_302_FOUND, background=tasks
     )
     response.headers["Referrer-Policy"] = "no-referrer"  # the callback URL carries the code and state
-    clear_oauth_flow(response, settings)
+    if flow is None or presented:
+        # Spent or unusable. A sealed, unexpired flow whose state was not presented stays: SameSite=Lax sends the
+        # cookie with a forged top-level GET too, and deleting it would fail the person's genuine return.
+        clear_oauth_flow(response, settings)
     if outcome.session is not None:
         set_session(response, settings, outcome.session.token)
     if outcome.check_email:
@@ -466,7 +478,8 @@ async def unlink_identity(
     """Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's
     other sessions end. 409 last_sign_in_method when nothing else could sign in."""
     try:
-        pending = await identities.unlink(db, settings, live, identity_id, body.current_password if body else None)
+        password = body.current_password if body else None
+        pending = await identities.unlink(db, settings, live, identity_id, password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc

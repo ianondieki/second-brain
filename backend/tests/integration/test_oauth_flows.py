@@ -29,9 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from structlog.testing import capture_logs
 
 import bridge.clock
-from bridge.auth import identities, service, throttle, totp
+from bridge.auth import identities, oauth, service, throttle, totp
+from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings, get_settings
 from bridge.db import create_session_factory
+from bridge.models.enums import AuthProvider
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
@@ -716,6 +718,58 @@ async def test_a_link_finished_in_another_session_is_refused(client: httpx.Async
     assert await linked(client) == []
 
 
+SIGNED_OUT = "UPDATE sessions SET revoked_at = now() WHERE user_id = (SELECT id FROM users WHERE email = :e)"
+SUSPENDED = "UPDATE users SET status = 'suspended' WHERE email = :e"
+
+
+def during_the_provider_call(
+    monkeypatch: pytest.MonkeyPatch, owner_engine: AsyncEngine, sql: str, address: str
+) -> None:
+    """Run ``sql`` for the account at ``address`` while the callback waits for the provider (no connection held)."""
+    real = oauth.fetch_identity
+
+    async def provider_call(*args: Any, **kwargs: Any) -> oauth.ProviderIdentity:
+        ident = await real(*args, **kwargs)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text(sql), {"e": address})
+        return ident
+
+    monkeypatch.setattr(oauth, "fetch_identity", provider_call)
+
+
+@pytest.mark.parametrize("change", [SIGNED_OUT, SUSPENDED], ids=["signed_out", "suspended"])
+async def test_a_link_whose_session_ends_during_the_provider_call_is_refused(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """T2.12 follow-up: the session is looked up again after the provider call; the copy read before it would still
+    link an identity to a signed-out session or a suspended account."""
+    address = email()
+    await email_account(client, address)
+    during_the_provider_call(monkeypatch, owner_engine, change, address)
+    response = await round_trip(client, person(), intent="link", **REAUTH)
+    assert landing(response) == ("/login", {"oauth_error": "oauth_session", "provider": "github"})
+    assert await identity_rows(owner_engine, address) == []
+    assert not [m for m in outbox(client).outbox if "sign-in was added" in m.text]
+
+
+@pytest.mark.parametrize("via", ["identity", "address"])
+async def test_an_account_suspended_during_the_provider_call_is_not_signed_in(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, via: str
+) -> None:
+    """T2.12 follow-up: rows read before the provider call are not trusted after it, even when this browser is
+    still signed in to the account (its session and user rows were read before the call)."""
+    who = person()
+    if via == "identity":
+        await round_trip(client, who, intent="signup", **signup_body())
+    else:
+        await email_account(client, who.email)
+    await refresh_csrf(client)
+    during_the_provider_call(monkeypatch, owner_engine, SUSPENDED, who.email)
+    response = await round_trip(client, who, intent="login")
+    assert landing(response) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+    assert not signed_in(response)
+
+
 # ------------------------------------------------------------------ state, replay, expiry and provider errors
 
 
@@ -726,6 +780,38 @@ async def test_a_state_mismatch_is_refused_before_any_provider_call(client: http
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": "forged-state"})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert token.call_count == 0
+    assert "__Host-bridge_oauth" not in cookie_names(response)  # another state: the flow in progress stays
+
+
+async def test_a_forged_callback_leaves_the_flow_for_the_genuine_one(client: httpx.AsyncClient) -> None:
+    """Pre-merge MINOR (security review of the T2.12 follow-ups): a page that loads the callback URL in someone's
+    browser (SameSite=Lax sends the flow cookie on a top-level GET) with a junk state, or none, must not delete the
+    flow that person just started, or their genuine return from the provider would fail with oauth_state."""
+    who = person()
+    params = await start(client, "github", "signup", **signup_body())
+    forgeries = [
+        ("github", {"code": "c", "state": "junk"}),
+        ("github", {"code": "c"}),
+        ("github", {"error": "access_denied", "state": "junk"}),
+        ("github", {"code": "c", "state": params["state"] + "x"}),
+        ("google", {"code": "c", "state": "junk"}),  # another provider's callback, also a forged state
+    ]
+    for provider, forged_params in forgeries:
+        forged = await client.get(f"/api/auth/oauth/{provider}/callback", params=forged_params)
+        assert landing(forged) == ("/login", {"oauth_error": "oauth_state", "provider": provider})
+        assert "__Host-bridge_oauth" not in cookie_names(forged)
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        genuine = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(genuine) == ("/dev", {})
+    assert signed_in(genuine)
+    assert _deleted(genuine, "__Host-bridge_oauth")  # spent by the callback that presented its state
+
+
+async def test_an_unreadable_flow_cookie_is_cleared(client: httpx.AsyncClient) -> None:
+    client.cookies.set("__Host-bridge_oauth", "not-a-sealed-flow")
+    response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": "junk"})
+    assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert _deleted(response, "__Host-bridge_oauth")
 
 
@@ -806,6 +892,60 @@ async def test_a_state_in_use_by_an_open_transaction_waits_for_it(app_engine: As
         await second.commit()
 
 
+async def test_a_spent_state_is_refused_for_as_long_as_its_cookie_lives(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up (spend window): the spent state outlives every cookie that carries it, so a copy of the
+    cookie replayed in its last seconds is still refused before any provider call."""
+    who = person()
+    await round_trip(client, who, intent="signup", **signup_body())
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    started = datetime.now(UTC)
+    params = await start(client, "github", "login")
+    flow_cookie = client.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    callback = "/api/auth/oauth/github/callback"
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        assert landing(await client.get(callback, params={"code": "a", "state": params["state"]})) == ("/dev", {})
+    last_seconds = started + oauth.FLOW_TTL - timedelta(seconds=5)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: last_seconds)
+    other.cookies.set("__Host-bridge_oauth", flow_cookie)
+    with respx.mock(assert_all_called=False) as router:
+        token = fake_github(router, who)
+        replay = await other.get(callback, params={"code": "b", "state": params["state"]})
+    assert landing(replay) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    assert token.call_count == 0
+
+
+async def test_the_state_spend_window_is_twice_the_flow_lifetime(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up (spend window boundary): a spent state is refused until 2 x FLOW_TTL after it was spent and
+    is unused from then on. The margin over the cookie's lifetime absorbs clock skew between the database, which
+    stamps the record, and the app, which reads it."""
+    settings = oauth_settings()
+    flow = oauth.new_flow(AuthProvider.GITHUB, "login", "/dev", now=datetime.now(UTC))
+    factory = create_session_factory(app_engine)
+    async with factory() as db:
+        assert await identities.spend_state(db, settings, flow)
+        await db.commit()
+    spent = datetime(2026, 1, 5, 9, 30, tzinfo=UTC)  # pin the record's time; the app clock is set from it below
+    digest = keyed_digest(settings.secret_key.get_secret_value(), "oauth_state:value", flow.state)
+    async with owner_engine.begin() as conn:
+        pinned = await conn.execute(
+            text("UPDATE login_attempts SET created_at = :t WHERE email_digest = :d"), {"t": spent, "d": digest}
+        )
+        assert pinned.rowcount == 1
+    window = 2 * oauth.FLOW_TTL
+    for age, first in [(window - timedelta(seconds=1), False), (window, True)]:
+        monkeypatch.setattr(bridge.clock, "utcnow", lambda at=spent + age: at)
+        async with factory() as db:
+            assert await identities.spend_state(db, settings, flow) is first
+            await db.rollback()
+
+
 async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     params = await start(client, "github", "login")
     later = datetime.now(UTC) + timedelta(minutes=11)
@@ -815,6 +955,7 @@ async def test_an_expired_flow_is_refused(client: httpx.AsyncClient, monkeypatch
         response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
     assert token.call_count == 0
+    assert _deleted(response, "__Host-bridge_oauth")
 
 
 async def test_a_flow_for_one_provider_cannot_finish_at_another(client: httpx.AsyncClient) -> None:
@@ -824,6 +965,7 @@ async def test_a_flow_for_one_provider_cannot_finish_at_another(client: httpx.As
         response = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
     assert landing(response) == ("/login", {"oauth_error": "oauth_state", "provider": "google"})
     assert token.call_count == 0
+    assert _deleted(response, "__Host-bridge_oauth")  # its state was presented: the flow is spent
 
 
 async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> None:
@@ -836,14 +978,17 @@ async def test_provider_errors_are_never_shown(client: httpx.AsyncClient) -> Non
     assert "script" not in denied.headers["location"]
     assert "access_denied" not in denied.headers["location"]
     assert denied.headers["referrer-policy"] == "no-referrer"
+    assert _deleted(denied, "__Host-bridge_oauth")
     params = await start(client, "google", "login")
     with respx.mock(assert_all_called=True) as router:
         router.post(GOOGLE_TOKEN).mock(return_value=httpx.Response(500, text="internal detail from the provider"))
         failed = await client.get("/api/auth/oauth/google/callback", params={"code": "c", "state": params["state"]})
     assert landing(failed) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    assert _deleted(failed, "__Host-bridge_oauth")
     params = await start(client, "google", "login")
     missing = await client.get("/api/auth/oauth/google/callback", params={"state": params["state"]})
     assert landing(missing) == ("/login", {"oauth_error": "oauth_failed", "provider": "google"})
+    assert _deleted(missing, "__Host-bridge_oauth")
 
 
 # ------------------------------------------------------------------ throttling and connections
@@ -861,13 +1006,21 @@ async def test_starting_oauth_is_throttled_per_ip(client: httpx.AsyncClient, oth
     assert (await other.post("/api/auth/oauth/github/start", json={"intent": "login"})).status_code == 200
 
 
-async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient) -> None:
-    """Junk callbacks use up the address's budget; the next one, even with a valid flow, reaches no provider."""
+async def test_oauth_callbacks_are_throttled_per_ip(
+    client: httpx.AsyncClient, other: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ten callbacks a minute from one address may reach the provider; the next, even with a valid flow, reaches
+    none. The app clock stands still, so a slow machine cannot let the first callbacks age out of the minute."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
     callback = "/api/auth/oauth/github/callback"
     for _ in range(10):
-        junk = await client.get(callback, params={"code": "c", "state": "junk"})
-        assert landing(junk) == ("/login", {"oauth_error": "oauth_state", "provider": "github"})
-    params = await start(client, "github", "signup", **signup_body())
+        response = await round_trip(client, person(), intent="login")
+        assert landing(response) == ("/signup", {"oauth_error": "oauth_no_account", "provider": "github"})
+    params = await start(other, "github", "signup", **signup_body())  # this address has used its ten starts too
+    flow_cookie = other.cookies.get("__Host-bridge_oauth")
+    assert flow_cookie
+    client.cookies.set("__Host-bridge_oauth", flow_cookie)
     with respx.mock(assert_all_called=False) as router, capture_logs() as logs:
         token = fake_github(router, person())
         throttled = await client.get(callback, params={"code": "c", "state": params["state"]})
@@ -876,6 +1029,54 @@ async def test_oauth_callbacks_are_throttled_per_ip(client: httpx.AsyncClient) -
     assert not signed_in(throttled)
     assert _deleted(throttled, "__Host-bridge_oauth")
     assert [entry["step"] for entry in logs if entry["event"] == "auth.oauth_throttled"] == ["callback"]
+
+
+async def test_forged_callbacks_do_not_use_up_the_callback_budget(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.12 follow-up: a page that makes this browser load the callback with a junk state (or none) is refused
+    before the throttle is charged, so it cannot lock the person out of their own sign-in for a minute. Nine of the
+    ten callbacks a minute are used up first, so any one refusal below that charged the throttle would refuse the
+    genuine callback at the end. Covered with and without a live flow cookie; with the flow's own state, the
+    provider's error and a missing or oversized code are refused uncharged too (they never reach the provider)."""
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)
+    settings, ip = oauth_settings(), new_ip()
+    async with create_session_factory(app_engine)() as db:
+        for _ in range(identities.REQUESTS_PER_IP_PER_MINUTE - 1):
+            assert await identities.allow_request(db, settings, "callback", ip)
+        await db.commit()
+    callback = "/api/auth/oauth/github/callback"
+    forgeries = [
+        {"code": "c", "state": "junk"},
+        {"code": "c"},
+        {"error": "access_denied", "state": "junk"},
+        {"code": "c", "state": "x" * 4096},
+    ]
+    refused_state = ("/login", {"oauth_error": "oauth_state", "provider": "github"})
+    async with make_client(app_engine, settings=settings, ip=ip) as client:
+        for params in forgeries:  # no flow cookie
+            assert landing(await client.get(callback, params=params)) == refused_state
+        state = (await start(client, "github", "login"))["state"]
+        for params in forgeries:  # a live flow cookie, which stays
+            assert landing(await client.get(callback, params=params)) == refused_state
+        cancelled = await client.get(callback, params={"error": "access_denied", "state": state})
+        assert landing(cancelled) == ("/login", {"oauth_error": "oauth_cancelled", "provider": "github"})
+        for code in (None, "c" * 4096):
+            state = (await start(client, "github", "login"))["state"]
+            params = {"state": state} if code is None else {"state": state, "code": code}
+            failed = await client.get(callback, params=params)
+            assert landing(failed) == ("/login", {"oauth_error": "oauth_failed", "provider": "github"})
+        response = await round_trip(client, person(), intent="signup", **signup_body())  # the tenth this minute
+        assert landing(response) == ("/dev", {})
+        assert signed_in(response)
+        await refresh_csrf(client)  # the new session carries its own CSRF binding
+        state = (await start(client, "github", "login"))["state"]
+        with respx.mock(assert_all_called=False) as router:
+            token = fake_github(router, person())
+            over = await client.get(callback, params={"code": "c", "state": state})
+        assert landing(over) == ("/login", {"oauth_error": "too_many_attempts", "provider": "github"})
+        assert token.call_count == 0
 
 
 async def test_no_database_connection_is_held_during_the_provider_call(
