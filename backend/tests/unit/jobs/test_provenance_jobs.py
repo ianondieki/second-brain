@@ -18,6 +18,7 @@ from bridge.config import ConfigurationError, Settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.jobs import audit as audit_jobs
 from bridge.jobs import provenance as jobs
+from bridge.jobs import reminders as reminder_jobs
 from bridge.jobs.app import IMPORT_PATHS, app
 from bridge.provenance import service
 from bridge.provenance.service import RegistrationError, RegistrationPendingError
@@ -49,7 +50,7 @@ def settings(**overrides: Any) -> Settings:
 
 
 def test_the_task_modules_are_imported_by_the_worker() -> None:
-    assert IMPORT_PATHS == ["bridge.jobs.provenance", "bridge.jobs.audit"]
+    assert IMPORT_PATHS == ["bridge.jobs.provenance", "bridge.jobs.audit", "bridge.jobs.reminders"]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
         service.TASK_HASH,
@@ -61,7 +62,12 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         assert name in app.tasks
     assert app.tasks[service.TASK_HASH].queue == service.QUEUE
     crons = {task.task.name: task.cron for task in app.periodic_registry.periodic_tasks.values()}
-    assert crons == {jobs.ANCHOR_TASK: "7 * * * *", audit_jobs.VERIFY_TASK: "30 21 * * *"}
+    assert crons == {
+        jobs.ANCHOR_TASK: "7 * * * *",
+        audit_jobs.VERIFY_TASK: "30 21 * * *",
+        reminder_jobs.DISPATCH_TASK: "*/15 * * * *",
+        reminder_jobs.ORG_DIGEST_TASK: "*/15 * * * *",
+    }
 
 
 def test_hourly_anchor_runs_never_overlap() -> None:
