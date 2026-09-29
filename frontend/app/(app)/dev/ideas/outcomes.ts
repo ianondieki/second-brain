@@ -1,4 +1,4 @@
-import { apiErrorCode } from "@/lib/api/errors";
+import { apiErrorCode } from "@/lib/api/error-code";
 
 import { isFieldName, type FieldIssue } from "./ideas";
 
