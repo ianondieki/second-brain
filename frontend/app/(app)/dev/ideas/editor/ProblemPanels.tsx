@@ -5,15 +5,14 @@ import { useId, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { RadioGroup } from "@/components/ui/RadioGroup";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
-import { searchProblems } from "../calls";
+import type { searchProblems } from "../calls";
 import { LIMITS, MAX_PROBLEMS, type NicheNode, type ProblemCard, type ProblemMode, type ProblemRef } from "../ideas";
 
-export interface ProblemPickerProps {
+export interface ProblemPanelsProps {
   mode: ProblemMode;
   linked: ProblemRef[];
   newTitle: string;
@@ -21,7 +20,7 @@ export interface ProblemPickerProps {
   niches: NicheNode[];
   /** The newest published problems, rendered with the page. */
   initialResults: ProblemCard[];
-  errors: { problems?: string; newTitle?: string; newStatement?: string };
+  errors: { newTitle?: string; newStatement?: string };
   onMode: (mode: ProblemMode) => void;
   onLinked: (problems: ProblemRef[]) => void;
   onNewTitle: (value: string) => void;
@@ -31,12 +30,16 @@ export interface ProblemPickerProps {
 
 type Search = { kind: "idle" } | { kind: "busy" } | { kind: "failed" };
 
+// Loaded with the first search, not with the page (docs/spec/07 item 5).
+const loadSearch: typeof searchProblems = (filters) => import("../calls").then((m) => m.searchProblems(filters));
+
 /**
- * "Which problem does it solve?": link up to five published problems (GET /api/problems, by words and niche) or
- * describe a new one, which becomes a developer-reported problem when the idea is published (AC-PROP-5).
+ * The chosen way of naming the problem, loaded once a choice is made: link up to five published problems (GET
+ * /api/problems, by words and niche) or describe a new one, which becomes a developer-reported problem when the idea
+ * is published (AC-PROP-5).
  */
-export function ProblemPicker(props: ProblemPickerProps) {
-  const { mode, linked, niches, errors, onMode, onLinked, searchImpl = searchProblems } = props;
+export function ProblemPanels(props: ProblemPanelsProps) {
+  const { mode, linked, niches, errors, onMode, onLinked, searchImpl = loadSearch } = props;
   const t = useTranslations("ideaEditor");
   const f = useTranslations("ideaFields");
   const id = useId();
@@ -52,7 +55,7 @@ export function ProblemPicker(props: ProblemPickerProps) {
     event.preventDefault();
     if (search.kind === "busy") return;
     setSearch({ kind: "busy" });
-    const outcome = await searchImpl({ q, niche });
+    const outcome = await searchImpl({ q, niche }).catch(() => ({ ok: false as const }));
     if (outcome.ok) {
       setResults(outcome.value.items);
       setSearched(true);
@@ -70,19 +73,6 @@ export function ProblemPicker(props: ProblemPickerProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      <RadioGroup<ProblemMode>
-        id={`${id}-mode`}
-        name="problem-mode"
-        legend={t("problemLegend")}
-        value={mode}
-        onChange={onMode}
-        error={mode === "pick" ? errors.problems : undefined}
-        options={[
-          { value: "pick", label: t("pickOption"), hint: t("pickHint") },
-          { value: "new", label: t("newOption"), hint: t("newHint") },
-        ]}
-      />
-
       {mode === "pick" ? (
         <div className="flex flex-col gap-5">
           {linked.length > 0 ? (

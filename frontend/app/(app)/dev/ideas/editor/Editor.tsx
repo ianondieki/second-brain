@@ -1,34 +1,28 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { AlertIcon, CheckIcon, LockIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-import { attestationText, publish, saveDraft } from "../calls";
+import type { Calls } from "../calls";
 import {
   ASKS,
-  draftBody,
   editHref,
-  ideaHref,
   LIMITS,
-  linkLines,
-  linksProblem,
   MATURITIES,
   MATURITY_KEY,
   MAX_SUMMARY_WORDS,
   publishChecklist,
   wordCount,
   type Attachment,
-  type Attestations,
   type AttestationText,
   type County,
   type EditorState,
@@ -38,12 +32,15 @@ import {
   type ProblemCard,
   type Step,
 } from "../ideas";
-import type { PublishProblem, SaveProblem } from "../outcomes";
-import { Attachments } from "./Attachments";
+import type { SaveProblem } from "../outcomes";
 import { useIssueMessage } from "./issues";
 import { ProblemPicker } from "./ProblemPicker";
-import { Review } from "./Review";
 import { Stepper } from "./Stepper";
+
+// Steps 2 and 3 load when they are opened, not with the page (docs/spec/07 item 5: at most 150 KB of JS per route;
+// React.lazy, as in settings/security/lazy.ts, adds no runtime).
+const DetailsStep = lazy(() => import("./DetailsStep").then((m) => ({ default: m.DetailsStep })));
+const Review = lazy(() => import("./Review").then((m) => ({ default: m.Review })));
 
 export interface EditorProps {
   /** The proposal's id; null for a new idea (the first save creates it). */
@@ -55,7 +52,7 @@ export interface EditorProps {
   counties: County[];
   attestations: AttestationText;
   problems: ProblemCard[];
-  calls?: { saveDraft: typeof saveDraft; publish: typeof publish; attestationText: typeof attestationText };
+  calls?: Calls;
 }
 
 type Save =
@@ -65,14 +62,11 @@ type Save =
   | { kind: "saved"; partial: boolean }
   | { kind: "failed"; problem: SaveProblem };
 
-type PublishState =
-  | { kind: "idle" }
-  | { kind: "busy" }
-  | { kind: "checklist" }
-  | { kind: "failed"; problem: PublishProblem; limit?: number };
-
 const AUTOSAVE_MS = 1200;
-const DEFAULT_CALLS = { saveDraft, publish, attestationText };
+
+// The API calls load with the first save, search or publish, not with the page: nothing is sent before someone types
+// (docs/spec/07 item 5, the 150 KB budget; the same on-demand pattern as settings/security/lazy.ts).
+const loadCalls = (): Promise<Calls> => import("../calls");
 
 /** Which fields each state key feeds, so an edit clears the API's issue on that field. */
 const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
@@ -99,10 +93,10 @@ const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
 export function Editor(props: EditorProps) {
   const t = useTranslations("ideaEditor");
   const f = useTranslations("ideaFields");
-  const router = useRouter();
   const issueMessage = useIssueMessage();
   const hydrated = useHydrated();
-  const calls = props.calls ?? DEFAULT_CALLS;
+  const injected = props.calls;
+  const getCalls = () => (injected ? Promise.resolve(injected) : loadCalls());
 
   const [state, setState] = useState<EditorState>(props.initial);
   const [step, setStep] = useState<Step>(props.step);
@@ -110,9 +104,6 @@ export function Editor(props: EditorProps) {
   const [save, setSave] = useState<Save>({ kind: "clean" });
   const [issues, setIssues] = useState<FieldIssue[]>([]);
   const [showRequired, setShowRequired] = useState(false);
-  const [text, setText] = useState<AttestationText>(props.attestations);
-  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
-  const [publishing, setPublishing] = useState<PublishState>({ kind: "idle" });
 
   const idRef = useRef<string | null>(props.id);
   const latest = useRef(state); // what the fields hold now, read by saves that run after a render
@@ -138,9 +129,15 @@ export function Editor(props: EditorProps) {
     const started = edits.current;
     if (started === savedEdits.current) return null; // nothing new (and a new idea is not created before typing)
     const creating = idRef.current === null;
-    const plan = draftBody(latest.current);
     setSave({ kind: "saving" });
-    const outcome = await calls.saveDraft(idRef.current, plan.body);
+    let result: Awaited<ReturnType<Calls["saveState"]>>;
+    try {
+      result = await (await getCalls()).saveState(idRef.current, latest.current);
+    } catch {
+      // The calls' code could not be fetched (offline).
+      result = { outcome: { ok: false, problem: "network", fields: [] }, held: [] };
+    }
+    const { outcome, held } = result;
     if (!outcome.ok) {
       setSave({ kind: "failed", problem: outcome.problem });
       if (outcome.fields.length > 0) setIssues(outcome.fields);
@@ -158,7 +155,7 @@ export function Editor(props: EditorProps) {
       setSave({ kind: "dirty" }); // typed during the save: the next one follows shortly
       schedule(AUTOSAVE_MS);
     } else {
-      setSave({ kind: "saved", partial: plan.held.length > 0 });
+      setSave({ kind: "saved", partial: held.length > 0 });
     }
     return null;
   }
@@ -239,42 +236,6 @@ export function Editor(props: EditorProps) {
     return issue ? issueMessage(issue) : undefined;
   };
   const words = wordCount(state.summary);
-  const linkProblem = linksProblem(state.links);
-
-  // --- publishing -------------------------------------------------------------------------------------------------
-
-  const statementKeys = text.statements.map((s) => s.key);
-  const allConfirmed = statementKeys.every((key) => confirmed[key]);
-
-  async function doPublish() {
-    if (publishing.kind === "busy") return;
-    setShowRequired(true);
-    if (checklist.length > 0 || !allConfirmed) {
-      setPublishing({ kind: "checklist" });
-      return;
-    }
-    setPublishing({ kind: "busy" });
-    if (!idRef.current) edits.current += 1; // publishing straight away still needs the draft
-    const saveProblem = await saveAll();
-    const id = idRef.current;
-    if (saveProblem || !id) {
-      setPublishing({ kind: "failed", problem: saveProblem === "validation" || !saveProblem ? "failed" : saveProblem });
-      return;
-    }
-    const attestations = Object.fromEntries(statementKeys.map((key) => [key, true])) as unknown as Attestations;
-    const outcome = await calls.publish(id, text, attestations);
-    if (outcome.ok) {
-      router.push(`${ideaHref(id)}?published=1`);
-      return;
-    }
-    if (outcome.fields.length > 0) setIssues(outcome.fields);
-    if (outcome.problem === "attestationsChanged") {
-      const fresh = await calls.attestationText();
-      if (fresh.ok) setText(fresh.value);
-      setConfirmed({});
-    }
-    setPublishing({ kind: "failed", problem: outcome.problem, limit: outcome.limit });
-  }
 
   const statusLine = <SaveStatus save={save} onRetry={() => void flush()} />;
 
@@ -440,77 +401,51 @@ export function Editor(props: EditorProps) {
       ) : null}
 
       {step === 2 ? (
-        <section aria-labelledby="details-notice" className="flex flex-col gap-6 border-l-4 border-jacaranda pl-4 sm:pl-6">
-          <div>
-            <p id="details-notice" className="inline-flex items-center gap-1.5 font-semibold text-jacaranda">
-              <LockIcon className="size-5 shrink-0" />
-              {f("confidentialBadge")}
-            </p>
-            <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{f("confidentialNotice")}</p>
-          </div>
-          {(["approach", "architecture", "pricing", "notes"] as const).map((key) => (
-            <TextAreaField
-              key={key}
-              id={`idea-${key}`}
-              label={f(key)}
-              hint={t(`${key}Hint`)}
-              value={state[key]}
-              maxLength={LIMITS[key]}
-              rows={key === "approach" || key === "architecture" ? 6 : 4}
-              onChange={(e) => update({ [key]: e.target.value })}
-            />
-          ))}
-          <TextAreaField
-            id="idea-links"
-            label={f("links")}
-            hint={t("linksHint")}
-            value={state.links}
-            rows={3}
-            inputMode="url"
-            spellCheck={false}
-            autoCapitalize="none"
-            error={linkProblem ? issueMessage({ field: "links", code: linkProblem }) : undefined}
-            onChange={(e) => update({ links: e.target.value })}
+        <Suspense fallback={null}>
+          <DetailsStep
+            state={state}
+            update={update}
+            attachments={attachments}
+            onAttachments={setAttachments}
+            ensureId={ensureId}
           />
-          <Attachments attachments={attachments} onChange={setAttachments} ensureId={ensureId} />
-        </section>
+        </Suspense>
       ) : null}
 
       {step === 3 ? (
-        <Review
-          state={state}
-          niches={props.niches}
-          attachments={attachments.length}
-          links={linkLines(state.links).length}
-          checklist={publishing.kind === "idle" ? [] : checklist}
-          issues={issues}
-          text={text}
-          confirmed={confirmed}
-          showUnconfirmed={publishing.kind !== "idle"}
-          onConfirm={(key, value) => setConfirmed((current) => ({ ...current, [key]: value }))}
-          onGoTo={goTo}
-          publishing={publishing}
-        />
-      ) : null}
-
-      <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
-        {step > 1 ? (
-          <Button variant="secondary" onClick={() => goTo((step - 1) as Step)}>
-            {t("back")}
-          </Button>
-        ) : (
-          <span className="hidden sm:block" />
-        )}
-        {step < 3 ? (
+        <Suspense fallback={null}>
+          <Review
+            state={state}
+            niches={props.niches}
+            attachments={attachments.length}
+            checklist={checklist}
+            issues={issues}
+            onIssues={setIssues}
+            onShowRequired={() => setShowRequired(true)}
+            initialText={props.attestations}
+            saveAll={() => {
+              if (!idRef.current) edits.current += 1; // publishing straight away still needs the draft
+              return saveAll();
+            }}
+            getId={() => idRef.current}
+            getCalls={getCalls}
+            onGoTo={goTo}
+          />
+        </Suspense>
+      ) : (
+        <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
+          {step > 1 ? (
+            <Button variant="secondary" onClick={() => goTo((step - 1) as Step)}>
+              {t("back")}
+            </Button>
+          ) : (
+            <span className="hidden sm:block" />
+          )}
           <Button variant="primary" onClick={() => goTo((step + 1) as Step)}>
             {t("continue")}
           </Button>
-        ) : (
-          <Button variant="primary" busy={publishing.kind === "busy"} onClick={() => void doPublish()}>
-            {publishing.kind === "busy" ? t("publishing") : t("publish")}
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </fieldset>
   );
 }

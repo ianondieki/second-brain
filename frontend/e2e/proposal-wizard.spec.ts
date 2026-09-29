@@ -130,7 +130,8 @@ test.describe("a signed-in developer", () => {
     // The three statements come from the API and must all be confirmed.
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByText("Confirm this statement.")).toHaveCount(3);
-    for (const box of await page.getByRole("checkbox").all()) await box.check();
+    await expect(page.getByRole("checkbox")).toHaveCount(3); // the step loads when opened
+  for (const box of await page.getByRole("checkbox").all()) await box.check();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "needs a verified mobile number" })).toBeVisible(
       SERVER_STEP,
@@ -149,7 +150,8 @@ test.describe("a signed-in developer", () => {
     await page.getByLabel("Approach").fill("Solar chillers with a shared booking queue.");
     await waitForSave(page);
     await page.getByRole("button", { name: "Continue" }).click();
-    for (const box of await page.getByRole("checkbox").all()) await box.check();
+    await expect(page.getByRole("checkbox")).toHaveCount(3); // the step loads when opened
+  for (const box of await page.getByRole("checkbox").all()) await box.check();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await expect(page).toHaveURL(/\/dev\/ideas\/[0-9a-f-]{36}\?published=1$/, SERVER_STEP);
@@ -169,6 +171,7 @@ test.describe("a signed-in developer", () => {
 
     // The new problem is now listed: a second idea can link it from the picker.
     await page.goto("/dev/ideas/new");
+    await page.getByText("Link a listed problem", { exact: true }).click(); // a new idea asks first
     await page.getByRole("searchbox", { name: "Search problems" }).fill(title);
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await page.getByRole("button", { name: `Link ${title}: milk spoils before collection` }).click();

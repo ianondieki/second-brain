@@ -82,6 +82,7 @@ const READY: EditorState = {
   ask: "pilot",
   problemStatement: "Milk spoils.",
   summary: "Solar chillers.",
+  problemMode: "pick",
   problems: [{ id: PROBLEM.id, title: PROBLEM.title, source: "developer", label: null, niche: null }],
 };
 
@@ -91,9 +92,9 @@ type Calls = NonNullable<EditorProps["calls"]>;
 
 function calls(overrides: Partial<Calls> = {}) {
   return {
-    saveDraft: vi.fn<Calls["saveDraft"]>(async (): Promise<Outcome<MyProposal, SaveProblem>> => ({
-      ok: true,
-      value: SAVED,
+    saveState: vi.fn<Calls["saveState"]>(async () => ({
+      outcome: { ok: true, value: SAVED } as Outcome<MyProposal, SaveProblem>,
+      held: [],
     })),
     publish: vi.fn<Calls["publish"]>(async (): Promise<Outcome<PublishResult, PublishProblem>> => ({
       ok: true,
@@ -104,7 +105,14 @@ function calls(overrides: Partial<Calls> = {}) {
   };
 }
 
-function renderEditor(props: Partial<Omit<EditorProps, "calls">> & { calls?: ReturnType<typeof calls> } = {}) {
+/** Lets the lazily loaded steps (Full details, Review) resolve. */
+async function settleLazy() {
+  await act(async () => {
+    await Promise.all([import("./DetailsStep"), import("./Review")]);
+  });
+}
+
+async function renderEditor(props: Partial<Omit<EditorProps, "calls">> & { calls?: ReturnType<typeof calls> } = {}) {
   const fake = props.calls ?? calls();
   renderWithIntl(
     <Editor
@@ -120,14 +128,15 @@ function renderEditor(props: Partial<Omit<EditorProps, "calls">> & { calls?: Ret
       calls={fake}
     />,
   );
+  await settleLazy();
   return fake;
 }
 
 const primary = () => document.querySelectorAll("[data-primary]");
 
 describe("the stepper and primary action", () => {
-  it("is an ordered list marking the current step, with one primary action per step", () => {
-    renderEditor();
+  it("is an ordered list marking the current step, with one primary action per step", async () => {
+    await renderEditor();
     const steps = within(screen.getByRole("navigation", { name: "Steps" })).getAllByRole("listitem");
     expect(steps).toHaveLength(3);
     expect(steps[0].getAttribute("aria-current")).toBe("step");
@@ -135,11 +144,13 @@ describe("the stepper and primary action", () => {
     expect(primary()[0].textContent).toBe("Continue");
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await settleLazy();
     expect(steps[1].getAttribute("aria-current")).toBe("step");
     expect(screen.getByText("Confidential")).toBeTruthy();
     expect(primary()).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: /Review and publish/ }));
+    await settleLazy();
     expect(primary()).toHaveLength(1);
     expect(primary()[0].textContent).toBe("Publish");
   });
@@ -151,16 +162,16 @@ describe("autosave", () => {
   });
 
   it("creates the draft on the first save, then saves changes to it", async () => {
-    const fake = renderEditor();
+    const fake = await renderEditor();
     const replace = vi.spyOn(window.history, "replaceState");
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Cold chain" } });
-    expect(fake.saveDraft).not.toHaveBeenCalled(); // waits until typing stops
+    expect(fake.saveState).not.toHaveBeenCalled(); // waits until typing stops
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1300);
     });
-    expect(fake.saveDraft).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fake.saveDraft).mock.calls[0][0]).toBeNull();
-    expect(vi.mocked(fake.saveDraft).mock.calls[0][1].teaser?.title).toBe("Cold chain");
+    expect(fake.saveState).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fake.saveState).mock.calls[0][0]).toBeNull();
+    expect(vi.mocked(fake.saveState).mock.calls[0][1].title).toBe("Cold chain");
     expect(replace.mock.lastCall?.[2]).toBe("/dev/ideas/p1/edit"); // the address now names the draft
     expect(screen.getByRole("status").textContent).toBe("Saved");
 
@@ -169,28 +180,31 @@ describe("autosave", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1300);
     });
-    expect(fake.saveDraft).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(fake.saveDraft).mock.calls[1][0]).toBe("p1");
+    expect(fake.saveState).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fake.saveState).mock.calls[1][0]).toBe("p1");
   });
 
   it("creates nothing before anything is typed", async () => {
-    const fake = renderEditor();
+    const fake = await renderEditor();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
-    expect(fake.saveDraft).not.toHaveBeenCalled();
+    expect(fake.saveState).not.toHaveBeenCalled();
   });
 
   it("puts the sanitiser's finding next to its field", async () => {
     const fake = calls({
-      saveDraft: vi.fn(async () => ({
-        ok: false as const,
-        problem: "fields" as const,
-        fields: [{ field: "summary" as const, code: "contains_email" }],
+      saveState: vi.fn(async () => ({
+        outcome: {
+          ok: false as const,
+          problem: "fields" as const,
+          fields: [{ field: "summary" as const, code: "contains_email" }],
+        },
+        held: [],
       })),
     });
-    renderEditor({ id: "p1", calls: fake });
+    await renderEditor({ id: "p1", calls: fake });
     fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "Mail jane@example.com" } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1300);
@@ -203,8 +217,8 @@ describe("autosave", () => {
     expect(screen.getByRole("alert").textContent).toContain("Some fields need changes");
   });
 
-  it("counts summary words against the limit", () => {
-    renderEditor({ initial: { ...READY, summary: "one two three" } });
+  it("counts summary words against the limit", async () => {
+    await renderEditor({ initial: { ...READY, summary: "one two three" } });
     expect(screen.getByText("3 words of 150")).toBeTruthy();
   });
 });
@@ -216,7 +230,7 @@ describe("publishing", () => {
   }
 
   it("shows the attestation text from the API and needs all three statements", async () => {
-    const fake = renderEditor({ id: "p1", initial: READY, step: 3 });
+    const fake = await renderEditor({ id: "p1", initial: READY, step: 3 });
     for (const statement of TEXT.statements) expect(screen.getByLabelText(statement.text)).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -226,7 +240,7 @@ describe("publishing", () => {
   });
 
   it("lists what is missing, with a way back to the step", async () => {
-    renderEditor({ id: "p1", initial: { ...READY, title: "", maturity: "" }, step: 3 });
+    await renderEditor({ id: "p1", initial: { ...READY, title: "", maturity: "" }, step: 3 });
     check();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -239,7 +253,7 @@ describe("publishing", () => {
   });
 
   it("publishes with the attestation text version and opens the idea", async () => {
-    const fake = renderEditor({ id: "p1", initial: READY, step: 3 });
+    const fake = await renderEditor({ id: "p1", initial: READY, step: 3 });
     check();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -259,7 +273,7 @@ describe("publishing", () => {
     [{ problem: "nothingToPublish" }, "There are no changes to publish."],
   ] as const)("explains a refusal: %j", async (refusal, text) => {
     const fake = calls({ publish: vi.fn(async () => ({ ok: false as const, fields: [], ...refusal })) });
-    renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
+    await renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
     check();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -278,7 +292,7 @@ describe("publishing", () => {
       publish: vi.fn(async () => ({ ok: false as const, problem: "attestationsChanged" as const, fields: [] })),
       attestationText: vi.fn(async () => ({ ok: true as const, value: changed })),
     });
-    renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
+    await renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
     check();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -290,7 +304,7 @@ describe("publishing", () => {
 });
 
 describe("the problem picker", () => {
-  function renderPicker(overrides: Partial<ProblemPickerProps> = {}) {
+  async function renderPicker(overrides: Partial<ProblemPickerProps> = {}) {
     const props: ProblemPickerProps = {
       mode: "pick",
       linked: [],
@@ -306,11 +320,22 @@ describe("the problem picker", () => {
       ...overrides,
     };
     renderWithIntl(<ProblemPicker {...props} />);
+    await act(async () => {
+      await import("./ProblemPanels");
+    });
     return props;
   }
 
-  it("links a listed problem and labels developer-reported ones", () => {
-    const props = renderPicker();
+  it("asks first, then opens the chosen way", async () => {
+    const onMode = vi.fn();
+    renderWithIntl(<ProblemPicker {...{ mode: null, linked: [], newTitle: "", newStatement: "", niches: NICHES, initialResults: [PROBLEM], errors: {}, onMode, onLinked: vi.fn(), onNewTitle: vi.fn(), onNewStatement: vi.fn() }} />);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    fireEvent.click(screen.getByLabelText(/Link a listed problem/));
+    expect(onMode).toHaveBeenCalledWith("pick");
+  });
+
+  it("links a listed problem and labels developer-reported ones", async () => {
+    const props = await renderPicker();
     expect(screen.getByText("Developer-reported")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: `Link ${PROBLEM.title}` }));
     expect(props.onLinked).toHaveBeenCalledWith([
@@ -320,7 +345,7 @@ describe("the problem picker", () => {
 
   it("searches by words and niche", async () => {
     const searchImpl = vi.fn(async () => ({ ok: true as const, value: { items: [] } }));
-    renderPicker({ searchImpl });
+    await renderPicker({ searchImpl });
     fireEvent.change(screen.getByRole("searchbox", { name: "Search problems" }), { target: { value: "maziwa" } });
     fireEvent.change(screen.getByLabelText("Niche"), { target: { value: "agriculture" } });
     await act(async () => {
@@ -333,8 +358,8 @@ describe("the problem picker", () => {
     fireEvent.click(within(empty as HTMLElement).getByRole("button", { name: "Describe a new problem" }));
   });
 
-  it("describes a new problem instead", () => {
-    const props = renderPicker({ mode: "new", errors: { newTitle: "Give the problem a title." } });
+  it("describes a new problem instead", async () => {
+    const props = await renderPicker({ mode: "new", errors: { newTitle: "Give the problem a title." } });
     expect(screen.getByLabelText("Problem title").getAttribute("aria-invalid")).toBe("true");
     fireEvent.change(screen.getByLabelText("What is the problem?"), { target: { value: "Late payments" } });
     expect(props.onNewStatement).toHaveBeenCalledWith("Late payments");
