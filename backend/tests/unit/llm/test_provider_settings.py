@@ -173,7 +173,7 @@ def test_staging_never_uses_a_free_provider() -> None:
 
 
 def test_the_prototype_total_cap_defaults_to_five_dollars_and_is_never_negative() -> None:
-    assert settings().llm_prototype_total_cap_usd == Decimal("5.00")
+    assert Settings.model_fields["llm_prototype_total_cap_usd"].default == Decimal("5.00")
     assert settings(llm_prototype_total_cap_usd=Decimal(0)).llm_prototype_total_cap_usd == 0
     with pytest.raises(ValidationError, match="LLM_PROTOTYPE_TOTAL_CAP_USD must be zero or more"):
         settings(llm_prototype_total_cap_usd=Decimal("-0.01"))

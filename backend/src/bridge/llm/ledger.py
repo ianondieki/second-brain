@@ -49,6 +49,18 @@ class CallStatus(StrEnum):
     BATCH_RESERVED = "batch_reserved"  # a batch item in flight, at its estimate, until its final row settles it
 
 
+# Rows of attempts that never reached a provider: a free slot's daily request count leaves them out.
+NOT_SENT = frozenset(
+    {
+        CallStatus.BLOCKED_KILL_SWITCH,
+        CallStatus.BLOCKED_BUDGET,
+        CallStatus.BLOCKED_TIER2,
+        CallStatus.BLOCKED_CONSENT,
+        CallStatus.BATCH_RESERVED,
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class LedgerEntry:
     id: UUID
@@ -138,6 +150,11 @@ class LedgerStore(Protocol):
 
     async def global_spent_usd(self, *, since: datetime) -> Decimal: ...
 
+    async def calls_since(self, *, model: str, since: datetime) -> int:
+        """Attempts on ``model`` since ``since`` that reached the provider (every row but ``NOT_SENT`` ones), as far as
+        the store can see (a free slot's daily request cap, D-37)."""
+        ...
+
 
 class InMemoryLedger:
     """``LedgerStore`` in memory (unit tests, ``FakeLLMClient``), with the SQL store's batch rules."""
@@ -210,3 +227,6 @@ class InMemoryLedger:
 
     async def global_spent_usd(self, *, since: datetime) -> Decimal:
         return sum((e.cost_usd for e in self._spend(since)), Decimal(0))
+
+    async def calls_since(self, *, model: str, since: datetime) -> int:
+        return sum(1 for e in self.entries if e.model == model and e.created_at >= since and e.status not in NOT_SENT)

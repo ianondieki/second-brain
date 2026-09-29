@@ -53,7 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.db import bind_tenant, tenant_of
 from bridge.llm.errors import LLMBatchNotOwned, LLMConfigError
-from bridge.llm.ledger import CallStatus, LedgerEntry, check_plain, check_reservation, check_settlement
+from bridge.llm.ledger import NOT_SENT, CallStatus, LedgerEntry, check_plain, check_reservation, check_settlement
 from bridge.llm.models import LlmCall
 from bridge.llm.registry import Purpose
 from bridge.logging import get_logger
@@ -232,3 +232,15 @@ class SqlLedger:
     async def global_spent_usd(self, *, since: datetime) -> Decimal:
         async with self._session() as db:
             return Decimal((await db.execute(select(func.app_llm_spend_usd(since)))).scalar_one())
+
+    async def calls_since(self, *, model: str, since: datetime) -> int:
+        """The rows the bound tenant may read (RLS): a user's own and its organisations'. A platform-wide count of a
+        free slot's requests needs a SECURITY DEFINER count (open: the REQ-LLM-01 card, "P7 providers")."""
+        calls = LlmCall.__table__.c
+        stmt = select(func.count()).where(
+            calls.model == model,
+            calls.created_at >= since,
+            calls.status.not_in([status.value for status in NOT_SENT]),
+        )
+        async with self._session() as db:
+            return int((await db.execute(stmt)).scalar_one())

@@ -356,7 +356,7 @@ class LLMService:
         self, call: _Call, estimate: Decimal, attempt: int, inputs: Mapping[str, Any], model: str
     ) -> Snapshot:
         try:
-            return await self._budget.check(call.ctx, estimate)
+            return await self._budget.check(call.ctx, estimate, model=self._registry.model(model))
         except LLMBlocked as exc:
             status = CallStatus.BLOCKED_KILL_SWITCH if isinstance(exc, LLMKillSwitch) else CallStatus.BLOCKED_BUDGET
             await self._record(call, status, attempt=attempt, inputs=inputs, model=model, error=str(exc))

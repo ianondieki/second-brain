@@ -1,19 +1,23 @@
 """Pre-call budget checks (REQ-LLM-01; ADR-005 decision 5; docs/spec/09 Cost controls).
 
-Before every attempt: ``LLM_KILL_SWITCH=1`` refuses; the global daily cap (``LLM_GLOBAL_DAILY_CAP_USD``, UTC day)
-refuses when today's spend plus the attempt's upper estimate would pass it; the billing subject's monthly cap
+Before every attempt: ``LLM_KILL_SWITCH=1`` refuses; a free provider slot's daily request cap
+(``LLM_FREE_<N>_DAILY_REQUESTS``, UTC day, D-37) refuses once today's attempts on the slot's model reach it
+(``LLMRequestCapReached``); the global daily cap (``LLM_GLOBAL_DAILY_CAP_USD``, UTC day) refuses when today's spend
+plus the attempt's upper estimate would pass it; the prototype's lifetime total (``LLM_PROTOTYPE_TOTAL_CAP_USD``,
+D-37: every row of the ledger, and only Anthropic costs money) does the same; the billing subject's monthly cap
 (``plans.limits.llm_monthly_cap_usd``, UTC calendar month) does the same (the 100% hard cap: callers such as scouts
-catch ``LLMBudgetExceeded`` and degrade). After a call the subject's spend is compared with the soft-cap ratio of
-``ai/models.yaml`` (80%): ``BudgetStatus.soft_cap_reached`` is set, and ``BudgetListener`` hears the crossing once
-(the soft-cap email is Phase 4). Concurrent calls may each pass the check, so a cap can be overrun by at most the
-calls in flight.
+catch ``LLMBudgetExceeded`` and degrade). The spend caps apply to attempts that cost something: a free slot's
+attempt (estimate 0) spends nothing, so a cap overrun by calls in flight never blocks it. After a call the subject's
+spend is compared with the soft-cap ratio of ``ai/models.yaml`` (80%): ``BudgetStatus.soft_cap_reached`` is set, and
+``BudgetListener`` hears the crossing once (the soft-cap email is Phase 4). Concurrent calls may each pass the
+check, so a cap (the request cap included) can be overrun by at most the calls in flight.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID
@@ -23,12 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge import clock
 from bridge.billing import entitlements
 from bridge.config import Settings
-from bridge.llm.errors import LLMBudgetExceeded, LLMKillSwitch
+from bridge.llm.errors import LLMBudgetExceeded, LLMKillSwitch, LLMRequestCapReached
 from bridge.llm.ledger import LedgerStore
+from bridge.llm.registry import ModelSpec
 from bridge.llm.types import BudgetStatus, CallContext
 from bridge.logging import get_logger
 
 CAP_LIMIT_KEY = "llm_monthly_cap_usd"
+LEDGER_START = datetime(1970, 1, 1, tzinfo=UTC)  # the prototype total counts every row the ledger holds
 log = get_logger("bridge.llm")
 
 
@@ -141,17 +147,29 @@ class BudgetGuard:
         if self._settings.llm_kill_switch:
             raise LLMKillSwitch()
 
-    async def check(self, ctx: CallContext, estimate_usd: Decimal) -> Snapshot:
-        """Raise ``LLMKillSwitch`` or ``LLMBudgetExceeded`` when the attempt may not run."""
+    async def check(self, ctx: CallContext, estimate_usd: Decimal, *, model: ModelSpec | None = None) -> Snapshot:
+        """Raise ``LLMKillSwitch``, ``LLMRequestCapReached`` or ``LLMBudgetExceeded`` when the attempt on ``model``
+        may not run."""
         self.check_kill_switch()
         now = self._now()
-        global_cap = self._settings.llm_global_daily_cap_usd
-        global_spent = await self._ledger.global_spent_usd(since=day_start(now))
-        if global_spent + estimate_usd > global_cap:
-            raise LLMBudgetExceeded("global", spent_usd=global_spent, cap_usd=global_cap)
+        if model is not None and model.daily_requests is not None:
+            sent = await self._ledger.calls_since(model=model.id, since=day_start(now))
+            if sent >= model.daily_requests:
+                raise LLMRequestCapReached(model.id)
+        paid = estimate_usd > 0
+        if paid:
+            global_cap = self._settings.llm_global_daily_cap_usd
+            global_spent = await self._ledger.global_spent_usd(since=day_start(now))
+            if global_spent + estimate_usd > global_cap:
+                raise LLMBudgetExceeded("global", spent_usd=global_spent, cap_usd=global_cap)
+            total_cap = self._settings.llm_prototype_total_cap_usd
+            total_spent = await self._ledger.global_spent_usd(since=LEDGER_START)
+            if total_spent + estimate_usd > total_cap:
+                raise LLMBudgetExceeded("total", spent_usd=total_spent, cap_usd=total_cap)
         snap = await self.snapshot(ctx)
-        if snap.spent_usd is not None and snap.cap_usd is not None and snap.spent_usd + estimate_usd > snap.cap_usd:
-            raise LLMBudgetExceeded("tenant", spent_usd=snap.spent_usd, cap_usd=snap.cap_usd)
+        spent, cap = snap.spent_usd, snap.cap_usd
+        if paid and spent is not None and cap is not None and spent + estimate_usd > cap:
+            raise LLMBudgetExceeded("tenant", spent_usd=spent, cap_usd=cap)
         return snap
 
     async def snapshot(self, ctx: CallContext) -> Snapshot:

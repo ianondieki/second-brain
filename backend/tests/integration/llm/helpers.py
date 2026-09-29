@@ -39,7 +39,8 @@ def service(
 ) -> LLMService:
     """The app's default service (``bridge.llm.deps.sql_service``: the SQL ledger, the plan caps and the consent
     table, all as ``db``'s tenant) over a scripted adapter."""
-    cfg = get_settings().model_copy(update={"llm_global_daily_cap_usd": ROOMY_GLOBAL_CAP, **overrides})
+    roomy = {"llm_global_daily_cap_usd": ROOMY_GLOBAL_CAP, "llm_prototype_total_cap_usd": ROOMY_GLOBAL_CAP}
+    cfg = get_settings().model_copy(update={**roomy, **overrides})
     reg = registry or registry_module.load(cfg.llm_models_file)
     return sql_service(db, factory=factory, settings=cfg, registry=reg, adapter=adapter)
 

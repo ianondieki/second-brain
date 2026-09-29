@@ -72,15 +72,26 @@ class LLMKillSwitch(LLMBlocked):
 
 
 class LLMBudgetExceeded(LLMBlocked):
-    """The per-tenant monthly cap or the global daily cap would be exceeded by this call (the hard cap)."""
+    """The per-tenant monthly cap, the global daily cap or the prototype's lifetime total
+    (``LLM_PROTOTYPE_TOTAL_CAP_USD``, D-37) would be exceeded by this call (the hard cap)."""
 
     code = "llm_budget"
 
-    def __init__(self, scope: Literal["tenant", "global"], *, spent_usd: Decimal, cap_usd: Decimal) -> None:
+    def __init__(self, scope: Literal["tenant", "global", "total"], *, spent_usd: Decimal, cap_usd: Decimal) -> None:
         super().__init__(f"the {scope} LLM budget is exhausted (spent {spent_usd} of {cap_usd} USD)")
         self.scope = scope
         self.spent_usd = spent_usd
         self.cap_usd = cap_usd
+
+
+class LLMRequestCapReached(LLMBlocked):
+    """A free provider slot has sent its daily request cap today (``LLM_FREE_<N>_DAILY_REQUESTS``, D-37)."""
+
+    code = "llm_request_cap"
+
+    def __init__(self, model: str) -> None:
+        super().__init__(f"the daily request cap of {model.partition(':')[0]} is reached")
+        self.model = model
 
 
 class Tier2NotAllowed(LLMBlocked):
