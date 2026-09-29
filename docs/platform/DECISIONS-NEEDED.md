@@ -24,6 +24,32 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing before G5.
 - Decision:
 
+### D-28 · What the 150 KB JS budget counts: unit, and whether response headers count (REQ-UX-05, AC-UX-3)
+- Why: `docs/spec/07` item 5 says "≤150 KB JS gzipped per route", and AC-UX-3 checks it with Lighthouse. The Phase 1 follow-up branch reads it as 150,000 bytes of gzip-compressed script **bodies** on first load (`npm run budget`, `make budget`; `docs/runbooks/dev-setup.md`). Lighthouse's script "transfer size" also counts **response headers**. Headers depend on the protocol: about 0.4 KB per script over the local HTTP/1.1 server (after page-only security headers; about 0.8 KB before), a few bytes each once HTTP/2 or HTTP/3 compresses them (HPACK or QPACK) behind Caddy and Cloudflare in production (Phase 8). By the Lighthouse reading, over local HTTP/1.1, two routes are over. By the body reading, every route passes.
+- Measured 2026-09-27 (production build, `next start`, HTTP/1.1; signed-in route with an org-owner test session). The body cuts on this branch: openapi-fetch's runtime left the browser bundle (its types stay), and the password field reads its own show/hide labels. A custom `global-error` saved nothing; the error styles are in Next's router bundle.
+
+  | Route | Bodies before (`515227f`) | Bodies now | Bodies + HTTP/1.1 headers now | 150 KiB = 153,600 B |
+  |---|---|---|---|---|
+  | `/`, `/legal/terms` | 141,327 | 141,327 | 144,624 | within |
+  | `/login` | 148,775 | 146,315 | 149,612 | within |
+  | `/signup` | 150,378 | 147,658 | **150,955** | within |
+  | `/signup/check-email` | 146,774 | 144,733 | 148,030 | within |
+  | `/auth/link` | not measured | 146,431 | 149,728 | within |
+  | `/org` | 146,453 | 144,411 | 147,708 | within |
+  | `/settings/security` | 150,051 | 147,976 | **151,653** | within |
+
+  Re-measured 2026-09-28 at `5b41434`, every route (after the round-3 review fixes, where notices on `/settings/security` take focus; stand-in API, same build mode): `/settings/security` 148,518 bytes of bodies, **152,195** with headers (148,441 / 152,118 at `335fd0a`); `/signup` 147,898 / **151,195**; `/auth/link` 146,671 / 149,968; `/login` 146,553 / 149,850; `/signup/check-email` 144,972 / 148,269; `/org` 144,655 / 147,952; `/`, `/legal/terms` 141,327 / 144,624. `/auth/link`, `/signup/check-email` and `/org` are about 240 bytes over the table's 2026-09-27 figures, as `/signup` and `/login` already were at `335fd0a`; the round-3 fixes changed only `/settings/security`.
+
+  At the Phase 1 end (`00fc8f2`), every script also carried the page headers: `/signup` was 150,378 bytes of bodies, 157,741 with headers. The remaining first load is about 130 KB of Next.js and React runtime; the app's own code is 6–10 KB per route.
+- Options:
+  (a) **Bodies only**, 1 KB = 1,000 bytes (this branch). The T7.4 Lighthouse job reports transfer size for information, and the pass/fail check is `npm run budget` until an HTTP/2 target exists. From staging (D-22) or Phase 8 on, Lighthouse's own number is asserted against the HTTP/2 edge.
+  (b) **Lighthouse transfer size including headers, measured on local HTTP/1.1.** `/signup` and `/settings/security` must lose about 1–2 KB more in T7.4. Candidates: server-rendered strings instead of client-side `useTranslations` in the auth forms (the use-intl client runtime is about 2.9 KB); fewer client components per route.
+  (c) **Lighthouse transfer size including headers, measured against the production-like HTTP/2 edge** (staging or Phase 8). This is expected to be the bodies plus under 1 KB (not measured here). Until that edge exists, (a) applies.
+  (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 152,195 with headers, `/settings/security`).
+- Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 1.5 KB of headroom on the heaviest route (`/settings/security`, 1,482 bytes) for Phase 2 screens.
+- Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
+- Decision:
+
 ### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
 - Why: ADR-005 decision 3 allows "at most one retry on the next allowed model" after `stop_reason == "refusal"`. The `docs/spec/09` table allocates exactly one model to each Phase 2 task and lists `claude-opus-5-5` only for the moderator pre-checklist and the eval judge, so any fallback model would be outside the allocation. `backend/ai/models.yaml` therefore ships `fallback_model: null` for all four Phase 2 tasks: a refusal is logged, goes to the human queue and the dead-letter queue, with no retry. `tests/unit/llm/test_registry.py` fails if a fallback is outside the spec 09 allocation of its task.
 - Proposal (needs your approval and a `docs/spec/09` change, since it widens the allocation):
@@ -33,6 +59,55 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Options: (a) keep no fallbacks (refusal → human queue only); (b) approve the proposal above and amend the `docs/spec/09` allocation; (c) approve only item 1 (classifiers).
 - Recommended default: (a) until you decide; the registry and its test already enforce it. Choosing (b) or (c) is a YAML edit plus the spec 09 table and `SPEC_09_ALLOCATION` in the registry test.
 - Blocks: nothing; refusals are rare and already reach the human queue.
+- Decision:
+
+### D-30 · Upholding a claim dispute against an E2 organisation (T2.1 schema v2, T2.6b claims, REQ-DIR-03)
+- Why: `docs/spec/06` 6.2 and AC-DIR-2 say a claim on an E2 organisation opens a dispute instead of transferring it, and the platform never rules on legal ownership (6.12). Schema v2 sends such a claim to `disputed`, and staff can uphold a dispute with `app_decide_claim` (it rejects the earlier approved claims and removes those claimants' memberships in the same transaction). Against an **E2** organisation that path is closed on purpose today: an E1-level claim cannot be approved (there is no E2 → E1 step), and an E2-level claim cannot be approved either, because the claimant may accept the Master Enterprise Terms only on an unclaimed or E1 organisation and E2 approval requires that acceptance. So a dispute against an E2 organisation can be rejected but never upheld in the product.
+- Options: (a) allow an E2-level disputed claim to be upheld: the claimant of an open **disputed E2** claim may record the Master Enterprise Terms acceptance on that E2 organisation; staff admin approval keeps E2 (new `e2_verified_at`, new re-verification date) and transfers ownership as for E1 disputes; (b) add a staff-only step `app_staff_revoke_verification(org, reason)` (E2 → unclaimed, held engagements frozen, Tier-2 grants revoked) that staff run first, after which the disputed claim follows the normal E1/E2 path; (c) keep it closed: disputes against E2 organisations are handled off-platform under the 6.12 process (suspend the organisation with `organizations.suspended_at`, which already stops Tier-2 access, and reject the in-app claim with a reason), revisited when real disputes occur; (d) decide at G2 with the advocate, keep (c) until then.
+- Recommended default: (c) until you decide; it needs no schema change and fails closed (Tier-2 access stops on suspension). (a) is the smallest change if in-product transfers of E2 organisations are wanted; (b) is cleaner for audit but touches engagements and grants (T2.5, Phase 3).
+- Blocks: nothing in Phase 2 (T2.6b builds the dispute queue either way; only the "uphold" button on an E2 organisation depends on this).
+- Decision:
+
+### D-31 · Badge text for an E2 (legal entity verified) organisation (T2.6a, REQ-DIR-01, AC-DIR-3)
+- Why: `docs/spec/06` 6.2 gives the badge copy for unclaimed ("Listed from public information · not on the platform · not affiliated") and E1 ("Domain verified (pending legal verification)") organisations, but none for E2. A verification badge is a claim to users, and claims text needs you (`CLAUDE.md` stop rule). T2.6a (`feat/REQ-DIR-02-provisional-seed`, `backend/src/bridge/directory/service.py` `BADGE_TEXT`) ships a placeholder tagged `[[COPY-REVIEW]]`: "Legal entity verified". No organisation can reach E2 until T2.6b, so nobody sees it yet.
+- Options: (a) approve "Legal entity verified"; (b) a line that says what was checked, e.g. "Registration and signatory verified" or "Business registration verified (BRS, KRA PIN)"; (c) your own wording, or leave it to the advocate's review at G2.
+- Recommended default: (a) as the placeholder until you answer; it must be approved before T2.6b can approve an E2 claim in staging.
+- Blocks: E2 approvals shown to users (T2.6b); nothing else.
+- Decision:
+
+### D-32 · Hardening the per-user digest: a separate login for the registration worker, and HMAC instead of SHA-256(salt ‖ data) (T2.1, REQ-TEN-01, ADR-002)
+- Why: the T2.1 round-3 security review found two limits of `app_subject_digest` (the per-user digest behind owner refs, audit digests and phone digests). (1) The database lets only the caller's own digest through unless the call runs as staff or as the `provenance_worker` role. But the app's login role `bridge_app` may switch to `provenance_worker` (by design, like every Tier-2 role: membership `WITH INHERIT FALSE, SET TRUE`). So an injected SQL expression on the request path can switch roles inside one statement and compute any user's digest. The binding stops query bugs and ORM loads, not injected SQL. The same trust applies to the `app.user_id` setting (threat model TB2). (2) The spec's formula `SHA-256(subject_salt ‖ data)` (`docs/spec/06` 6.4) puts a secret in front of the data, which is open to length extension. `HMAC-SHA-256(key = subject_salt, data)` is the standard construction. Changing it changes the spec.
+- Options:
+  (a) Keep both as they are for Phase 2. Record them as residuals (done in `THREAT_MODEL.md`) and revisit at the Phase 8 security audit.
+  (b) Give the registration worker its own database login `provenance_worker` (detected with `session_user`) and remove `bridge_app`'s SET membership in it. This changes `infra/postgres/roles.sql` and the deploy config, adds one more database URL secret, and needs an ADR-002 addendum.
+  (c) Switch the formula to HMAC (pgcrypto `hmac(data, salt, 'sha256')`) before any digest is stored in staging. This needs a `docs/spec/06` change by you.
+  (d) Both (b) and (c).
+- Recommended default: (a) now. Then (c) before staging (cheap while no real digests exist), and (b) with the Phase 8 hardening.
+- Blocks: nothing in Phase 2. (c) must be decided before real digests are stored (staging, D-22).
+- Decision:
+
+### D-33 · What the owner's "show name and title" opt-in on `/verify` means (T2.4, REQ-PROV-02)
+- Why: `docs/spec/06` 6.4 item 2 says public `/verify` shows only the hash, timestamp, TSA serial and match/no-match "unless the owner opts to show name and title". It does not say which name, at what scope, or what withdrawing does. The answer decides a schema column (T2.1 follow-up F4 was skipped for this reason) and what strangers can learn about an owner. Today `/verify` shows no name or title (fails closed).
+- Questions and options:
+  1. Which name: (a) the pseudonymous handle; (b) the display name; (c) the D2-verified legal name only (the certificate's rule), with the handle for owners below D2.
+  2. Scope: (a) per proposal (every version); (b) per registered version.
+  3. Withdrawal: (a) the owner can turn it off again, and `/verify` hides the name and title from then on (copies already seen cannot be recalled); (b) once on, it stays on for that version (it becomes part of the public record).
+- Recommended default: 1(c), 2(a), 3(a): the strongest identity only where it is verified, one switch per proposal, and a reversible choice. It needs one nullable column on `proposals` and an audit event on each change.
+- Blocks: the opt-in switch on `/verify` (F1–F4 screens); nothing else. Until then nothing is shown.
+- Decision:
+
+### D-34 · A fresh code to link or unlink a sign-in method (T2.12 follow-ups, REQ-AUTH-02)
+- Why: linking or unlinking a GitHub or Google sign-in uses the step-up rule from `docs/spec/06` (a second factor within the last 12 hours). For an account without a password but with two-step sign-in, a stolen session can therefore link the thief's own GitHub or Google account for up to about 12 h 10 min after the owner last entered a code. The thief can then sign in without the session. The `feat/REQ-AUTH-02-followups` threat model rates this Medium.
+- Options: (a) keep the 12-hour step-up rule for link and unlink (the spec's rule; today's behaviour); (b) ask for a new two-step code (or the password) at every link and unlink, whatever the last one was; (c) (b) for link only, and (a) for unlink.
+- Recommended default: (a) until you decide. (c) is a small change (one extra code prompt on a rare action) and closes the takeover path.
+- Blocks: nothing; the OAuth buttons ship in F4.
+- Decision:
+
+### D-38 · Storing short publisher excerpts for the research-agent demo (P11, REQ-RES-01)
+- Why: P11 drafts problems from 19 short verbatim excerpts (12–41 words each) saved in `backend/seed/research_excerpts.yaml` with URL, publisher and date (branch `feat/REQ-RES-01-sources`; method in `research/research-excerpts-2026-09.md`). Six come from official sources (CA, SASRA, the agriculture ministry) and thirteen from Kenyan news sites (Business Daily, Standard, Star, Capital FM). The publishers' terms for storing and showing short excerpts were not reviewed; Business Daily pages show a premium banner although the text was served without a login. This is a legal question, so agents do not decide it.
+- Options: (a) keep all 19 for the local demo only (never hosted), each shown with its source link and date; (b) keep only the six official-source excerpts and replace the news ones with more official sources; (c) have the terms reviewed before any excerpt is shown.
+- Recommended default: (a) for the local prototype, because nothing is hosted (D-36) and each quote is short and attributed; before any hosted release, (c).
+- Blocks: nothing in the prototype; any hosted release of the research cards.
 - Decision:
 
 ## Decided
@@ -64,6 +139,9 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 | D-23 · Python versions in CI | (a) legacy on 3.13, backend on 3.12 | 2026-09-24 | `PLAN.md` T1.2/T1.3 CI jobs |
 | D-24 · S3-compatible storage in the dev compose stack (MinIO image withdrawn) | (a) SeaweedFS for the local/CI S3 stand-in | 2026-09-27 | `infra/docker-compose.dev.yml` (`s3` service); `docs/platform/research/phase1-versions.md` |
 | D-25 · Four adviser voice-note tests fail on Linux | (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows | 2026-09-27 | `docs/platform/tests_skip_linux.txt`; `.github/workflows/pr.yml` legacy jobs |
+| D-35 · Prototype-first track | A working local prototype with every major feature end to end, for hackathon and recruiter demos: M1 (core flow, about 7–10 days), M2 (all features, about 3–4 weeks); it claims neither the Phase 2 exit nor any gate | 2026-09-29 | `PLAN.md` §8; `PROGRESS.md` Prototype checklist; `REQUIREMENTS.md` §7 |
+| D-36 · Zero spend for the prototype | No hosting, no new accounts, no real emails, SMS or payments; mail goes to Mailpit only; the owner's own LLM keys are the only exception | 2026-09-29 | `PLAN.md` §8 |
+| D-37 · LLM providers for local prototype runs (amends D-18 for local runs only) | OpenAI-compatible adapter (httpx) for the owner's free providers plus the existing Anthropic adapter; provider and model ids only in `ai/models.yaml` and `.env`; free providers are the default, Anthropic only with `LLM_PROVIDER=anthropic`, `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 prototype total; fall back to the fake with a "demo fallback" label; only seeded demo data goes to free providers; tests, `make check` and CI keep fakes and cassettes | 2026-09-29 | `PLAN.md` §8; `docs/platform/research/anthropic-prices-2026-09.md`; `docs/platform/tasks/REQ-LLM-01.md` ("Prototype providers") |
 
 The full entries (why, options, default, what they blocked) are kept below for the record.
 
@@ -242,3 +320,24 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Recommended default: (a), applied now so CI is green; revert if you choose otherwise.
 - Blocks: nothing.
 - Decision: (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows — 2026-09-27
+
+### D-35 · Prototype-first track (the owner's decision, 2026-09-29)
+- Why: the owner wants a working local prototype with every major feature working end to end, for hackathon and recruiter demos, before the remaining Phase 2–8 depth.
+- Decision: build it in two milestones. **M1 (core flow, about 7–10 days):** proposals (Tier 1 teaser + Tier 2 confidential) with the authorship certificate and `/verify`; Tier-2 access (Evaluation NDA, grant, watermarked view, access log, "Who has seen this"); directory browse and simple search; Pitch to company with EM1; the tracker main path `SUBMITTED` → `CLOSED` plus `DECLINED` and `WITHDRAWN` with the test clock; reminders (developer daily nudge and org digest) in Mailpit and in-app; `make demo`. **M2 (all features, about 3–4 weeks):** scout agent with Express interest (`ORG_INTEREST`), research agent over saved public excerpts with admin approval, trending and a transparent ranker, the submission assistant, subscriptions with a fake M-Pesa checkout, minimal admin queues, polished screens, a recorded Playwright walkthrough and the README "Demo" section. If M2 time runs short the cut order is (last first) admin, trending/ranker, assistant, research, subscriptions; the M1 features and the scout are never cut.
+- It does not claim the Phase 2 exit or any gate. Nothing is removed from `REQUIREMENTS.md`; items outside the prototype are rescheduled to "after prototype" (`REQUIREMENTS.md` §7): full claims/E2, invitations, Problem Briefs, the originality check, D2, real payments and eTIMS, WhatsApp, the remaining tracker side states, the full Phase 7 polish and the Phase 8 audit.
+- Working rules for the track: from 2026-09-29 reviews fix BLOCKER and MAJOR findings only, and MINOR findings are logged as follow-ups in the task card instead of new review rounds; the `security-reviewer` runs one round on `auth/`, `tenancy/`, `provenance/`, `engagements/`, `billing/` and the new LLM adapter, then BLOCKER/MAJOR only. Open decisions D-26..D-34 use their recorded default (or the most conservative option where none is recorded) for the prototype, without stopping; the reports list what was applied.
+- Decision: accepted — 2026-09-29
+
+### D-36 · Zero spend for the prototype (the owner's decision, 2026-09-29)
+- Decision: no hosting, no new accounts, no real emails, SMS or payments. Mail goes to Mailpit only; SMS stays on the Fake provider; payments use a `FakePaymentProvider` behind the `PaymentProvider` interface of `docs/spec/05` (no Daraja or Paystack code or accounts). The only permitted cost is the owner's own LLM keys under D-37. `make demo` runs on the owner's laptop (8 GB RAM, Docker Desktop at 4 GB) with ClamAV replaced by a demo-only fake scanner.
+- Decision: accepted — 2026-09-29
+
+### D-37 · LLM providers for local prototype runs (amends D-18 for local runs only; the owner's approval of these providers as vendors, 2026-09-29)
+- Adapter: an OpenAI-compatible adapter implementing the `ModelAdapter` protocol (`bridge/llm/adapter.py`) over `httpx` (no new SDK) for the free providers the owner configures in `backend/.env` (per provider slot: base URL, key, model). `AnthropicAdapter` stays for `ANTHROPIC_API_KEY`.
+- Ids: provider and model ids live only in `backend/ai/models.yaml` and `.env` (`test_no_model_ids_in_code` keeps passing). `models.yaml` chooses the provider per task; the free providers are the default; Anthropic is used only when `LLM_PROVIDER=anthropic`.
+- Caps: free providers are priced at 0 with a per-day request cap. Anthropic: `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 total for the prototype, enforced through the existing `llm_calls` ledger. Anthropic prices were confirmed from the official price page on 2026-09-29 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified"); `models.yaml` records them with `pricing_status` and the source URL, and Anthropic stays disabled unless the prices are marked verified.
+- Failure behaviour: a missing key, a hit cap or a failed call falls back to the deterministic fake and the UI shows a small "demo fallback" label. The demo never errors.
+- Data rule: only seeded demo data may be sent to free providers (they may train on it); Tier-2 content from non-demo users is refused before any call.
+- Tests, `make check` and CI keep using fakes and cassettes only; nothing in CI reaches a provider (AC-SEC-5 unchanged).
+- Keys: agents never ask for a key; every new variable is documented in `backend/.env.example` and listed in the Handoff and the milestone reports.
+- Decision: accepted — 2026-09-29

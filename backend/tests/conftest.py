@@ -1,4 +1,5 @@
-"""Shared test configuration. The egress guard is installed before any test module is imported."""
+"""Shared test configuration. The egress guard is installed, and proxies are disabled, before any test module is
+imported (AC-SEC-5: the guard allows loopback, so a loopback proxy must not be able to relay a request)."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import pytest
 from tests import egress
 
 egress.install()
+egress.disable_proxies()
 
 # Unit tests never read a developer's backend/.env: settings come from here or from the test itself.
 os.environ.setdefault("APP_ENV", "test")

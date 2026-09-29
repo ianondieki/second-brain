@@ -102,9 +102,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 | Agent | Model / effort | Use for |
 |---|---|---|
-| impl-backend, impl-frontend, impl-integrations, impl-ai | opus / xhigh | one task card each, in a worktree |
+| impl-backend | opus / xhigh | one task card each, in a worktree; the security-sensitive code of the prototype track (D-35) |
+| impl-frontend, impl-integrations, impl-ai | opus / high (prototype track, D-35) | one task card each, in a worktree |
 | db-migrations | opus / xhigh | the only writer of Alembic revisions, RLS policies, grants |
-| reviewer | opus / xhigh | adversarial review of every PR; reports, never fixes |
+| reviewer | opus / high (prototype track, D-35) | adversarial review of every PR; reports, never fixes |
 | security-reviewer | claude-fable-5-1 / xhigh | auth, tenancy, billing, provenance, engagements; Phase 8 audit |
 | test-writer | sonnet / high | tests from Given/When/Then |
 | ux-reviewer | opus / high | frontend PRs against docs/spec/07 |

@@ -70,21 +70,25 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
 
     Readable by the claimant, the organisation's owners and admins, and staff admin/moderator. The app writes the
     claimant's progress; approval runs only through ``app_approve_claim_e1`` (automatic E1) and ``app_decide_claim``
-    (staff admin), which set ``organizations.verification`` and create the claimant's membership. The OTP is compared
-    in SQL by ``app_confirm_claim_otp``; ``otp_verified_at`` is never the app's to set. The OTP columns change only
-    through the definer functions: ``otp_attempts`` counts every attempt and is never reset, and a new code comes from
-    ``app_reissue_claim_otp`` (at most 5 reissues, then manual review). One open claim per claimant and organisation,
-    and one new claim per claimant and organisation per 24 hours (trigger).
+    (staff admin), which set ``organizations.verification`` and seat the claimant (``app_seat_claimant``: an active
+    member keeps their roles unless the organisation has no active owner; anyone else becomes owner and admin). A
+    routine approval keeps an E1 or E2 organisation's verified domain unless the claimant is an active owner. The OTP
+    is compared in SQL by ``app_confirm_claim_otp``; ``otp_verified_at`` is never the app's to set. The OTP columns
+    change only through the definer functions: ``otp_attempts`` counts every attempt and is never reset, and a new code
+    comes from ``app_reissue_claim_otp`` (at most 5 reissues, then manual review; a disputed claim stays disputed). One
+    open claim per claimant and organisation, and one new claim per claimant and organisation per 24 hours (trigger).
 
     The DNS proof: ``dns_token`` is written with the claim and is write-once; ``dns_verified_at`` is set only by
     ``app_mark_claim_dns_verified`` once the app has resolved the TXT record, and is write-once too (trigger, every
     role). Whether a claim is a dispute is decided in SQL (``app_claim_competes``: another user holds an approved claim
-    or an active owner or admin membership, and the claimant is no active owner, admin or signatory), never by the
-    status label: a competing claim is filed as ``disputed`` and only the claim functions set or clear that mark (the
-    claimant may still withdraw). Staff approving a competing claim, whatever its label, upholds the dispute and
-    transfers the organisation: the new claimant becomes its only owner and admin, earlier approved claims of other
-    claimants are rejected and their memberships removed, the other members (removed ones too) lose owner and admin,
-    and pending invitations of the old control are revoked.
+    or an active owner or admin membership, and the claimant is no active owner, admin or signatory), and the label
+    follows it: a competing claim is filed as ``disputed``, every roster change and approval relabels the
+    organisation's open claims (``app_relabel_open_claims``, trigger ``memberships_claims_relabel``), and only the
+    claim functions set or clear that mark (the claimant may still withdraw). Staff approve a claim only under the
+    label the predicate gives. Approving a competing claim upholds the dispute and transfers the organisation: the new
+    claimant becomes its only owner and admin, earlier approved claims of other claimants are rejected and their
+    memberships removed, the other members (removed ones too) lose owner, admin and signatory, and pending invitations
+    of the old control, or carrying those roles, are revoked.
     """
 
     __tablename__ = "org_claims"

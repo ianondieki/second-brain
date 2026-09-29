@@ -1,14 +1,36 @@
-"""Auth API (REQ-AUTH-01): /api/auth/*. Every state-changing call needs the CSRF header (see bridge.main).
-Emails are sent after the response (``BackgroundTasks`` + ``bridge.auth.mailer``)."""
+"""Auth API (REQ-AUTH-01, OAuth REQ-AUTH-02): /api/auth/* and /api/me/identities. Every state-changing call needs
+the CSRF header (see bridge.main). Emails are sent after the response (``BackgroundTasks`` + ``bridge.auth.mailer``)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Request, Response, status
-from fastapi.responses import JSONResponse
+import hmac
+from typing import Annotated
+from uuid import UUID
 
-from bridge.auth import service
-from bridge.auth.cookies import clear_session, set_csrf, set_session, set_signup_binding, signup_cookie_name
-from bridge.auth.deps import CurrentSession, Db, EmailDep, PendingSession, SettingsDep, StepUpSession, client_ip
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
+
+from bridge import clock
+from bridge.auth import identities, oauth, service, sessions
+from bridge.auth.cookies import (
+    clear_oauth_flow,
+    clear_session,
+    set_csrf,
+    set_oauth_flow,
+    set_session,
+    set_signup_binding,
+    signup_cookie_name,
+)
+from bridge.auth.deps import (
+    CurrentSession,
+    Db,
+    EmailDep,
+    PendingSession,
+    SettingsDep,
+    StepUpSession,
+    client_ip,
+    optional_session,
+)
 from bridge.auth.mailer import PendingEmail, deliver
 from bridge.auth.models import User
 from bridge.auth.schemas import (
@@ -16,10 +38,14 @@ from bridge.auth.schemas import (
     CodeRequest,
     CsrfResponse,
     EmailRequest,
+    IdentityOut,
     LoginRequest,
     MembershipOut,
     MeResponse,
     MfaState,
+    OAuthProvidersResponse,
+    OAuthStartRequest,
+    OAuthStartResponse,
     RecoveryCodesResponse,
     SessionResponse,
     SetPasswordRequest,
@@ -27,13 +53,17 @@ from bridge.auth.schemas import (
     TokenRequest,
     TotpEnrolRequest,
     TotpEnrolResponse,
+    UnlinkRequest,
     UserOut,
 )
-from bridge.errors import ERROR_RESPONSES, ApiError
+from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.notifications.email import EmailProvider
 from bridge.tenancy.service import my_memberships
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], responses=ERROR_RESPONSES)
+me_router = APIRouter(prefix="/api/me", tags=["me"], responses=ERROR_RESPONSES)
+OptionalSession = Annotated[sessions.LiveSession | None, Depends(optional_session)]
+MAX_CALLBACK_PARAM_CHARS = 2048
 
 MESSAGES = {
     "invalid_email": "Enter a standard email address, such as name@example.com.",
@@ -52,6 +82,11 @@ MESSAGES = {
     "mfa_mandatory_for_role": "Your role requires two-step sign-in, so it cannot be turned off.",
     "current_password_required": "Enter your current password to make this change.",
     "recent_sign_in_required": "Sign in again with an emailed link to make this change.",
+    "unauthenticated": "Sign in to continue.",
+    "mfa_required": "Enter the code from your authenticator app.",
+    "step_up_required": "Confirm with your authenticator code to continue.",
+    "last_sign_in_method": "Set a password or link another account before removing this one.",
+    "not_found": "Not found.",
 }
 
 
@@ -252,7 +287,9 @@ async def set_password(
     """Set or change the password: the current one is required when set; a password-less account needs a sign-in
     within the last 15 minutes. Other sessions end; the account gets a notice."""
     try:
-        pending = await service.set_password(db, settings, live, body.current_password, body.new_password)
+        pending = await service.set_password(
+            db, settings, live, body.current_password, body.new_password, ip=client_ip(request)
+        )
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -261,9 +298,11 @@ async def set_password(
 
 
 @router.post("/totp/enrol")
-async def totp_enrol(body: TotpEnrolRequest, live: CurrentSession, db: Db, settings: SettingsDep) -> TotpEnrolResponse:
+async def totp_enrol(
+    body: TotpEnrolRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
+) -> TotpEnrolResponse:
     try:
-        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password)
+        secret, uri = await service.begin_totp_enrolment(db, settings, live, body.password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the re-auth throttle entry
         raise _fail(exc) from exc
@@ -300,3 +339,156 @@ async def totp_disable(
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)
+
+
+# ------------------------------------------------------------------------------------------------ OAuth (REQ-AUTH-02)
+
+
+@router.get("/oauth/providers")
+async def oauth_providers(settings: SettingsDep) -> OAuthProvidersResponse:
+    """The OAuth providers this deployment has credentials for; the web app shows only their buttons."""
+    return OAuthProvidersResponse(providers=oauth.enabled(settings))
+
+
+@router.post("/oauth/{provider}/start")
+async def oauth_start(
+    provider: str,
+    body: OAuthStartRequest,
+    request: Request,
+    response: Response,
+    db: Db,
+    settings: SettingsDep,
+    live: OptionalSession,
+) -> OAuthStartResponse:
+    """Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
+    short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
+    a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
+    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts
+    after 10 starts a minute from one IP."""
+    client = oauth.configured(settings, provider)
+    if client is None:
+        raise not_found()
+    if not await identities.allow_request(db, settings, "start", client_ip(request)):
+        raise _fail(service.AuthError("too_many_attempts", 429))
+    try:
+        flow = await identities.begin(db, settings, client.provider.name, body, live, ip=client_ip(request))
+    except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
+        raise _fail(exc) from exc
+    await db.commit()
+    set_oauth_flow(response, settings, oauth.seal(settings, flow), int(oauth.FLOW_TTL.total_seconds()))
+    return OAuthStartResponse(authorize_url=oauth.authorize_url(client, flow))
+
+
+def _state_matches(presented: str | None, flow: oauth.Flow) -> bool:
+    if presented is None or len(presented) > MAX_CALLBACK_PARAM_CHARS:
+        return False
+    return hmac.compare_digest(presented.encode("utf-8"), flow.state.encode("utf-8"))
+
+
+@router.get(
+    "/oauth/{provider}/callback",
+    response_class=RedirectResponse,
+    status_code=status.HTTP_302_FOUND,
+    responses={302: {"description": "To a fixed page of the web app; errors as ?oauth_error=CODE&provider=NAME"}},
+)
+async def oauth_callback(
+    provider: str,
+    request: Request,
+    tasks: BackgroundTasks,
+    db: Db,
+    settings: SettingsDep,
+    email: EmailDep,
+    live: OptionalSession,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is
+    spent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another
+    state (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also
+    spends its state server-side, so a replay gets oauth_state.
+    Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
+    oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
+    consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
+    Success: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER."""
+    client = oauth.configured(settings, provider)
+    if client is None:
+        raise not_found()
+    now = clock.utcnow()
+    flow = oauth.unseal(settings, request.cookies.get(settings.oauth_cookie_name), now=now)
+    presented = flow is not None and _state_matches(state, flow)
+    # The checks up to the throttle charge no throttle row and never reach the provider, so a forged callback (a page
+    # loading this URL in someone's browser with a junk state) never uses up that person's budget.
+    if flow is None or flow.provider != client.provider.name or not presented:
+        outcome = identities.failed(None, "oauth_state", client.provider.name)
+    elif error is not None:
+        outcome = identities.failed(flow.intent, "oauth_cancelled", flow.provider)  # never the provider's own text
+    elif not code or len(code) > MAX_CALLBACK_PARAM_CHARS:
+        outcome = identities.failed(flow.intent, "oauth_failed", flow.provider)
+    elif not await identities.allow_request(db, settings, "callback", client_ip(request)):
+        outcome = identities.failed(flow.intent, "too_many_attempts", flow.provider)
+    elif not await identities.spend_state(db, settings, flow):
+        outcome = identities.failed(None, "oauth_state", flow.provider)  # a replay, like a missing cookie
+    else:
+        # Keep the throttle entry and release the connection (and any row or advisory lock) before the provider call.
+        await db.commit()
+        try:
+            ident = await oauth.fetch_identity(client, flow, code, now=now)
+        except oauth.ProviderError:
+            outcome = identities.failed(flow.intent, "oauth_failed", flow.provider)
+        else:
+            outcome = await identities.complete(
+                db,
+                settings,
+                flow,
+                ident,
+                live=await identities.reload_session(db, live),  # it may have ended during the provider call
+                ip=client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            )
+    await db.commit()
+    response = RedirectResponse(
+        oauth.web_url(settings, outcome.path, outcome.params), status_code=status.HTTP_302_FOUND, background=tasks
+    )
+    response.headers["Referrer-Policy"] = "no-referrer"  # the callback URL carries the code and state
+    if flow is None or presented:
+        # Spent or unusable. A sealed, unexpired flow whose state was not presented stays: SameSite=Lax sends the
+        # cookie with a forged top-level GET too, and deleting it would fail the person's genuine return.
+        clear_oauth_flow(response, settings)
+    if outcome.session is not None:
+        set_session(response, settings, outcome.session.token)
+    if outcome.check_email:
+        set_signup_binding(response, settings, outcome.binding)
+    _send_later(tasks, request, email, outcome.pending)
+    return response
+
+
+@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_identity(
+    identity_id: UUID,
+    request: Request,
+    tasks: BackgroundTasks,
+    live: CurrentSession,
+    db: Db,
+    settings: SettingsDep,
+    email: EmailDep,
+    body: UnlinkRequest | None = None,
+) -> None:
+    """Unlink a provider (the same proof as linking: ``current_password`` when the account has one); the account's
+    other sessions end. 409 last_sign_in_method when nothing else could sign in."""
+    try:
+        password = body.current_password if body else None
+        pending = await identities.unlink(db, settings, live, identity_id, password, ip=client_ip(request))
+    except service.AuthError as exc:
+        await db.commit()  # keep the re-auth throttle entry
+        raise _fail(exc) from exc
+    await db.commit()
+    _send_later(tasks, request, email, pending)
+
+
+@me_router.get("/identities")
+async def my_identities(live: CurrentSession, db: Db) -> list[IdentityOut]:
+    """The providers linked to the signed-in account (provider tokens are never stored)."""
+    rows = await identities.list_for(db, live.user.id)
+    return [IdentityOut(id=row.id, provider=row.provider, linked_at=row.created_at) for row in rows]

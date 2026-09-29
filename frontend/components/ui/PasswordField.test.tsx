@@ -1,21 +1,13 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+
+import { renderWithIntl } from "@/test/intl";
 
 import { PasswordField } from "./PasswordField";
 
+/** The toggle's words ("Show", "Hide" and the fuller names) come from the English `fields` messages. */
 function renderField(extra: { hint?: string; error?: string } = {}) {
-  return render(
-    <PasswordField
-      id="password"
-      label="Password"
-      showLabel="Show"
-      hideLabel="Hide"
-      showName="Show password"
-      hideName="Hide password"
-      defaultValue="a long passphrase"
-      {...extra}
-    />,
-  );
+  return renderWithIntl(<PasswordField id="password" label="Password" defaultValue="a long passphrase" {...extra} />);
 }
 
 afterEach(cleanup);

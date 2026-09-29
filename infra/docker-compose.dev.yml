@@ -2,18 +2,25 @@
 # Ports bind to 127.0.0.1 only. Values come from infra/.env (copy infra/.env.example) and backend/.env.
 name: bridge
 
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://bridge_app:${BRIDGE_APP_PASSWORD:?set in infra/.env}@postgres:5432/bridge
+  DATABASE_OWNER_URL: postgresql+psycopg://bridge_owner:${BRIDGE_OWNER_PASSWORD:?set in infra/.env}@postgres:5432/bridge
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  EMAIL_PROVIDER: smtp
+  # SeaweedFS runs without S3 authentication in dev; boto3 still signs requests, so any credentials do.
+  OBJECT_STORE: s3
+  S3_ENDPOINT_URL: http://s3:8333
+  S3_ACCESS_KEY_ID: dev
+  S3_SECRET_ACCESS_KEY: dev
+  # Next.js forwards a client-supplied X-Forwarded-For unchanged, so the web hop is not trusted in dev (all local
+  # users share one throttle key). Phase 8: Caddy overwrites XFF and TRUSTED_PROXIES lists Caddy (and Cloudflare).
+  TRUSTED_PROXIES: 127.0.0.1
+
 x-backend: &backend
   build: ../backend
   env_file: ../backend/.env
-  environment:
-    DATABASE_URL: postgresql+psycopg://bridge_app:${BRIDGE_APP_PASSWORD:?set in infra/.env}@postgres:5432/bridge
-    DATABASE_OWNER_URL: postgresql+psycopg://bridge_owner:${BRIDGE_OWNER_PASSWORD:?set in infra/.env}@postgres:5432/bridge
-    SMTP_HOST: mailpit
-    SMTP_PORT: "1025"
-    EMAIL_PROVIDER: smtp
-    # Next.js forwards a client-supplied X-Forwarded-For unchanged, so the web hop is not trusted in dev (all local
-    # users share one throttle key). Phase 8: Caddy overwrites XFF and TRUSTED_PROXIES lists Caddy (and Cloudflare).
-    TRUSTED_PROXIES: 127.0.0.1
+  environment: *backend-env
   depends_on:
     postgres:
       condition: service_healthy
@@ -44,7 +51,8 @@ services:
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
   s3:
-    # S3-compatible stand-in for AWS S3 (D-24: MinIO's image was withdrawn). Unused until Phase 2 uploads.
+    # S3-compatible stand-in for AWS S3 (D-24: MinIO's image was withdrawn): the evidence, kyc-review and uploads
+    # buckets (bridge/storage/objects.py).
     image: chrislusf/seaweedfs:4.47
     command: ["server", "-s3", "-dir=/data", "-ip.bind=0.0.0.0"]
     volumes: [s3data:/data]
@@ -59,11 +67,26 @@ services:
 
   migrate:
     <<: *backend
-    command: ["sh", "-c", "alembic upgrade head && python -m bridge.seed"]
+    # Creates the object-store buckets before api and worker start (never at first use; idempotent). The provenance
+    # signing key's public half is published once PROVENANCE_SIGNING_KEY is set (skipped otherwise).
+    command: ["sh", "-c", "alembic upgrade head && python -m bridge.seed && python -m bridge.storage ensure-buckets && python -m bridge.provenance register-key --if-configured"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      s3:
+        condition: service_started
     restart: "no"
 
   api:
     <<: *backend
+    environment:
+      <<: *backend-env
+      # The API never signs and never reads the audit chains as audit_reader: it gets neither secret, even when
+      # backend/.env sets them for the worker (an empty value is unset; bridge/config.py).
+      PROVENANCE_SIGNING_KEY: ""
+      AUDIT_READER_DATABASE_URL: ""
     depends_on:
       migrate:
         condition: service_completed_successfully
