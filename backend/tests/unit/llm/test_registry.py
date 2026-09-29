@@ -28,6 +28,7 @@ SPEC_09_ALLOCATION = {
     "originality_explainer": {SONNET},  # originality overlap explanation
     "submission_assistant": {SONNET},  # submission assistant
     "reminder_nudge": {HAIKU},  # reminder & progress-reporter wording (REQ-REM-01)
+    "research_synthesis": {SONNET},  # research card synthesis (REQ-RES-01; the prototype sends no tools)
 }
 
 
