@@ -181,6 +181,19 @@ jobs:
         run: docker compose --env-file infra/.env -f infra/docker-compose.dev.yml up -d --build --wait
       - name: Egress lock (host and containers)
         run: bash infra/ci/egress-lock.sh
+      - name: Demo seed; export E2E_VERIFY_CERT_ID and E2E_DATABASE_OWNER_URL (REQ-FND-02)
+        # After the lock: the seed and the worker reach nothing outside (the TSA stays unreachable, so the
+        # certificate reads "Timestamp pending"). cert-id waits until the worker has hashed and signed it.
+        run: |
+          compose="docker compose --env-file infra/.env -f infra/docker-compose.dev.yml"
+          $compose run --rm -T migrate python -m bridge.seed --demo
+          cert_id="$($compose run --rm -T migrate python -m bridge.demo cert-id --wait 180)"
+          owner_password="$(sed -n 's/^BRIDGE_OWNER_PASSWORD=//p' infra/.env)"
+          echo "::add-mask::$owner_password"
+          echo "E2E_VERIFY_CERT_ID=$cert_id" >> "$GITHUB_ENV"
+          echo "E2E_DATABASE_OWNER_URL=postgresql://bridge_owner:${owner_password}@127.0.0.1:5432/bridge" >> "$GITHUB_ENV"
+      - name: Demo compose file validates (make demo's override of the dev stack)
+        run: python3 infra/demo/demo.py config
       - name: Playwright (mobile 360 px and desktop, axe)
         run: infra/ci/sandboxed.sh make check-e2e
       - name: Stack logs on failure
