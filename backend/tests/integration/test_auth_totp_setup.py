@@ -9,6 +9,7 @@ the API, wait until PostgreSQL shows it blocked by that transaction (the lock-an
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import time
 from collections.abc import AsyncIterator, Coroutine
@@ -18,6 +19,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from structlog.testing import capture_logs
@@ -241,7 +243,7 @@ async def test_a_pending_secret_stored_without_its_start_time_counts_as_expired(
     async with owner_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET totp_pending_enc = :blob WHERE id = :u"),
-            {"blob": encrypt(key, secret.encode("ascii"), user_id.bytes), "u": user_id},
+            {"blob": encrypt(key, secret.encode("ascii"), service.PENDING_LABEL + user_id.bytes), "u": user_id},
         )
     late = await client.post(CONFIRM, json={"code": totp.code_at(secret, now_counter())})
     assert error(late) == (409, "no_pending_enrolment")
@@ -267,6 +269,43 @@ async def test_the_setup_confirmation_is_throttled_like_the_second_factor(
     ]
     row = await user_row(owner_engine, address)
     assert (row["totp_enabled_at"], row["totp_pending_enc"] is not None) == (None, True)  # still pending, still off
+
+
+async def test_the_pending_envelope_opens_only_under_its_own_label(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """The pending and the active envelope share the key but not the associated data: the pending one names its kind
+    (``totp-pending|`` and the user id), the active one only the user id, so neither opens as the other."""
+    address = await verified(client)
+    secret = await begin(client)
+    row = await user_row(owner_engine, address)
+    opened = decrypt(data_key(), row["totp_pending_enc"], service.PENDING_LABEL + row["id"].bytes).decode("ascii")
+    assert opened.partition("|")[0] == secret
+    with pytest.raises(InvalidTag):
+        decrypt(data_key(), row["totp_pending_enc"], row["id"].bytes)
+
+
+@pytest.mark.parametrize("sealed", ["under the active label", "under another key", "truncated"])
+async def test_a_pending_envelope_that_does_not_open_counts_as_expired(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, sealed: str
+) -> None:
+    """A secret left pending across the change of label, sealed under another key, or altered: the confirmation
+    answers as for an expired one (409, the column cleared) instead of failing with a 500."""
+    address = await verified(client)
+    secret = await begin(client)
+    user_id = (await user_row(owner_engine, address))["id"]
+    fresh = f"{secret}|{int(time.time())}".encode("ascii")  # a start time that would still be fresh
+    blob = {
+        "under the active label": encrypt(data_key(), fresh, user_id.bytes),
+        "under another key": encrypt(os.urandom(32), fresh, service.PENDING_LABEL + user_id.bytes),
+        "truncated": b"short",
+    }[sealed]
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET totp_pending_enc = :b WHERE id = :u"), {"b": blob, "u": user_id})
+    late = await client.post(CONFIRM, json={"code": totp.code_at(secret, now_counter())})
+    assert error(late) == (409, "no_pending_enrolment")
+    row = await user_row(owner_engine, address)
+    assert (row["totp_pending_enc"], row["totp_enabled_at"]) == (None, None)
 
 
 async def test_a_cancel_behind_a_committing_confirmation_answers_totp_already_enabled(

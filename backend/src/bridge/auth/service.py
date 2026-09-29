@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,6 +64,8 @@ EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT,
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minute from one client IP, any account
 PENDING_TOTP_TTL = timedelta(minutes=15)  # the magic-link lifetime: a setup left open longer must start again
+# Associated data of the pending envelope: its kind, then the user id (the active envelope binds the user id only).
+PENDING_LABEL = b"totp-pending|"
 
 
 class AuthError(Exception):
@@ -540,19 +543,24 @@ async def begin_totp_enrolment(
 
 def seal_pending_secret(settings: Settings, user: User, secret: str) -> None:
     """Store ``secret`` as the pending TOTP secret with the time setup began, sealed together in one AES-GCM envelope
-    bound to the user id, so the time cannot be altered or detached; ``_pending_secret`` refuses it after
-    ``PENDING_TOTP_TTL``. The one place that writes the envelope (setup, and the demo seed's fixed secrets); the
-    caller holds ``lock_user``."""
+    bound to ``PENDING_LABEL`` and the user id, so the time cannot be altered or detached and the envelope never opens
+    as the active secret (or the active one as it); ``_pending_secret`` refuses it after ``PENDING_TOTP_TTL``. The one
+    place that writes the envelope (setup, and the demo seed's fixed secrets); the caller holds ``lock_user``."""
     began = int(clock.utcnow().timestamp())
-    user.totp_pending_enc = encrypt(_key(settings), f"{secret}|{began}".encode("ascii"), user.id.bytes)
+    user.totp_pending_enc = encrypt(_key(settings), f"{secret}|{began}".encode("ascii"), PENDING_LABEL + user.id.bytes)
 
 
 def _pending_secret(settings: Settings, user: User) -> str | None:
-    """The pending secret while its setup is fresh. One begun over ``PENDING_TOTP_TTL`` ago (a closed tab), or stored
-    before the start time was sealed with it, is cleared instead. The caller holds ``lock_user``."""
+    """The pending secret while its setup is fresh. One begun over ``PENDING_TOTP_TTL`` ago (a closed tab), stored
+    without its start time, or one that does not open (sealed before ``PENDING_LABEL``, under another key, or altered)
+    is cleared instead, the same answer as expired. The caller holds ``lock_user``."""
     if user.totp_pending_enc is None:
         return None
-    secret, _, began = _secret(settings, user, user.totp_pending_enc).partition("|")
+    try:
+        opened = decrypt(_key(settings), user.totp_pending_enc, PENDING_LABEL + user.id.bytes).decode("ascii")
+    except (InvalidTag, ValueError):  # ValueError: a blob too short to hold a nonce
+        opened = ""
+    secret, _, began = opened.partition("|")
     if began.isdigit() and clock.utcnow() - datetime.fromtimestamp(int(began), UTC) <= PENDING_TOTP_TTL:
         return secret
     user.totp_pending_enc = None
