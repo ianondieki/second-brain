@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from bridge.ids import uuid7
 
 FIXTURE = "rls-fixture"  # marks the fixture rows of tables with no tenant column (staff tables)
+STAFF_CODE = "rls_fixture"  # the same, where the marker column holds a code (research_runs.stop_reason)
 VECTOR_1024 = "CAST(array_fill(CAST(0.001 AS real), ARRAY[1024]) AS vector)"
 
 
@@ -248,6 +249,42 @@ async def add_tracker_rows(conn: AsyncConnection, engagement_id: UUID, developer
         paid=datetime(2026, 1, 15, tzinfo=UTC).date(),
         user=developer_id,
     )
+
+
+async def add_scout_rows(
+    conn: AsyncConnection, org_id: UUID, owner_id: UUID, niche_id: UUID, proposal_id: UUID, version_id: UUID
+) -> UUID:
+    """Revision 0005: a scout of the organisation (created by its owner), one completed run and one match of the given
+    registered version, written as the owner. Returns the scout's id."""
+    scout_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO scout_agents (id, org_id, niches, created_by) VALUES (:id, :org, ARRAY[CAST(:niche AS uuid)], :user)",
+        id=scout_id,
+        org=org_id,
+        niche=niche_id,
+        user=owner_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO agent_runs (id, scout_id, org_id, trigger, status, finished_at, window_end)"
+        " VALUES (:id, :scout, :org, 'weekly', 'completed', now(), now())",
+        id=uuid7(),
+        scout=scout_id,
+        org=org_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO agent_matches (id, scout_id, org_id, proposal_id, version_id, niche_id, score)"
+        " VALUES (:id, :scout, :org, :proposal, :version, :niche, 70)",
+        id=uuid7(),
+        scout=scout_id,
+        org=org_id,
+        proposal=proposal_id,
+        version=version_id,
+        niche=niche_id,
+    )
+    return scout_id
 
 
 async def build(conn: AsyncConnection, tag: str) -> World:
@@ -528,6 +565,20 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             exp=now + timedelta(minutes=10),
         )
         await _insert(conn, "INSERT INTO kyc_reviews (id, user_id) VALUES (:id, :user)", id=uuid7(), user=user_id)
+        # --- Schema v4 (revision 0005): a scout with one run and one match, and a pending payment per subject ---
+        await add_scout_rows(conn, org_id, user_id, niche_id, pitched, pitched_version)
+        for scope in ("user", "org"):
+            await _insert(
+                conn,
+                "INSERT INTO payments (id, user_id, org_id, plan_id, amount_kes_minor, provider, provider_ref,"
+                " initiated_by) VALUES (:id, :user, :org, :plan, 1500000, 'fake', :ref, :initiator)",
+                id=uuid7(),
+                user=user_id if scope == "user" else None,
+                org=org_id if scope == "org" else None,
+                plan=plan_id,
+                ref=uuid7().hex,
+                initiator=user_id,
+            )
         # Staff tables: fixture rows about this tenant, marked so the tests find them.
         await _insert(
             conn,
@@ -543,6 +594,14 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             id=uuid7(),
             org=org_id,
             address=f"partnerships@{label}-{tag}.example.test",
+        )
+        await _insert(
+            conn,
+            "INSERT INTO research_runs (id, niche_id, started_by, status, finished_at, stop_reason)"
+            f" VALUES (:id, :niche, :staff, 'stopped', now(), '{STAFF_CODE}')",
+            id=uuid7(),
+            niche=niche_id,
+            staff=staff_id,
         )
         tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
     # A system LLM call (no user, no organisation): readable by staff admin only.
@@ -680,6 +739,11 @@ TENANT_ROWS: dict[str, Rows] = {
             "payment_records",
         )
     },
+    # revision 0005: the scout's rows are its organisation's; a payment is its user's or its organisation's
+    "scout_agents": _rows("scout_agents", "t.id::text", "t.org_id", NO_USER),
+    "agent_runs": _rows("agent_runs", "t.id::text", "t.org_id", NO_USER),
+    "agent_matches": _rows("agent_matches", "t.id::text", "t.org_id", NO_USER),
+    "payments": _rows("payments", "t.id::text", "t.org_id", "t.user_id"),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).
@@ -695,5 +759,9 @@ STAFF_ROWS: dict[str, Rows] = {
     "proposal_confidential_embeddings": Rows(
         key="proposal_confidential_embeddings.version_id::text",
         owners=f"SELECT version_id::text AS key FROM proposal_confidential_embeddings WHERE embed_model = '{FIXTURE}'",
+    ),
+    "research_runs": Rows(
+        key="research_runs.id::text",
+        owners=f"SELECT id::text AS key FROM research_runs WHERE stop_reason = '{STAFF_CODE}'",
     ),
 }

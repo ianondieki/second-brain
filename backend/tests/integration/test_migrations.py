@@ -1,7 +1,7 @@
-"""Revisions 0001 to 0004 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
-REQ-LLM-01; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+"""Revisions 0001 to 0005 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0004, 0003 and 0002 leaves the revision before it exactly as it found it), table
+Migration round trip and drift (each of 0005, 0004, 0003 and 0002 leaves the revision before it exactly as it found it), table
 classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role attributes, the
 helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence triggers of schema v2 and
 the tracker triggers of schema v3, the listed-organisations policy and the Procrastinate schema. The tracker's
@@ -152,6 +152,38 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     "agreements": {"ip_terms", "exclusivity", "deemed_acceptance_days", "status", "final_pdf_sha256", "updated_at"},
     "milestones": {"seq", "deliverable", "amount_kes_minor", "due_date", "review_window_bd", "state", "updated_at"},
     "payment_records": {"confirmed_by", "confirmed_amount_kes_minor"},  # the developer's one confirmation
+    # revision 0005: never the keys, the organisation, the creator or a run's start and window; payments: no UPDATE
+    "scout_agents": {
+        "niches",
+        "counties",
+        "include_keywords",
+        "exclude_keywords",
+        "maturity",
+        "budget_band",
+        "min_fit",
+        "frequency",
+        "language",
+        "recipients",
+        "paused_at",
+        "cursor_at",
+        "cursor_proposal_id",
+        "updated_at",
+    },
+    "agent_runs": {"status", "finished_at", "scanned_count", "matched_count", "error_code"},
+    "agent_matches": {"feedback", "feedback_reason", "feedback_by", "feedback_at", "digest_sent_at"},
+    "research_runs": {
+        "status",
+        "finished_at",
+        "searches",
+        "fetches",
+        "input_tokens",
+        "candidates",
+        "discarded",
+        "cost_usd",
+        "stop_reason",
+        "demo_fallback",
+        "updated_at",
+    },
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -219,6 +251,13 @@ APP_GRANTS: dict[str, set[str]] = {
     "signatures": {S, I},
     "payment_records": {S, I, U},
     "test_clock": {S},
+    # revision 0005: scouts (the owner or admin configures), runs and matches (never deleted by the app), research runs
+    # (staff admin), payments (status and subscription only through the definers: no UPDATE, no DELETE)
+    "scout_agents": {S, I, U, D},
+    "agent_runs": {S, I, U},
+    "agent_matches": {S, I, U},
+    "research_runs": {S, I, U},
+    "payments": {S, I},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -349,6 +388,20 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
         True,
         {"bridge_app"},  # SqlLedger.calls_since: a free slot's daily request cap, platform-wide (a count only)
     ),
+    # revision 0005
+    "app_uuid_set_is_valid(uuid[], integer, integer)": (False, {"bridge_app"}),  # scout_agents CHECKs
+    "app_text_set_is_valid(text[], integer, integer)": (False, {"bridge_app"}),  # scout_agents and problems CHECKs
+    "app_scouts_due(timestamp with time zone, scout_frequency, uuid)": (True, {"bridge_app"}),  # the scouts.scan job
+    "app_create_research_candidate(uuid, text, text, text, text, numeric, text[], jsonb)": (True, {"bridge_app"}),
+    "app_settle_payment(uuid, payment_status, text)": (True, {"bridge_app"}),
+    "app_activate_paid_subscription(uuid)": (True, {"bridge_app"}),
+    # Cross-organisation counts only; owned by bridge_owner (aggregate_worker cannot own it: revision 0005 docstring).
+    "app_trend_aggregates(timestamp with time zone, timestamp with time zone)": (True, {"bridge_app"}),
+    "app_research_source_is_valid(jsonb)": (False, set()),  # app_create_research_candidate() only
+    "app_is_payment_subject(uuid, uuid)": (False, set()),  # the payment definers only
+    "payments_guard()": (False, set()),
+    "problems_research_guard()": (True, set()),
+    "scout_agents_recipients()": (True, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -560,10 +613,17 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     at_0002 = schema_snapshot(scratch_url)
     run_alembic(scratch_url, lambda config: command.upgrade(config, "0003"))
     at_0003 = schema_snapshot(scratch_url)
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0004"))
+    at_0004 = schema_snapshot(scratch_url)
+    assert set(at_0004["functions"]) - set(at_0003["functions"]), "0004 adds app_llm_calls_since"
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    assert set(at_head["functions"]) - set(at_0003["functions"]), "0004 adds app_llm_calls_since"
+    assert set(at_head["policies"]) - set(at_0004["policies"]), "0005 adds the policies of its tables"
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0004"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0005 leaves every object of 0004 exactly as it found it (the problems grants included)
+        assert after[kind] == at_0004[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0003"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0004 leaves every object of 0003 exactly as it found it
@@ -963,6 +1023,15 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
             await conn.execute(sa.text("SELECT app_llm_calls_since('m', now())"))  # revision 0004
+            # revision 0005: the definers and CHECK helpers bridge_app may call
+            await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
+            await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
+            await conn.execute(sa.text("SELECT app_text_set_is_valid(ARRAY['x'], 1, 5)"))
+            await expect_error(
+                conn, "SELECT app_settle_payment(uuid7(), 'failed', 'declined')", "no payment of the caller's"
+            )
+            await expect_error(conn, "SELECT app_activate_paid_subscription(uuid7())", "no payment of the caller's")
+            await expect_error(conn, "SELECT count(*) FROM app_scouts_due(now(), 'daily')", "the scouts.scan job only")
             event_id = uuid7()
             await conn.execute(
                 sa.text("INSERT INTO audit_events (id, chain_id, actor_kind, action) VALUES (:id, :c, 'system', 'x')"),
@@ -1534,6 +1603,72 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
     assert {row.name for row in insertable} == {c.name for c in TABLES["users"].columns} - {"demo_account"}
 
 
+# Revision 0005: columns only app_create_research_candidate() writes (bridge_app inserts every other column; no UPDATE).
+DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
+    "problems": {"research_run_id", "named_orgs"},
+    "problem_sources": {"excerpt_ref"},
+}
+
+
+@pytest.mark.parametrize(("table", "columns"), sorted(DEFINER_ONLY_COLUMNS.items()))
+async def test_bridge_app_inserts_every_column_but_the_research_ones(
+    owner_engine: AsyncEngine, table: str, columns: set[str]
+) -> None:
+    held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), CAST(:p AS text))"
+    for column in columns:
+        assert await scalar(owner_engine, held, t=f"public.{table}", c=column, p="INSERT") is False
+        assert await scalar(owner_engine, held, t=f"public.{table}", c=column, p="UPDATE") is False
+        assert await scalar(owner_engine, held, t=f"public.{table}", c=column, p="SELECT") is True
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'INSERT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
+    insertable = await rows(
+        owner_engine,
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, 'INSERT')",
+        columns=[c.name for c in TABLES[table].columns],
+        t=f"public.{table}",
+    )
+    assert {row.name for row in insertable} == {c.name for c in TABLES[table].columns} - columns
+
+
+async def test_schema_v4_protected_columns_and_tables_are_not_the_apps(app_engine: AsyncEngine) -> None:
+    """What only the definer functions, the database or the owner change in revision 0005: bridge_app is refused by
+    its grants (payments are settled and linked only through app_settle_payment and
+    app_activate_paid_subscription; runs are never deleted; keys, owners, creators and start times never change)."""
+    user_id = uuid7()
+    async with rolled_back(app_engine, user_id) as conn:
+        await add_user(conn, user_id)
+        for sql in (
+            "UPDATE payments SET status = 'succeeded'",
+            "UPDATE payments SET subscription_id = NULL",
+            "UPDATE payments SET settled_at = now()",
+            "UPDATE payments SET amount_kes_minor = 1",
+            "DELETE FROM payments",
+            "UPDATE scout_agents SET org_id = org_id",
+            "UPDATE scout_agents SET created_by = created_by",
+            "DELETE FROM agent_runs",
+            "UPDATE agent_runs SET started_at = now()",
+            "UPDATE agent_runs SET scout_id = scout_id",
+            "UPDATE agent_runs SET window_end = now()",
+            "DELETE FROM agent_matches",
+            "UPDATE agent_matches SET score = 100",
+            "UPDATE agent_matches SET proposal_id = proposal_id",
+            "UPDATE agent_matches SET rationale = 'x'",
+            "DELETE FROM research_runs",
+            "UPDATE research_runs SET started_by = started_by",
+            "UPDATE research_runs SET niche_id = niche_id",
+            "UPDATE problems SET research_run_id = NULL",
+            "UPDATE problems SET named_orgs = '{}'",
+            "INSERT INTO problems (id, source, title, statement, research_run_id) VALUES (uuid7(), 'developer', 't',"
+            " 's', NULL)",
+            "INSERT INTO problems (id, source, title, statement, named_orgs) VALUES (uuid7(), 'developer', 't', 's',"
+            " '{}')",
+            "INSERT INTO problem_sources (id, problem_id, url, retrieved_at, excerpt_ref) VALUES (uuid7(), uuid7(),"
+            " 'https://example.test', now(), NULL)",
+        ):
+            await expect_error(conn, sql, "permission denied")
+
+
 async def test_otp_digests_are_written_but_never_read_back(owner_engine: AsyncEngine) -> None:
     """The claimant and the phone owner write their code's digest and read their rows, through SQL and the ORM, but
     no statement of bridge_app returns the digest (offline brute force of a 6-digit code needs it)."""
@@ -2057,6 +2192,16 @@ V3_TRIGGERS = {
 }
 
 
+# Revision 0005: the payment guard, the research publication backstop and the scout recipients check.
+V5_TRIGGERS = {
+    ("payments", "payments_guard"): ("payments_guard", ROW | BEFORE | ON_INSERT | ON_DELETE | ON_UPDATE),
+    ("payments", "payments_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
+    ("problems", "problems_research_guard"): ("problems_research_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    # After RLS: reads the organisation's roster.
+    ("scout_agents", "scout_agents_recipients"): ("scout_agents_recipients", ROW | ON_INSERT | ON_UPDATE),
+}
+
+
 async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine) -> None:
     """The complete set of triggers on Bridge tables (Procrastinate's own are left to its schema)."""
     found = await rows(
@@ -2065,7 +2210,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
-    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS
+    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
