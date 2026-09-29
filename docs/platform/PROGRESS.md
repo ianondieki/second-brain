@@ -361,15 +361,15 @@ Python 3.13 venv at `/home/user/.venv-legacy` with `requirements.txt` and a `clo
 (`/home/user/bin`); `scripts/run_legacy_tests.py` → 307 OK. Worktrees live in `/home/user/sb-wt/<REQ-ID>`. The Windows
 workarounds in the laptop notes stay in their files. **Session 2 additions (network Full).** `make dev` builds and runs (all services healthy; about 260 MB of RAM without ClamAV) once the build containers trust this container's egress-proxy CA: an out-of-repo compose override (scratchpad `compose.ccr.json`, generated from the repo Dockerfiles by adding `COPY --from=ccr ca-bundle.crt` and `SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS` after each `FROM`) is passed as a second `-f`; the repo's Dockerfiles are unchanged and the laptop needs no override. Playwright 1.63: a shim at `/home/user/pw-shim` maps `chromium(_headless_shell)-1243/chrome*-linux64` onto the installed 1194 build (`PLAYWRIGHT_BROWSERS_PATH=/home/user/pw-shim`). `npm ci` in `frontend/` is clean.
 
-**In flight.**
+**In flight.** Merged into the integration branch on 2026-09-29 (session 2): schema v2 `ba42e69` (round 6: reviewer PASS, security-reviewer PASS, CI green), T2.6a `309330b`, D1 `44bd06d`, T2.4 `f5f322b` (re-check: reviewer PASS, security-reviewer PASS, CI green); 1657 backend tests pass on the merged tree, frontend 180. The MINOR follow-ups of each review are in the task cards (REQ-REPO-01, REQ-PROV-01, REQ-LLM-01).
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-REPO-01-schema-v2` (T2.1) | `7fb11bf` | round 6 done (951 passed); reviewer + security-reviewer round 6 running; CI dispatched | Q1–Q5 docs, mutation proofs M13/M14b/M16/M17, card "Sixth review round", THREAT_MODEL rows, revision docstring, static checks and the compatibility list are in (`0fcabad`..`7fb11bf`). Next: fix BLOCKER/MAJOR from round 6 if any, CI green, merge first. MINOR follow-ups (cascade-delete relabel, disputed claim back to `otp_sent` in T2.6b, statement-level trigger) are in the card |
-| `feat/REQ-PROV-01-provenance` (T2.4) | (moving) | impl-backend merging schema v2, switching to `app_unanchored_chain_heads()`, writing `snapshot_at` | then quick reviewer re-check, CI, merge |
-| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `b70f9f9` | schema v2 (`108a0f3`) merged, 1095 passed, static clean; CI dispatched | merge after schema v2 (the later schema commits are docs only) |
-| `feat/REQ-PROV-04-verification` (D1) | `b5bcfb7` | schema v2 (`108a0f3`) merged, 1072 passed, static clean; CI dispatched | merge after schema v2 |
-| `feat/REQ-LLM-01-llm-layer` (T2.2) | `dcf8afa` | schema v2 merged; settle via `app_llm_settle_batch_item`, `batch_poll` checks `app_llm_batch_owned`; 1265 passed; reviewer round 2 + security-reviewer running; CI dispatched | fix BLOCKER/MAJOR, merge after schema v2. Open for Phase 4: a job can't settle a batch whose user left the org |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `02f7170`+ | schema v2 merged, 1265 passed, CI green (pre-fix); reviewer round 2 PASS; security-reviewer CHANGES_REQUIRED (MAJOR: sanitiser CPU cost unbounded on long input) | impl-ai fixing the MAJOR (input cap + linear `_BLOCKS` + timing test); then merge integration in, suite, CI, merge |
+| `feat/REQ-ENG-01-schema-v3` (P1) | — | db-migrations writing revision 0003 (tracker tables, `users.demo_account`, `test_clock`) | reviewer + security-reviewer (engagements), merge |
+| `feat/REQ-PROP-01-proposals` (P2) | — | impl-backend | reviewer, merge |
+| `feat/REQ-DIR-01-screens` (P8 part 1: `/verify`, Companies) | — | impl-frontend | ux-reviewer + reviewer, merge |
+| `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
 **Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
@@ -394,16 +394,16 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | session 2: redone; `make dev` builds (CA override), Playwright shim, `npm ci` |
 | Anthropic price research (D-37) | done | verified 2026-09-29 |
 | P11 source excerpts (research, early) | done (`feat/REQ-RES-01-sources` `0bb707d`) | 19 verbatim dated excerpts, 4 niches; D-38 (publisher terms) open, default (a) local only |
-| P0 schema v2 round 6 → merge | in progress | round 6 done `7fb11bf`; reviews running |
-| P0 T2.4, T2.6a, D1, T2.2 → merge | todo | after schema v2 |
-| P1 schema v3 (prototype) | todo | |
-| P2 proposals | todo | |
+| P0 schema v2 round 6 → merge | done (`ba42e69`) | reviewer + security-reviewer PASS; CI green |
+| P0 T2.4, T2.6a, D1, T2.2 → merge | T2.6a, D1, T2.4 done; T2.2 fixing a security MAJOR | |
+| P1 schema v3 (prototype) | in progress | db-migrations |
+| P2 proposals | in progress | impl-backend |
 | P3 Tier-2 access | todo | |
 | P4 directory search + Pitch + EM1 | todo | |
 | P5 tracker main path + test clock | todo | |
 | P6 reminders | todo | |
 | P7 LLM providers (D-37) | todo | |
-| P8 M1 screens | todo | |
+| P8 M1 screens | in progress | part 1 `/verify` + Companies |
 | P9 `make demo` (basic) | todo | |
 | M1 merged, tag `prototype-m1`, M1 report | todo | |
 | P10 scout | todo | M2 |
