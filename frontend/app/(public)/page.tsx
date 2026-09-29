@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
-import { ButtonLink, textLinkClass } from "@/components/ui/Button";
+import { textLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 
 export default async function Landing() {
   const t = await getTranslations("landing");

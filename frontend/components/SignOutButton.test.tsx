@@ -8,11 +8,12 @@ import { SignOutButton } from "./SignOutButton";
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn(), post: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace, refresh: mocks.refresh }) }));
-vi.mock("@/lib/api/client", () => ({ api: { POST: (...args: unknown[]) => mocks.post(...args) } }));
+// The button sends through the CSRF-protected fetch only (lib/api/csrf), not the typed client.
+vi.mock("@/lib/api/csrf", () => ({ withCsrf: () => (...args: unknown[]) => mocks.post(...args) }));
 
 function answer(status: number) {
   const body = status === 204 ? null : JSON.stringify({ detail: { code: "x", message: "x" } });
-  return { data: undefined, error: undefined, response: new Response(body, { status }) };
+  return new Response(body, { status });
 }
 
 beforeEach(() => {
@@ -30,7 +31,7 @@ describe("SignOutButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
     expect(window.sessionStorage.getItem("bridge.pendingEmail")).toBeNull();
-    expect(mocks.post).toHaveBeenCalledWith("/api/auth/logout");
+    expect(mocks.post).toHaveBeenCalledWith("/api/auth/logout", expect.objectContaining({ method: "POST" }));
   });
 
   it.each([403, 500])("stays and warns when logout answers %i", async (status) => {

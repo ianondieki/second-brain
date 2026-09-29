@@ -1,7 +1,7 @@
 import type { ReactNode, Ref } from "react";
 
 import { cn } from "./cn";
-import { AlertIcon, CheckIcon, InfoIcon } from "./icons";
+import { AlertIcon, CheckIcon, InfoIcon } from "./status-icons";
 
 export type AlertTone = "error" | "info" | "ok";
 

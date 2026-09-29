@@ -110,11 +110,25 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype; any hosted release of the research cards.
 - Decision:
 
-### D-39 · Wording of the three ownership attestations at publish (P2, REQ-PROV-05, REQ-PROP-01)
-- Why: publishing a proposal records three ownership attestations (docs/spec/06 6.4; REQ-PROV-05). Their text is near-legal: it states what the developer affirms about authorship and rights. The prototype uses draft wording paraphrasing the spec's three statements, tagged `[[COPY-REVIEW]]`, in `backend/src/bridge/proposals/attestations.py` (branch `feat/REQ-PROP-01-proposals`); each acceptance stores the text's version and SHA-256, so a later wording is a new version, not an edit. Agents do not write legal text.
-- Options: (a) keep the draft wording for the local prototype only and have it reviewed (G2 legal pack) before any hosted use; (b) replace it now with wording you supply; (c) have an advocate draft it now.
-- Recommended default: (a); nothing is hosted (D-36), and the stored version and hash keep earlier acceptances traceable when the text changes.
+### D-39 · Legal and privacy wording used by the prototype (P2, P3, P5; REQ-PROV-05, REQ-PROV-03, REQ-ENG-05, REQ-LEG-01)
+- Why: the prototype shows text that is near-legal or a privacy disclosure. Agents do not write legal text (CLAUDE.md), so each is a `[[COPY-REVIEW]]` draft or a seeded placeholder: (1) the three ownership attestations at publish (`backend/src/bridge/proposals/attestations.py`, P2; each acceptance stores the text's version and SHA-256, so a later wording is a new version); (2) the viewer-logging notice shown when an organisation member accepts the Evaluation NDA (P3; docs/spec/10 requires it, recorded in `lawful_basis.md` later); (3) the cover text around the seeded mutual NDA template in the tracker (P5); (4) the seeded Evaluation NDA and mutual NDA templates themselves (Phase 1 placeholders headed "DRAFT — NOT LEGAL ADVICE"). Broadened on 2026-09-29 from the attestations alone, after the orchestrator's re-check.
+- Options: (a) keep the drafts for the local prototype only and have all four reviewed with the G2 legal pack before any hosted use; (b) replace any of them now with wording you supply; (c) have an advocate draft them now.
+- Recommended default: (a); nothing is hosted (D-36), each text is versioned and hashed where it is accepted, and the demo labels the templates as drafts.
 - Blocks: nothing in the prototype; any hosted release.
+- Decision:
+
+### D-40 · Tier-2 routes with the flag off: 403 (AC-SEC-2) or 404 for non-members (AC-SEC-1/b) (P3, REQ-SEC-01, REQ-TEN-01)
+- Why: two MUST criteria conflict for one caller. AC-SEC-2 says every Tier-2 endpoint returns 403 while `FEATURE_TIER2_ENABLED=false`, whatever the NDA state; AC-SEC-1/b says a cross-tenant API access returns 404 (enforced for every `/api/orgs/{org_id}/…` route by `test_every_org_route_answers_404_to_a_non_member`). The Tier-2 routes live under `/api/orgs/{org_id}/proposals/{proposal_id}/…`, so a signed-in non-member of that organisation hits both rules. P3 (merged `5ab7a6a`) answers 404 to non-members and 403 `tier2_disabled` to members, the owner and anonymous callers; `test_tier2_flag` checks exactly that. The orchestrator accepted it during the build; the re-check on 2026-09-29 found it should have been recorded here, because it narrows a MUST.
+- Options: (a) keep it: tenancy first (404 to non-members), then the flag (403 to everyone else); (b) the flag wins everywhere: move the Tier-2 routes off `/api/orgs/{org_id}` (e.g. an `org_id` query parameter) so every caller gets 403; (c) amend AC-SEC-2's wording to "every Tier-2 endpoint returns 403 to any caller who may address it", which is what (a) does.
+- Recommended default: (a), with (c) as the wording fix: a non-member learns nothing either way, and 404 hides that the organisation exists in the caller's reach.
+- Blocks: nothing in the prototype (the demo turns the flag on); the Phase 2 exit check of AC-SEC-2.
+- Decision:
+
+### D-41 · Model allocation vs current Anthropic models (REQ-LLM-01, docs/spec/09)
+- Why: `backend/ai/models.yaml` follows the docs/spec/09 allocation (Haiku 4.5, Sonnet 5, Opus 5.5). The price research of 2026-09-29 (`research/anthropic-prices-2026-09.md`) found Sonnet 5 is now listed as legacy (retirement not before 2027-06-30) with Sonnet 5.5 (`claude-sonnet-5-5`) current at the same price, and Haiku 4.5's retirement is "not sooner than October 15, 2026". Changing the allocation is a spec change, so agents do not make it. It matters only with `LLM_PROVIDER=anthropic`: the prototype defaults to free providers and the fake, and a call to a retired model falls back to the labelled fake (D-37), so the demo never errors.
+- Options: (a) keep the spec's allocation for the prototype and revisit before any hosted release; (b) move Sonnet tasks to Sonnet 5.5 now (a `models.yaml` change plus spec 09); (c) also plan Haiku 4.5's successor once one is announced.
+- Recommended default: (a) now, (b) at the next spec review; re-run the cassette evals after any change (docs/spec/09).
+- Blocks: nothing in the prototype.
 - Decision:
 
 ## Decided

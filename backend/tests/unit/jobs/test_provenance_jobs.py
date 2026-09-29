@@ -16,6 +16,7 @@ from sqlalchemy.exc import OperationalError
 from bridge.audit.chain import ChainProblem
 from bridge.config import ConfigurationError, Settings
 from bridge.crypto.envelope import LocalKeyWrapper
+from bridge.engagements import notify
 from bridge.jobs import audit as audit_jobs
 from bridge.jobs import provenance as jobs
 from bridge.jobs import reminders as reminder_jobs
@@ -50,7 +51,12 @@ def settings(**overrides: Any) -> Settings:
 
 
 def test_the_task_modules_are_imported_by_the_worker() -> None:
-    assert IMPORT_PATHS == ["bridge.jobs.provenance", "bridge.jobs.audit", "bridge.jobs.reminders"]
+    assert IMPORT_PATHS == [
+        "bridge.jobs.provenance",
+        "bridge.jobs.audit",
+        "bridge.jobs.notifications",
+        "bridge.jobs.reminders",
+    ]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
         service.TASK_HASH,
@@ -58,6 +64,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         service.TASK_TIMESTAMP,
         jobs.ANCHOR_TASK,
         audit_jobs.VERIFY_TASK,
+        notify.TASK,  # REQ-NOT-04: the tracker's notifications (P5)
     ):
         assert name in app.tasks
     assert app.tasks[service.TASK_HASH].queue == service.QUEUE

@@ -12,3 +12,14 @@ Held tags for E0 orgs send zero emails. Invitations: at most one aggregated, con
 ## Acceptance criteria and tests
 
 AC-DIR-1 (`integration/directory/test_held_tags.py`), AC-DIR-4 (`integration/directory/test_invitations.py`).
+
+## Prototype P4 (2026-09-29): held tags built; invitations after prototype
+
+- E0 tags are `held_unclaimed`, E1 tags `held_pending_verification` (`bridge/proposals/tags.py`); a held tag creates
+  no engagement and no grant, sends no email (EM1 only when a Pitch delivered something) and writes no in-app row;
+  the developer sees the spec's sentence ("{Org} isn't on the platform yet. Your proposal is saved and they'll see it
+  if they join and verify. We don't email them on your behalf.") and can withdraw a held tag.
+- Tests: `integration/directory/test_held_tags.py` (AC-DIR-1: zero emails in the mail sink and the delivery ledger, no
+  in-app row, no hook call, no `directory_invitations` row; E1 members see only the count).
+
+After prototype (unchanged scope): invitations (AC-DIR-4), suppressions, delisting's notice to the developer.

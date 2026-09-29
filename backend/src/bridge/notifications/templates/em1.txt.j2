@@ -1,0 +1,26 @@
+{# EM1, plain-text part (REQ-NOT-02; docs/spec/06 6.10). [[COPY-REVIEW]] ordinary transactional copy. #}
+Your proposal "{{ title }}" is registered and sent to {{ sent_count }}.
+
+Your disclosure record
+Receipt: {{ cert_id }}
+Hash: {{ hash }}
+
+Sent to ({{ sent_count }}, verified):
+{% for name in sent_to %}
+- {{ name }}
+{% endfor %}
+{% if saved_for %}
+
+Saved for ({{ saved_count }}):
+{% for line in saved_for %}
+- {{ line }}
+{% endfor %}
+{% endif %}
+
+Every view of your full proposal is logged and watermarked to the viewer, and you can follow each organisation's answer on your tracker.
+
+Open your proposal: {{ proposal_url }}
+
+--
+{{ product }} · Receipt {{ cert_id }}
+Manage notifications: {{ settings_url }} · Help: {{ help_url }} · Nairobi, Kenya

@@ -8,7 +8,7 @@ import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
-import { CheckIcon } from "@/components/ui/icons";
+import { CheckIcon } from "@/components/ui/status-icons";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";

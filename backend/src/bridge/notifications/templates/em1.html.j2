@@ -1,0 +1,29 @@
+{# EM1, HTML part (REQ-NOT-02; docs/spec/06 6.10). Autoescaped. One call to action. [[COPY-REVIEW]] #}
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ title }}</title></head>
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
+<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:24px">
+<p style="font-size:16px;line-height:1.5;margin:0 0 16px">Your proposal &ldquo;<strong>{{ title }}</strong>&rdquo; is registered and sent to {{ sent_count }}.</p>
+<h2 style="font-size:14px;margin:16px 0 8px">Your disclosure record</h2>
+<p style="font-size:14px;line-height:1.5;margin:0">Receipt: <code>{{ cert_id }}</code><br>Hash: <code style="word-break:break-all">{{ hash }}</code></p>
+<h2 style="font-size:14px;margin:16px 0 8px">Sent to ({{ sent_count }}, verified)</h2>
+<ul style="font-size:14px;line-height:1.5;margin:0;padding-left:20px">
+{% for name in sent_to %}
+<li>{{ name }}</li>
+{% endfor %}
+</ul>
+{% if saved_for %}
+<h2 style="font-size:14px;margin:16px 0 8px">Saved for ({{ saved_count }})</h2>
+<ul style="font-size:14px;line-height:1.5;margin:0;padding-left:20px">
+{% for line in saved_for %}
+<li>{{ line }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<p style="font-size:14px;line-height:1.5;margin:16px 0">Every view of your full proposal is logged and watermarked to the viewer, and you can follow each organisation's answer on your tracker.</p>
+<p style="margin:24px 0"><a data-cta="open-proposal" href="{{ proposal_url }}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">Open your proposal</a></p>
+</div>
+<p style="max-width:560px;margin:16px auto 0;font-size:12px;line-height:1.5;color:#71717a;text-align:center">{{ product }} · Receipt {{ cert_id }}<br><a href="{{ settings_url }}" style="color:#71717a">Manage notifications</a> · <a href="{{ help_url }}" style="color:#71717a">Help</a> · Nairobi, Kenya</p>
+</body>
+</html>
