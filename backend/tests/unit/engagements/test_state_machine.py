@@ -292,7 +292,7 @@ def test_whose_turn_and_the_pending_actions_follow_the_stage() -> None:
     assert turn(S.NDA_PENDING, sm.Facts(signed=frozenset({DEV}))) == (ORG,)
     assert turn(S.AGREEMENT_SIGNING, sm.Facts(signed=frozenset({ORG}))) == (DEV,)
     assert turn(S.NDA_SIGNED) == (DEV, ORG)
-    assert turn(S.NEGOTIATION, sm.Facts(draft_by=DEV)) == (ORG,)
+    assert turn(S.NEGOTIATION, sm.Facts(draft_by=DEV, draft_status=AgreementStatus.DRAFT)) == (ORG,)
     assert turn(S.NEGOTIATION) == (DEV, ORG)
     assert turn(S.IN_IMPLEMENTATION) == ()
     started = sm.Facts(milestones=(MilestoneState.ACCEPTED, MilestoneState.SUBMITTED_FOR_REVIEW))

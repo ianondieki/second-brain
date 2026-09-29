@@ -599,8 +599,10 @@ def pending(state: EngagementState, facts: Facts) -> tuple[Pending, ...]:
     elif state is S.NDA_SIGNED:
         found = [Pending(Command.PROPOSE_TERMS, DEV), Pending(Command.PROPOSE_TERMS, ORG)]
     elif state is S.NEGOTIATION:
-        turn = other(facts.draft_by) if facts.draft_by is not None else None
-        found = [Pending(Command.MARK_FINAL, p) for p in (DEV, ORG) if turn in (None, p)]
+        if facts.draft_status is AgreementStatus.DRAFT and facts.draft_by is not None:
+            found = [Pending(Command.MARK_FINAL, other(facts.draft_by))]  # the party who did not draft it
+        else:  # no draft yet, or a reopen left the latest version final: a new version, by either party
+            found = [Pending(Command.PROPOSE_TERMS, DEV), Pending(Command.PROPOSE_TERMS, ORG)]
     elif state is S.IN_IMPLEMENTATION:
         found = _implementation(facts.milestones)
     elif state is S.DELIVERED:
