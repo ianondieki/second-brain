@@ -77,7 +77,9 @@ export function PitchForm({
 }: PitchFormProps) {
   const t = useStrings("pitch");
   const hydrated = useHydrated();
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(initialSelected));
+  // Choices from the URL are only a starting point: an organisation this page shows as unavailable is dropped, and
+  // never more than one Pitch may hold (the plan's pitches left, at most 20), so the Pitch never sends either.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => initialChoices(initialSelected, groups, cap));
   const [blocked, setBlocked] = useState<ReadonlyMap<string, PitchReason>>(() => new Map());
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState<Shown | null>(null);
@@ -232,6 +234,17 @@ export function PitchForm({
   );
 }
 
+export function initialChoices(ids: readonly string[], groups: readonly PickerGroup[], cap: TagCap): Set<string> {
+  const unavailable = new Set(groups.flatMap((group) => group.rows.filter((row) => !row.available).map((row) => row.id)));
+  const out = new Set<string>();
+  for (const id of ids) {
+    const key = id.toLowerCase();
+    if (out.size >= selectionMax(cap)) break;
+    if (!unavailable.has(key)) out.add(key);
+  }
+  return out;
+}
+
 function Row({
   rowId,
   row,
@@ -274,7 +287,9 @@ function Row({
           value={row.id}
           checked={checked}
           disabled={!available || (locked && !checked)}
-          onChange={(event) => onToggle(row.id, event.target.checked)}
+          onChange={(event) => {
+            if (available) onToggle(row.id, event.target.checked); // an unavailable row never joins the Pitch
+          }}
           aria-describedby={`pitch-${rowId}-details`}
           className="absolute top-[1.35rem] left-2 z-[1] size-5 cursor-pointer accent-jacaranda disabled:cursor-not-allowed"
         />

@@ -103,7 +103,7 @@ function box(name: string) {
 
 async function clickPitch() {
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: "Pitch" }));
+    fireEvent.click(document.querySelector("[data-intent='pitch']")!);
   });
 }
 
@@ -175,6 +175,50 @@ describe("the picker", () => {
     const pages = within(screen.getByRole("navigation", { name: "Pages" }));
     expect((pages.getByRole("button", { name: "Next page" }) as HTMLButtonElement).value).toBe("c2");
     expect((pages.getByRole("button", { name: "First page" }) as HTMLButtonElement).value).toBe("");
+  });
+});
+
+describe("what the picker sends", () => {
+  it("never sends an organisation the page shows as unavailable, even when the URL chose it", async () => {
+    const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
+    renderForm({ initialSelected: [OWN, SAFCELL], pitchImpl });
+    expect(box("Own Co").checked).toBe(false);
+    expect(box("Own Co").disabled).toBe(true);
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledWith(PROPOSAL, [SAFCELL]);
+  });
+
+  it("never sends more than the plan's pitches left, whatever the URL holds", async () => {
+    const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
+    renderForm({ cap: { used: 4, limit: 5, plan: "dev_free" }, initialSelected: [SAFCELL, TELMARK, ELSEWHERE], pitchImpl });
+    expect(screen.getByText("1 of 1 chosen")).toBeTruthy();
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledWith(PROPOSAL, [SAFCELL]);
+  });
+
+  it("sends each organisation once, in lower case, and nothing for a refused one after a 409", async () => {
+    const pitchImpl = vi
+      .fn<(id: string, orgs: string[]) => Promise<PitchOutcome>>()
+      .mockResolvedValueOnce({ ok: false, problem: "conflict", conflicts: [{ orgId: TELMARK, reason: "tagged" }] })
+      .mockResolvedValueOnce({ ok: false, problem: "failed", conflicts: [] });
+    renderForm({ initialSelected: [SAFCELL.toUpperCase(), SAFCELL, TELMARK], pitchImpl });
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenLastCalledWith(PROPOSAL, [SAFCELL, TELMARK]);
+    fireEvent.click(box("Telmark")); // locked: the 409 said why
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenLastCalledWith(PROPOSAL, [SAFCELL]);
+  });
+
+  it("sends nothing while a pitch is under way", async () => {
+    let settle: (value: PitchOutcome) => void = () => {};
+    const pitchImpl = vi.fn(() => new Promise<PitchOutcome>((resolve) => (settle = resolve)));
+    renderForm({ initialSelected: [SAFCELL], pitchImpl });
+    await clickPitch();
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledTimes(1);
+    expect(box("Telmark").disabled).toBe(true);
+    await act(async () => settle({ ok: false, problem: "failed", conflicts: [] }));
+    expect(box("Telmark").disabled).toBe(false);
   });
 });
 
