@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import Settings
 from bridge.seed.demo.data import PROPOSALS, VIEWED, DemoProposal
-from bridge.seed.demo.runtime import Actor, DemoReport, DemoSeedError, one
+from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, one
 
 # ---------------------------------------------------------------------------------------------------- proposals
 
@@ -71,12 +71,13 @@ def _draft(proposal: DemoProposal, niches: dict[str, UUID], linked: list[UUID]) 
 
 
 async def ensure_proposal(
-    owner: AsyncEngine, actor: Actor, proposal: DemoProposal, niches: dict[str, UUID], report: DemoReport
+    owner: AsyncEngine, actors: Actors, proposal: DemoProposal, niches: dict[str, UUID], report: DemoReport
 ) -> None:
-    found = await _existing_proposal(owner, actor.user_id, proposal.title)
+    found = await _existing_proposal(owner, report.users[proposal.owner], proposal.title)
     if found is not None and found.status == "published":
         proposal_id, cert_id = UUID(str(found.id)), str(found.cert_id)
     else:
+        actor = await actors.get(proposal.owner)
         if found is None:
             linked = [await _problem_of(owner, report, proposal.links_problem_of)] if proposal.links_problem_of else []
             created = await actor.call(
@@ -101,7 +102,7 @@ async def ensure_proposal(
     report.cert_ids[proposal.key] = cert_id
 
 
-async def pitch(owner: AsyncEngine, actor: Actor, proposal: DemoProposal, report: DemoReport) -> None:
+async def pitch(owner: AsyncEngine, actors: Actors, proposal: DemoProposal, report: DemoReport) -> None:
     """Tag the proposal's organisations that are not tagged yet (P4's Pitch: E2 delivered, E1 and E0 held)."""
     proposal_id = report.proposals[proposal.key]
     wanted = [report.orgs[name] for name in proposal.pitch_to]
@@ -117,15 +118,16 @@ async def pitch(owner: AsyncEngine, actor: Actor, proposal: DemoProposal, report
     missing = [str(org_id) for org_id in wanted if org_id not in tagged]
     if not missing:
         return
+    actor = await actors.get(proposal.owner)
     result = await actor.call("POST", f"/api/me/proposals/{proposal_id}/tags", json={"org_ids": missing}, expect=(201,))
     statuses = ", ".join(f"{tag['org']['name']}: {tag['status']}" for tag in result.json()["tags"])
     report.did(f"proposal {proposal.key} pitched ({statuses})")
 
 
-async def record_view(owner: AsyncEngine, actor: Actor, settings: Settings, report: DemoReport) -> None:
+async def record_view(owner: AsyncEngine, actors: Actors, settings: Settings, report: DemoReport) -> None:
     """A fixture reviewer accepts the Evaluation NDA and opens the proposal's Tier 2 once, so "Who has seen this" has
     a row to show. Only with FEATURE_TIER2_ENABLED (make demo sets it; CI's stack leaves it off)."""
-    proposal, org, _reviewer = VIEWED
+    proposal, org, reviewer = VIEWED
     if not settings.feature_tier2_enabled:
         report.notes.append("Tier-2 view skipped: FEATURE_TIER2_ENABLED is off")
         return
@@ -134,10 +136,11 @@ async def record_view(owner: AsyncEngine, actor: Actor, settings: Settings, repo
         owner,
         "SELECT 1 FROM document_views WHERE proposal_id = :p AND viewer_user_id = :u LIMIT 1",
         p=proposal_id,
-        u=actor.user_id,
+        u=report.users[reviewer.email],
     )
     if seen is not None:
         return
+    actor = await actors.get(reviewer.email)
     terms = (await actor.call("GET", f"/api/orgs/{org_id}/proposals/{proposal_id}/nda")).json()
     if terms["acceptance_id"] is None:
         body = {

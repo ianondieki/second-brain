@@ -9,6 +9,7 @@ from typing import Final
 from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
+from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -25,7 +26,17 @@ from bridge.legal.models import LegalAcceptance
 from bridge.models.enums import ConsentPurpose, DevVerification, MembershipStatus, OrgRole, OrgVerification
 from bridge.profiles.consents import record_decisions
 from bridge.seed.demo.data import DEMO_PASSWORD, ORGS, DemoDeveloper, DemoOrg, DemoSeat, totp_secret
-from bridge.seed.demo.runtime import SEED_METHOD, Actor, DemoReport, DemoSeedError, execute, one, totp_code, user_id_of
+from bridge.seed.demo.runtime import (
+    SEED_METHOD,
+    Actors,
+    DemoReport,
+    DemoSeedError,
+    execute,
+    one,
+    signed_in,
+    totp_code,
+    user_id_of,
+)
 from bridge.tenancy.models import Membership
 
 _CODE: Final = re.compile(r"\b(\d{6})\b")
@@ -259,47 +270,58 @@ async def accept_master_terms(
 
 
 async def enrol_totp(
-    factory: async_sessionmaker[AsyncSession], settings: Settings, actor: Actor, report: DemoReport
+    app: FastAPI,
+    owner: AsyncEngine,
+    factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    email: str,
+    report: DemoReport,
 ) -> None:
     """Enrol the account's fixed demo secret: the pending secret is sealed as ``begin_totp_enrolment`` seals its random
-    one, then ``POST /api/auth/totp/confirm`` confirms it with the current code (recovery codes, audit, notice email).
-    An enrolled secret that does not open under this ``DATA_ENCRYPTION_KEY`` means other keys seeded the database."""
-    secret = totp_secret(actor.email)
+    one, then the user signs in with the demo password and ``POST /api/auth/totp/confirm`` confirms it with the current
+    code (recovery codes, audit, notice email). An enrolled secret that does not open under this
+    ``DATA_ENCRYPTION_KEY`` means that other keys seeded the database."""
+    secret = totp_secret(email)
     key = decode_key(settings.data_encryption_key.get_secret_value())
+    user_id = report.users[email]
     async with factory() as db:
-        await bind_tenant(db, user_id=actor.user_id)
-        user = await lock_user(db, actor.user_id)
+        await bind_tenant(db, user_id=user_id)
+        user = await lock_user(db, user_id)
         if user.totp_secret_enc is not None:
             try:
                 stored = decrypt(key, user.totp_secret_enc, user.id.bytes).decode("ascii")
             except InvalidTag as exc:
                 raise DemoSeedError(
-                    f"{actor.email}'s TOTP secret does not open with this DATA_ENCRYPTION_KEY: the demo database was"
+                    f"{email}'s TOTP secret does not open with this DATA_ENCRYPTION_KEY: the demo database was"
                     " seeded with other keys; run make demo-reset"
                 ) from exc
             if stored != secret:
-                raise DemoSeedError(f"{actor.email} has a TOTP secret that is not the demo one; run make demo-reset")
+                raise DemoSeedError(f"{email} has a TOTP secret that is not the demo one; run make demo-reset")
             return
         user.totp_pending_enc = encrypt(key, secret.encode("ascii"), user.id.bytes)
         await db.commit()
-    await actor.call("POST", "/api/auth/totp/confirm", json={"code": totp_code(actor.email)})
-    report.did(f"TOTP {actor.email}")
+    async with signed_in(app, owner, email) as actor:
+        await actor.call("POST", "/api/auth/totp/confirm", json={"code": totp_code(email)})
+    report.did(f"TOTP {email}")
 
 
 # ------------------------------------------------------------------------------------------------------------- D1
 
 
 async def verify_phone(
-    owner: AsyncEngine, actor: Actor, dev: DemoDeveloper, sms: SmsProvider, report: DemoReport
+    owner: AsyncEngine, actors: Actors, dev: DemoDeveloper, sms: SmsProvider, report: DemoReport
 ) -> None:
     """D1 through the phone-code routes; the fake SMS provider keeps the code in memory, where the seed reads it."""
     level = await one(
-        owner, "SELECT verification_level::text AS level FROM developer_profiles WHERE user_id = :u", u=actor.user_id
+        owner,
+        "SELECT verification_level::text AS level FROM developer_profiles WHERE user_id = :u",
+        u=report.users[dev.email],
     )
     if level is not None and level.level != DevVerification.D0.value:
         return
     if not isinstance(sms, FakeSmsProvider):
         raise DemoSeedError("the demo seed verifies phones through the fake SMS provider (SMS_PROVIDER=fake)")
+    actor = await actors.get(dev.email)
     sent = await actor.call("POST", "/api/me/verification/phone", json={"phone": dev.phone}, expect=(201,))
     message = next((m for m in reversed(sms.outbox) if m.to == dev.phone), None)
     found = _CODE.search(message.text) if message else None

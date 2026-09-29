@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
@@ -27,9 +26,10 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.auth import totp
+from bridge.auth.crypto import decode_key, decrypt
 from bridge.auth.models import User
 from bridge.auth.passwords import verify_password
-from bridge.auth.service import check_second_factor
 from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.db import create_session_factory
@@ -65,6 +65,7 @@ from bridge.seed.demo.data import (
     TELCO_A,
     VIEWED,
     all_accounts,
+    totp_secret,
 )
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
@@ -130,15 +131,25 @@ def runtime() -> DemoRuntime:
 
 
 def demo_settings(**update: Any) -> Settings:
-    return get_settings().model_copy(update={"feature_tier2_enabled": True, **update})
+    """What make demo runs with: APP_ENV test here (dev there) and both feature flags on."""
+    flags = {"feature_tier2_enabled": True, "feature_deals_enabled": True}
+    return get_settings().model_copy(update={**flags, **update})
+
+
+def flags_off() -> Settings:
+    """What CI's e2e stack runs with (make-env.sh): both feature flags off."""
+    return demo_settings(feature_tier2_enabled=False, feature_deals_enabled=False)
 
 
 @pytest.fixture(scope="module")
-async def seeded(owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime) -> tuple[DemoReport, DemoReport]:
-    """The demo seed, run twice: (first report, second report)."""
-    first = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
+async def seeded(
+    owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> tuple[DemoReport, DemoReport, DemoReport]:
+    """The demo seed with the flags off (as CI's stack), then on (as make demo) twice: the three reports."""
+    first = await seed_demo(flags_off(), owner_engine=owner, app_engine=app, runtime=runtime)
     second = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
-    return first, second
+    third = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
+    return first, second, third
 
 
 async def rows(engine: AsyncEngine, sql: str, **params: object) -> list[Any]:
@@ -154,26 +165,41 @@ async def counts(engine: AsyncEngine) -> dict[str, int]:
 
 
 async def test_running_the_demo_seed_again_changes_nothing(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
 ) -> None:
-    first, second = seeded
+    first, second, third = seeded
     assert first.created, "the first run seeds"
-    assert second.created == []
-    assert (second.users, second.orgs, second.proposals, second.cert_ids) == (
+    assert second.created, "with the flags on, the second run finishes what the flags held back"
+    assert third.created == []
+    assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
         first.users,
         first.orgs,
         first.proposals,
         first.cert_ids,
     )
     before = await counts(owner)
-    third = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
-    assert third.created == []
+    again = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert again.created == []
+    assert again.notes == []
     assert await counts(owner) == before
+
+
+async def test_with_the_flags_off_the_view_is_skipped_and_said(
+    seeded: tuple[DemoReport, DemoReport, DemoReport],
+) -> None:
+    first, second, _ = seeded
+    assert first.notes == ["Tier-2 view skipped: FEATURE_TIER2_ENABLED is off"]
+    assert second.notes == []
+    assert second.created == [f"Tier-2 view of {P1.key} by {VIEWED[2].email}"]
 
 
 @pytest.mark.parametrize("app_env", ["production", "staging"])
 async def test_staging_and_production_refuse_the_demo_seed_and_write_nothing(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime, app_env: str
+    seeded: tuple[DemoReport, DemoReport, DemoReport],
+    owner: AsyncEngine,
+    app: AsyncEngine,
+    runtime: DemoRuntime,
+    app_env: str,
 ) -> None:
     before = await counts(owner)
     with pytest.raises(DemoSeedRefused, match=f"APP_ENV={app_env}"):
@@ -196,7 +222,7 @@ async def test_an_app_env_left_to_the_default_refuses_the_demo_seed(
 
 
 async def test_every_demo_account_is_flagged_demo_with_reminders_and_totp(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     emails = [email for email, _, _ in all_accounts()]
     found = await rows(
@@ -215,21 +241,26 @@ async def test_every_demo_account_is_flagged_demo_with_reminders_and_totp(
 
 
 async def test_the_demo_password_signs_in_and_the_totp_helper_codes_verify(
-    seeded: tuple[DemoReport, DemoReport], app: AsyncEngine, capsys: pytest.CaptureFixture[str]
+    seeded: tuple[DemoReport, DemoReport, DemoReport], app: AsyncEngine, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    settings = get_settings()
-    later = time.time() + 30  # the next window: enrolment spent the current one (replay protection)
+    """The seed itself signed every party in with the password and a TOTP code (the engagements need both); here each
+    enrolled secret is the demo one and the helper's current code verifies against it (codes are single use, so the
+    check ignores the spent counter)."""
+    key = decode_key(get_settings().data_encryption_key.get_secret_value())
     async with create_session_factory(app)() as db:
         for email, _, _ in all_accounts():
             user = (await db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": email})).scalar_one()
             row = await db.get(User, user)
             assert row is not None
+            assert row.totp_secret_enc is not None
             assert verify_password(row.password_hash, DEMO_PASSWORD), email
-            code = totp_code(email, at=later)
+            stored = decrypt(key, row.totp_secret_enc, row.id.bytes).decode("ascii")
+            assert stored == totp_secret(email)
+            code = totp_code(email)
             wrong = code[:-1] + str((int(code[-1]) + 1) % 10)
-            assert not check_second_factor(settings, row, wrong), email
-            assert check_second_factor(settings, row, code), email
-        await db.rollback()  # the spent counters stay unspent for the next test
+            assert totp.verify(stored, code, last_counter=None).ok, email
+            assert not totp.verify(stored, wrong, last_counter=None).ok, email
+            assert row.totp_last_counter is not None  # a code was spent: enrolment and the seed's sign-ins
     assert demo_command.main(["totp", TELCO_A.seats[0].email]) == 0
     assert capsys.readouterr().out.strip() == totp_code(TELCO_A.seats[0].email)
     assert demo_command.main(["totp"]) == 0
@@ -239,7 +270,7 @@ async def test_the_demo_password_signs_in_and_the_totp_helper_codes_verify(
 
 
 async def test_a_database_seeded_under_other_keys_is_refused_with_the_reset_pointer(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
 ) -> None:
     other = SecretStr("b3RoZXItZGF0YS1rZXktMDEyMzQ1Njc4OWFiY2RlZjA=")  # base64 of 32 other bytes
     with pytest.raises(DemoSeedError, match="demo-reset"):
@@ -247,7 +278,7 @@ async def test_a_database_seeded_under_other_keys_is_refused_with_the_reset_poin
 
 
 async def test_the_developers_are_d1_and_d2_through_the_phone_flow(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     levels = dict(
         await rows(
@@ -267,7 +298,7 @@ async def test_the_developers_are_d1_and_d2_through_the_phone_flow(
 
 
 async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     report = seeded[0]
     for org in ORGS:
@@ -315,7 +346,7 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
 
 
 async def test_the_proposals_are_published_with_certificates_and_problems(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     report = seeded[0]
     assert set(report.cert_ids) == {p.key for p in PROPOSALS}
@@ -348,7 +379,7 @@ async def test_the_proposals_are_published_with_certificates_and_problems(
 
 
 async def test_the_exported_certificate_registers_through_the_real_pipeline(
-    seeded: tuple[DemoReport, DemoReport],
+    seeded: tuple[DemoReport, DemoReport, DemoReport],
     owner: AsyncEngine,
     app: AsyncEngine,
     runtime: DemoRuntime,
@@ -398,7 +429,7 @@ async def test_the_exported_certificate_registers_through_the_real_pipeline(
 
 
 async def test_e2_fixtures_get_delivered_tags_and_the_others_held_ones(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, runtime: DemoRuntime
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, runtime: DemoRuntime
 ) -> None:
     report = seeded[0]
     tags = {
@@ -407,8 +438,8 @@ async def test_e2_fixtures_get_delivered_tags_and_the_others_held_ones(
         for key in [proposal.key]
         for org, status in await rows(
             owner,
-            "SELECT o.legal_name, t.status::text FROM tags t JOIN organizations o ON o.id = t.org_id"
-            " WHERE t.proposal_id = :p",
+            "SELECT o.legal_name, t.status::text || CASE WHEN t.closed_at IS NULL THEN '' ELSE ' (closed)' END"
+            " FROM tags t JOIN organizations o ON o.id = t.org_id WHERE t.proposal_id = :p",
             p=report.proposals[proposal.key],
         )
     }
@@ -431,7 +462,7 @@ async def test_e2_fixtures_get_delivered_tags_and_the_others_held_ones(
 
 
 async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     proposal, org, reviewer = VIEWED
     report = seeded[0]
@@ -443,16 +474,6 @@ async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
         o=report.orgs[org.legal_name],
     )
     assert [v[0] for v in views] == [reviewer.email]
-
-
-async def test_without_the_tier2_flag_the_view_is_skipped_and_said(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
-) -> None:
-    again = await seed_demo(
-        demo_settings(feature_tier2_enabled=False), owner_engine=owner, app_engine=app, runtime=runtime
-    )
-    assert again.created == []
-    assert again.notes == ["Tier-2 view skipped: FEATURE_TIER2_ENABLED is off"]
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

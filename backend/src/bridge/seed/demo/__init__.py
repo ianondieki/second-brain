@@ -11,8 +11,9 @@ signup runs), D1 through the phone-code routes with the fake SMS provider, TOTP 
 organisation's owner under Row-Level Security, the Master Enterprise Terms accepted by the signatory under RLS, and
 drafts, publishing (which queues the T2.4 registration), pitching and the Evaluation NDA through the API. The rest has
 no application path yet and is written as the owner role, as staff would: ``users.demo_account`` (D-37), D2, the
-organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. Engagements beyond
-``SUBMITTED`` and reminders follow when P5 and P6 merge.
+organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. Each party signs
+in through the login routes with the demo password and its TOTP code. Engagements beyond ``SUBMITTED`` and reminders
+follow when P5 and P6 merge.
 
 Idempotent: every step looks for what it would create (by address, organisation name, proposal title) and skips what
 exists, so running it twice changes nothing. A database seeded under other keys (``DATA_ENCRYPTION_KEY``) is refused
@@ -35,9 +36,10 @@ from bridge.seed.demo.accounts import (
     raise_to_d2,
     verify_phone,
 )
-from bridge.seed.demo.data import DEVELOPERS, EXPORTED_PROPOSAL, ORGS, PROPOSALS, VIEWED
+from bridge.seed.demo.data import DEVELOPERS, EXPORTED_PROPOSAL, ORGS, PROPOSALS
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.runtime import (
+    Actors,
     DemoReport,
     DemoRuntime,
     DemoSeedError,
@@ -47,7 +49,6 @@ from bridge.seed.demo.runtime import (
     in_process_app,
     niche_ids,
     one,
-    signed_in,
     totp_code,
 )
 
@@ -82,21 +83,19 @@ async def seed_demo(
         for org in ORGS:
             await ensure_org(owner_engine, factory, settings, org, report)
         await owner_facts(owner_engine, niches, report)
-        actors = {
-            email: await stack.enter_async_context(signed_in(app, factory, settings, email)) for email in report.users
-        }
-        for actor in actors.values():
-            await enrol_totp(factory, settings, actor, report)
+        for email in report.users:
+            await enrol_totp(app, owner_engine, factory, settings, email, report)
+        actors = Actors(stack, app, owner_engine)  # each signs in (password, then TOTP) on first use
         for dev in DEVELOPERS:
-            await verify_phone(owner_engine, actors[dev.email], dev, runtime.sms_provider, report)
+            await verify_phone(owner_engine, actors, dev, runtime.sms_provider, report)
             await raise_to_d2(owner_engine, dev, report)
         for org in ORGS:
             await accept_master_terms(owner_engine, factory, org, report)
         for proposal in PROPOSALS:
-            await ensure_proposal(owner_engine, actors[proposal.owner], proposal, niches, report)
+            await ensure_proposal(owner_engine, actors, proposal, niches, report)
         for proposal in PROPOSALS:
-            await pitch(owner_engine, actors[proposal.owner], proposal, report)
-        await record_view(owner_engine, actors[VIEWED[2].email], settings, report)
+            await pitch(owner_engine, actors, proposal, report)
+        await record_view(owner_engine, actors, settings, report)
     return report
 
 
