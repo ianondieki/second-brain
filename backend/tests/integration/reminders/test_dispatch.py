@@ -360,3 +360,59 @@ async def test_one_llm_call_per_email_not_per_attempt(owner_engine: AsyncEngine)
         (message,) = w.email.outbox
         assert message.headers[WORDING_HEADER] == "fallback"
         assert AI_LABEL not in message.text
+
+
+async def _email_rows(w: Any) -> list[tuple[Any, str, int, str | None]]:
+    rows = await w.owner_rows(
+        "SELECT local_date, status::text, attempts, last_error FROM notification_deliveries"
+        " WHERE user_id = :u AND channel = 'email' ORDER BY local_date",
+        u=w.p.developer,
+    )
+    return [(row[0], row[1], row[2], row[3]) for row in rows]
+
+
+async def test_a_queued_email_with_nothing_left_to_say_is_dead_lettered(owner_engine: AsyncEngine) -> None:
+    async with as_app(owner_engine) as conn:
+        w = await build(conn)
+        w.email = FakeEmailProvider([DeliveryError("SMTP 451", transient=True, code=451)])
+        assert (await w.nudges(now=DAY_BEFORE_DUE)).outcomes[0].email == QUEUED
+        milestone = await tracker.run(conn, "SELECT id FROM milestones WHERE engagement_id = :e", e=w.engagement)
+        await tracker.act(conn, w.p.developer)
+        for step in ("IN_PROGRESS", "SUBMITTED_FOR_REVIEW"):  # the developer submits: nothing needs them now
+            await tracker.run(
+                conn, "UPDATE milestones SET state = CAST(:s AS milestone_state) WHERE id = :id", s=step, id=milestone
+            )
+        quiet = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(minutes=15))).of(w.p.developer)
+        assert quiet is not None
+        assert (quiet.status, quiet.email) == ("quiet", FAILED)
+        assert [row[1:] for row in await _email_rows(w)] == [("failed", 1, "withdrawn: nothing to send any more")]
+        assert w.email.attempts == 1
+
+
+async def test_a_queued_email_whose_channel_closed_is_dead_lettered(owner_engine: AsyncEngine) -> None:
+    async with as_app(owner_engine) as conn:
+        w = await build(conn)
+        w.email = FakeEmailProvider([DeliveryError("SMTP 451", transient=True, code=451)])
+        assert (await w.nudges(now=DAY_BEFORE_DUE)).outcomes[0].email == QUEUED
+        await consent(conn, w.p.developer, granted=False)  # the developer withdraws the reminders consent
+        closed = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(minutes=15))).of(w.p.developer)
+        assert closed is not None
+        assert (closed.status, closed.email, closed.email_skipped) == ("already", FAILED, "no_consent")
+        assert [row[1:] for row in await _email_rows(w)] == [("failed", 1, "withdrawn: no_consent")]
+        assert w.email.attempts == 1
+
+
+async def test_a_past_days_queued_email_is_swept_never_sent_late(owner_engine: AsyncEngine) -> None:
+    async with as_app(owner_engine) as conn:
+        w = await build(conn)
+        w.email = FakeEmailProvider([DeliveryError("SMTP 451", transient=True, code=451)])
+        assert (await w.nudges(now=DAY_BEFORE_DUE)).outcomes[0].email == QUEUED
+        next_day = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(days=1))).of(w.p.developer)
+        assert next_day is not None
+        assert next_day.email == SENT
+        day, following = DAY_BEFORE_DUE.date(), DAY_BEFORE_DUE.date() + timedelta(days=1)
+        assert await _email_rows(w) == [
+            (day, "failed", 1, "expired: its day passed"),
+            (following, "sent", 1, None),
+        ]
+        assert w.email.attempts == 2

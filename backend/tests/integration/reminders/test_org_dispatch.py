@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.engagements.calendar import NAIROBI
 from bridge.ids import uuid7
 from bridge.models.enums import DeliveryStatus
+from bridge.notifications.email import DeliveryError, FakeEmailProvider
 from bridge.reminders import dispatch
 from bridge.reminders.health import Health
 from tests.integration.engagements import tracker
@@ -171,3 +172,24 @@ async def test_one_members_failure_never_stops_the_run(
             (w.p.signatory, "error"),
             (w.p.other_member, "quiet"),
         }
+
+
+async def test_a_past_weeks_queued_digest_is_swept_never_sent_late(owner_engine: AsyncEngine) -> None:
+    async with as_app(owner_engine) as conn:
+        w = await build(conn)
+        w.email = FakeEmailProvider([DeliveryError("SMTP 451", transient=True, code=451)])
+        first = (await w.digests([w.p.signatory], now=TUESDAY)).of(w.p.signatory, w.p.org)
+        assert first is not None
+        assert first.email == DeliveryStatus.QUEUED
+        monday = (await w.digests([w.p.signatory], now=NEXT_MONDAY)).of(w.p.signatory, w.p.org)
+        assert monday is not None
+        assert monday.email == DeliveryStatus.SENT
+        rows = await w.owner_rows(
+            "SELECT local_date, status::text, last_error FROM notification_deliveries"
+            " WHERE user_id = :u AND channel = 'email' ORDER BY local_date",
+            u=w.p.signatory,
+        )
+        assert [tuple(row) for row in rows] == [
+            (date(2027, 3, 29), "failed", "expired: its day passed"),
+            (date(2027, 4, 5), "sent", None),
+        ]
