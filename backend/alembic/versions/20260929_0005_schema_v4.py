@@ -338,12 +338,15 @@ END;
 $$;
 
 -- One source of a research candidate (docs/spec/06 6.5 evidence[]): an object whose values are strings, with an https
--- URL (no whitespace, no user info), a published date (YYYY-MM-DD, a real date), a retrieval time and a non-blank
--- quote of at most 2000 characters; optionally a publisher (non-blank, at most 200), a source type of the 6.5 quality
--- tiers and an excerpt ref (the saved excerpt's id); no other key. Internal: only app_create_research_candidate()
--- calls it, as the owner.
+-- URL on an ASCII host (letters, digits, dots and hyphens, an optional port; no user info, no whitespace), a published
+-- date (YYYY-MM-DD, a real date), a retrieval time from the published date up to now (app_clock_now()), and a
+-- non-blank quote of at most 2000 characters; optionally a publisher (non-blank, at most 200), a source type of the
+-- 6.5 quality tiers and an excerpt ref (the saved excerpt's id); no other key; no control character (U+0001-U+001F,
+-- U+007F) in the URL, the quote or the publisher. Every malformed date or time (any data exception: a bad format, an
+-- out-of-range field, a time zone) is the same false. Internal: only app_create_research_candidate() calls it, as the
+-- owner. VOLATILE: it reads the clock.
 CREATE FUNCTION app_research_source_is_valid(p_source jsonb) RETURNS boolean
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql VOLATILE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
@@ -359,8 +362,10 @@ BEGIN
                    OR jsonb_typeof(kv.value) <> 'string') THEN
         RETURN false;
     END IF;
-    IF NOT coalesce(p_source->>'url' ~ '^https://[^[:space:]/?#@]+(/[^[:space:]]*)?$'
+    IF NOT coalesce(p_source->>'url' ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$'
                     AND length(p_source->>'url') <= 1000, false)
+       OR coalesce(p_source->>'url' ~ '[\x01-\x1f\x7f]' OR p_source->>'quote' ~ '[\x01-\x1f\x7f]'
+                   OR p_source->>'publisher' ~ '[\x01-\x1f\x7f]', false)
        OR NOT coalesce(btrim(p_source->>'quote') <> '' AND length(p_source->>'quote') <= 2000, false)
        OR NOT coalesce(p_source->>'published_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', false)
        OR NOT coalesce(p_source->>'retrieved_at' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][^[:space:]].*)?$', false)
@@ -374,10 +379,12 @@ BEGIN
     BEGIN
         v_date := CAST(p_source->>'published_date' AS date);
         v_retrieved := CAST(p_source->>'retrieved_at' AS timestamptz);
-    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+    EXCEPTION WHEN data_exception THEN
         RETURN false;
     END;
-    RETURN v_date IS NOT NULL AND v_retrieved IS NOT NULL;
+    RETURN v_date IS NOT NULL AND v_retrieved IS NOT NULL
+       AND (v_retrieved AT TIME ZONE 'Africa/Nairobi')::date >= v_date
+       AND v_retrieved <= public.app_clock_now();
 END;
 $$;
 
@@ -385,9 +392,11 @@ $$;
 -- caller's own running run (read FOR SHARE, so a run finishing meanwhile takes no further candidate). The card is a
 -- candidate (never public: 0002's policies), ai_generated, with the run's niche and country and, for a county run,
 -- its county; created_by is NULL, so the same staff admin may approve it through app_moderate_problem(). A title of
--- 1 to 90 characters, a statement of at most 120 words, confidence 0.40 to 1 (below 0.40 is discarded), 1 to 10 valid
--- sources (app_research_source_is_valid), and an official source when the card names organisations. The card and
--- its sources are written in one call: a refused source leaves nothing behind. Returns the card's id.
+-- 1 to 90 characters, a statement of at most 120 words and 1500 characters, an affected group of at most 200
+-- characters, no control character (U+0001-U+001F, U+007F) in any of them or in a named organisation, confidence
+-- 0.40 to 1 (below 0.40 is discarded), 1 to 10 valid sources (app_research_source_is_valid), and an official source
+-- when the card names organisations. The card and its sources are written in one call: a refused source leaves
+-- nothing behind. Returns the card's id.
 CREATE FUNCTION app_create_research_candidate(
     p_run uuid, p_title text, p_statement text, p_affected_group text, p_county_code text, p_confidence numeric,
     p_named_orgs text[], p_sources jsonb
@@ -412,11 +421,17 @@ BEGIN
         RAISE EXCEPTION 'app_create_research_candidate: confidence is 0.40 to 1 (a card below 0.40 is discarded)'
             USING ERRCODE = 'check_violation';
     END IF;
-    IF p_title IS NULL OR btrim(p_title) = '' OR length(btrim(p_title)) > 90
-       OR p_statement IS NULL OR btrim(p_statement) = ''
+    IF p_title IS NULL OR btrim(p_title) = '' OR length(btrim(p_title)) > 90 OR p_title ~ '[\x01-\x1f\x7f]'
+       OR p_statement IS NULL OR btrim(p_statement) = '' OR length(p_statement) > 1500
+       OR p_statement ~ '[\x01-\x1f\x7f]'
        OR cardinality(regexp_split_to_array(btrim(p_statement), '\s+')) > 120 THEN
         RAISE EXCEPTION 'app_create_research_candidate: a title of 1 to 90 characters and a statement of 1 to 120 words'
-            USING ERRCODE = 'check_violation';
+            ' (at most 1500 characters), without control characters' USING ERRCODE = 'check_violation';
+    END IF;
+    IF length(p_affected_group) > 200 OR p_affected_group ~ '[\x01-\x1f\x7f]'
+       OR EXISTS (SELECT 1 FROM unnest(p_named_orgs) AS n(name) WHERE n.name ~ '[\x01-\x1f\x7f]') THEN
+        RAISE EXCEPTION 'app_create_research_candidate: an affected group of at most 200 characters and named'
+            ' organisations without control characters' USING ERRCODE = 'check_violation';
     END IF;
     IF v_run.county_code IS NOT NULL AND p_county_code IS NOT NULL AND p_county_code <> v_run.county_code THEN
         RAISE EXCEPTION 'app_create_research_candidate: a county run''s card is of its county'
