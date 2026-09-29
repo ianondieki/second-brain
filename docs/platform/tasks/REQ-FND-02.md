@@ -84,3 +84,23 @@ engagements commit also changed how parties sign in (the step-up needs it).
 Follow-ups (not built): the image build itself is not measured against 4 GB (BuildKit, outside `docker stats`); the
 dev compose file keeps SeaweedFS's default volume sizing (the same small-disk failure can hit `make dev`); a
 `[[COPY-REVIEW]]` pass on the fixture proposal texts before recorded demos.
+
+## P9 fix round (review 2026-09-29: reviewer CHANGES_REQUIRED, 1 MAJOR; security-reviewer PASS, 5 MINORs)
+
+- MAJOR (a used demo stopped `make demo`): the seed drives only an engagement its Pitch has just opened (SUBMITTED,
+  genesis event alone) and leaves any other with one report line; on a database the demo was seeded into before,
+  every step the app refuses (a changed password or TOTP, a deleted idea) is noted instead of failing, while a new
+  database treats refusals as errors and a changed `DATA_ENCRYPTION_KEY` stays fatal; proposals are matched by their
+  first version's title; TOTP turned off in the app stays off. Regression test
+  `integration/demo/test_demo_seed_used.py::test_the_seed_step_exits_0_and_changes_nothing_people_did_in_the_app`.
+- MINORs: every compose command passes `-p bridge-demo` (a shell `COMPOSE_PROJECT_NAME=bridge` could have pointed
+  `demo-reset` at the dev stack); the generated secret files are created 0600; `e2e-env` writes the gitignored
+  `frontend/.env.e2e` and prints the owner URL masked; the backend image deletes `bridge/demo` and `bridge/seed/demo`
+  unless built with `WITH_DEV_TOOLS=true` (the renamed `WITH_TEST_CLOCK`), and `python -m bridge.seed` imports the demo
+  only for `--demo` (`integration/test_demo_excluded.py`; THREAT_MODEL §1 row); README for Windows without `make`,
+  WSL memory and the shell-read variables; nits (docstring, hidden bound parameters, private seed-only SQL helpers).
+
+Follow-ups (not built): pin the TSA CA bundles for the demo and run `probe-tsa` in the migrate step (the README says
+the chain is unpinned); audit events for the seed's owner-role writes (`org.verified`, `kyc.decided`; signups already
+write `auth.signup`); give `make dev`'s SeaweedFS the demo's explicit volume slots; the oversized commits recorded
+above.
