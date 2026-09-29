@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { DevNav } from "@/components/DevNav";
 import { HomeSummary } from "@/components/HomeSummary";
 import { SignedInShell } from "@/components/SignedInShell";
 import { requireMe } from "@/lib/api/server";
@@ -19,7 +20,7 @@ export default async function DeveloperHome() {
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("home");
   return (
-    <SignedInShell homeHref={home}>
+    <SignedInShell homeHref={home} nav={<DevNav current="home" />}>
       <HomeSummary me={me} lead={t("devLead")} />
     </SignedInShell>
   );
