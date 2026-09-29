@@ -371,9 +371,11 @@ Built (F4/F5, organisation; REQ-PROP-03's Inbox with this card's NDA step and Ti
   `frontend/e2e/support/org-scene.ts`. Shared: `lib/i18n/client-strings.ts` (`orgProposal` is a client-string
   namespace; `org`, `version`, `date`, `id` placeholders). Copy `nav.organisation`, `nav.inbox`, `home.orgLead*`,
   `orgHome.*`, `inbox.*`, `orgProposal.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8c`); Swahili drafts `[[SW-REVIEW]]`.
-- E2E state (`org-scene.ts`): API for signups, TOTP, publishing and the Pitch; the owner role (E2E_DATABASE_OWNER_URL)
-  only for D1, the organisation's E1/E2 level and verified domain, the signatory role and its Master Enterprise Terms
-  acceptance. The API must run with `FEATURE_TIER2_ENABLED=true`.
+- E2E state (`org-scene.ts`): API for signups, TOTP, publishing and the Pitch. The owner role (E2E_DATABASE_OWNER_URL)
+  writes what has no API yet: the developer's D1 level, the organisation's E1/E2 level and verified domain, the
+  member's roles (signatory for E2, viewer for the role refusal) and the signatory's Master Enterprise Terms
+  acceptance; it reads one listed E0 organisation of the seeded directory (a pitch elsewhere). Every helper refuses
+  anything outside `*.example.com`. The API must run with `FEATURE_TIER2_ENABLED=true`.
 - JS (production build, `scripts/js-budget.mjs`, until network idle): `/org` and `/org/inbox` 140,046 B; the proposal
   page in every state 142,702 B (budget 150,000).
 
@@ -389,7 +391,26 @@ Follow-ups (P8 part 3, not built):
 2. The empty Inbox's action is "Back to home"; docs/spec/07 item 4 wants "Set up Scout Agent" once scouts exist.
 3. The stage chip names the stage only; it becomes the link to the engagement's tracker when REQ-ENG-03's
    organisation screen lands (done by the tracker screen, not here).
-4. axe cannot run inside the script-less sandboxed frame, so the e2e axe check of the viewing state waits about 30 s
-   (measured) before it passes; exclude the frame in `checkScreen` (an option) if suite time matters.
+4. (Done in the review round: `checkScreen(page, { exclude })` leaves the script-less frame out of axe, and the spec
+   checks the frame's title itself; the viewing-state test went from about 34 s to 8 s.)
 5. `e2e/support/org-scene.ts` repeats the D1 SQL of `e2e/support/verification.ts`; fold them into one helper.
 6. Stage labels on the organisation side reuse `ideaFields.maturityValue.*`: renaming those keys changes both sides.
+7. (UX review) The empty Inbox's action (and the unverified states') becomes "Set up Scout Agent" or the verification
+   step once those screens exist (see 2).
+8. (UX review) On phones the marked page scrolls inside its frame (70 dvh) as well as the page; a full-height frame
+   (sized from the render, which runs no script) or a "open on its own" view is a Release 2 option.
+9. (UX review) LCP headroom on `/org` is thin (2.3 s of 2.5 s on the Slow 4G profile); the Inbox summary's API call is
+   on the critical path. Stream it (Suspense) or measure again once the Lighthouse CI budget (AC-UX-3) runs.
+
+Review round (2026-09-29, code review CHANGES_REQUIRED at `9236af4`, UX review PASS): `full-proposal.test.tsx` renders
+`FullProposal` in every state (no frame unless accepted and `?view=full`; exact sandbox; `referrerpolicy`), red
+against the sandbox widened, the frame without `?view=full`, the referrer policy removed and the NDA step skipped;
+`?org=` naming an organisation the person is not a member of shows "not a member" instead of switching; OrgNav and
+the home keep `?org=`; the home's Inbox summary survives an API failure; the Inbox cursor is capped at 500
+characters as the API; `nda_not_needed` (an owner who is also a member) points to the owner's preview with a plain
+link (no prefetch of the API page); `orgProposal.noticeHeading` reworded; `orgProposal.ndaLead` is legal wording held
+under D-39.
+
+Deviation (commit size): `aed7a97` (the proposal page, 583 lines: page, the four-state component, two client forms
+and the teaser) and `95b1a8d` (the Playwright spec and its scene helper, 368 lines) exceed the ~300-line guidance;
+each is one concern, and history is not rewritten.
