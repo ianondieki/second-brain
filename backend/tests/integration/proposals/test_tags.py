@@ -308,9 +308,14 @@ async def test_a_decline_holds_the_organisation_back_for_30_days(
     assert refused.json()["detail"]["conflicts"][0]["reason"] == "cooldown"
     again = await pitch(dev, first, pitch_orgs.safaricom)
     assert again.json()["detail"]["conflicts"][0]["reason"] == "already_pitched"
+    move = text("UPDATE test_clock SET enabled = true, clock_offset = CAST(:offset AS interval)")
     try:
-        async with owner_engine.begin() as conn:  # 31 days on the shared clock
-            await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = interval '31 days'"))
+        async with owner_engine.begin() as conn:  # 29 days on the shared clock: still held back
+            await conn.execute(move, {"offset": "29 days"})
+        still = await pitch(dev, second, pitch_orgs.safaricom)
+        assert (still.status_code, still.json()["detail"]["conflicts"][0]["reason"]) == (409, "cooldown")
+        async with owner_engine.begin() as conn:  # 31 days: free again
+            await conn.execute(move, {"offset": "31 days"})
         assert (await pitch(dev, second, pitch_orgs.safaricom)).status_code == 201
     finally:
         async with owner_engine.begin() as conn:
