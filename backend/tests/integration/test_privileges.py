@@ -780,6 +780,13 @@ async def test_users_only_report_and_system_sources_file_through_the_function(ow
 
 # What the app's DNS-check code calls once it has resolved the claim's TXT record (the lookup itself is app-side).
 MARK_DNS = "SELECT app_mark_claim_dns_verified(:id)"
+CLAIM_STATUS = "SELECT status::text FROM org_claims WHERE id = :id"
+DISPUTE_MARK = "only the claim functions mark a claim disputed"  # org_claims_status_guard()
+# The organisation's owner group: its active members holding owner or admin.
+OWNER_GROUP = (
+    "SELECT array_agg(user_id ORDER BY user_id) FROM memberships"
+    " WHERE org_id = :org AND status = 'active' AND roles && '{owner,admin}'::org_role[]"
+)
 
 
 async def _claim(conn: AsyncConnection, org: UUID, claimant: UUID, domain: str, level: str, otp_hash: bytes) -> UUID:
@@ -1098,7 +1105,8 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
         assert await run(conn, MARK_DNS, id=claim) is True
-        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
+        # Not a member, on an organisation with an owner: in review as a dispute (approving it below transfers).
+        assert await run(conn, CLAIM_STATUS, id=claim) == "disputed"
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
@@ -1265,10 +1273,15 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         met = await add_legal_template(conn, "master_enterprise_terms")
         elsewhere = await add_org(conn)
         await _invite(conn, elsewhere, founder, "{owner}")  # another organisation's invitation: untouched
-        await act(conn, first)  # E1 at once on an official domain; the owner then builds the roster
+        await act(conn, first)  # the founder holds the organisation: even an official domain's claim is a dispute
         earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
         await _prove_domain(conn, earlier, right)
-        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "disputed"
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'first claim upheld')", id=earlier)
+        await act(conn, first)  # the new owner re-promotes the founder and builds the roster
+        promote = "UPDATE memberships SET roles = '{owner,admin}' WHERE org_id = :org AND user_id = :u"
+        assert (await conn.execute(text(promote), {"org": org, "u": founder})).rowcount == 1
         await _add_membership(conn, org, reviewer, "{reviewer}")
         await _add_membership(conn, org, signer, "{admin,signatory}")
         await _add_membership(conn, org, second, "{admin}")
@@ -1279,12 +1292,16 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         await act(conn, second)
         by_second = await _invite(conn, org, second, "{viewer}")
         admin_by_second = await _invite(conn, org, second, "{admin}")
-        # another domain, proven, and the claim disputed
+        await act(conn, first)  # second is removed (an active admin's claim would be no dispute) ...
+        remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        assert (await conn.execute(text(remove), {"org": org, "u": second})).rowcount == 1
+        await act(conn, second)  # ... and claims another domain: marked disputed when filed, and it stays so
         disputed = await _claim(conn, org, second, "second.example.test", level, right)
+        assert await run(conn, CLAIM_STATUS, id=disputed) == "disputed"
+        await expect(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", DISPUTE_MARK, id=disputed)
         await _prove_domain(conn, disputed, right)
         if level == "e2":
             await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=second, t=met)
-        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
         await act(conn, admin)
         await run(conn, "SELECT app_decide_claim(:id, true, 'dispute upheld')", id=disputed)
 
@@ -1370,6 +1387,116 @@ async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(
             signatory: ("active", ["admin", "owner", "signatory"]),
         }
         assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=org) == "e2"
+
+
+async def test_a_competing_claim_is_decided_as_a_dispute_whatever_its_label(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Whether a claim is a dispute is decided in SQL, never by its label (round 5): a claim competes when another
+    user holds an approved claim on the organisation or is an active owner or admin of it, and the claimant is not an
+    active owner, admin or signatory. It is marked disputed when filed (org_claims_guard) or when the automatic E1
+    check finds the competition (app_approve_claim_e1, not manual review), and staff approving it is the dispute's
+    outcome, the transfer, even with the label still pending_review. The claimant can neither mark a claim disputed
+    nor clear the mark. An approved outsider never ends up next to the earlier owner: one owner group, never two."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'documents checked')"
+    approve = "SELECT app_approve_claim_e1(:id)::text"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("compete-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{first.example.test}")
+        contested, plain = await add_org(conn), await add_org(conn)
+        first, stranger, a, b, c = [await w.add_user(conn, _email(n), n) for n in ("first", "stranger", "a", "b", "c")]
+        # The reviewer's probe: an outsider's claim on an organisation already E1, on another domain, proven.
+        await act(conn, first)
+        earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, approve, id=earlier) == "approved"
+        await act(conn, stranger)
+        competing = await _claim(conn, org, stranger, "second.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=competing) == "disputed"
+        await _prove_domain(conn, competing, right)  # the email code and the DNS record still verify
+        assert await run(conn, approve, id=competing) == "disputed"
+        for status in ("pending_review", "otp_sent", "dns_pending"):
+            await expect(conn, f"UPDATE org_claims SET status = '{status}' WHERE id = :id", DISPUTE_MARK, id=competing)
+        filed_disputed = (  # nor is an ordinary claim marked by its claimant, when filed or later
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'plain.example.test', 'info@plain.example.test', 'e1', CAST(:s AS claim_status))"
+        )
+        refused = "marked disputed only by the database"
+        await expect(conn, filed_disputed, refused, id=uuid7(), org=plain, u=stranger, s="disputed")
+        ordinary = uuid7()
+        await run(conn, filed_disputed, id=ordinary, org=plain, u=stranger, s="otp_sent")
+        await expect(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", DISPUTE_MARK, id=ordinary)
+        await act(conn, admin)
+        await run(conn, decide, id=competing)
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [stranger]
+        assert await run(conn, CLAIM_STATUS, id=earlier) == "rejected"
+        assert await run(conn, "SELECT verified_domain::text FROM organizations WHERE id = :id", id=org) == (
+            "second.example.test"
+        )
+        # Claims filed before any competition existed: ordinary labels, and still decided as the disputes they became.
+        claims: dict[UUID, UUID] = {}
+        for user, name in ((a, "a"), (b, "b"), (c, "c")):
+            await act(conn, user)
+            claims[user] = await _claim(conn, contested, user, f"{name}.contested.example.test", "e1", right)
+            await _prove_domain(conn, claims[user], right)
+        await act(conn, a)
+        assert await run(conn, approve, id=claims[a]) == "pending_review"  # other open claims: manual review
+        await act(conn, admin)
+        await run(conn, decide, id=claims[a])  # nobody held the organisation: no dispute
+        await act(conn, b)
+        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claims[b])
+        await act(conn, admin)
+        await run(conn, decide, id=claims[b])  # labelled pending_review, decided as the dispute it is
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=contested) == [b]
+        assert await run(conn, CLAIM_STATUS, id=claims[a]) == "rejected"
+        await act(conn, c)  # the automatic E1 check finds the competition: a dispute, not manual review
+        assert await run(conn, approve, id=claims[c]) == "disputed"
+
+
+async def test_an_ousted_claimant_cannot_rejoin_through_a_new_claim(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The security review's T9 to T15: after an upheld dispute the ousted owner, and a co-owner demoted to viewer,
+    file new claims a day later. Each is marked disputed when filed and the claimant cannot relabel it for a routine
+    review; approving one is again the dispute's outcome (the claimant becomes the only owner and admin), so nobody
+    rejoins next to the new owner and then demotes them."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("ousted-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{corp.example.test}")
+        ousted, demoted, newcomer = [await w.add_user(conn, _email(n), n) for n in ("ousted", "demoted", "newcomer")]
+        await act(conn, ousted)
+        original = await _claim(conn, org, ousted, "corp.example.test", "e1", right)
+        await _prove_domain(conn, original, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=original) == "approved"
+        await _add_membership(conn, org, demoted, "{owner}")
+        await act(conn, newcomer)
+        upheld = await _claim(conn, org, newcomer, "corp-ke.example.test", "e1", right)
+        await _prove_domain(conn, upheld, right)
+        await act(conn, admin)
+        await run(conn, decide, id=upheld)
+        await as_owner(conn)  # a day later (the claim cooldown)
+        await run(conn, "UPDATE org_claims SET created_at = now() - interval '2 days' WHERE org_id = :org", org=org)
+        refiled: dict[UUID, UUID] = {}
+        for user in (ousted, demoted):
+            await act(conn, user)
+            refiled[user] = await _claim(conn, org, user, "corp.example.test", "e1", right)
+            assert await run(conn, CLAIM_STATUS, id=refiled[user]) == "disputed"
+            relabel = "UPDATE org_claims SET status = 'pending_review' WHERE id = :id"
+            await expect(conn, relabel, DISPUTE_MARK, id=refiled[user])
+        await act(conn, ousted)
+        await _prove_domain(conn, refiled[ousted], right)
+        await act(conn, admin)
+        await run(conn, decide, id=refiled[ousted])
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [ousted]
+        assert await run(conn, CLAIM_STATUS, id=upheld) == "rejected"
+        await act(conn, newcomer)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is False
 
 
 async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:

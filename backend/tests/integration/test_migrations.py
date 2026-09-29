@@ -291,6 +291,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
     "org_claims_guard()": (True, set()),
     "org_claims_dns_guard()": (False, set()),
+    "org_claims_status_guard()": (False, set()),
+    "app_claim_competes(uuid, uuid)": (False, set()),  # called only inside the claim functions and org_claims_guard()
     "phone_verifications_guard()": (False, set()),
     "evidence_time_guard()": (False, set()),
     "chain_anchors_guard()": (True, set()),
@@ -1914,6 +1916,7 @@ V2_TRIGGERS = {
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
+    ("org_claims", "org_claims_status_guard"): ("org_claims_status_guard", ROW | BEFORE | ON_UPDATE),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
     ("provenance_records", "provenance_records_hash_guard"): (

@@ -736,7 +736,9 @@ POLICIES: tuple[Policy, ...] = (
         " AND otp_verified_at IS NULL AND dns_verified_at IS NULL AND reviewed_by IS NULL AND decided_at IS NULL"
         " AND CAST(split_part(CAST(email_address AS text), '@', 2) AS citext) = domain",
     ),
-    # The claimant moves an open claim along or withdraws it; approval and rejection are the definer functions'.
+    # The claimant moves an open claim along or withdraws it; approval and rejection are the definer functions'. The
+    # disputed mark is the database's (org_claims_guard, org_claims_status_guard): an unchanged disputed passes here so
+    # the claimant can add evidence to a dispute, but the claimant neither sets nor clears it.
     Policy(
         "org_claims",
         "UPDATE",
@@ -1299,10 +1301,37 @@ BEGIN
 END;
 $$;
 
+-- Whether p_claimant's claim on p_org competes with the organisation's current control (round 5): another user holds
+-- an approved claim on it or is an active owner or admin of it, and p_claimant is not an active owner, admin or
+-- signatory of it (the organisation's own member upgrading E1 to E2 competes with nobody). A dispute is decided here,
+-- never by a claim's status label: org_claims_guard() files such a claim as disputed, app_approve_claim_e1() marks it
+-- when it finds the competition later, and app_decide_claim() transfers the organisation when it approves one,
+-- whatever its label. Called only by those, as the owner; no role holds EXECUTE.
+CREATE FUNCTION app_claim_competes(p_org uuid, p_claimant uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT NOT EXISTS (
+               SELECT 1
+                 FROM public.memberships m
+                WHERE m.org_id = p_org AND m.user_id = p_claimant AND m.status = 'active'
+                  AND m.roles && '{owner,admin,signatory}'::public.org_role[])
+       AND (EXISTS (
+                SELECT 1
+                  FROM public.org_claims c
+                 WHERE c.org_id = p_org AND c.claimant_user_id <> p_claimant AND c.status = 'approved')
+            OR EXISTS (
+                SELECT 1
+                  FROM public.memberships m
+                 WHERE m.org_id = p_org AND m.user_id <> p_claimant AND m.status = 'active'
+                   AND m.roles && '{owner,admin}'::public.org_role[]))
+$$;
+REVOKE ALL ON FUNCTION app_claim_competes(uuid, uuid) FROM PUBLIC;
+
 -- E1 domain-email OTP: compares the stored hash of the claimant's open claim (until expiry) and on a match sets
--- otp_verified_at, which the app cannot set. otp_attempts counts every attempt on the claim and is never reset; the
--- claim's budget is 5 attempts per code issued (the first plus at most 5 reissues, so at most 30). Returns whether
--- this call matched; commit either way.
+-- otp_verified_at, which the app cannot set (a disputed claim proves its domain the same way). otp_attempts counts
+-- every attempt on the claim and is never reset; the claim's budget is 5 attempts per code issued (the first plus at
+-- most 5 reissues, so at most 30). Returns whether this call matched; commit either way.
 CREATE FUNCTION app_confirm_claim_otp(p_claim uuid, p_otp_hash bytea) RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1319,7 +1348,7 @@ BEGIN
         RAISE EXCEPTION 'app_confirm_claim_otp: no such claim for the current user'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF v_claim.status NOT IN ('otp_sent', 'dns_pending') OR v_claim.otp_verified_at IS NOT NULL
+    IF v_claim.status NOT IN ('otp_sent', 'dns_pending', 'disputed') OR v_claim.otp_verified_at IS NOT NULL
        OR v_claim.otp_hash IS NULL OR v_claim.otp_expires_at IS NULL OR v_claim.otp_expires_at <= now()
        OR v_claim.otp_attempts >= 5 * (1 + v_claim.otp_reissues) THEN
         RETURN false;
@@ -1336,8 +1365,9 @@ $$;
 
 -- A new email code for the claimant's open claim that is still waiting for one: replaces the hash and expiry (at most
 -- an hour ahead) and counts the reissue; the attempt count carries on. After 5 reissues no code is issued: the claim
--- moves to manual review (pending_review) and the function returns false. A fresh claim on the same organisation is
--- only possible after the 24-hour cooldown of org_claims_guard(), so a new claim cannot reset the limits either.
+-- moves to manual review (pending_review; a disputed claim stays disputed) and the function returns false. A fresh
+-- claim on the same organisation is only possible after the 24-hour cooldown of org_claims_guard(), so a new claim
+-- cannot reset the limits either.
 CREATE FUNCTION app_reissue_claim_otp(p_claim uuid, p_otp_hash bytea, p_expires_at timestamptz) RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1353,7 +1383,7 @@ BEGIN
         RAISE EXCEPTION 'app_reissue_claim_otp: no such claim for the current user'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF v_claim.status NOT IN ('otp_sent', 'dns_pending') OR v_claim.otp_verified_at IS NOT NULL THEN
+    IF v_claim.status NOT IN ('otp_sent', 'dns_pending', 'disputed') OR v_claim.otp_verified_at IS NOT NULL THEN
         RAISE EXCEPTION 'app_reissue_claim_otp: the claim is not waiting for an email code'
             USING ERRCODE = 'check_violation';
     END IF;
@@ -1363,7 +1393,9 @@ BEGIN
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
     IF v_claim.otp_reissues >= 5 THEN
-        UPDATE public.org_claims SET status = 'pending_review', updated_at = now() WHERE id = p_claim;
+        UPDATE public.org_claims
+           SET status = CASE WHEN status = 'disputed' THEN status ELSE 'pending_review' END, updated_at = now()
+         WHERE id = p_claim;
         RETURN false;
     END IF;
     UPDATE public.org_claims
@@ -1412,8 +1444,10 @@ $$;
 -- Automatic E1 (docs/spec/06 6.2) for the claimant's own open E1 claim once the OTP and the DNS TXT record are
 -- verified. Automatic only when the organisation is unclaimed or pending, not delisted, has no other open claim, and
 -- the domain is in official_domains[] (or it is the claimant's own self-signup organisation); otherwise the claim goes
--- to manual review, and a claim on an E2 organisation becomes a dispute (never a transfer). On approval: verification
--- e1, verified_domain, the claimant's owner+admin membership, held_unclaimed tags -> held_pending_verification.
+-- to manual review. A claim that is disputed, or competes with the organisation's current control
+-- (app_claim_competes), or is on an E2 organisation, is (or stays) a dispute: never approved here, never manual review.
+-- On approval: verification e1, verified_domain, the claimant's owner+admin membership, held_unclaimed tags ->
+-- held_pending_verification.
 CREATE FUNCTION app_approve_claim_e1(p_claim uuid) RETURNS claim_status
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1432,7 +1466,7 @@ BEGIN
         RAISE EXCEPTION 'app_approve_claim_e1: no such claim for the current user'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF v_claim.level <> 'e1' OR v_claim.status NOT IN ('otp_sent', 'dns_pending') THEN
+    IF v_claim.level <> 'e1' OR v_claim.status NOT IN ('otp_sent', 'dns_pending', 'disputed') THEN
         RAISE EXCEPTION 'app_approve_claim_e1: not an open E1 claim' USING ERRCODE = 'check_violation';
     END IF;
     IF v_claim.otp_verified_at IS NULL OR v_claim.dns_verified_at IS NULL THEN
@@ -1440,7 +1474,7 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
     SELECT * INTO v_org FROM public.organizations WHERE id = v_claim.org_id FOR UPDATE;
-    IF v_org.verification = 'e2' THEN
+    IF v_claim.status = 'disputed' OR v_org.verification = 'e2' OR public.app_claim_competes(v_org.id, v_user) THEN
         v_status := 'disputed';
     ELSIF v_org.verification IN ('unclaimed', 'pending')
           AND v_org.delisted_at IS NULL
@@ -1484,14 +1518,15 @@ $$;
 -- claimant an owner and admin. Every approval needs the claimed domain proven: the email code (otp_verified_at) and
 -- the DNS TXT record (dns_verified_at), or, for E2 only, a claimant who is an active owner, admin or signatory of an
 -- organisation already E1 on that same domain. Staff never decide their own claim.
--- Approving a disputed claim upholds the dispute (docs/spec/06 6.2: competing claims go to dispute review, never an
+-- Approving a claim that competes with the organisation's current control (app_claim_competes, decided here whatever
+-- the claim's status label) upholds the dispute (docs/spec/06 6.2: competing claims go to dispute review, never an
 -- automatic transfer) and transfers the organisation in the same transaction, the new claimant becoming its only owner
 -- and admin: every earlier approved claim of another claimant becomes rejected, its decision_reason naming this claim,
 -- and those claimants' memberships are removed with no role but viewer (so nobody reactivates them with power); every
 -- other active membership loses owner and admin and keeps its other roles (viewer when none is left); every pending
 -- invitation issued by anyone but the new claimant (all issued under the old control), or carrying owner or admin, is
--- revoked. The new claimant re-promotes people afterwards; staff correct a roster with app_staff_remove_membership.
--- The caller audits every change.
+-- revoked. Approving a claim that competes with nobody transfers nothing. The new claimant re-promotes people
+-- afterwards; staff correct a roster with app_staff_remove_membership. The caller audits every change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1500,6 +1535,7 @@ DECLARE
     v_staff uuid := public.app_user_id();
     v_claim public.org_claims%ROWTYPE;
     v_org public.organizations%ROWTYPE;
+    v_dispute boolean;
 BEGIN
     IF NOT public.app_is_staff('{admin}') THEN
         RAISE EXCEPTION 'app_decide_claim: staff admin only' USING ERRCODE = 'insufficient_privilege';
@@ -1517,6 +1553,7 @@ BEGIN
     END IF;
     IF p_approve THEN
         SELECT * INTO v_org FROM public.organizations WHERE id = v_claim.org_id FOR UPDATE;
+        v_dispute := public.app_claim_competes(v_org.id, v_claim.claimant_user_id);
         IF NOT (
             (v_claim.otp_verified_at IS NOT NULL AND v_claim.dns_verified_at IS NOT NULL)
             OR (v_claim.level = 'e2' AND v_org.verification = 'e1' AND v_org.verified_domain = v_claim.domain
@@ -1565,7 +1602,7 @@ BEGIN
              WHERE org_id = v_org.id AND status IN ('held_unclaimed', 'held_pending_verification')
                AND closed_at IS NULL;
         END IF;
-        IF v_claim.status = 'disputed' THEN
+        IF v_dispute THEN
             -- The transfer: the new claimant becomes the only owner and admin (they re-promote people afterwards).
             WITH superseded AS (
                 UPDATE public.org_claims c
@@ -2180,7 +2217,10 @@ $$;
 -- One claim per claimant and organisation per 24 hours, whatever became of the earlier one: withdrawing and claiming
 -- again cannot reset the OTP attempt and reissue limits. (One open claim per claimant and organisation is also a
 -- partial unique index.) The database times the claim (created_at := now(), whatever is sent), so a backdated claim
--- cannot escape the cooldown. SECURITY DEFINER: sees the claimant's earlier claims whatever the caller's visibility.
+-- cannot escape the cooldown. An open claim that competes with the organisation's current control (app_claim_competes)
+-- is filed as disputed whatever status is sent, and only the database marks a claim disputed: an open claim sent as
+-- disputed that competes with nobody is refused (closed statuses, written only by the owner, are left as sent).
+-- SECURITY DEFINER: sees the claimant's earlier claims and the organisation's control whatever the caller's visibility.
 CREATE FUNCTION org_claims_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -2194,6 +2234,40 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'org_claims: one claim per claimant and organisation per 24 hours'
             USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status IN ('otp_sent', 'dns_pending', 'pending_review', 'disputed') THEN
+        IF public.app_claim_competes(NEW.org_id, NEW.claimant_user_id) THEN
+            NEW.status := 'disputed';
+        ELSIF NEW.status = 'disputed' THEN
+            RAISE EXCEPTION 'org_claims: a claim is marked disputed only by the database (when it competes with the'
+                ' organisation''s current control)' USING ERRCODE = 'check_violation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Only the claim functions (running as the table's owner) mark a claim disputed or clear the mark: the claimant's own
+-- UPDATE moves an ordinary open claim along, withdraws any open claim and edits a disputed claim's evidence, but never
+-- turns a claim into a dispute or a dispute into an ordinary claim (round 5: a dispute is decided in SQL,
+-- app_claim_competes). SECURITY INVOKER, so current_user is the writer: bridge_app, or the owner inside a claim
+-- function.
+CREATE FUNCTION org_claims_status_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (OLD.status = 'disputed') <> (NEW.status = 'disputed')
+       AND NOT (OLD.status = 'disputed' AND NEW.status = 'withdrawn')
+       AND current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c
+                             WHERE c.oid = TG_RELID) THEN
+        RAISE EXCEPTION 'org_claims: only the claim functions mark a claim disputed or clear the mark'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
     END IF;
     RETURN NEW;
 END;
@@ -2223,6 +2297,7 @@ REVOKE ALL ON FUNCTION proposals_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION org_claims_status_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION phone_verifications_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
@@ -2254,6 +2329,9 @@ CREATE TRIGGER org_claims_guard
 CREATE TRIGGER org_claims_dns_guard
     BEFORE UPDATE ON org_claims
     FOR EACH ROW EXECUTE FUNCTION org_claims_dns_guard();
+CREATE TRIGGER org_claims_status_guard
+    BEFORE UPDATE ON org_claims
+    FOR EACH ROW EXECUTE FUNCTION org_claims_status_guard();
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
@@ -2319,6 +2397,8 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_audit_chain_heads()": ("provenance_worker",),
     "app_unanchored_chain_heads()": ("provenance_worker",),
 }
+# Helpers only definer code calls, as the owner: no EXECUTE for any role (revoked from PUBLIC where created).
+INTERNAL_FUNCTIONS = ("app_claim_competes(uuid, uuid)",)
 # Revision 0001 helpers the Tier-2 roles' policies call (revoked again on downgrade).
 FUNCTION_GRANTS_0001: dict[str, tuple[str, ...]] = {"app_user_id()": TIER2_ROLES}
 TRIGGER_FUNCTIONS = (
@@ -2331,6 +2411,7 @@ TRIGGER_FUNCTIONS = (
     "tags_guard()",
     "org_claims_guard()",
     "org_claims_dns_guard()",
+    "org_claims_status_guard()",
     "phone_verifications_guard()",
     "evidence_time_guard()",
     "provenance_records_hash_guard()",
@@ -2451,7 +2532,10 @@ def downgrade() -> None:
     _run_sql(
         "\n".join(
             [
-                *(f"DROP FUNCTION {signature};" for signature in (*FUNCTION_GRANTS, *TRIGGER_FUNCTIONS)),
+                *(
+                    f"DROP FUNCTION {signature};"
+                    for signature in (*FUNCTION_GRANTS, *TRIGGER_FUNCTIONS, *INTERNAL_FUNCTIONS)
+                ),
                 *(
                     f"REVOKE EXECUTE ON FUNCTION {signature} FROM {', '.join(roles)};"
                     for signature, roles in FUNCTION_GRANTS_0001.items()
