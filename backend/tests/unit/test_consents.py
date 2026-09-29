@@ -37,5 +37,6 @@ def test_the_assistant_opt_in_is_per_sign_in_and_says_so() -> None:
     assert ConsentPurpose.TIER2_LLM_ASSISTANT not in SETTINGS_PURPOSES
     assert set(SETTINGS_PURPOSES) | SESSION_ONLY == set(ConsentPurpose)
     shown = load_texts(get_settings().consents_file)[ConsentPurpose.TIER2_LLM_ASSISTANT]
-    assert "this sign-in only" in shown.text
+    assert "During this sign-in only" in shown.text
     assert "sign out" in shown.text
+    assert "my proposals" in shown.text  # per session, not per proposal (ADR-005 decision 4)
