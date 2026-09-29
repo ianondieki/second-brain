@@ -22,6 +22,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIN_SECRET_CHARS = 32
 
 AppEnv = Literal["dev", "test", "staging", "production"]
+PaymentProviderName = Literal["fake"]
 LLMProvider = Literal["fake", "free", "anthropic"]
 ResponseFormat = Literal["none", "json_object", "json_schema"]
 
@@ -50,6 +51,7 @@ OPTIONAL_SETTINGS = (
     "s3_access_key_id",
     "s3_secret_access_key",
     "audit_reader_database_url",
+    "payment_provider",  # PAYMENT_PROVIDER= is the fake in dev and test, none elsewhere
     "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev), else fake
     "llm_prototype_total_cap_usd",  # LLM_PROTOTYPE_TOTAL_CAP_USD= is USD 5 in dev and test, none elsewhere
     *(f"llm_free_{n}_{part}" for n in LLM_FREE_SLOTS for part in (*FREE_SLOT_PARTS, "response_format")),
@@ -183,6 +185,14 @@ class Settings(BaseSettings):
     # else clean) runs only in dev and test; ClamAV returns after the prototype. Uploads fail closed otherwise.
     attachment_scanner: Literal["fake", "clamav"] = "fake"
 
+    # Payments (bridge.billing.providers; docs/spec/05, D-36). The prototype has one provider, the fake: a simulated
+    # M-Pesa checkout that settles FAKE_PAYMENT_DELAY_SECONDS after it starts, on the app clock (app_clock_now(), so
+    # the dev/test clock moves it). It runs only in dev and test; staging and production refuse it at start-up.
+    # Unset: the fake in dev and test, no provider elsewhere (checkouts answer 503; fail closed). Daraja and Paystack
+    # (REQ-BIL-04, REQ-BIL-05) come after G4 with their own settings.
+    payment_provider: PaymentProviderName | None = None
+    fake_payment_delay_seconds: float = Field(default=4.0, ge=0, le=300)
+
     # The nightly audit.verify_chain job reads every audit chain as audit_reader, a separate login (roles.sql). The job
     # fails closed without it.
     audit_reader_database_url: SecretStr | None = None
@@ -249,6 +259,13 @@ class Settings(BaseSettings):
 
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
+
+    @property
+    def payment_effective_provider(self) -> PaymentProviderName | None:
+        """``PAYMENT_PROVIDER``, or when unset: the fake in dev and test, none in staging and production (D-36)."""
+        if self.payment_provider is not None:
+            return self.payment_provider
+        return "fake" if self.app_env in ("dev", "test") else None
 
     # --------------------------------------------------------------------------------------- LLM providers (D-37)
 
@@ -366,6 +383,11 @@ class Settings(BaseSettings):
         ):
             problems.append(
                 "AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are required when SMS_PROVIDER=africastalking"
+            )
+        if self.payment_provider == "fake" and self.app_env in ("staging", "production"):
+            problems.append(
+                "PAYMENT_PROVIDER=fake is for dev and test only: staging and production take no simulated payments"
+                " (D-36)"
             )
         problems.extend(self._key_problems())
         problems.extend(self._llm_problems())
