@@ -180,11 +180,13 @@ def chat(body: dict[str, Any]) -> httpx.Response:
     return httpx.Response(200, json={"choices": [choice], "usage": {"prompt_tokens": 80, "completion_tokens": 20}})
 
 
-WORDED = {
+WORDED = {  # the model's choice (ids only): code renders every word
     "injection_suspected": False,
-    "headline": "One thing needs you today, and one engagement is at risk.",
-    "next_step": "Submit milestone 1 of “RLS proposal” for review by 31 Mar 2027.",
+    "opening": "your_day",
+    "order": ["n1", "h1"],
+    "next_step_variant": "start_with",
 }
+WORDED_HEADLINE = "Here is your day on Bridge. 1 thing needs you today, and 1 engagement needs attention."
 
 
 @pytest.mark.parametrize("demo", [False, True])
@@ -205,9 +207,12 @@ async def test_only_a_demo_accounts_facts_reach_a_free_provider(owner_engine: As
         if demo:
             assert route.call_count == 1
             assert "Tracker Ltd" not in route.calls[0].request.content.decode()  # no organisation text sent
-            assert (outcome.wording.source, outcome.wording.headline) == ("model", WORDED["headline"])
+            assert (outcome.wording.source, outcome.wording.headline) == ("model", WORDED_HEADLINE)
             assert message.headers[WORDING_HEADER] == "model"
-            assert message.text.startswith(f"{WORDED['headline']}\n{AI_LABEL}\n")
+            assert message.text.startswith(f"{WORDED_HEADLINE}\n{AI_LABEL}\n")
+            assert "NEXT STEP\nStart with this: Submit milestone 1 of “RLS proposal” for review by 31 Mar 2027." in (
+                message.text
+            )
         else:
             assert not route.called
             assert outcome.wording.reason == "demo_fallback:not_demo_data"

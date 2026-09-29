@@ -135,7 +135,7 @@ async def test_a_valid_choice_is_rendered_by_code_and_labelled() -> None:
     needs = message.text.split("NEEDS YOU\n", 1)[1].split("\n\n", 1)[0].splitlines()
     assert needs == [
         "- “Till reconciler” with Sacco C: sign the mutual NDA (due 3 Oct 2026).",
-        "- Milestone 1 “Pilot for one county” of “Solar cold rooms”: submit it for review by 6 Oct 2026.",
+        "- Milestone 1 “Confidential pilot” of “Solar cold rooms”: submit it for review by 6 Oct 2026.",
     ]
     health = message.text.split("HEALTH\n", 1)[1].split("\n\n", 1)[0].splitlines()
     assert [line.split(" with ")[0] for line in health] == ["- “Till reconciler”", "- “Solar cold rooms”"]

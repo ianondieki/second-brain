@@ -3,10 +3,12 @@
 ``compose_nudge`` turns a developer's ``DeveloperFacts`` into a ``Nudge``: Needs you (each engagement awaiting the
 developer, each open milestone), Waiting on the other party, Health (every active engagement, with its code-computed
 reasons), drafts not published, and one featured next step. Everything is code-rendered; party text is quoted and
-defanged (``bridge.reminders.render``). ``Nudge.fact_lines`` is all an LLM may see (``bridge.reminders.wording``):
-counts, codes, dates, milestone numbers and the developer's own proposal titles, never an organisation's text or a
-milestone's deliverable. ``Wording`` is what the email says above and below the facts: the LLM's rewording or the
-fixed fallback (``fallback_wording``), marked either way.
+defanged (``bridge.reminders.render``). Each item has an id (``Nudge.item_ids``: n1.., w1.., h1.., d1..).
+``Nudge.fact_lines`` is all an LLM may see (``bridge.reminders.wording``): today's date, each item id with a brief of
+codes, dates, milestone numbers and the developer's own proposal titles (never an organisation's text or a
+milestone's deliverable), and the next step. ``Wording`` is what the email says above and below the facts, every word
+rendered by code: the model's choice among fixed variants, or the fixed fallback (``fallback_wording``), marked
+either way.
 
 A nudge is ``empty`` (nothing is sent) when nothing needs the developer, every engagement is on track and no draft
 waits: waiting on the other party alone is quiet.
@@ -14,7 +16,7 @@ waits: waiting on the other party alone is quiet.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Final, Literal
@@ -44,13 +46,15 @@ DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 M = MilestoneState
 WORDING_HEADER: Final = "X-Bridge-Wording"  # "model" or "fallback": which wording the email carries
 # [[COPY-REVIEW]]
-AI_LABEL: Final = "AI-drafted: an AI model worded the first line and the next step from the facts below."
+AI_LABEL: Final = (
+    "AI-drafted: an AI model chose the opening, the order of the lists and the phrasing of the next step;"
+    " every fact is written by code."
+)
 FOOTER: Final = "You get this daily reminder because you turned reminders on."
 CTA: Final = "Open your tracker"
 IN_APP_TITLE: Final = "Your daily update"
 UPCOMING_DAYS: Final = 14  # open milestones due within this many days are listed one by one under Needs you
 _OPEN_WORK: Final = frozenset({M.PLANNED, M.IN_PROGRESS, M.CHANGES_REQUESTED})
-OVERDUE_CODES: Final = frozenset({ReasonCode.MILESTONE_OVERDUE, ReasonCode.REVIEW_OVERDUE, ReasonCode.STAGE_OVERDUE})
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +86,20 @@ class Nudge:
     fact_lines: tuple[str, ...]
 
     @property
+    def needs_ids(self) -> tuple[str, ...]:
+        """Item ids, by section and position: n1.. (needs you), w1.. (waiting), h1.. (health), d1.. (drafts)."""
+        return _ids("n", self.needs_you)
+
+    @property
+    def item_ids(self) -> tuple[str, ...]:
+        return (
+            *self.needs_ids,
+            *_ids("w", self.waiting),
+            *_ids("h", self.health),
+            *_ids("d", self.drafts),
+        )
+
+    @property
     def watch(self) -> int:
         """Engagements at risk or off track."""
         return sum(1 for row in self.health if row.health is not Health.ON_TRACK)
@@ -108,13 +126,17 @@ class Nudge:
 
 @dataclass(frozen=True, slots=True)
 class Wording:
-    """The email's first line and next step. ``source`` is "model" (an LLM worded it from ``fact_lines``; labelled
-    "AI-drafted") or "fallback" (the fixed text); ``reason`` says why the fallback was used."""
+    """The email's first line, next step and item order, every word rendered by code. ``source`` is "model" (an LLM
+    chose the opening, the order and the next step's phrasing among code-rendered variants,
+    ``bridge.reminders.wording``; labelled "AI-drafted") or "fallback" (the fixed text, code order); ``reason`` says
+    why the fallback was used; ``order`` lists item ids (``Nudge.item_ids``) to show first, each section keeping its
+    other items after them in code order."""
 
     headline: str
     next_step: str
     source: Literal["model", "fallback"]
     reason: str | None = None
+    order: tuple[str, ...] = ()
 
     @property
     def ai_drafted(self) -> bool:
@@ -123,6 +145,17 @@ class Wording:
 
 def fallback_wording(nudge: Nudge, reason: str) -> Wording:
     return Wording(nudge.fallback_headline, nudge.next_step, "fallback", reason)
+
+
+def _ids(prefix: str, items: Sequence[object]) -> tuple[str, ...]:
+    return tuple(f"{prefix}{i}" for i in range(1, len(items) + 1))
+
+
+def _ordered[T](prefix: str, items: Sequence[T], order: Sequence[str]) -> list[T]:
+    """``items`` with those ``order`` names first, in its order; the rest after, as they were."""
+    rank = {item_id: i for i, item_id in enumerate(order)}
+    ids = _ids(prefix, items)
+    return [item for _, item in sorted(zip(ids, items, strict=True), key=lambda pair: rank.get(pair[0], len(rank)))]
 
 
 def _first_upper(text: str) -> str:
@@ -141,20 +174,26 @@ def _due(day: date | None) -> str:
     return f" (due {eat_date(day)})" if day else ""
 
 
-def _needs_you(e: EngagementFact, today: date) -> list[str]:
-    """What the developer does next on ``e``: each open milestone overdue or due within ``UPCOMING_DAYS``, else one
-    line for the stage (with the next milestone's date during implementation)."""
+def _needs_you(e: EngagementFact, today: date) -> list[tuple[str, str]]:
+    """What the developer does next on ``e`` as (sentence, brief): each open milestone overdue or due within
+    ``UPCOMING_DAYS``, else one line for the stage (with the next milestone's date during implementation). The brief
+    is what the model sees: codes, dates and the developer's own title, never an organisation's text."""
     if DEV not in e.awaiting:
         return []
     open_work = sorted((m for m in e.milestones if m.state in _OPEN_WORK), key=lambda m: (m.due_on, m.seq))
     soon = [m for m in open_work if (m.due_on - today).days <= UPCOMING_DAYS]
     if soon:
         return [
-            f"Milestone {m.seq} {quote(m.deliverable)} of {_title(e)}: submit it for review by {eat_date(m.due_on)}."
+            (
+                f"Milestone {m.seq} {quote(m.deliverable)} of {_title(e)}: submit it for review by {eat_date(m.due_on)}"
+                ".",
+                f"milestone {m.seq} of {_title(e)}, due {eat_date(m.due_on)}",
+            )
             for m in soon
         ]
     due = open_work[0].due_on if open_work else e.stage_deadline_on
-    return [f"{_title(e)} with {_org(e)}: {developer_action(e)}{_due(due)}."]
+    action = developer_action(e)
+    return [(f"{_title(e)} with {_org(e)}: {action}{_due(due)}.", f"{_title(e)}: {action}{_due(due)}")]
 
 
 def _next_step(pairs: list[tuple[EngagementFact, Assessment]], drafts: tuple[str, ...]) -> str:
@@ -188,59 +227,45 @@ def _step_for(r: Reason, e: EngagementFact) -> str:
 
 def compose_nudge(facts: DeveloperFacts, holidays: Collection[date]) -> Nudge:
     pairs = [(e, assess(e, facts.today, holidays)) for e in facts.engagements if e.assessed]
-    needs_you: list[str] = []
-    waiting: list[str] = []
-    health: list[HealthRow] = []
+    needs_you: list[tuple[str, str]] = []
+    waiting: list[tuple[str, str]] = []
+    health: list[tuple[HealthRow, str]] = []
     for e, a in pairs:
         needs_you += _needs_you(e, facts.today)
         if ORG in e.awaiting:
+            action, due = organisation_action(e), _due(e.stage_deadline_on)
             waiting.append(
-                f"{_title(e)}: waiting for {_org(e)} to {organisation_action(e)}{_due(e.stage_deadline_on)}."
+                (
+                    f"{_title(e)}: waiting for {_org(e)} to {action}{due}.",
+                    f"{_title(e)}: waiting for the organisation to {action}{due}",
+                )
             )
         why = "; ".join(reason_text(r, e, viewer=DEV) for r in a.reasons)
         line = f"{_title(e)} with {_org(e)}: {HEALTH_LABELS[a.health]}" + (f". {why}." if why else ".")
-        health.append(HealthRow(e.id, a.health, line))
+        health.append((HealthRow(e.id, a.health, line), f"{_title(e)}: {HEALTH_LABELS[a.health].lower()}"))
     drafts = tuple(quote(title, fallback="Untitled draft") for title in facts.drafts)
     step = _next_step(pairs, drafts)
+    briefs = [
+        *zip(_ids("n", needs_you), (brief for _, brief in needs_you), strict=True),
+        *zip(_ids("w", waiting), (brief for _, brief in waiting), strict=True),
+        *zip(_ids("h", health), (brief for _, brief in health), strict=True),
+        *zip(_ids("d", drafts), (f"unpublished draft {title}" for title in drafts), strict=True),
+    ]
+    fact_lines = (
+        f"Today is {eat_date(facts.today)}.",
+        *(f"{item_id}: {brief}" for item_id, brief in briefs),
+        f"Suggested next step: {step}",
+    )
     return Nudge(
         facts.user_id,
         facts.today,
-        tuple(needs_you),
-        tuple(waiting),
-        tuple(health),
+        tuple(text for text, _ in needs_you),
+        tuple(text for text, _ in waiting),
+        tuple(row for row, _ in health),
         drafts,
         step,
-        _fact_lines(facts.today, needs_you, waiting, health, pairs, drafts, step),
+        fact_lines,
     )
-
-
-def _fact_lines(
-    today: date,
-    needs_you: list[str],
-    waiting: list[str],
-    health: list[HealthRow],
-    pairs: list[tuple[EngagementFact, Assessment]],
-    drafts: tuple[str, ...],
-    step: str,
-) -> tuple[str, ...]:
-    """What the model may reword, stated as units ``bridge.reminders.grounding`` matches whole: each count with its
-    noun (and status), the dates, the developer's own titles. Counts of zero are left out."""
-    counts = [row.health for row in health]
-    overdue = sum(1 for _, a in pairs for r in a.reasons if r.code in OVERDUE_CODES)
-    lines = [f"Today is {eat_date(today)}."]
-    if needs_you:
-        lines.append(f"{plural(len(needs_you), 'thing')} need{'s' if len(needs_you) == 1 else ''} the developer.")
-    if waiting:
-        lines.append(f"{plural(len(waiting), 'engagement')} wait{'s' if len(waiting) == 1 else ''} on the other party.")
-    for status in (Health.OFF_TRACK, Health.AT_RISK, Health.ON_TRACK):
-        if counts.count(status):
-            lines.append(f"{plural(counts.count(status), 'engagement')} {HEALTH_LABELS[status].lower()}.")
-    if overdue:
-        lines.append(f"{plural(overdue, 'item')} overdue.")
-    if drafts:
-        lines.append(f"{plural(len(drafts), 'draft')} unpublished.")
-    lines.append(f"Suggested next step: {step}")
-    return tuple(lines)
 
 
 def summary(nudge: Nudge) -> str:
@@ -265,10 +290,10 @@ def email(nudge: Nudge, wording: Wording) -> Email:
         headline=wording.headline,
         notes=(AI_LABEL,) if wording.ai_drafted else (),
         sections=sections(
-            ("Needs you", nudge.needs_you),
-            ("Waiting on the other party", nudge.waiting),
-            ("Health", [row.line for row in nudge.health]),
-            ("Drafts not published", nudge.drafts),
+            ("Needs you", _ordered("n", nudge.needs_you, wording.order)),
+            ("Waiting on the other party", _ordered("w", nudge.waiting, wording.order)),
+            ("Health", [row.line for row in _ordered("h", nudge.health, wording.order)]),
+            ("Drafts not published", _ordered("d", nudge.drafts, wording.order)),
         ),
         next_step=wording.next_step,
         cta_label=CTA,
