@@ -9,11 +9,14 @@ length: Tier-2 plaintext is never stored here, with or without consent (the LLM 
 no SELECT on the column, so the mapper never loads it.
 
 Message Batches: an item is reserved at submission (``status = 'batch_reserved'``, the estimated cost, ``batch_id`` and
-``custom_id``) and settled once its result arrives (a second row with the same pair, the same ``org_id`` and ``user_id``
-and the final status and cost, inserted with ``ON CONFLICT DO NOTHING``). An item is its tenant's: the partial unique
-indexes allow one reservation and one settlement per item and tenant (NULLS NOT DISTINCT), and the database refuses a
-settlement for an item only other tenants reserved (``llm_calls_batch_guard``, revision 0002 round 5). A platform job's
-batch rows (no user, no organisation) are written only by a session that binds no user.
+``custom_id``; its ``created_at`` is the database's, whatever is sent) and settled once its result arrives through
+``app_llm_settle_batch_item`` (a second row with the same pair, the ``org_id`` and ``user_id`` of the batch's earliest
+reservation, the final status and cost and the database's time; false once the item has settled). A batch is the
+tenant's of its earliest reservation (``app_llm_batch_owned``, which ``batch_poll`` checks before fetching results;
+revision 0002 round 6). An item is its tenant's: the partial unique indexes allow one reservation and one settlement
+per item and tenant (NULLS NOT DISTINCT), and the database refuses a settlement for an item only other tenants reserved
+(``llm_calls_batch_guard``, round 5). A platform job's batch rows (no user, no organisation) are written only by a
+session that binds no user.
 Spend is read from the ``llm_spend`` view (org_id, user_id, cost_usd, created_at; revision 0002), the one rule that
 counts a reservation until its item settles and then only the settled row: the tenant monthly sum reads the view
 under RLS, and ``app_llm_spend_usd`` the platform total.
