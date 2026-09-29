@@ -178,7 +178,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             )
         ).scalars()
     )
-    review_due = await _review_due(db, engagement.id, milestones)
+    review_due = await review_due_dates(db, engagement.id, milestones)
     endorsements = [
         e
         for e in await _endorsements(db, engagement.id)
@@ -280,7 +280,7 @@ def _milestone(m: Milestone, review_due_on: date | None) -> MilestoneOut:
     )
 
 
-async def _review_due(db: AsyncSession, engagement_id: UUID, milestones: Sequence[Milestone]) -> dict[UUID, date]:
+async def review_due_dates(db: AsyncSession, engagement_id: UUID, milestones: Sequence[Milestone]) -> dict[UUID, date]:
     """REQ-ENG-09: a milestone under review is due its review window in business days after the Nairobi date of its
     latest submission (a resubmission after changes starts a new window)."""
     waiting = {str(m.id): m for m in milestones if m.state is MilestoneState.SUBMITTED_FOR_REVIEW}
