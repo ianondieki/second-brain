@@ -16,10 +16,11 @@ import { totp } from "./totp";
  *   organisation (an E2 organisation gets a delivered tag and, under the default policy, a Tier-2 grant; an E1 one a
  *   held tag).
  *
- * Only what no API offers yet is written as the database owner, for test accounts only (every address is under
- * example.com): the developer's D1 level (the SMS code never leaves the API process), the organisation's
- * verification level with its verified domain (the claim review is REQ-DIR-03), the signatory role and the
- * signatory's acceptance of the current Master Enterprise Terms (no acceptance screen yet).
+ * What no API offers yet goes through the database owner, for test accounts only (every address is under
+ * example.com). Writes: the developer's D1 level (the SMS code never leaves the API process), the organisation's
+ * verification level with its verified domain (the claim review is REQ-DIR-03), the member's roles (signatory for E2;
+ * viewer for the role refusal) and the signatory's acceptance of the current Master Enterprise Terms (no acceptance
+ * screen yet). Reads: a listed E0 organisation of the seeded directory to pitch elsewhere.
  *
  * E2E_DATABASE_OWNER_URL is a libpq URL of the stack's database as bridge_owner (for example
  * postgresql://bridge_owner:…@127.0.0.1:5432/bridge). Without it the specs that need this state skip. The API must
@@ -121,6 +122,9 @@ export function verifyOrg(member: OrgMember, level: "e1" | "e2"): void {
 
 /** Removes the member's Tier-2 role (reviewer, signatory, admin): a plain viewer of the organisation. */
 export function makeViewer(member: OrgMember): void {
+  if (!TEST_DOMAIN.test(member.domain) || !member.email.endsWith(`@${member.domain}`)) {
+    throw new Error("makeViewer is for test organisations (*.example.com) only");
+  }
   ownerSql(
     "UPDATE memberships SET roles = '{owner,viewer}' WHERE org_id = CAST(:'org' AS uuid)" +
       " AND user_id = (SELECT id FROM users WHERE email = :'email');",

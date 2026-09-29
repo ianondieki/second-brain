@@ -51,6 +51,13 @@ test.describe("an organisation member", () => {
     );
     await checkScreen(page);
 
+    // An organisation the member does not belong to is never swapped for their own one.
+    await page.goto("/org/inbox?org=01a0ee62-0000-7000-8000-0000000000ff");
+    await expectEmptyState(page, "Your account is not a member of this organisation.", "Open your Inbox");
+    await page.goto("/org/inbox/01a0ee62-f783-733e-9321-9f34ec389ac2?org=01a0ee62-0000-7000-8000-0000000000ff");
+    await expectEmptyState(page, "Your account is not a member of this organisation.", "Open your Inbox");
+    await page.goto("/org/inbox");
+
     // E1: a pitched proposal is held; the organisation sees only how many wait (AC-PROP-1/a).
     verifyOrg(member, "e1");
     const held = await pitchFromNewDeveloper(browser, baseURL!, [member.orgId]);
@@ -120,7 +127,12 @@ test.describe("an organisation member", () => {
       "sandbox",
       "allow-popups allow-popups-to-escape-sandbox",
     );
-    await checkScreen(page);
+    await expect(page.locator("[data-tier2-frame]")).toHaveAttribute(
+      "title",
+      `Full proposal: ${pitched.title}, marked for you`,
+    );
+    // The marked page runs no script, so axe cannot run inside it: the frame is left out (its title is checked above).
+    await checkScreen(page, { exclude: ["[data-tier2-frame]"] });
 
     // Accepted once: coming back does not open (and log) the full proposal until asked.
     await page.getByRole("link", { name: "Close full proposal" }).click();
