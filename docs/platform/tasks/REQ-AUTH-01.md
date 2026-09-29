@@ -68,9 +68,10 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    apart (`secret|start` or `secret`). Mixing them up was the BLOCKER. It is now closed by construction: the
    confirmation re-seals the bare secret, sign-in reads only `totp_secret_enc`, the test above decrypts the stored
    active envelope, and an active envelope copied into the pending column has no start time and is refused as
-   expired. A distinct associated-data label per kind (for example `b"totp-pending:" + user_id`) would separate them
-   cryptographically. It is not needed now: secrets pending at deploy would no longer decrypt, so the confirmation
-   would also have to treat such an envelope as expired. It is an option for the security review. (2) SQL cannot see
+   expired. Since the security review (P17 round 1) the kinds are also separated cryptographically: the pending
+   envelope's associated data is `totp-pending|` and the user id, the active one's the user id alone, and a pending
+   envelope that does not open (sealed before the label, under another key, or altered) is cleared and answered like
+   an expired one instead of a 500; a secret pending at deploy therefore reads as expired. (2) SQL cannot see
    the time, so a sweeper would have to decrypt rows. None is planned: an abandoned secret stays encrypted, sign-in
    never reads it, and it is refused after 15 minutes. (3) The time is the app clock (`bridge.clock.utcnow`, not the
    tracker's test clock) in whole seconds. Clock skew between API instances shifts the lifetime by the skew. A start
@@ -104,12 +105,16 @@ Signup always answers 202 "check your email" (no account enumeration); the verif
    committing turn-off answers 409 `totp_not_enabled` with no codes, audit event or notice. That race is what
    `lock_user` guards here. The replacement overwrites the whole hash list, so the two step-up races end the same
    with or without the lock; only the turn-off race tells them apart (mutation-proved).
-   **For the security-reviewer:** a stolen session whose second factor is under 12 h old can replace the codes. The
-   owner's codes then stop working and the owner gets the notice. The thief's codes pass only the second factor, so
-   a later sign-in still needs the password or an emailed link. Asking for the current password too, or a fresher
-   second factor, would narrow this; the card asked for the step-up helper only, so it is left as is.
-   **Open (impl-frontend):** the "Get new recovery codes" action on the "on" screen (on 403 `step_up_required` it asks
-   for an authenticator code, POST /api/auth/step-up, then retries; the codes are shown once, as at setup); the
+   **Proof (security review, P17 round 1):** the step-up alone was not enough, since a recovery code spent at step-up
+   also makes the factor fresh. The route now takes `ensure_fresh_proof`, as linking and unlinking a sign-in method
+   do: a second factor within 12 h and `current_password` when the account has one (optional JSON body; 403
+   `current_password_required`), checked under `lock_user` after 409 `totp_not_enabled`. `ensure_fresh_proof` moved
+   from `identities.py` to `service.py` (identities imports service). The notice goes out at most once per account and
+   Nairobi day (dedupe key); every replacement is audited.
+   **Open (impl-frontend):** the "Get new recovery codes" action on the "on" screen (it sends `current_password` when
+   the account has one, as linking does, and 403 `current_password_required` asks for it again; on 403
+   `step_up_required` it asks for an authenticator code, POST /api/auth/step-up, then retries; the codes are shown
+   once, as at setup); the
    codes-not-shown notices point at it, `security.codesNotShownTurnOff` no longer sends people to turn two-step
    sign-in off; the comment on `onWithoutCodes` goes.
 
@@ -129,13 +134,31 @@ bare secrets, which follow-up 7 treats as expired (17 demo tests errored with 40
 `service.seal_pending_secret` is now the one writer of the pending envelope; `begin_totp_enrolment` and the seed's
 `enrol_totp` both call it.
 
+**Security review round 1 (P17), fixed:** MAJOR: `POST /api/auth/totp/confirm` had no throttle (40 wrong codes in a
+minute, no 429), so a stolen session could guess against a setup the owner had begun. It now shares the second
+factor's budget (`mfa` keys: 5 codes a minute for the account from one client IP), checked before `lock_user`, each
+checked code recorded and kept by the router's commit, the throttled case logged (`auth.totp_confirm_throttled`).
+MINORs: a pending envelope that does not open counts as expired, and the pending kind has its own associated-data
+label (follow-up 7 above); new recovery codes need `ensure_fresh_proof` and send one notice a day (follow-up 8 above);
+`record_decisions` writes a session-only purpose only with a `session:` source (defence in depth); the session-only
+refusal message lives in `profiles/consents.py`, imported by both routers. Tests:
+`test_the_setup_confirmation_is_throttled_like_the_second_factor`,
+`test_the_pending_envelope_opens_only_under_its_own_label`,
+`test_a_pending_envelope_that_does_not_open_counts_as_expired`,
+`test_new_recovery_codes_need_the_current_password_even_after_a_recovery_code_step_up`,
+`test_the_new_recovery_codes_notice_goes_out_once_a_day`, `unit/test_consents.py`
+`test_a_session_only_purpose_is_recorded_only_for_a_login_session`. The shared budget means the enrolment's
+confirmation counts as one of the five codes of `test_the_second_factor_is_throttled_after_five_attempts`.
+
 **P17 backend status (2026-09-29, `feat/REQ-AUTH-01-followups-7-8`):** the BLOCKER is fixed and the integration branch
-is merged in (last at `7e813ce`). Full backend suite: 3201 passed. `bridge/auth/service.py`: 99% with branches (93% on
-the merged tree before these tests; the Handoff measured 91%). The one line left (283) re-raises when an insert fails
-while the address is still free. New tests reach the auth paths nothing tested: signup refusals, a signup that loses
-the race for its address, magic links to suspended accounts, rehash at login, the new-password policy, a step-up
-without two-step sign-in, the second-factor throttle, a wrong second step. Mutation proofs: 33 mutations, all killed
-and all restored. They cover the fix; the lifetime, expiry-clearing and cancel guards of follow-up 7; the lock,
-step-up, turn-off check, audit, notice and throttle guards of follow-up 8; the session-only signup rule; and the paths
-the new tests reach. Next: security-reviewer (one round) and reviewer on this branch, then the frontend halves
+is merged in (last at `7e813ce`). Full backend suite: 3214 passed (after security review round 1).
+`bridge/auth/service.py`: 99% with branches (93% on the merged tree before these tests; the Handoff measured 91%). The
+one line left (286) re-raises when an insert fails while the address is still free. New tests reach the auth paths
+nothing tested: signup refusals, a signup that loses the race for its address, magic links to suspended accounts,
+rehash at login, the new-password policy, a step-up without two-step sign-in, the second-factor throttle, a wrong
+second step. Mutation proofs: 41 mutations, all killed and all restored. They cover the fix; the lifetime,
+expiry-clearing and cancel guards of follow-up 7; the lock, step-up, turn-off check, audit, notice and throttle guards
+of follow-up 8; the session-only signup rule; the security review round 1 fixes (the confirmation throttle, the
+pending label and unopenable envelopes, the recovery-codes proof and daily notice, `record_decisions`); and the paths
+the new tests reach. Next: the security-reviewer's check of the round 1 fixes, then the frontend halves
 (impl-frontend) with ux-reviewer.
