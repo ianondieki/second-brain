@@ -3,12 +3,13 @@
 REQ-ENG-01 (engagement columns for stage deadlines, optimistic concurrency, the organisation's contact and the end of
 an engagement; agreements, milestones, signatures and payment records), REQ-ENG-02 (``engagement_events``: append-only,
 hash-chained, ``engagements.state`` its projection in the same statement; endorsements), D-37 (``users.demo_account``)
-and the shared dev/test clock of PLAN.md §8 P5. Design: ``docs/platform/tasks/REQ-ENG-01.md``. Additive only: 7
-new tables, 10 new enum types, new columns on ``engagements`` and ``users``, three new policies and two triggers on
-``engagements``, bridge_app's INSERT and column UPDATE on ``engagements``, and bridge_app's INSERT on ``users``
-narrowed to every column but ``demo_account`` (the table-wide grant is restored on downgrade). Existing engagements
-(fixtures only until now) get a genesis event, so every engagement has a chain. Nothing of revisions 0001 and 0002 is
-dropped.
+and the shared dev/test clock of PLAN.md §8 P5. Design: ``docs/platform/tasks/REQ-ENG-01.md``. Additive but for
+one stricter CHECK: 7 new tables, 10 new enum types, new columns on ``engagements`` and ``users``, three new policies
+and two triggers on ``engagements``, revision 0002's end-reason CHECK on ``engagements`` replaced by a NULL-safe one
+(restored on downgrade), bridge_app's INSERT and column UPDATE on ``engagements``, and bridge_app's INSERT on
+``users`` narrowed to every column but ``demo_account`` (the table-wide grant is restored on downgrade). Existing
+engagements (fixtures only until now) get a genesis event, so every engagement has a chain. Nothing else of revisions
+0001 and 0002 is changed or dropped.
 
 The chain (``engagement_events_chain()``, BEFORE INSERT, SECURITY DEFINER). An append locks the engagement's row
 (``SELECT ... FOR UPDATE``: appends to one engagement are serialised until commit, at any isolation level), reads the
@@ -218,9 +219,9 @@ EXPIRED_REASONS = "'NO_REVIEW', 'NO_DECISION', 'CONTACT_NOT_MADE', 'NO_DEV_RESPO
 
 def _end_reason_matches(state_column: str) -> str:
     """Verbatim from bridge.engagements.models.end_reason_matches. NULL for DECLINED or EXPIRED without a reason (NULL
-    IN (...) is NULL, which a CHECK lets through), so the events' CHECK wraps it in coalesce(..., false). Revision
-    0002's CHECK on engagements has that gap; the genesis event mirrors a new engagement's state and reason, so no
-    engagement is inserted DECLINED or EXPIRED without its reason any more, and later ones come from events."""
+    IN (...) is NULL, which a CHECK lets through), so both CHECKs of this revision wrap it in coalesce(..., false):
+    the events' and the replacement of revision 0002's ``ck_engagements_end_reason_matches_state``, which had that
+    gap (restored on downgrade)."""
     return (
         f"({state_column} = 'DECLINED' AND end_reason IN ({DECLINED_REASONS}))"
         f" OR ({state_column} = 'EXPIRED' AND end_reason IN ({EXPIRED_REASONS}))"
@@ -1066,6 +1067,10 @@ def downgrade() -> None:
         "stage_entered_at",
     ):
         op.drop_column("engagements", column)  # drops the CHECK constraints over it
+    op.drop_constraint(op.f("ck_engagements_end_reason_matches_state"), "engagements", type_="check")
+    op.create_check_constraint(  # revision 0002's, as it was
+        op.f("ck_engagements_end_reason_matches_state"), "engagements", _end_reason_matches("state")
+    )
     op.drop_column("users", "demo_account")
     _run_sql("REVOKE INSERT ON TABLE users FROM bridge_app; GRANT INSERT ON TABLE users TO bridge_app;")
     bind = op.get_bind()
@@ -1093,6 +1098,15 @@ def _alter_earlier_tables() -> None:
     _run_sql(
         "UPDATE engagements SET stage_entered_at = updated_at,"
         f" ended_at = CASE WHEN state IN ({TERMINAL}) THEN updated_at END;"
+    )
+    # Revision 0002's end-reason CHECK let DECLINED or EXPIRED through without a reason (NULL IN (...) is NULL): the
+    # NULL-safe version replaces it (the orchestrator's ruling, P1). Validated: an existing row without its reason
+    # stops the upgrade.
+    op.drop_constraint(op.f("ck_engagements_end_reason_matches_state"), "engagements", type_="check")
+    op.create_check_constraint(
+        op.f("ck_engagements_end_reason_matches_state"),
+        "engagements",
+        f"coalesce({_end_reason_matches('state')}, false)",
     )
     op.create_check_constraint(
         op.f("ck_engagements_ended_exactly_when_terminal"),

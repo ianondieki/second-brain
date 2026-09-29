@@ -108,7 +108,8 @@ class Engagement(IdMixin, TimestampsMixin, Base):
             ["proposal_versions.proposal_id", "proposal_versions.id"],
             name="fk_engagements_version",
         ),
-        CheckConstraint(end_reason_matches("state"), name="end_reason_matches_state"),
+        # NULL-safe since revision 0003 (NULL IN (...) is NULL, which a CHECK would let through).
+        CheckConstraint(f"coalesce({end_reason_matches('state')}, false)", name="end_reason_matches_state"),
         # Set by the database when the engagement enters a terminal state (and only then).
         CheckConstraint(f"(ended_at IS NOT NULL) = (state IN ({TERMINAL}))", name="ended_exactly_when_terminal"),
         # The organisation's named contact (docs/spec/06 6.9 stage 3): person, channel and contact-by date together.

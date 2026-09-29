@@ -545,11 +545,18 @@ async def test_a_payment_is_recorded_by_the_org_and_confirmed_once_by_the_develo
         )
 
 
-async def test_the_owner_cannot_create_a_declined_engagement_without_its_reason(owner_engine: AsyncEngine) -> None:
-    """Revision 0002's CHECK lets a NULL end_reason through (NULL IN (...) is NULL); the genesis event's CHECK is
-    NULL-safe and mirrors the engagement, so a DECLINED or EXPIRED engagement always carries its reason."""
+async def test_a_declined_or_expired_engagement_needs_its_reason(owner_engine: AsyncEngine) -> None:
+    """Revision 0002's CHECK let a NULL end_reason through (NULL IN (...) is NULL); revision 0003 replaces it with a
+    NULL-safe one, so the table itself refuses DECLINED or EXPIRED without its reason code, for every role; a reason
+    on any other state stays refused, and a terminal state without a reason code (WITHDRAWN) is fine."""
     async with as_app(owner_engine) as conn:
         p = await parties(conn)
+        definition = await run(
+            conn,
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+            " WHERE conname = 'ck_engagements_end_reason_matches_state'",
+        )
+        assert definition.startswith("CHECK (COALESCE(")
         params = {
             "id": uuid7(),
             "p": p.proposal,
@@ -558,10 +565,16 @@ async def test_the_owner_cannot_create_a_declined_engagement_without_its_reason(
             "v": p.version,
             "origin": "tagged",
         }
-        await expect(conn, ENGAGE, "ck_engagement_events_end_reason_matches_state", **params | {"state": "DECLINED"})
-        await expect(conn, ENGAGE, "ck_engagement_events_end_reason_matches_state", **params | {"state": "EXPIRED"})
-        await run(conn, ENGAGE, **params | {"state": "WITHDRAWN"})  # a terminal state without a reason code
+        for state in ("DECLINED", "EXPIRED"):
+            await expect(conn, ENGAGE, "ck_engagements_end_reason_matches_state", **params | {"state": state})
+        with_reason = ENGAGE.replace("origin, state)", "origin, state, end_reason)").replace(
+            "CAST(:state AS engagement_state))", "CAST(:state AS engagement_state), 'BUDGET')"
+        )
+        await expect(conn, with_reason, "ck_engagements_end_reason_matches_state", **params | {"state": "SUBMITTED"})
+        await expect(conn, with_reason, "ck_engagements_end_reason_matches_state", **params | {"state": "EXPIRED"})
+        await run(conn, ENGAGE, **params | {"state": "WITHDRAWN"})
         assert await run(conn, "SELECT ended_at IS NOT NULL FROM engagements WHERE id = :id", id=params["id"]) is True
+        await run(conn, with_reason, **params | {"id": uuid7(), "org": p.org, "state": "DECLINED"})
 
 
 async def test_demo_account_is_the_owners_to_set(owner_engine: AsyncEngine) -> None:
