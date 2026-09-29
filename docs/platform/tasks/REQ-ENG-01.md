@@ -188,3 +188,6 @@ Result on the branch: full backend suite 1022 passed (951 before, 71 new), `ruff
 - `signatures.ip` and `user_agent` are personal data kept with the evidence; their retention belongs to the Phase 8
   retention schedule.
 - "Signed outside the platform" (assignment, exclusive licence) needs a new `step_up_method` value and path later.
+- The database trusts the state machine for deadline values (`stage_deadline_at` on an event, from `policy.yaml` on
+  the business-day calendar): a same-state event can move a deadline. Every change is an event, so it is visible and
+  verifiable in the History tab, but a policy check of the value belongs to P5.
