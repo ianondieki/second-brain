@@ -21,6 +21,7 @@ from bridge.jobs import audit as audit_jobs
 from bridge.jobs import provenance as jobs
 from bridge.jobs import reminders as reminder_jobs
 from bridge.jobs.app import IMPORT_PATHS, app
+from bridge.matching.tasks import SCAN_TASK as SCOUT_SCAN_TASK
 from bridge.provenance import service
 from bridge.provenance.service import RegistrationError, RegistrationPendingError
 from bridge.provenance.signing import LocalSigner
@@ -75,6 +76,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         audit_jobs.VERIFY_TASK: "30 21 * * *",
         reminder_jobs.DISPATCH_TASK: "*/15 * * * *",
         reminder_jobs.ORG_DIGEST_TASK: "*/15 * * * *",
+        SCOUT_SCAN_TASK: "*/15 * * * *",
     }
 
 
