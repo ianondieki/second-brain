@@ -318,3 +318,29 @@ Files: `bridge/proposals/{access,grants,render,views}.py`, `bridge/legal/nda.py`
   ended engagements directly as the owner (0003 records the inserted state as the genesis event), as do
   `integration/world.py` and `integration/test_migrations.py`'s fixtures.
 
+## P3 reviews (2026-09-29, at `99541b9`): reviewer PASS, security-reviewer PASS
+
+Fixed before merge: `tier2_gate` answers a session still waiting for its second factor with 401 `mfa_required` before
+any membership lookup or audit write (security MINOR 1; `test_access.py::test_a_session_waiting_for_its_second_factor_is_asked_for_it_before_anything_else`,
+red first). Test gaps closed: `test_access.py::test_the_tier2_row_is_read_in_the_path_organisations_tenant` (a
+reviewer of two organisations; `tier2.load` runs with `app.user_id` the reviewer and `app.org_id` the path's
+organisation, and the other organisation is refused before any read) and the owner's `POST .../nda` answered 409
+`nda_not_needed` with no row written (`::test_the_owner_reads_their_own_tier2_without_a_logged_view`).
+
+Follow-ups (MINOR, not built):
+
+- The NDA purpose (`check_nda=False`) cannot run `app_tier2_granted`, which needs the NDA; so the NDA step does not
+  check who accepted the Master Enterprise Terms (the render does). THREAT_MODEL §5 (the NDA and access-log R row) now
+  says so. A definer function answering "granted but for the NDA" would close it (`db-migrations`).
+- `document_views` should snapshot the viewer's name and verified email at the view (`db-migrations`): today "Who has
+  seen this" joins `users` for the name (an INNER JOIN), so a viewer's erasure would drop or rename their past views.
+- A grant revoked after the predicate passed and before `tier2.load` or the view insert answers 404 (the load finds
+  no row) or 500 (the `document_views` policy refuses) instead of a 403 naming the revocation: re-run `require` on
+  that path.
+- With the flag off, refusals of signed-in members are audited on the organisation's chain (audit growth; T8.4 rate
+  limits; `REQ-SEC-01.md`).
+- `grant_on_tag` creates a new grant after an earlier revocation (a re-tag counts as the owner's consent); decide when
+  revocation by the owner lands.
+- Commit sizes: `access.py` (about 330 lines) and the routes commit (about 330) exceed the ~300-line guidance; recorded
+  as a deviation (one module each).
+
