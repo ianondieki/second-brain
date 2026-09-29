@@ -1,22 +1,33 @@
-"""Problems API (REQ-PROP-01; docs/spec/06 6.3): ``GET /api/problems``, the editor's linked-Problem picker.
-Signed-in users only; published problems clear of moderation, newest first, filtered by niche (a parent niche includes
-its children) and by text in the title or statement."""
+"""Problems API (REQ-PROP-01, REQ-RES-01, REQ-RES-02; docs/spec/06 6.3, 6.5). Signed-in users only.
+
+- ``GET /api/problems``: the editor's linked-Problem picker and the problem list: published problems clear of
+  moderation, newest first, filtered by niche (a parent niche includes its children), country, county (AC-RES-4) and
+  text in the title or statement.
+- ``GET /api/problems/{problem_id}``: one published, clear problem card with its cited sources (URL, publisher, source
+  type, dates, verbatim quote) and its label: "AI-drafted, human-reviewed on <date>" for a research card
+  (``[[COPY-REVIEW]]``; a card the demo seed made says so instead), "Developer-reported" for a developer's. Anything
+  else, a research ``candidate`` included (AC-RES-2), is 404.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from bridge.auth.deps import CurrentSession, Db
-from bridge.errors import ERROR_RESPONSES
+from bridge.errors import ERROR_RESPONSES, not_found
 from bridge.problems import service
 from bridge.proposals.schemas import ProblemRef
 
 router = APIRouter(prefix="/api/problems", tags=["problems"], responses=ERROR_RESPONSES)
 NO_NUL = r"^[^\x00]*$"
+COUNTRY = r"^[A-Z]{2}$"
+COUNTY = r"^[A-Z]{2}-[A-Z0-9]{1,5}$"
 
 
 class ProblemCard(ProblemRef):
@@ -28,21 +39,80 @@ class ProblemPage(BaseModel):
     items: list[ProblemCard]
 
 
+class CitationOut(BaseModel):
+    url: str
+    publisher: str | None
+    source_type: str | None
+    published_date: date | None
+    retrieved_at: datetime
+    quote: str | None
+
+
+class ProblemDetail(ProblemCard):
+    affected_group: str | None
+    country: str
+    county_code: str | None
+    ai_generated: bool
+    seeded_example: bool = Field(description="A demo seed card made from a fixed answer, never a live AI result")
+    confidence: Decimal | None
+    named_orgs: list[str]
+    citations: list[CitationOut]
+
+
 @router.get("")
 async def list_problems(
     live: CurrentSession,
     db: Db,
     niche: Annotated[str | None, Query(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)] = None,
+    country: Annotated[str | None, Query(pattern=COUNTRY)] = None,
+    county: Annotated[str | None, Query(pattern=COUNTY)] = None,
     q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=NO_NUL)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> ProblemPage:
     rows = await service.list_published(
-        db, niche=niche, q=(q.strip() or None) if q else None, limit=limit, offset=offset
+        db,
+        niche=niche,
+        q=(q.strip() or None) if q else None,
+        limit=limit,
+        offset=offset,
+        country=country,
+        county=county,
     )
     return ProblemPage(
         items=[
             ProblemCard(**ref.model_dump(), statement=statement, published_at=published_at)
             for ref, statement, published_at in rows
         ]
+    )
+
+
+@router.get("/{problem_id}")
+async def get_problem(problem_id: UUID, live: CurrentSession, db: Db) -> ProblemDetail:
+    found = await service.get_published(db, problem_id)
+    if found is None:
+        raise not_found("No such problem.")
+    ref, row, citations = found
+    return ProblemDetail(
+        **ref.model_dump(),
+        statement=row.statement,
+        published_at=row.published_at,
+        affected_group=row.affected_group,
+        country=row.country,
+        county_code=row.county_code,
+        ai_generated=row.ai_generated,
+        seeded_example=bool(row.seeded_example),
+        confidence=row.confidence,
+        named_orgs=list(row.named_orgs or ()),
+        citations=[
+            CitationOut(
+                url=c.url,
+                publisher=c.publisher,
+                source_type=c.source_type,
+                published_date=c.published_date,
+                retrieved_at=c.retrieved_at,
+                quote=c.quote,
+            )
+            for c in citations
+        ],
     )
