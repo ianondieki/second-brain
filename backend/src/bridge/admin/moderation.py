@@ -5,6 +5,11 @@ problem, and decide one: approve (the subject becomes ``clear``; a problem ``pub
 The subject's state changes only through ``app_moderate_proposal`` / ``app_moderate_problem`` (SECURITY DEFINER:
 staff only, never on their own content); the case records who decided and when, and the decision is audited on the
 staff member's chain. Approving a held proposal writes its ``proposal_published`` signal, which publishing withheld.
+
+Vulnerability content is never made public (REQ-PROP-02): while the subject's current Tier-1 text screens as
+``security_vulnerability``, ``approve`` answers 409 ``cannot_approve_vulnerability`` and only ``reject`` is possible.
+A false positive is released by its author, who publishes a corrected version; that version is screened again, and
+once it no longer screens as a vulnerability a moderator may approve the case (whose reasons keep the history).
 Claims, research approval and reports arrive with P15.
 """
 
@@ -22,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.audit.service import record as audit
 from bridge.errors import ApiError, not_found
 from bridge.models.enums import AuditActor, ModerationCaseStatus, ModerationSource, ModerationState
+from bridge.proposals.prescreen import SECURITY_VULNERABILITY, RulesPreScreen, ScreenInput
 from bridge.proposals.service import signal
 
 UNRESOLVED: Final = ("open", "held", "escalated")
@@ -106,6 +112,21 @@ _CLOSE = text(
 )
 
 
+_CURRENT_TEXT = {
+    "proposal": text("SELECT title, problem_statement, impact_claims, summary FROM proposals WHERE id = :id"),
+    "problem": text("SELECT title, statement FROM problems WHERE id = :id"),
+}
+
+
+async def _shows_a_vulnerability(db: AsyncSession, subject_type: str, subject_id: UUID) -> bool:
+    """Whether the subject's current Tier-1 text screens as a security vulnerability (screened again now)."""
+    row = (await db.execute(_CURRENT_TEXT[subject_type], {"id": subject_id})).one_or_none()
+    if row is None:
+        return False
+    fields = {name: value for name, value in row._asdict().items() if value}
+    return SECURITY_VULNERABILITY in (await RulesPreScreen().screen(ScreenInput(fields))).reasons
+
+
 def _refusal(exc: DBAPIError) -> ApiError | None:
     sqlstate = getattr(exc.orig, "sqlstate", None)
     if sqlstate == "P0002":  # no_data_found: gone, or the moderator's own content
@@ -122,6 +143,18 @@ async def decide(db: AsyncSession, *, staff_id: UUID, case_id: UUID, decision: D
     if case.status not in UNRESOLVED:
         raise ApiError(409, "already_decided", "This case was already decided.")
     approve = decision == "approve"
+    vulnerable = (
+        approve
+        and case.subject_type in _CURRENT_TEXT
+        and await _shows_a_vulnerability(db, case.subject_type, case.subject_id)
+    )
+    if vulnerable:
+        raise ApiError(
+            409,
+            "cannot_approve_vulnerability",
+            "Vulnerability reports are never made public: reject this case. The author can publish a corrected"
+            " version, which is screened again.",
+        )
     state = ModerationState.CLEAR if approve else ModerationState.REJECTED
     proposal: Any = None
     try:
