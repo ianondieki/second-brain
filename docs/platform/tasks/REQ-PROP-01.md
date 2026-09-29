@@ -95,3 +95,49 @@ Follow-ups (not in P2):
 1. `admin/moderation.py:160-205`: a decision locks case → proposal while a publish locks proposal → case, so a concurrent publish and decision can deadlock (the decision answers 500; nothing leaks). Lock the proposal row before the case, or map 40P01 to 409/retry; add a concurrent test of the post-lock version check.
 2. `proposal_versions` RLS lets signed-in readers read an earlier registered version (including a v1 held for a vulnerability) through `bridge_app`; no endpoint serves it. db-migrations: a per-version moderation flag or restrict non-owners to `current_version_id`.
 3. Sanitiser: false positives "Served 15 000 till now" (payment) and "ASP.NET" (domain); still accepted `O712345678` (letter O) and spelled-out "jane at gmail dot com" (after prototype).
+
+## Notes (P8 frontend, branch `feat/REQ-PROP-01-screens`)
+
+Built (F2, developer):
+
+- `/dev/ideas` (My ideas): newest change first; each row has the title link, niche, at most two chips (status as icon
+  + words + colour: Draft, Published, Held for review, Not approved, Hidden; "Unpublished changes") and the last change
+  in Nairobi time. "New idea" is the one primary action, or the empty state's one action. "My ideas" joins DevNav.
+- `/dev/ideas/new` and `/dev/ideas/{id}/edit` (`?step=2|3`): the 3-step editor. The stepper is an `<ol>` with
+  `aria-current="step"`; every change autosaves 1.2 s after typing stops (POST once, then PATCH; saves never overlap;
+  the URL becomes `/edit` without a navigation); the sanitiser's 422 findings sit by their fields; the fields are
+  disabled until hydration so early typing is not lost. Step 1: title, niche, the problem choice (link up to five
+  published problems via `GET /api/problems`, or describe a new developer-reported one; a new idea starts with neither
+  chosen), then the public teaser. Step 2 (Tier 2) is marked confidential in the docs/spec/04 4.2 approved phrasing;
+  links (http/https, checked before sending) and attachments (raw body, `X-File-Name` percent-encoded; wrong type,
+  20 MB, EICAR/infected and 10-file limits explained). Step 3: teaser preview, detail counts, what still blocks
+  publishing (one link back per step), the three statements from `GET /api/proposals/attestations` verbatim (version
+  sent back), and Publish; 403 `d1_required`, 402 `plan_limit` (with the cap), 409 `attestation_text_outdated` (text
+  re-read, boxes cleared), 409 `nothing_to_publish`, 422 field lists and 503 are worded.
+- `/dev/ideas/{id}`: status and moderation notices, the teaser, the owner's Tier 2, the certificate id, registration
+  time, timestamp status, the `/verify/{cert_id}` link and the certificate PDF (shown once timestamped), and Delete
+  with a dialog stating what is kept (published: hidden, evidence kept; draft: removed). Slots for "Who has seen this"
+  (P3) and "Pitch to companies" (P4) are marked in the page, not built.
+- Copy `nav.ideas`, `ideaFields.*`, `ideas.*`, `ideaDelete.*`, `ideaEditor.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8b`);
+  Swahili drafts `[[SW-REVIEW]]`.
+- Tests: `ideas.test.ts`, `ideas-pages.test.tsx`, `editor/editor.test.tsx`, `frontend/e2e/proposal-wizard.spec.ts`
+  (axe, one primary action, no horizontal scroll, both projects).
+
+Shared files changed: `components/DevNav.tsx` (My ideas), `components/ui/icons.tsx`, `components/ui/TextAreaField.tsx`
+(new), `components/ui/ButtonLink.tsx` (split out of `Button.tsx` so client bundles skip `next/link`),
+`locales/locales.test.ts` (refuses key segments next-intl cannot load, e.g. `prototype`), `frontend/.env.example`.
+
+Follow-ups, not built:
+
+- JS budget: the editor routes measure 149,958 bytes gzipped of 150,000 (baseline of a signed-in page 144,578); any
+  addition to step 1 or to the shared shell tips them over. Steps 2 and 3, the picker panels and the API calls load on
+  demand. The Lighthouse CI budget (AC-UX-3) is still to add.
+- D1 in e2e: the fake SMS outbox is in-process, so `e2e/support/verification.ts` raises the test developer to D1
+  through `E2E_DATABASE_OWNER_URL`; CI does not set it yet, so the publishing test skips there. Either export it in the
+  e2e job (the compose Postgres is on 127.0.0.1:5432) or add a dev/test-only way to read fake SMS codes.
+- No in-app phone verification screen exists: the 403 notice says so in plain text. Link it when the D1 flow ships.
+- 402 `plan_limit`: no billing page yet, so the notice has no upgrade link.
+- The certificate PDF link appears only once timestamped (the API answers 404 before the worker has registered the
+  version); owners cannot download a "Timestamp pending" certificate meanwhile.
+- Pagination of My ideas (API caps at 200).
+
