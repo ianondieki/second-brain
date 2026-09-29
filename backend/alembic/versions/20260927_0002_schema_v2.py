@@ -751,11 +751,14 @@ POLICIES: tuple[Policy, ...] = (
         "SELECT",
         f"user_id = app_user_id() OR (org_id IS NOT NULL AND {_ORG_MEMBER}) OR {_STAFF_ADMIN}",
     ),
-    # System rows (no user, no organisation) are allowed; a row never names another user or a foreign organisation.
+    # System rows (no user, no organisation) are allowed; a row never names another user or a foreign organisation. A
+    # system batch row only from a request that binds no user (the platform job): a request bound to a user never
+    # writes into the platform's batch items (round 5).
     Policy(
         "llm_calls",
         "INSERT",
-        check="(user_id IS NULL OR user_id = app_user_id()) AND (org_id IS NULL OR app_is_member(org_id))",
+        check="(user_id IS NULL OR user_id = app_user_id()) AND (org_id IS NULL OR app_is_member(org_id))"
+        " AND (batch_id IS NULL OR user_id IS NOT NULL OR org_id IS NOT NULL OR app_user_id() IS NULL)",
     ),
     # --- staff tables ---
     Policy("moderation_cases", "SELECT", _STAFF),
@@ -819,8 +822,10 @@ $$;
 """
 
 # The LLM spend rule, defined once (docs/spec/09 cost caps): every llm_calls row counts, except a Message Batches
-# reservation whose item has settled (the settled row counts instead). security_invoker: a tenant reads only the rows
-# RLS lets it read, exactly as from llm_calls (the tenant monthly sum); app_llm_spend_usd() reads it as the owner.
+# reservation whose item has settled (the settled row counts instead). An item is its tenant's: only a settlement with
+# the reservation's org_id and user_id settles it (round 5; llm_calls_batch_guard). security_invoker: a tenant reads
+# only the rows RLS lets it read, exactly as from llm_calls (the tenant monthly sum); app_llm_spend_usd() reads it as
+# the owner.
 VIEWS_SQL = r"""
 CREATE VIEW llm_spend WITH (security_invoker = true) AS
 SELECT c.org_id, c.user_id, c.cost_usd, c.created_at
@@ -828,7 +833,8 @@ SELECT c.org_id, c.user_id, c.cost_usd, c.created_at
  WHERE NOT (c.status = 'batch_reserved' AND EXISTS (
        SELECT 1
          FROM llm_calls s
-        WHERE s.batch_id = c.batch_id AND s.custom_id = c.custom_id AND s.status <> 'batch_reserved'));
+        WHERE s.batch_id = c.batch_id AND s.custom_id = c.custom_id AND s.status <> 'batch_reserved'
+          AND s.org_id IS NOT DISTINCT FROM c.org_id AND s.user_id IS NOT DISTINCT FROM c.user_id));
 """
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -2269,6 +2275,29 @@ BEGIN
 END;
 $$;
 
+-- A Message Batches item is identified within its tenant (org_id and user_id, NULL for none: the unique indexes and the
+-- llm_spend rule), so a settlement settles only a reservation of its own tenant: one for an item that has
+-- reservations, none of them its tenant's, is refused (another tenant's request, or a ledger bound to another
+-- organisation or user than the reservation), so it can neither cancel that reservation from the spend nor pre-empt
+-- its real settlement. Reservations of different tenants for one pair coexist. SECURITY DEFINER: sees every tenant's
+-- reservations whatever the writer may read.
+CREATE FUNCTION llm_calls_batch_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.batch_id IS NOT NULL AND NEW.status <> 'batch_reserved'
+       AND EXISTS (
+           SELECT 1
+             FROM public.llm_calls r
+            WHERE r.batch_id = NEW.batch_id AND r.custom_id = NEW.custom_id AND r.status = 'batch_reserved')
+       AND NOT EXISTS (
+           SELECT 1
+             FROM public.llm_calls r
+            WHERE r.batch_id = NEW.batch_id AND r.custom_id = NEW.custom_id AND r.status = 'batch_reserved'
+              AND r.org_id IS NOT DISTINCT FROM NEW.org_id AND r.user_id IS NOT DISTINCT FROM NEW.user_id) THEN
+        RAISE EXCEPTION 'llm_calls: a batch settlement settles only a reservation of its own tenant (organisation and'
+            ' user)' USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;
@@ -2299,6 +2328,7 @@ REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_status_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION llm_calls_batch_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION phone_verifications_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION proposal_versions_guard() FROM PUBLIC;
@@ -2333,6 +2363,9 @@ CREATE TRIGGER org_claims_dns_guard
 CREATE TRIGGER org_claims_status_guard
     BEFORE UPDATE ON org_claims
     FOR EACH ROW EXECUTE FUNCTION org_claims_status_guard();
+CREATE TRIGGER llm_calls_batch_guard
+    BEFORE INSERT ON llm_calls
+    FOR EACH ROW EXECUTE FUNCTION llm_calls_batch_guard();
 CREATE TRIGGER phone_verifications_guard
     BEFORE INSERT ON phone_verifications
     FOR EACH ROW EXECUTE FUNCTION phone_verifications_guard();
@@ -2413,6 +2446,7 @@ TRIGGER_FUNCTIONS = (
     "org_claims_guard()",
     "org_claims_dns_guard()",
     "org_claims_status_guard()",
+    "llm_calls_batch_guard()",
     "phone_verifications_guard()",
     "evidence_time_guard()",
     "provenance_records_hash_guard()",
@@ -2928,19 +2962,22 @@ def _create_tables() -> None:
     op.create_index("ix_llm_calls_created_at", "llm_calls", ["created_at"], unique=False)
     op.create_index("ix_llm_calls_org_id_created_at", "llm_calls", ["org_id", "created_at"], unique=False)
     op.create_index("ix_llm_calls_user_id_created_at", "llm_calls", ["user_id", "created_at"], unique=False)
-    # A Message Batches item is reserved once and settles once (the ledger settles with ON CONFLICT DO NOTHING).
+    # A Message Batches item is reserved once and settles once within its tenant (org_id, user_id; NULL counts as one
+    # value), so another tenant's row never blocks it (the ledger settles with ON CONFLICT DO NOTHING).
     op.create_index(
         "uq_llm_calls_batch_reservation",
         "llm_calls",
-        ["batch_id", "custom_id"],
+        ["batch_id", "custom_id", "org_id", "user_id"],
         unique=True,
+        postgresql_nulls_not_distinct=True,
         postgresql_where=sa.text("status = 'batch_reserved'"),
     )
     op.create_index(
         "uq_llm_calls_batch_settlement",
         "llm_calls",
-        ["batch_id", "custom_id"],
+        ["batch_id", "custom_id", "org_id", "user_id"],
         unique=True,
+        postgresql_nulls_not_distinct=True,
         postgresql_where=sa.text("batch_id IS NOT NULL AND status <> 'batch_reserved'"),
     )
     op.create_table(

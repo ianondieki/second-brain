@@ -1907,7 +1907,8 @@ async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engi
             batch=None,
             item=None,
         )
-        # A system job's item (no user, no organisation) settles the same way.
+        # A system job's item (no user, no organisation; the job binds no user) settles the same way.
+        await act(conn, None)
         system = {"u": None, "batch": batch, "item": "item-2"}
         await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("1.00"), **system)
         for _ in range(2):
@@ -1917,6 +1918,64 @@ async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engi
         assert await run(conn, "SELECT count(*) FROM llm_spend WHERE user_id = :u", u=user) == 0
         assert await run(conn, "SELECT count(*) FROM llm_calls WHERE batch_id = :b", b=batch) == 0
         assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")  # the total, never the rows
+
+
+TENANT_BATCH_CALL = (
+    "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, batch_id, custom_id)"
+    " VALUES (:id, :org, :u, 't', 'm', :status, :cost, :batch, :item)"
+)
+ORG_SPEND = "SELECT coalesce(sum(cost_usd), 0) FROM llm_spend WHERE org_id = :org"
+SETTLES_ONLY = "settles only a reservation of its own tenant"  # llm_calls_batch_guard()
+
+
+async def test_a_batch_item_belongs_to_its_tenant(owner_engine: AsyncEngine) -> None:
+    """The review probes L1, L1b, L2, L2b and L9 (round 5): a batch item is identified within its tenant (org_id and
+    user_id, NULL for none), so another tenant's rows naming the same (batch_id, custom_id) neither settle, cancel nor
+    block it. A settlement settles only a reservation of its own tenant: one for an item only another tenant reserved
+    is refused, as is one under another organisation or user than the reservation's (a mis-bound ledger).
+    Reservations of different tenants for one pair coexist, each counting until its own tenant settles it. A request
+    bound to a user writes no platform job's batch row (no user, no organisation); the job, binding no user, does."""
+    async with as_app(owner_engine) as conn:
+        victim = await w.add_user(conn, _email("batch-victim"), "Victim")
+        intruder = await w.add_user(conn, _email("batch-intruder"), "Intruder")
+        org = await add_org(conn, verification="e1")
+        await _add_membership(conn, org, victim, "{owner,admin}")
+        since = await run(conn, "SELECT now() - interval '1 second'")
+        before = await run(conn, GLOBAL_SPEND, t=since)
+        batch = f"msgbatch_{uuid4().hex[:20]}"
+        mine, theirs = {"org": org, "u": victim, "batch": batch}, {"org": None, "u": intruder, "batch": batch}
+        system = {"org": None, "u": None, "batch": batch}
+        settle = TENANT_BATCH_CALL + " ON CONFLICT DO NOTHING"
+        reserved = {"status": "batch_reserved"}
+        await act(conn, victim, org)
+        for item, cost in (("item-1", 50), ("item-2", 40)):
+            await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(cost), item=item, **mine)
+        await act(conn, intruder)  # L1: a zero-cost settlement of the victim's item, as a user or a system row
+        for tenant in (theirs, system):
+            for sql in (TENANT_BATCH_CALL, settle):
+                await expect(conn, sql, SETTLES_ONLY, id=uuid7(), status="ok", cost=Decimal(0), item="item-1", **tenant)
+        # L2: the intruder reserves a pair the victim has not reserved yet: the intruder's own item.
+        await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(5), item="item-3", **theirs)
+        await act(conn, victim, org)  # L2b: the victim still reserves that pair, and settles it as the victim's
+        await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(30), item="item-3", **mine)
+        for item, cost in (("item-1", 38), ("item-3", 20)):  # L1b: the real settlement is never dropped
+            params = {"id": uuid7(), "status": "ok", "cost": Decimal(cost), "item": item, **mine}
+            assert (await conn.execute(text(settle), params)).rowcount == 1
+        # L9: settled under no organisation although reserved under one (a mis-bound ledger): refused.
+        unbound = mine | {"org": None}
+        await expect(conn, settle, SETTLES_ONLY, id=uuid7(), status="ok", cost=Decimal(1), item="item-2", **unbound)
+        assert await run(conn, ORG_SPEND, org=org) == Decimal(98)  # 38 settled, 40 reserved, 20 settled
+        await act(conn, intruder)  # the victim's settlement of item-3 cancelled only the victim's reservation
+        assert await run(conn, USER_SPEND, u=intruder) == Decimal(5)
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(103)
+        job_item = {"id": uuid7(), **reserved, "cost": Decimal(1), "item": "item-4", **system}
+        await expect(conn, TENANT_BATCH_CALL, "row-level security", **job_item)
+        await act(conn, None)
+        await run(conn, TENANT_BATCH_CALL, **job_item)
+        await act(conn, intruder)
+        job_settles = {"id": uuid7(), "status": "ok", "cost": Decimal(0), "item": "item-4", **system}
+        await expect(conn, settle, "row-level security", **job_settles)
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(104)
 
 
 LLM_CALL = (
