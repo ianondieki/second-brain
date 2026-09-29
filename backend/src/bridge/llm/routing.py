@@ -53,7 +53,7 @@ from bridge.llm.errors import (
 )
 from bridge.llm.guard import ConsentChecker, check_tier2
 from bridge.llm.ledger import LedgerStore
-from bridge.llm.prepare import check_messages, check_schema
+from bridge.llm.prepare import check_breakpoints, check_messages, check_schema, check_tools, resolve_effort
 from bridge.llm.registry import Registry, TaskSpec, free_model_key
 from bridge.llm.types import CallContext, LLMOutput, Message, Result
 from bridge.logging import get_logger
@@ -193,7 +193,6 @@ class RoutedLLMClient:
         if not self._runtime.demo_fallback:
             raise self._unavailable(spec, reason)
         if not guarded:
-            check_messages(messages)
             await self._guard(spec, messages, ctx)
         result = fallback_result(schema, reason=reason, trace_id=str(ctx.trace_id))
         log.info("llm.demo_fallback", task=spec.name, reason=reason.value, trace_id=ctx.trace_id)
@@ -211,7 +210,12 @@ class RoutedLLMClient:
         cache_breakpoints: Sequence[int] | None = None,
     ) -> Result[OutputT]:
         spec = self._runtime.registry.task(task)
+        # A caller's mistake is refused on every route as the Anthropic service refuses it (tests on the fake see it).
         check_schema(schema)
+        check_messages(messages)
+        check_breakpoints(cache_breakpoints, len(messages))
+        check_tools(spec, tools)
+        resolve_effort(spec, self._runtime.registry.model(spec.model), effort)
         ctx = replace(ctx, trace_id=ctx.trace_id or uuid7().hex)  # the service and a fallback share one trace
         route = await self._route(spec, tools=bool(tools))
         if isinstance(route, FallbackReason):

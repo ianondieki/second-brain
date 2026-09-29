@@ -96,6 +96,25 @@ async def test_unknown_tasks_and_bad_schemas_are_the_callers_mistake() -> None:
         await r.client.complete(TASK, screen(), dict, ctx=DEMO)  # type: ignore[type-var]
 
 
+@pytest.mark.parametrize("provider", ["fake", "free"])
+async def test_a_callers_mistake_is_refused_on_every_route_as_on_anthropic(provider: str) -> None:
+    """Effort on a model without one, a bad cache breakpoint, a tool the task may not use, or messages in the wrong
+    order are ``LLMConfigError`` whatever the provider, so a caller's tests on the fake catch them."""
+    r = routed(provider=provider)  # type: ignore[arg-type]
+    with respx.mock(assert_all_called=False) as router:
+        route = router.route()
+        with pytest.raises(LLMConfigError, match="no effort parameter"):
+            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, effort="high")
+        with pytest.raises(LLMConfigError, match="breakpoints"):
+            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, cache_breakpoints=[7])
+        with pytest.raises(LLMConfigError, match="may not use tool"):
+            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
+        with pytest.raises(LLMConfigError, match="last message"):
+            await r.client.complete(TASK, [*screen(), Message.assistant(Instruction("x"))], Verdict, ctx=DEMO)
+    assert not route.called
+    assert r.ledger.entries == []
+
+
 # ------------------------------------------------------------------------------------------ a free provider
 
 
@@ -103,7 +122,7 @@ async def test_a_demo_users_call_goes_to_the_free_slot_at_no_cost() -> None:
     r = routed()
     with respx.mock(assert_all_called=True) as router:
         route = router.post(url(1)).mock(return_value=chat())
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, effort="high")  # effort is dropped
+        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
     assert result.demo_fallback is False
     assert result.fallback_reason is None
     assert (result.parsed.verdict, result.model) == ("clean", free_model_key(slot(1)))
@@ -202,9 +221,19 @@ async def test_a_task_listing_no_configured_slot_falls_back() -> None:
 
 
 async def test_tools_never_go_to_a_free_provider() -> None:
-    r = routed()
+    r = routed(reg=registry_with(moderation_prescreen={"allowed_tools": ["web_search_20260209"]}))
     result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
     assert_fallback(result, "tools_unsupported")
+
+
+async def test_an_effort_override_is_dropped_on_a_free_slot() -> None:
+    """Valid for the task's Anthropic model, meaningless for a free model: sent without effort."""
+    r = routed()
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post(url(1)).mock(return_value=chat())
+        result = await r.client.complete("originality_explainer", screen(), Verdict, ctx=DEMO, effort="high")
+    assert result.demo_fallback is False
+    assert "effort" not in route.calls.last.request.content.decode()
 
 
 @pytest.mark.parametrize(
