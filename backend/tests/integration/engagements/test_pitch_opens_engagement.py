@@ -6,6 +6,7 @@ deadline from policy.yaml (the interim insert set none), and a refusal is the Pi
 from __future__ import annotations
 
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -67,7 +68,7 @@ async def test_a_refusal_is_the_pitchs_409(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(ApiError) as conflict:
         await tag_hooks.open_engagement(None, tag_id=UUID(int=5), **ids)  # type: ignore[arg-type]
     assert conflict.value.status_code == 409
-    assert conflict.value.detail == {
+    assert cast(dict[str, str], conflict.value.detail) == {
         "code": "tag_conflict",
         "message": "The organisation cannot receive engagements now.",
     }
