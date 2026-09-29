@@ -21,6 +21,7 @@ import {
   DUAL_ENDORSEMENT_STATES,
   isFinished,
   kesAmount,
+  offersContactReveal,
   shortHash,
   stageLeft,
   stepperSteps,
@@ -153,7 +154,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
 async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
   const t = await getTranslations("tracker");
   const dual = DUAL_ENDORSEMENT_STATES.has(detail.state) || detail.endorsements.some((e) => e.milestone_id === null);
-  const namedContact = detail.my_party === "org" && detail.contact?.user_id === me.user.id;
+  const namedContact = offersContactReveal(detail, me.user.id);
   const nothing =
     !dual && !detail.contact && detail.agreements.length === 0 && detail.signatures.length === 0 && detail.payments.length === 0;
   return (

@@ -12,6 +12,7 @@ import {
   formatDate,
   kesAmount,
   milestoneTargets,
+  offersContactReveal,
   stageChip,
   stageLeft,
   stepperSteps,
@@ -239,5 +240,27 @@ describe("tracker links", () => {
       "/org/engagements/e1?org=o1&tab=documents&doc=agreement",
     );
     expect(withQuery("/dev/engagements/e1", "", { tab: "history" })).toBe("/dev/engagements/e1?tab=history");
+  });
+});
+
+describe("the contact reveal", () => {
+  const contact = { user_id: "u-rita", name: "Rita Wanjiru", role: "signatory", channel: "email" as const, contact_by: "2026-10-01" };
+  const approved = detail({ my_party: "org", state: "INTEREST_CONFIRMED", contact });
+
+  it("is offered to the organisation's named contact once approved", () => {
+    expect(offersContactReveal(approved, "u-rita")).toBe(true);
+    expect(offersContactReveal({ ...approved, state: "CLOSED" }, "u-rita")).toBe(true);
+  });
+
+  it("is not offered to a member who is not the named contact, nor to the developer", () => {
+    expect(offersContactReveal(approved, "u-otieno")).toBe(false);
+    expect(offersContactReveal({ ...approved, my_party: "developer" }, "u-rita")).toBe(false);
+  });
+
+  it("is not offered before the approval or on an ended engagement", () => {
+    expect(offersContactReveal({ ...approved, state: "UNDER_REVIEW" }, "u-rita")).toBe(false);
+    for (const state of ["DECLINED", "WITHDRAWN", "EXPIRED", "TERMINATED"] as const) {
+      expect(offersContactReveal({ ...approved, state }, "u-rita"), state).toBe(false);
+    }
   });
 });
