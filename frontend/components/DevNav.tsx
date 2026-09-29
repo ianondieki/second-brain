@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ComponentType, SVGProps } from "react";
 
+import { EngagementsIcon } from "./tracker/icons";
 import { cn } from "./ui/cn";
 import { CompaniesIcon, HomeIcon, IdeasIcon } from "./ui/icons";
 
@@ -12,6 +13,7 @@ import { CompaniesIcon, HomeIcon, IdeasIcon } from "./ui/icons";
 export const DEV_SECTIONS = [
   { key: "home", href: "/dev", Icon: HomeIcon },
   { key: "ideas", href: "/dev/ideas", Icon: IdeasIcon },
+  { key: "engagements", href: "/dev/engagements", Icon: EngagementsIcon },
   { key: "companies", href: "/dev/companies", Icon: CompaniesIcon },
 ] as const satisfies ReadonlyArray<{ key: string; href: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }>;
 
