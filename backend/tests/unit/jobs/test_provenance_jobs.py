@@ -56,6 +56,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         "bridge.jobs.audit",
         "bridge.jobs.notifications",
         "bridge.jobs.reminders",
+        "bridge.jobs.scouts",
     ]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
