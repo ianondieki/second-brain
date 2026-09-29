@@ -121,6 +121,9 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 | D-23 · Python versions in CI | (a) legacy on 3.13, backend on 3.12 | 2026-09-24 | `PLAN.md` T1.2/T1.3 CI jobs |
 | D-24 · S3-compatible storage in the dev compose stack (MinIO image withdrawn) | (a) SeaweedFS for the local/CI S3 stand-in | 2026-09-27 | `infra/docker-compose.dev.yml` (`s3` service); `docs/platform/research/phase1-versions.md` |
 | D-25 · Four adviser voice-note tests fail on Linux | (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows | 2026-09-27 | `docs/platform/tests_skip_linux.txt`; `.github/workflows/pr.yml` legacy jobs |
+| D-35 · Prototype-first track | A working local prototype with every major feature end to end, for hackathon and recruiter demos: M1 (core flow, about 7–10 days), M2 (all features, about 3–4 weeks); it claims neither the Phase 2 exit nor any gate | 2026-09-29 | `PLAN.md` §8; `PROGRESS.md` Prototype checklist; `REQUIREMENTS.md` §7 |
+| D-36 · Zero spend for the prototype | No hosting, no new accounts, no real emails, SMS or payments; mail goes to Mailpit only; the owner's own LLM keys are the only exception | 2026-09-29 | `PLAN.md` §8 |
+| D-37 · LLM providers for local prototype runs (amends D-18 for local runs only) | OpenAI-compatible adapter (httpx) for the owner's free providers plus the existing Anthropic adapter; provider and model ids only in `ai/models.yaml` and `.env`; free providers are the default, Anthropic only with `LLM_PROVIDER=anthropic`, `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 prototype total; fall back to the fake with a "demo fallback" label; only seeded demo data goes to free providers; tests, `make check` and CI keep fakes and cassettes | 2026-09-29 | `PLAN.md` §8; `docs/platform/research/anthropic-prices-2026-09.md`; `docs/platform/tasks/REQ-LLM-01.md` ("Prototype providers") |
 
 The full entries (why, options, default, what they blocked) are kept below for the record.
 
@@ -299,3 +302,24 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Recommended default: (a), applied now so CI is green; revert if you choose otherwise.
 - Blocks: nothing.
 - Decision: (a) keep the four adviser tests on the Linux skip list; the full suite stays blocking on Windows — 2026-09-27
+
+### D-35 · Prototype-first track (the owner's decision, 2026-09-29)
+- Why: the owner wants a working local prototype with every major feature working end to end, for hackathon and recruiter demos, before the remaining Phase 2–8 depth.
+- Decision: build it in two milestones. **M1 (core flow, about 7–10 days):** proposals (Tier 1 teaser + Tier 2 confidential) with the authorship certificate and `/verify`; Tier-2 access (Evaluation NDA, grant, watermarked view, access log, "Who has seen this"); directory browse and simple search; Pitch to company with EM1; the tracker main path `SUBMITTED` → `CLOSED` plus `DECLINED` and `WITHDRAWN` with the test clock; reminders (developer daily nudge and org digest) in Mailpit and in-app; `make demo`. **M2 (all features, about 3–4 weeks):** scout agent with Express interest (`ORG_INTEREST`), research agent over saved public excerpts with admin approval, trending and a transparent ranker, the submission assistant, subscriptions with a fake M-Pesa checkout, minimal admin queues, polished screens, a recorded Playwright walkthrough and the README "Demo" section. If M2 time runs short the cut order is (last first) admin, trending/ranker, assistant, research, subscriptions; the M1 features and the scout are never cut.
+- It does not claim the Phase 2 exit or any gate. Nothing is removed from `REQUIREMENTS.md`; items outside the prototype are rescheduled to "after prototype" (`REQUIREMENTS.md` §7): full claims/E2, invitations, Problem Briefs, the originality check, D2, real payments and eTIMS, WhatsApp, the remaining tracker side states, the full Phase 7 polish and the Phase 8 audit.
+- Working rules for the track: from 2026-09-29 reviews fix BLOCKER and MAJOR findings only, and MINOR findings are logged as follow-ups in the task card instead of new review rounds; the `security-reviewer` runs one round on `auth/`, `tenancy/`, `provenance/`, `engagements/`, `billing/` and the new LLM adapter, then BLOCKER/MAJOR only. Open decisions D-26..D-34 use their recorded default (or the most conservative option where none is recorded) for the prototype, without stopping; the reports list what was applied.
+- Decision: accepted — 2026-09-29
+
+### D-36 · Zero spend for the prototype (the owner's decision, 2026-09-29)
+- Decision: no hosting, no new accounts, no real emails, SMS or payments. Mail goes to Mailpit only; SMS stays on the Fake provider; payments use a `FakePaymentProvider` behind the `PaymentProvider` interface of `docs/spec/05` (no Daraja or Paystack code or accounts). The only permitted cost is the owner's own LLM keys under D-37. `make demo` runs on the owner's laptop (8 GB RAM, Docker Desktop at 4 GB) with ClamAV replaced by a demo-only fake scanner.
+- Decision: accepted — 2026-09-29
+
+### D-37 · LLM providers for local prototype runs (amends D-18 for local runs only; the owner's approval of these providers as vendors, 2026-09-29)
+- Adapter: an OpenAI-compatible adapter implementing the `ModelAdapter` protocol (`bridge/llm/adapter.py`) over `httpx` (no new SDK) for the free providers the owner configures in `backend/.env` (per provider slot: base URL, key, model). `AnthropicAdapter` stays for `ANTHROPIC_API_KEY`.
+- Ids: provider and model ids live only in `backend/ai/models.yaml` and `.env` (`test_no_model_ids_in_code` keeps passing). `models.yaml` chooses the provider per task; the free providers are the default; Anthropic is used only when `LLM_PROVIDER=anthropic`.
+- Caps: free providers are priced at 0 with a per-day request cap. Anthropic: `LLM_GLOBAL_DAILY_CAP_USD=1.00` and a USD 5 total for the prototype, enforced through the existing `llm_calls` ledger. Anthropic prices were confirmed from the official price page on 2026-09-29 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified"); `models.yaml` records them with `pricing_status` and the source URL, and Anthropic stays disabled unless the prices are marked verified.
+- Failure behaviour: a missing key, a hit cap or a failed call falls back to the deterministic fake and the UI shows a small "demo fallback" label. The demo never errors.
+- Data rule: only seeded demo data may be sent to free providers (they may train on it); Tier-2 content from non-demo users is refused before any call.
+- Tests, `make check` and CI keep using fakes and cassettes only; nothing in CI reaches a provider (AC-SEC-5 unchanged).
+- Keys: agents never ask for a key; every new variable is documented in `backend/.env.example` and listed in the Handoff and the milestone reports.
+- Decision: accepted — 2026-09-29
