@@ -264,7 +264,11 @@ deviations). Fix round (`d0e9dc4`..`0c0ac6d`, 1191 passed): M1, m4 (the per-sess
 consent now needs the owner's live login session: new `bridge.auth.sessions.is_live`, so T2.2 also needs
 security-reviewer), m5, m6 fixed; m3 half done (missing batch items reported). M2 (batch reservations) and settle-once
 need `llm_calls.batch_id`/`custom_id`, a `batch_reserved` status and a spend rule: done as schema item G; impl-ai
-is merging schema `abc4263` into T2.2 and finishing M2 and settle-once. Carry to T2.9 and Phase 4 as the card notes
+merged schema `abc4263` into T2.2 (`73cc085`) and finished M2 and settle-once (`47e801a`..`c3cb248`; 1241 passed, 1 test
+waiting for schema round 5's tenant scoping: `test_another_tenant_cannot_settle_or_cancel_an_items_reservation`).
+Decision to confirm in review: an item missing from the provider's results now stays reserved (errs toward stopping
+spend). Batch ownership check `app_llm_batch_owned` went to db-migrations as item H. Next for T2.2: merge round 5 in,
+then reviewer round 2 and security-reviewer (`bridge.auth.sessions.is_live`). Carry to T2.9 and Phase 4 as the card notes
 say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
 setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
 headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
