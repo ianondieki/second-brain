@@ -508,6 +508,22 @@ async def require_reauth(
         raise AuthError("recent_sign_in_required", 403)
 
 
+async def ensure_fresh_proof(
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
+) -> None:
+    """Adding or removing a sign-in method, or replacing the recovery codes: a second factor within
+    STEP_UP_MAX_AGE_HOURS when TOTP is on (the ADR-002 step-up rule), and the current password when the account has
+    one (``require_reauth``, throttled like a login; the caller commits even on failure). A password-less account
+    without TOTP needs a sign-in within the last 15 minutes instead; a password-less account with TOTP needs only the
+    fresh second factor."""
+    if user.totp_enabled_at is not None:
+        if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
+            raise AuthError("step_up_required", 403)
+        if user.password_hash is None:
+            return
+    await require_reauth(db, settings, user, live, password, ip=ip)
+
+
 def notice_email(settings: Settings, user: User, what: str) -> PendingEmail:
     return PendingEmail(
         user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice"
@@ -623,11 +639,13 @@ def _issue_recovery_codes(settings: Settings, user: User) -> list[str]:
 
 
 async def replace_recovery_codes(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, *, ip: str
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, password: str | None, *, ip: str
 ) -> tuple[list[str], list[PendingEmail]]:
     """Ten new recovery codes replace the old ones in one step (follow-up 8): the way back to codes after the
-    confirmation's answer was lost, for roles that cannot turn two-step sign-in off and on again. The route needs a
-    second factor within 12 h (step-up); throttled like the re-auth checks (5 a minute for the account, from any IP;
+    confirmation's answer was lost, for roles that cannot turn two-step sign-in off and on again. The proof is
+    ``ensure_fresh_proof``'s, as for linking and unlinking a sign-in method: a second factor within 12 h and the
+    current password when the account has one, since a recovery code spent at step-up also makes the factor fresh
+    (security review). Throttled like the re-auth checks (5 a minute for the account, from any IP;
     ``REAUTH_IP_LIMIT`` a minute from one client IP). Under ``lock_user``: a step-up spending an old code either
     commits first (its remaining hashes are then replaced here) or waits and re-reads only the new hashes, so it can
     never write the old ones back."""
@@ -639,6 +657,7 @@ async def replace_recovery_codes(
     user = await lock_user(db, live.user.id)
     if user.totp_enabled_at is None:
         raise AuthError("totp_not_enabled", 409)
+    await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
     codes = _issue_recovery_codes(settings, user)
     await audit(db, "auth.recovery_codes_replaced", actor_user_id=user.id, subject_type="user", subject_id=user.id)
     # [[COPY-REVIEW]] plain transactional copy

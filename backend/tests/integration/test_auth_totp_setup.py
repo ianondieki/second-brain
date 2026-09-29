@@ -112,6 +112,29 @@ async def user_row(owner_engine: AsyncEngine, address: str) -> dict[str, Any]:
         return dict(row.mappings().one())
 
 
+def with_password(password: str | None = PASSWORD) -> dict[str, Any]:
+    """The body of POST /api/auth/totp/recovery-codes: the current password, none for a password-less account."""
+    return {} if password is None else {"current_password": password}
+
+
+async def password_less(owner_engine: AsyncEngine, address: str) -> None:
+    """Drop the account's password (as for an account made through OAuth): its proof is the fresh second factor."""
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET password_hash = NULL WHERE email = :e"), {"e": address})
+
+
+async def age_the_second_factor(owner_engine: AsyncEngine, address: str) -> None:
+    """Make every session's last second factor 13 hours old, past the 12-hour step-up window."""
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE sessions SET mfa_verified_at = now() - interval '13 hours' "
+                "WHERE user_id = (SELECT id FROM users WHERE email = :e)"
+            ),
+            {"e": address},
+        )
+
+
 def hashes_of(codes: list[str]) -> list[str]:
     pepper = get_settings().recovery_code_pepper.get_secret_value()
     return sorted(totp.recovery_hash(code, pepper) for code in codes)
@@ -361,7 +384,7 @@ async def test_new_recovery_codes_replace_the_old_ones_and_sign_in_once_each(
     """THREAT_MODEL §1 "Recovery codes never seen after a lost confirmation": the person gets ten new codes."""
     address = await verified(client)
     old = await enrolled(client)
-    issued = await client.post(CODES)
+    issued = await client.post(CODES, json=with_password())
     assert issued.status_code == 200, issued.text
     new = list(issued.json()["recovery_codes"])
     assert len(set(new)) == 10
@@ -384,7 +407,7 @@ async def test_new_recovery_codes_are_audited_and_emailed_without_the_codes(
 ) -> None:
     address = await verified(client)
     await enrolled(client)
-    new = list((await client.post(CODES)).json()["recovery_codes"])
+    new = list((await client.post(CODES, json=with_password())).json()["recovery_codes"])
     user_id = (await user_row(owner_engine, address))["id"]
     async with owner_engine.connect() as conn:
         rows = await conn.execute(
@@ -405,16 +428,25 @@ async def test_new_recovery_codes_need_a_recent_second_factor(
 ) -> None:
     address = await verified(client)
     old = await enrolled(client)
-    async with owner_engine.begin() as conn:
-        await conn.execute(
-            text(
-                "UPDATE sessions SET mfa_verified_at = now() - interval '13 hours' "
-                "WHERE user_id = (SELECT id FROM users WHERE email = :e)"
-            ),
-            {"e": address},
-        )
-    assert error(await client.post(CODES)) == (403, "step_up_required")
+    await age_the_second_factor(owner_engine, address)
+    assert error(await client.post(CODES, json=with_password())) == (403, "step_up_required")
     assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old)
+
+
+async def test_new_recovery_codes_need_the_current_password_even_after_a_recovery_code_step_up(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """Security review: a recovery code spent at step-up makes the second factor fresh, so a session holding one code
+    could otherwise mint ten more. As for linking and unlinking a sign-in method, the current password is needed too
+    when the account has one."""
+    address = await verified(client)
+    old = await enrolled(client)
+    await age_the_second_factor(owner_engine, address)
+    assert (await client.post("/api/auth/step-up", json={"code": old[0]})).status_code == 200
+    for sent in (with_password(None), with_password("not my password at all")):
+        assert error(await client.post(CODES, json=sent)) == (403, "current_password_required")
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old[1:])
+    assert (await client.post(CODES, json=with_password())).status_code == 200
 
 
 async def test_new_recovery_codes_refuse_a_cross_site_request(
@@ -423,7 +455,7 @@ async def test_new_recovery_codes_refuse_a_cross_site_request(
     address = await verified(client)
     old = await enrolled(client)
     del client.headers["X-CSRF-Token"]
-    assert error(await client.post(CODES)) == (403, "csrf_failed")
+    assert error(await client.post(CODES, json=with_password())) == (403, "csrf_failed")
     assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old)
 
 
@@ -431,12 +463,14 @@ async def test_new_recovery_codes_need_two_step_sign_in_on(client: httpx.AsyncCl
     await verified(client)
     await enrolled(client)
     assert (await client.post("/api/auth/totp/disable")).status_code == 204  # the second factor stays fresh (12 h)
-    assert error(await client.post(CODES)) == (409, "totp_not_enabled")
+    assert error(await client.post(CODES, json=with_password())) == (409, "totp_not_enabled")
 
 
 async def test_new_recovery_codes_are_throttled_per_client_ip(
-    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Password-less accounts, so this route's throttle is the only one on the way (a password is checked under the
+    re-auth throttle as well)."""
     shared = new_ip()
     async with (
         make_client(app_engine, ip=shared) as first,
@@ -444,32 +478,36 @@ async def test_new_recovery_codes_are_throttled_per_client_ip(
         make_client(app_engine, ip=new_ip()) as elsewhere,
     ):
         for browser in (first, second, elsewhere):
-            await verified(browser)
+            address = await verified(browser)
             await enrolled(browser)
+            await password_less(owner_engine, address)
         monkeypatch.setattr(service, "REAUTH_IP_LIMIT", 2)
         freeze_the_clock(monkeypatch)
         for _ in range(2):
-            assert (await first.post(CODES)).status_code == 200
-        assert error(await second.post(CODES)) == (429, "too_many_attempts")  # another account, the same address
-        assert (await elsewhere.post(CODES)).status_code == 200
+            assert (await first.post(CODES, json=with_password(None))).status_code == 200
+        refused = await second.post(CODES, json=with_password(None))
+        assert error(refused) == (429, "too_many_attempts")  # another account, the same address
+        assert (await elsewhere.post(CODES, json=with_password(None))).status_code == 200
 
 
 async def test_new_recovery_codes_from_several_ips_share_the_account_budget(
-    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A stolen session used from several addresses still gets five replacements a minute in all."""
+    """A stolen session used from several addresses still gets five replacements a minute in all (a password-less
+    account, so this route's throttle is the only one on the way)."""
     name = get_settings().session_cookie_name
     async with make_client(app_engine, ip=new_ip()) as here, make_client(app_engine, ip=new_ip()) as there:
-        await verified(here)
+        address = await verified(here)
         await enrolled(here)
+        await password_less(owner_engine, address)
         session = here.cookies.get(name)
         assert session
         there.cookies.set(name, session)
         await refresh_csrf(there)
         freeze_the_clock(monkeypatch)
         for browser in (here, here, here, there, there):
-            assert (await browser.post(CODES)).status_code == 200
-        assert error(await there.post(CODES)) == (429, "too_many_attempts")
+            assert (await browser.post(CODES, json=with_password(None))).status_code == 200
+        assert error(await there.post(CODES, json=with_password(None))) == (429, "too_many_attempts")
 
 
 async def test_a_step_up_behind_a_committing_replacement_cannot_restore_the_old_codes(
@@ -481,7 +519,7 @@ async def test_a_step_up_behind_a_committing_replacement_cannot_restore_the_old_
     old = await enrolled(client)
     async with create_session_factory(app_engine)() as first:
         live = await live_session(first, client)
-        new, _ = await service.replace_recovery_codes(first, get_settings(), live, ip=new_ip())
+        new, _ = await service.replace_recovery_codes(first, get_settings(), live, PASSWORD, ip=new_ip())
         step_up = await blocked_behind(first, client.post("/api/auth/step-up", json={"code": old[0]}))
         await first.commit()
     assert error(await step_up) == (401, "invalid_code")
@@ -496,7 +534,7 @@ async def test_a_replacement_behind_a_committing_step_up_leaves_only_the_new_cod
     async with create_session_factory(app_engine)() as first:
         live = await live_session(first, client)
         await service.complete_mfa(first, get_settings(), live, old[0], new_ip(), rotate=False)
-        replace = await blocked_behind(first, client.post(CODES))
+        replace = await blocked_behind(first, client.post(CODES, json=with_password()))
         await first.commit()
     issued = await replace
     assert issued.status_code == 200, issued.text
@@ -515,7 +553,7 @@ async def test_a_replacement_behind_a_committing_turn_off_answers_totp_not_enabl
     async with create_session_factory(app_engine)() as first:
         live = await live_session(first, client)
         await service.disable_totp(first, get_settings(), live)
-        replace = await blocked_behind(first, client.post(CODES))
+        replace = await blocked_behind(first, client.post(CODES, json=with_password()))
         await first.commit()
     assert error(await replace) == (409, "totp_not_enabled")
     row = await user_row(owner_engine, address)

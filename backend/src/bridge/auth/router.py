@@ -46,6 +46,7 @@ from bridge.auth.schemas import (
     OAuthProvidersResponse,
     OAuthStartRequest,
     OAuthStartResponse,
+    RecoveryCodesRequest,
     RecoveryCodesResponse,
     SessionResponse,
     SetPasswordRequest,
@@ -353,13 +354,21 @@ async def totp_confirm(
 
 @router.post("/totp/recovery-codes")
 async def totp_recovery_codes(
-    request: Request, tasks: BackgroundTasks, live: StepUpSession, db: Db, settings: SettingsDep, email: EmailDep
+    request: Request,
+    tasks: BackgroundTasks,
+    live: CurrentSession,
+    db: Db,
+    settings: SettingsDep,
+    email: EmailDep,
+    body: RecoveryCodesRequest | None = None,
 ) -> RecoveryCodesResponse:
-    """Ten new recovery codes replace the old ones, which stop working; shown once. Needs a second factor within
-    12 hours (403 step_up_required) and two-step sign-in on (409 totp_not_enabled); 429 too_many_attempts after 5 a
-    minute for the account. The account gets a security notice."""
+    """Ten new recovery codes replace the old ones, which stop working; shown once. Needs two-step sign-in on (409
+    totp_not_enabled), a second factor within 12 hours (403 step_up_required) and, when the account has a password,
+    ``current_password`` (403 current_password_required), as for linking a sign-in method; 429 too_many_attempts
+    after 5 a minute for the account. The account gets a security notice."""
     try:
-        codes, pending = await service.replace_recovery_codes(db, settings, live, ip=client_ip(request))
+        password = body.current_password if body else None
+        codes, pending = await service.replace_recovery_codes(db, settings, live, password, ip=client_ip(request))
     except service.AuthError as exc:
         await db.commit()  # keep the throttle entry
         raise _fail(exc) from exc

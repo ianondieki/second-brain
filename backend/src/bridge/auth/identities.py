@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import hmac
 from dataclasses import dataclass, field
-from datetime import timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -115,21 +114,6 @@ async def spend_state(db: AsyncSession, settings: Settings, flow: oauth.Flow) ->
 # ------------------------------------------------------------------------------------------------ start
 
 
-async def ensure_fresh_proof(
-    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
-) -> None:
-    """Adding or removing a sign-in method: a second factor within STEP_UP_MAX_AGE_HOURS when TOTP is on (the
-    ADR-002 step-up rule), and the current password when the account has one (``service.require_reauth``, throttled
-    like a login; the caller commits even on failure). A password-less account without TOTP needs a sign-in within
-    the last 15 minutes instead; a password-less account with TOTP needs only the fresh second factor."""
-    if user.totp_enabled_at is not None:
-        if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
-            raise service.AuthError("step_up_required", 403)
-        if user.password_hash is None:
-            return
-    await service.require_reauth(db, settings, user, live, password, ip=ip)
-
-
 def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
     service.refuse_session_only(choices.consents)
     if choices.consents and choices.consents_version is None:
@@ -154,7 +138,7 @@ async def begin(
             raise service.AuthError("unauthenticated", 401)
         if live.row.mfa_pending:
             raise service.AuthError("mfa_required", 401)
-        await ensure_fresh_proof(db, settings, live.user, live, req.current_password, ip=ip)
+        await service.ensure_fresh_proof(db, settings, live.user, live, req.current_password, ip=ip)
         return oauth.new_flow(provider, "link", "/settings/security", now=now, session=csrf.binding_for(live.token))
     signup: OAuthSignup | None = None
     if req.intent == "signup":
@@ -451,7 +435,7 @@ async def unlink(
     identity = (await db.execute(stmt)).scalar_one_or_none()
     if identity is None:
         raise service.AuthError("not_found", 404)
-    await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
+    await service.ensure_fresh_proof(db, settings, user, live, password, ip=ip)
     others = (
         select(func.count())
         .select_from(AuthIdentity)

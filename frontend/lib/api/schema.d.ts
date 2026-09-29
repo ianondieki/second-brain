@@ -450,9 +450,10 @@ export interface paths {
         put?: never;
         /**
          * Totp Recovery Codes
-         * @description Ten new recovery codes replace the old ones, which stop working; shown once. Needs a second factor within
-         *     12 hours (403 step_up_required) and two-step sign-in on (409 totp_not_enabled); 429 too_many_attempts after 5 a
-         *     minute for the account. The account gets a security notice.
+         * @description Ten new recovery codes replace the old ones, which stop working; shown once. Needs two-step sign-in on (409
+         *     totp_not_enabled), a second factor within 12 hours (403 step_up_required) and, when the account has a password,
+         *     ``current_password`` (403 current_password_required), as for linking a sign-in method; 429 too_many_attempts
+         *     after 5 a minute for the account. The account gets a security notice.
          */
         post: operations["totp_recovery_codes_api_auth_totp_recovery_codes_post"];
         delete?: never;
@@ -3677,6 +3678,14 @@ export interface components {
             /** Version No */
             version_no: number;
         };
+        /**
+         * RecoveryCodesRequest
+         * @description New recovery codes: the current password when the account has one (with a second factor within 12 hours).
+         */
+        RecoveryCodesRequest: {
+            /** Current Password */
+            current_password?: string | null;
+        };
         /** RecoveryCodesResponse */
         RecoveryCodesResponse: {
             /** Recovery Codes */
@@ -6421,7 +6430,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RecoveryCodesRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

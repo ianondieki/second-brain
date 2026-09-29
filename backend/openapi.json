@@ -4693,6 +4693,26 @@
         "title": "PublishOut",
         "type": "object"
       },
+      "RecoveryCodesRequest": {
+        "additionalProperties": false,
+        "description": "New recovery codes: the current password when the account has one (with a second factor within 12 hours).",
+        "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          }
+        },
+        "title": "RecoveryCodesRequest",
+        "type": "object"
+      },
       "RecoveryCodesResponse": {
         "properties": {
           "recovery_codes": {
@@ -8631,8 +8651,25 @@
     },
     "/api/auth/totp/recovery-codes": {
       "post": {
-        "description": "Ten new recovery codes replace the old ones, which stop working; shown once. Needs a second factor within\n12 hours (403 step_up_required) and two-step sign-in on (409 totp_not_enabled); 429 too_many_attempts after 5 a\nminute for the account. The account gets a security notice.",
+        "description": "Ten new recovery codes replace the old ones, which stop working; shown once. Needs two-step sign-in on (409\ntotp_not_enabled), a second factor within 12 hours (403 step_up_required) and, when the account has a password,\n``current_password`` (403 current_password_required), as for linking a sign-in method; 429 too_many_attempts\nafter 5 a minute for the account. The account gets a security notice.",
         "operationId": "totp_recovery_codes_api_auth_totp_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RecoveryCodesRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
