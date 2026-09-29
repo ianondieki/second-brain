@@ -414,3 +414,14 @@ under D-39.
 Deviation (commit size): `aed7a97` (the proposal page, 583 lines: page, the four-state component, two client forms
 and the teaser) and `95b1a8d` (the Playwright spec and its scene helper, 368 lines) exceed the ~300-line guidance;
 each is one concern, and history is not rewritten.
+
+## P8 part 3 re-check (reviewer PASS at `b535fdd`, 2026-09-29): MINOR follow-ups
+
+- Three fix-round behaviours have no test that fails on revert: `OrgNav` keeping `query` (`components/OrgNav.tsx:44`),
+  the Inbox cursor cap `{1,500}` (`org/inbox/page.tsx:22`), and the home Inbox summary's try/catch with
+  `unstable_rethrow` (`org/page.tsx:49-54`). Add vitests: `OrgNav` with `query="?org=B"` gives hrefs ending in
+  `?org=B`; `InboxSummary` with a throwing `getInbox` renders the link and rethrows a redirect; the exported cursor
+  pattern at 500 and 501 characters. The e2e has no member of two organisations.
+- The marked Tier-2 render's own accessibility is never checked (axe cannot enter the script-less sandboxed frame):
+  run `checkScreen` on the render opened at top level (the owner preview `/api/me/proposals/{id}/tier2`, or
+  `tier2Src` as a member, which logs one view).
