@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.audit.service import record as audit
 from bridge.errors import ApiError, not_found
+from bridge.matching.tasks import defer_on_new
 from bridge.models.enums import AuditActor, ModerationCaseStatus, ModerationSource, ModerationState
 from bridge.proposals.prescreen import SECURITY_VULNERABILITY, RulesPreScreen, ScreenInput
 from bridge.proposals.service import signal
@@ -211,6 +212,7 @@ async def decide(
         and proposal.moderation_state != ModerationState.CLEAR
     ):
         await signal(db, proposal_id=case.subject_id, owner_id=proposal.owner_id)
+        await defer_on_new(db, case.subject_id)  # visible now: the on_new scouts' run (REQ-SCOUT-02)
     await audit(
         db,
         "moderation.case_decided",

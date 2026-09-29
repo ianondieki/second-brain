@@ -13,7 +13,8 @@
 5. the version becomes ``registered`` with a fresh certificate id (the database times it), the proposal points at it,
    the attestation row is written and the T2.4 registration pipeline is queued (``enqueue_registration``);
 6. a ``signal_events`` row when the teaser is visible (clear: ``proposal_published`` the first time,
-   ``proposal_version_published`` after), and the ``proposal.published`` audit event.
+   ``proposal_version_published`` after), the on_new scouts' run queued (``scouts.on_new``, REQ-SCOUT-02; a failure
+   to queue it never fails the publication), and the ``proposal.published`` audit event.
 
 D1 is the route's dependency (``D1Developer``, AC-IP-5). Reads: the owner's list and detail (with their own Tier 2;
 the Tier-2 read is audited) and the public teaser, which only a published, clear proposal has (a held teaser is
@@ -35,6 +36,7 @@ from bridge.config import Settings
 from bridge.crypto.envelope import KeyWrapper
 from bridge.errors import ApiError, not_found
 from bridge.ids import uuid7
+from bridge.matching.tasks import defer_on_new
 from bridge.models.enums import ModerationState, ProposalStatus, ProvenanceStatus, VersionStatus
 from bridge.problems import service as problems
 from bridge.proposals import attestations, editor, tier2
@@ -368,6 +370,7 @@ async def publish(
     if state == ModerationState.CLEAR:
         kind = SIGNAL_PUBLISHED if locked.status != ProposalStatus.PUBLISHED else SIGNAL_NEW_VERSION
         await signal(db, proposal_id=proposal_id, owner_id=user_id, kind=kind)
+        await defer_on_new(db, proposal_id)
     await audit(
         db,
         "proposal.published",
