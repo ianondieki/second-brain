@@ -42,7 +42,7 @@ TELECOM = Draft(
     affected_group="Smaller mobile operators and their customers",
     named_orgs=(),
     citations=(
-        Citation("ke-tel-001", "M-Pesa’s share in the mobile money market had slimmed to 89 percent"),
+        Citation("ke-tel-001", "M-Pesa\u2019s share in the mobile money market had slimmed to 89 percent"),
         Citation("ke-tel-002", "decline from the previous Sh0.41 to Sh0.37"),
         Citation("ke-tel-004", "the current MTR regime disproportionately disadvantages smaller operators"),
     ),
@@ -125,7 +125,7 @@ def test_an_unverified_citation_is_dropped_and_lowers_the_agreement() -> None:
 
 def test_supporting_text_is_compared_unicode_exact_after_collapsing() -> None:
     straight = Citation("ke-tel-001", "M-Pesa's share in the mobile money market")  # straight apostrophe
-    curly = Citation("ke-tel-001", "M-Pesa’s   share in the\nmobile money market")
+    curly = Citation("ke-tel-001", "M-Pesa\u2019s   share in the\nmobile money market")
     assert not checks.verified(straight, excerpt("ke-tel-001"), POLICY)
     assert checks.verified(curly, excerpt("ke-tel-001"), POLICY)
 

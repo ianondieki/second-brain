@@ -150,9 +150,10 @@ def test_a_duplicate_id_refuses_the_file() -> None:
 def test_whitespace_in_a_quote_is_collapsed_not_folded() -> None:
     data = raw_excerpts()
     first = data["excerpts"][0]
-    data["excerpts"] = [first | {"quote": "As of\n December\t2025,  M-Pesa’s share – slimmed."}]
+    data["excerpts"] = [first | {"quote": "As of\n December\t2025,  M-Pesa\u2019s share \u2013 slimmed."}]
     [excerpt] = parse_excerpts(data, {"KE": load_allowlist("KE")}, get_research_policy())
-    assert excerpt.quote == "As of December 2025, M-Pesa’s share – slimmed."  # curly apostrophe and en dash kept
+    # curly apostrophe and en dash kept
+    assert excerpt.quote == "As of December 2025, M-Pesa\u2019s share \u2013 slimmed."
 
 
 @pytest.mark.parametrize(
@@ -202,7 +203,8 @@ def test_the_stale_fixtures_are_archived_and_never_offered_to_a_run() -> None:
 def test_freshness_is_one_until_12_months_and_zero_from_18() -> None:
     catalogue, policy = load_catalogue(), get_research_policy()
     excerpt = catalogue.get("ke-tel-001")
-    assert excerpt is not None and excerpt.published_date == date(2026, 4, 3)
+    assert excerpt is not None
+    assert excerpt.published_date == date(2026, 4, 3)
     assert freshness_score(excerpt, date(2027, 4, 2), policy) == 1
     assert freshness(excerpt, date(2027, 4, 3), policy) is Freshness.STALE
     assert freshness_score(excerpt, date(2027, 4, 3), policy) == 1  # the stale day itself: the slope starts here
