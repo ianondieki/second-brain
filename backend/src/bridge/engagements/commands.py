@@ -209,6 +209,10 @@ async def execute(
     )
     milestone = None
     if command in sm.MILESTONE_STEPS:
+        try:  # a transition not in the table is 409 before the milestone it names is looked up (AC-TRACK-1)
+            sm.check_source(command, engagement.state)
+        except sm.TrackerError as error:
+            raise api_error(error) from error
         milestone = next((m for m in loaded.milestones if m.id == inputs.milestone_id), None)
         if milestone is None:
             raise not_found("No such milestone on this engagement.")

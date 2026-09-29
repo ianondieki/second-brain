@@ -486,6 +486,14 @@ def authorize(command: Command, actor: Actor, *, deals_enabled: bool) -> tuple[T
     return transition, role
 
 
+def check_source(command: Command, state: EngagementState) -> None:
+    """409 ``illegal_transition`` unless ``command`` starts from ``state`` (every transition not in the table)."""
+    if state not in TABLE[command].sources:
+        raise Conflict(
+            "illegal_transition", f"'{command.value}' is not possible while the engagement is {state.value}."
+        )
+
+
 def decide(
     command: Command,
     actor: Actor,
@@ -499,10 +507,7 @@ def decide(
     ``Invalid`` otherwise. ``milestone`` is the state of the milestone a sub-tracker command names; ``reason`` the
     decline reason code."""
     transition, role = authorize(command, actor, deals_enabled=facts.deals_enabled)
-    if state not in transition.sources:
-        raise Conflict(
-            "illegal_transition", f"'{command.value}' is not possible while the engagement is {state.value}."
-        )
+    check_source(command, state)
     _guard(command, actor.party, facts, milestone)
     to_state = transition.target or state
     if transition.completes is not None and facts.signed | {actor.party} == BOTH:
