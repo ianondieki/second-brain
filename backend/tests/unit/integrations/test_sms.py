@@ -300,6 +300,8 @@ def live_settings(app_env: AppEnv = "production", username: str = "bridge-live")
         africastalking_username=username,
         africastalking_api_key=SecretStr(API_KEY),
         africastalking_sender_id="BRIDGE",
+        embedder="bge-m3",  # REQ-EMB-01 and REQ-LLM-01: what production also needs to start
+        llm_kill_switch=True,
     )
 
 
