@@ -4,11 +4,21 @@ import { expect, type Locator, type Page } from "@playwright/test";
 /**
  * The page-level rules every screen keeps (same as e2e/auth.spec.ts): axe finds nothing serious or critical
  * (AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, at 360 px in mobile-360).
+ * `exclude`: selectors axe leaves out, for frames that run no script (axe cannot run inside them and would wait for
+ * each one), such as the API's marked Tier-2 page in its sandbox. The caller checks what axe then skips (for a frame,
+ * its title).
  */
-export async function checkScreen(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"])
-    .analyze();
+export async function checkScreen(page: Page, { exclude = [] }: { exclude?: string[] } = {}) {
+  let axe = new AxeBuilder({ page }).withTags([
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa",
+    "best-practice",
+  ]);
+  for (const selector of exclude) axe = axe.exclude(selector);
+  const results = await axe.analyze();
   const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(
     serious,
