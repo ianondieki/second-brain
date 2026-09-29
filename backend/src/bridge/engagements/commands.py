@@ -69,14 +69,18 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    ModerationState,
     NdaKind,
     OrgRole,
+    OrgVerification,
     PaymentMethod,
+    ProposalStatus,
     SignatureDocumentKind,
     StepUpMethod,
     TagStatus,
 )
 from bridge.proposals.models import Proposal, Tag
+from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
 C = sm.Command
@@ -690,12 +694,35 @@ EFFECTS: Final[dict[sm.Command, Effect]] = {
 
 class OpenRefused(Exception):
     """``open_engagement_for_tag`` refused: ``code`` is stable (``tag_not_found``, ``tag_not_delivered``,
-    ``proposal_not_published``, ``engagement_exists``)."""
+    ``proposal_not_published``, ``org_unavailable``, ``own_organisation``, ``engagement_exists``, ``refused``)."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+async def _existing_engagement(db: AsyncSession, proposal_id: UUID, org_id: UUID) -> UUID | None:
+    found: UUID | None = await db.scalar(
+        select(Engagement.id).where(Engagement.proposal_id == proposal_id, Engagement.org_id == org_id)
+    )
+    return found
+
+
+async def _organisation_refusal(db: AsyncSession, org_id: UUID) -> OpenRefused | None:
+    """The organisation must be E2, not suspended and not delisted (a delisted one is not even readable)."""
+    org = (
+        await db.execute(
+            select(Organization.verification, Organization.suspended_at, Organization.delisted_at).where(
+                Organization.id == org_id
+            )
+        )
+    ).one_or_none()
+    if org is None or org.verification is not OrgVerification.E2 or org.suspended_at or org.delisted_at:
+        return OpenRefused(
+            "org_unavailable", "The organisation cannot receive engagements now (not verified, suspended or delisted)."
+        )
+    return None
 
 
 async def open_engagement_for_tag(db: AsyncSession, tag_id: UUID) -> Engagement:
@@ -705,10 +732,12 @@ async def open_engagement_for_tag(db: AsyncSession, tag_id: UUID) -> Engagement:
     approval; the caller commits (and sends EM1).
 
     The engagement is for the proposal's current registered version, origin ``tagged``, with the ``SUBMITTED``
-    deadline from policy.yaml on the business-day calendar; the database writes its genesis event (seq 1, the
-    developer as actor) and refuses it unless the proposal is published and clear, the organisation E2, not
-    suspended or delisted, and the developer's tag to it open and delivered (revision 0003). One engagement per
-    proposal and organisation: a second call raises ``OpenRefused("engagement_exists")``.
+    deadline from policy.yaml on the business-day calendar; the database writes its genesis event. Every refusal is an
+    ``OpenRefused`` with a code, checked here first (the tag, the proposal published and clear, the organisation E2 and
+    neither suspended nor delisted, the developer not one of its members, one engagement per proposal and
+    organisation), with the database's refusals of the insert as the backstop (a concurrent duplicate is
+    ``engagement_exists``, a policy refusal ``refused``). The insert runs in a savepoint, so after a refusal the
+    caller's transaction is still usable.
     """
     user_id, _ = tenant_of(db)
     tag = await db.get(Tag, tag_id)
@@ -716,13 +745,26 @@ async def open_engagement_for_tag(db: AsyncSession, tag_id: UUID) -> Engagement:
         raise OpenRefused("tag_not_found", "No tag of yours with that id.")
     if tag.status is not TagStatus.DELIVERED or tag.closed_at is not None:
         raise OpenRefused("tag_not_delivered", "Only an open, delivered tag opens an engagement.")
-    version_id = await db.scalar(select(Proposal.current_version_id).where(Proposal.id == tag.proposal_id))
-    if version_id is None:
-        raise OpenRefused("proposal_not_published", "The proposal has no registered version.")
-    existing = await db.scalar(
-        select(Engagement.id).where(Engagement.proposal_id == tag.proposal_id, Engagement.org_id == tag.org_id)
-    )
-    if existing is not None:
+    proposal = (
+        await db.execute(
+            select(Proposal.status, Proposal.moderation_state, Proposal.current_version_id).where(
+                Proposal.id == tag.proposal_id
+            )
+        )
+    ).one_or_none()
+    if (
+        proposal is None
+        or proposal.status is not ProposalStatus.PUBLISHED
+        or proposal.moderation_state is not ModerationState.CLEAR
+        or proposal.current_version_id is None
+    ):
+        raise OpenRefused("proposal_not_published", "The proposal is not published and clear of moderation holds.")
+    refusal = await _organisation_refusal(db, tag.org_id)
+    if refusal is not None:
+        raise refusal
+    if await membership_of(db, tag.org_id, user_id) is not None:
+        raise OpenRefused("own_organisation", "You belong to this organisation, so it cannot receive your proposal.")
+    if await _existing_engagement(db, tag.proposal_id, tag.org_id) is not None:
         raise OpenRefused("engagement_exists", "This proposal already has an engagement with this organisation.")
     now = await app_now(db)
     deadline = sm.stage_deadline(S.SUBMITTED, now, await load_holidays(db, local_date(now)), get_policy())
@@ -731,12 +773,23 @@ async def open_engagement_for_tag(db: AsyncSession, tag_id: UUID) -> Engagement:
         proposal_id=tag.proposal_id,
         org_id=tag.org_id,
         developer_id=user_id,
-        version_id=version_id,
+        version_id=proposal.current_version_id,
         origin=EngagementOrigin.TAGGED,
         state=S.SUBMITTED,
         stage_deadline_at=deadline,
     )
-    db.add(engagement)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(engagement)
+            await db.flush()
+    except DBAPIError as exc:
+        sqlstate = getattr(exc.orig, "sqlstate", None)
+        if sqlstate == "23505":
+            raise OpenRefused(
+                "engagement_exists", "This proposal already has an engagement with this organisation."
+            ) from exc
+        if sqlstate in ("42501", "23514"):
+            raise OpenRefused("refused", "The engagement could not be opened for this tag.") from exc
+        raise
     await db.refresh(engagement)
     return engagement
