@@ -1593,8 +1593,10 @@ $$;
 -- but the new claimant (all issued under the old control), or carrying owner, admin or signatory, is revoked; the E1
 -- or E2 verified domain becomes the claim's. Approving a claim that competes with nobody transfers nothing and seats
 -- the claimant (app_seat_claimant): a member keeps their roles unless the organisation has no active owner (then
--- owner and admin are added), anyone else becomes owner and admin; an E1 approval of an organisation already E1
--- keeps its verified domain unless the claimant is an active owner. Every approval then relabels the organisation's
+-- owner and admin are added), anyone else becomes owner and admin; an E1 approval of an organisation already E1, and
+-- an E2 approval of one already E1 or E2 (Q3), keep its verified domain unless the claimant is an active owner (a
+-- non-owner's claim on another domain verifies the organisation, not a new domain). Every approval then relabels the
+-- organisation's
 -- other open claims. The new claimant re-appoints people afterwards; staff correct a roster with
 -- app_staff_remove_membership. The caller audits every change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
@@ -1672,9 +1674,12 @@ BEGIN
                     ' claimant'
                     USING ERRCODE = 'check_violation';
             END IF;
+            -- As for E1 (round 6, Q3): an organisation already E1 or E2 keeps its verified domain unless the claimant
+            -- is an active owner or the approval upholds a dispute.
             UPDATE public.organizations
                SET verification = 'e2',
-                   verified_domain = v_claim.domain,
+                   verified_domain = CASE WHEN v_dispute OR v_org.verification NOT IN ('e1', 'e2') OR v_owner
+                                          THEN v_claim.domain ELSE verified_domain END,
                    e2_verified_at = now(),
                    reverify_due_on = ((now() AT TIME ZONE 'Africa/Nairobi') + interval '1 year')::date,
                    public_entity = v_claim.public_entity_requested,

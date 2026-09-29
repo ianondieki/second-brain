@@ -1587,6 +1587,57 @@ async def test_a_routine_e1_approval_keeps_the_owners_domain_and_roles(
         assert await run(conn, ROLES_OF, org=orphan, u=lone) == ["admin", "owner"]
 
 
+async def test_a_routine_e2_approval_keeps_the_owners_domain(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Round 6, Q3: the E1 rule for the verified domain holds for E2 too. Staff approving an admin's E2 claim on another
+    domain of an organisation already E1 (email code and DNS record proven) verifies the organisation at E2 but keeps
+    its verified domain, and the admin keeps their roles; the owner's E2 re-verification on another domain moves it.
+    Q2 (accepted as built): through the E2 shortcut on an organisation with no active owner, the approved member (here
+    a signatory) gains owner and admin."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'E2 documents checked')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("q3-admin"), "Admin", staff_role="admin")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        org, orphan = await add_org(conn, verification="e1"), await add_org(conn, verification="e1")
+        for verified, domain in ((org, "old.example.test"), (orphan, "orphan.example.test")):
+            await run(conn, "UPDATE organizations SET verified_domain = :d WHERE id = :id", id=verified, d=domain)
+        owner, member, gone, signatory = [
+            await w.add_user(conn, _email(n), n) for n in ("q3-owner", "q3-member", "q3-gone", "q3-signatory")
+        ]
+        await _add_membership(conn, org, owner, "{owner,admin}")
+        await _add_membership(conn, org, member, "{admin}")
+        await _add_membership(conn, orphan, gone, "{owner,admin}", status="removed")  # the only owner has left
+        await _add_membership(conn, orphan, signatory, "{signatory}")
+        claims: dict[UUID, UUID] = {}
+        for user, target, domain, proven in (
+            (member, org, "member.example.test", True),
+            (owner, org, "new.example.test", True),
+            (signatory, orphan, "orphan.example.test", False),  # the shortcut: no email code or DNS record
+        ):
+            await act(conn, user)
+            await run(conn, MET_ACCEPTANCE, id=uuid7(), org=target, u=user, t=met)
+            claims[user] = await _claim(conn, target, user, domain, "e2", right)
+            assert await run(conn, CLAIM_STATUS, id=claims[user]) == "otp_sent"  # members compete with nobody
+            if proven:
+                await _prove_domain(conn, claims[user], right)
+        await act(conn, admin)
+        await run(conn, decide, id=claims[member])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e2", "old.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=member) == ["admin"]
+        assert await run(conn, OWNERS, org=org) == [owner]
+        await act(conn, admin)
+        for user in (owner, signatory):
+            await run(conn, decide, id=claims[user])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e2", "new.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=owner) == ["admin", "owner"]
+        assert tuple((await conn.execute(text(VERIFIED), {"id": orphan})).one()) == ("e2", "orphan.example.test")
+        assert await run(conn, ROLES_OF, org=orphan, u=signatory) == ["admin", "owner", "signatory"]
+
+
 async def test_a_competing_claim_is_decided_as_a_dispute_whatever_its_label(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
