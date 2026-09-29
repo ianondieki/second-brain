@@ -50,7 +50,7 @@ async def test_startup_builds_the_registry_and_a_keyless_adapter() -> None:
 
 
 def test_the_free_provider_gets_one_adapter_per_slot() -> None:
-    cfg = settings(llm_provider=None, **SLOT_1)
+    cfg = settings(app_env="dev", llm_provider=None, **SLOT_1)
     runtime = deps.build_runtime(cfg)
     assert runtime.provider == "free"
     [route] = runtime.free

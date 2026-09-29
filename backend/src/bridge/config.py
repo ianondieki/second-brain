@@ -29,9 +29,10 @@ ResponseFormat = Literal["none", "json_object", "json_schema"]
 # LLM_FREE_<N>_BASE_URL, _API_KEY, _MODEL and _DAILY_REQUESTS, set together, plus an optional _RESPONSE_FORMAT.
 LLM_FREE_SLOTS: Final = (1, 2, 3)
 FREE_SLOT_PARTS: Final = ("base_url", "api_key", "model", "daily_requests")
-# llm_calls.model is varchar(80) and holds "free<N>:<model>" (bridge.llm.providers.model_key).
+# llm_calls.model is varchar(80) and holds "free<N>:<model>" (bridge.llm.registry.free_model_key).
 FREE_MODEL = re.compile(r"[A-Za-z0-9._:/@+-]{1,74}")
 LOOPBACK_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
+PROTOTYPE_TOTAL_CAP_USD: Final = Decimal("5.00")  # D-37: the local prototype's lifetime LLM spend
 
 # Optional settings: an empty value means unset (None).
 OPTIONAL_SETTINGS = (
@@ -49,7 +50,8 @@ OPTIONAL_SETTINGS = (
     "s3_access_key_id",
     "s3_secret_access_key",
     "audit_reader_database_url",
-    "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev and test), else fake
+    "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev), else fake
+    "llm_prototype_total_cap_usd",  # LLM_PROTOTYPE_TOTAL_CAP_USD= is USD 5 in dev and test, none elsewhere
     *(f"llm_free_{n}_{part}" for n in LLM_FREE_SLOTS for part in (*FREE_SLOT_PARTS, "response_format")),
 )
 
@@ -197,13 +199,14 @@ class Settings(BaseSettings):
     # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
     llm_global_daily_cap_usd: Decimal = Decimal("0")
     llm_models_file: Path = BACKEND_DIR / "ai" / "models.yaml"
-    # Providers for local prototype runs (D-37; bridge.llm.routing). fake | free | anthropic; unset picks free when a
-    # complete free slot is set (dev and test), else fake; staging and production run Anthropic only and refuse the
-    # free providers (they may train on what they receive). Anthropic runs only with LLM_PROVIDER=anthropic.
+    # Providers for local prototype runs (D-37; bridge.llm.routing). fake | free | anthropic; unset is free in dev when
+    # a complete free slot is set, else fake in dev and test, and Anthropic in staging and production, which refuse
+    # the free providers (they may train on what they receive) and the fake. Anthropic runs only when chosen.
     llm_provider: LLMProvider | None = None
     # Lifetime spend of this database's ledger across every provider (only Anthropic costs money): the USD 5
-    # prototype total of D-37. 0 refuses every call that costs anything.
-    llm_prototype_total_cap_usd: Decimal = Decimal("5.00")
+    # prototype total of D-37 in dev and test when unset; staging and production have none unless it is set
+    # (llm_total_cap_usd). 0 refuses every call that costs anything.
+    llm_prototype_total_cap_usd: Decimal | None = None
     llm_free_1_base_url: str | None = None
     llm_free_1_api_key: SecretStr | None = None
     llm_free_1_model: str | None = None
@@ -251,13 +254,23 @@ class Settings(BaseSettings):
 
     @property
     def llm_effective_provider(self) -> LLMProvider:
-        """``LLM_PROVIDER``, or when unset: Anthropic in staging and production, else free when a complete free slot
-        is set, else the fake."""
+        """``LLM_PROVIDER``, or when unset: Anthropic in staging and production, the fake in test (a test that wants
+        a provider says so), else free when a complete free slot is set, else the fake."""
         if self.llm_provider is not None:
             return self.llm_provider
         if self.app_env in ("staging", "production"):
             return "anthropic"
+        if self.app_env == "test":
+            return "fake"
         return "free" if self.llm_free_slots() else "fake"
+
+    @property
+    def llm_total_cap_usd(self) -> Decimal | None:
+        """The lifetime spend cap: ``LLM_PROTOTYPE_TOTAL_CAP_USD``, or USD 5 in dev and test when unset (D-37); None
+        (no total) in staging and production unless it is set."""
+        if self.llm_prototype_total_cap_usd is not None:
+            return self.llm_prototype_total_cap_usd
+        return PROTOTYPE_TOTAL_CAP_USD if self.app_env in ("dev", "test") else None
 
     @property
     def llm_demo_fallback(self) -> bool:
@@ -278,7 +291,7 @@ class Settings(BaseSettings):
 
     def _llm_problems(self) -> list[str]:
         problems: list[str] = []
-        if self.llm_prototype_total_cap_usd < 0:
+        if self.llm_prototype_total_cap_usd is not None and self.llm_prototype_total_cap_usd < 0:
             problems.append("LLM_PROTOTYPE_TOTAL_CAP_USD must be zero or more")
         used: list[str] = []  # slots with any value (refused outside local runs)
         for n in LLM_FREE_SLOTS:
@@ -310,6 +323,8 @@ class Settings(BaseSettings):
                     "LLM_PROVIDER=free is for local runs: staging and production never send data to free"
                     " providers (D-37)"
                 )
+            if self.llm_provider == "fake" and self.app_env == "production":
+                problems.append("production uses LLM_PROVIDER=anthropic (or leave it empty): the fake answers nothing")
             if used:
                 where = "staging and production"
                 problems.append(f"{', '.join(used)} are for local runs only: leave them empty in {where}")

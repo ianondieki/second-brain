@@ -247,6 +247,14 @@ async def test_the_prototype_total_counts_every_day_of_the_ledger() -> None:
     assert (info.value.scope, info.value.spent_usd, info.value.cap_usd) == ("total", Decimal("4.95"), Decimal("5.00"))
 
 
+async def test_without_a_total_only_the_daily_and_tenant_caps_apply() -> None:
+    """Staging and production have no prototype total unless it is set: the lifetime sum is not even read."""
+    ledger = InMemoryLedger()
+    ledger.entries.append(entry("500", user=USER, when=NOW - timedelta(days=40)))
+    g = guard(ledger, app_env="staging", llm_global_daily_cap_usd=Decimal(1), llm_prototype_total_cap_usd=None)
+    await g.check(CallContext(), Decimal("0.50"))
+
+
 async def test_the_daily_cap_is_checked_before_the_total() -> None:
     ledger = InMemoryLedger()
     ledger.entries.append(entry("0.99", user=USER))

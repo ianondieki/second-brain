@@ -35,9 +35,13 @@ PRODUCTION: dict[str, Any] = {
 
 
 def test_tests_run_on_the_fake_provider() -> None:
-    """The test conftest sets LLM_PROVIDER=fake: no test reaches a provider by default."""
-    assert settings().llm_provider == "fake"
+    """The test conftest blanks the provider variables (a shell or .env value never leaks in), and an unset provider
+    is the fake under APP_ENV=test, even with a complete slot: no test reaches a provider by default."""
+    assert settings().llm_provider is None
+    assert settings().llm_free_slots() == ()
     assert settings().llm_effective_provider == "fake"
+    assert settings(**SLOT_1).llm_effective_provider == "fake"
+    assert settings(llm_provider="free", **SLOT_1).llm_effective_provider == "free"  # only when a test asks
 
 
 def test_a_complete_slot_is_parsed_with_its_defaults() -> None:
@@ -136,13 +140,13 @@ def test_empty_values_mean_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_an_unset_provider_is_free_with_a_slot_and_fake_without_in_dev() -> None:
-    assert settings(llm_provider=None).llm_effective_provider == "fake"
-    assert settings(llm_provider=None, **SLOT_1).llm_effective_provider == "free"
+    assert settings(app_env="dev", llm_provider=None).llm_effective_provider == "fake"
+    assert settings(app_env="dev", llm_provider=None, **SLOT_1).llm_effective_provider == "free"
     # Anthropic is used only when chosen explicitly, even with a key (D-37).
-    keyed = settings(llm_provider=None, anthropic_api_key=SecretStr("test-anthropic-key-not-real"))
+    keyed = settings(app_env="dev", llm_provider=None, anthropic_api_key=SecretStr("test-anthropic-key-not-real"))
     assert keyed.llm_effective_provider == "fake"
-    assert settings(llm_provider="anthropic", **SLOT_1).llm_effective_provider == "anthropic"
-    assert settings(llm_provider="fake", **SLOT_1).llm_effective_provider == "fake"
+    assert settings(app_env="dev", llm_provider="anthropic", **SLOT_1).llm_effective_provider == "anthropic"
+    assert settings(app_env="dev", llm_provider="fake", **SLOT_1).llm_effective_provider == "fake"
 
 
 def test_the_demo_fallback_is_for_dev_and_test_only() -> None:
@@ -157,8 +161,8 @@ def test_production_never_uses_a_free_provider() -> None:
         settings(**PRODUCTION, llm_provider="free")
     with pytest.raises(ValidationError, match="LLM_FREE_1_"):
         settings(**PRODUCTION, llm_provider="anthropic", **SLOT_1)
-    # LLM_PROVIDER=fake starts (the router then refuses every call: production has no demo fallback).
-    assert settings(**PRODUCTION, llm_provider="fake").llm_demo_fallback is False
+    with pytest.raises(ValidationError, match="production uses LLM_PROVIDER=anthropic"):
+        settings(**PRODUCTION, llm_provider="fake")
     cfg = settings(**PRODUCTION, llm_provider=None)
     assert cfg.llm_effective_provider == "anthropic"
     assert settings(**PRODUCTION, llm_provider="anthropic").llm_effective_provider == "anthropic"
@@ -172,9 +176,16 @@ def test_staging_never_uses_a_free_provider() -> None:
     assert settings(app_env="staging", llm_provider=None).llm_effective_provider == "anthropic"
 
 
-def test_the_prototype_total_cap_defaults_to_five_dollars_and_is_never_negative() -> None:
-    assert Settings.model_fields["llm_prototype_total_cap_usd"].default == Decimal("5.00")
-    assert settings(llm_prototype_total_cap_usd=Decimal(0)).llm_prototype_total_cap_usd == 0
+def test_the_prototype_total_is_five_dollars_on_local_runs_and_explicit_elsewhere() -> None:
+    """D-37's USD 5 is the prototype's: dev and test default to it; staging and production have no total unless it
+    is set explicitly (a lifetime cap would stop a hosted app, and summing the whole ledger per call is not free)."""
+    assert Settings.model_fields["llm_prototype_total_cap_usd"].default is None
+    for env in ("dev", "test"):
+        assert settings(app_env=env, llm_prototype_total_cap_usd=None).llm_total_cap_usd == Decimal("5.00")
+    assert settings(app_env="dev", llm_prototype_total_cap_usd=Decimal(0)).llm_total_cap_usd == 0
+    assert settings(app_env="staging", llm_prototype_total_cap_usd=None).llm_total_cap_usd is None
+    assert settings(**PRODUCTION, llm_prototype_total_cap_usd=None).llm_total_cap_usd is None
+    assert settings(**PRODUCTION, llm_prototype_total_cap_usd=Decimal(20)).llm_total_cap_usd == 20
     with pytest.raises(ValidationError, match="LLM_PROTOTYPE_TOTAL_CAP_USD must be zero or more"):
         settings(llm_prototype_total_cap_usd=Decimal("-0.01"))
 
@@ -193,4 +204,6 @@ def test_every_new_variable_is_documented_by_name_only() -> None:
             assert assigned[name] == "", f"{name} has a value in .env.example"
     assert assigned["LLM_GLOBAL_DAILY_CAP_USD"] == "1.00"
     assert assigned["LLM_PROTOTYPE_TOTAL_CAP_USD"] == "5.00"
+    text = " ".join(" ".join(example).split())
+    assert "per account until the platform-wide count lands" in text  # the cap is per tenant for now (RLS)
     assert Path(BACKEND_DIR / ".env.example").is_file()

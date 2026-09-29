@@ -3,8 +3,9 @@
 Before every attempt: ``LLM_KILL_SWITCH=1`` refuses; a free provider slot's daily request cap
 (``LLM_FREE_<N>_DAILY_REQUESTS``, UTC day, D-37) refuses once today's attempts on the slot's model reach it
 (``LLMRequestCapReached``); the global daily cap (``LLM_GLOBAL_DAILY_CAP_USD``, UTC day) refuses when today's spend
-plus the attempt's upper estimate would pass it; the prototype's lifetime total (``LLM_PROTOTYPE_TOTAL_CAP_USD``,
-D-37: every row of the ledger, and only Anthropic costs money) does the same; the billing subject's monthly cap
+plus the attempt's upper estimate would pass it; the prototype's lifetime total (``Settings.llm_total_cap_usd``:
+``LLM_PROTOTYPE_TOTAL_CAP_USD``, USD 5 in dev and test when unset, none in staging and production unless set; D-37:
+every row of the ledger, and only Anthropic costs money) does the same; the billing subject's monthly cap
 (``plans.limits.llm_monthly_cap_usd``, UTC calendar month) does the same (the 100% hard cap: callers such as scouts
 catch ``LLMBudgetExceeded`` and degrade). The spend caps apply to attempts that cost something: a free slot's
 attempt (estimate 0) spends nothing, so a cap overrun by calls in flight never blocks it. After a call the subject's
@@ -162,10 +163,11 @@ class BudgetGuard:
             global_spent = await self._ledger.global_spent_usd(since=day_start(now))
             if global_spent + estimate_usd > global_cap:
                 raise LLMBudgetExceeded("global", spent_usd=global_spent, cap_usd=global_cap)
-            total_cap = self._settings.llm_prototype_total_cap_usd
-            total_spent = await self._ledger.global_spent_usd(since=LEDGER_START)
-            if total_spent + estimate_usd > total_cap:
-                raise LLMBudgetExceeded("total", spent_usd=total_spent, cap_usd=total_cap)
+            total_cap = self._settings.llm_total_cap_usd
+            if total_cap is not None:
+                total_spent = await self._ledger.global_spent_usd(since=LEDGER_START)
+                if total_spent + estimate_usd > total_cap:
+                    raise LLMBudgetExceeded("total", spent_usd=total_spent, cap_usd=total_cap)
         snap = await self.snapshot(ctx)
         spent, cap = snap.spent_usd, snap.cap_usd
         if paid and spent is not None and cap is not None and spent + estimate_usd > cap:
