@@ -1,0 +1,58 @@
+# Engagement tracker policy (REQ-ENG-01, REQ-BD-01; docs/spec/06 6.9 "Due rule" column, docs/spec/13 "Other
+# defaults"). The state machine (bridge/engagements/state_machine.py) is the only definition of stages and
+# transitions; the numbers it uses live here and are cited by key. Loaded and validated by
+# bridge/engagements/policy.py (a missing or malformed value stops the app at first use).
+#
+# BD = Kenyan business days: Monday to Friday, not a gazetted public holiday (the `holidays` table, admin-editable).
+# The entry day itself is never counted, and a deadline falls at the end of its Nairobi day (23:59:59 EAT).
+version: 1
+
+stages:
+  # Stage 0: the developer accepts or declines an organisation's interest; else EXPIRED (NO_DEV_RESPONSE).
+  ORG_INTEREST: {due_bd: 5, expire_bd: 5}
+  # Stage 1: the organisation starts the review, declines or requests info; expires at 20 BD (NO_REVIEW).
+  SUBMITTED: {due_bd: 10, expire_bd: 20}
+  # Stage 2: the signatory's decision; expires at 30 BD (NO_DECISION).
+  UNDER_REVIEW: {due_bd: 15, expire_bd: 30}
+  # Stage 3: first contact by the named contact-by date (at most 5 BD ahead); escalation to the org admin at +3 BD;
+  # EXPIRED (CONTACT_NOT_MADE) at +10 BD from entering the stage.
+  INTEREST_CONFIRMED: {due_bd: 5, escalate_bd: 3, expire_bd: 10}
+  # Stage 4: the NDA is sent within 5 BD; the developer's confirmation auto-confirms after 3 BD (job, later).
+  CONTACT_MADE: {due_bd: 5, auto_confirm_bd: 3}
+  # Stage 5: both signatures within 5 BD; reminders at 2 and 4 BD.
+  NDA_PENDING: {due_bd: 5, remind_bd: [2, 4]}
+  # Stage 6: a terms draft within 10 BD.
+  NDA_SIGNED: {due_bd: 10}
+  # Stage 7: each response within 7 BD (every new version sets a new deadline).
+  NEGOTIATION: {due_bd: 7}
+  # Stage 8: both signatures within 5 BD.
+  AGREEMENT_SIGNING: {due_bd: 5}
+  # Stage 9: per milestone (each milestone's due date and review window); no stage deadline.
+  IN_IMPLEMENTATION: {}
+  # Stage 10: the organisation's review of the final delivery (the agreement's window; default 10 BD).
+  DELIVERED: {due_bd: 10}
+  # Stage 11: both signatures of the acceptance certificate within 5 BD.
+  SIGN_OFF: {due_bd: 5}
+  # Stage 12: the developer confirms the recorded payment within 5 BD; never auto-confirmed.
+  PAYMENT_FINAL: {due_bd: 5}
+
+contact:
+  # The contact-by date the signatory names when approving to proceed: at most this many BD ahead.
+  contact_by_max_bd: 5
+
+milestones:
+  review_window_bd_default: 5
+  review_window_bd_max: 60
+  reminder_bd: 3
+  escalation_bd: 5
+  max_per_agreement: 20
+
+agreement:
+  # "Deemed accepted after N days" clause: 0 = never deemed accepted (docs/spec/06 6.9 stage 8).
+  deemed_acceptance_days_max: 90
+  exclusivity_max_chars: 500
+
+decline:
+  # OTHER needs a written reason of at least this many characters (docs/spec/06 6.9 Codes).
+  other_min_chars: 20
+  other_max_chars: 1000

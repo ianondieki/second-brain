@@ -61,6 +61,9 @@ API only (the picker screen is P8). Branch `feat/REQ-PROP-03-pitch`.
     `async def open_engagement(db, *, developer_id, proposal_id, version_id, org_id, tag_id): try: return (await
     commands.open_engagement_for_tag(db, tag_id)).id` / `except commands.OpenRefused as exc: raise ApiError(409,
     "tag_conflict", exc.message) from exc` (the Pitch's own checks make `engagement_exists` a lost race only).
+    Done in P5 (`feat/REQ-ENG-02-tracker`): `tag_hooks.open_engagement` is that adapter, `interim_open_engagement`
+    is deleted, and a Pitch's engagement now carries the SUBMITTED deadline
+    (`integration/engagements/test_pitch_opens_engagement.py`).
   - P3's `bridge.proposals.grants.grant_on_tag` (`(db, *, owner_id, proposal_id, org_id) -> UUID | None`) is plugged
     in since P3 merged (the interim no-grant is gone): a delivered tag gets an active `auto_tagged` grant under the
     default policy. `integration/proposals/test_pitch_tier2.py` proves the whole path: before the Pitch the E2

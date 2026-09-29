@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -21,6 +23,7 @@ from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
+from bridge.engagements.router import router as engagements_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.logging import configure_logging
@@ -34,6 +37,7 @@ from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
 API_PREFIX = "/api"
+TEST_CLOCK_MODULE = "bridge.testclock"
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -42,6 +46,15 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
     "Cache-Control": "no-store",
 }
+
+
+def dev_clock_router(settings: Settings) -> APIRouter | None:
+    """The dev/test clock router (REQ-ENG-12): never in production, and only where the image carries the module
+    (``backend/Dockerfile`` deletes it unless built with ``WITH_TEST_CLOCK=true``)."""
+    if settings.app_env == "production" or importlib.util.find_spec(TEST_CLOCK_MODULE) is None:
+        return None
+    router: APIRouter = importlib.import_module(TEST_CLOCK_MODULE).build_router(settings)
+    return router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -110,6 +123,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pitch_router)
     app.include_router(proposals_router)
     app.include_router(problems_router)
+    app.include_router(engagements_router)
+    clock_router = dev_clock_router(settings)
+    if clock_router is not None:
+        app.include_router(clock_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 
