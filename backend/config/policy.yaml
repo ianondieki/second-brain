@@ -56,3 +56,15 @@ decline:
   # OTHER needs a written reason of at least this many characters (docs/spec/06 6.9 Codes).
   other_min_chars: 20
   other_max_chars: 1000
+
+reminders:
+  # The daily reminders' health rules and start times (REQ-REM-01, REQ-REM-02; docs/spec/06 6.11). Read by
+  # bridge/reminders/thresholds.py. BD = Kenyan business days, as above.
+  due_soon_bd: 2                     # at risk: an item due within this many BD with no action
+  off_track_after_days: 7            # off track: an item overdue by more than this many days
+  rework_loops_off_track: 2          # off track: a milestone sent back for changes this many times
+  cold_after_bd: 3                   # at risk: no repository activity for this many BD (a linked repo, Release 2)
+  quiet_after_days: 5                # "No update from {developer} since {date}" once quiet this long
+  upcoming_days: 14                  # open milestones due within this many days are listed one by one
+  developer_send_after: "07:30"      # EAT: the developer's daily reminder (N23 send_after_hour default)
+  organisation_send_after: "08:30"   # EAT: the organisation's progress digest (reminders.org_digest)

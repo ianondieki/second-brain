@@ -41,7 +41,7 @@ def test_the_shipped_policy_has_the_spec_thresholds() -> None:
     """docs/spec/06 6.11: due within 2 BD, overdue >7 days, rework loop >= 2, cold after 3 BD; 07:30 and 08:30 EAT."""
     assert load_reminder_policy() == SPEC
     assert get_reminder_policy() is get_reminder_policy()
-    assert load_policy().stage  # the tracker's loader still reads the same file
+    assert load_policy().review_window_bd_default == 5  # the tracker's loader still reads the same file
 
 
 @pytest.mark.parametrize(

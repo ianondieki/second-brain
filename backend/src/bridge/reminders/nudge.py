@@ -40,6 +40,7 @@ from bridge.reminders.render import (
     render_text,
     sections,
 )
+from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
 
 KIND: Final = "em7"
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
@@ -53,7 +54,6 @@ AI_LABEL: Final = (
 FOOTER: Final = "You get this daily reminder because you turned reminders on."
 CTA: Final = "Open your tracker"
 IN_APP_TITLE: Final = "Your daily update"
-UPCOMING_DAYS: Final = 14  # open milestones due within this many days are listed one by one under Needs you
 _OPEN_WORK: Final = frozenset({M.PLANNED, M.IN_PROGRESS, M.CHANGES_REQUESTED})
 
 
@@ -174,14 +174,14 @@ def _due(day: date | None) -> str:
     return f" (due {eat_date(day)})" if day else ""
 
 
-def _needs_you(e: EngagementFact, today: date) -> list[tuple[str, str]]:
+def _needs_you(e: EngagementFact, today: date, upcoming_days: int) -> list[tuple[str, str]]:
     """What the developer does next on ``e`` as (sentence, brief): each open milestone overdue or due within
-    ``UPCOMING_DAYS``, else one line for the stage (with the next milestone's date during implementation). The brief
+    ``upcoming_days``, else one line for the stage (with the next milestone's date during implementation). The brief
     is what the model sees: codes, dates and the developer's own title, never an organisation's text."""
     if DEV not in e.awaiting:
         return []
     open_work = sorted((m for m in e.milestones if m.state in _OPEN_WORK), key=lambda m: (m.due_on, m.seq))
-    soon = [m for m in open_work if (m.due_on - today).days <= UPCOMING_DAYS]
+    soon = [m for m in open_work if (m.due_on - today).days <= upcoming_days]
     if soon:
         return [
             (
@@ -225,13 +225,14 @@ def _step_for(r: Reason, e: EngagementFact) -> str:
     return f"Pick up {title} where you left off."
 
 
-def compose_nudge(facts: DeveloperFacts, holidays: Collection[date]) -> Nudge:
-    pairs = [(e, assess(e, facts.today, holidays)) for e in facts.engagements if e.assessed]
+def compose_nudge(facts: DeveloperFacts, holidays: Collection[date], policy: ReminderPolicy | None = None) -> Nudge:
+    policy = policy or get_reminder_policy()
+    pairs = [(e, assess(e, facts.today, holidays, policy)) for e in facts.engagements if e.assessed]
     needs_you: list[tuple[str, str]] = []
     waiting: list[tuple[str, str]] = []
     health: list[tuple[HealthRow, str]] = []
     for e, a in pairs:
-        needs_you += _needs_you(e, facts.today)
+        needs_you += _needs_you(e, facts.today, policy.upcoming_days)
         if ORG in e.awaiting:
             action, due = organisation_action(e), _due(e.stage_deadline_on)
             waiting.append(

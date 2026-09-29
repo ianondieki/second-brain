@@ -37,12 +37,12 @@ from bridge.reminders.render import (
     render_text,
     sections,
 )
+from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
 
 KIND: Final = "em7_org"
 Cadence = Literal["daily", "weekly"]
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 M = MilestoneState
-UPCOMING_DAYS: Final = 14  # open milestones due within this many days are listed
 _OVERDUE: Final = frozenset({ReasonCode.MILESTONE_OVERDUE, ReasonCode.REVIEW_OVERDUE, ReasonCode.STAGE_OVERDUE})
 _OPEN_WORK: Final = frozenset({M.PLANNED, M.IN_PROGRESS, M.CHANGES_REQUESTED})
 CTA: Final = "Open your organisation's tracker"
@@ -128,8 +128,10 @@ def _needs_us(e: EngagementFact) -> list[str]:
     return [f"{_title(e)}: {organisation_action(e)}{_due(e.stage_deadline_on)}."]
 
 
-def _entry(e: EngagementFact, today: date, holidays: Collection[date]) -> tuple[DigestEntry, list[str]]:
-    a = assess(e, today, holidays)
+def _entry(
+    e: EngagementFact, today: date, holidays: Collection[date], policy: ReminderPolicy
+) -> tuple[DigestEntry, list[str]]:
+    a = assess(e, today, holidays, policy)
     stage = STAGE_LABELS.get(e.state, e.state.value)
     sentences = [f"{_title(e)} ({stage}): {HEALTH_LABELS[a.health]}."]
     sentences += [f"{reason_text(r, e, viewer=ORG)}." for r in a.reasons]
@@ -138,21 +140,22 @@ def _entry(e: EngagementFact, today: date, holidays: Collection[date]) -> tuple[
         (
             m
             for m in e.milestones
-            if m.state in _OPEN_WORK and (m.due_on - today).days <= UPCOMING_DAYS and m.seq not in named
+            if m.state in _OPEN_WORK and (m.due_on - today).days <= policy.upcoming_days and m.seq not in named
         ),
         key=lambda m: (m.due_on, m.seq),
     )
     if due:
         listed = "; ".join(f"milestone {m.seq} {quote(m.deliverable)} due {eat_date(m.due_on)}" for m in due)
         sentences.append(f"Milestones due: {listed}.")
-    quiet = quiet_since(e, today)
+    quiet = quiet_since(e, today, policy)
     if quiet is not None:
         sentences.append(f"No update from {_dev(e)} since {eat_date(quiet)}.")
     overdue = [f"{_title(e)}: {reason_text(r, e, viewer=ORG)}." for r in a.reasons if r.code in _OVERDUE]
     return DigestEntry(e.id, a.health, " ".join(sentences)), overdue
 
 
-def compose_digest(facts: OrgFacts, holidays: Collection[date]) -> Digest:
+def compose_digest(facts: OrgFacts, holidays: Collection[date], policy: ReminderPolicy | None = None) -> Digest:
+    policy = policy or get_reminder_policy()
     active = [e for e in facts.engagements if e.assessed]
     window = 1 if facts.cadence == "daily" else 7
     new_tagged = tuple(
@@ -165,7 +168,7 @@ def compose_digest(facts: OrgFacts, holidays: Collection[date]) -> Digest:
     entries: list[DigestEntry] = []
     for e in active:
         needs_us += _needs_us(e)
-        entry, late = _entry(e, facts.today, holidays)
+        entry, late = _entry(e, facts.today, holidays, policy)
         entries.append(entry)
         overdue += late
     entries.sort(key=lambda entry: -entry.health.rank)

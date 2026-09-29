@@ -2,10 +2,11 @@
 
 ``run_developer_nudges`` (EM7, job ``reminders.dispatch``) and ``run_org_digests`` (org EM7, ``reminders.org_digest``)
 run every 15 minutes. "Now" is ``app_clock_now()`` (the dev/test clock moves them; a test may pass ``now``), turned into
-the Nairobi date. Nothing is looked at before ``SEND_AFTER`` (07:30 EAT) or ``ORG_SEND_AFTER`` (08:30 EAT) unless the
-run is forced (``force=True``: ``python -m bridge.reminders run --now``, dev and test only). Each recipient is handled
-in its own session bound to them (one tenant at a time) and its own transaction; one recipient's failure is logged
-and never stops the run.
+the Nairobi date. Nothing is looked at before ``developer_send_after`` (07:30 EAT) or ``organisation_send_after``
+(08:30 EAT; ``policy.yaml``'s ``reminders`` section, ``bridge.reminders.thresholds``) unless the run is forced
+(``force=True``: ``python -m bridge.reminders run --now``, dev and test only). Each recipient is handled in its own
+session bound to them (one tenant at a time) and its own transaction; one recipient's failure is logged and never
+stops the run.
 
 Per recipient and period (the Nairobi day; for a weekly digest, its ISO week):
 
@@ -65,11 +66,10 @@ from bridge.reminders import org_digest
 from bridge.reminders.facts import clock_now, developer_facts, load_holidays, org_facts
 from bridge.reminders.health import Health, nairobi_today
 from bridge.reminders.render import TRACKER_PATH
+from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
 from bridge.reminders.wording import word_nudge
 from bridge.tenancy.models import Membership
 
-SEND_AFTER: Final = time(7, 30)  # docs/spec/06 6.11: developers, at send_after_hour (default 07:30 EAT)
-ORG_SEND_AFTER: Final = time(8, 30)  # docs/spec/06 6.11: reminders.org_digest 08:30
 EMAIL, IN_APP = NotificationChannel.EMAIL, NotificationChannel.IN_APP
 Status = Literal["sent", "already", "quiet", "not_opted_in", "error"]
 EXPIRED: Final = "expired: its day passed"
@@ -85,6 +85,7 @@ class Deps:
     settings: Settings
     email: EmailProvider
     llm: LLMRuntime | None = None
+    policy: ReminderPolicy = field(default_factory=get_reminder_policy)  # policy.yaml's reminders section
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,7 +275,7 @@ async def run_developer_nudges(
 ) -> Report:
     """One pass of ``reminders.dispatch``: each active user's EM7 for today, at most once per channel."""
     now = await _now(deps, now)
-    if not _gate(now, SEND_AFTER, force):
+    if not _gate(now, deps.policy.developer_send_after, force):
         return Report(now, nairobi_today(now), ran=False)
     today, holidays, recipients = await _each(deps, now, user_ids)
     outcomes = []
@@ -307,7 +308,7 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
             status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", email=status, email_skipped=block)
         facts = await developer_facts(db, r.id, today, deals_enabled=deps.settings.feature_deals_enabled)
-        composed = developer.compose_nudge(facts, holidays)
+        composed = developer.compose_nudge(facts, holidays, deps.policy)
         if composed.empty:
             status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", email=status, email_skipped=block)
@@ -356,7 +357,7 @@ async def run_org_digests(
 ) -> Report:
     """One pass of ``reminders.org_digest``: each opted-in member's digest per organisation and period."""
     now = await _now(deps, now)
-    if not _gate(now, ORG_SEND_AFTER, force):
+    if not _gate(now, deps.policy.organisation_send_after, force):
         return Report(now, nairobi_today(now), ran=False)
     today, holidays, recipients = await _each(deps, now, user_ids)
     outcomes: list[Outcome] = []
@@ -403,7 +404,7 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
             status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", org_id=org_id, email=status, email_skipped=block)
         facts = await org_facts(db, org_id, today, cadence, deals_enabled=deps.settings.feature_deals_enabled)
-        digest = org_digest.compose_digest(facts, holidays)
+        digest = org_digest.compose_digest(facts, holidays, deps.policy)
         if digest.empty:
             status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", org_id=org_id, email=status, email_skipped=block)

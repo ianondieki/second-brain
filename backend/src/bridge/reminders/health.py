@@ -10,13 +10,17 @@ The rules (docs/spec/06 6.11), for the engagement's main-path stages only (side 
 - an item is the developer's milestone (from the **signed** agreement, not yet submitted or accepted), the
   organisation's review of a submitted milestone (due its review date, ``history.review_due_dates``), or the current
   stage's deadline for each party awaited;
-- ``at_risk``: an item due within ``DUE_SOON_BD`` (2) BD with no action, an item overdue by 1 to 7 days, or (only
-  with a linked repository, during ``IN_IMPLEMENTATION``, never on a weekend or holiday) no repository activity for
-  ``COLD_AFTER_BD`` (3) BD; Release 1 links no repository, so the repo-cold rule never fires yet;
-- ``off_track``: an item overdue by more than ``OFF_TRACK_AFTER_DAYS`` (7) days, or a milestone sent back for changes
-  ``REWORK_LOOPS_OFF_TRACK`` (2) or more times;
+- ``at_risk``: an item due within ``due_soon_bd`` (2) BD with no action, an item overdue by 1 to
+  ``off_track_after_days`` (7) days, or (only with a linked repository, during ``IN_IMPLEMENTATION``, never on a
+  weekend or holiday) no repository activity for ``cold_after_bd`` (3) BD; Release 1 links no repository, so the
+  repo-cold rule never fires yet;
+- ``off_track``: an item overdue by more than ``off_track_after_days`` days, or a milestone sent back for changes
+  ``rework_loops_off_track`` (2) or more times;
 - otherwise ``on_track``. Each reason is a code tuple (code, party, date, days, milestone), never prose and never a
   percentage: the renderers word it.
+
+The numbers are ``backend/config/policy.yaml``'s ``reminders`` section (``bridge.reminders.thresholds``); every rule
+takes the policy, the loaded one by default.
 
 Whose turn it is (``EngagementFact.awaiting``) is the state machine's: the fact loader asks
 ``bridge.engagements.state_machine.pending`` (docs/spec/06 6.9: the only definition of stages and next actors).
@@ -33,15 +37,11 @@ from uuid import UUID
 
 from bridge.engagements.calendar import business_days_between, is_business_day, local_date
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
+from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
 
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 S, M = EngagementState, MilestoneState
 
-DUE_SOON_BD: Final = 2  # "due within 2 BD with no action"
-OFF_TRACK_AFTER_DAYS: Final = 7  # "overdue >7 days"
-REWORK_LOOPS_OFF_TRACK: Final = 2  # "a rework loop >= 2"
-COLD_AFTER_BD: Final = 3  # repo-cold rule (Release 2: a linked repository)
-QUIET_AFTER_DAYS: Final = 5  # "No update from {party} since {date}" once a party has been quiet this long
 
 # Main-path stages (docs/spec/06 6.9). Side branches pause or freeze the clock; terminal states have nothing due.
 ASSESSED_STATES: Final = frozenset(
@@ -149,99 +149,89 @@ def nairobi_today(now: datetime) -> date:
     return local_date(now)
 
 
+@dataclass(frozen=True, slots=True)
+class _Day:
+    """Today, the holidays and the thresholds every rule reads."""
+
+    today: date
+    holidays: Collection[date]
+    policy: ReminderPolicy
+
+
 def _item(
-    party: EngagementParty,
-    due: date,
-    today: date,
-    holidays: Collection[date],
-    *,
-    soon: ReasonCode,
-    late: ReasonCode,
-    seq: int | None = None,
+    party: EngagementParty, due: date, day: _Day, *, soon: ReasonCode, late: ReasonCode, seq: int | None = None
 ) -> Reason | None:
-    if due < today:
-        days = (today - due).days
-        health = Health.OFF_TRACK if days > OFF_TRACK_AFTER_DAYS else Health.AT_RISK
+    if due < day.today:
+        days = (day.today - due).days
+        health = Health.OFF_TRACK if days > day.policy.off_track_after_days else Health.AT_RISK
         return Reason(late, health, party, due, days, seq)
-    left = business_days_between(today, due, holidays)
-    if left <= DUE_SOON_BD:
+    left = business_days_between(day.today, due, day.holidays)
+    if left <= day.policy.due_soon_bd:
         return Reason(soon, Health.AT_RISK, party, due, left, seq)
     return None
 
 
-def _milestone_reasons(m: MilestoneFact, today: date, holidays: Collection[date]) -> list[Reason]:
+def _milestone_reasons(m: MilestoneFact, day: _Day) -> list[Reason]:
     reasons: list[Reason] = []
     if m.state is M.ACCEPTED:
         return reasons
-    if m.rework_loops >= REWORK_LOOPS_OFF_TRACK:
+    if m.rework_loops >= day.policy.rework_loops_off_track:
         reasons.append(Reason(ReasonCode.REWORK_LOOP, Health.OFF_TRACK, DEV, m.due_on, m.rework_loops, m.seq))
     if m.state is M.SUBMITTED_FOR_REVIEW:
         if m.review_due_on is not None:
             found = _item(
-                ORG,
-                m.review_due_on,
-                today,
-                holidays,
-                soon=ReasonCode.REVIEW_DUE_SOON,
-                late=ReasonCode.REVIEW_OVERDUE,
-                seq=m.seq,
+                ORG, m.review_due_on, day, soon=ReasonCode.REVIEW_DUE_SOON, late=ReasonCode.REVIEW_OVERDUE, seq=m.seq
             )
             reasons.extend([found] if found else [])
         return reasons
     if m.state in _DEVELOPER_WORK:
         found = _item(
-            DEV,
-            m.due_on,
-            today,
-            holidays,
-            soon=ReasonCode.MILESTONE_DUE_SOON,
-            late=ReasonCode.MILESTONE_OVERDUE,
-            seq=m.seq,
+            DEV, m.due_on, day, soon=ReasonCode.MILESTONE_DUE_SOON, late=ReasonCode.MILESTONE_OVERDUE, seq=m.seq
         )
         reasons.extend([found] if found else [])
     return reasons
 
 
-def repo_cold(e: EngagementFact, today: date, holidays: Collection[date]) -> Reason | None:
+def repo_cold(
+    e: EngagementFact, today: date, holidays: Collection[date], policy: ReminderPolicy | None = None
+) -> Reason | None:
     """AC-REM-4/b: only with a linked repository, during implementation, on a business day."""
     if not e.repo_linked or e.state is not S.IN_IMPLEMENTATION or not is_business_day(today, holidays):
         return None
     idle = business_days_between(e.last_repo_activity_on or e.entered_on, today, holidays)
-    if idle >= COLD_AFTER_BD:
+    if idle >= (policy or get_reminder_policy()).cold_after_bd:
         return Reason(ReasonCode.REPO_COLD, Health.AT_RISK, DEV, None, idle)
     return None
 
 
-def assess(e: EngagementFact, today: date, holidays: Collection[date]) -> Assessment:
+def assess(
+    e: EngagementFact, today: date, holidays: Collection[date], policy: ReminderPolicy | None = None
+) -> Assessment:
     """The engagement's health on ``today`` and the reasons, worst first, then by due date and milestone."""
     if not e.assessed:
         return Assessment(Health.ON_TRACK, ())
+    day = _Day(today, holidays, policy or get_reminder_policy())
     reasons: list[Reason] = []
     for m in e.milestones:
-        reasons.extend(_milestone_reasons(m, today, holidays))
+        reasons.extend(_milestone_reasons(m, day))
     if e.stage_deadline_on is not None:
         for party in (DEV, ORG):
             if party in e.awaiting:
                 found = _item(
-                    party,
-                    e.stage_deadline_on,
-                    today,
-                    holidays,
-                    soon=ReasonCode.STAGE_DUE_SOON,
-                    late=ReasonCode.STAGE_OVERDUE,
+                    party, e.stage_deadline_on, day, soon=ReasonCode.STAGE_DUE_SOON, late=ReasonCode.STAGE_OVERDUE
                 )
                 reasons.extend([found] if found else [])
-    cold = repo_cold(e, today, holidays)
+    cold = repo_cold(e, today, holidays, day.policy)
     reasons.extend([cold] if cold else [])
     reasons.sort(key=lambda r: (-r.health.rank, r.due_on or today, r.milestone_seq or 0, r.party.value))
     health = max((r.health for r in reasons), key=lambda h: h.rank, default=Health.ON_TRACK)
     return Assessment(health, tuple(reasons))
 
 
-def quiet_since(e: EngagementFact, today: date) -> date | None:
-    """The date of the developer's last update when it is at least ``QUIET_AFTER_DAYS`` old (the engagement's start
+def quiet_since(e: EngagementFact, today: date, policy: ReminderPolicy | None = None) -> date | None:
+    """The date of the developer's last update when it is at least ``quiet_after_days`` old (the engagement's start
     when they never acted), for "No update from {developer} since {date}"; None while they are active."""
     if not e.assessed:
         return None
     last = e.last_developer_update_on or e.created_on
-    return last if (today - last).days >= QUIET_AFTER_DAYS else None
+    return last if (today - last).days >= (policy or get_reminder_policy()).quiet_after_days else None

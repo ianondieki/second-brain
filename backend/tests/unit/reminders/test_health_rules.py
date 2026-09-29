@@ -14,8 +14,6 @@ import pytest
 
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
 from bridge.reminders.health import (
-    COLD_AFTER_BD,
-    QUIET_AFTER_DAYS,
     EngagementFact,
     Health,
     MilestoneFact,
@@ -26,6 +24,7 @@ from bridge.reminders.health import (
     repo_cold,
 )
 from bridge.reminders.nudge import DeveloperFacts, compose_nudge, fallback_wording, render_nudge
+from bridge.reminders.thresholds import get_reminder_policy
 
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 S, M = EngagementState, MilestoneState
@@ -196,7 +195,7 @@ def test_repo_cold_on_a_business_day_with_a_linked_repo_in_implementation() -> N
     assert (reason.code, reason.health, reason.days) == (ReasonCode.REPO_COLD, Health.AT_RISK, 5)
     assert assess(linked, MONDAY, NO_HOLIDAYS).health is Health.AT_RISK
     fresh = replace(linked, last_repo_activity_on=MONDAY - timedelta(days=3))  # Friday: one business day
-    assert COLD_AFTER_BD > 1
+    assert get_reminder_policy().cold_after_bd > 1
     assert repo_cold(fresh, MONDAY, NO_HOLIDAYS) is None
     assert repo_cold(replace(linked, state=S.NEGOTIATION), MONDAY, NO_HOLIDAYS) is None
     never = replace(linked, last_repo_activity_on=None, entered_on=MONDAY - timedelta(days=14))
@@ -207,7 +206,7 @@ def test_repo_cold_on_a_business_day_with_a_linked_repo_in_implementation() -> N
 
 
 def test_quiet_since_names_the_developers_last_update_once_it_is_old_enough() -> None:
-    last = MONDAY - timedelta(days=QUIET_AFTER_DAYS)
+    last = MONDAY - timedelta(days=get_reminder_policy().quiet_after_days)
     assert quiet_since(engagement(last_developer_update_on=last), MONDAY) == last
     assert quiet_since(engagement(last_developer_update_on=last + timedelta(days=1)), MONDAY) is None
     never = engagement(last_developer_update_on=None, created_on=MONDAY - timedelta(days=9))
