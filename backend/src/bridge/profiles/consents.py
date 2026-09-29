@@ -28,6 +28,8 @@ from bridge.profiles.models import Consent
 # session. The settings API neither lists nor records them (REQ-PROP-05): a settings or signup row never opens one.
 SESSION_ONLY: Final = frozenset({ConsentPurpose.TIER2_LLM_ASSISTANT})
 SETTINGS_PURPOSES: Final = tuple(p for p in ConsentPurpose if p not in SESSION_ONLY)
+# ``consents.source`` of a per-session decision starts with this (``bridge.llm.guard.session_consent_source``).
+SESSION_SOURCE_PREFIX: Final = "session:"
 # The refusal's message wherever such a purpose is sent (the settings API; signup, REQ-AUTH-01). [[COPY-REVIEW]]
 SESSION_ONLY_MESSAGE: Final = (
     "Turn the writing assistant on from the proposal editor: it lasts for one sign-in at a time."
@@ -75,6 +77,11 @@ def terms_version(settings: Settings) -> str:
 async def record_decisions(
     db: AsyncSession, settings: Settings, *, user_id: UUID, decisions: Mapping[ConsentPurpose, bool], source: str
 ) -> None:
+    """Record one row per decision. A purpose decided per sign-in (``SESSION_ONLY``) is recorded only with a
+    ``session:`` source, whatever its value: defence in depth behind the settings API's and signup's refusals
+    (REQ-PROP-05, REQ-AUTH-01), so no lasting row of it is ever written."""
+    if not source.startswith(SESSION_SOURCE_PREFIX) and any(purpose in SESSION_ONLY for purpose in decisions):
+        raise ValueError("a purpose decided per sign-in is recorded only for a login session")
     texts = load_texts(settings.consents_file)
     for purpose, granted in decisions.items():
         shown = texts[ConsentPurpose(purpose)]

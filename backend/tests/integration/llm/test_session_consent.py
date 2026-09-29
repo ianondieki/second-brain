@@ -94,6 +94,27 @@ async def _record(
         await db.commit()
 
 
+async def _stored_before_the_refusals(
+    factory: async_sessionmaker[AsyncSession], user_id: UUID, purpose: ConsentPurpose, granted: bool
+) -> None:
+    """A ``settings`` row on a per-session purpose, as stored before the settings API (P13), signup and
+    ``record_decisions`` (P17) refused one: written directly, since ``record_decisions`` now refuses it."""
+    shown = consents.load_texts(get_settings().consents_file)[purpose]
+    async with factory() as db:
+        await bind_tenant(db, user_id=user_id)
+        db.add(
+            Consent(
+                user_id=user_id,
+                purpose=shown.purpose,
+                granted=granted,
+                text_version=shown.version,
+                text_sha256=shown.sha256,
+                source="settings",
+            )
+        )
+        await db.commit()
+
+
 async def _live(
     factory: async_sessionmaker[AsyncSession],
     owner: UUID,
@@ -159,7 +180,7 @@ async def test_a_later_withdrawal_ends_it(factory: async_sessionmaker[AsyncSessi
 
     await _grant(factory, user, session)  # the latest decision wins: a fresh opt-in in the same session is live again
     assert await _live(factory, user, ASSISTANT, session)
-    await _record(factory, user, ASSISTANT, False)  # a withdrawal from the settings page ends it too
+    await _stored_before_the_refusals(factory, user, ASSISTANT, False)  # an older settings withdrawal ends it too
     assert not await _live(factory, user, ASSISTANT, session)
 
 
@@ -177,7 +198,7 @@ async def test_a_grant_not_bound_to_a_session_is_never_live(
     factory: async_sessionmaker[AsyncSession], user: UUID
 ) -> None:
     """A ``tier2_llm_assistant`` grant from the settings page is not a per-use opt-in: it opens no session."""
-    await _record(factory, user, ASSISTANT, True)
+    await _stored_before_the_refusals(factory, user, ASSISTANT, True)
     for session in (await login(factory, user), None):
         assert not await _live(factory, user, ASSISTANT, session)
 

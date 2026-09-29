@@ -33,7 +33,7 @@ from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
 
 PER_SESSION = consents.SESSION_ONLY
-SESSION_SOURCE_PREFIX = "session:"
+SESSION_SOURCE_PREFIX = consents.SESSION_SOURCE_PREFIX
 
 
 def session_consent_source(session_id: UUID) -> str:
