@@ -111,7 +111,7 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 | `amina@developers.example` | Amina Wanjiru, developer (D2) | My ideas with certificates and pitches; "Who has seen this" (a SACCO B reviewer opened one) |
 | `brian@developers.example` | Brian Otieno, developer (D1) | My ideas; a pitch still new at Telco A, two held until the organisations are verified |
 | `reviewer@telco-a.example` | Telco A (fixture), reviewer | the Inbox: Brian's new proposal; open it, accept the Evaluation NDA and read the full proposal |
-| `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox with each proposal's stage |
+| `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox and Engagements: each seat sees the steps that are its to take (review, approve, sign, record a payment) |
 | `owner@sacco-b.example`, `signatory@sacco-b.example`, `reviewer@sacco-b.example`, `finance@sacco-b.example` | SACCO B (fixture), the same seats | the Inbox with two proposals in progress |
 | `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | the Inbox: proposals wait until it is E2 |
 
@@ -123,8 +123,11 @@ nudges for SACCO members" (in negotiation with SACCO B, whose reviewer has opene
 off-grid tower sites" (closed with Telco A: NDA, agreement, two milestones, sign-off and a recorded payment); Brian's
 "Cashless market-fee collection for counties" (submitted to Telco A, held for County Government of C and NGO D) and
 "USSD repayment reminders for feature phones" (approved to proceed by SACCO B). NGO D (fixture) is an E0 listing with
-no members. The provisional directory of public organisations (E0) is loaded too. The Inbox shows each engagement's
-stage; the tracker screens come later (the API at http://localhost:8000/api/docs already runs every step).
+no members. The provisional directory of public organisations (E0) is loaded too. Each side's **Engagements** screen
+shows the tracker: the five stage groups, whose turn it is and the next step, both parties' endorsements, the
+agreement and milestones, and the History. Every step from Submitted to Closed can be taken in the browser by the
+party whose turn it is; signatures, endorsements and payments ask for a fresh TOTP code when the last one is older
+than 12 hours.
 
 **Time and reminders.** `make demo-clock DAYS=3` moves the app's clock forward (deadlines, due dates and reminders
 follow it; it never moves back until `make demo-reset`). `make demo-reminders` sends the day's developer nudges and the
