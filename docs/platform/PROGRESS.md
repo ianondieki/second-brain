@@ -348,7 +348,7 @@ Checklist (updated after every task; commit and push after each):
 
 ### Handoff (resume from here; updated 2026-09-29)
 
-Cloud session on a Linux container (4 CPUs, 15 GB RAM), started 2026-09-29 from handoff commit `913c6ae`. Every branch
+Cloud session on a Linux container (4 CPUs, 15 GB RAM), started 2026-09-29 from handoff commit `913c6ae`. Session 2 (a new container, network access Full) resumed from `172b0e4` and redid the Linux setup below (legacy suite 307 OK). Every branch
 named in the laptop Handoff exists on origin at the recorded commit. The owner recorded D-35 (prototype first), D-36
 (zero spend) and D-37 (LLM providers for local runs) on 2026-09-29; the plan is `PLAN.md` §8 and the scheduling note
 `REQUIREMENTS.md` §7. D-26..D-34 stay open and use their recorded defaults for the prototype (list below).
@@ -365,7 +365,7 @@ workarounds in the laptop notes stay in their files.
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-REPO-01-schema-v2` (T2.1) | `2ca0347` | round 6 being finished (db-migrations) | `2ca0347` verified on Linux: 948 passed, 2 failed (`test_every_trigger_is_installed_and_enabled`, `test_e1_claims_approve_automatically_only_on_an_official_domain`). Fix both, apply Q1–Q5 as recommended in the laptop Handoff, mutation proofs, docs, static checks, compatibility list; then reviewer + security-reviewer round 6 (BLOCKER/MAJOR only), CI, merge |
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `108a0f3` | round 6: code done and verified; docs, proofs and reviews left (db-migrations) | `2ca0347` was followed by `c933f0f` (catalog test, AC-DIR-2 claim on a held E2 organisation), `64c834e` (Q3: an E2 approval by a non-owner keeps the verified domain) and `108a0f3` (Q5: the database sets a batch reservation's `created_at`). Session 2 (2026-09-29) ran the full suite on `108a0f3` on Linux: **951 passed, 0 failed**. Q1–Q5 are applied as recommended (Q1 accepted as the deviation; Q2 accepted; Q3 and Q5 in code; Q4 is a doc placement). Next: write the Q1, Q2 and Q4 docs; mutation proofs M13/M14b/M16/M17; card "Sixth review round", THREAT_MODEL rows, revision docstring; static checks; compatibility list; then reviewer + security-reviewer round 6 (BLOCKER/MAJOR only), CI, merge |
 | `feat/REQ-PROV-01-provenance` (T2.4) | `9a414c0` | waiting for schema v2 | as in the laptop Handoff |
 | `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `09ae48e` | waiting for schema v2 | as in the laptop Handoff |
 | `feat/REQ-PROV-04-verification` (D1) | `41164de` | waiting for schema v2 | as in the laptop Handoff |
