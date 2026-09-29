@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import type { components } from "@/lib/api/schema";
-import { forwardHeaders, serverApi } from "@/lib/api/server";
+import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
+import { homeFor, type Me } from "@/lib/auth/routing";
 
-import { isUuid } from "./membership";
+import { isUuid, pickMembership, type Membership } from "./membership";
 import { refusalOf, type Refusal } from "./refusals";
 
 // Server-side calls for the organisation screens, each bounded so a hung API ends in the route's error page. The
@@ -20,6 +21,24 @@ export type EvaluationNda = components["schemas"]["EvaluationNdaOut"];
 const TIMEOUT_MS = 5000;
 /** Proposals per Inbox page: a phone's worth of teasers on mobile data. */
 export const INBOX_PAGE_SIZE = 20;
+
+export interface OrgContext {
+  me: Me;
+  memberships: Membership[];
+  /** The organisation the screen acts for, or null for an account without an active membership. */
+  org: Membership | null;
+}
+
+/**
+ * Organisation screens only: the signed-in person (else /login or the second-factor page), on the organisation side
+ * (anyone else goes to their own home), and the organisation named by `?org=` when they are a member of it.
+ */
+export async function orgContext(requested: string | string[] | undefined): Promise<OrgContext> {
+  const me = await requireMe();
+  const home = homeFor(me.side);
+  if (home !== "/org") redirect(home);
+  return { me, memberships: me.memberships, org: pickMembership(me.memberships, requested) };
+}
 
 async function options() {
   return { headers: await forwardHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" as const };

@@ -91,7 +91,7 @@ describe("refusals (REQ-REPO-01, REQ-SEC-01)", () => {
     expect(REFUSAL_ACTION.mfa_enrolment_required).toBe("turnOnMfa");
     expect(ACTION_HREF.turnOnMfa).toBe("/settings/security");
     expect(REFUSAL_ACTION.step_up_required).toBe("stepUp");
-    expect(REFUSAL_ACTION.nda_outdated).toBe("reload");
+    expect(REFUSAL_ACTION.nda_outdated).toBe("newVersion");
     // Conditions only someone else can change offer no action of their own.
     for (const refusal of ["tier2_disabled", "org_not_e2", "master_terms_required", "role_not_permitted"] as const) {
       expect(REFUSAL_ACTION[refusal], refusal).toBeNull();

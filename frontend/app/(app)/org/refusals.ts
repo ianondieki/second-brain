@@ -31,10 +31,11 @@ export type Refusal = (typeof REFUSALS)[number] | "generic";
 
 /**
  * What the one action does. `enterCode`: the second-factor page; `turnOnMfa`: security settings; `stepUp`: the code
- * form on the page itself; `reload`: fetch the page again (a newer NDA, a passing failure); `inbox`: back to the list.
+ * form on the page itself; `newVersion`: show the NDA version published meanwhile; `reload`: fetch the page again (a
+ * passing failure); `inbox`: back to the list.
  * Null: nothing the person can do here (an admin, the developer or the platform has to act).
  */
-export type RefusalAction = "enterCode" | "turnOnMfa" | "stepUp" | "reload" | "inbox" | null;
+export type RefusalAction = "enterCode" | "turnOnMfa" | "stepUp" | "newVersion" | "reload" | "inbox" | null;
 
 export const REFUSAL_ACTION: Record<Refusal, RefusalAction> = {
   mfa_required: "enterCode",
@@ -51,7 +52,7 @@ export const REFUSAL_ACTION: Record<Refusal, RefusalAction> = {
   grant_revoked: "inbox",
   engagement_ended: "inbox",
   nda_required: "reload",
-  nda_outdated: "reload",
+  nda_outdated: "newVersion",
   not_configured: "reload",
   not_found: "inbox",
   generic: "reload",
@@ -66,7 +67,7 @@ export function refusalOf(status: number, error: unknown): Refusal {
   return code !== undefined && KNOWN.has(code) ? (code as Refusal) : "generic";
 }
 
-/** Where a link action goes; `stepUp` and `reload` are handled on the page, not by a link. */
+/** Where a link action goes; `stepUp`, `newVersion` and `reload` are handled on the page, not by a link. */
 export const ACTION_HREF: Partial<Record<Exclude<RefusalAction, null>, string>> = {
   enterCode: "/auth/mfa",
   turnOnMfa: "/settings/security",
