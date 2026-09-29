@@ -33,11 +33,10 @@ AC-SEC-2 (`integration/test_feature_flags.py::test_tier2_flag`). AC-SEC-7 is Pha
   `integration/proposals/test_access.py::test_predicate_negatives[feature_disabled]`,
   `unit/proposals/test_access_rules.py`.
 
-Deviation for the orchestrator: AC-SEC-2 reads "every Tier-2 endpoint returns 403". On an organisation path a
-signed-in non-member gets 404 instead (tenancy before the flag), because AC-SEC-1 and docs/spec/08 require 404 from
-every organisation route to a non-member and the existing sweep enforces it. Both deny; neither reveals anything. If
-the flag must win everywhere, the organisation routes move off `/api/orgs/{org_id}` (for example an `org_id` query
-parameter) instead.
+Deviation (accepted by the orchestrator, 2026-09-29, ruling 1): AC-SEC-2 reads "every Tier-2 endpoint returns 403".
+On an organisation path a signed-in non-member gets 404 instead (tenancy before the flag), because AC-SEC-1 and
+docs/spec/08 require 404 from every organisation route to a non-member and the existing sweep enforces it; everyone
+else gets 403 `tier2_disabled` while the flag is off. Both deny; neither reveals anything.
 
 ## After prototype (rescheduled, not removed)
 

@@ -16,8 +16,8 @@ AC-REPO-2 (`integration/proposals/test_render_marks.py`).
 ## Prototype P3 (T2.5 minimal, 2026-09-29): built
 
 - `bridge/proposals/render.py`: the server-side HTML render (Release 1 marks). Owner attribution: the version's
-  `owner_handle` until the organisation's engagement reaches `INTEREST_CONFIRMED` or a later main-path stage
-  (`access.REVEALED_STATES`), the owner's display name after; certificate id, `registered_at` in EAT and the
+  `owner_handle` until the organisation's engagement chain (revision 0003 events) has entered `INTEREST_CONFIRMED` or
+  a later main-path stage (`access.REVEALED_STATES`; not `PROCUREMENT_ROUTE`), the owner's display name after; certificate id, `registered_at` in EAT and the
   `/verify/{cert_id}` link. Per-viewer mark: 120 tiles of "name · organisation · YYYY-MM-DD HH:MM EAT · view
   {view_id}" in a fixed, rotated overlay (`aria-hidden`, no pointer events, printed too), the same values in
   `<meta name="bridge:view-id|viewer|viewer-org|viewed-on|cert-id">`, and a plain-text line at the end with the honest

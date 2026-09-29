@@ -280,6 +280,41 @@ Files: `bridge/proposals/{access,grants,render,views}.py`, `bridge/legal/nda.py`
 - The unlock quota (REQ-BIL-03), the PDF render, attachment renders and raw download, coarse durations, the KIPI and
   KECOBO nudge before the first Tier-2 release, the P8 screens (the NDA step, the Tier-2 view, the "Who has seen this"
   panel).
-- A unique index on `nda_acceptances (user_id, org_id, proposal_id, nda_template_id)` would make "once per version" a
-  database rule (today the advisory lock and the lookup in `bridge/legal/nda.py`); `db-migrations` if wanted.
+- Follow-up for `db-migrations` (ruling 6): a unique index on `nda_acceptances (user_id, org_id, proposal_id,
+  nda_template_id)` makes "once per version" a database rule (today the advisory lock and the lookup in
+  `bridge/legal/nda.py`).
+
+## T2.5 orchestrator rulings (2026-09-29, on the P3 report)
+
+1. Tenancy before the flag on organisation paths (404 to non-members, 403 `tier2_disabled` otherwise): accepted;
+   recorded in `REQ-SEC-01.md`.
+2. The terms condition checked by the application as "the current version was accepted", the database deciding who
+   accepted it (a refusal only it can see reported as `master_terms_required`): accepted.
+3. The NDA checked last, after the grant: accepted.
+4. Manual grants, revocation, policy changes, held-tag grants, the unlock quota, the PDF render, attachments, raw
+   download and durations: after the prototype (above).
+5. `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` on the render only: accepted.
+6. The unique index on `nda_acceptances`: a follow-up for `db-migrations` (above).
+7. The viewer-logging notice and the render text stay `[[COPY-REVIEW]]`.
+
+## T2.5 on schema v3 (revision 0003, merged 2026-09-29)
+
+- `engagements.state` is now the projection of `engagement_events`. The predicate still reads `state` for the
+  ended-engagement condition and denies exactly `WITHDRAWN`, `DECLINED` and `TERMINATED`, as `app_tier2_granted`
+  (unchanged by 0003) does: an `EXPIRED` or `CLOSED` engagement also has `ended_at` but keeps the access, as in
+  docs/spec/06 6.1.
+- The owner attribution now reads the chain: the owner is named once the engagement's events have entered
+  `INTEREST_CONFIRMED` or a later main-path state (`access.REVEALED_STATES`), whatever the current state, so a pause,
+  dispute or expiry after the approval keeps the name. `PROCUREMENT_ROUTE` is no longer in the set: a public entity
+  determines its route before it approves to proceed.
+- The T2.5 fixtures move engagements as the parties do, as `bridge_app`: the developer creates the `SUBMITTED`
+  engagement of their delivered tag; the reviewer starts the review or declines (a reason code); a public entity's
+  admin sets the procurement route; the signatory names the contact and approves to proceed, or terminates; the
+  developer withdraws or pauses (`tier2_scene.engage`, `step`, `approve_to_proceed`, `end_engagement`, which also
+  checks the projection's `state` and `ended_at`). `test_render_marks.py::test_the_owner_is_named_once_the_organisation_approved_to_proceed`
+  walks SUBMITTED → UNDER_REVIEW → PROCUREMENT_ROUTE → INTEREST_CONFIRMED → ON_HOLD (mutation: the reveal read from
+  the current state instead of the history, or `PROCUREMENT_ROUTE` back in the set, turns it red).
+- Not T2.5's files, left as they are (they pass on 0003): `integration/test_rls.py::_grant_scenario` still inserts its
+  ended engagements directly as the owner (0003 records the inserted state as the genesis event), as do
+  `integration/world.py` and `integration/test_migrations.py`'s fixtures.
 
