@@ -19,6 +19,8 @@ from bridge.api import health
 from bridge.auth import csrf
 from bridge.auth.router import me_router as identities_router
 from bridge.auth.router import router as auth_router
+from bridge.billing.router import plans_router
+from bridge.billing.router import router as billing_router
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
@@ -124,6 +126,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(proposals_router)
     app.include_router(problems_router)
     app.include_router(engagements_router)
+    app.include_router(plans_router)
+    app.include_router(billing_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)
