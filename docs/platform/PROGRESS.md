@@ -447,6 +447,8 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
 | 46 | P6 EM7 wording: after two review rounds the free-text fact checker still admitted invented actions ("the other party did sign the mutual NDA") | change (made during the re-check) | the model now chooses among code-rendered variants (opening, fact order, next-step phrasing), so every fact in the email is written by code: docs/spec/09's 100% factual consistency by construction; free wording returns with the REQ-EVAL-01 eval set |
 | 47 | Four implementers ran at once for about an hour (P5, P6, P8 parts 2 and 3) | deviation, recorded | CLAUDE.md allows at most three; the fourth was a small P6 fix round; no new implementer starts until the count is back under three |
+| 48 | Commit trailer: session 2 used `Co-Authored-By: Claude Opus 5.5 …` plus a `Claude-Session:` line | change (found by the P8 part 3 reviewer) | CLAUDE.md sets the line `Co-Authored-By: Claude <noreply@anthropic.com>` and takes precedence over the session's default; the model name also broke the no-model-identifier rule. From now on every commit uses the CLAUDE.md line; pushed history keeps the old form (no rewrite) |
+| 49 | Four implementers again for a short fix (org screens' render link while P6, P8 part 4 and P9 ran) | deviation, recorded | a one-line backend fix plus a merge; same rule as #47 |
 
 ### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
 
