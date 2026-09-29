@@ -349,3 +349,16 @@ Counts are produced by `docs/platform/checks/check_traceability.py`; if this tab
 | R1 | 94 | 105 | all TODO |
 | R2 | 4 | 2 | DEFERRED (ADR-003, ADR-004, ADR-008) |
 | R3 | 1 | 0 | DEFERRED (ADR-008) |
+
+## 7. Prototype track scheduling (D-35, 2026-09-29)
+
+The prototype track (`PLAN.md` §8) builds the thinnest end-to-end part of some requirements first. It removes nothing
+from this register and changes no Status on its own: a row becomes DONE only when every linked AC passes in CI, as
+before. The parts the prototype leaves out are rescheduled to "after prototype" and return to the row's Phase.
+
+| Prototype | REQ-IDs | What the prototype builds | After prototype |
+|---|---|---|---|
+| M1 | REQ-REPO-01, REQ-PROV-01..03, REQ-PROV-05, REQ-PROP-01..03, REQ-MOD-01, REQ-REPO-02, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02, REQ-SEC-01, REQ-DIR-01, REQ-DIR-02, REQ-LLM-01 | Proposals with Tier 1/Tier 2 and registration, certificate, `/verify`, Evaluation NDA, auto-grants, watermarked HTML render, access log, directory search, Pitch with held tags and EM1, the D-37 provider adapter | Tier-2 PDF render, manual grants and the niche-E2 policy, raw download, over-disclosure check, full moderation pre-screen, Schemathesis leakage suite |
+| M1 | REQ-ENG-01..03, REQ-ENG-05, REQ-ENG-07..10, REQ-ENG-12, REQ-BD-01, REQ-NOT-04, REQ-REM-01, REQ-REM-02, REQ-NOT-06 | Tracker main path `SUBMITTED` → `CLOSED` with `DECLINED` and `WITHDRAWN`, EM2, test clock, developer nudge and org digest | Side states `EXPIRED`, `ON_HOLD`, `DISPUTED`, `TERMINATED`, `INFO_REQUESTED`, `PROCUREMENT_ROUTE` (REQ-ENG-06); messages (REQ-ENG-11); PAdES and RFC 3161 on signatures; exclusivity; EM4–EM6, EM8 (REQ-NOT-05); full notification dispatch (REQ-NOT-03) |
+| M2 | REQ-SCOUT-01..03, REQ-ENG-04, REQ-RES-01, REQ-RES-02, REQ-TREND-01, REQ-TREND-02, REQ-PERS-01, REQ-PROP-05, REQ-BIL-04 (interface), REQ-BIL-08, REQ-ADM-01 (queues) | Scout with rule matching and LLM rationale, Express interest; research over saved excerpts with admin approval; transparent trending and ranker; submission assistant; plans page, one paywall, fake M-Pesa checkout; moderation, claims and research-approval queues | bge-m3, Haiku/Sonnet scout pipeline and Message Batches, injection evals (REQ-SCOUT-05..07, REQ-EVAL-01), live research, anti-gaming depth, LambdaMART (REQ-PERS-02..04), real Daraja/Paystack and eTIMS (REQ-BIL-05..07), full admin console |
+| After prototype | REQ-DIR-03 (full claims and E2), REQ-DIR-04 (invitations), REQ-DIR-05 (Problem Briefs), REQ-PROP-04 (originality check), REQ-PROV-04 (D2), REQ-BIL-03 (unlock quota beyond the one paywall), REQ-BIL-05..07, REQ-R2-01 (WhatsApp), REQ-UX-01..07 (full Phase 7 polish), REQ-SEC-02, REQ-SEC-03, REQ-ADM-02, REQ-ADM-03, REQ-LEG-01, REQ-OPS-01 (Phase 8) | — | Unchanged scope, Phase and Release |
