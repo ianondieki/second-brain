@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { DevNav } from "@/components/DevNav";
-import { IntlScope } from "@/components/IntlScope";
+import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Alert, type AlertTone } from "@/components/ui/Alert";
 import { standaloneLinkClass } from "@/components/ui/Button";
@@ -13,6 +13,7 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
 import { requireMe } from "@/lib/api/server";
+import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
 
 import { countyName, myIdea } from "../data";
@@ -117,9 +118,9 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
 
       {status !== "hidden" ? (
         <section className="mt-12 border-t border-line pt-6">
-          <IntlScope namespaces={["ideaDelete"]}>
+          <ClientStrings strings={await clientStrings(["ideaDelete"])}>
             <DeleteIdea id={idea.id} registered={idea.current !== null} />
-          </IntlScope>
+          </ClientStrings>
         </section>
       ) : null}
     </SignedInShell>
@@ -233,7 +234,7 @@ async function Confidential({ version }: { version: Version }) {
                   <li key={file.id} className="[overflow-wrap:anywhere]">
                     {file.file_name}
                     {file.size_bytes !== null ? (
-                      <span className="ml-2 text-sm text-ink-soft">{f("fileSize", fileSizeParts(file.size_bytes))}</span>
+                      <span className="ml-2 text-sm text-ink-soft">{f(fileSizeParts(file.size_bytes).key, { value: fileSizeParts(file.size_bytes).value })}</span>
                     ) : null}
                   </li>
                 ))}

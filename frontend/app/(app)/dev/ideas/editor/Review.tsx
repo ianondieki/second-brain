@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -58,8 +59,8 @@ type Publishing =
  */
 export function Review(props: ReviewProps) {
   const { state } = props;
-  const t = useTranslations("ideaEditor");
-  const f = useTranslations("ideaFields");
+  const t = useStrings("ideaEditor");
+  const f = useStrings("ideaFields");
   const router = useRouter();
   const issueMessage = useIssueMessage();
   const id = useId();

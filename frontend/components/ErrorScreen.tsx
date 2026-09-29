@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "./ClientStrings";
 
 // Every route in a group downloads its error boundary, so this stays small: a plain button with the primary
 // button's look (components/ui/Button.tsx) instead of importing the Button module and next/link with it.
@@ -13,7 +13,7 @@ const PRIMARY =
  * (API down, timeout, bug), and one way forward.
  */
 export function ErrorScreen({ retry }: { retry: () => void }) {
-  const t = useTranslations("errorPage");
+  const t = useStrings("errorPage");
   return (
     <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pt-16 pb-16 sm:px-6">
       <div className="max-w-md">

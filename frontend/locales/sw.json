@@ -378,11 +378,13 @@
     "confidentialTitle": "Maelezo kamili",
     "confidentialBadge": "Siri",
     "confidentialNotice": "Maelezo haya yanaonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura unaorekodiwa na kumjulisha mwenye wazo.",
-    "fileSize": "{unit, select, bytes {{value} baiti} kb {{value} KB} other {{value} MB}}",
     "fileScanning": "Inakaguliwa",
     "teaserHintPublished": "Kila aliyeingia anaweza kuona muhtasari huu.",
     "teaserHintHeld": "Kila aliyeingia ataona muhtasari huu msimamizi akishaukagua.",
-    "teaserHintHidden": "Hakuna mwingine anayeweza kuona muhtasari huu sasa."
+    "teaserHintHidden": "Hakuna mwingine anayeweza kuona muhtasari huu sasa.",
+    "fileSizeBytes": "baiti {value}",
+    "fileSizeKb": "KB {value}",
+    "fileSizeMb": "MB {value}"
   },
   "ideas": {
     "pageTitle": "Mawazo yangu",
@@ -475,7 +477,7 @@
     "askChoose": "Chagua moja",
     "countyHint": "Si lazima",
     "summaryHint": "Linafanya nini, si jinsi linavyofanya kazi.",
-    "wordCount": "{count, plural, one {# neno} other {# maneno}} kati ya {max}",
+    "wordCount": "Maneno: {count} kati ya {max}",
     "impactHint": "Si lazima: nani ananufaika, na kwa kiasi gani.",
     "approachHint": "Jinsi linavyofanya kazi.",
     "architectureHint": "Vipengele, data na miunganisho.",
@@ -503,7 +505,7 @@
       "validation": "Baadhi ya maelezo hayakukubaliwa. Kagua fomu, kisha ujaribu tena.",
       "fields": "Baadhi ya sehemu zinahitaji mabadiliko. Zimewekwa alama hapa chini.",
       "d1Required": "Ili kuchapisha, akaunti yako inahitaji nambari ya simu iliyothibitishwa. Bado huwezi kuithibitisha ndani ya programu, kwa hivyo wazo hili litabaki rasimu iliyohifadhiwa kwa sasa.",
-      "planLimit": "Mpango wako unaruhusu {limit, plural, one {# wazo lililochapishwa} other {# mawazo yaliyochapishwa}}. Ficha moja ili uchapishe hili.",
+      "planLimit": "Mawazo yaliyochapishwa ambayo mpango wako unaruhusu: {limit}. Ficha moja ili uchapishe hili.",
       "planLimitUnknown": "Mpango wako hauruhusu mawazo zaidi yaliyochapishwa. Ficha moja ili uchapishe hili.",
       "attestationsRequired": "Thibitisha kauli zote tatu ili uchapishe.",
       "attestationsChanged": "Kauli zimebadilika. Zisome tena, kisha uthibitishe.",
@@ -547,9 +549,9 @@
       "tooLong": "Kila kiungo kinaweza kuwa na hadi herufi {max}.",
       "other": "Badilisha sehemu hii, kisha ujaribu tena."
     },
-    "detailsSections": "{count, plural, one {# sehemu iliyoandikwa} other {# sehemu zilizoandikwa}}",
-    "detailsFiles": "{count, plural, one {# faili} other {# faili}}",
-    "detailsLinks": "{count, plural, one {# kiungo} other {# viungo}}",
+    "detailsSections": "Sehemu zilizoandikwa: {count}",
+    "detailsFiles": "Faili: {count}",
+    "detailsLinks": "Viungo: {count}",
     "backToIdea": "Rudi kwenye wazo",
     "noProblemsYet": "Bado hakuna matatizo yaliyoorodheshwa."
   }

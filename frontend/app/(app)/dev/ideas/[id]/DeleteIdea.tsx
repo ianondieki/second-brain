@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -32,7 +33,7 @@ export interface DeleteIdeaProps {
  * never published is removed. A native <dialog>: it traps focus, closes on Escape and returns focus to the button.
  */
 export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteIdeaProps) {
-  const t = useTranslations("ideaDelete");
+  const t = useStrings("ideaDelete");
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();

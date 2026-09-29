@@ -284,9 +284,9 @@ describe("attachments", () => {
   });
 
   it("formats sizes in decimal units", () => {
-    expect(fileSizeParts(512)).toEqual({ value: 512, unit: "bytes" });
-    expect(fileSizeParts(820_400)).toEqual({ value: 820, unit: "kb" });
-    expect(fileSizeParts(4_210_000)).toEqual({ value: 4.2, unit: "mb" });
+    expect(fileSizeParts(512)).toEqual({ key: "fileSizeBytes", value: 512 });
+    expect(fileSizeParts(820_400)).toEqual({ key: "fileSizeKb", value: 820 });
+    expect(fileSizeParts(4_210_000)).toEqual({ key: "fileSizeMb", value: 4.2 });
   });
 
   it("uploads the raw bytes with the name percent-encoded in a header, never in the URL", async () => {

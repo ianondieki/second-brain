@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
-import { IntlScope } from "@/components/IntlScope";
+import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { requireMe } from "@/lib/api/server";
+import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
 
 import { editorOptions, myIdea } from "../data";
@@ -53,7 +54,7 @@ export async function EditorScreen({ id, step }: { id: string | null; step: Step
           {idea ? t("backToIdea") : ideas("back")}
         </Link>
       </p>
-      <IntlScope namespaces={["ideaEditor", "ideaFields"]}>
+      <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields"])}>
         <Editor
           id={idea?.id ?? null}
           hasDraft={idea?.draft != null}
@@ -65,7 +66,7 @@ export async function EditorScreen({ id, step }: { id: string | null; step: Step
           attestations={options.attestations}
           problems={options.problems}
         />
-      </IntlScope>
+      </ClientStrings>
     </SignedInShell>
   );
 }

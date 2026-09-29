@@ -1,7 +1,8 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -94,8 +95,8 @@ const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
  * action; "Continue" is the others'.
  */
 export function Editor(props: EditorProps) {
-  const t = useTranslations("ideaEditor");
-  const f = useTranslations("ideaFields");
+  const t = useStrings("ideaEditor");
+  const f = useStrings("ideaFields");
   const issueMessage = useIssueMessage();
   const hydrated = useHydrated();
   const injected = props.calls;
@@ -497,7 +498,7 @@ export function Editor(props: EditorProps) {
 
 /** "Saving…", "Saved", "Not saved yet" with a retry: icon + words, announced politely. */
 function SaveStatus({ save, onRetry }: { save: Save; onRetry: () => void }) {
-  const t = useTranslations("ideaEditor");
+  const t = useStrings("ideaEditor");
   const failed = save.kind === "failed";
   const text =
     save.kind === "saving"

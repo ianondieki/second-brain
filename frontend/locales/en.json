@@ -378,11 +378,13 @@
     "confidentialTitle": "Full details",
     "confidentialBadge": "Confidential",
     "confidentialNotice": "These details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass.",
-    "fileSize": "{unit, select, bytes {{value} bytes} kb {{value} KB} other {{value} MB}}",
     "fileScanning": "Being checked",
     "teaserHintPublished": "Everyone signed in can see this teaser.",
     "teaserHintHeld": "Everyone signed in will see this teaser once a moderator has checked it.",
-    "teaserHintHidden": "Nobody else can see this teaser now."
+    "teaserHintHidden": "Nobody else can see this teaser now.",
+    "fileSizeBytes": "{value} bytes",
+    "fileSizeKb": "{value} KB",
+    "fileSizeMb": "{value} MB"
   },
   "ideas": {
     "pageTitle": "My ideas",
@@ -475,7 +477,7 @@
     "askChoose": "Choose one",
     "countyHint": "Optional",
     "summaryHint": "What it does, not how it works.",
-    "wordCount": "{count, plural, one {# word} other {# words}} of {max}",
+    "wordCount": "Words: {count} of {max}",
     "impactHint": "Optional: who benefits, and by how much.",
     "approachHint": "How it works.",
     "architectureHint": "Components, data and integrations.",
@@ -503,7 +505,7 @@
       "validation": "Some of the details were not accepted. Check the form, then try again.",
       "fields": "Some fields need changes. They are marked below.",
       "d1Required": "To publish, your account needs a verified mobile number. You cannot verify it in the app yet, so this idea stays a saved draft for now.",
-      "planLimit": "Your plan allows {limit, plural, one {# published idea} other {# published ideas}}. Hide one to publish this one.",
+      "planLimit": "Published ideas your plan allows: {limit}. Hide one to publish this one.",
       "planLimitUnknown": "Your plan does not allow more published ideas. Hide one to publish this one.",
       "attestationsRequired": "Confirm all three statements to publish.",
       "attestationsChanged": "The statements changed. Read them again, then confirm.",
@@ -547,9 +549,9 @@
       "tooLong": "Each link can be up to {max} characters.",
       "other": "Change this field, then try again."
     },
-    "detailsSections": "{count, plural, one {# written section} other {# written sections}}",
-    "detailsFiles": "{count, plural, one {# file} other {# files}}",
-    "detailsLinks": "{count, plural, one {# link} other {# links}}",
+    "detailsSections": "Written sections: {count}",
+    "detailsFiles": "Files: {count}",
+    "detailsLinks": "Links: {count}",
     "backToIdea": "Back to the idea",
     "noProblemsYet": "No problems are listed yet."
   }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+
+import { useStrings } from "./ClientStrings";
 
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -16,7 +17,7 @@ import { AlertIcon } from "./ui/icons";
  * else, including a network failure, keeps the person here with a warning that they may still be signed in.
  */
 export function SignOutButton() {
-  const t = useTranslations("shell");
+  const t = useStrings("shell");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

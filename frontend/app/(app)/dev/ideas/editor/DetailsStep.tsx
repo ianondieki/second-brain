@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 
 import { LockIcon } from "@/components/ui/icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
@@ -26,8 +26,8 @@ const WRITTEN = ["approach", "architecture", "pricing", "notes"] as const;
  * Loaded when the step opens.
  */
 export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
-  const t = useTranslations("ideaEditor");
-  const f = useTranslations("ideaFields");
+  const t = useStrings("ideaEditor");
+  const f = useStrings("ideaFields");
   const issueMessage = useIssueMessage();
   const linkProblem = linksProblem(state.links);
   return (

@@ -1,7 +1,8 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { useId, useState, type ChangeEvent } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -46,11 +47,15 @@ function saveProblem(problem: SaveProblem): Problem {
  * did not remove stays listed.
  */
 export function Attachments({ attachments, onAttachments, ensureDraft, getCalls }: AttachmentsProps) {
-  const t = useTranslations("ideaEditor");
-  const f = useTranslations("ideaFields");
+  const t = useStrings("ideaEditor");
+  const f = useStrings("ideaFields");
   const id = useId();
   const [state, setState] = useState<State>({ kind: "idle" });
   const busy = state.kind === "busy";
+  const fileSize = (bytes: number) => {
+    const { key, value } = fileSizeParts(bytes);
+    return f(key, { value });
+  };
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -113,7 +118,7 @@ export function Attachments({ attachments, onAttachments, ensureDraft, getCalls 
                   {name}
                   {attachment.size_bytes !== null ? (
                     <span className="ml-2 text-sm text-ink-soft tabular-nums">
-                      {f("fileSize", fileSizeParts(attachment.size_bytes))}
+                      {fileSize(attachment.size_bytes)}
                     </span>
                   ) : null}
                   {attachment.av_status !== "clean" ? (

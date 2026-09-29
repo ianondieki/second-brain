@@ -1,7 +1,8 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -40,8 +41,8 @@ const loadSearch: typeof searchProblems = (filters) => import("../calls").then((
  */
 export function ProblemPanels(props: ProblemPanelsProps) {
   const { mode, linked, niches, errors, onMode, onLinked, searchImpl = loadSearch } = props;
-  const t = useTranslations("ideaEditor");
-  const f = useTranslations("ideaFields");
+  const t = useStrings("ideaEditor");
+  const f = useStrings("ideaFields");
   const id = useId();
   const [q, setQ] = useState("");
   const [niche, setNiche] = useState("");

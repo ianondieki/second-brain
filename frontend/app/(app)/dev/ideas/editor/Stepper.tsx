@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 
 import { cn } from "@/components/ui/cn";
 
@@ -11,7 +11,7 @@ import { STEPS, type Step } from "../ideas";
  * is a button: the editor saves as it goes, so any step can be opened in any order.
  */
 export function Stepper({ step, onStep, disabled = false }: { step: Step; onStep: (step: Step) => void; disabled?: boolean }) {
-  const t = useTranslations("ideaEditor");
+  const t = useStrings("ideaEditor");
   return (
     <nav aria-label={t("stepsLabel")}>
       <ol className="grid grid-cols-3 gap-2">

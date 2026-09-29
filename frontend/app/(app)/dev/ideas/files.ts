@@ -22,9 +22,10 @@ export function attachmentType(name: string): string | null {
   return dot < 0 ? null : (TYPE_BY_EXTENSION[name.slice(dot + 1).toLowerCase()] ?? null);
 }
 
-/** File sizes as people read them: "820 KB", "4.2 MB" (1 KB = 1,000 bytes, as the size limit is stated). */
-export function fileSizeParts(bytes: number): { value: number; unit: "bytes" | "kb" | "mb" } {
-  if (bytes < 1000) return { value: bytes, unit: "bytes" };
-  if (bytes < 1_000_000) return { value: Math.round(bytes / 1000), unit: "kb" };
-  return { value: Math.round(bytes / 100_000) / 10, unit: "mb" };
+/** File sizes as people read them: "820 KB", "4.2 MB" (1 KB = 1,000 bytes, as the size limit is stated), as the
+ * ideaFields message key and its value. */
+export function fileSizeParts(bytes: number): { key: "fileSizeBytes" | "fileSizeKb" | "fileSizeMb"; value: number } {
+  if (bytes < 1000) return { key: "fileSizeBytes", value: bytes };
+  if (bytes < 1_000_000) return { key: "fileSizeKb", value: Math.round(bytes / 1000) };
+  return { key: "fileSizeMb", value: Math.round(bytes / 100_000) / 10 };
 }

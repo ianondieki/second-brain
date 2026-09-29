@@ -116,7 +116,7 @@ describe("autosave", () => {
 
   it("counts summary words against the limit", async () => {
     await renderEditor({ initial: { ...READY, summary: "one two three" } });
-    expect(screen.getByText("3 words of 150")).toBeTruthy();
+    expect(screen.getByText("Words: 3 of 150")).toBeTruthy();
   });
 });
 
@@ -165,7 +165,7 @@ describe("publishing", () => {
 
   it.each([
     [{ problem: "d1Required" }, "To publish, your account needs a verified mobile number."],
-    [{ problem: "planLimit", limit: 3 }, "Your plan allows 3 published ideas. Hide one to publish this one."],
+    [{ problem: "planLimit", limit: 3 }, "Published ideas your plan allows: 3. Hide one to publish this one."],
     [{ problem: "planLimit" }, "Your plan does not allow more published ideas."],
     [{ problem: "nothingToPublish" }, "There are no changes to publish."],
   ] as const)("explains a refusal: %j", async (refusal, text) => {

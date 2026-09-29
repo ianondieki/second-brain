@@ -1,5 +1,6 @@
-import { useTranslations } from "next-intl";
 import { useCallback } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { LIMITS, MAX_LINKS, MAX_SUMMARY_WORDS, type FieldIssue, type FieldName } from "../ideas";
 
@@ -51,7 +52,7 @@ function maxFor({ field, code }: FieldIssue): number | undefined {
 
 /** A function from an issue to its sentence. */
 export function useIssueMessage() {
-  const t = useTranslations("ideaEditor");
+  const t = useStrings("ideaEditor");
   return useCallback(
     (issue: FieldIssue): string => {
       if (issue.code === "required") return t(`required.${requiredKey(issue.field)}`);

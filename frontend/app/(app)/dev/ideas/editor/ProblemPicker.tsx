@@ -1,7 +1,8 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { lazy, Suspense, useId, type ReactNode } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
 
 import { RadioGroup } from "@/components/ui/RadioGroup";
 
@@ -19,7 +20,7 @@ export interface ProblemPickerProps extends Omit<ProblemPanelsProps, "mode" | "e
 
 /** "Which problem does it solve?": link listed problems or describe a new one (REQ-PROP-01, AC-PROP-5). */
 export function ProblemPicker({ mode, errors, ...rest }: ProblemPickerProps) {
-  const t = useTranslations("ideaEditor");
+  const t = useStrings("ideaEditor");
   const id = useId();
   return (
     <div className="flex flex-col gap-5">
