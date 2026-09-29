@@ -381,6 +381,13 @@ async def test_the_orm_maps_the_chain_and_the_version_counter(owner_engine: Asyn
         stale_version = engagement.lock_version
         await session.refresh(engagement)
         assert (engagement.state, engagement.lock_version) == (EngagementState.UNDER_REVIEW, stale_version + 1)
+        # Both parties can lock the row to compare a client's version (If-Match) before appending; nobody else can.
+        lock = "SELECT lock_version FROM engagements WHERE id = :e FOR UPDATE"
+        for party, org in ((p.developer, None), (p.reviewer, p.org)):
+            await act(conn, party, org)
+            assert await run(conn, lock, e=engagement.id) == stale_version + 1
+        await act(conn, p.outsider)
+        assert await run(conn, lock, e=engagement.id) is None
 
         await act(conn, p.signatory, p.org)
         engagement.contact_user_id = p.owner
