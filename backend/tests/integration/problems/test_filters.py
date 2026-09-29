@@ -48,14 +48,13 @@ async def _problem(conn: Any, niche: UUID, author: UUID, *, country: str, county
 
 @pytest.fixture
 async def regions(owner_engine: AsyncEngine) -> None:
-    """Kenya's two counties as the reference seed has them, and Uganda as a country only (no county row, so the
-    shared database's county count stays the reference seed's 47)."""
+    """Kenya and two of its counties, codes the reference seed has (so the shared database's region count stays the
+    seed's 48). A problem's country has no foreign key: the second country needs no region row."""
     async with owner_engine.begin() as conn:
         for code, parent, kind, name in (
             ("KE", None, "country", "Kenya"),
             ("KE-30", "KE", "county", "Nairobi City"),
             ("KE-22", "KE", "county", "Kiambu"),
-            ("UG", None, "country", "Uganda"),
         ):
             await conn.execute(
                 text(

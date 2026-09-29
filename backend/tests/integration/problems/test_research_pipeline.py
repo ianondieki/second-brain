@@ -261,7 +261,9 @@ async def test_a_failed_call_fails_the_run_with_its_code(
 ) -> None:
     """On the Anthropic route (as staging: nothing is faked) a provider error fails the run; no card."""
     runtime = llm_runtime(LLMProviderError("boom", transient=False), provider="anthropic")
-    settings = get_settings().model_copy(update={"llm_global_daily_cap_usd": Decimal(1000)})
+    # roomy caps: the shared test ledger holds other tests' spend (a cap would fail the run with llm_budget instead)
+    roomy = {"llm_global_daily_cap_usd": Decimal(10**6), "llm_prototype_total_cap_usd": Decimal(10**6)}
+    settings = get_settings().model_copy(update=roomy)
     run_id = await start(app_engine, research_world, TELECOM)
     outcome = await execute(app_engine, research_world, run_id, runtime, settings=settings)
     assert outcome is not None
