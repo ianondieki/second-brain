@@ -60,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await app.state.llm_runtime.aclose()
             await engine.dispose()
 
     app = FastAPI(

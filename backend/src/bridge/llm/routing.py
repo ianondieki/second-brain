@@ -93,6 +93,13 @@ class LLMRuntime:
     def free_route(self, number: int) -> FreeRoute | None:
         return next((route for route in self.free if route.slot.number == number), None)
 
+    async def aclose(self) -> None:
+        """Close every adapter's HTTP client (the app's lifespan, at shutdown)."""
+        for adapter in (self.anthropic, *(route.adapter for route in self.free)):
+            close = getattr(adapter, "aclose", None)
+            if close is not None:
+                await close()
+
 
 def reason_of(exc: LLMError) -> FallbackReason:
     if isinstance(exc, NotDemoData):

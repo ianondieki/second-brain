@@ -176,6 +176,7 @@ async def test_redirects_are_not_followed() -> None:
     ("finish_reason", "stop"),
     [
         ("stop", "end_turn"),
+        ("eos", "end_turn"),  # some local model servers
         ("length", "max_tokens"),
         ("content_filter", "refusal"),
         ("tool_calls", "tool_use"),
@@ -188,6 +189,25 @@ async def test_finish_reasons_map_to_stop_reasons(finish_reason: str | None, sto
     with respx.mock(assert_all_called=True) as router:
         router.post(URL).mock(return_value=httpx.Response(200, json=reply(finish_reason=finish_reason)))
         assert (await adapter().create(request())).stop_reason == stop
+
+
+@pytest.mark.parametrize(
+    ("content", "text"),
+    [
+        ('```json\n{"a": 1}\n```', '{"a": 1}'),
+        ('  ```\n{"a": 1}\n```\n', '{"a": 1}'),
+        ('```JSON\r\n{"a": 1}\r\n```', '{"a": 1}'),
+        ('```json\n```json\n{"a": 1}\n```\n```', '```json\n{"a": 1}\n```'),  # one fence only
+        ('{"a": "```"}', '{"a": "```"}'),  # a fence inside the text stays
+        ('Here: ```json\n{"a": 1}\n```', 'Here: ```json\n{"a": 1}\n```'),  # not surrounding: left as is
+        ('```json {"a": 1}```', '```json {"a": 1}```'),  # no line breaks: not a fence
+    ],
+)
+async def test_one_surrounding_code_fence_is_stripped(content: str, text: str) -> None:
+    """Free models often wrap JSON in a markdown fence; the service then validates the inner text."""
+    with respx.mock(assert_all_called=True) as router:
+        router.post(URL).mock(return_value=httpx.Response(200, json=reply(content=content)))
+        assert (await adapter().create(request())).text == text
 
 
 async def test_a_refusal_field_is_a_refusal() -> None:
@@ -309,6 +329,26 @@ async def test_free_slots_have_no_batch_api() -> None:
         await a.batch_state("b")
     with pytest.raises(LLMUnavailable, match="no batch API"):
         await a.batch_results("b")
+
+
+async def test_the_adapter_ignores_proxy_and_netrc_settings_from_the_environment() -> None:
+    a = adapter()
+    client = a._client()
+    assert client.trust_env is False
+    assert client.follow_redirects is False
+    await a.aclose()
+
+
+async def test_aclose_closes_only_the_adapters_own_client() -> None:
+    own = adapter()
+    client = own._client()
+    await own.aclose()
+    assert client.is_closed
+    await own.aclose()  # twice is harmless
+    await adapter().aclose()  # never opened: nothing to close
+    async with httpx.AsyncClient() as injected:
+        await OpenAICompatibleAdapter(slot(), timeout_seconds=5.0, http_client=injected).aclose()
+        assert not injected.is_closed  # the caller's
 
 
 async def test_an_injected_client_is_used() -> None:

@@ -8,7 +8,8 @@ output schema, or ``none``). The schema is always in the system prompt as well (
 prompt caching (breakpoints are dropped) and no batch API: ``batch_*`` raise ``LLMUnavailable`` (the router answers a
 batch with the deterministic fake, ``bridge.llm.routing``).
 
-Reply: ``choices[0].message.content`` (a string or text parts); ``finish_reason`` ``stop`` is ``end_turn``,
+Reply: ``choices[0].message.content`` (a string or text parts), without one surrounding markdown code fence (free
+models often wrap JSON in one); ``finish_reason`` ``stop`` (or ``eos``) is ``end_turn``,
 ``length`` is ``max_tokens``, ``content_filter`` or a ``message.refusal`` is ``refusal``, a tool call is ``tool_use``
 and anything else is ``unknown`` (the service treats the last two as unsupported stops), so no provider text becomes
 a stop reason. Usage: ``prompt_tokens`` less its cached part are input tokens, the cached part cache reads,
@@ -17,13 +18,15 @@ a stop reason. Usage: ``prompt_tokens`` less its cached part are input tokens, t
 Fail closed and quiet: a transport error, a non-2xx status (a redirect included: never followed, it could carry the
 key elsewhere), an oversized or a malformed body each raise ``LLMProviderError`` naming the slot and the status only,
 ``from None``. The provider's body and the key never reach a log line, an error or a traceback; ``repr`` names the
-slot only; slot URLs carry no credentials or query (``bridge.config.free_slot_url_problem``). No retries: one attempt
-is one request and one ledger row, counted against the slot's daily cap.
+slot only; slot URLs carry no credentials or query (``bridge.config.free_slot_url_problem``); the client ignores
+proxy, certificate and netrc settings from the environment (``trust_env=False``) and is closed with the app
+(``aclose``). No retries: one attempt is one request and one ledger row, counted against the slot's daily cap.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -39,8 +42,10 @@ CHAT_PATH = "/chat/completions"
 MAX_REPLY_BYTES = 2_000_000  # a reply is a few KB; anything this large is refused unread past the bound
 MAX_TOKEN_COUNT = 10_000_000  # usage counts are bounded before they reach the ledger's integer columns
 TRANSIENT_STATUSES = frozenset({408, 409, 425, 429})
+FENCE_LANGUAGE = re.compile(r"[A-Za-z0-9_+-]*")
 STOP_REASONS = {
     "stop": "end_turn",
+    "eos": "end_turn",  # some local model servers
     "length": "max_tokens",
     "content_filter": "refusal",
     "tool_calls": "tool_use",
@@ -89,6 +94,21 @@ def _usage(raw: Any) -> TokenUsage:
     )
 
 
+def unfence(text: str) -> str:
+    """``text`` without one surrounding markdown code fence (an opening line of three backticks and an optional
+    language, a closing line of three backticks); anything else unchanged. Linear: no backtracking pattern."""
+    stripped = text.strip()
+    if len(stripped) < 6 or not (stripped.startswith("```") and stripped.endswith("```")):
+        return text
+    first_break = stripped.find("\n")
+    if first_break == -1 or not FENCE_LANGUAGE.fullmatch(stripped[3:first_break].strip()):
+        return text
+    head, line_break, last = stripped[first_break + 1 : -3].rpartition("\n")
+    if not line_break or last.strip(" \t"):
+        return text  # the closing backticks are not on a line of their own
+    return head.rstrip("\r")
+
+
 def _content(value: Any) -> str:
     if value is None:
         return ""
@@ -115,7 +135,7 @@ def from_reply(data: Any, model_key: str) -> ModelResponse:
     message = choices[0].get("message")
     if not isinstance(message, Mapping):
         raise _Malformed
-    text = _content(message.get("content"))
+    text = unfence(_content(message.get("content")))
     refusal = message.get("refusal")
     finish = choices[0].get("finish_reason")
     if isinstance(refusal, str) and refusal.strip():
@@ -137,14 +157,21 @@ class OpenAICompatibleAdapter:
         self._url = slot.base_url.rstrip("/") + CHAT_PATH
         self._timeout = timeout_seconds
         self._http = http_client
+        self._owns_http = http_client is None
 
     def __repr__(self) -> str:
         return f"OpenAICompatibleAdapter(slot={self._slot.name})"
 
     def _client(self) -> httpx.AsyncClient:
         if self._http is None:
-            self._http = httpx.AsyncClient(timeout=self._timeout, follow_redirects=False)
+            self._http = httpx.AsyncClient(timeout=self._timeout, follow_redirects=False, trust_env=False)
         return self._http
+
+    async def aclose(self) -> None:
+        """Close the adapter's own client (the app's lifespan does, at shutdown); an injected one is the caller's."""
+        if self._owns_http and self._http is not None:
+            client, self._http = self._http, None
+            await client.aclose()
 
     def _error(self, what: str, *, transient: bool, status: int | None = None) -> LLMProviderError:
         return LLMProviderError(f"free provider {self._slot.name} {what}", transient=transient, status_code=status)

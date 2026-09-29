@@ -49,6 +49,25 @@ async def test_startup_builds_the_registry_and_a_keyless_adapter() -> None:
         assert runtime.demo_fallback is True  # APP_ENV=test
 
 
+async def test_the_lifespan_closes_the_adapters_http_clients() -> None:
+    cfg = settings(app_env="dev", llm_provider=None, **SLOT_1)
+    app = create_app(cfg)
+    async with app.router.lifespan_context(app):
+        runtime = app.state.llm_runtime
+        [route] = runtime.free
+        client = route.adapter._client()  # opened on first use
+        assert not client.is_closed
+    assert client.is_closed
+
+
+async def test_the_anthropic_adapter_closes_its_sdk_client() -> None:
+    keyed = AnthropicAdapter(api_key=SecretStr("k"), timeout_seconds=5.0, max_retries=0)
+    sdk = keyed._client()
+    await keyed.aclose()
+    assert sdk.is_closed()
+    await AnthropicAdapter(api_key=None, timeout_seconds=5.0, max_retries=0).aclose()  # no client: nothing to close
+
+
 def test_the_free_provider_gets_one_adapter_per_slot() -> None:
     cfg = settings(app_env="dev", llm_provider=None, **SLOT_1)
     runtime = deps.build_runtime(cfg)
