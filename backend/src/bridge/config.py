@@ -7,10 +7,13 @@ runs with a default key. Every variable is documented in ``backend/.env.example`
 from __future__ import annotations
 
 import base64
+import re
+from dataclasses import dataclass, field
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +22,16 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIN_SECRET_CHARS = 32
 
 AppEnv = Literal["dev", "test", "staging", "production"]
+LLMProvider = Literal["fake", "free", "anthropic"]
+ResponseFormat = Literal["none", "json_object", "json_schema"]
+
+# Free OpenAI-compatible provider slots for local prototype runs (D-37; bridge.llm.openai_adapter). A slot is
+# LLM_FREE_<N>_BASE_URL, _API_KEY, _MODEL and _DAILY_REQUESTS, set together, plus an optional _RESPONSE_FORMAT.
+LLM_FREE_SLOTS: Final = (1, 2, 3)
+FREE_SLOT_PARTS: Final = ("base_url", "api_key", "model", "daily_requests")
+# llm_calls.model is varchar(80) and holds "free<N>:<model>" (bridge.llm.providers.model_key).
+FREE_MODEL = re.compile(r"[A-Za-z0-9._:/@+-]{1,74}")
+LOOPBACK_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
 
 # Optional settings: an empty value means unset (None).
 OPTIONAL_SETTINGS = (
@@ -36,11 +49,45 @@ OPTIONAL_SETTINGS = (
     "s3_access_key_id",
     "s3_secret_access_key",
     "audit_reader_database_url",
+    "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev and test), else fake
+    *(f"llm_free_{n}_{part}" for n in LLM_FREE_SLOTS for part in (*FREE_SLOT_PARTS, "response_format")),
 )
 
 
 class ConfigurationError(RuntimeError):
     """A component was asked for whose settings are missing (fail closed at the point of use, never a default)."""
+
+
+@dataclass(frozen=True, slots=True)
+class FreeSlot:
+    """One complete free provider slot (D-37). ``repr`` and ``str`` never show the key."""
+
+    number: int
+    base_url: str
+    api_key: SecretStr = field(repr=False)
+    model: str
+    daily_requests: int
+    response_format: ResponseFormat
+
+    @property
+    def name(self) -> str:
+        return f"free{self.number}"
+
+
+def free_slot_url_problem(url: str) -> str | None:
+    """Why ``url`` may not be a slot's base URL: https only (plain http on loopback, for a local model server), no
+    credentials, query or fragment (a key never sits in a URL, which may reach a log)."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if parts.scheme != "https" and not (parts.scheme == "http" and host in LOOPBACK_HOSTS):
+        return "must be an https URL (plain http only on localhost)"
+    if parts.username is not None or parts.password is not None:
+        return "must not carry credentials (the key goes in its own variable)"
+    if parts.query or parts.fragment or url.endswith(("?", "#")):
+        return "must not carry a query or fragment"
+    if not host:
+        return "must name a host"
+    return None
 
 
 class Settings(BaseSettings):
@@ -147,6 +194,28 @@ class Settings(BaseSettings):
     # Spend across every tenant per UTC day; 0 refuses every call that costs anything (fail closed).
     llm_global_daily_cap_usd: Decimal = Decimal("0")
     llm_models_file: Path = BACKEND_DIR / "ai" / "models.yaml"
+    # Providers for local prototype runs (D-37; bridge.llm.routing). fake | free | anthropic; unset picks free when a
+    # complete free slot is set (dev and test), else fake; staging and production run Anthropic only and refuse the
+    # free providers (they may train on what they receive). Anthropic runs only with LLM_PROVIDER=anthropic.
+    llm_provider: LLMProvider | None = None
+    # Lifetime spend of this database's ledger across every provider (only Anthropic costs money): the USD 5
+    # prototype total of D-37. 0 refuses every call that costs anything.
+    llm_prototype_total_cap_usd: Decimal = Decimal("5.00")
+    llm_free_1_base_url: str | None = None
+    llm_free_1_api_key: SecretStr | None = None
+    llm_free_1_model: str | None = None
+    llm_free_1_daily_requests: int | None = None
+    llm_free_1_response_format: ResponseFormat | None = None
+    llm_free_2_base_url: str | None = None
+    llm_free_2_api_key: SecretStr | None = None
+    llm_free_2_model: str | None = None
+    llm_free_2_daily_requests: int | None = None
+    llm_free_2_response_format: ResponseFormat | None = None
+    llm_free_3_base_url: str | None = None
+    llm_free_3_api_key: SecretStr | None = None
+    llm_free_3_model: str | None = None
+    llm_free_3_daily_requests: int | None = None
+    llm_free_3_response_format: ResponseFormat | None = None
 
     # Embeddings (ADR-005 decision 6). bge-m3 runs on the worker from local weights only (never downloaded by code).
     embedder: Literal["fake", "bge-m3"] = "fake"
@@ -174,6 +243,74 @@ class Settings(BaseSettings):
 
     def _cookie(self, name: str) -> str:
         return f"__Host-{name}" if self.cookie_secure else name
+
+    # --------------------------------------------------------------------------------------- LLM providers (D-37)
+
+    @property
+    def llm_effective_provider(self) -> LLMProvider:
+        """``LLM_PROVIDER``, or when unset: Anthropic in staging and production, else free when a complete free slot
+        is set, else the fake."""
+        if self.llm_provider is not None:
+            return self.llm_provider
+        if self.app_env in ("staging", "production"):
+            return "anthropic"
+        return "free" if self.llm_free_slots() else "fake"
+
+    @property
+    def llm_demo_fallback(self) -> bool:
+        """Whether a missing key, a hit cap, the kill switch or a failed call falls back to the deterministic fake
+        (labelled "demo fallback"): local runs only; staging and production raise the typed error instead."""
+        return self.app_env in ("dev", "test")
+
+    def llm_free_slots(self) -> tuple[FreeSlot, ...]:
+        """The complete free provider slots, in slot order (the validator refuses a half-configured one)."""
+        slots = []
+        for n in LLM_FREE_SLOTS:
+            url, key, model, requests = (getattr(self, f"llm_free_{n}_{part}") for part in FREE_SLOT_PARTS)
+            if not all(_is_given(v) for v in (url, key, model, requests)):
+                continue
+            response_format: ResponseFormat = getattr(self, f"llm_free_{n}_response_format") or "json_object"
+            slots.append(FreeSlot(n, url.rstrip("/"), key, model, requests, response_format))
+        return tuple(slots)
+
+    def _llm_problems(self) -> list[str]:
+        problems: list[str] = []
+        if self.llm_prototype_total_cap_usd < 0:
+            problems.append("LLM_PROTOTYPE_TOTAL_CAP_USD must be zero or more")
+        used: list[str] = []  # slots with any value (refused outside local runs)
+        for n in LLM_FREE_SLOTS:
+            prefix = f"LLM_FREE_{n}_"
+            values = [getattr(self, f"llm_free_{n}_{part}") for part in FREE_SLOT_PARTS]
+            present = [_is_given(v) for v in values]
+            fmt_set = getattr(self, f"llm_free_{n}_response_format") is not None
+            if any(present) or fmt_set:
+                used.append(f"{prefix}*")
+            if any(present) and not all(present):
+                # Half a slot is a mistake, not a choice: refuse to start rather than guess.
+                names = [f"{prefix}{part.upper()}" for part in FREE_SLOT_PARTS]
+                problems.append(f"{', '.join(names[:-1])} and {names[-1]} must be set together (or all left empty)")
+                continue
+            if not any(present):
+                if fmt_set:
+                    problems.append(f"{prefix}RESPONSE_FORMAT is set but slot {n} is not")
+                continue
+            url, _, model, requests = values
+            if (url_problem := free_slot_url_problem(url)) is not None:
+                problems.append(f"{prefix}BASE_URL {url_problem}")
+            if not FREE_MODEL.fullmatch(model):
+                problems.append(f"{prefix}MODEL must be 1-74 characters from A-Z a-z 0-9 . _ : / @ + -")
+            if requests < 1:
+                problems.append(f"{prefix}DAILY_REQUESTS must be 1 or more (leave the slot empty to turn it off)")
+        if self.app_env in ("staging", "production"):
+            if self.llm_provider == "free":
+                problems.append(
+                    "LLM_PROVIDER=free is for local runs: staging and production never send data to free"
+                    " providers (D-37)"
+                )
+            if used:
+                where = "staging and production"
+                problems.append(f"{', '.join(used)} are for local runs only: leave them empty in {where}")
+        return problems
 
     @field_validator(*OPTIONAL_SETTINGS, mode="before")
     @classmethod
@@ -213,6 +350,7 @@ class Settings(BaseSettings):
                 "AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are required when SMS_PROVIDER=africastalking"
             )
         problems.extend(self._key_problems())
+        problems.extend(self._llm_problems())
         if self.app_env == "production":
             if self.embedder == "fake":
                 problems.append("production embeds with a real model only (EMBEDDER=bge-m3)")
@@ -265,6 +403,19 @@ def decoded_key(value: SecretStr) -> bytes | None:
 
 def _is_set(value: SecretStr | None) -> bool:
     return value is not None and bool(value.get_secret_value().strip())
+
+
+def _is_set_text(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
+
+
+def _is_given(value: str | SecretStr | int | None) -> bool:
+    """A slot value is given when it is not empty (a number, even 0, is given: the range check reports it)."""
+    if isinstance(value, SecretStr):
+        return _is_set(value)
+    if isinstance(value, str):
+        return _is_set_text(value)
+    return value is not None
 
 
 @lru_cache(maxsize=1)
