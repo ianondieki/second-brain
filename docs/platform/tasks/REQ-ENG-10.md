@@ -12,7 +12,8 @@ people on the engagement are told in-app. Both are terminal: every later command
 
 ## Tests
 
-`tests/integration/engagements/test_tracker_branches.py`.
+`tests/integration/engagements/test_tracker_branches.py`; `test_withdraw_tier2.py` (after WITHDRAWN the
+organisation's Tier-2 render is refused: P3's `can_view_tier2` and `app_tier2_granted` agree).
 
 ## After the prototype
 

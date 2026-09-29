@@ -385,7 +385,13 @@ router calls `app_set_test_clock`, is left out of the production image and is st
    spec's "has not been shared yet" would be untrue once a grant is live.
 8. The OTHER decline text reaches the developer through the notification job's arguments (kept out of the chain).
 
-### Schema needs (for db-migrations; not built)
+### Orchestrator ruling on P5 (2026-09-29)
+
+Decisions 1–9 above are accepted for the prototype. Decision 8 is recorded as a privacy follow-up: the OTHER
+decline text must not stay in `procrastinate_jobs` arguments (purge finished notification jobs, or pass an id of a
+stored text instead). The schema needs below are db-migrations follow-ups.
+
+### Schema needs (db-migrations follow-ups; not built)
 
 1. A mutable store both parties read for a decline's written reason (and later messages), so the text does not travel
    in job arguments.
@@ -406,7 +412,8 @@ router calls `app_set_test_clock`, is left out of the production image and is st
   parity, chain verified, documents intact, EM2 once), `test_tracker_guards.py` (API 403/409 per actor, 404
   non-parties, stale 409, AC-SEC-7, step-up, D2, assignment 409, payment mismatch 409, both sides 403,
   `open_engagement_for_tag`), `test_tracker_branches.py` (DECLINED reason codes, WITHDRAWN, stage 0),
-  `test_em2_contact.py` (AC-MAIL-1, contact reveal), `test_tracker_edges.py`; `tests/integration/test_testclock_excluded.py`
+  `test_em2_contact.py` (AC-MAIL-1, contact reveal), `test_tracker_edges.py`, `test_withdraw_tier2.py` (after
+  WITHDRAWN the organisation's Tier-2 render is refused by P3's predicate and `app_tier2_granted`); `tests/integration/test_testclock_excluded.py`
   (REQ-ENG-12, REQ-BD-01).
 
 ### Result (P5)
@@ -421,7 +428,8 @@ legacy suite passes except two `tests/test_adviser_cli.py` checks that need `clo
 ### Follow-ups (not built)
 
 - The schema needs above (decline text store, phone reveal, org recipients, the both-sides policy).
-- Purge finished `notifications` jobs (their arguments can hold a decline's written reason).
+- Privacy (ruling on decision 8): purge finished `notifications` jobs, or pass an id of the stored decline text
+  instead of the text (with schema need 1).
 - The Playwright paths (AC-TRACK-4) and the tracker screens (P8) on these endpoints; the demo seed (P9) sets
   `FEATURE_DEALS_ENABLED=true`, TOTP for the demo developers and organisation seats, D2 for the demo developers.
 - Expiry, escalation and auto-confirmation jobs (after the prototype), driven by `app_clock_now()`.
