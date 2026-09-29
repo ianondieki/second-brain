@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from structlog.testing import capture_logs
 
 import bridge.clock
@@ -254,16 +255,61 @@ async def test_a_second_open_code_does_not_verify_a_d1_profile(
     assert await phone_verified_events(owner_engine, user_of(developer)) == 1
 
 
+LOCK_PROFILE = text("SELECT user_id FROM developer_profiles WHERE user_id = :u FOR UPDATE")
+
+# How many sessions wait on the caller's locks, directly or through one another (the second waiter for a row queues on
+# the tuple lock that the first waiter holds). pg_locks and pg_blocking_pids are read live, not from a snapshot.
+QUEUED_BEHIND_ME = text(
+    "WITH RECURSIVE queue(pid) AS (SELECT pg_backend_pid() UNION"
+    " SELECT l.pid FROM pg_locks l JOIN queue q ON q.pid = ANY (pg_blocking_pids(l.pid)) WHERE NOT l.granted)"
+    " SELECT count(*) FROM queue WHERE pid <> pg_backend_pid()"
+)
+
+
+async def queue_behind(holder: AsyncConnection, tasks: list[asyncio.Task[httpx.Response]]) -> int:
+    """How many sessions wait on ``holder``'s locks, polled until every task waits, one task has finished (so it did
+    not wait) or 120 s have passed (the pattern of ``test_concurrent_appends_to_one_chain_are_serialised``)."""
+    deadline = time.monotonic() + 120
+    while True:
+        queued = int((await holder.execute(QUEUED_BEHIND_ME)).scalar_one())
+        if queued >= len(tasks) or any(task.done() for task in tasks) or time.monotonic() > deadline:
+            return queued
+        await asyncio.sleep(0.05)
+
+
+@pytest.mark.parametrize("winner", [0, 1], ids=["first_number_queues_first", "second_number_queues_first"])
 async def test_concurrent_confirmations_of_two_numbers_verify_one(
-    signed_in: Client, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+    signed_in: Client, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, winner: int
 ) -> None:
-    """The profile row is locked while a code is confirmed, so two racing codes cannot both verify."""
+    """The profile row is locked while a code is confirmed, so two racing codes cannot both verify.
+
+    The race is forced, not left to timing: the test holds the profile row lock, starts one confirmation and sees it
+    wait on that lock (pg_locks), starts the other and sees it queue behind the first, then releases the lock. The
+    holder has locked nothing else, so both wait on the profile row. Both orders are forced: each time the first in
+    the queue verifies, and the second, which waited for that commit, finds the profile D1 (409) and leaves its code
+    untouched."""
     developer = await signed_in()
-    (first, first_code), (second, second_code) = await second_open_code(developer, monkeypatch)
-    responses = await asyncio.gather(confirm(developer, first, first_code), confirm(developer, second, second_code))
-    assert sorted(r.status_code for r in responses) == [200, 409]
-    rows = [await code_row(owner_engine, verification_id) for verification_id in (first, second)]
-    assert sum(row["verified_at"] is not None for row in rows) == 1
+    codes = await second_open_code(developer, monkeypatch)
+    queue = [codes[winner], codes[1 - winner]]
+    tasks: list[asyncio.Task[httpx.Response]] = []
+    async with owner_engine.connect() as holder:
+        assert (await holder.execute(LOCK_PROFILE, {"u": user_of(developer)})).scalar_one() == user_of(developer)
+        try:
+            for verification_id, code in queue:
+                tasks.append(asyncio.create_task(confirm(developer, verification_id, code)))
+                queued = await queue_behind(holder, tasks)
+                assert queued == len(tasks), f"confirmation {len(tasks)} did not queue on the profile row lock"
+        finally:
+            await holder.rollback()  # releases the profile row: the waiters proceed in their queue order
+            await asyncio.gather(*tasks, return_exceptions=True)
+    won, lost = [task.result() for task in tasks]
+    assert won.status_code == 200, won.text
+    assert won.json() == {"verification_level": "d1"}
+    assert (lost.status_code, lost.json()["detail"]["code"]) == (409, "already_verified")
+    won_row, lost_row = [await code_row(owner_engine, verification_id) for verification_id, _ in queue]
+    assert won_row["verified_at"] is not None
+    assert (lost_row["verified_at"], lost_row["attempts"]) == (None, 0)
+    assert await level_of(developer) == "d1"
     assert await phone_verified_events(owner_engine, user_of(developer)) == 1
 
 
