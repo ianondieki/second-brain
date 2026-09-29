@@ -219,3 +219,67 @@ Reviewer (22 mutations red, 4 survivors explained or listed below; 951 passed) a
 6. `memberships_claims_relabel` `OLD.org_id` branch (`:2480`) untested (mutation O survives). Cover a membership move, or refuse `org_id` changes on `memberships`.
 7. A batch tenant settling an item only another tenant reserved gets `check_violation`, not `insufficient_privilege` (`:2504-2516`); optionally map both to `LLMBatchNotOwned`.
 8. Commit `2ca0347` is a 725-line "wip (unverified)" commit; it stays in history (no rewrite; recorded with the earlier wip commits as a deviation). Its content was verified in session 2 (951 passed) and reviewed in round 6.
+
+## T2.5 prototype P3 (2026-09-29): built
+
+Files: `bridge/proposals/{access,grants,render,views}.py`, `bridge/legal/nda.py`, the Tier-2 routes in
+`bridge/proposals/router.py` (`tier2_router`), `backend/openapi.json`, `frontend/lib/api/schema.d.ts`.
+
+- **Predicate** `access.can_view_tier2(db, settings, live, proposal_id=, org_id=, check_nda=)` returns an `Access` or
+  the first failed `Condition` (its value is the error code). Order: `tier2_disabled`; the proposal is published, clear
+  and has a registered current version (404; its owner passes every organisation condition and reads unlogged); an
+  active membership of the path's organisation (404); `org_not_e2`, `org_suspended`; `role_not_permitted`
+  (reviewer, signatory or admin, as the database); `email_unverified`; `domain_mismatch` (the address at exactly the
+  verified domain, compared like citext); `mfa_enrolment_required`; `step_up_required` (the session's second factor
+  at most `STEP_UP_MAX_AGE_HOURS` = 12 h old); `master_terms_required` (the current version accepted for the
+  organisation); `grant_revoked`, `grant_required` (an active, unrevoked Tier >= 2 grant); `engagement_ended`
+  (WITHDRAWN, DECLINED, TERMINATED); `nda_required` (the current Evaluation NDA, this person, this proposal, this
+  organisation). The NDA is last so the NDA step is offered only when nothing else is missing, and accepting it needs
+  the others (`check_nda=False`); the card's list put it before the grant. The facts are read under the viewer's RLS;
+  then `app_tier2_granted(proposal, version, org)` must agree. RLS hides `org_claims` from a reviewer, so the
+  application checks only that the current Master Enterprise Terms were accepted, and a database refusal after every
+  application condition passed is reported as `master_terms_required` (the acceptor was neither the approved E2
+  claimant nor an active signatory). Each refusal writes `tier2.access_denied` (condition, purpose `render|nda`,
+  organisation id) on the organisation's chain once the viewer is its member, else on the viewer's, committed before
+  the 403/404.
+- **Grants** `grants.grant_on_tag(db, *, owner_id, proposal_id, org_id) -> UUID | None`: what P4 calls in the owner's
+  transaction right after inserting a `delivered` tag (tenant bound to the owner; it does not commit). Policy
+  `auto_tagged` (the default): an active Tier-2 grant (`source auto_tagged`, `granted_by` the owner,
+  `counts_as_unlock` false), idempotent under an advisory lock on (proposal, organisation); an organisation's pending
+  `requested` grant is activated instead (it keeps its source: bridge_app has no UPDATE on `source`). Any other policy
+  returns None. `GrantError` when the caller does not own the proposal or has no open `delivered` tag on it for that
+  organisation. Audited `tier2.grant_created` or `tier2.grant_activated` on the owner's chain. A grant made while the
+  flag is off releases nothing until it is on.
+- **Evaluation NDA** (`bridge/legal/nda.py`; `GET|POST /api/orgs/{org_id}/proposals/{id}/nda`): the current
+  `nda_templates` row of kind `evaluation` with its legal body (the seeded placeholder) and the viewer-logging notice
+  v1 (`[[COPY-REVIEW]]`); 503 `not_configured` without a seeded NDA. Accepting echoes `template_id`, `sha256` and
+  `logging_notice_version` (409 `nda_outdated` otherwise; 422 for a malformed hash) and records one row per person,
+  organisation, proposal and template version (201; 200 with the same row when repeated), with the template hash and
+  notice version, under an advisory lock; audited `tier2.nda_accepted` on the organisation's chain. The owner gets
+  409 `nda_not_needed`.
+- **Render and access log**: see `REQ-PROV-03.md`. `GET /api/orgs/{org_id}/proposals/{id}/tier2` (organisations; one
+  logged view per page) and `GET /api/me/proposals/{id}/tier2` (the owner's preview). No JSON form of Tier 2 exists
+  for organisations (`test_render_marks.py::test_organisations_get_tier2_only_as_a_marked_page`).
+- **Flag**: `REQ-SEC-01.md`.
+- Tests: `integration/proposals/test_access.py::test_predicate_negatives` (AC-REPO-1, 25 cases: every condition
+  above, the Master Enterprise Terms by a non-signatory, by the approved E2 claimant (readable) and superseded, the
+  grant requested and revoked, each ended engagement, the NDA superseded, another organisation of the viewer's without
+  a grant, hidden and held proposals, the membership removed; each refusal audited, no view logged, no Tier-2 text in
+  the response, logs or audit), `::test_the_owner_reads_their_own_tier2_without_a_logged_view`,
+  `::test_a_stranger_and_an_anonymous_caller_get_nothing`; `test_nda.py`; `test_grants.py`; `test_render_marks.py`
+  (AC-REPO-2); `integration/test_feature_flags.py::test_tier2_flag` (AC-SEC-2); `unit/proposals/test_access_rules.py`,
+  `unit/proposals/test_render.py`. The shared scene is `integration/proposals/tier2_scene.py` (registered in
+  `integration/conftest.py`). No schema change was needed.
+
+## T2.5 after prototype (rescheduled, not removed)
+
+- Manual approval, the "any E2 organisation in my niche" policy, organisations' grant requests and the owner's
+  decisions on them, revocation by the owner ("stops future views only", and the UI says so), with the step-up and
+  the email notice on policy changes, manual grants and raw-download enablement (`REQUIREMENTS.md` §7).
+- Grants for held tags delivered on E2 approval (`app_decide_claim` delivers the tags; nothing grants yet).
+- The unlock quota (REQ-BIL-03), the PDF render, attachment renders and raw download, coarse durations, the KIPI and
+  KECOBO nudge before the first Tier-2 release, the P8 screens (the NDA step, the Tier-2 view, the "Who has seen this"
+  panel).
+- A unique index on `nda_acceptances (user_id, org_id, proposal_id, nda_template_id)` would make "once per version" a
+  database rule (today the advisory lock and the lookup in `bridge/legal/nda.py`); `db-migrations` if wanted.
+
