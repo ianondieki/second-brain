@@ -603,7 +603,8 @@ async def confirm_totp_enrolment(
     guess codes against a setup the owner has begun (security review MAJOR); the throttled case is logged."""
     keys = throttle.keys(settings.secret_key.get_secret_value(), "mfa", str(live.user.id), ip)
     if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
-        log.warning("auth.totp_confirm_throttled", user_id=str(live.user.id))
+        # Looked up per call: the module logger is cached on first use (structlog), which hides it from capture_logs.
+        get_logger(__name__).warning("auth.totp_confirm_throttled", user_id=str(live.user.id))
         raise AuthError("too_many_attempts", 429)
     user = await lock_user(db, live.user.id)
     secret = _pending_secret(settings, user)
