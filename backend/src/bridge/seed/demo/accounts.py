@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
 from bridge.auth import passwords
-from bridge.auth.crypto import decode_key, decrypt, encrypt
+from bridge.auth.crypto import decode_key, decrypt
 from bridge.auth.models import User
 from bridge.auth.schemas import OrgSignup
-from bridge.auth.service import NewAccount, create_account, lock_user
+from bridge.auth.service import NewAccount, create_account, lock_user, seal_pending_secret
 from bridge.config import Settings
 from bridge.db import bind_tenant
 from bridge.ids import uuid7
@@ -289,10 +289,10 @@ async def enrol_totp(
     email: str,
     report: DemoReport,
 ) -> None:
-    """Enrol the account's fixed demo secret: the pending secret is sealed as ``begin_totp_enrolment`` seals its random
-    one, then the user signs in with the demo password and ``POST /api/auth/totp/confirm`` confirms it with the current
-    code (recovery codes, audit, notice email). An enrolled secret that does not open under this
-    ``DATA_ENCRYPTION_KEY`` means that other keys seeded the database."""
+    """Enrol the account's fixed demo secret: ``seal_pending_secret`` seals it as ``begin_totp_enrolment`` seals its
+    random one (with the start time the confirmation checks), then the user signs in with the demo password and
+    ``POST /api/auth/totp/confirm`` confirms it with the current code (recovery codes, audit, notice email). An
+    enrolled secret that does not open under this ``DATA_ENCRYPTION_KEY`` means that other keys seeded the database."""
     secret = totp_secret(email)
     key = decode_key(settings.data_encryption_key.get_secret_value())
     user_id = report.users[email]
@@ -312,7 +312,7 @@ async def enrol_totp(
             if stored != secret:  # its owner turned TOTP off and on again in the app
                 raise DemoSeedError(f"{email} has a TOTP secret of its own, not the demo one")
             return
-        user.totp_pending_enc = encrypt(key, secret.encode("ascii"), user.id.bytes)
+        seal_pending_secret(settings, user, secret)
         await db.commit()
     async with signed_in(app, owner, email) as actor:
         await actor.call("POST", "/api/auth/totp/confirm", json={"code": totp_code(email)})

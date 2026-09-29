@@ -534,10 +534,17 @@ async def begin_totp_enrolment(
         raise AuthError("totp_already_enabled", 409)
     await require_reauth(db, settings, user, live, password, ip=ip)
     secret = totp.new_secret()
-    # The start time travels inside the AES-GCM envelope with the secret, so it cannot be altered or detached.
+    seal_pending_secret(settings, user, secret)
+    return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
+
+
+def seal_pending_secret(settings: Settings, user: User, secret: str) -> None:
+    """Store ``secret`` as the pending TOTP secret with the time setup began, sealed together in one AES-GCM envelope
+    bound to the user id, so the time cannot be altered or detached; ``_pending_secret`` refuses it after
+    ``PENDING_TOTP_TTL``. The one place that writes the envelope (setup, and the demo seed's fixed secrets); the
+    caller holds ``lock_user``."""
     began = int(clock.utcnow().timestamp())
     user.totp_pending_enc = encrypt(_key(settings), f"{secret}|{began}".encode("ascii"), user.id.bytes)
-    return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
 
 
 def _pending_secret(settings: Settings, user: User) -> str | None:
