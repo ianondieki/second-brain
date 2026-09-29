@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -129,17 +130,61 @@ async def test_research_runs_are_staff_admin_only_and_capped(owner_engine: Async
             await expect(conn, START, "row-level security", id=uuid7(), by=outsider or people.admin, **start)
             assert await run(conn, "SELECT count(*) FROM research_runs WHERE id = :id", id=mine) == 0
             assert await rowcount(conn, "UPDATE research_runs SET searches = 1 WHERE id = :id", id=mine) == 0
-        await act(conn, people.other_admin)  # any staff admin may close a stale run
+        await act(conn, people.other_admin)  # another staff admin reads the run and may record its counts
         assert await run(conn, "SELECT count(*) FROM research_runs WHERE id = :id", id=mine) == 1
         caps = "UPDATE research_runs SET searches = :s, fetches = :f WHERE id = :id"
         await expect(conn, caps, "run_caps", s=26, f=0, id=mine)
         await expect(conn, caps, "run_caps", s=0, f=41, id=mine)
         assert await rowcount(conn, caps, s=25, f=40, id=mine) == 1
         stop = "UPDATE research_runs SET status = 'stopped', finished_at = now(), stop_reason = :r WHERE id = :id"
+        await expect(conn, stop, "only the staff admin who started a run", r="fetch_cap", id=mine)  # not its starter
+        await act(conn, people.admin)
         await expect(conn, stop.replace(", stop_reason = :r", ""), "stop_reason_is_a_code", id=mine)
         await expect(conn, stop, "stop_reason_is_a_code", r="Too many fetches!", id=mine)
         assert await rowcount(conn, stop, r="fetch_cap", id=mine) == 1
         await expect(conn, "DELETE FROM research_runs WHERE id = :id", "permission denied", id=mine)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "status = 'running', finished_at = NULL, stop_reason = NULL",  # back to running
+        "status = 'failed', stop_reason = 'late_failure'",  # another outcome
+        "searches = 3",
+        "cost_usd = 0.5",
+        "stop_reason = 'other_cap'",
+        "demo_fallback = true",
+    ],
+)
+async def test_a_finished_research_run_never_changes_again(owner_engine: AsyncEngine, change: str) -> None:
+    """research_runs_guard, for every role: a finished run never returns to running (so it never takes candidates
+    again) and its outcome, counts, cost and flags are final, even for its starter and the owner."""
+    async with as_app(owner_engine) as conn:
+        people = await _staff(conn)
+        finished = uuid7()
+        await run(
+            conn,
+            START,
+            id=finished,
+            niche=people.niche,
+            county=None,
+            by=people.admin,
+            status="stopped",
+            finished=datetime.now(UTC),
+            reason="fetch_cap",
+        )
+        update = f"UPDATE research_runs SET {change} WHERE id = :id"
+        await act(conn, people.admin)
+        await expect(conn, update, "a finished run never changes", id=finished)
+        await as_owner(conn)
+        await expect(conn, update, "a finished run never changes", id=finished)
+        await expect(
+            conn,
+            "UPDATE research_runs SET started_by = :u WHERE id = :id",
+            "never change",
+            u=people.other_admin,
+            id=finished,
+        )
 
 
 # --- app_create_research_candidate ----------------------------------------------------------------------------------
@@ -150,8 +195,18 @@ async def test_only_a_staff_admin_creates_candidates_on_their_own_running_run(ow
         people = await _staff(conn)
         mine = await _start(conn, people.admin, people.niche)
         theirs = await _start(conn, people.other_admin, people.niche)
-        done = await _start(conn, people.admin, people.niche)
-        await run(conn, "UPDATE research_runs SET status = 'completed', finished_at = now() WHERE id = :id", id=done)
+        done = uuid7()  # a finished run of the caller's (inserted finished: a finished run never reopens)
+        await run(
+            conn,
+            START,
+            id=done,
+            niche=people.niche,
+            county=None,
+            by=people.admin,
+            status="completed",
+            finished=datetime.now(UTC),
+            reason=None,
+        )
         valid = [source(), OTHER_PUBLISHER]
         for caller in (people.moderator, people.developer, None):  # wrong role
             await act(conn, caller)
@@ -170,6 +225,15 @@ async def test_only_a_staff_admin_creates_candidates_on_their_own_running_run(ow
         pytest.param([source(url="https://www.ca.go.ke/a page")], id="url_with_space"),
         pytest.param([source(url="https://user@evil.example/")], id="url_with_userinfo"),
         pytest.param([source(url="ftp://www.ca.go.ke/file")], id="not_web"),
+        pytest.param([source(url="https://www.exämple.co.ke/page")], id="non_ascii_host"),
+        pytest.param([source(url="https://www.ca.go.ke/a\x07b")], id="control_in_url"),
+        pytest.param([source(quote="Line one.\nLine two.")], id="control_in_quote"),
+        pytest.param([source(publisher="Business\tDaily")], id="control_in_publisher"),
+        pytest.param([source(published_date="2026-04-03", retrieved_at="2026-04-02")], id="retrieved_before_published"),
+        pytest.param([source(retrieved_at="2999-01-01")], id="retrieved_in_the_future"),
+        pytest.param([source(retrieved_at="2026-09-29T10:00+99:99")], id="bad_time_zone_offset"),
+        pytest.param([source(retrieved_at="2026-09-29T10:00 Mars/Olympus")], id="unknown_time_zone"),
+        pytest.param([source(retrieved_at="2026-09-29 25:00")], id="bad_hour"),
         pytest.param([{k: v for k, v in source().items() if k != "url"}], id="no_url"),
         pytest.param([{k: v for k, v in source().items() if k != "published_date"}], id="no_date"),
         pytest.param([source(published_date="2026-02-30")], id="impossible_date"),
@@ -202,6 +266,23 @@ async def test_every_source_needs_an_https_url_a_date_and_a_quote(owner_engine: 
         assert await run(conn, "SELECT count(*) FROM problems WHERE research_run_id = :r", r=mine) == 0
 
 
+async def test_a_source_may_name_a_port_and_be_retrieved_the_day_it_was_published(owner_engine: AsyncEngine) -> None:
+    async with as_app(owner_engine) as conn:
+        people = await _staff(conn)
+        mine = await _start(conn, people.admin, people.niche)
+        await act(conn, people.admin)
+        today = datetime.now(UTC).date().isoformat()
+        port = source(url="https://www.ca.go.ke:8443/notice", published_date=today, retrieved_at=today)
+        created = await run(conn, CREATE, **card(mine, [port, OTHER_PUBLISHER]))
+        assert isinstance(created, UUID)
+        await expect(  # an hour from now is not retrieved yet (the database's clock)
+            conn,
+            CREATE,
+            "1 to 10 sources",
+            **card(mine, [source(retrieved_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat())]),
+        )
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
@@ -214,6 +295,12 @@ async def test_every_source_needs_an_https_url_a_date_and_a_quote(owner_engine: 
         ({"statement": " ".join(["word"] * 121)}, "a statement of 1 to 120 words"),
         ({"named": "{Safaricom}"}, "naming an organisation needs an official source"),
         ({"named": "{" + ",".join(f"Org {i}" for i in range(11)) + "}", "sources": [OFFICIAL]}, "named_orgs_valid"),
+        ({"title": "Mobile\tmoney"}, "without control characters"),
+        ({"statement": "One line.\nAnother line."}, "without control characters"),
+        ({"statement": " ".join(["x" * 15] * 100)}, "at most 1500 characters"),  # 100 words, 1599 characters
+        ({"group": "x" * 201}, "an affected group of at most 200 characters"),
+        ({"group": "Farmers\x07"}, "an affected group of at most 200 characters"),
+        ({"named": '{"Safari\x07com"}', "sources": [OFFICIAL]}, "named organisations without control characters"),
     ],
 )
 async def test_a_candidate_is_refused_below_its_bounds(

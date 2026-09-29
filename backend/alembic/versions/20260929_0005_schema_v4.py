@@ -7,7 +7,8 @@ REQ-SCOUT-01 and REQ-SCOUT-02 (``scout_agents``, ``agent_runs``, ``agent_matches
 "Revision 0005" section of ``docs/platform/tasks/REQ-SCOUT-01.md``. Additive: 5 new tables, 5 new enum types, three new
 columns on ``problems`` and ``problem_sources``, one trigger on ``problems``, and bridge_app's INSERT on ``problems``
 and ``problem_sources`` narrowed to every column but the new ones (the table-wide grants are restored on downgrade).
-Nothing of revisions 0001 to 0004 is changed or dropped. D-43: the scout has no database role of its own in the
+Nothing of revisions 0001 to 0004 is changed or dropped. The upgrade is additive; the downgrade is destructive (it drops
+payment records: see ``downgrade()``). D-43: the scout has no database role of its own in the
 prototype (the worker is bridge_app; the scout code never reads Tier 2, enforced by P10's import-lint and prompt tests).
 
 Who writes what (RLS; bridge_app; ``app.org_id`` narrows every organisation predicate when set):
@@ -24,13 +25,19 @@ Who writes what (RLS; bridge_app; ``app.org_id`` narrows every organisation pred
   scout exists or what it matched.
 - ``agent_runs`` (ORG): members read; an acting member (owner, admin, signatory or reviewer: a job binds the
   ``act_as_user_id`` that ``app_scouts_due`` names) inserts a running run and updates its status, counts and error code;
-  no DELETE. ``error_code`` is a code, never free text; a failed run carries one, no other does.
+  no DELETE (runs go only with their scout). ``error_code`` is a code, never free text; a failed run carries one, no
+  other does. ``started_at`` is the database's clock (default ``app_clock_now()``): bridge_app's INSERT is
+  column-scoped without it, so a run is never forward- or back-dated.
 - ``agent_matches`` (ORG only): members read; an acting member inserts a match for the current registered version of a
   published, clear proposal (read under the caller's own RLS), with no feedback and no digest time; UPDATE of the
-  feedback columns (the caller's own ``feedback_by``) and ``digest_sent_at`` only. UNIQUE (scout_id, proposal_id): a
+  feedback columns and ``digest_sent_at`` only; a feedback is given as oneself and, once given, changed or cleared
+  only by its author (``agent_matches_feedback_guard``, every role; other members and the digest job still write
+  ``digest_sent_at``). UNIQUE (scout_id, proposal_id): a
   proposal is matched once per scout across runs (AC-SCOUT-6).
 - ``research_runs`` (STAFF): staff admin only (read, insert as ``started_by``, update); CHECK searches <= 25 and
-  fetches <= 40 (AC-RES-3). Candidates come only from ``app_create_research_candidate``.
+  fetches <= 40 (AC-RES-3). ``research_runs_guard`` (every role): only the starter changes a run's status, a finished
+  run never changes again (never back to running), and its niche, region, starter and start never change. Candidates
+  come only from ``app_create_research_candidate``.
 - ``payments`` (ORG_OR_USER): the user, or the organisation's owner, admin or finance member, reads; inserts a pending
   payment (as ``initiated_by``) for an active, non-default plan of the subject's side at exactly its price; no UPDATE
   or DELETE grant. Provider ``fake`` only (CHECK); ``provider_ref`` platform-generated and unique; no phone column.
@@ -53,22 +60,30 @@ SECURITY DEFINER functions (pinned search_path, EXECUTE revoked from PUBLIC and 
   completed, not failed) in the same Africa/Nairobi day or ISO week as ``p_now``; on_new: only for a published, clear
   proposal the scout has not matched yet. Nothing else is returned.
 - ``app_create_research_candidate(run, title, statement, affected_group, county, confidence, named_orgs, sources)``:
-  staff admin only, on the caller's own running run; a title of 1 to 90 characters and a statement of at most 120
-  words; confidence 0.40 to 1; 1 to 10 sources, each an object of string values with an https URL, a published date
-  (YYYY-MM-DD), a retrieval time and a quote (optional publisher, source type of the 6.5 tiers, excerpt ref; nothing
-  else); a card naming organisations needs an official source. Inserts the candidate (``created_by`` NULL, so the same
-  admin may approve it through ``app_moderate_problem``) and its sources in one call, niche and country from the run.
+  staff admin only, on the caller's own running run; a title of 1 to 90 characters, a statement of at most 120 words
+  and 1500 characters, an affected group of at most 200, no control characters in them or in named organisations;
+  confidence 0.40 to 1; 1 to 10 sources, each an object of string values with an https URL on an ASCII host, a
+  published date (YYYY-MM-DD), a retrieval time between that date and now, and a quote (optional publisher, source
+  type of the 6.5 tiers, excerpt ref; nothing else; no control characters; any malformed date or time is the same
+  refusal); a card naming organisations needs an official source. Inserts the candidate (``created_by`` NULL, so the
+  same admin may approve it through ``app_moderate_problem``) and its sources in one call, niche and country from the
+  run.
 - ``app_settle_payment(payment, status, failure_code)``: the payment's subject only (one refusal, the same for a
   payment that does not exist); pending -> succeeded, failed or cancelled once; repeating the same outcome is a no-op
-  (false); another outcome is refused.
+  (false); another outcome is refused. Fails closed for real money: a payment of any provider but ``fake`` is never
+  settled as succeeded here (the revision that widens the provider CHECK adds the platform path, REQ-BIL-04).
 - ``app_activate_paid_subscription(payment)``: the subject only; a succeeded payment whose plan is of the subject's
-  side at the paid amount; serialised per subject; cancels the subject's live subscription and inserts the new one
+  side (the price is not re-checked: plan and amount were matched at INSERT and never change, so a later price change
+  never strands a paid payment); serialised per subject; cancels the subject's live subscription and inserts the new one
   from ``app_clock_now()`` (a month or a year, per the plan's interval), linking the payment; a linked payment returns
   its subscription (idempotent).
 - ``app_trend_aggregates(p_since, p_now)``: signal_events in [p_since, p_now) (at most 400 days) per item, kind and
-  Africa/Nairobi day: ``events`` counts each actor once per item and day (actor-less signals once per day); ``actors``
-  is the item and kind's distinct actors over the window; ``orgs`` its distinct organisations only when there are 3 or
-  more, else NULL. It never returns an actor hash, an organisation hash or an organisation id.
+  Africa/Nairobi day, only of the kinds ``proposal_published``, ``proposal_version_published``, ``scout_match`` and
+  ``org_interest`` (adding one is a revision), only for published proposals clear of moderation holds, and only for an
+  item and kind with at least 3 distinct actors in the window (else no row): ``events`` counts each actor once per
+  item and day (actor-less signals once per day); ``actors`` is the item and kind's distinct actors over the window;
+  ``orgs`` its distinct organisations only when there are 3 or more, else NULL. It never returns an actor hash, an
+  organisation hash or an organisation id.
 
 Owner of ``app_trend_aggregates``: ``bridge_owner``, not ``aggregate_worker`` (docs/spec/08 reads aggregates under
 that role). ``ALTER FUNCTION ... OWNER TO aggregate_worker`` needs the migration role to be able to ``SET ROLE``
@@ -76,13 +91,17 @@ that role). ``ALTER FUNCTION ... OWNER TO aggregate_worker`` needs the migration
 no membership in it and ``prepare_db.sql`` lets nobody but the owner create in ``public``; granting either would give a
 runtime role an owned object (``test_runtime_roles_own_nothing``) and a login path to CREATE. bridge_app cannot switch
 to ``aggregate_worker`` either (it is a member of the Tier-2 roles only). So the definer runs as the owner, reads
-``signal_events`` only, and returns counts only; the query is the whole of its privilege.
+``signal_events`` (and the proposals' visibility) only, and returns counts only; the query is the whole of its
+privilege. Recorded as D-46 (``DECISIONS-NEEDED.md``): keep this for the prototype; own it as ``aggregate_worker``
+at Phase 4.
 
 Operating rules for the code that uses this schema:
 
 - The scan job calls ``app_scouts_due`` with no user bound, then binds each ``act_as_user_id`` with the scout's
   organisation (``bind_tenant``) for its run: runs, matches and the cursor are written under that binding.
-- Leave ``agent_runs.started_at`` out (``app_clock_now()``, so due-ness follows the test clock).
+- ``agent_runs.started_at`` is the database's (``app_clock_now()``, so due-ness follows the test clock).
+- Never accept a client-supplied id or reference for a new row (scout, run, match, payment, ``provider_ref``): a
+  unique key refusal would tell the caller that another tenant's row exists.
 - Research runs bind the staff admin who started them; create candidates only through ``app_create_research_candidate``.
 - Payments: insert pending at the plan's price, query the provider, then ``app_settle_payment`` and
   ``app_activate_paid_subscription`` (refresh the ORM rows afterwards: the functions changed them). The database cannot
@@ -99,7 +118,7 @@ from collections.abc import Sequence
 from typing import NamedTuple
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0005"
@@ -127,7 +146,12 @@ APP_GRANTS: dict[str, str] = {
         "SELECT, INSERT, DELETE, UPDATE (niches, counties, include_keywords, exclude_keywords, maturity, budget_band,"
         " min_fit, frequency, language, recipients, paused_at, cursor_at, cursor_proposal_id, updated_at)"
     ),
-    "agent_runs": "SELECT, INSERT, UPDATE (status, finished_at, scanned_count, matched_count, error_code)",
+    # started_at is the database's clock (its default, app_clock_now()): never inserted or updated by the app, so a
+    # run is never forward- or back-dated.
+    "agent_runs": (
+        "SELECT, INSERT (id, scout_id, org_id, trigger, status, finished_at, window_start, window_end, scanned_count,"
+        " matched_count, error_code), UPDATE (status, finished_at, scanned_count, matched_count, error_code)"
+    ),
     "agent_matches": "SELECT, INSERT, UPDATE (feedback, feedback_reason, feedback_by, feedback_at, digest_sent_at)",
     "research_runs": (
         "SELECT, INSERT, UPDATE (status, finished_at, searches, fetches, input_tokens, candidates, discarded, cost_usd,"
@@ -225,12 +249,9 @@ POLICIES: tuple[Policy, ...] = (
     # --- agent_matches (ORG only): matches of published proposals; feedback as oneself ---
     Policy("agent_matches", "SELECT", _ORG_MEMBER),
     Policy("agent_matches", "INSERT", check=MATCH_INSERT),
-    Policy(
-        "agent_matches",
-        "UPDATE",
-        _SCOUT_ACTOR,
-        f"{_SCOUT_ACTOR} AND (feedback_by IS NULL OR feedback_by = app_user_id())",
-    ),
+    # Whose feedback it is needs OLD: agent_matches_feedback_guard (a CHECK here on feedback_by would also stop every
+    # other member, the digest job included, from updating a match someone judged).
+    Policy("agent_matches", "UPDATE", _SCOUT_ACTOR, _SCOUT_ACTOR),
     # --- research_runs (STAFF): staff admin only ---
     Policy("research_runs", "SELECT", _STAFF_ADMIN),
     Policy(
@@ -338,12 +359,15 @@ END;
 $$;
 
 -- One source of a research candidate (docs/spec/06 6.5 evidence[]): an object whose values are strings, with an https
--- URL (no whitespace, no user info), a published date (YYYY-MM-DD, a real date), a retrieval time and a non-blank
--- quote of at most 2000 characters; optionally a publisher (non-blank, at most 200), a source type of the 6.5 quality
--- tiers and an excerpt ref (the saved excerpt's id); no other key. Internal: only app_create_research_candidate()
--- calls it, as the owner.
+-- URL on an ASCII host (letters, digits, dots and hyphens, an optional port; no user info, no whitespace), a published
+-- date (YYYY-MM-DD, a real date), a retrieval time from the published date up to now (app_clock_now()), and a
+-- non-blank quote of at most 2000 characters; optionally a publisher (non-blank, at most 200), a source type of the
+-- 6.5 quality tiers and an excerpt ref (the saved excerpt's id); no other key; no control character (U+0001-U+001F,
+-- U+007F) in the URL, the quote or the publisher. Every malformed date or time (any data exception: a bad format, an
+-- out-of-range field, a time zone) is the same false. Internal: only app_create_research_candidate() calls it, as the
+-- owner. VOLATILE: it reads the clock.
 CREATE FUNCTION app_research_source_is_valid(p_source jsonb) RETURNS boolean
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql VOLATILE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
@@ -359,8 +383,10 @@ BEGIN
                    OR jsonb_typeof(kv.value) <> 'string') THEN
         RETURN false;
     END IF;
-    IF NOT coalesce(p_source->>'url' ~ '^https://[^[:space:]/?#@]+(/[^[:space:]]*)?$'
+    IF NOT coalesce(p_source->>'url' ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$'
                     AND length(p_source->>'url') <= 1000, false)
+       OR coalesce(p_source->>'url' ~ '[\x01-\x1f\x7f]' OR p_source->>'quote' ~ '[\x01-\x1f\x7f]'
+                   OR p_source->>'publisher' ~ '[\x01-\x1f\x7f]', false)
        OR NOT coalesce(btrim(p_source->>'quote') <> '' AND length(p_source->>'quote') <= 2000, false)
        OR NOT coalesce(p_source->>'published_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', false)
        OR NOT coalesce(p_source->>'retrieved_at' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][^[:space:]].*)?$', false)
@@ -374,10 +400,12 @@ BEGIN
     BEGIN
         v_date := CAST(p_source->>'published_date' AS date);
         v_retrieved := CAST(p_source->>'retrieved_at' AS timestamptz);
-    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+    EXCEPTION WHEN data_exception THEN
         RETURN false;
     END;
-    RETURN v_date IS NOT NULL AND v_retrieved IS NOT NULL;
+    RETURN v_date IS NOT NULL AND v_retrieved IS NOT NULL
+       AND (v_retrieved AT TIME ZONE 'Africa/Nairobi')::date >= v_date
+       AND v_retrieved <= public.app_clock_now();
 END;
 $$;
 
@@ -385,9 +413,11 @@ $$;
 -- caller's own running run (read FOR SHARE, so a run finishing meanwhile takes no further candidate). The card is a
 -- candidate (never public: 0002's policies), ai_generated, with the run's niche and country and, for a county run,
 -- its county; created_by is NULL, so the same staff admin may approve it through app_moderate_problem(). A title of
--- 1 to 90 characters, a statement of at most 120 words, confidence 0.40 to 1 (below 0.40 is discarded), 1 to 10 valid
--- sources (app_research_source_is_valid), and an official source when the card names organisations. The card and
--- its sources are written in one call: a refused source leaves nothing behind. Returns the card's id.
+-- 1 to 90 characters, a statement of at most 120 words and 1500 characters, an affected group of at most 200
+-- characters, no control character (U+0001-U+001F, U+007F) in any of them or in a named organisation, confidence
+-- 0.40 to 1 (below 0.40 is discarded), 1 to 10 valid sources (app_research_source_is_valid), and an official source
+-- when the card names organisations. The card and its sources are written in one call: a refused source leaves
+-- nothing behind. Returns the card's id.
 CREATE FUNCTION app_create_research_candidate(
     p_run uuid, p_title text, p_statement text, p_affected_group text, p_county_code text, p_confidence numeric,
     p_named_orgs text[], p_sources jsonb
@@ -412,11 +442,17 @@ BEGIN
         RAISE EXCEPTION 'app_create_research_candidate: confidence is 0.40 to 1 (a card below 0.40 is discarded)'
             USING ERRCODE = 'check_violation';
     END IF;
-    IF p_title IS NULL OR btrim(p_title) = '' OR length(btrim(p_title)) > 90
-       OR p_statement IS NULL OR btrim(p_statement) = ''
+    IF p_title IS NULL OR btrim(p_title) = '' OR length(btrim(p_title)) > 90 OR p_title ~ '[\x01-\x1f\x7f]'
+       OR p_statement IS NULL OR btrim(p_statement) = '' OR length(p_statement) > 1500
+       OR p_statement ~ '[\x01-\x1f\x7f]'
        OR cardinality(regexp_split_to_array(btrim(p_statement), '\s+')) > 120 THEN
         RAISE EXCEPTION 'app_create_research_candidate: a title of 1 to 90 characters and a statement of 1 to 120 words'
-            USING ERRCODE = 'check_violation';
+            ' (at most 1500 characters), without control characters' USING ERRCODE = 'check_violation';
+    END IF;
+    IF length(p_affected_group) > 200 OR p_affected_group ~ '[\x01-\x1f\x7f]'
+       OR EXISTS (SELECT 1 FROM unnest(p_named_orgs) AS n(name) WHERE n.name ~ '[\x01-\x1f\x7f]') THEN
+        RAISE EXCEPTION 'app_create_research_candidate: an affected group of at most 200 characters and named'
+            ' organisations without control characters' USING ERRCODE = 'check_violation';
     END IF;
     IF v_run.county_code IS NOT NULL AND p_county_code IS NOT NULL AND p_county_code <> v_run.county_code THEN
         RAISE EXCEPTION 'app_create_research_candidate: a county run''s card is of its county'
@@ -478,6 +514,9 @@ $$;
 -- never free text) only for failed or cancelled. Repeating the recorded outcome changes nothing and returns false (a
 -- repeated query or callback); another outcome is refused. settled_at is the database's (payments_guard). Whether the
 -- provider really took the money is the caller's to check before calling (the provider query): the database cannot.
+-- So it fails closed for real money: a payment of any provider but the fake one is never settled as succeeded here,
+-- by its subject; the revision that widens the provider CHECK must add the platform path (REQ-BIL-04:
+-- webhook_events, the provider's verification, the amount and currency check) on purpose.
 CREATE FUNCTION app_settle_payment(p_payment uuid, p_status payment_status, p_failure_code text DEFAULT NULL)
     RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -499,6 +538,10 @@ BEGIN
         RAISE EXCEPTION 'app_settle_payment: a failure code (a code) only for a failed or cancelled payment'
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
+    IF p_status = 'succeeded' AND v_payment.provider IS DISTINCT FROM 'fake' THEN
+        RAISE EXCEPTION 'app_settle_payment: only the platform settles a real provider''s payment as succeeded'
+            ' (REQ-BIL-04)' USING ERRCODE = 'insufficient_privilege';
+    END IF;
     SELECT * INTO v_payment FROM public.payments p WHERE p.id = p_payment FOR UPDATE;
     IF v_payment.status <> 'pending' THEN
         IF v_payment.status = p_status AND v_payment.failure_code IS NOT DISTINCT FROM p_failure_code THEN
@@ -514,7 +557,9 @@ END;
 $$;
 
 -- Activates the plan a succeeded payment paid for (REQ-BIL-08): the payment's subject only (the same one refusal),
--- only a succeeded payment whose plan is of the subject's side at the amount paid. Activations of one subject are
+-- only a succeeded payment whose plan is of the subject's side. The price is not re-checked: the plan and the amount
+-- were matched when the payment was inserted (INSERT policy) and never change (payments_guard), so a later price
+-- change in plans.yaml never strands a payment that succeeded. Activations of one subject are
 -- serialised (advisory lock), then the payment's row is locked: a payment already linked returns its subscription
 -- (idempotent: a repeated query or callback activates nothing twice, AC-SUB-2). Otherwise the subject's live
 -- subscription (trialing, active or past_due) is cancelled and the new one inserted active from app_clock_now() for a
@@ -547,8 +592,8 @@ BEGIN
     END IF;
     SELECT * INTO v_plan FROM public.plans pl WHERE pl.id = v_payment.plan_id;
     v_side := CASE WHEN v_payment.org_id IS NULL THEN 'developer' ELSE 'org' END;
-    IF v_plan.side IS DISTINCT FROM v_side OR v_plan.price_kes_minor IS DISTINCT FROM v_payment.amount_kes_minor THEN
-        RAISE EXCEPTION 'app_activate_paid_subscription: the payment does not match its plan''s side and price'
+    IF v_plan.side IS DISTINCT FROM v_side THEN
+        RAISE EXCEPTION 'app_activate_paid_subscription: the payment''s plan is not of its subject''s side'
             USING ERRCODE = 'check_violation';
     END IF;
     v_now := public.app_clock_now();
@@ -567,11 +612,14 @@ END;
 $$;
 
 -- Cross-organisation trend aggregates (REQ-TREND-01; docs/spec/06 6.6, docs/spec/08 Tenancy): signal_events in
--- [p_since, p_now), at most 400 days, per item, kind and Africa/Nairobi day. events counts each actor once per item
--- and day (signals without an actor once per day: 1 event/account/item/day); actors is the item and kind's distinct
--- actors over the window; orgs its distinct organisations only when there are 3 or more (else NULL), so a small count
--- never singles an organisation out. No actor hash, organisation hash or organisation id is ever returned. Owned by
--- bridge_owner (the revision's docstring says why not aggregate_worker); it reads signal_events and nothing else.
+-- [p_since, p_now), at most 400 days, per item, kind and Africa/Nairobi day, of the listed kinds only
+-- (proposal_published, proposal_version_published, scout_match, org_interest: adding a kind is a revision), whose item
+-- is a published proposal clear of moderation holds, and only for an item and kind with at least 3 distinct actors in
+-- the window (fewer: no row at all, so no count ever describes one or two accounts). events counts each actor once
+-- per item and day (signals without an actor once per day: 1 event/account/item/day); actors is the item and kind's
+-- distinct actors over the window; orgs its distinct organisations only when there are 3 or more (else NULL). No
+-- actor hash, organisation hash or organisation id is ever returned. Owned by bridge_owner (the revision's docstring
+-- and D-46 say why not aggregate_worker); it reads signal_events and the proposals' visibility, nothing else.
 CREATE FUNCTION app_trend_aggregates(p_since timestamptz, p_now timestamptz)
     RETURNS TABLE (item_id uuid, kind varchar, day date, events integer, actors integer, orgs integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -588,6 +636,9 @@ BEGIN
                s.actor_hash AS s_actor, s.org_hash AS s_org
           FROM public.signal_events s
          WHERE s.ts >= p_since AND s.ts < p_now
+           AND s.kind = ANY ('{proposal_published,proposal_version_published,scout_match,org_interest}'::text[])
+           AND EXISTS (SELECT 1 FROM public.proposals p
+                        WHERE p.id = s.item_id AND p.status = 'published' AND p.moderation_state = 'clear')
     ), per_day AS (
         SELECT g.s_item, g.s_kind, g.s_day, count(DISTINCT coalesce(g.s_actor, '\x'::bytea)) AS d_events
           FROM signals g
@@ -596,6 +647,7 @@ BEGIN
         SELECT g.s_item, g.s_kind, count(DISTINCT g.s_actor) AS i_actors, count(DISTINCT g.s_org) AS i_orgs
           FROM signals g
          GROUP BY g.s_item, g.s_kind
+        HAVING count(DISTINCT g.s_actor) >= 3
     )
     SELECT d.s_item, d.s_kind, d.s_day, d.d_events::integer, i.i_actors::integer,
            CASE WHEN i.i_orgs >= 3 THEN i.i_orgs::integer END
@@ -733,6 +785,64 @@ BEGIN
 END;
 $$;
 
+-- A match's feedback is its author's (docs/spec/06 6.8 feedback loop), for every role: a feedback is given as oneself,
+-- and once given only the member who gave it changes or clears it; anyone else who may update the match (an acting
+-- member, the digest job) still writes digest_sent_at. SECURITY INVOKER: reads nothing.
+CREATE FUNCTION agent_matches_feedback_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.feedback, NEW.feedback_reason, NEW.feedback_by, NEW.feedback_at)
+       IS DISTINCT FROM (OLD.feedback, OLD.feedback_reason, OLD.feedback_by, OLD.feedback_at) THEN
+        IF OLD.feedback_by IS NOT NULL AND OLD.feedback_by IS DISTINCT FROM public.app_user_id() THEN
+            RAISE EXCEPTION 'agent_matches: only the member who gave a feedback changes or clears it'
+                USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF NEW.feedback_by IS NOT NULL AND NEW.feedback_by IS DISTINCT FROM public.app_user_id() THEN
+            RAISE EXCEPTION 'agent_matches: a feedback is given as oneself' USING ERRCODE = 'insufficient_privilege';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A research run's lifecycle, for every role: its niche, region, starter and start never change; only the staff
+-- admin who started it changes its status (and with it its finish and stop reason); a finished run (completed,
+-- stopped or failed) never changes again: never back to running, nor its counts, cost or flags. SECURITY INVOKER:
+-- reads nothing.
+CREATE FUNCTION research_runs_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.id, NEW.niche_id, NEW.country, NEW.county_code, NEW.started_by, NEW.created_at)
+       IS DISTINCT FROM (OLD.id, OLD.niche_id, OLD.country, OLD.county_code, OLD.started_by, OLD.created_at) THEN
+        RAISE EXCEPTION 'research_runs: the niche, region, starter and start of a run never change'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF OLD.status <> 'running'
+       AND (NEW.status, NEW.finished_at, NEW.searches, NEW.fetches, NEW.input_tokens, NEW.candidates, NEW.discarded,
+            NEW.cost_usd, NEW.stop_reason, NEW.demo_fallback)
+           IS DISTINCT FROM (OLD.status, OLD.finished_at, OLD.searches, OLD.fetches, OLD.input_tokens, OLD.candidates,
+                             OLD.discarded, OLD.cost_usd, OLD.stop_reason, OLD.demo_fallback) THEN
+        RAISE EXCEPTION 'research_runs: a finished run never changes (it is %)', OLD.status
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status AND OLD.started_by IS DISTINCT FROM public.app_user_id() THEN
+        RAISE EXCEPTION 'research_runs: only the staff admin who started a run changes its status'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER agent_matches_feedback_guard
+    BEFORE UPDATE ON agent_matches
+    FOR EACH ROW EXECUTE FUNCTION agent_matches_feedback_guard();
+CREATE TRIGGER research_runs_guard
+    BEFORE UPDATE ON research_runs
+    FOR EACH ROW EXECUTE FUNCTION research_runs_guard();
 CREATE TRIGGER agent_runs_0_visible
     BEFORE INSERT ON agent_runs
     FOR EACH ROW EXECUTE FUNCTION scout_row_visible();
@@ -767,6 +877,8 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
 INTERNAL_FUNCTIONS = ("app_research_source_is_valid(jsonb)", "app_is_payment_subject(uuid, uuid)")
 TRIGGER_FUNCTIONS = (
     "scout_row_visible()",
+    "agent_matches_feedback_guard()",
+    "research_runs_guard()",
     "payments_guard()",
     "problems_research_guard()",
     "scout_agents_recipients()",
@@ -819,6 +931,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Destructive: drops the scouts, their runs and matches, the research runs, the research columns of problems and
+    their sources, and ``payments``, which are financial records. Under the CLAUDE.md stop rule a downgrade of a
+    database holding any of them is a destructive migration: back the database up and get the human's decision
+    first. The downgrade refuses while ``payments`` has rows unless it is run with ``-x allow_payment_loss=true``
+    (``alembic -x allow_payment_loss=true downgrade 0004``)."""
+    allowed = context.get_x_argument(as_dictionary=True).get("allow_payment_loss") == "true"
+    if not allowed and op.get_bind().execute(sa.text("SELECT EXISTS (SELECT 1 FROM payments)")).scalar():
+        raise RuntimeError(
+            "revision 0005 downgrade: payments holds financial records; back the database up, get the human's"
+            " decision (CLAUDE.md: destructive migration), then run with -x allow_payment_loss=true"
+        )
     # The trigger and the columns of this revision on revision 0002 tables first (a column drop takes its CHECKs,
     # foreign key and index with it), then bridge_app's table-wide INSERT as it was.
     _run_sql("DROP TRIGGER problems_research_guard ON problems;")

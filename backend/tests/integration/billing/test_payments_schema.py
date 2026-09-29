@@ -391,7 +391,6 @@ async def test_activation_is_idempotent_and_replaces_the_live_subscription(owner
         ("dev_month", {}, "failed"),  # not succeeded
         ("dev_month", {}, "cancelled"),
         ("org_month", {}, "succeeded"),  # a user paid for an organisation plan (inserted past the policy)
-        ("dev_month", {"amount": 100}, "succeeded"),  # paid less than the plan's price
     ],
 )
 async def test_activation_needs_a_succeeded_payment_matching_its_plan(
@@ -404,9 +403,69 @@ async def test_activation_needs_a_succeeded_payment_matching_its_plan(
         await act(conn, dev)
         code = None if outcome == "succeeded" else "declined"
         await run(conn, SETTLE, id=payment, status=outcome, code=code)
-        message = "has not succeeded" if outcome != "succeeded" else "does not match its plan's side and price"
+        message = "has not succeeded" if outcome != "succeeded" else "plan is not of its subject's side"
         await expect(conn, ACTIVATE, message, id=payment)
         assert await _subscriptions(conn, user=dev) == []
+
+
+async def test_a_price_change_after_payment_never_strands_a_succeeded_payment(owner_engine: AsyncEngine) -> None:
+    """The plan and the amount were matched when the payment was inserted and never change, so activation does not
+    re-check the price: a plans.yaml price change between the checkout and its activation still activates."""
+    async with as_app(owner_engine) as conn:
+        plans = await _plans(conn)
+        dev = await add_user(conn, "payer")
+        await act(conn, dev)
+        payment = pay(plans, "dev_month", user=dev, org=None, by=dev)
+        await run(conn, PAY, **payment)
+        await as_owner(conn)
+        await run(conn, "UPDATE plans SET price_kes_minor = 59900 WHERE id = :id", id=plans["dev_month"])
+        await act(conn, dev)
+        await run(conn, SETTLE, id=payment["id"], status="succeeded", code=None)
+        activated = await run(conn, ACTIVATE, id=payment["id"])
+        assert [(s.id, s.status) for s in await _subscriptions(conn, user=dev)] == [(activated, "active")]
+
+
+async def test_a_paid_default_plan_is_still_never_bought(owner_engine: AsyncEngine) -> None:
+    """N2: the side's default plan priced above zero (a mistake in plans.yaml) at exactly its price is still refused:
+    the default plan is self-serve only (revision 0001's subscriptions policy), never paid for."""
+    async with as_app(owner_engine) as conn:
+        plans = await _plans(conn)
+        dev = await add_user(conn, "payer")
+        await run(conn, "UPDATE plans SET price_kes_minor = 5000 WHERE id = :id", id=plans["developer_default"])
+        await act(conn, dev)
+        await expect(
+            conn,
+            PAY,
+            "row-level security",
+            **(
+                pay(plans, "dev_month", user=dev, org=None, by=dev)
+                | {"plan": plans["developer_default"], "amount": 5000}
+            ),
+        )
+
+
+async def test_settlement_fails_closed_for_a_real_provider(owner_engine: AsyncEngine) -> None:
+    """Only the fake provider exists (CHECK). If a later revision widens the CHECK, app_settle_payment still never
+    settles that provider's payment as succeeded for its subject: the platform path (REQ-BIL-04) must be added on
+    purpose. Failing or cancelling it stays possible. (The CHECK is dropped inside this rolled-back transaction.)"""
+    async with as_app(owner_engine) as conn:
+        plans = await _plans(conn)
+        dev = await add_user(conn, "payer")
+        await run(conn, "ALTER TABLE payments DROP CONSTRAINT ck_payments_provider_known")
+        real, other = (pay(plans, "dev_month", user=dev, org=None, by=dev, provider="daraja") for _ in range(2))
+        for payment in (real, other):
+            await _pending(conn, payment)
+        await act(conn, dev)
+        await expect(
+            conn,
+            SETTLE,
+            "only the platform settles a real provider's payment",
+            id=real["id"],
+            status="succeeded",
+            code=None,
+        )
+        assert await run(conn, "SELECT status::text FROM payments WHERE id = :id", id=real["id"]) == "pending"
+        assert await run(conn, SETTLE, id=other["id"], status="failed", code="declined") is True
 
 
 async def test_settlement_and_activation_follow_the_test_clock(owner_engine: AsyncEngine) -> None:

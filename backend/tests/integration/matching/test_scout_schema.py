@@ -25,6 +25,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.ids import uuid7
+from tests.integration import world as w
 from tests.integration.schema_v4 import (
     Proposals,
     act,
@@ -246,6 +247,10 @@ async def test_runs_are_written_by_acting_members_and_never_deleted(owner_engine
             params = run_params(scout, a.org, status=status, finished=datetime.now(NAIROBI), error=error)
             await expect(conn, RUN, "row-level security", **params)  # a run starts running
         running = run_params(scout, a.org)
+        dated = RUN.replace("error_code, window_end)", "error_code, window_end, started_at)").replace(
+            ":error, now())", ":error, now(), now() - interval '2 days')"
+        )
+        await expect(conn, dated, "permission denied", **run_params(scout, a.org))  # never forward- or back-dated
         await run(conn, RUN, **running)
         started = await run(
             conn,
@@ -312,7 +317,7 @@ async def test_matches_name_the_current_version_of_a_published_clear_proposal(ow
             "UPDATE agent_matches SET feedback = 'not_relevant', feedback_reason = :reason, feedback_by = :by,"
             " feedback_at = now() WHERE id = :id"
         )
-        await expect(conn, judge, "row-level security", reason="off_niche", by=a.owner, id=match["id"])  # not as self
+        await expect(conn, judge, "a feedback is given as oneself", reason="off_niche", by=a.owner, id=match["id"])
         await expect(conn, judge, "feedback_complete", reason="Not for us!", by=a.reviewer, id=match["id"])
         assert await rowcount(conn, judge, reason="off_niche", by=a.reviewer, id=match["id"]) == 1
         sent = "UPDATE agent_matches SET digest_sent_at = now() WHERE id = :id"
@@ -324,6 +329,67 @@ async def test_matches_name_the_current_version_of_a_published_clear_proposal(ow
         await act(conn, b.owner, b.org)
         for scout_id, org_id in ((scout, b.org), (scout, a.org), (uuid7(), b.org)):
             await expect(conn, MATCH, "no scout of the caller's with that id", **match_params(scout_id, org_id, found))
+
+
+async def test_a_members_own_held_or_hidden_proposal_is_never_matched(owner_engine: AsyncEngine) -> None:
+    """N6: the acting member owns the proposals, so they can read them all; only the policy's own clauses refuse a held
+    one (moderation_state = 'clear') and a hidden one (status = 'published'), while their published, clear one is
+    matched."""
+    async with as_app(owner_engine) as conn:
+        niche = await add_niche(conn)
+        a = await seats(conn)
+        problem = await w.add_problem(conn, a.reviewer, niche)
+        clear, clear_version = await w.add_proposal(conn, a.reviewer, niche, problem)
+        held, held_version = await w.add_proposal(conn, a.reviewer, niche, problem, moderation_state="held")
+        hidden, hidden_version = await w.add_proposal(conn, a.reviewer, niche, problem, status="hidden")
+        scout = await _scout(conn, a.org, a.owner, niche)
+        found = Proposals(a.reviewer, niche, clear, clear_version, clear, clear_version, held, held_version)
+        await act(conn, a.reviewer, a.org)
+        visible = "SELECT count(*) FROM proposals WHERE id = ANY (:ids)"
+        assert await run(conn, visible, ids=[held, hidden]) == 2  # the owner reads both
+        for proposal, version in ((held, held_version), (hidden, hidden_version)):
+            await expect(
+                conn,
+                MATCH,
+                "row-level security",
+                **match_params(scout, a.org, found, proposal=proposal, version=version),
+            )
+        await run(conn, MATCH, **match_params(scout, a.org, found))
+
+
+async def test_a_feedback_is_changed_or_cleared_only_by_its_author(owner_engine: AsyncEngine) -> None:
+    """Another acting member (or the owner role) neither overwrites nor clears a reviewer's feedback, but still records
+    the digest time; the author changes and clears their own; a cleared feedback is anyone's to give again."""
+    async with as_app(owner_engine) as conn:
+        niche = await add_niche(conn)
+        a = await seats(conn)
+        found = await proposals(conn, niche)
+        scout = await _scout(conn, a.org, a.owner, niche)
+        match = match_params(scout, a.org, found)
+        await run(conn, MATCH, **match)
+        judge = (
+            "UPDATE agent_matches SET feedback = CAST(:f AS match_feedback), feedback_reason = NULL,"
+            " feedback_by = :by, feedback_at = now() WHERE id = :id"
+        )
+        clear = (
+            "UPDATE agent_matches SET feedback = NULL, feedback_reason = NULL, feedback_by = NULL, feedback_at = NULL"
+            " WHERE id = :id"
+        )
+        await act(conn, a.reviewer, a.org)
+        assert await rowcount(conn, judge, f="relevant", by=a.reviewer, id=match["id"]) == 1
+        await act(conn, a.owner, a.org)
+        await expect(conn, judge, "only the member who gave a feedback", f="not_relevant", by=a.owner, id=match["id"])
+        await expect(conn, clear, "only the member who gave a feedback", id=match["id"])
+        assert (
+            await rowcount(conn, "UPDATE agent_matches SET digest_sent_at = now() WHERE id = :id", id=match["id"]) == 1
+        )
+        await as_owner(conn)
+        await expect(conn, clear, "only the member who gave a feedback", id=match["id"])
+        await act(conn, a.reviewer, a.org)
+        assert await rowcount(conn, judge, f="not_relevant", by=a.reviewer, id=match["id"]) == 1
+        assert await rowcount(conn, clear, id=match["id"]) == 1
+        await act(conn, a.owner, a.org)
+        assert await rowcount(conn, judge, f="relevant", by=a.owner, id=match["id"]) == 1
 
 
 async def test_deleting_a_scout_removes_its_runs_and_matches(owner_engine: AsyncEngine) -> None:

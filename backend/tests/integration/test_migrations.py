@@ -402,6 +402,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_research_source_is_valid(jsonb)": (False, set()),  # app_create_research_candidate() only
     "app_is_payment_subject(uuid, uuid)": (False, set()),  # the payment definers only
     "scout_row_visible()": (False, set()),  # SECURITY INVOKER: the caller's RLS decides
+    "agent_matches_feedback_guard()": (False, set()),
+    "research_runs_guard()": (False, set()),
     "payments_guard()": (False, set()),
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
@@ -1606,15 +1608,17 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
     assert {row.name for row in insertable} == {c.name for c in TABLES["users"].columns} - {"demo_account"}
 
 
-# Revision 0005: columns only app_create_research_candidate() writes (bridge_app inserts every other column; no UPDATE).
+# Revision 0005: columns bridge_app reads but neither inserts nor updates: the research columns only
+# app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problems": {"research_run_id", "named_orgs"},
     "problem_sources": {"excerpt_ref"},
+    "agent_runs": {"started_at"},
 }
 
 
 @pytest.mark.parametrize(("table", "columns"), sorted(DEFINER_ONLY_COLUMNS.items()))
-async def test_bridge_app_inserts_every_column_but_the_research_ones(
+async def test_bridge_app_inserts_every_column_but_the_databases_ones(
     owner_engine: AsyncEngine, table: str, columns: set[str]
 ) -> None:
     held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), CAST(:p AS text))"
@@ -2202,6 +2206,8 @@ V5_TRIGGERS = {
     ("problems", "problems_research_guard"): ("problems_research_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     # After RLS: reads the organisation's roster.
     ("scout_agents", "scout_agents_recipients"): ("scout_agents_recipients", ROW | ON_INSERT | ON_UPDATE),
+    ("agent_matches", "agent_matches_feedback_guard"): ("agent_matches_feedback_guard", ROW | BEFORE | ON_UPDATE),
+    ("research_runs", "research_runs_guard"): ("research_runs_guard", ROW | BEFORE | ON_UPDATE),
     # Fires first on INSERT (name order): no unique or foreign key error reveals another organisation's scout.
     **{(t, f"{t}_0_visible"): ("scout_row_visible", ROW | BEFORE | ON_INSERT) for t in ("agent_runs", "agent_matches")},
 }
