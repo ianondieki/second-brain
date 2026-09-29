@@ -99,7 +99,7 @@ from collections.abc import Sequence
 from typing import NamedTuple
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0005"
@@ -912,6 +912,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Destructive: drops the scouts, their runs and matches, the research runs, the research columns of problems and
+    their sources, and ``payments``, which are financial records. Under the CLAUDE.md stop rule a downgrade of a
+    database holding any of them is a destructive migration: back the database up and get the human's decision
+    first. The downgrade refuses while ``payments`` has rows unless it is run with ``-x allow_payment_loss=true``
+    (``alembic -x allow_payment_loss=true downgrade 0004``)."""
+    allowed = context.get_x_argument(as_dictionary=True).get("allow_payment_loss") == "true"
+    if not allowed and op.get_bind().execute(sa.text("SELECT EXISTS (SELECT 1 FROM payments)")).scalar():
+        raise RuntimeError(
+            "revision 0005 downgrade: payments holds financial records; back the database up, get the human's"
+            " decision (CLAUDE.md: destructive migration), then run with -x allow_payment_loss=true"
+        )
     # The trigger and the columns of this revision on revision 0002 tables first (a column drop takes its CHECKs,
     # foreign key and index with it), then bridge_app's table-wide INSERT as it was.
     _run_sql("DROP TRIGGER problems_research_guard ON problems;")
