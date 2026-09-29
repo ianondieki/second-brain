@@ -5,8 +5,9 @@
 order: not a signatory (403 ``role_required``: a reviewer never expresses interest, AC-TRACK-8), no fresh second
 factor (403 ``step_up_required``, ADR-002), the organisation not E2 (403 ``org_not_e2``, AC-SCOUT-8) or suspended or
 delisted (403 ``org_unavailable``); a scout match that is not the organisation's or not of that proposal (404), a
-proposal that is not published and clear (404); the developer a member of the organisation (409
-``own_organisation``), an engagement for the pair already (409 ``engagement_exists``); a contact who is not an active
+proposal that is not published and clear, or whose developer is a member of the organisation (the same 404: a
+distinct answer would tell an employer that an author is one of its members; the refusal is audited for staff only),
+an engagement for the pair already (409 ``engagement_exists``); a contact who is not an active
 member (422 ``invalid_contact``) or a contact-by date out of range (422 ``invalid_contact_by``). The database's
 policies (revision 0003) are the backstop: a signatory of an E2 organisation inserts ``ORG_INTEREST`` for the current
 registered version of a published, clear proposal, and its genesis event names the signatory. The engagement's
@@ -47,7 +48,14 @@ from bridge.engagements.service import Party, api_error, app_now, load_holidays,
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
 from bridge.logging import get_logger
-from bridge.models.enums import EngagementOrigin, EngagementState, GrantSource, OrgRole, OrgVerification
+from bridge.models.enums import (
+    AuditActor,
+    EngagementOrigin,
+    EngagementState,
+    GrantSource,
+    OrgRole,
+    OrgVerification,
+)
 from bridge.notifications.em2 import one_line
 from bridge.notifications.in_app import post_in_app
 from bridge.tenancy import signals
@@ -77,11 +85,11 @@ _MONTH = text("SELECT CAST(date_trunc('month', app_clock_now() AT TIME ZONE 'Afr
 _INSERT_GRANT = text(
     "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source, counts_as_unlock,"
     " billing_month, granted_by, granted_at) VALUES (:id, :proposal, :org, :owner, :tier, 'active',"
-    " CAST(:source AS grant_source), :unlock, :month, :owner, now())"
+    " CAST(:source AS grant_source), :unlock, :month, :owner, app_clock_now())"
 )
 _ACTIVATE = text(
-    "UPDATE disclosure_grants SET status = 'active', granted_by = :owner, granted_at = now(), updated_at = now()"
-    " WHERE id = :id AND owner_id = :owner"
+    "UPDATE disclosure_grants SET status = 'active', counts_as_unlock = :unlock, billing_month = :month,"
+    " granted_by = :owner, granted_at = app_clock_now(), updated_at = now() WHERE id = :id AND owner_id = :owner"
 )
 # [[COPY-REVIEW]] the organisation's in-app notice when the developer shares the full proposal.
 SHARED_TITLE: Final = "Full proposal shared"
@@ -124,7 +132,8 @@ async def express_interest(db: AsyncSession, settings: Settings, org: OrgContext
     if proposal is None:
         raise not_found("No published proposal has this id.")
     if await membership_of(db, org.org_id, proposal.owner_id) is not None:
-        raise ApiError(409, "own_organisation", "The developer belongs to your organisation.")
+        await _refuse_own_member(db, body.proposal_id)
+        raise not_found("No published proposal has this id.")
     if (await db.execute(_EXISTING, {"proposal": body.proposal_id, "org": org.org_id})).scalar_one_or_none():
         raise ApiError(409, "engagement_exists", "Your organisation already has an engagement for this proposal.")
     now = await app_now(db)
@@ -178,6 +187,22 @@ async def express_interest(db: AsyncSession, settings: Settings, org: OrgContext
         },
     )
     return engagement.id
+
+
+async def _refuse_own_member(db: AsyncSession, proposal_id: UUID) -> None:
+    """Audit the refusal (the condition only) where no organisation member reads it: a system event on the global
+    chain (``audit_events`` shows an organisation's events to its owners and admins, and an event to its actor), so
+    the audit trail cannot become the oracle the 404 closes. Committed before the 404 is raised."""
+    await audit(
+        db,
+        "engagement.interest_refused",
+        actor_user_id=None,
+        actor_kind=AuditActor.SYSTEM,
+        subject_type="proposal",
+        subject_id=proposal_id,
+        payload={"condition": "own_organisation"},
+    )
+    await db.commit()
 
 
 def _refusal(exc: DBAPIError) -> ApiError:
@@ -234,16 +259,16 @@ async def share_tier2(db: AsyncSession, settings: Settings, party: Party) -> tup
     live = (await db.execute(_LIVE, params)).one_or_none()
     if live is not None and live.status == "active":
         return await share_state(db, engagement), False
+    # The unlock flags are the same however the grant comes about (REQ-BIL-03 counts them later).
+    tagged = bool((await db.execute(_TAGGED, params)).scalar_one())
+    month: date = (await db.execute(_MONTH)).scalar_one()
+    flags = {"unlock": not tagged, "month": month}
     if live is not None:  # the organisation asked first: the request keeps its source
         grant_id, action, source = UUID(str(live.id)), "tier2.grant_activated", str(live.source)
-        await db.execute(_ACTIVATE, {"id": grant_id, "owner": party.user_id})
+        await db.execute(_ACTIVATE, {"id": grant_id, "owner": party.user_id} | flags)
     else:
-        tagged = bool((await db.execute(_TAGGED, params)).scalar_one())
-        month: date = (await db.execute(_MONTH)).scalar_one()
         grant_id, action, source = uuid7(), "tier2.grant_created", GrantSource.ORG_INTEREST.value
-        await db.execute(
-            _INSERT_GRANT, params | {"id": grant_id, "source": source, "unlock": not tagged, "month": month}
-        )
+        await db.execute(_INSERT_GRANT, params | {"id": grant_id, "source": source} | flags)
     await audit(
         db,
         action,

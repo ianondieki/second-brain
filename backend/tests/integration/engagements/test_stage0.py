@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.db import bind_tenant, create_session_factory
 from bridge.matching.scan import clock_now, run_periodic
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import (
@@ -212,6 +213,8 @@ async def test_an_e1_organisation_gets_403_until_e2(owner_engine: AsyncEngine, a
 
 
 async def test_the_developer_may_not_be_a_member(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """P10 security review MINOR (a): the refusal is the 404 of an unavailable proposal (no oracle telling an employer
+    that an author is one of its members), audited where no organisation member reads it."""
     world = await build(owner_engine)
     today = await db_today(owner_engine)
     async with owner_engine.begin() as conn:
@@ -226,7 +229,30 @@ async def test_the_developer_may_not_be_a_member(owner_engine: AsyncEngine, app_
         refused = await signatory.post(
             f"/api/orgs/{world.org.id}/interest", json=interest(world, proposal, None, today)
         )
-        assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "own_organisation")
+        unavailable = await signatory.post(
+            f"/api/orgs/{world.org.id}/interest", json=interest(world, uuid4(), None, today)
+        )
+    assert (refused.status_code, refused.json()) == (unavailable.status_code, unavailable.json())
+    assert refused.status_code == 404
+    [event] = await rows(
+        owner_engine,
+        "SELECT actor_user_id, org_id, actor_kind::text AS kind, payload FROM audit_events"
+        " WHERE action = 'engagement.interest_refused' AND subject_id = :p",
+        p=proposal,
+    )
+    assert (event.actor_user_id, event.org_id, event.kind, event.payload) == (
+        None,
+        None,
+        "system",
+        {"condition": "own_organisation"},
+    )
+    for member in (world.org.signatory, world.org.owner):  # neither the actor nor the organisation's admins see it
+        async with create_session_factory(app_engine)() as db:
+            await bind_tenant(db, user_id=member, org_id=world.org.id)
+            seen = await db.scalar(
+                text("SELECT count(*) FROM audit_events WHERE action = 'engagement.interest_refused'")
+            )
+        assert seen == 0
 
 
 async def test_a_suspended_organisation_cannot_express_interest(

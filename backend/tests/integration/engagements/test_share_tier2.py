@@ -180,6 +180,9 @@ async def test_an_organisations_request_is_activated_and_keeps_its_source(
     assert (shared["grant_id"], shared["source"]) == (str(requested), "manual")
     [grant] = await grants(owner_engine, proposal)
     assert (grant.status, grant.granted_by) == ("active", world.developer)
+    assert grant.counts_as_unlock is True  # the same flags as a new grant (P10 security review MINOR b)
+    assert grant.billing_month is not None
+    assert grant.billing_month.day == 1
 
 
 async def test_a_proposal_no_longer_clear_is_not_shared(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
