@@ -28,6 +28,9 @@ services:
 
   s3:
     mem_limit: 384m
+    # Explicit volume slots: by default SeaweedFS derives them from the free disk (1 GB volumes, seven per bucket),
+    # so a Docker disk with less than about 21 GB free refuses the third bucket's first upload. 64 slots of 128 MB.
+    command: ["server", "-s3", "-dir=/data", "-ip.bind=0.0.0.0", "-master.volumeSizeLimitMB=128", "-volume.max=64"]
 
   migrate:
     # Later files win: the generated demo secrets override any in backend/.env, so the demo database always opens

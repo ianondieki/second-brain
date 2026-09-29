@@ -97,6 +97,15 @@ def test_the_generated_secrets_win_over_backend_env_and_the_api_still_gets_no_si
     assert load(DEV)["services"]["api"]["environment"]["PROVENANCE_SIGNING_KEY"] == ""
 
 
+def test_the_object_store_has_explicit_volume_slots_whatever_the_free_disk() -> None:
+    """SeaweedFS derives its volume slots from the free disk by default (1 GB volumes, seven per bucket): on a small
+    Docker disk the third bucket's first upload fails. The demo sets the slots and a small volume size."""
+    command = load(DEMO)["services"]["s3"]["command"]
+    assert command[:2] == ["server", "-s3"]
+    assert "-volume.max=64" in command
+    assert "-master.volumeSizeLimitMB=128" in command
+
+
 def test_the_migrate_step_seeds_the_demo_after_the_buckets_and_the_signing_key() -> None:
     script = " ".join(load(DEMO)["services"]["migrate"]["command"])
     order = ["alembic upgrade head", "ensure-buckets", "register-key --if-configured", "python -m bridge.seed --demo"]
@@ -201,3 +210,29 @@ def test_docker_compose_validates_the_merged_demo_file(tmp_path: Path) -> None:
     assert merged["services"]["api"]["environment"]["APP_ENV"] == "dev"
     assert merged["services"]["api"]["environment"]["PROVENANCE_SIGNING_KEY"] == ""
     assert merged["services"]["api"]["build"]["args"]["WITH_TEST_CLOCK"] == "true"
+
+
+def test_ci_seeds_the_demo_after_the_egress_lock_and_exports_both_e2e_variables() -> None:
+    """M1 exit (re-check #38): the e2e job gives Playwright a registered certificate and the owner URL, so the
+    /verify record test and the D1 publish test run instead of skipping; nothing is seeded before the lock."""
+    workflow = yaml.safe_load((REPO / ".github" / "workflows" / "pr.yml").read_text(encoding="utf-8"))
+    runs = [str(step.get("run", "")) for step in workflow["jobs"]["e2e"]["steps"]]
+    lock = next(i for i, run in enumerate(runs) if "infra/ci/egress-lock.sh" in run)
+    seed = next(i for i, run in enumerate(runs) if "python -m bridge.seed --demo" in run)
+    playwright = next(i for i, run in enumerate(runs) if "make check-e2e" in run)
+    assert lock < seed < playwright
+    assert "python -m bridge.demo cert-id --wait" in runs[seed]
+    assert "$GITHUB_ENV" in runs[seed]
+    for name in ("E2E_VERIFY_CERT_ID", "E2E_DATABASE_OWNER_URL"):
+        assert f"{name}=" in runs[seed], name
+    assert "::add-mask::" in runs[seed]
+
+
+def test_ci_runs_the_stack_with_both_feature_flags_on() -> None:
+    script = (REPO / "infra" / "ci" / "make-env.sh").read_text(encoding="utf-8")
+    for flag in ("FEATURE_TIER2_ENABLED", "FEATURE_DEALS_ENABLED"):
+        assert f'-e "s|^{flag}=.*|{flag}=true|"' in script, flag
+    for name in ("verify.spec.ts", "proposal-wizard.spec.ts"):
+        text = (REPO / "frontend" / "e2e" / name).read_text(encoding="utf-8")
+        assert "test.skip(!CERT_ID" not in text, name
+        assert "test.skip(!OWNER_DATABASE_URL" not in text, name
