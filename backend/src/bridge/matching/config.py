@@ -35,6 +35,7 @@ _SECTIONS: Final = {
         "top_3_items",
         "first_run_days",
         "preview_items",
+        "failed_runs_per_day",
     },
     "schedule": {"scan_after"},
 }
@@ -46,6 +47,7 @@ _LIMIT_RANGES: Final = {
     "top_3_items": (1, 10),
     "first_run_days": (1, 90),
     "preview_items": (1, 50),
+    "failed_runs_per_day": (1, 20),
 }
 
 
@@ -80,6 +82,7 @@ class Weights:
     top_3_items: int
     first_run_days: int
     preview_items: int
+    failed_runs_per_day: int
     scan_after: time
     budget_bands: tuple[BudgetBand, ...]
 

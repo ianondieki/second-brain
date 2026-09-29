@@ -26,6 +26,7 @@ def test_the_real_file_loads() -> None:
     assert weights.max_model_shift == 5  # until REQ-SCOUT-06's eval gate
     assert (weights.digest_items, weights.top_3_items) == (10, 3)
     assert weights.first_run_days == 30
+    assert weights.failed_runs_per_day == 3
     assert weights.scan_after == time(7, 0)
     assert weights.band("under_500k") is not None
     assert weights.band("nope") is None

@@ -410,3 +410,20 @@ async def test_a_recipient_whose_delivery_fails_leaves_the_matches_undigested(
     assert outcome.digest.recipients == {}
     [match] = await matches(owner_engine, scout)
     assert match.digest_sent_at is None  # the next run's digest lists it
+
+
+async def test_failed_runs_are_retried_at_most_three_times_a_day(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P10 security review MINOR e: a persistent fault stops after limits.failed_runs_per_day failed runs."""
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, world.org, [world.niche])
+
+    async def broken(*args: Any, **kwargs: Any) -> int:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(scan_module, "_insert_match", broken)
+    seen = [(o.status, o.reason) for o in [mine(await weekly(app_engine), scout) for _ in range(4)]]
+    assert seen == [("failed", "scan_failed")] * 3 + [("skipped", "retry_cap")]
+    assert [r.status for r in await runs(owner_engine, scout)] == ["failed"] * 3

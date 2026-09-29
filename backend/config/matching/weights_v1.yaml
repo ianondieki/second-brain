@@ -35,6 +35,8 @@ limits:
   top_3_items: 3          # plans with scout_digest top_3
   first_run_days: 30      # a scout's first scan, and Preview, cover this many days
   preview_items: 10       # Preview shows this many (at most the plan's digest size)
+  failed_runs_per_day: 3  # failed runs a scout may retry per Nairobi day (a persistent fault never re-spends
+                          # model calls every 15 minutes)
 
 schedule:
   scan_after: "07:00"     # EAT: daily and weekly scans start at this time, then run once per Nairobi day or ISO week

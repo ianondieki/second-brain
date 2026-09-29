@@ -16,7 +16,9 @@ is under that member's RLS and every cache (the match rows) is the organisation'
    ``limits.model_top_n`` (``rationale.explain``), the rest carry the code's line;
 4. in one transaction: the matches (``ON CONFLICT DO NOTHING``), a ``scout_match`` signal for each, the cursor
    (daily and weekly runs), and the run completed with its counts. Any failure rolls the step back and marks the run
-   ``failed`` with the code ``scan_failed`` (a failed run may be retried the same day or week);
+   ``failed`` with the code ``scan_failed`` (a failed run may be retried the same day or week, at most
+   ``limits.failed_runs_per_day`` failed runs per scout and Nairobi day, so a persistent fault never re-spends model
+   calls every 15 minutes);
 5. the digest (``digest.send``) of the scout's undigested matches, to its re-checked recipients.
 """
 
@@ -59,6 +61,11 @@ _DUE = text(
     "SELECT scout_id, org_id, act_as_user_id FROM app_scouts_due(:now, CAST(:trigger AS scout_frequency), :proposal)"
 )
 _CLOCK = text("SELECT app_clock_now()")
+_FAILED_TODAY = text(
+    "SELECT count(*) FROM agent_runs WHERE scout_id = :scout AND status = 'failed'"
+    " AND CAST(started_at AT TIME ZONE 'Africa/Nairobi' AS date)"
+    " = CAST(app_clock_now() AT TIME ZONE 'Africa/Nairobi' AS date)"
+)
 _DB_NOW = text("SELECT now()")  # proposals.published_at is the database's own clock, not the test clock
 _FINISH = text(
     "UPDATE agent_runs SET status = CAST(:status AS agent_run_status), finished_at = app_clock_now(),"
@@ -164,6 +171,10 @@ async def scan(deps: ScanDeps, found: Due, trigger: ScoutFrequency, *, proposal_
         if scout.frequency.value not in allowed:
             log.info("scouts.skipped", scout_id=str(scout.id), reason="plan")
             return Outcome(found.scout_id, found.org_id, "skipped", reason="plan")
+        failed = int((await db.execute(_FAILED_TODAY, {"scout": scout.id})).scalar_one())
+        if failed >= deps.weights.failed_runs_per_day:  # a persistent fault: wait for the next Nairobi day
+            log.warning("scouts.skipped", scout_id=str(scout.id), reason="retry_cap", failed_today=failed)
+            return Outcome(found.scout_id, found.org_id, "skipped", reason="retry_cap")
         until: datetime = (await db.execute(_DB_NOW)).scalar_one()
         window = window_of(scout, until, deps.weights, proposal_id)
         start = window.since or (window.after[0] if window.after else None)
