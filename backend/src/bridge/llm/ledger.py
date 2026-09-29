@@ -8,10 +8,13 @@ the ledger, with or without consent (AC-SEC-6). Output text is kept only for tas
 
 Message Batches items (revision 0002): ``reserve`` writes one ``batch_reserved`` row per item of an accepted batch, at
 its estimate; ``settle`` writes the item's final row once (``False`` when it had settled before). Spend follows the
-``llm_spend`` rule: every row counts except a reservation whose item has settled, so an item counts from submission
-and only once. Every row of an item names the tenant (organisation and user) of its reservation: a settlement from
-another tenant is refused, so it can neither cancel the reservation nor move the cost (schema round 5 enforces the
-same with a trigger). ``record`` writes every other row.
+``llm_spend`` rule: every row counts except a reservation whose item has settled for the same tenant, so an item
+counts from submission and only once. A batch is the tenant's (organisation and user) of its earliest reservation
+(``batch_owned``; schema round 6, ``app_llm_batch_owned``): another tenant's later reservation of one of its items
+coexists, counts against that tenant and takes nothing. A settlement is written with the batch tenant's organisation
+and user, whatever the entry names (``app_llm_settle_batch_item``), and only for that tenant or the platform job (no
+organisation, no user); anybody else gets ``LLMBatchNotOwned``, so it can neither cancel a reservation nor move the
+cost. ``record`` writes every other row.
 
 ``LedgerStore`` is the seam; ``InMemoryLedger`` serves tests and fakes, with the same rules. ``check_subject`` runs
 first in every call: a store that cannot write the subject's rows or read its spend refuses the call before anything
@@ -22,12 +25,14 @@ is sent, never after a paid attempt. The SQL store over the ``llm_calls`` table 
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
 from uuid import UUID
+
+from bridge.llm.errors import LLMBatchNotOwned
 
 
 class CallStatus(StrEnum):
@@ -71,6 +76,8 @@ class LedgerEntry:
 
 
 BatchItemKey = tuple[str, str]
+Tenant = tuple[UUID | None, UUID | None]  # (organisation, user)
+HeldKey = tuple[BatchItemKey | None, Tenant]  # the unique indexes: an item within its tenant
 
 
 def item_key(entry: LedgerEntry) -> BatchItemKey | None:
@@ -78,6 +85,11 @@ def item_key(entry: LedgerEntry) -> BatchItemKey | None:
     if entry.batch_id is None or entry.custom_id is None:
         return None
     return entry.batch_id, entry.custom_id
+
+
+def held_key(entry: LedgerEntry) -> HeldKey:
+    """A batch item's row within its tenant (the unique indexes and the ``llm_spend`` rule match on both)."""
+    return item_key(entry), (entry.org_id, entry.user_id)
 
 
 def check_plain(entry: LedgerEntry) -> None:
@@ -109,7 +121,14 @@ class LedgerStore(Protocol):
         ...
 
     async def settle(self, entry: LedgerEntry) -> bool:
-        """Write a batch item's final row unless the item has settled before; True when this call settled it."""
+        """Write a batch item's final row, with the batch tenant's organisation and user, unless the item has settled
+        before; True when this call settled it. ``LLMBatchNotOwned`` unless the store's tenant owns the batch or is
+        the platform job."""
+        ...
+
+    async def batch_owned(self, batch_id: str, *, org_id: UUID | None, user_id: UUID | None) -> bool:
+        """Whether the batch is the tenant's of its earliest reservation (False for a batch with none), before its
+        state or results are read."""
         ...
 
     async def tenant_spent_usd(self, *, org_id: UUID | None, user_id: UUID | None, since: datetime) -> Decimal:
@@ -136,38 +155,50 @@ class InMemoryLedger:
     async def reserve(self, entries: Sequence[LedgerEntry]) -> None:
         for entry in entries:
             check_reservation(entry)
-            self._check_tenant(entry)
-        keys = [item_key(e) for e in entries]
-        held = {item_key(e) for e in self.entries if e.status is CallStatus.BATCH_RESERVED}
+        keys = [held_key(e) for e in entries]
+        held = {held_key(e) for e in self.entries if e.status is CallStatus.BATCH_RESERVED}
         if len(set(keys)) != len(keys) or not held.isdisjoint(keys):
             raise ValueError("a batch item is reserved already")
         self.entries.extend(entries)
 
+    def _owner(self, batch_id: str) -> Tenant | None:
+        """The tenant of the batch's earliest reservation (the first written; the database sets its time)."""
+        for e in self.entries:
+            if e.batch_id == batch_id and e.status is CallStatus.BATCH_RESERVED:
+                return e.org_id, e.user_id
+        return None
+
+    async def batch_owned(self, batch_id: str, *, org_id: UUID | None, user_id: UUID | None) -> bool:
+        owner = self._owner(batch_id)
+        return owner is not None and owner == (org_id, user_id)
+
     async def settle(self, entry: LedgerEntry) -> bool:
         check_settlement(entry)
-        self._check_tenant(entry)  # before the conflict check, as a BEFORE INSERT trigger runs
-        if item_key(entry) in self._settled():
+        batch_id = str(entry.batch_id)
+        owner = self._owner(batch_id)
+        if owner is None or (entry.org_id, entry.user_id) not in {owner, (None, None)}:
+            raise LLMBatchNotOwned(batch_id)
+        row = replace(entry, org_id=owner[0], user_id=owner[1])
+        holds = {
+            held_key(e) for e in self.entries if e.status is CallStatus.BATCH_RESERVED and item_key(e) == item_key(row)
+        }
+        if holds and held_key(row) not in holds:  # llm_calls_batch_guard, before the conflict check
+            raise ValueError("this batch item's reservations belong to another tenant")
+        if held_key(row) in self._settled():
             return False
-        self.entries.append(entry)
+        self.entries.append(row)
         return True
 
-    def _check_tenant(self, entry: LedgerEntry) -> None:
-        """Every row of a batch item names the organisation and user of its first row (revision 0002 round 5)."""
-        key = item_key(entry)
-        for e in self.entries:
-            if item_key(e) == key and (e.org_id, e.user_id) != (entry.org_id, entry.user_id):
-                raise ValueError("this batch item's rows belong to another tenant")
-
-    def _settled(self) -> set[BatchItemKey | None]:
+    def _settled(self) -> set[HeldKey]:
         return {
-            item_key(e) for e in self.entries if e.batch_id is not None and e.status is not CallStatus.BATCH_RESERVED
+            held_key(e) for e in self.entries if e.batch_id is not None and e.status is not CallStatus.BATCH_RESERVED
         }
 
     def _spend(self, since: datetime) -> Iterator[LedgerEntry]:
         """The ``llm_spend`` rule: every row since ``since`` but a reservation whose item has settled."""
         settled = self._settled()
         for e in self.entries:
-            if e.created_at >= since and not (e.status is CallStatus.BATCH_RESERVED and item_key(e) in settled):
+            if e.created_at >= since and not (e.status is CallStatus.BATCH_RESERVED and held_key(e) in settled):
                 yield e
 
     async def tenant_spent_usd(self, *, org_id: UUID | None, user_id: UUID | None, since: datetime) -> Decimal:

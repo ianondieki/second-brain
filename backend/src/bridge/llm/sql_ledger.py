@@ -21,11 +21,16 @@ logged (``llm.ledger_clamped``, error level) naming the columns. A clamped row s
 so the subject and the platform stop sooner, never later (fail closed); the pre-call caps keep real attempts far
 below the bound.
 
-Message Batches (revision 0002): ``reserve`` inserts an accepted batch's ``batch_reserved`` rows in one transaction;
-``settle`` inserts an item's final row with an untargeted ``ON CONFLICT DO NOTHING`` (the partial unique index allows
-one settlement per item; a targeted conflict clause is refused by RLS for system rows), and a row count of 0 means an
-earlier poll settled it. Both sums follow the ``llm_spend`` rule: the tenant sum reads the view (``security_invoker``,
-so the caller's RLS applies as on ``llm_calls``) and ``app_llm_spend_usd()`` sums it as the owner.
+Message Batches (revision 0002): ``reserve`` inserts an accepted batch's ``batch_reserved`` rows in one transaction
+(the database sets a reservation's ``created_at``). A batch is the tenant's of its earliest reservation:
+``batch_owned`` asks ``app_llm_batch_owned()`` (a SECURITY DEFINER: bridge_app cannot read other tenants' rows or
+system rows) and, for a tenant's handle, that a reservation naming exactly the handle's organisation and user exists,
+so the handle's subject is the one its settlements are written for. ``settle`` writes an item's final row through
+``app_llm_settle_batch_item()``, which writes it with the batch tenant's organisation and user for that tenant or the
+platform job (nothing bound), refuses anybody else (``LLMBatchNotOwned``), and returns false when an earlier poll
+settled the item (``ON CONFLICT DO NOTHING`` on the partial unique index). Both sums follow the ``llm_spend`` rule:
+the tenant sum reads the view (``security_invoker``, so the caller's RLS applies as on ``llm_calls``) and
+``app_llm_spend_usd()`` sums it as the owner.
 
 Stored as the table defines it: ``purpose`` only for consent-covered tasks (NULL for Tier-1-only ones). The entry's
 ``attempt``, ``error`` and ``output`` have no column in ``llm_calls``: the attempt reaches the ``llm.call`` log, errors
@@ -41,13 +46,14 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, Numeric, Uuid, column, func, insert, select, table
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import DateTime, Numeric, Uuid, bindparam, column, func, insert, select, table, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.db import bind_tenant, tenant_of
-from bridge.llm.errors import LLMConfigError
-from bridge.llm.ledger import LedgerEntry, check_plain, check_reservation, check_settlement
+from bridge.llm.errors import LLMBatchNotOwned, LLMConfigError
+from bridge.llm.ledger import CallStatus, LedgerEntry, check_plain, check_reservation, check_settlement
 from bridge.llm.models import LlmCall
 from bridge.llm.registry import Purpose
 from bridge.logging import get_logger
@@ -56,6 +62,29 @@ STOP_REASON_CHARS = 40  # llm_calls.stop_reason; provider stop reasons are short
 MAX_ROW_COST_USD = Decimal(100)  # the llm_calls CHECK on cost_usd (a schema bound, not a spending cap)
 COUNT_COLUMNS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "latency_ms")
 log = get_logger("bridge.llm")
+INSUFFICIENT_PRIVILEGE = "42501"  # app_llm_settle_batch_item: not the caller's batch, or no such batch
+# The row's columns app_llm_settle_batch_item takes, in its order; it writes org_id, user_id and created_at itself.
+SETTLE_COLUMNS = (
+    "batch_id",
+    "custom_id",
+    "id",
+    "task",
+    "purpose",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "cost_usd",
+    "latency_ms",
+    "status",
+    "stop_reason",
+    "trace_id",
+    "inputs",
+)
+SETTLE = text(
+    "SELECT app_llm_settle_batch_item(" + ", ".join(f"p_{name} => :{name}" for name in SETTLE_COLUMNS) + ")"
+).bindparams(bindparam("inputs", type_=JSONB), bindparam("cost_usd", type_=Numeric(12, 6)))
 # The spend rule (revision 0002): every llm_calls row except a batch reservation whose item has settled.
 LLM_SPEND = table(
     "llm_spend",
@@ -161,12 +190,31 @@ class SqlLedger:
 
     async def settle(self, entry: LedgerEntry) -> bool:
         check_settlement(entry)
-        stmt = pg_insert(LlmCall).values(**row_values(entry)).on_conflict_do_nothing()
+        values = row_values(entry)  # its org_id, user_id and created_at are the database's: see SETTLE
+        params = {name: values[name] for name in SETTLE_COLUMNS}
         async with self._session() as db:
-            conn = await db.connection()
-            inserted = (await conn.execute(stmt)).rowcount
+            try:
+                settled = bool((await db.execute(SETTLE, params)).scalar_one())
+            except DBAPIError as exc:
+                if getattr(exc.orig, "sqlstate", None) == INSUFFICIENT_PRIVILEGE:
+                    raise LLMBatchNotOwned(str(entry.batch_id)) from exc
+                raise
             await db.commit()
-        return inserted == 1
+        return settled
+
+    async def batch_owned(self, batch_id: str, *, org_id: UUID | None, user_id: UUID | None) -> bool:
+        async with self._session() as db:
+            owned = bool((await db.execute(select(func.app_llm_batch_owned(batch_id)))).scalar_one())
+            if not owned or (org_id is None and user_id is None):
+                return owned  # a platform job's batch is owned only by a caller with nothing bound
+            calls = LlmCall.__table__.c
+            exact = select(calls.id).where(
+                calls.batch_id == batch_id,
+                calls.status == CallStatus.BATCH_RESERVED.value,
+                calls.org_id.is_not_distinct_from(org_id),
+                calls.user_id.is_not_distinct_from(user_id),
+            )
+            return bool((await db.execute(select(exact.exists()))).scalar_one())
 
     async def tenant_spent_usd(self, *, org_id: UUID | None, user_id: UUID | None, since: datetime) -> Decimal:
         await self.check_subject(org_id=org_id, user_id=user_id)
