@@ -127,3 +127,16 @@ def test_an_llm_screen_adds_reasons_but_never_releases_a_hold() -> None:
     assert merged.reasons == (SECURITY_VULNERABILITY, "spam")
     assert merge(llm).hold is False
     assert merge().reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("field", "text", "reason"),
+    [
+        ("title", "\u0405afaricom overcharges farmers", NAMES_ORG_NEGATIVE),  # Cyrillic S
+        ("summary", "Saf\u0430ricom\u3164is a scam", NAMES_ORG_NEGATIVE),  # Cyrillic a, Hangul filler
+        ("summary", "A vulnerabilit\u0443 in the agent app", SECURITY_VULNERABILITY),  # Cyrillic y
+    ],
+)
+async def test_lookalike_letters_do_not_dodge_a_hold(field: str, text: str, reason: str) -> None:
+    result = await screen(**{field: text})
+    assert reason in result.reasons

@@ -70,3 +70,22 @@ kinds `proposal_published` (first visible publication, or a moderator's approval
   write after its upload fails.
 - Open for the orchestrator: the attestation wording in `bridge/proposals/attestations.py` is `[[COPY-REVIEW]]` draft
   text for G2; REQUIREMENTS.md's AC-IP-5 row still describes the probe route.
+
+## P2 review round 1 (2026-09-29): fixed, and follow-ups
+
+Fixed (red test first each): an "@" before a domain is an email (MAJOR 1); the detectors and the pre-screen read a
+Unicode skeleton (lookalikes, fillers, foreign full stops and digits, defanged forms; MAJOR 2); a moderation decision
+carries the reviewed `subject_version_id` and answers 409 `case_changed` when the author published another version
+meanwhile (MAJOR 3); wider phone separators, a payment keyword after the number, token word counts, lengths checked
+after cleaning (422 `too_long`), only published and clear linked problems count at publishing; tests for the
+concurrent cap, a chunked upload over 20 MB, the audited owner read, the picker and the attestation digest pin.
+
+Follow-ups (not in P2):
+1. db-migrations: the `proposal_versions` SELECT policy lets any signed-in `bridge_app` reader see every registered
+   version of a published, clear proposal, including an older version that was held (a teaser approved at version 2
+   exposes a held version 1 to direct SQL; no endpoint returns older versions today). Add a per-version moderation
+   flag or limit non-owners to `proposals.current_version_id`.
+2. When the LLM pre-screen lands (T2.2/P7), its `security_vulnerability` label must join the approve check in
+   `bridge/admin/moderation.py` (today the rules re-screen the current text).
+3. Commit sizes: several P2 commits exceed the ~300-line guideline (whole modules with their tests); later work
+   splits by concern.

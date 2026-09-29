@@ -10,6 +10,12 @@ Vulnerability content is never made public (REQ-PROP-02): while the subject's cu
 ``security_vulnerability``, ``approve`` answers 409 ``cannot_approve_vulnerability`` and only ``reject`` is possible.
 A false positive is released by its author, who publishes a corrected version; that version is screened again, and
 once it no longer screens as a vulnerability a moderator may approve the case (whose reasons keep the history).
+
+A decision is about what the moderator reviewed: a proposal case carries the proposal's current version
+(``subject_version_id``, the version the preview shows) and the decision must send it back. When the author has
+published another version in the meantime (it joins the open case), the decision answers 409 ``case_changed`` and
+changes nothing; the version is compared again after the subject's row is locked by the moderation function, so a
+version published concurrently cannot slip through. Problems have no versions: their cases carry null.
 Claims, research approval and reports arrive with P15.
 """
 
@@ -19,7 +25,7 @@ from datetime import datetime
 from typing import Any, Final, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +56,7 @@ class CaseOut(BaseModel):
     status: ModerationCaseStatus
     created_at: datetime
     subject_state: ModerationState | None
+    subject_version_id: UUID | None = Field(description="The proposal version the preview shows; null for problems")
     preview: CasePreview
 
 
@@ -61,6 +68,7 @@ class DecisionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: Decision
+    subject_version_id: UUID | None = Field(description="The case's subject_version_id as reviewed (required)")
 
 
 class DecisionOut(BaseModel):
@@ -72,7 +80,7 @@ class DecisionOut(BaseModel):
 _CASES = text(
     "SELECT m.id, m.subject_type, m.subject_id, m.reasons, m.source, m.status, m.created_at,"
     " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, coalesce(p.title, pr.title) AS title,"
-    " coalesce(p.summary, pr.statement) AS body"
+    " coalesce(p.summary, pr.statement) AS body, p.current_version_id AS subject_version_id"
     " FROM moderation_cases m"
     " LEFT JOIN proposals p ON m.subject_type = 'proposal' AND p.id = m.subject_id"
     " LEFT JOIN problems pr ON m.subject_type = 'problem' AND pr.id = m.subject_id"
@@ -93,6 +101,7 @@ async def list_cases(db: AsyncSession, *, unresolved: bool) -> CaseList:
                 status=r.status,
                 created_at=r.created_at,
                 subject_state=r.subject_state,
+                subject_version_id=r.subject_version_id,
                 preview=CasePreview(title=r.title, text=r.body),
             )
             for r in rows
@@ -101,7 +110,8 @@ async def list_cases(db: AsyncSession, *, unresolved: bool) -> CaseList:
 
 
 _CASE = text("SELECT id, subject_type, subject_id, status FROM moderation_cases WHERE id = :id FOR UPDATE")
-_PROPOSAL = text("SELECT owner_id, status, moderation_state FROM proposals WHERE id = :id")
+_PROPOSAL = text("SELECT owner_id, status, moderation_state, current_version_id FROM proposals WHERE id = :id")
+_CURRENT_VERSION = text("SELECT current_version_id FROM proposals WHERE id = :id")
 _MODERATE_PROPOSAL = text("SELECT app_moderate_proposal(:id, CAST(:state AS moderation_state))")
 _MODERATE_PROBLEM = text(
     "SELECT app_moderate_problem(:id, CAST(:state AS moderation_state), CAST(:status AS problem_status))"
@@ -136,12 +146,27 @@ def _refusal(exc: DBAPIError) -> ApiError | None:
     return None
 
 
-async def decide(db: AsyncSession, *, staff_id: UUID, case_id: UUID, decision: Decision) -> DecisionOut:
+def _case_changed() -> ApiError:
+    return ApiError(409, "case_changed", "The author published a new version. Review the case again.")
+
+
+async def _subject_version(db: AsyncSession, subject_type: str, subject_id: UUID) -> UUID | None:
+    if subject_type != "proposal":
+        return None
+    version: UUID | None = (await db.execute(_CURRENT_VERSION, {"id": subject_id})).scalar_one_or_none()
+    return version
+
+
+async def decide(
+    db: AsyncSession, *, staff_id: UUID, case_id: UUID, decision: Decision, subject_version_id: UUID | None
+) -> DecisionOut:
     case = (await db.execute(_CASE, {"id": case_id})).one_or_none()
     if case is None:
         raise not_found("No such case.")
     if case.status not in UNRESOLVED:
         raise ApiError(409, "already_decided", "This case was already decided.")
+    if await _subject_version(db, case.subject_type, case.subject_id) != subject_version_id:
+        raise _case_changed()
     approve = decision == "approve"
     vulnerable = (
         approve
@@ -172,6 +197,11 @@ async def decide(db: AsyncSession, *, staff_id: UUID, case_id: UUID, decision: D
             raise
         await db.rollback()
         raise refusal from None
+    # The moderation function's UPDATE holds the subject's row lock until COMMIT: compare again, so a version
+    # published while this decision ran is not approved or rejected unseen.
+    if await _subject_version(db, case.subject_type, case.subject_id) != subject_version_id:
+        await db.rollback()
+        raise _case_changed()
     outcome = ModerationCaseStatus.APPROVED if approve else ModerationCaseStatus.REJECTED
     await db.execute(_CLOSE, {"status": outcome.value, "staff": staff_id, "id": case_id})
     if (

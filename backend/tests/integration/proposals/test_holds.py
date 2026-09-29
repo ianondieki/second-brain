@@ -17,6 +17,7 @@ from tests.integration.proposals.helpers import (
     Staff,
     cases_about,
     create,
+    decide,
     draft_body,
     publish,
     rows,
@@ -87,8 +88,7 @@ async def test_a_vulnerability_naming_an_org_is_held_and_never_approved(
     assert case["preview"]["title"] == "Cold-chain alerts"
 
     # REQ-PROP-02: vulnerability content is never made public, so a moderator can only reject it.
-    url = f"/api/admin/moderation/cases/{case['id']}/decision"
-    refused = await moderator.post(url, json={"decision": "approve"})
+    refused = await decide(moderator, case, "approve")
     assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "cannot_approve_vulnerability")
     assert (await reader.get(f"/api/proposals/{pid}")).status_code == 404
     assert await visible_to(app_engine, user_of(reader), pid) == 0
@@ -102,7 +102,8 @@ async def test_a_vulnerability_naming_an_org_is_held_and_never_approved(
     assert (second["version_no"], second["moderation"]["state"]) == (2, "held")
     [case] = await cases_about(moderator, pid)
     assert "new_version_of_moderated_proposal" in case["reasons"]
-    decided = await moderator.post(url, json={"decision": "approve"})
+    assert case["subject_version_id"] == second["version_id"]
+    decided = await decide(moderator, case, "approve")
     assert decided.status_code == 200, decided.text
     assert decided.json() == {"id": case["id"], "status": "approved", "subject_state": "clear"}
     card = await reader.get(f"/api/proposals/{pid}")
@@ -122,7 +123,7 @@ async def test_a_rejected_teaser_stays_private(
     moderator = await moderators()
     [case] = await cases_about(moderator, created["id"])
     assert case["reasons"] == ["names_real_org_negative"]
-    rejected = await moderator.post(f"/api/admin/moderation/cases/{case['id']}/decision", json={"decision": "reject"})
+    rejected = await decide(moderator, case, "reject")
     assert rejected.json()["subject_state"] == "rejected"
     reader = await developers(level="d0")
     assert (await reader.get(f"/api/proposals/{created['id']}")).status_code == 404
@@ -155,10 +156,10 @@ async def test_a_held_new_problem_is_not_public_but_the_clean_teaser_is(
     [case] = await cases_about(moderator, problem_id)
     assert case["reasons"] == ["new_developer_problem", "security_vulnerability"]
     assert case["subject_state"] == "held"
-    url = f"/api/admin/moderation/cases/{case['id']}/decision"
-    refused = await moderator.post(url, json={"decision": "approve"})
+    assert case["subject_version_id"] is None  # problems have no versions
+    refused = await decide(moderator, case, "approve")
     assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "cannot_approve_vulnerability")
-    assert (await moderator.post(url, json={"decision": "reject"})).json()["subject_state"] == "rejected"
+    assert (await decide(moderator, case, "reject")).json()["subject_state"] == "rejected"
 
 
 async def test_a_new_version_of_a_rejected_proposal_goes_back_to_the_moderators(
@@ -170,7 +171,7 @@ async def test_a_new_version_of_a_rejected_proposal_goes_back_to_the_moderators(
     await publish(owner, pid)
     moderator = await moderators()
     [case] = await cases_about(moderator, pid)
-    await moderator.post(f"/api/admin/moderation/cases/{case['id']}/decision", json={"decision": "reject"})
+    await decide(moderator, case, "reject")
 
     await owner.patch(f"/api/me/proposals/{pid}", json={"teaser": {"title": "Cold-chain alerts for co-ops"}})
     second = (await publish(owner, pid)).json()
@@ -182,6 +183,39 @@ async def test_a_new_version_of_a_rejected_proposal_goes_back_to_the_moderators(
     assert again["id"] != case["id"]
     assert again["reasons"] == ["new_version_of_moderated_proposal"]
     assert again["preview"]["title"] == "Cold-chain alerts for co-ops"
-    await moderator.post(f"/api/admin/moderation/cases/{again['id']}/decision", json={"decision": "approve"})
+    await decide(moderator, again, "approve")
     assert (await reader.get(f"/api/proposals/{pid}")).json()["version_no"] == 2
     assert await visible_to(app_engine, user_of(reader), pid) == 1
+
+
+async def test_a_decision_is_tied_to_the_version_the_moderator_reviewed(
+    developers: Developers, moderators: Staff, proposal_world: ProposalWorld, app_engine: AsyncEngine
+) -> None:
+    """Review MAJOR 3: a new version merged into an open case is not approved by a decision about the old one."""
+    owner = await developers()
+    brand = proposal_world.org_brand
+    created = await create(owner, draft_body(proposal_world, title=f"Why {brand} overcharges"))
+    pid = created["id"]
+    first = (await publish(owner, pid)).json()
+    moderator = await moderators()
+    [seen] = await cases_about(moderator, pid)
+    assert seen["subject_version_id"] == first["version_id"]
+
+    await owner.patch(f"/api/me/proposals/{pid}", json={"teaser": {"title": f"{brand} are crooks"}})
+    second = (await publish(owner, pid)).json()
+    url = f"/api/admin/moderation/cases/{seen['id']}/decision"
+    stale = await moderator.post(url, json={"decision": "approve", "subject_version_id": seen["subject_version_id"]})
+    assert (stale.status_code, stale.json()["detail"]["code"]) == (409, "case_changed")
+    reader = await developers(level="d0")
+    assert (await reader.get(f"/api/proposals/{pid}")).status_code == 404
+    assert await visible_to(app_engine, user_of(reader), pid) == 0
+
+    [fresh] = await cases_about(moderator, pid)
+    assert fresh["id"] == seen["id"]
+    assert fresh["status"] == "open"
+    assert fresh["subject_version_id"] == second["version_id"]
+    assert fresh["preview"]["title"] == f"{brand} are crooks"
+    assert (await moderator.post(url, json={"decision": "reject"})).status_code == 422  # the version is required
+    rejected = await moderator.post(url, json={"decision": "reject", "subject_version_id": fresh["subject_version_id"]})
+    assert rejected.status_code == 200, rejected.text
+    assert (await reader.get(f"/api/proposals/{pid}")).status_code == 404

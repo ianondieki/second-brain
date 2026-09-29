@@ -154,3 +154,102 @@ def test_blank_values_become_none() -> None:
     cleaned, errors = sanitise({"title": "  <p> </p> ", "summary": ""})
     assert cleaned == {"title": None, "summary": None}
     assert errors == []
+
+
+# --- review round 1 (MAJOR 1, MAJOR 2): "@" before a domain, and Unicode evasions ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Write to janedoe @gmail.com for a demo",
+        "Write to janedoe@ gmail.com for a demo",
+        "Write to janedoe @ gmail.co.ke",
+        "Reach us @gmail.com",
+        "jane<b></b>@gmail.com",
+        "jane<span>@</span>gmail.com",
+    ],
+)
+def test_an_at_sign_before_a_domain_is_an_email(text: str) -> None:
+    assert "contains_email" in [e.code for e in check_field("summary", text)]
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("mail janedoe@gm\u0430il.com", "contains_email"),  # Cyrillic a
+        ("see ex\u0430mple.com", "contains_domain"),  # Cyrillic a
+        ("see example.c\u043em", "contains_domain"),  # Cyrillic o
+        ("see \u0435x\u0430mpl\u0435.\u03bfrg", "contains_domain"),  # Cyrillic e/a, Greek omicron
+        ("see coldchain\u3164.com", "contains_domain"),  # Hangul filler
+        ("see coldchain.\u2800com", "contains_domain"),  # Braille blank
+        ("see cold\u115fchain.co\u1160.ke", "contains_domain"),  # Hangul fillers
+        ("see coldchain\uffa0.com", "contains_domain"),  # halfwidth Hangul filler
+        ("see coldchain\u3002com", "contains_domain"),  # ideographic full stop
+        ("see coldchain\uff61co\uff61ke", "contains_domain"),  # halfwidth ideographic full stop
+        ("call \u0660\u0667\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668", "contains_phone"),  # Arabic-Indic
+        ("call \u06f0\u06f7\u06f1\u06f2 \u06f3\u06f4\u06f5 \u06f6\u06f7\u06f8", "contains_phone"),  # Persian
+        ("call \u0966\u096d\u0967\u0968\u0969\u096a\u096b\u096c\u096d\u096e", "contains_phone"),  # Devanagari
+        ("mail jane@gma\u0301il.com", "contains_email"),  # a combining accent
+    ],
+)
+def test_unicode_evasions_are_seen_through(text: str, code: str) -> None:
+    assert code in [e.code for e in check_field("summary", text)]
+
+
+def test_the_cleaned_text_is_kept_as_written() -> None:
+    cleaned, errors = sanitise(
+        {"summary": "Serves \u0441\u0435\u043b\u043e villages"}
+    )  # Cyrillic "\u0441\u0435\u043b\u043e"
+    assert errors == []
+    assert cleaned == {"summary": "Serves \u0441\u0435\u043b\u043e villages"}
+
+
+def test_an_at_sign_with_a_number_is_not_an_email() -> None:
+    assert check_field("summary", "Pumps run @ 3.5 bar and cost KES 50 @ 10%") == []
+
+
+# --- review round 1 MINORs --------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("call 0712/345/678", "contains_phone"),
+        ("call 0712,345,678", "contains_phone"),
+        ("call 0712_345_678", "contains_phone"),
+        ("Use 123456 till", "contains_payment_number"),
+        ("send to 400200 (paybill)", "contains_payment_number"),
+        ("see coldchain[.]co[.]ke", "contains_domain"),
+        ("see coldchain (.) com", "contains_domain"),
+        ("see coldchain . com", "contains_domain"),
+        ("mail jane (at) example [dot] com", "contains_email"),
+    ],
+)
+def test_more_separators_and_defanged_forms(text: str, code: str) -> None:
+    assert code in [e.code for e in check_field("summary", text)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["10000 farmers till the land", "Scores rose from 2019 till 2021", "It ends here . Then it starts again"],
+)
+def test_ordinary_text_with_the_new_rules_passes(text: str) -> None:
+    assert check_field("summary", text) == []
+
+
+def test_words_count_across_punctuation_and_blank_fillers() -> None:
+    assert word_count("don't stop well-known") == 3
+    assert word_count("a,b,c,d") == 4
+    assert word_count("word\u3164word\u2800word") == 3
+    assert word_count("- -- ---") == 0
+    joined = ",".join(["w"] * 151)
+    assert [e.code for e in check_field("summary", joined)] == ["too_many_words"]
+
+
+def test_the_length_is_checked_after_cleaning() -> None:
+    title = "\ufdfa" * 10  # 10 characters; NFKC makes each one 18
+    [error] = check_field("title", title)
+    assert (error.field, error.code) == ("title", "too_long")
+    assert check_field("title", "x" * 120) == []
+    assert [e.code for e in check_field("new_problem.title", "y" * 91)] == ["too_long"]

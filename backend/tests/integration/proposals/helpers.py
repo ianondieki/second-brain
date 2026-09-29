@@ -229,3 +229,9 @@ async def cases_about(staff: httpx.AsyncClient, subject_id: str, *, decided: boo
     response = await staff.get("/api/admin/moderation/cases", params={"decided": str(decided).lower()})
     assert response.status_code == 200, response.text
     return [c for c in response.json()["items"] if c["subject_id"] == subject_id]
+
+
+async def decide(staff: httpx.AsyncClient, case: dict[str, Any], decision: str) -> httpx.Response:
+    """Decide a case about the version the moderator reviewed (the case's ``subject_version_id``)."""
+    body = {"decision": decision, "subject_version_id": case["subject_version_id"]}
+    return await staff.post(f"/api/admin/moderation/cases/{case['id']}/decision", json=body)

@@ -1,0 +1,65 @@
+{
+  "synthetic": true,
+  "description": "Two answers that fail validation (one is not JSON at all).",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_sch_11",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sure! Here is my verdict: clean"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_sch_12",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\": \"clean\", \"reason\": \"missing the flag\"}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

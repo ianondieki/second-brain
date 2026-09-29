@@ -1,0 +1,40 @@
+{
+  "synthetic": true,
+  "description": "A tool_use stop reason, which the layer does not handle yet.",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_tool_01",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-5",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_syn_01",
+              "name": "lookup",
+              "input": {
+                "q": "x"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

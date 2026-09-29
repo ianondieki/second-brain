@@ -55,6 +55,16 @@ async def test_a_new_draft_is_the_owners_only(
     [version] = await rows(owner_engine, "SELECT * FROM proposal_versions WHERE proposal_id = :p", p=created["id"])
     assert SECRET_APPROACH not in str(version._asdict())
 
+    # The owner's own Tier-2 read is audited (docs/spec/06 6.1: every read of the Tier-2 tables), ids only.
+    reads = await rows(
+        owner_engine,
+        "SELECT actor_user_id, payload FROM audit_events WHERE action = 'proposal.tier2_read' AND subject_id = :p",
+        p=created["id"],
+    )
+    assert [(r.actor_user_id, r.payload) for r in reads] == [
+        (user_of(owner), {"version_ids": [draft["id"]], "by_owner": True})
+    ]
+
     listed = (await owner.get("/api/me/proposals")).json()["items"]
     assert [(i["id"], i["status"], i["title"], i["has_draft"]) for i in listed] == [
         (created["id"], "draft", "Cold-chain alerts", True)
@@ -108,6 +118,14 @@ async def test_partial_saves_apply_only_what_was_sent(developers: Developers, pr
         ({"impact_claims": "Pay via till 123456"}, "impact_claims", "contains_payment_number"),
         ({"summary": "See https://example.test"}, "summary", "contains_url"),
         ({"summary": " ".join(["word"] * 151)}, "summary", "too_many_words"),
+        ({"summary": "Write to janedoe @gmail.com"}, "summary", "contains_email"),
+        ({"summary": "Write to jane<b></b>@gmail.com"}, "summary", "contains_email"),
+        ({"summary": "See ex\u0430mple.com"}, "summary", "contains_domain"),
+        (
+            {"problem_statement": "Call \u0660\u0667\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668"},
+            "problem_statement",
+            "contains_phone",
+        ),
     ],
 )
 async def test_contact_details_are_refused_on_save(

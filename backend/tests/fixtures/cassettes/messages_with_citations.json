@@ -1,0 +1,59 @@
+{
+  "synthetic": true,
+  "description": "An answer whose text blocks carry citations (document and web search).",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_cite_01",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"verdict\": \"clean\", ",
+              "citations": [
+                {
+                  "type": "char_location",
+                  "cited_text": "Kenya grid data",
+                  "document_index": 0,
+                  "document_title": "Grid report",
+                  "start_char_index": 0,
+                  "end_char_index": 15
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "\"reason\": \"Cited.\"}",
+              "citations": [
+                {
+                  "type": "web_search_result_location",
+                  "cited_text": "tariffs rose",
+                  "url": "https://example.org/t",
+                  "title": "Tariffs",
+                  "encrypted_index": "syn"
+                }
+              ]
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

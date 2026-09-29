@@ -23,6 +23,7 @@ from bridge.models.enums import (
     ProposalStatus,
     VersionStatus,
 )
+from bridge.proposals.sanitise import MAX_LENGTHS
 
 MAX_PROBLEMS = 5
 MAX_LINKS = 10
@@ -43,14 +44,16 @@ class TeaserIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=MAX_LENGTHS["title"])
     niche_id: UUID | None = None
     county_code: str | None = Field(default=None, pattern=r"^KE-\d{2}$")
     maturity: ProposalMaturity | None = None
     ask: ProposalAsk | None = None
-    problem_statement: str | None = Field(default=None, max_length=2000)
-    impact_claims: str | None = Field(default=None, max_length=1000)
-    summary: str | None = Field(default=None, max_length=1500, description="At most 150 words: what, never how")
+    problem_statement: str | None = Field(default=None, max_length=MAX_LENGTHS["problem_statement"])
+    impact_claims: str | None = Field(default=None, max_length=MAX_LENGTHS["impact_claims"])
+    summary: str | None = Field(
+        default=None, max_length=MAX_LENGTHS["summary"], description="At most 150 words: what, never how"
+    )
 
 
 class ConfidentialIn(BaseModel):
@@ -70,8 +73,8 @@ class NewProblemIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field(min_length=1, max_length=90)
-    statement: str = Field(min_length=1, max_length=2000)
+    title: str = Field(min_length=1, max_length=MAX_LENGTHS["new_problem.title"])
+    statement: str = Field(min_length=1, max_length=MAX_LENGTHS["new_problem.statement"])
     niche_id: UUID | None = Field(default=None, description="Defaults to the proposal's niche")
 
 

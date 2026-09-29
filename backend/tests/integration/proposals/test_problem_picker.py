@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.integration import world as w
-from tests.integration.proposals.helpers import Developers, ProposalWorld
+from tests.integration.proposals.helpers import Developers, ProposalWorld, user_of
 
 
 async def test_the_picker_lists_published_clear_problems_by_niche_and_text(
@@ -47,3 +47,15 @@ async def test_the_picker_lists_published_clear_problems_by_niche_and_text(
     assert len(page["items"]) == 1
     assert (await reader.get("/api/problems", params={"q": "%"})).status_code == 200
     assert (await reader.get("/api/problems", params={"niche": "Bad Slug"})).status_code == 422
+
+
+async def test_the_creators_own_held_problem_is_not_offered(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    """Row-Level Security lets a creator read their own held problem; the picker still offers only clear ones."""
+    reader = await developers()
+    word = f"cistern{uuid4().hex[:8]}"
+    async with owner_engine.begin() as conn:
+        own = await w.add_problem(conn, user_of(reader), proposal_world.niche_id, moderation_state="held")
+        await conn.execute(text("UPDATE problems SET title = :t WHERE id = :id"), {"t": f"Leaky {word}", "id": own})
+    assert (await reader.get("/api/problems", params={"q": word})).json()["items"] == []

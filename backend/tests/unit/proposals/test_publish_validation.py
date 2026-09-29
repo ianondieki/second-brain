@@ -9,11 +9,13 @@ from uuid import uuid4
 
 import pytest
 
-from bridge.proposals import tier2
+from bridge.proposals import attestations, tier2
 from bridge.proposals.editor import PROBLEM_REQUIRED, REQUIRED, attachment_problem, object_key, publish_errors
 from bridge.proposals.router import _file_name
 from bridge.storage.scanner import EICAR
 
+# SHA-256 of "2026-09-29.1" and the three statements, one per line (bridge.proposals.attestations).
+PINNED_DIGEST = "5d40383c0e5543556bbc9221e1df539e66153a74dbd699ce8320101c85e5a9d5"
 COMPLETE: dict[str, Any] = {
     "title": "Cold-chain alerts",
     "niche_id": uuid4(),
@@ -109,3 +111,9 @@ def test_a_tier2_document_round_trips_and_refuses_anything_else() -> None:
         with pytest.raises(tier2.Tier2Error) as caught:
             tier2.decode(bad)
         assert caught.value.__cause__ is None  # never chains the decoder's error, which holds the plaintext
+
+
+def test_the_attestation_text_digest_is_pinned_to_its_version() -> None:
+    """Changing the wording without a new VERSION fails here: stored attestations name (version, SHA-256)."""
+    assert attestations.VERSION == "2026-09-29.1"
+    assert attestations.text_digest().hex() == PINNED_DIGEST
