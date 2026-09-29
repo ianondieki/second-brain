@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import copy
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
 import pytest
 import yaml
+from pydantic import SecretStr
 
-from bridge.config import get_settings
+from bridge.config import FreeSlot, get_settings
 from bridge.llm import registry
 from bridge.llm.errors import LLMConfigError
 from bridge.llm.registry import Purpose
@@ -36,7 +38,8 @@ def raw() -> dict[str, Any]:
 def test_the_real_file_loads_with_the_phase_2_tasks() -> None:
     reg = registry.load(get_settings().llm_models_file)
     assert set(reg.tasks) >= PHASE_2_TASKS
-    assert reg.pricing_status.startswith("placeholder")
+    assert reg.pricing_status == "verified"  # D-37: verified on 2026-09-29 (research/anthropic-prices-2026-09.md)
+    assert reg.prices_verified is True
     tier1_only = {"moderation_prescreen", "over_disclosure_check", "originality_explainer"}
     for name in tier1_only:
         assert reg.task(name).purpose is Purpose.TIER1_ONLY
@@ -118,6 +121,18 @@ def test_unknown_task_is_a_config_error() -> None:
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].pop("output"), "prices need"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=-1), "zero or more"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=True), "number"),
+        (lambda d: d.update(pricing_status="guessed"), "pricing_status"),
+        (lambda d: d.pop("pricing_verified_on"), "pricing_verified_on"),
+        (lambda d: d.update(pricing_verified_on="yesterday"), "pricing_verified_on"),
+        (lambda d: d.pop("pricing_source"), "pricing_source"),
+        (lambda d: d.update(pricing_source="http://prices.example"), "pricing_source"),
+        (lambda d: d.pop("free_providers"), "free_providers"),
+        (lambda d: d["free_providers"].update(max_output_tokens=0), "free_providers.max_output_tokens"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(free_slots=[0]), "free_slots"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(free_slots=[4]), "free_slots"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(free_slots=[1, 1]), "free_slots"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(free_slots="1"), "free_slots"),
+        (lambda d: d["tasks"]["moderation_prescreen"].update(free_slots=[True]), "free_slots"),
     ],
 )
 def test_strict_parsing_refuses(mutate: Any, message: str) -> None:
@@ -196,3 +211,80 @@ def test_every_task_follows_the_spec_09_allocation() -> None:
         assert spec.model in allowed, name
         assert spec.fallback_model is None or spec.fallback_model in allowed - {spec.model}, name
         assert spec.fallback_effort is None or spec.fallback_model is not None, name
+
+
+# ---------------------------------------------------------------------------------------- D-37 (prototype track, P7)
+
+SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing"
+# research/anthropic-prices-2026-09.md (verified 2026-09-29): input, output, cache read, 5m and 1h writes
+VERIFIED_PRICES = {
+    SONNET: ("2", "10", "0.20", "2.50", "4"),
+    HAIKU: ("1", "5", "0.10", "1.25", "2"),
+    OPUS: ("4", "20", "0.20", "5", "8"),
+}
+
+
+def test_the_anthropic_prices_are_the_verified_list_prices() -> None:
+    """D-37: the prices, the verification date and the source page of the research note; batch at 50%."""
+    reg = registry.load(get_settings().llm_models_file)
+    assert (reg.pricing_verified_on, reg.pricing_source) == (date(2026, 9, 29), SOURCE)
+    for model_id, expected in VERIFIED_PRICES.items():
+        p = reg.model(model_id).prices
+        got = (p.input, p.output, p.cache_read, p.cache_write_5m, p.cache_write_1h)
+        assert got == tuple(Decimal(v) for v in expected), model_id
+    assert reg.batch_price_ratio == Decimal("0.5")
+
+
+def test_placeholder_prices_still_parse_but_are_not_verified() -> None:
+    data = raw()
+    data["pricing_status"] = "placeholder-unverified"
+    del data["pricing_verified_on"], data["pricing_source"]
+    reg = registry.parse(data)
+    assert reg.prices_verified is False
+    assert (reg.pricing_verified_on, reg.pricing_source) == (None, None)
+
+
+def test_every_task_lists_the_free_slots_that_may_serve_it() -> None:
+    reg = registry.load(get_settings().llm_models_file)
+    assert all(task.free_slots == (1, 2, 3) for task in reg.tasks.values())
+    data = raw()
+    del data["tasks"]["moderation_prescreen"]["free_slots"]
+    assert registry.parse(data).task("moderation_prescreen").free_slots == ()  # never a free provider unless listed
+
+
+def free_slot(number: int = 2, model: str = "vendor/demo-model", requests: int = 40) -> FreeSlot:
+    return FreeSlot(number, "https://free.example/v1", SecretStr("k"), model, requests, "json_object")
+
+
+def test_a_free_slot_registry_prices_at_zero_and_keeps_only_the_tasks_listing_the_slot() -> None:
+    data = raw()
+    data["tasks"]["originality_explainer"]["free_slots"] = [1]
+    base = registry.parse(data)
+    reg = base.for_free_slot(free_slot())
+    key = registry.free_model_key(free_slot())
+    assert key == "free2:vendor/demo-model"
+    assert set(reg.models) == {key}
+    spec = reg.model(key)
+    assert (spec.supports_effort, spec.daily_requests, spec.max_output_tokens) == (False, 40, 8192)
+    assert "originality_explainer" not in reg.tasks
+    task = reg.task("submission_assistant")
+    assert (task.model, task.effort, task.fallback_model, task.fallback_effort) == (key, None, None, None)
+    assert task.json_schema_format is False  # the schema goes in the prompt for every free provider
+    assert task.allowed_tools == ()
+    assert task.purpose is base.task("submission_assistant").purpose
+    assert task.max_tokens == base.task("submission_assistant").max_tokens
+    usage = TokenUsage(input_tokens=10**6, output_tokens=10**6, cache_read_input_tokens=10**6)
+    assert reg.cost_usd(key, usage) == 0
+    assert reg.estimate_usd(key, input_chars=10**6, max_tokens=4096, cache_writes=True) == 0
+    assert (reg.sanitiser, reg.budget, reg.transport) == (base.sanitiser, base.budget, base.transport)
+
+
+def test_a_free_slot_lowers_a_task_budget_to_the_free_output_cap() -> None:
+    data = raw()
+    data["free_providers"]["max_output_tokens"] = 512
+    reg = registry.parse(data).for_free_slot(free_slot())
+    assert reg.task("moderation_prescreen").max_tokens == 512
+
+
+def test_a_free_model_key_fits_the_ledger_column() -> None:
+    assert len(registry.free_model_key(free_slot(3, "m" * 74))) <= registry.NAME_CHARS
