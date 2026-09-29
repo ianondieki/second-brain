@@ -29,7 +29,9 @@ def test_a_batch_past_the_cap_is_refused_whole(used: int, adding: int) -> None:
     with pytest.raises(PlanLimitExceeded) as info:
         check_room(SETTINGS, ent("dev_free"), "tags_per_proposal", used=used, adding=adding)
     assert info.value.status_code == 402
-    assert info.value.detail == {
+    detail = info.value.detail
+    assert isinstance(detail, dict)
+    assert detail == {
         "code": "plan_limit",
         "message": "This needs a higher plan.",
         "limit_key": "tags_per_proposal",
