@@ -193,6 +193,20 @@ async def test_cancel_answers_totp_already_enabled_when_two_step_sign_in_is_on(
     assert len(row["totp_recovery_hashes"]) == 10
 
 
+async def test_setup_cannot_start_again_while_two_step_sign_in_is_on(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    """Checked under the lock before the re-auth: no new pending secret beside the active one."""
+    address = await verified(client)
+    await enrolled(client)
+    before = await user_row(owner_engine, address)
+    again = await client.post(ENROL, json={"password": PASSWORD})
+    assert error(again) == (409, "totp_already_enabled")
+    after = await user_row(owner_engine, address)
+    assert after["totp_pending_enc"] is None
+    assert after["totp_secret_enc"] == before["totp_secret_enc"]
+
+
 async def test_cancel_needs_a_signed_in_session(client: httpx.AsyncClient) -> None:
     assert error(await client.delete(ENROL)) == (401, "unauthenticated")
 
@@ -337,6 +351,16 @@ async def test_new_recovery_codes_need_a_recent_second_factor(
             {"e": address},
         )
     assert error(await client.post(CODES)) == (403, "step_up_required")
+    assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old)
+
+
+async def test_new_recovery_codes_refuse_a_cross_site_request(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = await verified(client)
+    old = await enrolled(client)
+    del client.headers["X-CSRF-Token"]
+    assert error(await client.post(CODES)) == (403, "csrf_failed")
     assert sorted((await user_row(owner_engine, address))["totp_recovery_hashes"]) == hashes_of(old)
 
 
