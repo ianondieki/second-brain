@@ -24,24 +24,6 @@ function requiredKey(field: FieldName): RequiredKey {
   return field in REQUIRED_KEY ? REQUIRED_KEY[field as keyof typeof REQUIRED_KEY] : "other";
 }
 
-const ISSUE_CODES = [
-  "contains_url",
-  "contains_domain",
-  "contains_email",
-  "contains_phone",
-  "contains_payment_number",
-  "too_long",
-  "too_many_words",
-  "problem_required",
-  "unknown",
-  "notWeb",
-  "tooMany",
-  "tooLong",
-] as const;
-type IssueCode = (typeof ISSUE_CODES)[number];
-const KNOWN_CODES: ReadonlySet<string> = new Set(ISSUE_CODES);
-const isIssueCode = (code: string): code is IssueCode => KNOWN_CODES.has(code);
-
 function maxFor({ field, code }: FieldIssue): number | undefined {
   if (code === "too_many_words") return MAX_SUMMARY_WORDS;
   if (code === "tooMany") return MAX_LINKS;
@@ -56,8 +38,10 @@ export function useIssueMessage() {
   return useCallback(
     (issue: FieldIssue): string => {
       if (issue.code === "required") return t(`required.${requiredKey(issue.field)}`);
-      if (isIssueCode(issue.code)) return t(`issue.${issue.code}`, { max: maxFor(issue) ?? 0 });
-      return t("issue.other");
+      // A code without its own message (a finding added to the API later) gets the general one.
+      const key = `issue.${issue.code}` as "issue.other";
+      const message = t(key, { max: maxFor(issue) ?? 0 });
+      return message === `ideaEditor.${key}` ? t("issue.other") : message;
     },
     [t],
   );
