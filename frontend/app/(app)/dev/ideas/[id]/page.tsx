@@ -29,6 +29,10 @@ import { fileSizeParts } from "../files";
 import { ideaStatus, type IdeaStatus } from "../status";
 import { IdeaStatusBadge } from "../IdeaStatusBadge";
 import { DeleteIdea } from "./DeleteIdea";
+import { ideaTags, ideaViews } from "./pitch/data";
+import { pitchesLeft, pitchHref } from "./pitch/picker";
+import { Pitches } from "./Pitches";
+import { WhoHasSeen } from "./WhoHasSeen";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
   const t = await getTranslations("ideas");
@@ -44,8 +48,9 @@ function shownVersion(idea: MyProposal): Version | null {
 
 /**
  * One of your ideas (REQ-PROP-01, REQ-PROV-02): status and any moderation hold, the public teaser, the confidential
- * full details (yours only), and the certificate with its /verify link and PDF. "Edit idea" (or "Continue editing")
- * is the one primary action; a hidden idea has none, since it cannot change.
+ * full details (yours only), and the certificate with its /verify link and PDF. Once registered: its pitches with the
+ * plan's cap and "Who has seen this" (REQ-PROP-03, REQ-PROV-03). The one primary action is "Pitch to companies" for a
+ * published idea with pitches left, else "Edit idea" (or "Continue editing"); a hidden idea has none.
  */
 export default async function IdeaPage({ params, searchParams }: PageProps<"/dev/ideas/[id]">) {
   const me = await requireMe();
@@ -73,6 +78,10 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   const version = shownVersion(idea);
   const hasChanges = idea.current !== null && idea.draft !== null;
   const notice = noticeFor(status, hasChanges);
+  // Pitches and views exist only for a registered idea.
+  const [tags, views] = idea.current ? await Promise.all([ideaTags(idea.id), ideaViews(idea.id)]) : [null, null];
+  const canPitch = status === "published" && tags !== null && pitchesLeft(tags.cap) !== 0;
+  const p = await getTranslations("ideaPitches");
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
@@ -103,18 +112,26 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
       ) : null}
 
       {status !== "hidden" ? (
-        <div className="mt-6">
-          <ButtonLink href={editHref(idea.id)} variant="primary">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          {canPitch ? (
+            <ButtonLink href={pitchHref(idea.id)} variant="primary">
+              {p("pitch")}
+            </ButtonLink>
+          ) : null}
+          <ButtonLink href={editHref(idea.id)} variant={canPitch ? "secondary" : "primary"}>
             {idea.draft ? t("continueDraft") : t("edit")}
           </ButtonLink>
         </div>
       ) : null}
 
+      {idea.current && (status !== "hidden" || (tags?.items.length ?? 0) > 0) ? (
+        <Pitches ideaId={idea.id} status={status} tags={tags} />
+      ) : null}
+      {idea.current ? <WhoHasSeen views={views} /> : null}
+
       {version ? <Teaser version={version} status={status} /> : null}
       {version ? <Confidential version={version} /> : null}
       <Certificate idea={idea} />
-
-      {/* P3: "Who has seen this" (REQ-PROP-03) goes here. P4: "Pitch to companies" (REQ-REPO-01) goes here. */}
 
       {status !== "hidden" ? (
         <section className="mt-12 border-t border-line pt-6">

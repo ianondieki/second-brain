@@ -32,6 +32,8 @@ export const CLIENT_STRING_NAMESPACES = [
   "ideaEditor",
   "ideaFields",
   "ideaDelete",
+  "pitch",
+  "tagWithdraw",
   "orgProposal",
   "trackerActions",
 ] as const;

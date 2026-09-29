@@ -3,7 +3,7 @@ import { Icon, type IconProps } from "./status-icons";
 // One authored icon set: 20 px grid, 1.75 stroke, round joins, currentColor. Icons are decorative: the words next
 // to them carry the meaning (status = icon + text + colour, docs/spec/07 item 6).
 
-export { AlertIcon, CheckIcon, InfoIcon, LockIcon } from "./status-icons";
+export { AlertIcon, CheckIcon, ClockIcon, InfoIcon, LockIcon, SendIcon } from "./status-icons";
 
 export function EyeIcon(props: IconProps) {
   return (
@@ -86,13 +86,12 @@ export function PencilIcon(props: IconProps) {
   );
 }
 
-/** Waiting (held for review, timestamp pending): a clock. */
-export function ClockIcon(props: IconProps) {
+/** Withdrawn or closed (a pitch that no longer waits): a circle with a bar. */
+export function ClosedIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <circle cx="10" cy="10" r="7.5" />
-      <path d="M10 6v4.25l2.75 1.75" />
+      <path d="M6.75 10h6.5" />
     </Icon>
   );
 }
-
