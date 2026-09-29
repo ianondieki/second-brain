@@ -7,7 +7,7 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { AlertIcon, CheckIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
@@ -71,6 +71,8 @@ const AUTOSAVE_MS = 1200;
 // The API calls load with the first save, search or publish, not with the page: nothing is sent before someone types
 // (docs/spec/07 item 5, the 150 KB budget; the same on-demand pattern as settings/security/lazy.ts).
 const loadCalls = (): Promise<Calls> => import("../calls");
+// The first save needs only the save path (a smaller chunk than all the calls).
+const loadSave = (): Promise<Pick<Calls, "saveState">> => import("../save");
 
 /** Which fields each state key feeds, so an edit clears the API's issue on that field. */
 const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
@@ -141,7 +143,8 @@ export function Editor(props: EditorProps) {
     setSave({ kind: "saving" });
     let result: Awaited<ReturnType<Calls["saveState"]>>;
     try {
-      result = await (await getCalls()).saveState(idRef.current, latest.current);
+      const save = injected ?? (await loadSave());
+      result = await save.saveState(idRef.current, latest.current);
     } catch {
       // The calls' code could not be fetched (offline).
       result = { outcome: { ok: false, problem: "network", fields: [] }, held: [] };

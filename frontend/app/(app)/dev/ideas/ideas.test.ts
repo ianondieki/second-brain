@@ -15,7 +15,8 @@ import {
 import { attachmentType, fileSizeParts } from "./files";
 import { hasUnpublishedChanges, ideaStatus } from "./status";
 import { stateFromVersion } from "./versions";
-import { fieldIssues, publishRefusal, saveRefusal, uploadRefusal } from "./outcomes";
+import { fieldIssues, saveRefusal } from "./outcomes";
+import { publishRefusal, uploadRefusal } from "./refusals";
 
 // REQ-PROP-01 (F2): the My ideas editor's logic. AC-REPO-4/a is the API's (422 cannot_publish); the screen shows the
 // same checks before publishing and every refusal next to its field.

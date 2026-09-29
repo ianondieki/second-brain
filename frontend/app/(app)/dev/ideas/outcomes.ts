@@ -49,7 +49,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function detail(body: unknown): Record<string, unknown> {
+export function detail(body: unknown): Record<string, unknown> {
   return isRecord(body) && isRecord(body.detail) ? body.detail : {};
 }
 
@@ -72,7 +72,7 @@ const REFERENCE_FIELD: Record<string, FieldIssue> = {
   unknown_problem: { field: "problems", code: "unknown" },
 };
 
-function common(status: number, code: string | undefined): CommonProblem | null {
+export function common(status: number, code: string | undefined): CommonProblem | null {
   if (status === 0) return "network";
   if (status === 401) return code === "mfa_required" ? "mfaRequired" : "signedOut";
   if (status === 429) return "rateLimited";
@@ -82,7 +82,7 @@ function common(status: number, code: string | undefined): CommonProblem | null 
   return null;
 }
 
-function fieldsRefusal<P extends string>(body: unknown, problem: P): Refusal<P> | null {
+export function fieldsRefusal<P extends string>(body: unknown, problem: P): Refusal<P> | null {
   const code = apiErrorCode(body);
   if (code && REFERENCE_FIELD[code]) return { problem, fields: [REFERENCE_FIELD[code]] };
   const fields = fieldIssues(body);
@@ -96,40 +96,4 @@ export function saveRefusal(status: number, body: unknown): Refusal<SaveProblem>
   if (shared) return { problem: shared, fields: [] };
   if (status === 422) return fieldsRefusal<SaveProblem>(body, "fields") ?? { problem: "validation", fields: [] };
   return { problem: "failed", fields: [] };
-}
-
-/** A refused publish (POST /api/me/proposals/{id}/publish). */
-export function publishRefusal(status: number, body: unknown): Refusal<PublishProblem> {
-  const code = apiErrorCode(body);
-  const shared = common(status, code);
-  if (shared) return { problem: shared, fields: [] };
-  if (status === 403 && code === "d1_required") return { problem: "d1Required", fields: [] };
-  if (status === 402) {
-    const limit = detail(body).limit;
-    return { problem: "planLimit", fields: [], limit: typeof limit === "number" ? limit : undefined };
-  }
-  if (status === 409 && code === "attestation_text_outdated") return { problem: "attestationsChanged", fields: [] };
-  if (status === 409 && code === "nothing_to_publish") return { problem: "nothingToPublish", fields: [] };
-  if (status === 422 && code === "attestations_required") return { problem: "attestationsRequired", fields: [] };
-  if (status === 422) return fieldsRefusal<PublishProblem>(body, "fields") ?? { problem: "failed", fields: [] };
-  return { problem: "failed", fields: [] };
-}
-
-const UPLOAD_CODES: Record<string, UploadProblem> = {
-  too_large: "tooLarge",
-  attachment_infected: "infected",
-  unsupported_file: "unsupported",
-  empty_file: "empty",
-  invalid_file_name: "badName",
-  too_many_attachments: "tooMany",
-};
-
-/** A refused attachment upload. */
-export function uploadRefusal(status: number, body: unknown): Refusal<UploadProblem> {
-  const code = apiErrorCode(body);
-  const shared = common(status, code);
-  if (shared) return { problem: shared, fields: [] };
-  if (status === 413) return { problem: "tooLarge", fields: [] };
-  const known = code ? UPLOAD_CODES[code] : undefined;
-  return { problem: known ?? "failed", fields: [] };
 }

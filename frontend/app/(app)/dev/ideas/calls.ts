@@ -1,64 +1,21 @@
 import { api, withCsrf, type ApiClient } from "@/lib/api/client";
 
-import { draftBody } from "./draft";
 import type {
   Attachment,
   Attestations,
   AttestationText,
-  DraftBody,
-  EditorState,
-  MyProposal,
   ProblemCard,
   PublishResult,
   Removed,
 } from "./ideas";
-import {
-  publishRefusal,
-  saveRefusal,
-  uploadRefusal,
-  type PublishProblem,
-  type Refusal,
-  type SaveProblem,
-  type UploadProblem,
-} from "./outcomes";
+import { saveRefusal, type PublishProblem, type SaveProblem, type UploadProblem } from "./outcomes";
+import { publishRefusal, uploadRefusal } from "./refusals";
+import { saveDraft, saveState, settle, type Outcome } from "./save";
+
+export { saveDraft, saveState, type Outcome };
 
 // The editor's calls from the browser (same-origin /api through the Next.js rewrite). Each settles into its value or a
 // Refusal the screen words; a thrown fetch (offline, reset) is "network".
-
-export type Outcome<T, P extends string> = { ok: true; value: T } | ({ ok: false } & Refusal<P>);
-
-type Answer = { data?: unknown; error?: unknown; response: Response };
-
-async function settle<T, P extends string>(
-  call: () => Promise<Answer>,
-  refuse: (status: number, body: unknown) => Refusal<P>,
-): Promise<Outcome<T, P>> {
-  let answer: Answer;
-  try {
-    answer = await call();
-  } catch {
-    return { ok: false, ...refuse(0, undefined) };
-  }
-  if (answer.response.ok) return { ok: true, value: answer.data as T };
-  return { ok: false, ...refuse(answer.response.status, answer.error) };
-}
-
-/** Save the draft: a new proposal (POST) the first time, then PATCH. */
-export function saveDraft(id: string | null, body: DraftBody, client: ApiClient = api) {
-  return settle<MyProposal, SaveProblem>(
-    () =>
-      id
-        ? client.PATCH("/api/me/proposals/{proposal_id}", { params: { path: { proposal_id: id } }, body })
-        : client.POST("/api/me/proposals", { body }),
-    saveRefusal,
-  );
-}
-
-/** Save everything the editor holds; `held` names the parts left out as typed (links, a half-written problem). */
-export async function saveState(id: string | null, state: EditorState, client: ApiClient = api) {
-  const plan = draftBody(state);
-  return { outcome: await saveDraft(id, plan.body, client), held: plan.held };
-}
 
 export function publish(id: string, text: AttestationText, attestations: Attestations, client: ApiClient = api) {
   return settle<PublishResult, PublishProblem>(
