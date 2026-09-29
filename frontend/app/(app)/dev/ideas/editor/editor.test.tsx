@@ -6,7 +6,7 @@ import { renderWithIntl } from "@/test/intl";
 import type { Attachment, AttestationText } from "../ideas";
 import { Attachments } from "./Attachments";
 import { calls, NICHES, PROBLEM, READY, renderEditor, settleLazy, TEXT } from "./fixtures";
-import { ProblemPicker, type ProblemPickerProps } from "./ProblemPicker";
+import { preloadPanels, ProblemPicker, type ProblemPickerProps } from "./ProblemPicker";
 
 // REQ-PROP-01 (F2): the three-step editor. docs/spec/07 items 2 and 6 (one primary action per step; the stepper is an
 // <ol> with aria-current="step"), the sanitiser's findings next to their fields, the three attestations and the
@@ -94,6 +94,7 @@ describe("autosave", () => {
           fields: [
             { field: "summary" as const, code: "contains_email" },
             { field: "summary" as const, code: "contains_url" },
+            { field: "title" as const, code: "a_code_added_later" },
           ],
         },
         held: [],
@@ -111,6 +112,8 @@ describe("autosave", () => {
     expect(message).toContain("Remove the email address: the teaser is public");
     expect(message).toContain("Remove the web address: the teaser is public"); // every finding, not the first
     expect(screen.queryByRole("button", { name: "Save again" })).toBeNull(); // saving again cannot help
+    // A finding without its own message gets the general one.
+    expect(screen.getByText("Change this field, then try again.")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("Some fields need changes");
   });
 
@@ -216,10 +219,8 @@ describe("the problem picker", () => {
       onNewStatement: vi.fn(),
       ...overrides,
     };
+    await preloadPanels();
     renderWithIntl(<ProblemPicker {...props} />);
-    await act(async () => {
-      await import("./ProblemPanels");
-    });
     return props;
   }
 

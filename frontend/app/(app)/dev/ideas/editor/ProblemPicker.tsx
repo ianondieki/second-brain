@@ -1,16 +1,23 @@
 "use client";
 
-import { lazy, Suspense, useId, type ReactNode } from "react";
+import { Suspense, use, useId, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
 import { RadioGroup } from "@/components/ui/RadioGroup";
+import { preloadable } from "@/lib/preloadable";
 
 import type { ProblemMode } from "../ideas";
 import type { ProblemPanelsProps } from "./ProblemPanels";
 
 // The picker and the new-problem fields load once a choice is made (docs/spec/07 item 5, the 150 KB budget).
-const ProblemPanels = lazy(() => import("./ProblemPanels").then((m) => ({ default: m.ProblemPanels })));
+const panelsModule = preloadable(() => import("./ProblemPanels"));
+export const preloadPanels = panelsModule;
+
+function ProblemPanels(props: ProblemPanelsProps) {
+  const { ProblemPanels: Panels } = use(panelsModule());
+  return <Panels {...props} />;
+}
 
 export interface ProblemPickerProps extends Omit<ProblemPanelsProps, "mode" | "errors"> {
   /** Null until the developer chooses: a new idea asks first. */

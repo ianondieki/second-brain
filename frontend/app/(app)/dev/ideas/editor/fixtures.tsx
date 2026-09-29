@@ -14,7 +14,7 @@ import {
   type PublishResult,
 } from "../ideas";
 import type { PublishProblem, SaveProblem } from "../outcomes";
-import { Editor, type EditorProps } from "./Editor";
+import { Editor, preloadSteps, type EditorProps } from "./Editor";
 
 // Shared fixtures of the editor's component tests (REQ-PROP-01).
 
@@ -91,14 +91,16 @@ export function calls(overrides: Partial<Calls> = {}) {
 }
 
 /** Lets the lazily loaded steps (Full details, Review) resolve. */
+/** The later steps' code, loaded before a render so the editor reads it synchronously (as the server does). */
 export async function settleLazy() {
   await act(async () => {
-    await Promise.all([import("./DetailsStep"), import("./Review")]);
+    await preloadSteps();
   });
 }
 
 export async function renderEditor(props: Partial<Omit<EditorProps, "calls">> & { calls?: ReturnType<typeof calls> } = {}) {
   const fake = props.calls ?? calls();
+  await preloadSteps();
   renderWithIntl(
     <Editor
       id={null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState, type ComponentProps } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -11,7 +11,7 @@ import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
-import { useHydrated } from "@/lib/hooks/useHydrated";
+import { preloadable } from "@/lib/preloadable";
 
 import type { Calls } from "../calls";
 import {
@@ -35,13 +35,29 @@ import {
 } from "../ideas";
 import type { SaveProblem } from "../outcomes";
 import { useIssueMessage } from "./issues";
-import { ProblemPicker } from "./ProblemPicker";
+import { preloadPanels, ProblemPicker } from "./ProblemPicker";
 import { Stepper } from "./Stepper";
 
 // Steps 2 and 3 load when they are opened, not with the page (docs/spec/07 item 5: at most 150 KB of JS per route;
 // React.lazy, as in settings/security/lazy.ts, adds no runtime).
-const DetailsStep = lazy(() => import("./DetailsStep").then((m) => ({ default: m.DetailsStep })));
-const Review = lazy(() => import("./Review").then((m) => ({ default: m.Review })));
+// Server-rendered whole (preloadable), so the HTML arrives complete and nothing shifts while the chunk loads.
+const detailsModule = preloadable(() => import("./DetailsStep"));
+const reviewModule = preloadable(() => import("./Review"));
+
+/** Starts loading the later steps' code (tests render them at once). */
+export function preloadSteps() {
+  return Promise.all([detailsModule(), reviewModule(), preloadPanels()]);
+}
+
+function DetailsStep(props: ComponentProps<typeof import("./DetailsStep").DetailsStep>) {
+  const { DetailsStep: Step } = use(detailsModule());
+  return <Step {...props} />;
+}
+
+function Review(props: ComponentProps<typeof import("./Review").Review>) {
+  const { Review: Step } = use(reviewModule());
+  return <Step {...props} />;
+}
 
 export interface EditorProps {
   /** The proposal's id; null for a new idea (the first save creates it). */
@@ -100,7 +116,6 @@ export function Editor(props: EditorProps) {
   const t = useStrings("ideaEditor");
   const f = useStrings("ideaFields");
   const issueMessage = useIssueMessage();
-  const hydrated = useHydrated();
   const injected = props.calls;
   const getCalls = () => (injected ? Promise.resolve(injected) : loadCalls());
 
@@ -117,6 +132,7 @@ export function Editor(props: EditorProps) {
   const draftRef = useRef(props.hasDraft ?? props.id !== null);
   const attachmentsRef = useRef(attachments); // the list as the last change left it, read by file actions
   const mounted = useRef(true);
+  const fieldset = useRef<HTMLFieldSetElement>(null);
   const latest = useRef(state); // what the fields hold now, read by saves that run after a render
   const edits = useRef(0); // bumped on every change
   const savedEdits = useRef(0); // the edit count the last successful save covered
@@ -220,6 +236,15 @@ export function Editor(props: EditorProps) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [save.kind]);
 
+  // The fields turn on once React runs, on the DOM node rather than through state: a re-render as hydration ends would
+  // hand a server-rendered step that is still loading new props, and React would render it again on the client
+  // (its HTML removed until the chunk arrives: a layout shift). React never re-applies the constant attributes.
+  useEffect(() => {
+    if (!fieldset.current) return;
+    fieldset.current.disabled = false;
+    fieldset.current.dataset.hydrated = "true";
+  }, []);
+
   // Leaving the editor (a link, the back button) saves what was typed instead of dropping the pending autosave.
   useEffect(() => {
     mounted.current = true;
@@ -288,8 +313,9 @@ export function Editor(props: EditorProps) {
     {/* Disabled until React runs: anything typed into the server-rendered fields before then would be lost (slow
         connections take seconds to hydrate). `data-hydrated` tells tests when the editor is live. */}
     <fieldset
-      disabled={!hydrated}
-      data-hydrated={hydrated ? "true" : "false"}
+      ref={fieldset}
+      disabled
+      data-hydrated="false"
       className="m-0 flex min-w-0 flex-col gap-8 border-0 p-0"
     >
       <div className="flex flex-col gap-3">
