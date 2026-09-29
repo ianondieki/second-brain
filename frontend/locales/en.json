@@ -5,7 +5,7 @@
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing",
-    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is an attestation (D-39 family); stage labels come from the API (state_machine.STAGE_LABELS)"
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is attestation wording held as a draft under D-39 item 7 (DECISIONS-NEEDED; the API stores only a boolean); stage labels come from the API (state_machine.STAGE_LABELS)"
   },
   "app": {
     "name": "Bridge",
@@ -937,7 +937,7 @@
         "org": "Drafted by the organisation, {when}"
       },
       "ipTerms": "Intellectual property",
-      "deemed": "Deemed acceptance",
+      "deemed": "Accepted without a reply",
       "deemedDays": "After {count, plural, one {# day} other {# days}} without a response",
       "notGiven": "Not given",
       "exclusivity": "Exclusivity",
@@ -1009,8 +1009,8 @@
     },
     "history": {
       "title": "History",
-      "chainOk": "Every event below is in its original order and unchanged.",
-      "chainBroken": "The history could not be checked: some events may have been altered.",
+      "chainOk": "The history passed its integrity check when this page loaded.",
+      "chainBroken": "The history did not pass its integrity check when this page loaded: some events may have been altered.",
       "actor": "{name}, {role}"
     },
     "event": {
@@ -1112,7 +1112,7 @@
       "conflict": "That step is no longer possible. The engagement is refreshed to show where it stands.",
       "stepUp": "This step needs a fresh code from your authenticator app.",
       "notAllowed": "This step is not yours to take.",
-      "d2": "Signing an agreement needs identity verification (D2) first.",
+      "d2": "Signing an agreement needs your identity to be verified first.",
       "dealsOff": "Deal steps (the NDA, the agreement, signatures and payments) are not switched on yet.",
       "mfaSetup": "Turn on two-step sign-in to act on this engagement.",
       "signOutside": "An assignment or an exclusive licence cannot be signed in the app. Reopen the terms, or sign outside the platform.",
@@ -1177,8 +1177,8 @@
       "lead": "A new version of the terms. The other party marks it final before either side signs.",
       "ip": "Intellectual property",
       "ipHint": "An assignment or an exclusive licence is signed outside the platform.",
-      "deemed": "Deemed acceptance (days)",
-      "deemedHint": "Days after a milestone is submitted until it counts as accepted without a response. 0 means never.",
+      "deemed": "Days until a milestone counts as accepted without a reply",
+      "deemedHint": "Counted from when the milestone is submitted. 0 means a milestone is accepted only when the other side accepts it.",
       "exclusivity": "Exclusivity (optional)",
       "exclusivityHint": "Leave empty for none.",
       "milestone": "Milestone {number}",

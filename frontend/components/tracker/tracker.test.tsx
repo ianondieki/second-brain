@@ -231,7 +231,7 @@ describe("the History tab", () => {
     const h = history({ chain_verified: false });
     h.events[1] = { ...h.events[1], command: "something_new" };
     renderWithIntl(<HistoryList history={h} />);
-    expect(document.querySelector("[data-chain='unverified']")!.textContent).toContain("could not be checked");
+    expect(document.querySelector("[data-chain='unverified']")!.textContent).toContain("did not pass its integrity check");
     expect(screen.getByText("Step recorded")).toBeTruthy();
   });
 });

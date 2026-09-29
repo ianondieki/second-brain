@@ -5,7 +5,7 @@
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
-    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.* [[SW-REVIEW]] draft Swahili"
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is attestation wording held as a draft under D-39 item 7 (DECISIONS-NEEDED; the API stores only a boolean) [[SW-REVIEW]] draft Swahili"
   },
   "app": {
     "name": "Bridge",
@@ -937,7 +937,7 @@
         "org": "Limeandaliwa na shirika, {when}"
       },
       "ipTerms": "Haki miliki",
-      "deemed": "Kukubaliwa kwa kudhaniwa",
+      "deemed": "Kukubaliwa bila jibu",
       "deemedDays": "Baada ya siku {count, plural, one {#} other {#}} bila jibu",
       "notGiven": "Haijatolewa",
       "exclusivity": "Upekee",
@@ -1009,8 +1009,8 @@
     },
     "history": {
       "title": "Historia",
-      "chainOk": "Kila tukio hapa chini liko katika mpangilio wake wa asili na halijabadilishwa.",
-      "chainBroken": "Historia haikuweza kukaguliwa: huenda baadhi ya matukio yamebadilishwa.",
+      "chainOk": "Historia ilipita ukaguzi wake wa uadilifu ukurasa huu ulipopakia.",
+      "chainBroken": "Historia haikupita ukaguzi wake wa uadilifu ukurasa huu ulipopakia: huenda baadhi ya matukio yamebadilishwa.",
       "actor": "{name}, {role}"
     },
     "event": {
@@ -1112,7 +1112,7 @@
       "conflict": "Hatua hiyo haiwezekani tena. Ushirikiano umesasishwa kuonyesha ulipofikia.",
       "stepUp": "Hatua hii inahitaji nambari mpya kutoka kwa programu yako ya uthibitishaji.",
       "notAllowed": "Hatua hii si yako kuchukua.",
-      "d2": "Kusaini makubaliano kunahitaji uthibitisho wa utambulisho (D2) kwanza.",
+      "d2": "Kusaini makubaliano kunahitaji utambulisho wako uthibitishwe kwanza.",
       "dealsOff": "Hatua za makubaliano (NDA, makubaliano, saini na malipo) bado hazijawashwa.",
       "mfaSetup": "Washa kuingia kwa hatua mbili ili kuchukua hatua kwenye ushirikiano huu.",
       "signOutside": "Uhamisho au leseni ya kipekee haviwezi kusainiwa ndani ya programu. Fungua masharti tena, au saini nje ya jukwaa.",
@@ -1177,8 +1177,8 @@
       "lead": "Toleo jipya la masharti. Upande mwingine huliweka kuwa la mwisho kabla ya yeyote kusaini.",
       "ip": "Haki miliki",
       "ipHint": "Uhamisho au leseni ya kipekee husainiwa nje ya jukwaa.",
-      "deemed": "Kukubaliwa kwa kudhaniwa (siku)",
-      "deemedHint": "Siku baada ya hatua kuwasilishwa hadi ihesabiwe kuwa imekubaliwa bila jibu. 0 inamaanisha kamwe.",
+      "deemed": "Siku hadi hatua ihesabiwe kuwa imekubaliwa bila jibu",
+      "deemedHint": "Huhesabiwa tangu hatua ilipowasilishwa. 0 inamaanisha hatua hukubaliwa tu upande mwingine unapoikubali.",
       "exclusivity": "Upekee (si lazima)",
       "exclusivityHint": "Acha wazi kama hakuna.",
       "milestone": "Hatua {number}",
