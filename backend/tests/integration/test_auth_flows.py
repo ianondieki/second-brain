@@ -366,11 +366,13 @@ async def test_a_step_up_without_two_step_sign_in_is_refused(client: httpx.Async
 async def test_the_second_factor_is_throttled_after_five_attempts(
     client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """One budget for every code checked against the account's secret: the setup confirmation that turned two-step
+    sign-in on was the first of the five attempts, so four wrong step-up codes use up the rest."""
     await signed_in(client)
-    secret = await enrol_totp(client)
     now = datetime.now(UTC)
     monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)  # no attempt ages out of the minute on a slow machine
-    for _ in range(5):
+    secret = await enrol_totp(client)
+    for _ in range(4):
         assert refusal(await client.post("/api/auth/step-up", json={"code": "1234567"})) == (401, "invalid_code")
     right = totp.code_at(secret, _now_counter() + 1)
     assert refusal(await client.post("/api/auth/step-up", json={"code": right})) == (429, "too_many_attempts")

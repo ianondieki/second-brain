@@ -20,6 +20,7 @@ import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from structlog.testing import capture_logs
 
 import bridge.clock
 from bridge.auth import service, sessions, totp
@@ -247,6 +248,27 @@ async def test_a_pending_secret_stored_without_its_start_time_counts_as_expired(
     assert (await user_row(owner_engine, address))["totp_pending_enc"] is None
 
 
+async def test_the_setup_confirmation_is_throttled_like_the_second_factor(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Security review MAJOR: a stolen session could guess codes against the owner's pending secret for its 15
+    minutes. The confirmation shares the second factor's budget: 5 codes a minute for the account from one client IP;
+    then even the right code is refused, and the refusal is logged."""
+    address = await verified(client)
+    secret = await begin(client)
+    freeze_the_clock(monkeypatch)
+    for _ in range(5):
+        assert error(await client.post(CONFIRM, json={"code": NOT_A_CODE})) == (401, "invalid_code")
+    with capture_logs() as logs:
+        refused = await client.post(CONFIRM, json={"code": totp.code_at(secret, now_counter())})
+    assert error(refused) == (429, "too_many_attempts")
+    assert [entry["event"] for entry in logs if entry["event"] == "auth.totp_confirm_throttled"] == [
+        "auth.totp_confirm_throttled"
+    ]
+    row = await user_row(owner_engine, address)
+    assert (row["totp_enabled_at"], row["totp_pending_enc"] is not None) == (None, True)  # still pending, still off
+
+
 async def test_a_cancel_behind_a_committing_confirmation_answers_totp_already_enabled(
     client: httpx.AsyncClient, app_engine: AsyncEngine, owner_engine: AsyncEngine
 ) -> None:
@@ -256,7 +278,9 @@ async def test_a_cancel_behind_a_committing_confirmation_answers_totp_already_en
     secret = await begin(client)
     async with create_session_factory(app_engine)() as first:
         live = await live_session(first, client)
-        await service.confirm_totp_enrolment(first, get_settings(), live, totp.code_at(secret, now_counter()))
+        await service.confirm_totp_enrolment(
+            first, get_settings(), live, totp.code_at(secret, now_counter()), ip=new_ip()
+        )
         cancel = await blocked_behind(first, client.delete(ENROL))
         await first.commit()
     assert error(await cancel) == (409, "totp_already_enabled")

@@ -339,11 +339,12 @@ async def totp_confirm(
     email: EmailDep,
 ) -> RecoveryCodesResponse:
     """Turn two-step sign-in on with a code from the pending secret; returns the recovery codes, shown once. 409
-    no_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared)."""
+    no_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared);
+    429 too_many_attempts after 5 codes a minute, counted with the second step and step-up codes."""
     try:
-        codes, pending = await service.confirm_totp_enrolment(db, settings, live, body.code)
+        codes, pending = await service.confirm_totp_enrolment(db, settings, live, body.code, ip=client_ip(request))
     except service.AuthError as exc:
-        await db.commit()  # keep an expired pending secret cleared
+        await db.commit()  # keep the throttle entry, and an expired pending secret cleared
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)

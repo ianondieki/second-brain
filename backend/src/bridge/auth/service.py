@@ -572,13 +572,21 @@ async def cancel_totp_enrolment(db: AsyncSession, live: sessions.LiveSession) ->
 
 
 async def confirm_totp_enrolment(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, code: str
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, code: str, *, ip: str
 ) -> tuple[list[str], list[PendingEmail]]:
+    """Turn two-step sign-in on with a code from the pending secret. Throttled in the second factor's budget (the
+    "mfa" keys of ``complete_mfa``: 5 codes a minute for the account from one client IP), so a stolen session cannot
+    guess codes against a setup the owner has begun (security review MAJOR); the throttled case is logged."""
+    keys = throttle.keys(settings.secret_key.get_secret_value(), "mfa", str(live.user.id), ip)
+    if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
+        log.warning("auth.totp_confirm_throttled", user_id=str(live.user.id))
+        raise AuthError("too_many_attempts", 429)
     user = await lock_user(db, live.user.id)
     secret = _pending_secret(settings, user)
     if secret is None:
         raise AuthError("no_pending_enrolment", 409)  # the router commits, so an expired secret stays cleared
     check = totp.verify(secret, code, last_counter=None)
+    throttle.record(db, keys, succeeded=check.ok)  # the router commits on a refusal, so a wrong code stays counted
     if not check.ok:
         raise AuthError("invalid_code", 401)
     now = clock.utcnow()
