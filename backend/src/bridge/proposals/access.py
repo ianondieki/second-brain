@@ -2,7 +2,7 @@
 
 One predicate, one answer: the first condition that fails, or the access with what the render needs. In order:
 
-1. ``FEATURE_TIER2_ENABLED`` (403 ``tier2_disabled``; every route tagged ``tier2`` also refuses first, below);
+1. ``FEATURE_TIER2_ENABLED`` (403 ``tier2_disabled``);
 2. the proposal is published, clear of moderation holds and has a registered current version (else 404, as for its
    teaser); its owner may always open their own Tier 2 (a render of the owner is never logged);
 3. the viewer is an active member of the organisation named in the path (else 404: its existence is not confirmed);
@@ -23,8 +23,11 @@ claimant or an active signatory; RLS hides the claims from a reviewer, so this m
 version was accepted, and a refusal by the database after every condition here passed is reported as that condition.
 
 Every refusal answers 403 (404 for 2 and 3) and appends a ``tier2.access_denied`` audit event naming the condition,
-committed before the error is raised. Nothing Tier-2 is read before the predicate passes, and the Tier-2 row itself
-is then read as ``tier2_reader``, whose policy is ``app_tier2_granted`` again.
+committed before the error is raised. Every route tagged ``tier2`` runs ``tier2_gate`` first: tenancy, then the flag
+(a signed-in non-member of the path's organisation gets 404 as on every organisation route, AC-SEC-1; anyone else
+gets 403 ``tier2_disabled`` while the flag is off, whatever their NDA state, AC-SEC-2). Nothing Tier-2 is read
+before the predicate passes, and the Tier-2 row itself is then read as ``tier2_reader``, whose policy is
+``app_tier2_granted`` again. On the owner's own route (no organisation in the path) the owner is the only viewer.
 """
 
 from __future__ import annotations
@@ -255,10 +258,10 @@ def _grant_state(rows: list[Any]) -> GrantState:
 
 
 async def gather(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, *, proposal_id: UUID, org_id: UUID
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, *, proposal_id: UUID, org_id: UUID | None
 ) -> tuple[Facts, str | None]:
-    """The facts for ``live``'s user, ``org_id`` and ``proposal_id``, and the accepted NDA's template version. Binds
-    the request to the organisation once the viewer is an active member of it."""
+    """The facts for ``live``'s user, ``org_id`` (None: the owner's own route) and ``proposal_id``, and the accepted
+    NDA's template version. Binds the request to the organisation once the viewer is an active member of it."""
     user = live.user
     enabled = settings.feature_tier2_enabled
     if not enabled:
@@ -268,8 +271,10 @@ async def gather(
     target = _target(row, owner=is_owner)
     if target is None or is_owner:
         return Facts(enabled=True, target=target, is_owner=is_owner), None
-    membership = (await db.execute(_MEMBERSHIP, {"org": org_id, "user": user.id})).scalar_one_or_none()
-    if membership is None:
+    membership = None
+    if org_id is not None:
+        membership = (await db.execute(_MEMBERSHIP, {"org": org_id, "user": user.id})).scalar_one_or_none()
+    if org_id is None or membership is None:
         return Facts(enabled=True, target=target), None
     await bind_tenant(db, user_id=user.id, org_id=org_id)
     org = (await db.execute(_ORG, {"org": org_id})).one()
@@ -302,7 +307,7 @@ async def can_view_tier2(
     live: sessions.LiveSession,
     *,
     proposal_id: UUID,
-    org_id: UUID,
+    org_id: UUID | None,
     check_nda: bool = True,
 ) -> Access | Condition:
     """The access of ``live``'s user to ``proposal_id``'s current Tier 2 through ``org_id``, or the first failed
@@ -315,6 +320,7 @@ async def can_view_tier2(
     assert target is not None  # first_failure checked it
     if facts.is_owner:
         return Access(target=target, owner=True)
+    assert org_id is not None  # a member of it (first_failure)
     if check_nda:
         keys = {"proposal": proposal_id, "version": target.version_id, "org": org_id}
         if not (await db.execute(_GRANTED, keys)).scalar_one():
@@ -372,7 +378,7 @@ async def require(
     live: sessions.LiveSession,
     *,
     proposal_id: UUID,
-    org_id: UUID,
+    org_id: UUID | None,
     purpose: Purpose,
 ) -> Access:
     """``can_view_tier2`` or the refusal (audited, then raised)."""
@@ -394,22 +400,40 @@ def _path_uuid(request: Request, name: str) -> UUID | None:
         return None
 
 
-async def require_tier2_enabled(
+async def tier2_gate(
     request: Request,
     settings: SettingsDep,
     db: Db,
     live: Annotated[sessions.LiveSession | None, Depends(optional_session)],
 ) -> None:
-    """Router dependency of every route tagged ``tier2`` (AC-SEC-2): with ``FEATURE_TIER2_ENABLED`` off each answers
-    403 ``tier2_disabled`` before anything else is checked, whoever asks and whatever their NDA state."""
+    """Router dependency of every route tagged ``tier2``, before anything else (the path's other parameters
+    included). Tenancy first: a signed-in caller who is not an active member of the path's organisation gets 404, as
+    on every organisation route (AC-SEC-1). Then the flag (AC-SEC-2): while ``FEATURE_TIER2_ENABLED`` is off, everyone
+    else gets 403 ``tier2_disabled``, members whatever their NDA state and anonymous callers alike."""
+    org_param = "org_id" in request.path_params
+    org_id, proposal_id = _path_uuid(request, "org_id"), _path_uuid(request, "proposal_id")
+    purpose = Purpose.NDA if request.url.path.endswith("/nda") else Purpose.RENDER
+    user_id = None if live is None else live.user.id
+    if user_id is not None and org_param:
+        rows = [] if org_id is None else (await db.execute(_MEMBERSHIP, {"org": org_id, "user": user_id})).all()
+        if not rows:
+            raise await refuse(
+                db,
+                Condition.NOT_MEMBER,
+                user_id=user_id,
+                proposal_id=proposal_id,
+                org_id=org_id,
+                purpose=purpose,
+                member=False,
+            )
     if settings.feature_tier2_enabled:
         return
     raise await refuse(
         db,
         Condition.FEATURE_DISABLED,
-        user_id=None if live is None else live.user.id,
-        proposal_id=_path_uuid(request, "proposal_id"),
-        org_id=_path_uuid(request, "org_id"),
-        purpose=Purpose.NDA if request.url.path.endswith("/nda") else Purpose.RENDER,
-        member=False,
+        user_id=user_id,
+        proposal_id=proposal_id,
+        org_id=org_id,
+        purpose=purpose,
+        member=user_id is not None and org_param,
     )
