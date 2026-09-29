@@ -244,7 +244,7 @@
   "companies": {
     "pageTitle": "Companies",
     "title": "Companies",
-    "lead": "Organisations in the directory, grouped by niche. Each one shows how far it is verified.",
+    "lead": "Organisations in the directory, grouped by niche. Each one shows its verification level.",
     "searchLabel": "Search by name",
     "filters": "Filters",
     "filtersChosen": "Filters ({count} chosen)",
@@ -277,7 +277,7 @@
   "verify": {
     "pageTitle": "Check a certificate",
     "title": "Check an authorship certificate",
-    "lead": "Enter the certificate ID to see what was registered and when.",
+    "lead": "Enter the certificate ID to see the fingerprint that was registered and when.",
     "idLabel": "Certificate ID",
     "idHint": "8 to 24 letters and numbers. It is on the certificate and in its QR code.",
     "idInvalid": "Enter the certificate ID as printed: 8 to 24 letters and numbers.",
@@ -285,7 +285,7 @@
     "recordTitle": "Certificate {certId}",
     "statusTimestamped": "Timestamped",
     "statusPending": "Timestamp pending",
-    "explainTimestamped": "A file with this fingerprint was registered here, and an independent timestamp authority confirmed it existed at the time below.",
+    "explainTimestamped": "A file with this fingerprint was registered here, and an independent timestamp authority confirmed it existed by the time below.",
     "explainPending": "A file with this fingerprint was registered here. The independent timestamp is not back yet, so check again later.",
     "hash": "Fingerprint (SHA-256)",
     "time": "Timestamp",

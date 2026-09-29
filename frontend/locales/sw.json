@@ -277,7 +277,7 @@
   "verify": {
     "pageTitle": "Kagua cheti",
     "title": "Kagua cheti cha uandishi",
-    "lead": "Weka kitambulisho cha cheti ili uone kilichosajiliwa na lini.",
+    "lead": "Weka kitambulisho cha cheti ili uone alama ya kidijitali iliyosajiliwa na lini.",
     "idLabel": "Kitambulisho cha cheti",
     "idHint": "Herufi na tarakimu 8 hadi 24. Kiko kwenye cheti na kwenye msimbo wake wa QR.",
     "idInvalid": "Weka kitambulisho cha cheti kama kilivyochapishwa: herufi na tarakimu 8 hadi 24.",
@@ -285,7 +285,7 @@
     "recordTitle": "Cheti {certId}",
     "statusTimestamped": "Kimewekewa muhuri wa muda",
     "statusPending": "Muhuri wa muda unasubiriwa",
-    "explainTimestamped": "Faili yenye alama hii ilisajiliwa hapa, na mamlaka huru ya muhuri wa muda ilithibitisha kwamba ilikuwepo wakati ulioonyeshwa hapa chini.",
+    "explainTimestamped": "Faili yenye alama hii ilisajiliwa hapa, na mamlaka huru ya muhuri wa muda ilithibitisha kwamba ilikuwepo kufikia wakati ulioonyeshwa hapa chini.",
     "explainPending": "Faili yenye alama hii ilisajiliwa hapa. Muhuri huru wa muda bado haujarudi, kwa hivyo kagua tena baadaye.",
     "hash": "Alama ya kidijitali (SHA-256)",
     "time": "Muhuri wa muda",
