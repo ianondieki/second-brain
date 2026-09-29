@@ -130,6 +130,12 @@ async def test_a_spent_cap_falls_back_before_anything_is_sent(earlier: LedgerEnt
     assert [e.status for e in r.ledger.entries[1:]] == [CallStatus.BLOCKED_BUDGET]
 
 
+async def test_an_unavailable_provider_falls_back() -> None:
+    r = routed(provider="anthropic", anthropic=FakeAdapter([LLMUnavailable("the provider cannot serve this")]))
+    result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+    assert (result.demo_fallback, result.fallback_reason) == (True, "unavailable")
+
+
 async def test_an_anthropic_provider_error_falls_back() -> None:
     r = routed(provider="anthropic", anthropic=FakeAdapter([LLMProviderError("HTTP 529", transient=True)]))
     result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)

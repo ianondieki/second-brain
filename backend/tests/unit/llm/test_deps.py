@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import httpx
 import pytest
+import yaml
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
@@ -32,6 +33,7 @@ from bridge.llm.sql_ledger import SqlLedger
 from bridge.main import create_app
 from tests.unit.llm.helpers import settings
 from tests.unit.llm.test_provider_settings import SLOT_1
+from tests.unit.llm.test_registry import raw
 
 
 async def test_startup_builds_the_registry_and_a_keyless_adapter() -> None:
@@ -141,3 +143,36 @@ async def test_a_request_without_a_signed_in_session_gets_no_llm_client() -> Non
             response = await client.get("/_llm_probe")
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "unauthenticated"
+
+
+class Recorder:
+    """Stands in for the module's structlog logger (cached loggers ignore ``capture_logs`` once used)."""
+
+    def __init__(self) -> None:
+        self.events: dict[str, tuple[str, dict[str, Any]]] = {}
+
+    def info(self, event: str, **fields: Any) -> None:
+        self.events[event] = ("info", fields)
+
+    def error(self, event: str, **fields: Any) -> None:
+        self.events[event] = ("error", fields)
+
+
+def test_anthropic_with_unverified_prices_is_logged_at_startup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-37: the runtime starts (every call falls back or is refused) and says why, without any key or price."""
+    data = raw()
+    data["pricing_status"] = "placeholder-unverified"
+    models = tmp_path / "models.yaml"
+    models.write_text(yaml.safe_dump(data), encoding="utf-8")
+    recorder = Recorder()
+    monkeypatch.setattr(deps, "log", recorder)
+    runtime = deps.build_runtime(settings(llm_provider="anthropic", llm_models_file=models))
+    assert runtime.registry.prices_verified is False
+    level, fields = recorder.events["llm.runtime"]
+    assert (level, fields["provider"], fields["prices_verified"], fields["free_slots"]) == (
+        "info",
+        "anthropic",
+        False,
+        [],
+    )
+    assert recorder.events["llm.prices_unverified"][0] == "error"
