@@ -316,7 +316,10 @@ tested only on the password route; "touch no database" wording; `c89ced0`..`daa3
 because the regeneration landed in `77892bc` — recorded as a deviation, history not rewritten). MINOR round done (`f040615`..`9e392fd`: a
 forged callback keeps the live flow cookie; `reload_session` refuses pending changes; live-cookie and four-route
 per-IP tests; 231 passed, auth 96%; 7 mutants killed; orchestrator read the cookie change). Integration merged in
-(`a24dd47`); CI run 36538966699 green; **merged** into the integration branch. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
+(`a24dd47`); CI run 36538966699 green; **merged** into the integration branch.
+REQ-AUTH-01 follow-ups 7 and 8 (backend: `DELETE /api/auth/totp/enrol` under `lock_user`; step-up "new recovery
+codes" route) started on `feat/REQ-AUTH-01-followups-7-8` (impl-backend, worktree `sb-wt/REQ-AUTH-01-f78`); the frontend
+halves follow. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
 New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
 directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
 reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
