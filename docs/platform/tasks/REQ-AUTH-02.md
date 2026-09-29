@@ -45,3 +45,14 @@ Round-2 MINOR follow-ups (branch `feat/REQ-AUTH-02-followups`):
 - `THREAT_MODEL.md` records the 12 h residual for password-less TOTP accounts (link and unlink need only a second
   factor within the step-up window) and the provider-call race.
 - The `TRUSTED_PROXIES` start-up warning is left for Phase 8: the right check depends on the deployed proxy topology.
+
+Pre-merge MINOR round (reviewer and security-reviewer PASS with MINORs):
+
+- The callback clears the flow cookie only when the flow is spent or unusable: missing, unreadable or expired, or
+  its state was presented. A forged callback (another state, or none) leaves a live flow, so it cannot fail the
+  person's genuine return from the provider (SameSite=Lax sends the cookie on a top-level GET).
+- `identities.reload_session` raises `RuntimeError` when the session holds unflushed changes, which
+  `expunge_all()` would drop silently.
+- The forged-callback budget test covers the live-cookie refusals (another state, the provider's error, a missing
+  or oversized code) with nine of the ten callbacks already used; the per-IP re-auth test runs at all four
+  re-auth routes (password change, TOTP enrolment, OAuth link and unlink).
