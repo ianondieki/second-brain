@@ -411,8 +411,7 @@ router calls `app_set_test_clock`, is left out of the production image and is st
 
 ### Result (P5)
 
-Full backend suite: 2210 passed (the integration branch had 1743 at P1's merge plus the P8 screens' tests), total
-coverage 98%; `engagements/` 98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification
+Full backend suite: 2210 passed, 0 failed (P5 adds 23 test files), total coverage 98%; `engagements/` 98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification
 job 100%. `ruff check`, `ruff format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the frontend's
 `eslint`, `tsc`, `vitest` (244 passed) and `api:check` (types regenerated), the copy-lint and
 `check_traceability.py` (0 errors) are clean. The legacy suite passes except two `tests/test_adviser_cli.py` checks
