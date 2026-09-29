@@ -168,6 +168,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype; any hosted release.
 - Decision:
 
+### D-46 · Cross-organisation trend aggregates read by a definer owned by `bridge_owner`, not under `aggregate_worker` (revision 0005; P12)
+- Why: docs/spec/08 says cross-organisation aggregates are read under the `aggregate_worker` role. In revision 0005 the migration role (`bridge_owner`) cannot own an object as `aggregate_worker` (no SET on that role; only the owner may CREATE in `public`; `test_runtime_roles_own_nothing`), so `app_trend_aggregates` is a SECURITY DEFINER owned by `bridge_owner`, executable by `bridge_app` only, returning counts only (no hashes or organisation ids; organisations only from 3). The security review of 0005 (PASS) rated this acceptable for the prototype and asked for this entry, since it changes a spec-08 design statement.
+- Options: (a) keep the definer for the prototype, with an in-function minimum of 3 distinct actors per item and kind and an allowlist of the kinds aggregated (being added in the 0005 fix round); (b) at Phase 4, add a superuser post-migration step or a scoped `GRANT aggregate_worker TO bridge_owner WITH SET TRUE, INHERIT FALSE` plus a transaction-local CREATE so the function is owned by `aggregate_worker`, with a one-function exception in `test_runtime_roles_own_nothing`.
+- Recommended default: (a) now, (b) at Phase 4.
+- Blocks: nothing in the prototype.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
