@@ -16,6 +16,23 @@ Owner ("My ideas"; 404 for anyone else's proposal):
 
 Everyone signed in: ``GET /api/proposals/attestations`` (the statements to confirm before publishing) and
 ``GET /api/proposals/{id}`` (a published, clear teaser: Tier 1 only).
+
+Owner: ``GET /api/me/proposals/{id}/views`` ("Who has seen this": organisation, person, time and NDA version of every
+Tier-2 view).
+
+Tier 2 (REQ-REPO-01, REQ-PROV-03, REQ-SEC-01; ``tier2_router``, tag ``tier2``): ``access.tier2_gate`` answers 404 to
+a signed-in non-member of the path's organisation, then 403 ``tier2_disabled`` to everyone while
+``FEATURE_TIER2_ENABLED`` is off; then ``can_view_tier2`` decides (``access.py``; 404 for a proposal without a public
+teaser, else 403 naming the first missing condition; every refusal audited):
+
+- ``GET /api/orgs/{org_id}/proposals/{id}/nda``: the current Evaluation NDA with the viewer-logging notice, and your
+  acceptance of it (needs every other condition).
+- ``POST /api/orgs/{org_id}/proposals/{id}/nda``: accept what was shown (201; 200 when already accepted; 409
+  ``nda_outdated`` when a newer version exists).
+- ``GET /api/orgs/{org_id}/proposals/{id}/tier2``: the current version's Tier 2 as a marked, uncacheable HTML page;
+  each page is one logged view. There is no JSON form of Tier 2 for organisations.
+- ``GET /api/me/proposals/{id}/tier2``: the owner's preview of that page (marked for the owner, not logged; 404 for
+  anyone else). The owner's JSON reads above are not gated by the flag (REQ-PROV-01 card); this render is.
 """
 
 from __future__ import annotations
@@ -25,13 +42,15 @@ from typing import Annotated, Any
 from urllib.parse import unquote
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi.responses import HTMLResponse
 
 from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody
+from bridge.legal import nda
 from bridge.profiles.verification import D1Developer
-from bridge.proposals import attestations, editor, lifecycle, service
-from bridge.proposals.deps import PreScreenDep, ScannerDep, StoreDep, WrapperDep
+from bridge.proposals import access, attestations, editor, lifecycle, render, service, views
+from bridge.proposals.deps import PreScreenDep, ScannerDep, StoreDep, WrapperDep, get_key_wrapper
 from bridge.proposals.models import MAX_ATTACHMENT_BYTES
 from bridge.proposals.schemas import (
     AttachmentOut,
@@ -47,6 +66,7 @@ from bridge.proposals.schemas import (
 )
 
 router = APIRouter(tags=["proposals"], responses=ERROR_RESPONSES)
+tier2_router = APIRouter(tags=["tier2"], responses=ERROR_RESPONSES, dependencies=[Depends(access.tier2_gate)])
 UNAVAILABLE: dict[int | str, dict[str, Any]] = {503: {"model": ApiErrorBody}}
 MAX_FILE_NAME = 200
 
@@ -185,3 +205,97 @@ async def attestation_text(live: CurrentSession) -> AttestationText:
 async def get_teaser(proposal_id: UUID, live: CurrentSession, db: Db) -> TeaserCard:
     """A published teaser (Tier 1 only). Drafts, held, rejected and hidden proposals are 404 for everyone."""
     return await service.teaser_card(db, proposal_id)
+
+
+@router.get("/api/me/proposals/{proposal_id}/views")
+async def who_has_seen(proposal_id: UUID, live: CurrentSession, db: Db) -> views.ProposalViews:
+    """ "Who has seen this": every organisation view of your proposal's full version, newest first."""
+    return await views.who_has_seen(db, owner_id=live.user.id, proposal_id=proposal_id)
+
+
+# --- Tier 2 for organisations (gated by FEATURE_TIER2_ENABLED, then by can_view_tier2) -------------------------------
+
+HTML_PAGE: dict[int | str, dict[str, Any]] = {
+    200: {"content": {"text/html": {"schema": {"type": "string"}}}, "description": "The marked page"}
+}
+ALREADY_ACCEPTED: dict[int | str, dict[str, Any]] = {
+    200: {"model": nda.NdaAcceptanceOut, "description": "Already accepted"}
+}
+
+
+def _not_for_the_owner(granted: access.Access) -> None:
+    if granted.owner:
+        raise ApiError(409, "nda_not_needed", "You own this proposal: no NDA is needed to read it.")
+
+
+@tier2_router.get("/api/orgs/{org_id}/proposals/{proposal_id}/nda", responses=UNAVAILABLE)
+async def evaluation_nda(
+    org_id: UUID, proposal_id: UUID, live: CurrentSession, db: Db, settings: SettingsDep
+) -> nda.EvaluationNdaOut:
+    """The Evaluation NDA to accept before opening this proposal, with the viewer-logging notice."""
+    granted = await access.require(
+        db, settings, live, proposal_id=proposal_id, org_id=org_id, purpose=access.Purpose.NDA
+    )
+    _not_for_the_owner(granted)
+    return await nda.terms(db, user_id=live.user.id, org_id=org_id, proposal_id=proposal_id)
+
+
+@tier2_router.post(
+    "/api/orgs/{org_id}/proposals/{proposal_id}/nda",
+    status_code=201,
+    responses={**ALREADY_ACCEPTED, **UNAVAILABLE},
+)
+async def accept_evaluation_nda(
+    org_id: UUID,
+    proposal_id: UUID,
+    body: nda.NdaAcceptIn,
+    response: Response,
+    live: CurrentSession,
+    db: Db,
+    settings: SettingsDep,
+) -> nda.NdaAcceptanceOut:
+    """Accept the Evaluation NDA for this proposal, in your name and your organisation's (once per version)."""
+    granted = await access.require(
+        db, settings, live, proposal_id=proposal_id, org_id=org_id, purpose=access.Purpose.NDA
+    )
+    _not_for_the_owner(granted)
+    accepted, created = await nda.accept(db, body, user_id=live.user.id, org_id=org_id, proposal_id=proposal_id)
+    await db.commit()
+    if not created:
+        response.status_code = 200
+    return accepted
+
+
+@tier2_router.get(
+    "/api/orgs/{org_id}/proposals/{proposal_id}/tier2",
+    response_class=HTMLResponse,
+    responses={**HTML_PAGE, **UNAVAILABLE},
+)
+async def tier2_page(
+    org_id: UUID, proposal_id: UUID, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
+) -> HTMLResponse:
+    """The full proposal as a marked page for you (one logged view each time); never cached."""
+    granted = await access.require(
+        db, settings, live, proposal_id=proposal_id, org_id=org_id, purpose=access.Purpose.RENDER
+    )
+    page = await views.render(db, settings, get_key_wrapper(request), live, granted)
+    return HTMLResponse(page, headers=render.HEADERS)
+
+
+@tier2_router.get(
+    "/api/me/proposals/{proposal_id}/tier2",
+    response_class=HTMLResponse,
+    responses={**HTML_PAGE, **UNAVAILABLE},
+)
+async def tier2_preview(
+    proposal_id: UUID, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
+) -> HTMLResponse:
+    """Your proposal's full version as organisations see it, marked for you (not logged as a view)."""
+    granted = await access.require(
+        db, settings, live, proposal_id=proposal_id, org_id=None, purpose=access.Purpose.RENDER
+    )
+    page = await views.render(db, settings, get_key_wrapper(request), live, granted)
+    return HTMLResponse(page, headers=render.HEADERS)
+
+
+router.include_router(tier2_router)  # last: routes added to tier2_router after this line would be missed
