@@ -10,7 +10,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { AlertIcon, CheckIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";

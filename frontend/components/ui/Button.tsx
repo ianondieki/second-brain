@@ -1,5 +1,4 @@
-import Link from "next/link";
-import type { ButtonHTMLAttributes, ComponentProps, MouseEvent } from "react";
+import type { ButtonHTMLAttributes, MouseEvent } from "react";
 
 import { cn } from "./cn";
 
@@ -45,7 +44,7 @@ export function buttonClass(variant: ButtonVariant, className?: string) {
 }
 
 /** `data-primary` marks the screen's single primary action; Playwright asserts at most one per page. */
-function primaryMark(variant: ButtonVariant) {
+export function primaryMark(variant: ButtonVariant) {
   return variant === "primary" ? { "data-primary": "" } : {};
 }
 
@@ -83,13 +82,4 @@ export function Button({
       {children}
     </button>
   );
-}
-
-export interface ButtonLinkProps extends ComponentProps<typeof Link> {
-  variant?: ButtonVariant;
-}
-
-/** A navigation that looks like a button (for example "Create an account" on the landing page). */
-export function ButtonLink({ variant = "secondary", className, ...rest }: ButtonLinkProps) {
-  return <Link className={buttonClass(variant, className)} {...primaryMark(variant)} {...rest} />;
 }

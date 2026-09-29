@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button, ButtonLink, textLinkClass } from "@/components/ui/Button";
+import { Button, textLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";

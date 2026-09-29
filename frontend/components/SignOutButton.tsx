@@ -1,22 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { settle } from "@/lib/api/call";
-import { api } from "@/lib/api/client";
-import { forgetEmail } from "@/lib/auth/session";
+import { useStrings } from "./ClientStrings";
+
+import { withCsrf } from "@/lib/api/csrf";
+import { forgetEmail } from "@/lib/auth/remembered-email";
 
 import { Button } from "./ui/Button";
-import { AlertIcon } from "./ui/icons";
+import { AlertIcon } from "./ui/status-icons";
 
 /**
  * Ends the session (POST /api/auth/logout). Only 204 (ended) or 401 (already gone) count as signed out; anything
  * else, including a network failure, keeps the person here with a warning that they may still be signed in.
  */
 export function SignOutButton() {
-  const t = useTranslations("shell");
+  const t = useStrings("shell");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -24,8 +24,12 @@ export function SignOutButton() {
   async function signOut() {
     setBusy(true);
     setFailed(false);
-    const outcome = await settle(api.POST("/api/auth/logout"));
-    if (outcome.ok || outcome.status === 401) {
+    // Only the CSRF helper, not the typed client: this button is on every signed-in page (the 150 KB JS budget).
+    const status = await withCsrf()("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(
+      (response) => response.status,
+      () => 0, // offline or reset: may still be signed in
+    );
+    if (status === 204 || status === 401) {
       forgetEmail(); // the next person on this device should not see this address offered back
       router.replace("/login");
       router.refresh();

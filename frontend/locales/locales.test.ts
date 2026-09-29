@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CLIENT_STRING_NAMESPACES, PLACEHOLDER_NAMES } from "@/lib/i18n/client-strings";
+
 import en from "./en.json";
 import sw from "./sw.json";
 
@@ -33,6 +35,25 @@ const BANNED = [/theft[\s-]?proof/i, /cannot be stolen/i, /protected idea/i, /pr
 describe("locale files", () => {
   it("have identical keys in English and Swahili", () => {
     expect(Object.keys(SW).sort()).toEqual(Object.keys(EN).sort());
+  });
+
+  // next-intl refuses these as message id segments (the catalogue fails to load and every page answers 500).
+  it("use no key segment next-intl refuses", () => {
+    for (const key of Object.keys(EN)) {
+      for (const segment of key.split(".")) expect(["prototype", "constructor", "__proto__"], key).not.toContain(segment);
+    }
+  });
+
+  // lib/i18n/client-strings.ts formats these namespaces on the server with "{name}" placeholders the browser fills in:
+  // plain arguments only, and every argument name in its list.
+  it("keep the server-formatted namespaces to plain arguments", () => {
+    for (const [key, value] of visible(EN)) {
+      if (!CLIENT_STRING_NAMESPACES.some((ns) => key.startsWith(`${ns}.`))) continue;
+      expect(value, key).not.toMatch(/,\s*(plural|select|selectordinal)\b/);
+      for (const slot of slots(value)) {
+        if (slot.startsWith("{")) expect(PLACEHOLDER_NAMES as readonly string[], key).toContain(slot.slice(1, -1));
+      }
+    }
   });
 
   it("have no empty messages", () => {
