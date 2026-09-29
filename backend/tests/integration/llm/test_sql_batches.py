@@ -9,12 +9,13 @@ missing from the provider's results keeps its reservation.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 import pytest
 from sqlalchemy import RowMapping
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
@@ -22,11 +23,12 @@ from bridge.billing import plans
 from bridge.config import get_settings
 from bridge.db import bind_tenant
 from bridge.ids import uuid7
-from bridge.llm.adapter import BatchItemError, ModelResponse
+from bridge.llm.adapter import BatchItemError, BatchState, ModelResponse
 from bridge.llm.budget import cap_from_limits, day_start, month_start
-from bridge.llm.client import BatchItem
-from bridge.llm.errors import LLMBudgetExceeded, LLMProviderError
+from bridge.llm.client import BatchHandle, BatchItem
+from bridge.llm.errors import LLMBatchNotOwned, LLMBudgetExceeded, LLMProviderError
 from bridge.llm.fakes import FakeAdapter, Reply
+from bridge.llm.ledger import CallStatus, LedgerEntry
 from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext, Result
 from bridge.models.enums import PlanSide
@@ -180,44 +182,107 @@ async def test_a_platform_jobs_batch_settles_once_although_bridge_app_cannot_rea
 async def test_an_item_missing_from_the_results_keeps_its_reservation(
     factory: Factory, owner_engine: AsyncEngine, people: People
 ) -> None:
+    """Not settled, since the results may have been cut short and the item billed: every poll reports it as transient
+    and its reservation keeps counting (fail closed) until a poll whose results hold it settles it once."""
     trace = f"batch-missing-{people.tag}"
     ctx = CallContext(org_id=people.org_a, user_id=people.a, trace_id=trace)
     org_before = await org_spend(factory, people)
+    adapter = ResultsWithout([reply()] * len(IDS) * 3, missing={"b"})  # three polls of three items
     async with factory() as db:
         await bind_tenant(db, user_id=people.a)
-        svc = service(db, factory, ResultsWithout([reply()] * len(IDS), missing={"b"}), registry=BATCHABLE)
+        svc = service(db, factory, adapter, registry=BATCHABLE)
         handle = await svc.batch_submit(TASK, items(*IDS), Verdict, ctx=ctx)
-        done = await svc.batch_poll(handle, Verdict)
-    missing = done.results["b"]
-    assert isinstance(missing, LLMProviderError)
-    assert missing.transient
+        for _ in range(2):
+            done = await svc.batch_poll(handle, Verdict)
+            missing = done.results["b"]
+            assert isinstance(missing, LLMProviderError)
+            assert missing.transient
+            reservations, settlements = split(await stored(owner_engine, trace))
+            assert sorted(r["custom_id"] for r in settlements) == ["a", "c"]
+            assert sorted(r["custom_id"] for r in reservations) == IDS  # b's reservation is still there
+            [held] = [r for r in reservations if r["custom_id"] == "b"]
+            assert await org_spend(factory, people) - org_before == Decimal(held["cost_usd"]) + total(settlements)
+        adapter.missing = set()
+        found = await svc.batch_poll(handle, Verdict)
+    assert isinstance(found.results["b"], Result)
     reservations, settlements = split(await stored(owner_engine, trace))
-    assert sorted(r["custom_id"] for r in settlements) == ["a", "c"]
-    [held] = [r for r in reservations if r["custom_id"] == "b"]
-    assert await org_spend(factory, people) - org_before == Decimal(held["cost_usd"]) + total(settlements)
+    assert sorted(r["custom_id"] for r in settlements) == IDS
+    assert await org_spend(factory, people) - org_before == total(settlements)
+
+
+class Watched(FakeAdapter):
+    """Records which batches' state and results were read."""
+
+    def __init__(self, replies: list[Reply]) -> None:
+        super().__init__(replies)
+        self.reads: list[str] = []
+
+    async def batch_state(self, batch_id: str) -> BatchState:
+        self.reads.append(f"state {batch_id}")
+        return await super().batch_state(batch_id)
+
+    async def batch_results(self, batch_id: str) -> dict[str, ModelResponse | BatchItemError]:
+        self.reads.append(f"results {batch_id}")
+        return await super().batch_results(batch_id)
+
+
+def settlement(batch_id: str, custom_id: str, *, org: UUID | None, user: UUID | None, trace: str) -> LedgerEntry:
+    """An item's final row as ``batch_poll`` writes it, naming ``org`` and ``user``."""
+    return LedgerEntry(
+        id=uuid7(),
+        created_at=clock.utcnow(),
+        org_id=org,
+        user_id=user,
+        task=TASK,
+        purpose="tier1_only",
+        model="m",
+        status=CallStatus.OK,
+        stop_reason="end_turn",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+        cost_usd=Decimal("0.001"),
+        latency_ms=0,
+        trace_id=trace,
+        attempt=1,
+        inputs={"fields": []},
+        batch_id=batch_id,
+        custom_id=custom_id,
+    )
+
+
+async def submit_as_a(factory: Factory, people: People, adapter: FakeAdapter, trace: str) -> BatchHandle:
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        ctx = CallContext(org_id=people.org_a, user_id=people.a, trace_id=trace)
+        return await service(db, factory, adapter, registry=BATCHABLE).batch_submit(
+            TASK, items(*IDS), Verdict, ctx=ctx
+        )
 
 
 async def test_another_tenant_cannot_settle_or_cancel_an_items_reservation(
     factory: Factory, owner_engine: AsyncEngine, people: People
 ) -> None:
-    """Needs revision 0002 round 5 (a batch item's rows keep the tenant of its first row). Organisation B, polling a
-    handle that names A's batch (one provider account serves every tenant), is refused at its first settlement; A's
-    reservations keep counting and A's own poll settles them, as A."""
+    """Organisation B, polling a handle that names A's batch (one provider account serves every tenant), is refused
+    before the batch's state or results are read (``app_llm_batch_owned``); B's ledger settling one of its items
+    directly is refused by ``app_llm_settle_batch_item``. A's reservations keep counting and A's own poll settles
+    them, as A."""
     trace = f"batch-cross-{people.tag}"
-    adapter = FakeAdapter([reply()] * len(IDS) * 2)
+    adapter = Watched([reply()] * len(IDS))
     org_before = await org_spend(factory, people)
-    async with factory() as db:
-        await bind_tenant(db, user_id=people.a)
-        ctx = CallContext(org_id=people.org_a, user_id=people.a, trace_id=trace)
-        handle = await service(db, factory, adapter, registry=BATCHABLE).batch_submit(
-            TASK, items(*IDS), Verdict, ctx=ctx
-        )
+    handle = await submit_as_a(factory, people, adapter, trace)
     held = await stored(owner_engine, trace)
     forged = handle.model_copy(update={"org_id": people.org_b, "user_id": people.b, "trace_id": f"{trace}-b"})
     async with factory() as db:
         await bind_tenant(db, user_id=people.b)
-        with pytest.raises(DBAPIError):
+        with pytest.raises(LLMBatchNotOwned):
             await service(db, factory, adapter, registry=BATCHABLE).batch_poll(forged, Verdict)
+        assert adapter.reads == []  # neither its state nor its results
+        ledger = SqlLedger(factory, caller=db)
+        for org in (people.org_b, None):
+            with pytest.raises(LLMBatchNotOwned):
+                await ledger.settle(settlement(handle.batch_id, "a", org=org, user=people.b, trace=f"{trace}-b"))
     assert await stored(owner_engine, f"{trace}-b") == []
     assert await org_spend(factory, people) - org_before == total(held)  # A's reservations still count
     async with factory() as db:
@@ -227,3 +292,61 @@ async def test_another_tenant_cannot_settle_or_cancel_an_items_reservation(
     assert (reservations, sorted(r["custom_id"] for r in settlements)) == (held, IDS)
     assert {(r["org_id"], r["user_id"]) for r in settlements} == {(people.org_a, people.a)}
     assert await org_spend(factory, people) - org_before == total(settlements)
+
+
+async def test_a_later_reservation_of_another_tenant_does_not_take_the_batch(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """Round 6: a batch is the tenant's of its earliest reservation (created_at is the database's). B reserving an
+    item of A's batch afterwards (a squatted item) is accepted as B's own row, but B still cannot poll the batch,
+    A's poll settles every item as A, and B's reservation keeps counting against B."""
+    trace = f"batch-squat-{people.tag}"
+    adapter = Watched([reply()] * len(IDS))
+    handle = await submit_as_a(factory, people, adapter, trace)
+    squat = replace(
+        settlement(handle.batch_id, "a", org=people.org_b, user=people.b, trace=f"{trace}-b"),
+        status=CallStatus.BATCH_RESERVED,
+        stop_reason=None,
+        cost_usd=Decimal(3),
+    )
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.b)
+        await SqlLedger(factory, caller=db).reserve([squat])
+        forged = handle.model_copy(update={"org_id": people.org_b, "user_id": people.b, "trace_id": f"{trace}-b"})
+        with pytest.raises(LLMBatchNotOwned):
+            await service(db, factory, adapter, registry=BATCHABLE).batch_poll(forged, Verdict)
+    assert adapter.reads == []
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.a)
+        await service(db, factory, adapter, registry=BATCHABLE).batch_poll(handle, Verdict)
+    _, settlements = split(await stored(owner_engine, trace))
+    assert {(r["custom_id"], r["org_id"], r["user_id"]) for r in settlements} == {
+        (custom_id, people.org_a, people.a) for custom_id in IDS
+    }
+    [kept] = await stored(owner_engine, f"{trace}-b")
+    assert (kept["status"], kept["org_id"], kept["user_id"]) == (RESERVED, people.org_b, people.b)
+    async with factory() as db:
+        await bind_tenant(db, user_id=people.b)
+        spent = await SqlLedger(factory, caller=db).tenant_spent_usd(
+            org_id=people.org_b, user_id=people.b, since=month_start(clock.utcnow())
+        )
+    assert spent == Decimal(3)
+
+
+async def test_a_platform_job_settles_an_items_row_with_the_batch_tenant(
+    factory: Factory, owner_engine: AsyncEngine, people: People
+) -> None:
+    """``app_llm_settle_batch_item`` for the platform job (nothing bound), e.g. once the batch's user has left the
+    organisation: the row names the batch tenant's organisation and user, whatever the entry names, and settles once."""
+    trace = f"batch-job-{people.tag}"
+    handle = await submit_as_a(factory, people, FakeAdapter(), trace)
+    org_before = await org_spend(factory, people)
+    async with factory() as db:  # nothing bound
+        ledger = SqlLedger(factory, caller=db)
+        row = settlement(handle.batch_id, "a", org=None, user=None, trace=trace)
+        assert await ledger.settle(row) is True
+        assert await ledger.settle(replace(row, id=uuid7())) is False
+    [done] = split(await stored(owner_engine, trace))[1]
+    assert (done["custom_id"], done["org_id"], done["user_id"]) == ("a", people.org_a, people.a)
+    [held] = [r for r in split(await stored(owner_engine, trace))[0] if r["custom_id"] == "a"]
+    assert await org_spend(factory, people) - org_before == Decimal(done["cost_usd"]) - Decimal(held["cost_usd"])

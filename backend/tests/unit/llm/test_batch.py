@@ -9,7 +9,9 @@ returns every outcome again but writes, dead-letters, queues and counts nothing 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
@@ -17,6 +19,7 @@ from bridge.llm.adapter import BatchItemError, BatchState, ModelResponse
 from bridge.llm.budget import StaticCaps, day_start, month_start
 from bridge.llm.client import BatchHandle, BatchItem
 from bridge.llm.errors import (
+    LLMBatchNotOwned,
     LLMBudgetExceeded,
     LLMConfigError,
     LLMKillSwitch,
@@ -329,17 +332,57 @@ async def test_a_repeat_poll_returns_every_outcome_and_counts_nothing_twice() ->
     assert not errored.transient
 
 
+class Watched(FakeAdapter):
+    """Records which batches' state and results were read."""
+
+    def __init__(self, replies: list[Reply]) -> None:
+        super().__init__(replies)
+        self.reads: list[str] = []
+
+    async def batch_state(self, batch_id: str) -> BatchState:
+        self.reads.append(f"state {batch_id}")
+        return await super().batch_state(batch_id)
+
+    async def batch_results(self, batch_id: str) -> dict[str, ModelResponse | BatchItemError]:
+        self.reads.append(f"results {batch_id}")
+        return await super().batch_results(batch_id)
+
+
 async def test_another_tenant_polling_the_batch_cannot_settle_its_items() -> None:
-    """A handle naming another tenant's batch (one provider account serves every tenant) is refused at its first
-    item; the owner's reservations keep counting and the owner's own poll settles them, as the owner."""
-    r = rig(FakeAdapter([OK] * 4), reg=batchable())
+    """A handle naming another tenant's batch (one provider account serves every tenant) is refused before the
+    batch's state or results are read (``app_llm_batch_owned``); the owner's reservations keep counting and the
+    owner's own poll settles them, as the owner."""
+    adapter = Watched([OK] * 4)
+    r = rig(adapter, reg=batchable())
     handle = await r.service.batch_submit(TASK, items("a", "b"), Verdict, ctx=CTX)
     held = total(reserved(r))
     forged = handle.model_copy(update={"org_id": None, "user_id": OWNER, "trace_id": "forged"})
-    with pytest.raises(ValueError, match="another tenant"):
+    with pytest.raises(LLMBatchNotOwned) as info:
         await r.service.batch_poll(forged, Verdict)
+    assert info.value.code == "llm_batch_not_owned"
+    assert adapter.reads == []  # neither its state nor its results
     assert settled(r) == []
     assert await spend(r) == (held, held)
     await r.service.batch_poll(handle, Verdict)
+    assert adapter.reads == [f"state {handle.batch_id}", f"results {handle.batch_id}"]
     assert ids(settled(r)) == ["a", "b"]
     assert {(e.org_id, e.user_id) for e in settled(r)} == {(ORG, None)}
+
+
+async def test_a_later_reservation_of_another_tenant_does_not_take_the_batch() -> None:
+    """Round 6: the batch is the tenant's of its earliest reservation. Another tenant that reserves an item of it
+    afterwards (a squatted item) still cannot poll it, and its own reservation keeps counting against it."""
+    adapter = Watched([OK] * 2)
+    r = rig(adapter, reg=batchable())
+    handle = await r.service.batch_submit(TASK, items("a", "b"), Verdict, ctx=CTX)
+    [first] = [e for e in reserved(r) if e.custom_id == "a"]
+    squat = replace(first, id=uuid4(), org_id=None, user_id=OWNER, trace_id="squat")
+    await r.ledger.reserve([squat])
+    forged = handle.model_copy(update={"org_id": None, "user_id": OWNER, "trace_id": "forged"})
+    with pytest.raises(LLMBatchNotOwned):
+        await r.service.batch_poll(forged, Verdict)
+    assert adapter.reads == []
+    await r.service.batch_poll(handle, Verdict)
+    assert {(e.custom_id, e.org_id, e.user_id) for e in settled(r)} == {("a", ORG, None), ("b", ORG, None)}
+    mine = await r.ledger.tenant_spent_usd(org_id=None, user_id=OWNER, since=month_start(NOW))
+    assert mine == squat.cost_usd  # the squatter's reservation never settles

@@ -43,6 +43,18 @@ class LLMProviderError(LLMError):
         self.status_code = status_code
 
 
+class LLMBatchNotOwned(LLMError):
+    """A Message Batches batch is not the bound tenant's: the tenant of its earliest reservation is another, or it has
+    none (an unknown batch gets the same answer). Raised before the batch's state or results are read, and by a
+    settlement from another tenant (``app_llm_batch_owned``, ``app_llm_settle_batch_item``)."""
+
+    code = "llm_batch_not_owned"
+
+    def __init__(self, batch_id: str) -> None:
+        super().__init__(f"no batch of this tenant's with id {batch_id}")
+        self.batch_id = batch_id
+
+
 # ------------------------------------------------------------------------------------------ refused before the call
 
 
