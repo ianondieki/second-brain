@@ -20,6 +20,8 @@ from typing import Any, Final, Protocol
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.proposals.sanitise import detection_skeleton
+
 NAMES_ORG_NEGATIVE: Final = "names_real_org_negative"
 SECURITY_VULNERABILITY: Final = "security_vulnerability"
 RULES_VERSION: Final = "1"
@@ -130,7 +132,8 @@ class RulesPreScreen:
     async def screen(self, item: ScreenInput) -> ScreenResult:
         orgs = _org_pattern(item.org_names)
         hits: dict[str, set[str]] = {NAMES_ORG_NEGATIVE: set(), SECURITY_VULNERABILITY: set()}
-        for name, value in item.fields.items():
+        for name, raw in item.fields.items():
+            value = detection_skeleton(raw, blank=" ")  # lookalike letters and fillers do not dodge a hold
             if _VULNERABILITY.search(value):
                 hits[SECURITY_VULNERABILITY].add(name)
             if orgs is not None and any(

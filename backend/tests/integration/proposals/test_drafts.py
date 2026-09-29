@@ -108,6 +108,14 @@ async def test_partial_saves_apply_only_what_was_sent(developers: Developers, pr
         ({"impact_claims": "Pay via till 123456"}, "impact_claims", "contains_payment_number"),
         ({"summary": "See https://example.test"}, "summary", "contains_url"),
         ({"summary": " ".join(["word"] * 151)}, "summary", "too_many_words"),
+        ({"summary": "Write to janedoe @gmail.com"}, "summary", "contains_email"),
+        ({"summary": "Write to jane<b></b>@gmail.com"}, "summary", "contains_email"),
+        ({"summary": "See ex\u0430mple.com"}, "summary", "contains_domain"),
+        (
+            {"problem_statement": "Call \u0660\u0667\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668"},
+            "problem_statement",
+            "contains_phone",
+        ),
     ],
 )
 async def test_contact_details_are_refused_on_save(
