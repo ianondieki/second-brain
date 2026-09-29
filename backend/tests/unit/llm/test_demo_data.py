@@ -45,9 +45,16 @@ def tier2(owner: UUID, *, tier1_owner: UUID | None = None) -> list[Message]:
         Message.system("You suggest placements."),
         Message.user(
             Instruction("Suggest:"),
-            InputField("teaser.summary", "Public teaser.", owner_id=tier1_owner),
+            InputField("teaser.summary", "Public teaser.", owner_id=tier1_owner or owner),
             InputField("confidential.method", f"The method is {CANARY}.", tier=Tier.TIER2, owner_id=owner),
         ),
+    ]
+
+
+def owned(owner: UUID) -> list[Message]:
+    return [
+        Message.system("You screen teasers."),
+        Message.user(Instruction("Screen:"), InputField("teaser.summary", "Solar kiosks.", owner_id=owner)),
     ]
 
 
@@ -61,7 +68,22 @@ def demo_rig(demo: set[UUID], *, consents: StaticConsents | None = None) -> tupl
 
 
 async def test_a_demo_users_call_passes() -> None:
-    await DemoDataRule(StaticDemoAccounts({USER})).check_call(TASK, screen(), CallContext(user_id=USER, org_id=ORG))
+    await DemoDataRule(StaticDemoAccounts({USER})).check_call(TASK, owned(USER), CallContext(user_id=USER, org_id=ORG))
+
+
+async def test_an_ownerless_field_is_not_demo_data_unless_it_is_public_platform_data() -> None:
+    """Security review P7, MAJOR 1: an ownerless Tier-1 field could be anybody's text."""
+    rule = DemoDataRule(StaticDemoAccounts({USER}))
+    with pytest.raises(NotDemoData):
+        await rule.check_call(TASK, screen(), CallContext(user_id=USER))
+    public = [Message.user(Instruction("Excerpt:"), InputField("research.excerpt", "Saved excerpt.", public=True))]
+    await rule.check_call(TASK, public, CallContext(user_id=USER))
+
+
+def test_tier2_text_is_never_public_platform_data() -> None:
+    with pytest.raises(ValueError, match="public"):
+        InputField("confidential.m", "x", tier=Tier.TIER2, owner_id=OWNER, public=True)
+    assert "public" in repr(InputField("research.excerpt", "x", public=True))
 
 
 @pytest.mark.parametrize(

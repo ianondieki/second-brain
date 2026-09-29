@@ -32,7 +32,7 @@ from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from tests.unit.llm.helpers import ORG, OTHER_OWNER, OWNER, SESSION, USER, settings
 from tests.unit.llm.rig import registry_with, screen
-from tests.unit.llm.routing_rig import KEYS, OK, chat, routed, slot, url
+from tests.unit.llm.routing_rig import KEYS, OK, chat, demo_screen, routed, slot, url
 from tests.unit.llm.schemas import Verdict
 
 TASK = "moderation_prescreen"
@@ -46,7 +46,7 @@ def tier2(owner: UUID) -> list[Message]:
         Message.system("You suggest placements."),
         Message.user(
             Instruction("Suggest:"),
-            InputField("teaser.summary", "Public teaser."),
+            InputField("teaser.summary", "Public teaser.", owner_id=owner),
             InputField("confidential.method", f"The method is {CANARY}.", tier=Tier.TIER2, owner_id=owner),
         ),
     ]
@@ -66,7 +66,7 @@ async def test_the_fake_provider_answers_every_call_without_sending_or_recording
     r = routed(provider="fake")
     with respx.mock(assert_all_called=False) as router:
         route = router.route()
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert_fallback(result, "fake_provider")
     assert result.trace_id == "demo-trace"
     assert not route.called
@@ -85,15 +85,15 @@ async def test_the_fake_provider_keeps_the_consent_guard() -> None:
 async def test_without_the_demo_fallback_the_fake_provider_is_unavailable() -> None:
     r = routed(provider="fake", demo_fallback=False)
     with pytest.raises(LLMUnavailable, match="fake_provider"):
-        await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
 
 
 async def test_unknown_tasks_and_bad_schemas_are_the_callers_mistake() -> None:
     r = routed(provider="fake")
     with pytest.raises(LLMConfigError):
-        await r.client.complete("nope", screen(), Verdict, ctx=DEMO)
+        await r.client.complete("nope", demo_screen(), Verdict, ctx=DEMO)
     with pytest.raises(LLMConfigError):
-        await r.client.complete(TASK, screen(), dict, ctx=DEMO)  # type: ignore[type-var]
+        await r.client.complete(TASK, demo_screen(), dict, ctx=DEMO)  # type: ignore[type-var]
 
 
 @pytest.mark.parametrize("provider", ["fake", "free"])
@@ -104,13 +104,13 @@ async def test_a_callers_mistake_is_refused_on_every_route_as_on_anthropic(provi
     with respx.mock(assert_all_called=False) as router:
         route = router.route()
         with pytest.raises(LLMConfigError, match="no effort parameter"):
-            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, effort="high")
+            await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO, effort="high")
         with pytest.raises(LLMConfigError, match="breakpoints"):
-            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, cache_breakpoints=[7])
+            await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO, cache_breakpoints=[7])
         with pytest.raises(LLMConfigError, match="may not use tool"):
-            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
+            await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
         with pytest.raises(LLMConfigError, match="last message"):
-            await r.client.complete(TASK, [*screen(), Message.assistant(Instruction("x"))], Verdict, ctx=DEMO)
+            await r.client.complete(TASK, [*demo_screen(), Message.assistant(Instruction("x"))], Verdict, ctx=DEMO)
     assert not route.called
     assert r.ledger.entries == []
 
@@ -122,7 +122,7 @@ async def test_a_demo_users_call_goes_to_the_free_slot_at_no_cost() -> None:
     r = routed()
     with respx.mock(assert_all_called=True) as router:
         route = router.post(url(1)).mock(return_value=chat())
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert result.demo_fallback is False
     assert result.fallback_reason is None
     assert (result.parsed.verdict, result.model) == ("clean", free_model_key(slot(1)))
@@ -147,10 +147,35 @@ async def test_data_that_is_not_seeded_demo_data_never_reaches_a_free_provider(c
     r = routed()
     with respx.mock(assert_all_called=False) as router:
         route = router.route()
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=ctx)
+        result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=ctx)
     assert not route.called
     assert_fallback(result, "not_demo_data")
     assert r.ledger.entries == []
+
+
+async def test_an_ownerless_field_never_reaches_a_free_provider() -> None:
+    """Security review P7, MAJOR 1: a Tier-1 field without an owner may be any (non-demo) user's text, so a demo
+    caller cannot send it to a free provider; only fields marked public platform data may go without an owner."""
+    r = routed()
+    with respx.mock(assert_all_called=False) as router:
+        route = router.route()
+        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)  # the teaser field names no owner
+    assert not route.called
+    assert_fallback(result, "not_demo_data")
+    assert r.ledger.entries == []
+
+
+async def test_public_platform_data_without_an_owner_goes_to_the_free_slot() -> None:
+    r = routed()
+    messages = [
+        Message.system("You draft problems from public sources."),
+        Message.user(Instruction("Excerpt:"), InputField("research.excerpt", "Saved public excerpt.", public=True)),
+    ]
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post(url(1)).mock(return_value=chat())
+        result = await r.client.complete(TASK, messages, Verdict, ctx=DEMO)
+    assert route.call_count == 1
+    assert result.demo_fallback is False
 
 
 @pytest.mark.parametrize("subject", [USER, OWNER], ids=["demo-caller", "the-owner-itself"])
@@ -195,9 +220,9 @@ async def test_slots_are_tried_in_order_until_each_has_used_its_daily_requests()
     with respx.mock(assert_all_called=True) as router:
         one = router.post(url(1)).mock(return_value=chat())
         two = router.post(url(2)).mock(return_value=chat())
-        first = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
-        second = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
-        third = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        first = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
+        second = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
+        third = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert (first.model, second.model) == (free_model_key(slot(1)), free_model_key(slot(2)))
     assert_fallback(third, "request_cap")
     assert (one.call_count, two.call_count) == (1, 1)
@@ -207,7 +232,7 @@ async def test_a_slot_that_runs_out_during_a_retry_falls_back() -> None:
     r = routed(slots=(slot(1, requests=1),))
     with respx.mock(assert_all_called=True) as router:
         route = router.post(url(1)).mock(return_value=chat("not json"))
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert_fallback(result, "request_cap")
     assert route.call_count == 1
     assert [e.status for e in r.ledger.entries] == [CallStatus.SCHEMA_ERROR, CallStatus.BLOCKED_BUDGET]
@@ -215,14 +240,14 @@ async def test_a_slot_that_runs_out_during_a_retry_falls_back() -> None:
 
 async def test_a_task_listing_no_configured_slot_falls_back() -> None:
     r = routed(slots=(slot(2),), reg=registry_with(moderation_prescreen={"free_slots": [1]}))
-    assert_fallback(await r.client.complete(TASK, screen(), Verdict, ctx=DEMO), "no_free_slot")
+    assert_fallback(await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO), "no_free_slot")
     r = routed(slots=())
-    assert_fallback(await r.client.complete(TASK, screen(), Verdict, ctx=DEMO), "no_free_slot")
+    assert_fallback(await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO), "no_free_slot")
 
 
 async def test_tools_never_go_to_a_free_provider() -> None:
     r = routed(reg=registry_with(moderation_prescreen={"allowed_tools": ["web_search_20260209"]}))
-    result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
+    result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO, tools=[{"type": "web_search_20260209"}])
     assert_fallback(result, "tools_unsupported")
 
 
@@ -231,7 +256,7 @@ async def test_an_effort_override_is_dropped_on_a_free_slot() -> None:
     r = routed()
     with respx.mock(assert_all_called=True) as router:
         route = router.post(url(1)).mock(return_value=chat())
-        result = await r.client.complete("originality_explainer", screen(), Verdict, ctx=DEMO, effort="high")
+        result = await r.client.complete("originality_explainer", demo_screen(), Verdict, ctx=DEMO, effort="high")
     assert result.demo_fallback is False
     assert "effort" not in route.calls.last.request.content.decode()
 
@@ -257,7 +282,7 @@ async def test_every_failed_call_falls_back_with_the_label(
     r = routed()
     with respx.mock(assert_all_called=True) as router:
         router.post(url(1)).mock(side_effect=replies)
-        result = await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        result = await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert_fallback(result, reason)
     assert result.trace_id == "demo-trace"
 
@@ -266,7 +291,7 @@ async def test_the_kill_switch_falls_back_and_keeps_the_consent_guard() -> None:
     r = routed(cfg=settings(llm_kill_switch=True))
     with respx.mock(assert_all_called=False) as router:
         route = router.route()
-        assert_fallback(await r.client.complete(TASK, screen(), Verdict, ctx=DEMO), "kill_switch")
+        assert_fallback(await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO), "kill_switch")
         with pytest.raises(ConsentRequired):  # the kill switch refused before the guard: the fallback runs it
             await r.client.complete(ASSISTANT, tier2(USER), Verdict, ctx=DEMO)
     assert not route.called
@@ -279,9 +304,9 @@ async def test_without_the_demo_fallback_errors_propagate() -> None:
     with respx.mock(assert_all_called=True) as router:
         router.post(url(1)).mock(return_value=httpx.Response(503))
         with pytest.raises(LLMProviderError):
-            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+            await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     with pytest.raises(LLMUnavailable, match="no_free_slot"):
-        await routed(demo_fallback=False, slots=()).client.complete(TASK, screen(), Verdict, ctx=DEMO)
+        await routed(demo_fallback=False, slots=()).client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
 
 
 async def test_one_service_per_route_per_client() -> None:
@@ -289,6 +314,6 @@ async def test_one_service_per_route_per_client() -> None:
     with respx.mock(assert_all_called=True) as router:
         router.post(url(1)).mock(return_value=chat())
         for _ in range(3):
-            await r.client.complete(TASK, screen(), Verdict, ctx=DEMO)
+            await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
     assert r.built == [free_model_key(slot(1))]
     assert OK["verdict"] == "clean"

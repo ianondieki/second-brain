@@ -1,20 +1,21 @@
 """The D-37 data rule: only seeded demo data goes to a free provider (a free provider may train on what it receives).
 
 A call routed to a free slot passes only when its user (``CallContext.user_id``: the signed-in user, or the member an
-organisation's call is bound to) is a demo account and so is every field's owner: ``users.demo_account = true``
-(schema v3; the demo seed sets it as the owner role, never the app). ``LLMService`` runs the rule right after the
-Tier-2 consent guard, before sanitising, budgeting or sending:
+organisation's call is bound to) is a demo account and every field is owned by one (``users.demo_account = true``,
+schema v3; the demo seed sets it as the owner role, never the app) or is public platform data (``InputField.public``,
+Tier 1 only, e.g. the research excerpts saved in the repository). A field without an owner that is not marked public
+could be anybody's text, so it is not demo data (security review P7, MAJOR 1). ``LLMService`` runs the rule right
+after the Tier-2 consent guard, before sanitising, budgeting or sending:
 
 - a Tier-2 field owned by a non-demo account is refused (``Tier2DemoOnly``, a ``Tier2NotAllowed``: a ``blocked_tier2``
   row with names and lengths only), whatever the consent and whoever calls;
-- otherwise a call with no user (a platform or organisation job), a non-demo user, or a field owned by a non-demo
-  account raises ``NotDemoData``, unrecorded (nothing was attempted); the router answers with the deterministic fake,
-  labelled "demo fallback" (``bridge.llm.routing``).
+- otherwise a call with no user (a platform or organisation job), a non-demo user, a field owned by a non-demo
+  account or an ownerless field not marked public raises ``NotDemoData``, unrecorded (nothing was attempted); the
+  router answers with the deterministic fake, labelled "demo fallback" (``bridge.llm.routing``).
 
 The Anthropic services have no rule: they keep the T2.2 rules. ``SqlDemoAccounts`` reads the column in its own short
-transaction as the caller's tenant, so a failure never touches the caller's transaction; a missing column (the
-integration branch before schema v3), a missing or unreadable row, and any database error all count as "not a demo
-account" (fail closed).
+transaction as the caller's tenant, so a failure never touches the caller's transaction; a missing column, a missing
+or unreadable row, and any database error all count as "not a demo account" (fail closed).
 """
 
 from __future__ import annotations
@@ -98,5 +99,8 @@ class DemoDataRule:
         if ctx.user_id is None or not await self._is_demo(ctx.user_id):
             raise NotDemoData(task)
         for item in fields:
-            if item.owner_id is not None and not await self._is_demo(item.owner_id):
+            if item.owner_id is None:
+                if not item.public:  # anybody's text, as far as the rule can tell
+                    raise NotDemoData(task)
+            elif not await self._is_demo(item.owner_id):
                 raise NotDemoData(task)

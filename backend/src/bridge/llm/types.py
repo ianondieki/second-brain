@@ -49,25 +49,31 @@ class Instruction:
 
 @dataclass(frozen=True, slots=True)
 class InputField:
-    """Untrusted text. ``name`` is a stable identifier (``teaser.summary``); ``owner_id`` is the user whose consent
-    governs a Tier-2 field; ``max_chars`` lowers the sanitiser's length cap for this field."""
+    """Untrusted text. ``name`` is a stable identifier (``teaser.summary``); ``owner_id`` is the user whose text it is
+    (required for Tier 2, whose consent governs the field; D-37: a free provider takes only fields owned by demo
+    accounts); ``public`` marks public platform data with no owner (for example the research excerpts saved in the
+    repository), the only ownerless text a free provider may take; ``max_chars`` lowers the sanitiser's length cap."""
 
     name: str
     value: str
     tier: Tier = Tier.TIER1
     owner_id: UUID | None = None
     max_chars: int | None = None
+    public: bool = False
 
     def __post_init__(self) -> None:
         if not FIELD_NAME.fullmatch(self.name):
             raise ValueError("a field name is 1-64 characters from a-z 0-9 _ . - and starts with a letter")
         if self.tier is Tier.TIER2 and self.owner_id is None:
             raise ValueError(f"Tier-2 field {self.name} needs owner_id (whose consent governs it)")
+        if self.tier is Tier.TIER2 and self.public:
+            raise ValueError(f"Tier-2 field {self.name} is confidential, never public platform data")
         if self.max_chars is not None and self.max_chars < 1:
             raise ValueError("max_chars must be positive")
 
     def __repr__(self) -> str:  # never print the value (it may be Tier-2)
-        return f"InputField(name={self.name!r}, tier={self.tier.value}, chars={len(self.value)})"
+        public = ", public" if self.public else ""
+        return f"InputField(name={self.name!r}, tier={self.tier.value}, chars={len(self.value)}{public})"
 
 
 Part = Instruction | InputField

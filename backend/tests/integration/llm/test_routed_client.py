@@ -28,7 +28,7 @@ from bridge.llm.sql_ledger import SqlLedger
 from bridge.llm.types import CallContext
 from tests.integration.llm.conftest import People
 from tests.integration.llm.helpers import OK, ROOMY_GLOBAL_CAP, TASK, as_app_with_demo_account, stored
-from tests.unit.llm.rig import screen
+from tests.unit.llm.routing_rig import demo_screen
 from tests.unit.llm.schemas import Verdict
 
 Factory = async_sessionmaker[AsyncSession]
@@ -64,7 +64,8 @@ async def test_a_real_accounts_call_never_reaches_a_free_provider(
         async with factory() as db:
             await bind_tenant(db, user_id=people.a)
             client = routed_client(db, factory=factory, settings=cfg, runtime=build_runtime(cfg))
-            result = await client.complete(TASK, screen(), Verdict, ctx=CallContext(user_id=people.a, trace_id=trace))
+            ctx = CallContext(user_id=people.a, trace_id=trace)
+            result = await client.complete(TASK, demo_screen(people.a), Verdict, ctx=ctx)  # owned, but not demo
     assert not route.called
     assert (result.demo_fallback, result.fallback_reason) == (True, "not_demo_data")
     assert await stored(owner_engine, trace) == []
@@ -87,7 +88,7 @@ async def test_a_seeded_demo_accounts_call_reaches_the_free_slot_and_is_recorded
             with respx.mock(assert_all_called=True) as router:
                 route = router.post(f"{BASE}/chat/completions").mock(return_value=chat())
                 result = await client.complete(
-                    TASK, screen(), Verdict, ctx=CallContext(user_id=people.a, trace_id=trace)
+                    TASK, demo_screen(people.a), Verdict, ctx=CallContext(user_id=people.a, trace_id=trace)
                 )
             assert route.call_count == 1
             assert (result.demo_fallback, result.model) == (False, key)

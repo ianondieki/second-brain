@@ -23,12 +23,22 @@ from bridge.llm.ledger import InMemoryLedger
 from bridge.llm.openai_adapter import OpenAICompatibleAdapter
 from bridge.llm.registry import Registry
 from bridge.llm.routing import FreeRoute, LLMRuntime, RoutedLLMClient
+from bridge.llm.types import InputField, Instruction, Message
 from tests.unit.llm.helpers import NOW, USER, real_registry, settings
 from tests.unit.llm.rig import NONCE
 
 BASES = {1: "https://free-one.example/v1", 2: "https://free-two.example/v1", 3: "https://free-three.example/v1"}
 KEYS = {n: f"sk-free-{n}-key-not-real" for n in BASES}
 OK = {"injection_suspected": False, "verdict": "clean", "reason": "fine"}
+
+
+def demo_screen(owner: UUID = USER) -> list[Message]:
+    """``rig.screen()`` with the teaser owned by ``owner`` (a demo account by default): free-slot data (D-37)."""
+    summary = "<b>Solar</b> kiosks for [markets](https://evil.example)"
+    return [
+        Message.system("You screen teasers for policy issues."),
+        Message.user(Instruction("Screen this teaser:"), InputField("teaser.summary", summary, owner_id=owner)),
+    ]
 
 
 def url(n: int) -> str:
