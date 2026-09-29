@@ -140,6 +140,12 @@ class AnthropicAdapter:
             )
         return self._sdk
 
+    async def aclose(self) -> None:
+        """Close the SDK client, if one was opened (the app's lifespan does, at shutdown)."""
+        if self._sdk is not None:
+            sdk, self._sdk = self._sdk, None
+            await sdk.close()
+
     async def create(self, request: ModelRequest) -> ModelResponse:
         client = self._client()
         try:

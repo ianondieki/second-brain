@@ -56,11 +56,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
-        # The LLM registry and adapter; requests get LLMService over the SQL stores (bridge.llm.deps.LLMDep).
-        app.state.llm_registry, app.state.llm_adapter = llm_runtime(settings)
+        # The LLM registry and provider adapters; requests get RoutedLLMClient over the SQL stores (bridge.llm.deps).
+        app.state.llm_runtime = llm_runtime(settings)
         try:
             yield
         finally:
+            await app.state.llm_runtime.aclose()
             await engine.dispose()
 
     app = FastAPI(

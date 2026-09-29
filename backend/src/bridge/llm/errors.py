@@ -72,15 +72,26 @@ class LLMKillSwitch(LLMBlocked):
 
 
 class LLMBudgetExceeded(LLMBlocked):
-    """The per-tenant monthly cap or the global daily cap would be exceeded by this call (the hard cap)."""
+    """The per-tenant monthly cap, the global daily cap or the prototype's lifetime total
+    (``LLM_PROTOTYPE_TOTAL_CAP_USD``, D-37) would be exceeded by this call (the hard cap)."""
 
     code = "llm_budget"
 
-    def __init__(self, scope: Literal["tenant", "global"], *, spent_usd: Decimal, cap_usd: Decimal) -> None:
+    def __init__(self, scope: Literal["tenant", "global", "total"], *, spent_usd: Decimal, cap_usd: Decimal) -> None:
         super().__init__(f"the {scope} LLM budget is exhausted (spent {spent_usd} of {cap_usd} USD)")
         self.scope = scope
         self.spent_usd = spent_usd
         self.cap_usd = cap_usd
+
+
+class LLMRequestCapReached(LLMBlocked):
+    """A free provider slot has sent its daily request cap today (``LLM_FREE_<N>_DAILY_REQUESTS``, D-37)."""
+
+    code = "llm_request_cap"
+
+    def __init__(self, model: str) -> None:
+        super().__init__(f"the daily request cap of {model.partition(':')[0]} is reached")
+        self.model = model
 
 
 class Tier2NotAllowed(LLMBlocked):
@@ -92,6 +103,30 @@ class Tier2NotAllowed(LLMBlocked):
         super().__init__(f"task {task} reads Tier-1 fields only; refused Tier-2 fields {', '.join(fields)}")
         self.task = task
         self.fields = fields
+
+
+class Tier2DemoOnly(Tier2NotAllowed):
+    """A Tier-2 field of a non-demo account was routed to a free provider (D-37: only seeded demo data goes there),
+    refused whatever the consent says."""
+
+    code = "llm_tier2_demo_only"
+
+    def __init__(self, task: str, fields: tuple[str, ...]) -> None:
+        super().__init__(task, fields)
+        self.args = (
+            f"task {task}: Tier-2 fields {', '.join(fields)} of a non-demo account never go to a free provider",
+        )
+
+
+class NotDemoData(LLMBlocked):
+    """A call routed to a free provider is not seeded demo data (D-37): its user, or a field's owner, is not a demo
+    account, or it has no user. The router answers it with the labelled fake."""
+
+    code = "llm_not_demo_data"
+
+    def __init__(self, task: str) -> None:
+        super().__init__(f"task {task}: only seeded demo data goes to a free provider")
+        self.task = task
 
 
 class ConsentRequired(LLMBlocked):
