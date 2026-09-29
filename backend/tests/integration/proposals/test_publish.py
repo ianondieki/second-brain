@@ -253,6 +253,8 @@ async def test_editing_a_published_proposal_starts_the_next_version(
 
     second = (await publish(owner, pid)).json()
     assert (second["version_no"], second["status"]) == (2, "published")
+    signals = await rows(owner_engine, "SELECT kind FROM signal_events WHERE item_id = :p ORDER BY ts, id", p=pid)
+    assert [s.kind for s in signals] == ["proposal_published", "proposal_version_published"]
     assert second["cert_id"] != first["cert_id"]
     card = (await reader.get(f"/api/proposals/{pid}")).json()
     assert (card["teaser"]["title"], card["version_no"]) == ("Cold-chain alerts v2", 2)

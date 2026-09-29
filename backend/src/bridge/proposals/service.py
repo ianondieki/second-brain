@@ -7,11 +7,13 @@
 3. the active-proposal cap of the owner's plan for a first publication (AC-SUB-1: 402, nothing created), counted
    under a per-owner advisory lock so two publications cannot both pass it;
 4. the rules pre-screen of the teaser and of a new Problem: a hold is raised in the same transaction
-   (``app_hold_proposal``, a held Problem) with a ``moderation_cases`` row; a new Problem is published at once and
-   queued for moderation either way (AC-PROP-5);
+   (``app_hold_proposal``, a held Problem) with a ``moderation_cases`` row; a new version of a held or rejected
+   proposal is queued again (it stays private until a moderator approves it); a new Problem is published at once
+   and queued for moderation either way (AC-PROP-5);
 5. the version becomes ``registered`` with a fresh certificate id (the database times it), the proposal points at it,
    the attestation row is written and the T2.4 registration pipeline is queued (``enqueue_registration``);
-6. a ``signal_events`` row when the teaser is visible (clear), and the ``proposal.published`` audit event.
+6. a ``signal_events`` row when the teaser is visible (clear: ``proposal_published`` the first time,
+   ``proposal_version_published`` after), and the ``proposal.published`` audit event.
 
 D1 is the route's dependency (``D1Developer``, AC-IP-5). Reads: the owner's list and detail (with their own Tier 2;
 the Tier-2 read is audited) and the public teaser, which only a published, clear proposal has (a held teaser is
@@ -55,8 +57,12 @@ from bridge.proposals.schemas import (
 from bridge.provenance.service import enqueue_registration, new_cert_id, status_label, subject_digest
 
 ACTIVE_PROPOSALS: Final = "active_proposals"
-SIGNAL_PUBLISHED: Final = "proposal_published"
+SIGNAL_PUBLISHED: Final = "proposal_published"  # first visible publication
+SIGNAL_NEW_VERSION: Final = "proposal_version_published"  # a later version of a visible proposal
 NEW_PROBLEM_REASON: Final = "new_developer_problem"
+# A new version of a held or rejected proposal goes back to the moderators even when the rules raise nothing.
+NEW_VERSION_REASON: Final = "new_version_of_moderated_proposal"
+TEASER_COLUMNS: Final = ("title", "niche_id", "country", "county_code", "problem_statement", "impact_claims", "summary")
 # [[COPY-REVIEW]] what the owner reads about moderation.
 MODERATION_MESSAGES: Final = {
     ModerationState.HELD: "Held for review: only you can see this teaser until a moderator approves it.",
@@ -277,10 +283,10 @@ def _check_attestations(body: PublishIn) -> None:
         raise ApiError(422, "attestations_required", "Confirm all three statements to publish.", missing=missing)
 
 
-async def signal(db: AsyncSession, *, proposal_id: UUID, owner_id: UUID) -> None:
+async def signal(db: AsyncSession, *, proposal_id: UUID, owner_id: UUID, kind: str = SIGNAL_PUBLISHED) -> None:
     """The cross-org signal of a visible publication (ids and a per-subject salted hash only)."""
     actor = await subject_digest(db, owner_id, SIGNAL_ACTOR)
-    await db.execute(_SIGNAL, {"id": uuid7(), "item": proposal_id, "kind": SIGNAL_PUBLISHED, "actor": actor})
+    await db.execute(_SIGNAL, {"id": uuid7(), "item": proposal_id, "kind": kind, "actor": actor})
 
 
 async def publish(
@@ -336,15 +342,17 @@ async def publish(
 
     cert_id = new_cert_id()
     await db.execute(_REGISTER, {"cert_id": cert_id, "version": version_id})
-    teaser = {name: values[name] for name in ("title", "niche_id", "country", "county_code", *editor.TEXT_FIELDS[1:])}
+    teaser = {name: values[name] for name in TEASER_COLUMNS}
     maturity_ask = {"maturity": str(row.maturity), "ask": str(row.ask)}
     await db.execute(_PUBLISH, {"id": proposal_id, "version": version_id, **teaser, **maturity_ask})
     state = locked.moderation_state
     if teaser_screen.hold:
         await db.execute(_HOLD, {"id": proposal_id})
-        classifier = None if teaser_screen.classifier is None else json.dumps(teaser_screen.classifier)
-        await problems.open_case(db, "proposal", proposal_id, teaser_screen.reasons, classifier)
         state = ModerationState.HELD if state == ModerationState.CLEAR else state
+    if teaser_screen.hold or state != ModerationState.CLEAR:
+        classifier = None if teaser_screen.classifier is None else json.dumps(teaser_screen.classifier)
+        teaser_reasons = teaser_screen.reasons or (NEW_VERSION_REASON,)
+        await problems.open_case(db, "proposal", proposal_id, teaser_reasons, classifier)
     await db.execute(
         _ATTEST,
         {
@@ -357,7 +365,8 @@ async def publish(
     )
     await enqueue_registration(db, version_id)
     if state == ModerationState.CLEAR:
-        await signal(db, proposal_id=proposal_id, owner_id=user_id)
+        kind = SIGNAL_PUBLISHED if locked.status != ProposalStatus.PUBLISHED else SIGNAL_NEW_VERSION
+        await signal(db, proposal_id=proposal_id, owner_id=user_id, kind=kind)
     await audit(
         db,
         "proposal.published",

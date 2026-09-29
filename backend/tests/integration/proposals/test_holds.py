@@ -138,3 +138,29 @@ async def test_a_held_new_problem_is_not_public_but_the_clean_teaser_is(
     [case] = await cases_about(moderator, problem_id)
     assert case["reasons"] == ["new_developer_problem", "security_vulnerability"]
     assert case["subject_state"] == "held"
+
+
+async def test_a_new_version_of_a_rejected_proposal_goes_back_to_the_moderators(
+    developers: Developers, moderators: Staff, proposal_world: ProposalWorld, app_engine: AsyncEngine
+) -> None:
+    owner = await developers()
+    created = await create(owner, draft_body(proposal_world, title=f"Why {proposal_world.org_brand} is a scam"))
+    pid = created["id"]
+    await publish(owner, pid)
+    moderator = await moderators()
+    [case] = await cases_about(moderator, pid)
+    await moderator.post(f"/api/admin/moderation/cases/{case['id']}/decision", json={"decision": "reject"})
+
+    await owner.patch(f"/api/me/proposals/{pid}", json={"teaser": {"title": "Cold-chain alerts for co-ops"}})
+    second = (await publish(owner, pid)).json()
+    assert second["version_no"] == 2
+    assert second["moderation"]["state"] == "rejected"  # still private: a moderator decides again
+    reader = await developers(level="d0")
+    assert (await reader.get(f"/api/proposals/{pid}")).status_code == 404
+    [again] = await cases_about(moderator, pid)
+    assert again["id"] != case["id"]
+    assert again["reasons"] == ["new_version_of_moderated_proposal"]
+    assert again["preview"]["title"] == "Cold-chain alerts for co-ops"
+    await moderator.post(f"/api/admin/moderation/cases/{again['id']}/decision", json={"decision": "approve"})
+    assert (await reader.get(f"/api/proposals/{pid}")).json()["version_no"] == 2
+    assert await visible_to(app_engine, user_of(reader), pid) == 1
