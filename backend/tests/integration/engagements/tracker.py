@@ -46,7 +46,7 @@ async def run(conn: AsyncConnection, sql: str, **params: object) -> Any:
 
 async def rowcount(conn: AsyncConnection, sql: str, **params: object) -> int:
     result = await conn.execute(sa.text(sql), params)
-    return int(result.rowcount)  # type: ignore[attr-defined]
+    return int(result.rowcount)
 
 
 async def act(conn: AsyncConnection, user_id: UUID | None, org_id: UUID | None = None) -> None:
