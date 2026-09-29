@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -32,8 +32,14 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // A code confirmed after the form has gone (the page moved on) must not run the step.
+  const mounted = useRef(true);
   useEffect(() => {
+    mounted.current = true;
     document.getElementById("tracker-step-up-code")?.focus();
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
   if (!enrolled) {
@@ -61,6 +67,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
     setBusy(true);
     setFailed(false);
     const outcome = await confirmImpl(code);
+    if (!mounted.current) return;
     if (!outcome.ok) {
       setBusy(false);
       setCode("");
@@ -75,7 +82,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
     try {
       await onConfirmed();
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -98,7 +105,8 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
         <SubmitButton variant="primary" busy={busy}>
           {busy ? t("stepUp.checking") : t("stepUp.submit")}
         </SubmitButton>
-        <Button variant="secondary" onClick={onCancel}>
+        {/* Inert while the code is checked: the step may already be running. */}
+        <Button variant="secondary" busy={busy} onClick={onCancel}>
           {t("cancel")}
         </Button>
       </div>

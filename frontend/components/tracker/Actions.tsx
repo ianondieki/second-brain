@@ -72,6 +72,8 @@ export function Actions(props: ActionsProps) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
+  // The step-up retries its step once, and only while its form is still open (not after Cancel or a refresh).
+  const stepUpOpen = useRef(false);
 
   // A refreshed engagement brings new buttons: the list is what the API allows now (adjusted while rendering, as
   // React recommends for state that follows a prop).
@@ -102,6 +104,7 @@ export function Actions(props: ActionsProps) {
       return;
     }
     if (outcome.refusal === "stepUp" && !retried) {
+      stepUpOpen.current = true;
       setMode({ kind: "stepUp", item, request });
       return;
     }
@@ -210,8 +213,15 @@ export function Actions(props: ActionsProps) {
       {mode.kind === "stepUp" ? (
         <StepUp
           enrolled={props.enrolled}
-          onCancel={() => setMode({ kind: "list" })}
-          onConfirmed={() => run(mode.item, mode.request, true)}
+          onCancel={() => {
+            stepUpOpen.current = false;
+            setMode({ kind: "list" });
+          }}
+          onConfirmed={async () => {
+            if (!stepUpOpen.current) return;
+            stepUpOpen.current = false;
+            await run(mode.item, mode.request, true);
+          }}
           confirmImpl={props.confirmImpl}
         />
       ) : null}

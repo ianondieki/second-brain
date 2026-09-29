@@ -140,6 +140,32 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     expect(screen.getByText("Enter the 6-digit code from your authenticator app.")).toBeTruthy();
   });
 
+  it("keeps Cancel inert while the code is checked, and never runs the step once the form is gone", async () => {
+    let settle: (value: { ok: true }) => void = () => {};
+    const confirmImpl = vi.fn(() => new Promise<{ ok: true }>((resolve) => (settle = resolve)));
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
+    const { unmount } = renderActions(signing(), { runImpl, confirmImpl });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
+    fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "123456" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(cancel);
+    expect(screen.getByLabelText("Authenticator code")).toBeTruthy(); // still open: Cancel did nothing
+    unmount();
+    await act(async () => settle({ ok: true }));
+    expect(runImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run the step after Cancel", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
+    renderActions(signing(), { runImpl, confirmImpl: async () => ({ ok: true }) });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Authenticator code")).toBeNull();
+    expect(runImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("points to two-step sign-in when the account has none", async () => {
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
     renderActions(signing(), { runImpl, enrolled: false });
