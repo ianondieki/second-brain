@@ -111,3 +111,13 @@ tasks:
     fallback_model: null         # D-29
     fallback_effort: null
     free_slots: [1, 2, 3]
+  reminder_nudge:               # EM7 developer daily reminder: rewords code-computed fact tuples only (REQ-REM-01)
+    model: claude-haiku-4-5
+    effort: null
+    max_tokens: 512
+    batchable: false             # docs/spec/09 "batch nightly": the prototype words each reminder as it is sent
+    confidential: true
+    purpose: tier1_only
+    fallback_model: null         # D-29; a failed call answers with the fixed fallback text
+    fallback_effort: null
+    free_slots: [1, 2, 3]

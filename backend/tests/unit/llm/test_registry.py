@@ -27,6 +27,7 @@ SPEC_09_ALLOCATION = {
     "over_disclosure_check": {HAIKU},  # teaser over-disclosure check
     "originality_explainer": {SONNET},  # originality overlap explanation
     "submission_assistant": {SONNET},  # submission assistant
+    "reminder_nudge": {HAIKU},  # reminder & progress-reporter wording (REQ-REM-01)
 }
 
 

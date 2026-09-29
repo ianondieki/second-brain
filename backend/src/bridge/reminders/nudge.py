@@ -50,6 +50,7 @@ CTA: Final = "Open your tracker"
 IN_APP_TITLE: Final = "Your daily update"
 UPCOMING_DAYS: Final = 14  # open milestones due within this many days are listed one by one under Needs you
 _OPEN_WORK: Final = frozenset({M.PLANNED, M.IN_PROGRESS, M.CHANGES_REQUESTED})
+OVERDUE_CODES: Final = frozenset({ReasonCode.MILESTONE_OVERDUE, ReasonCode.REVIEW_OVERDUE, ReasonCode.STAGE_OVERDUE})
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,12 +203,18 @@ def compose_nudge(facts: DeveloperFacts, holidays: Collection[date]) -> Nudge:
     drafts = tuple(quote(title, fallback="Untitled draft") for title in facts.drafts)
     step = _next_step(pairs, drafts)
     counts = [health_row.health for health_row in health]
+    status = ", ".join(
+        f"{HEALTH_LABELS[h].lower()} {counts.count(h)}"
+        for h in (Health.OFF_TRACK, Health.AT_RISK, Health.ON_TRACK)
+        if counts.count(h)
+    )
+    overdue = sum(1 for _, a in pairs for r in a.reasons if r.code in OVERDUE_CODES)
     fact_lines = (
         f"Date: {eat_date(facts.today)}",
         f"Things that need the developer: {len(needs_you)}",
         f"Engagements waiting on the other party: {len(waiting)}",
-        f"Engagements off track: {counts.count(Health.OFF_TRACK)}; at risk: {counts.count(Health.AT_RISK)};"
-        f" on track: {counts.count(Health.ON_TRACK)}",
+        *([f"Engagement health: {status}"] if status else []),
+        *([f"Overdue items: {overdue}"] if overdue else []),
         f"Drafts not published: {len(drafts)}",
         f"Suggested next step: {step}",
     )
