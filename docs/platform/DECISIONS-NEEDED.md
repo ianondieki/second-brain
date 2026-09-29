@@ -110,6 +110,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype; any hosted release of the research cards.
 - Decision:
 
+### D-39 · Wording of the three ownership attestations at publish (P2, REQ-PROV-05, REQ-PROP-01)
+- Why: publishing a proposal records three ownership attestations (docs/spec/06 6.4; REQ-PROV-05). Their text is near-legal: it states what the developer affirms about authorship and rights. The prototype uses draft wording paraphrasing the spec's three statements, tagged `[[COPY-REVIEW]]`, in `backend/src/bridge/proposals/attestations.py` (branch `feat/REQ-PROP-01-proposals`); each acceptance stores the text's version and SHA-256, so a later wording is a new version, not an edit. Agents do not write legal text.
+- Options: (a) keep the draft wording for the local prototype only and have it reviewed (G2 legal pack) before any hosted use; (b) replace it now with wording you supply; (c) have an advocate draft it now.
+- Recommended default: (a); nothing is hosted (D-36), and the stored version and hash keep earlier acceptances traceable when the text changes.
+- Blocks: nothing in the prototype; any hosted release.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
