@@ -16,7 +16,10 @@ from uuid import UUID
 import httpx
 import pytest
 import respx
+import structlog
+from structlog.testing import capture_logs
 
+from bridge.llm import routing
 from bridge.llm.demo_fallback import DEMO_FALLBACK_MODEL, fallback_output
 from bridge.llm.errors import (
     ConsentRequired,
@@ -230,6 +233,47 @@ async def test_tier2_text_of_a_non_demo_account_is_refused_even_when_every_slot_
         await r.client.complete(ASSISTANT, tier2(OWNER), Verdict, ctx=CallContext(user_id=OWNER, session_id=SESSION))
 
 
+async def test_a_rule_refusal_on_the_fallback_path_is_a_blocked_row() -> None:
+    """P7 review: the router's own guard records its refusals as the service does (names and lengths only)."""
+    consents = StaticConsents([(OWNER, ConsentPurpose.TIER2_LLM_ASSISTANT, SESSION)])
+    r = routed(consents=consents, slots=())  # no slot: the fallback path's guard decides
+    ctx = CallContext(user_id=OWNER, session_id=SESSION, trace_id="guard-trace")
+    with pytest.raises(Tier2DemoOnly):
+        await r.client.complete(ASSISTANT, tier2(OWNER), Verdict, ctx=ctx)
+    [row] = r.ledger.entries
+    assert (row.status, row.task, row.trace_id, row.user_id, row.attempt) == (
+        CallStatus.BLOCKED_TIER2,
+        ASSISTANT,
+        "guard-trace",
+        OWNER,
+        0,
+    )
+    assert row.cost_usd == Decimal(0)
+    assert CANARY not in repr(row.inputs)
+    assert CANARY not in str(row.error)
+    fake = routed(provider="fake")
+    with pytest.raises(ConsentRequired):
+        await fake.client.complete(ASSISTANT, tier2(USER), Verdict, ctx=DEMO)
+    assert [e.status for e in fake.ledger.entries] == [CallStatus.BLOCKED_CONSENT]
+
+
+async def test_a_fallback_is_logged_with_its_reason_and_no_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P7 review N9: ``llm.demo_fallback`` names the task, the reason and the trace, never a field value."""
+    r = routed(provider="fake")
+    with capture_logs() as logs:
+        monkeypatch.setattr(routing, "log", structlog.get_logger("bridge.llm"))  # a logger bound under the capture
+        await r.client.complete(TASK, demo_screen(), Verdict, ctx=DEMO)
+    [event] = [entry for entry in logs if entry["event"] == "llm.demo_fallback"]
+    assert event == {
+        "event": "llm.demo_fallback",
+        "log_level": "info",
+        "task": TASK,
+        "reason": "fake_provider",
+        "trace_id": "demo-trace",
+    }
+    assert "Solar" not in repr(logs)
+
+
 async def test_a_demo_accounts_tier2_text_with_its_consent_goes_to_the_free_slot() -> None:
     consents = StaticConsents([(USER, ConsentPurpose.TIER2_LLM_ASSISTANT, SESSION)])
     r = routed(consents=consents)
@@ -323,7 +367,8 @@ async def test_the_kill_switch_falls_back_and_keeps_the_consent_guard() -> None:
         with pytest.raises(ConsentRequired):  # the kill switch refused before the guard: the fallback runs it
             await r.client.complete(ASSISTANT, tier2(USER), Verdict, ctx=DEMO)
     assert not route.called
-    assert [e.status for e in r.ledger.entries] == [CallStatus.BLOCKED_KILL_SWITCH] * 2
+    kill, consent = CallStatus.BLOCKED_KILL_SWITCH, CallStatus.BLOCKED_CONSENT
+    assert [e.status for e in r.ledger.entries] == [kill, kill, consent]  # the fallback's guard records its refusal
 
 
 async def test_without_the_demo_fallback_errors_propagate() -> None:

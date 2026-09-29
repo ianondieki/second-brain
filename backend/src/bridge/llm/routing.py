@@ -31,6 +31,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from bridge import clock
@@ -42,6 +43,7 @@ from bridge.llm.client import CUSTOM_ID, BatchHandle, BatchItem, BatchPoll, LLMS
 from bridge.llm.demo_data import DataRule
 from bridge.llm.demo_fallback import DEMO_FALLBACK_MODEL, FallbackReason, check_fallback, fallback_result
 from bridge.llm.errors import (
+    ConsentRequired,
     LLMBudgetExceeded,
     LLMCallFailed,
     LLMConfigError,
@@ -51,10 +53,18 @@ from bridge.llm.errors import (
     LLMRequestCapReached,
     LLMUnavailable,
     NotDemoData,
+    Tier2NotAllowed,
 )
 from bridge.llm.guard import ConsentChecker, check_tier2
-from bridge.llm.ledger import LedgerStore
-from bridge.llm.prepare import check_breakpoints, check_messages, check_schema, check_tools, resolve_effort
+from bridge.llm.ledger import CallStatus, LedgerEntry, LedgerStore
+from bridge.llm.prepare import (
+    check_breakpoints,
+    check_messages,
+    check_schema,
+    check_tools,
+    resolve_effort,
+    unsent_inputs,
+)
 from bridge.llm.registry import Registry, TaskSpec, free_model_key
 from bridge.llm.types import CallContext, LLMOutput, Message, Result
 from bridge.logging import get_logger
@@ -179,11 +189,41 @@ class RoutedLLMClient:
         return FallbackReason.REQUEST_CAP
 
     async def _guard(self, spec: TaskSpec, messages: Sequence[Message], ctx: CallContext) -> None:
-        """The rules a fallback keeps: the Tier-2 consent guard and, on the free route, the D-37 Tier-2 refusal."""
-        await check_tier2(spec, messages, self._consents, session_id=ctx.session_id)
-        if self._runtime.provider == "free":
-            with suppress(NotDemoData):  # answered by the fake anyway; only another account's Tier-2 text is refused
-                await self._data_rule.check_call(spec.name, messages, ctx)
+        """The rules a fallback keeps: the Tier-2 consent guard and, on the free route, the D-37 Tier-2 refusal. As in
+        the service, a call the ledger cannot record is refused unrecorded, and a refusal is a ``blocked_tier2`` or
+        ``blocked_consent`` row with names and lengths only."""
+        await self._ledger.check_subject(org_id=ctx.org_id, user_id=ctx.user_id)
+        try:
+            await check_tier2(spec, messages, self._consents, session_id=ctx.session_id)
+            if self._runtime.provider == "free":
+                with suppress(NotDemoData):  # answered by the fake anyway; another account's Tier-2 text is refused
+                    await self._data_rule.check_call(spec.name, messages, ctx)
+        except (Tier2NotAllowed, ConsentRequired) as exc:
+            status = CallStatus.BLOCKED_CONSENT if isinstance(exc, ConsentRequired) else CallStatus.BLOCKED_TIER2
+            await self._ledger.record(
+                LedgerEntry(
+                    id=uuid7(),
+                    created_at=self._now(),
+                    org_id=ctx.org_id,
+                    user_id=ctx.user_id,
+                    task=spec.name,
+                    purpose=spec.purpose.value,
+                    model=spec.model,  # a refused call names the task's model, as the service's rows do
+                    status=status,
+                    stop_reason=None,
+                    input_tokens=0,
+                    output_tokens=0,
+                    cache_read_tokens=0,
+                    cache_creation_tokens=0,
+                    cost_usd=Decimal(0),
+                    latency_ms=0,
+                    trace_id=str(ctx.trace_id),
+                    attempt=0,
+                    inputs=unsent_inputs(messages),
+                    error=str(exc),
+                )
+            )
+            raise
 
     def _unavailable(self, spec: TaskSpec, reason: FallbackReason) -> LLMUnavailable:
         return LLMUnavailable(f"no provider can serve task {spec.name} ({reason.value})")
@@ -315,7 +355,11 @@ class RoutedLLMClient:
         )
 
     async def batch_poll[OutputT: LLMOutput](self, handle: BatchHandle, schema: type[OutputT]) -> BatchPoll[OutputT]:
-        if not handle.demo_fallback:
+        if not handle.demo_fallback:  # a provider batch is Anthropic's: another provider family never polls it
+            if self._runtime.provider != "anthropic":
+                raise LLMUnavailable(
+                    f"batch {handle.batch_id} is a provider batch: poll it with LLM_PROVIDER=anthropic"
+                )
             return await self._anthropic().batch_poll(handle, schema)
         spec = self._runtime.registry.task(handle.task)
         check_schema(schema)

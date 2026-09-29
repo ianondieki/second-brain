@@ -226,6 +226,19 @@ async def test_an_anthropic_batch_that_fails_to_submit_falls_back_or_raises() ->
         await routed(reg=batchable(), demo_fallback=False).client.batch_submit(TASK, items("a"), Verdict, ctx=DEMO)
 
 
+@pytest.mark.parametrize("provider", ["free", "fake"])
+async def test_a_real_batch_handle_is_polled_only_on_the_anthropic_provider(provider: str) -> None:
+    """P7 review: a provider batch belongs to Anthropic; another provider family refuses to poll it."""
+    handle = BatchHandle(
+        batch_id="msgbatch_real", task=TASK, model="m", trace_id="t", org_id=None, user_id=USER, inputs={"a": {}}
+    )
+    adapter = FakeAdapter()
+    r = routed(provider=provider, anthropic=adapter, reg=batchable())  # type: ignore[arg-type]
+    with pytest.raises(LLMUnavailable, match="anthropic"):
+        await r.client.batch_poll(handle, Verdict)
+    assert r.built == []
+
+
 async def test_a_handle_with_an_unknown_reason_polls_as_no_batch_api() -> None:
     handle = BatchHandle(
         batch_id="demo-fallback-x",
