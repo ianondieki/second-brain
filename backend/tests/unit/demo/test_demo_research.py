@@ -39,7 +39,8 @@ async def test_the_seeded_client_answers_the_research_call_only() -> None:
     client = SeededExampleClient(seeded_answer("health"))
     ctx = CallContext(trace_id="research:seed")
     result = await client.complete(synthesis.TASK, [], synthesis.ResearchSynthesis, ctx=ctx)
-    assert (result.model, result.cost_usd, result.demo_fallback, result.attempts) == (SEEDED_EXAMPLE_MODEL, 0, False, 0)
+    assert (result.model, result.demo_fallback, result.attempts) == (SEEDED_EXAMPLE_MODEL, False, 0)
+    assert result.cost_usd == 0
     with pytest.raises(LLMConfigError):
         await client.complete("reminder_nudge", [], synthesis.ResearchSynthesis, ctx=ctx)
     with pytest.raises(LLMConfigError):
