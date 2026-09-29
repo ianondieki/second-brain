@@ -2728,6 +2728,7 @@
     },
     "/api/auth/totp/confirm": {
       "post": {
+        "description": "Turn two-step sign-in on with a code from the pending secret; returns the recovery codes, shown once. 409\nno_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared).",
         "operationId": "totp_confirm_api_auth_totp_confirm_post",
         "requestBody": {
           "content": {
@@ -2932,6 +2933,99 @@
       }
     },
     "/api/auth/totp/enrol": {
+      "delete": {
+        "description": "Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409\ntotp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery\ncodes, may have been lost); 409 no_pending_enrolment when nothing is pending.",
+        "operationId": "totp_enrol_cancel_api_auth_totp_enrol_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Totp Enrol Cancel",
+        "tags": [
+          "auth"
+        ]
+      },
       "post": {
         "operationId": "totp_enrol_api_auth_totp_enrol_post",
         "requestBody": {

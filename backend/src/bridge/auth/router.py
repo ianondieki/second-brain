@@ -310,6 +310,18 @@ async def totp_enrol(
     return TotpEnrolResponse(secret=secret, otpauth_uri=uri)
 
 
+@router.delete("/totp/enrol", status_code=status.HTTP_204_NO_CONTENT)
+async def totp_enrol_cancel(live: CurrentSession, db: Db) -> None:
+    """Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409
+    totp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery
+    codes, may have been lost); 409 no_pending_enrolment when nothing is pending."""
+    try:
+        await service.cancel_totp_enrolment(db, live)
+    except service.AuthError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+
+
 @router.post("/totp/confirm")
 async def totp_confirm(
     body: CodeRequest,
@@ -320,9 +332,12 @@ async def totp_confirm(
     settings: SettingsDep,
     email: EmailDep,
 ) -> RecoveryCodesResponse:
+    """Turn two-step sign-in on with a code from the pending secret; returns the recovery codes, shown once. 409
+    no_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared)."""
     try:
         codes, pending = await service.confirm_totp_enrolment(db, settings, live, body.code)
     except service.AuthError as exc:
+        await db.commit()  # keep an expired pending secret cleared
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)

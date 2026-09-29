@@ -291,7 +291,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Totp Confirm */
+        /**
+         * Totp Confirm
+         * @description Turn two-step sign-in on with a code from the pending secret; returns the recovery codes, shown once. 409
+         *     no_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared).
+         */
         post: operations["totp_confirm_api_auth_totp_confirm_post"];
         delete?: never;
         options?: never;
@@ -327,7 +331,13 @@ export interface paths {
         put?: never;
         /** Totp Enrol */
         post: operations["totp_enrol_api_auth_totp_enrol_post"];
-        delete?: never;
+        /**
+         * Totp Enrol Cancel
+         * @description Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409
+         *     totp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery
+         *     codes, may have been lost); 409 no_pending_enrolment when nothing is pending.
+         */
+        delete: operations["totp_enrol_cancel_api_auth_totp_enrol_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2547,6 +2557,96 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TotpEnrolResponse"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    totp_enrol_cancel_api_auth_totp_enrol_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

@@ -16,7 +16,7 @@ import re
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -61,6 +61,7 @@ EMAIL_DAILY_LIMIT = 20  # emails to one address a day, whatever the source
 EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minute from one client IP, any account
+PENDING_TOTP_TTL = timedelta(minutes=15)  # the magic-link lifetime: a setup left open longer must start again
 
 
 class AuthError(Exception):
@@ -523,17 +524,44 @@ async def begin_totp_enrolment(
         raise AuthError("totp_already_enabled", 409)
     await require_reauth(db, settings, user, live, password, ip=ip)
     secret = totp.new_secret()
-    user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
+    # The start time travels inside the AES-GCM envelope with the secret, so it cannot be altered or detached.
+    began = int(clock.utcnow().timestamp())
+    user.totp_pending_enc = encrypt(_key(settings), f"{secret}|{began}".encode("ascii"), user.id.bytes)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
+
+
+def _pending_secret(settings: Settings, user: User) -> str | None:
+    """The pending secret while its setup is fresh. One begun over ``PENDING_TOTP_TTL`` ago (a closed tab), or stored
+    before the start time was sealed with it, is cleared instead. The caller holds ``lock_user``."""
+    if user.totp_pending_enc is None:
+        return None
+    secret, _, began = _secret(settings, user, user.totp_pending_enc).partition("|")
+    if began.isdigit() and clock.utcnow() - datetime.fromtimestamp(int(began), UTC) <= PENDING_TOTP_TTL:
+        return secret
+    user.totp_pending_enc = None
+    return None
+
+
+async def cancel_totp_enrolment(db: AsyncSession, live: sessions.LiveSession) -> None:
+    """Cancel setup: clear the pending secret (follow-up 7). It takes ``lock_user`` like the confirmation, so the two
+    serialise: behind a confirmation that committed first it answers 409 totp_already_enabled (two-step sign-in is on
+    and that answer may have been lost, codes unseen); a confirmation behind it finds nothing pending."""
+    user = await lock_user(db, live.user.id)
+    if user.totp_enabled_at is not None:
+        raise AuthError("totp_already_enabled", 409)
+    if user.totp_pending_enc is None:
+        raise AuthError("no_pending_enrolment", 409)
+    user.totp_pending_enc = None
 
 
 async def confirm_totp_enrolment(
     db: AsyncSession, settings: Settings, live: sessions.LiveSession, code: str
 ) -> tuple[list[str], list[PendingEmail]]:
     user = await lock_user(db, live.user.id)
-    if user.totp_pending_enc is None:
-        raise AuthError("no_pending_enrolment", 409)
-    check = totp.verify(_secret(settings, user, user.totp_pending_enc), code, last_counter=None)
+    secret = _pending_secret(settings, user)
+    if secret is None:
+        raise AuthError("no_pending_enrolment", 409)  # the router commits, so an expired secret stays cleared
+    check = totp.verify(secret, code, last_counter=None)
     if not check.ok:
         raise AuthError("invalid_code", 401)
     codes = totp.new_recovery_codes()
