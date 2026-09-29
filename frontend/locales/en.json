@@ -236,6 +236,11 @@
     "body": "Something went wrong while loading this page. Try again in a moment.",
     "retry": "Try again"
   },
+  "nav": {
+    "developer": "Developer",
+    "home": "Home",
+    "companies": "Companies"
+  },
   "verify": {
     "pageTitle": "Check a certificate",
     "title": "Check an authorship certificate",

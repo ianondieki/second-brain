@@ -69,6 +69,13 @@
     scroll-padding-block: 1.5rem;
   }
 
+  /* Under 1024 px the developer tab bar is fixed to the bottom: focus scrolling keeps controls above it. */
+  @media (width < 64rem) {
+    html:has([data-tab-bar]) {
+      scroll-padding-block-end: calc(5rem + env(safe-area-inset-bottom));
+    }
+  }
+
   body {
     line-height: 1.6;
   }

@@ -236,6 +236,11 @@
     "body": "Kuna tatizo wakati wa kupakia ukurasa huu. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena"
   },
+  "nav": {
+    "developer": "Msanidi programu",
+    "home": "Nyumbani",
+    "companies": "Makampuni"
+  },
   "verify": {
     "pageTitle": "Kagua cheti",
     "title": "Kagua cheti cha uandishi",
