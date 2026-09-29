@@ -4,6 +4,7 @@ pause and resume, delete, and Preview: rules only, the last 30 days, nothing wri
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from bridge.ids import uuid7
+from bridge.llm.fakes import FakeLLMClient
+from bridge.matching.rationale import ScoutFit
 from bridge.matching.scan import clock_now, run_periodic
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
@@ -242,3 +245,27 @@ async def test_a_pending_organisation_configures_and_previews(
         assert (await owner.post(path(world.org.id), json=form(world.niche))).status_code == 201
         preview = await owner.post(path(world.org.id, "/preview"), json=form(world.niche))
         assert preview.json()["total"] == 1
+
+
+async def test_the_model_never_changes_which_proposals_the_digest_lists(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """AC-SCOUT-5 (P10 review MAJOR 2): a top-3 plan, four equal proposals, a model that answers 0 for the first and
+    100 for the rest: Preview and the first digest list the same three, in the same order."""
+    world = await build(owner_engine)  # the free plan: a digest of 3
+    published = [(await publish(owner_engine, world, f"p{i}"))[0] for i in range(4)]
+    body = form(world.niche, min_fit=60, recipients=[str(world.org.reviewer)])
+    async with clients(app_engine, SETTINGS, world.org.owner) as (owner,):
+        preview = (await owner.post(path(world.org.id, "/preview"), json=body)).json()
+        assert [i["proposal_id"] for i in preview["items"]] == [str(p) for p in published[:3]]
+        assert (await owner.post(path(world.org.id), json=body)).status_code == 201
+    replies = [ScoutFit(injection_suspected=False, fit=fit, rationale="A fit.") for fit in (0, 100, 100, 100)]
+    scan_deps, email = deps(app_engine, llm=FakeLLMClient(replies))
+    await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True)
+    [digest] = email.outbox
+    match_ids = re.findall(r"/org/inbox/matches/([0-9a-f-]{36})\?", digest.text)
+    proposal_of = {
+        str(m.id): m.proposal_id
+        for m in await rows(owner_engine, "SELECT id, proposal_id FROM agent_matches WHERE org_id = :o", o=world.org.id)
+    }
+    assert [proposal_of[m] for m in match_ids] == published[:3]  # the Preview equals the first digest

@@ -9,8 +9,11 @@ opening one changes nothing (the matches API has no side effect on GET).
 
 ``send`` runs after a scan committed, with the scout's acting member and organisation bound:
 
-1. the scout's undigested matches (``digest_sent_at`` NULL) whose proposal is still published and clear, highest
-   score first, read through ``current_version_id`` (Tier 1 only);
+1. the scout's undigested matches (``digest_sent_at`` NULL) whose proposal is still published and clear, read through
+   ``current_version_id`` (Tier 1 only), chosen and ordered exactly as Preview orders them: the rules' deterministic
+   score (``rule_breakdown.deterministic``), then the earlier publication, then the proposal id. The model never
+   changes which matches are listed (AC-SCOUT-5: the Preview equals the first digest); the final score is shown as a
+   figure only;
 2. the recipients re-checked at send time (AC-SCOUT-7, AC-SCOUT-8): each still an active member holding reviewer, an
    active user with a verified email address at the organisation's verified domain, of an E1 or E2 organisation that
    is not suspended; a removed recipient gets nothing;
@@ -148,7 +151,7 @@ _UNDIGESTED = text(
     " LEFT JOIN niches n ON n.id = v.niche_id LEFT JOIN niches pn ON pn.id = n.parent_id"
     " LEFT JOIN regions r ON r.code = v.county_code"
     " WHERE m.scout_id = :scout AND m.org_id = :org AND m.digest_sent_at IS NULL"
-    " ORDER BY m.score DESC, m.created_at, m.id"
+    " ORDER BY coalesce(CAST(m.rule_breakdown ->> 'deterministic' AS integer), m.score) DESC, p.published_at, p.id"
 )
 _RECIPIENTS = text(
     "SELECT u.id, CAST(u.email AS text) AS email FROM users u"
