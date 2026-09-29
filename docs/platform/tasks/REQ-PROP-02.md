@@ -23,8 +23,10 @@ AC-PROP-6 (`unit/proposals/test_sanitise.py`, `integration/proposals/test_holds.
   `check_field` (raw and plain text, so a link hidden in HTML is still refused; the summary's 150 words). Errors name the
   field and a plain `[[COPY-REVIEW]]` reason, never the offending text. Applied to the four Tier-1 text fields and a new
   Problem's title and statement on every save and again at publishing.
-- Holds (with REQ-MOD-01): `bridge/proposals/prescreen.py` `RulesPreScreen` holds `security_vulnerability` (a
-  vulnerability vocabulary: exploits, injection, XSS/CSRF, RCE, auth/OTP bypass, breaches, CVE ids, ...) and
+- Holds (with REQ-MOD-01): `bridge/proposals/prescreen.py` `RulesPreScreen` holds `security_vulnerability` (security
+  vocabulary in a technical context: a vulnerability in or of a system, exploits of a system or bug, injection,
+  XSS/CSRF, RCE, auth/OTP bypass, data breaches, hacked or breached systems, CVE ids; "vulnerable households" or "we
+  hacked together a prototype" hold nothing) and
   `names_real_org_negative` (a listed directory organisation, by legal name, name without its legal form, or brand
   before a sector word, in the same sentence as a negative term). A held teaser is `moderation_state = held` with a
   `moderation_cases` row in the publishing transaction; RLS, the teaser endpoint and every other reader return nothing
