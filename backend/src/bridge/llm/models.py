@@ -20,6 +20,8 @@ session that binds no user.
 Spend is read from the ``llm_spend`` view (org_id, user_id, cost_usd, created_at; revision 0002), the one rule that
 counts a reservation until its item settles and then only the settled row: the tenant monthly sum reads the view
 under RLS, and ``app_llm_spend_usd`` the platform total.
+``app_llm_calls_since(model, since)`` (revision 0004; a free slot's daily request cap, D-37) returns the platform-wide
+number of the model's rows since then that reached a provider (every status but ``blocked_*`` and ``batch_reserved``).
 """
 
 from __future__ import annotations

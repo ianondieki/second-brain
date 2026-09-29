@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -14,24 +15,31 @@ from bridge.auth import sessions
 from bridge.auth.models import User
 from bridge.clock import utcnow
 from bridge.config import Settings, get_settings
+from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.db import bind_tenant, create_session_factory
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.main import create_app
 from bridge.notifications.email import FakeEmailProvider
+from bridge.storage.objects import InMemoryObjectStore
+from bridge.storage.scanner import FakeScanner
 
 
 @asynccontextmanager
 async def make_client(
     app_engine: AsyncEngine, settings: Settings | None = None, *, ip: str = "127.0.0.1"
 ) -> AsyncIterator[httpx.AsyncClient]:
-    """An https client (Secure cookies are sent) for an app wired to ``app_engine`` and fake email and SMS outboxes.
-    ``ip`` is the client address the app sees (per-IP throttles)."""
+    """An https client (Secure cookies are sent) for an app wired to ``app_engine``, fake email and SMS outboxes, a
+    throwaway Tier-2 key wrapper, an in-memory object store and the fake scanner (tests replace them on
+    ``client.app.state``). ``ip`` is the client address the app sees (per-IP throttles)."""
     settings = settings or get_settings()
     app = create_app(settings)
     app.state.engine = app_engine
     app.state.session_factory = create_session_factory(app_engine)
     app.state.email_provider = FakeEmailProvider()
     app.state.sms_provider = FakeSmsProvider()
+    app.state.key_wrapper = LocalKeyWrapper(os.urandom(32))
+    app.state.object_store = InMemoryObjectStore()
+    app.state.scanner = FakeScanner()
     transport = httpx.ASGITransport(app=app, client=(ip, 123))
     async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
         client.app = app  # type: ignore[attr-defined]

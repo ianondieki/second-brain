@@ -232,3 +232,11 @@ class SqlLedger:
     async def global_spent_usd(self, *, since: datetime) -> Decimal:
         async with self._session() as db:
             return Decimal((await db.execute(select(func.app_llm_spend_usd(since)))).scalar_one())
+
+    async def calls_since(self, *, model: str, since: datetime) -> int:
+        """Platform-wide: a free slot's quota is shared by every tenant, so ``app_llm_calls_since()`` (revision 0004,
+        a SECURITY DEFINER count; the number only, never a row) counts every tenant's and the platform jobs' rows of
+        ``model`` since ``since`` that reached the provider: every row but a ``blocked_*`` one or a ``batch_reserved``
+        reservation (``NOT_SENT``, which the integration tests hold the function to)."""
+        async with self._session() as db:
+            return int((await db.execute(select(func.app_llm_calls_since(model, since)))).scalar_one())

@@ -31,7 +31,8 @@ from bridge.llm.types import LLMOutput, TokenUsage
 
 Reply = LLMOutput | Mapping[str, Any] | str | ModelResponse | BatchItemError | BaseException
 FAKE_CHARS_PER_TOKEN = 4
-# The fake's own global cap, so callers' tests are not refused by a dev or test LLM_GLOBAL_DAILY_CAP_USD of 0.
+# The fake's own global caps, so callers' tests are not refused by a dev or test LLM_GLOBAL_DAILY_CAP_USD of 0 or by
+# the prototype total (LLM_PROTOTYPE_TOTAL_CAP_USD).
 FAKE_GLOBAL_DAILY_CAP_USD = Decimal(1000)
 
 
@@ -101,7 +102,11 @@ class FakeLLMClient(LLMService):
         caps: CapProvider | None = None,
         nonce: Callable[[], str] = new_nonce,
     ) -> None:
-        cfg = settings or get_settings().model_copy(update={"llm_global_daily_cap_usd": FAKE_GLOBAL_DAILY_CAP_USD})
+        roomy = {
+            "llm_global_daily_cap_usd": FAKE_GLOBAL_DAILY_CAP_USD,
+            "llm_prototype_total_cap_usd": FAKE_GLOBAL_DAILY_CAP_USD,
+        }
+        cfg = settings or get_settings().model_copy(update=roomy)
         self.adapter = FakeAdapter(replies)
         self.ledger = InMemoryLedger()
         self.dead_letters = InMemoryDeadLetters()

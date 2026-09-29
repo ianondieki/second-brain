@@ -164,3 +164,10 @@ async def audit_reader_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
     engine = role_engine(database_url, "audit_reader")
     yield engine
     await engine.dispose()
+
+
+# Proposal fixtures shared by the proposal, billing, admin and profile API tests (REQ-PROP-01, REQ-BIL-02, REQ-MOD-01).
+from tests.integration.proposals.helpers import developers, moderators, proposal_world  # noqa: E402, F401
+
+# The Tier-2 scene of the T2.5 tests (REQ-REPO-01, REQ-PROV-03, REQ-SEC-01).
+from tests.integration.proposals.tier2_scene import scenes  # noqa: E402, F401

@@ -28,8 +28,10 @@ from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.logging import configure_logging
 from bridge.notifications.email import provider_from_settings
+from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.proposals.router import router as proposals_router
 from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
@@ -66,11 +68,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
-        # The LLM registry and adapter; requests get LLMService over the SQL stores (bridge.llm.deps.LLMDep).
-        app.state.llm_registry, app.state.llm_adapter = llm_runtime(settings)
+        # The LLM registry and provider adapters; requests get RoutedLLMClient over the SQL stores (bridge.llm.deps).
+        app.state.llm_runtime = llm_runtime(settings)
         try:
             yield
         finally:
+            await app.state.llm_runtime.aclose()
             await engine.dispose()
 
     app = FastAPI(
@@ -116,6 +119,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(directory_router)
     app.include_router(admin_router)
     app.include_router(provenance_router)
+    app.include_router(proposals_router)
+    app.include_router(problems_router)
     app.include_router(engagements_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
