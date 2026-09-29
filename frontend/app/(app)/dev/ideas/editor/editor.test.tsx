@@ -231,9 +231,10 @@ describe("publishing", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     });
-    expect(screen.getByText("Title: Add a title.")).toBeTruthy();
-    expect(screen.getByText("How far along is it?: Choose how far along it is.")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Go to step 1" })[0]);
+    expect(screen.getByText("Add a title.")).toBeTruthy();
+    expect(screen.getByText("Choose how far along it is.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Go to step 1" })).toHaveLength(1); // one per step to fix
+    fireEvent.click(screen.getByRole("button", { name: "Go to step 1" }));
     expect(screen.getByLabelText("Title").getAttribute("aria-invalid")).toBe("true");
   });
 

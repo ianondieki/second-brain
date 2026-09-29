@@ -17,7 +17,7 @@ import {
   type Step,
 } from "../ideas";
 import type { PublishProblem } from "../outcomes";
-import { FIELD_LABEL, useIssueMessage } from "./issues";
+import { useIssueMessage } from "./issues";
 
 export interface ReviewProps {
   state: EditorState;
@@ -56,6 +56,8 @@ export function Review(props: ReviewProps) {
     if (!blocking.some((b) => b.field === issue.field)) blocking.push(issue);
   }
 
+  const steps = [...new Set(blocking.map((issue) => FIELD_STEP[issue.field]))].sort();
+
   return (
     <div className="flex flex-col gap-8">
       <section aria-labelledby={`${id}-teaser`}>
@@ -90,14 +92,17 @@ export function Review(props: ReviewProps) {
           <h3 id={`${id}-missing`} className="font-semibold text-error">
             {t("missingTitle")}
           </h3>
-          <ul className="mt-2 flex flex-col">
+          <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-ink marker:text-ink-soft">
             {blocking.map((issue) => (
-              <li key={issue.field} className="flex flex-wrap items-center justify-between gap-x-4">
-                <span className="py-1 text-ink">
-                  {t("fieldIssue", { field: f(FIELD_LABEL[issue.field]), problem: issueMessage(issue) })}
-                </span>
-                <Button variant="link" onClick={() => props.onGoTo(FIELD_STEP[issue.field])}>
-                  {t("fixIn", { step: FIELD_STEP[issue.field] })}
+              <li key={issue.field}>{issueMessage(issue)}</li>
+            ))}
+          </ul>
+          {/* One way back per step that has something to fix. */}
+          <ul className="mt-2 flex flex-wrap gap-x-6">
+            {steps.map((step) => (
+              <li key={step}>
+                <Button variant="link" onClick={() => props.onGoTo(step)}>
+                  {t("fixIn", { step })}
                 </Button>
               </li>
             ))}

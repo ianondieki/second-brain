@@ -61,19 +61,3 @@ export function useIssueMessage() {
     [t],
   );
 }
-
-/** The field's label key under ideaFields.* for the review step's list. */
-export const FIELD_LABEL = {
-  title: "title",
-  niche_id: "niche",
-  county_code: "county",
-  maturity: "maturity",
-  ask: "ask",
-  problem_statement: "problemStatement",
-  summary: "summary",
-  impact_claims: "impactClaims",
-  problems: "problems",
-  "new_problem.title": "newProblemTitle",
-  "new_problem.statement": "newProblemStatement",
-  links: "links",
-} as const satisfies Record<FieldName, string>;

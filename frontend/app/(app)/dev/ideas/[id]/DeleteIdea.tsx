@@ -5,11 +5,19 @@ import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 
 import { removeIdea } from "../calls";
 import { BASE_PATH } from "../ideas";
+
+// Destructive buttons, written out rather than layered on the secondary variant: without class merging, two
+// background or border utilities on one element resolve by stylesheet order, not by the order written.
+const DANGER_BASE =
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control border px-5 text-base font-semibold " +
+  "transition-colors duration-150 ease-out aria-disabled:cursor-progress";
+const DANGER_OUTLINE = `${DANGER_BASE} border-error bg-transparent text-error hover:bg-[color-mix(in_oklab,var(--error)_7%,var(--paper))]`;
+const DANGER_SOLID = `${DANGER_BASE} border-error bg-error text-on-accent hover:bg-[color-mix(in_oklab,var(--error)_84%,var(--ink))]`;
 
 export interface DeleteIdeaProps {
   id: string;
@@ -47,14 +55,9 @@ export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteId
 
   return (
     <>
-      <Button
-        variant="secondary"
-        className="border-error text-error hover:bg-[color-mix(in_oklab,var(--error)_7%,var(--paper))]"
-        onClick={() => dialog.current?.showModal()}
-        aria-haspopup="dialog"
-      >
+      <button type="button" className={DANGER_OUTLINE} onClick={() => dialog.current?.showModal()} aria-haspopup="dialog">
         {t("open")}
-      </Button>
+      </button>
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
@@ -80,10 +83,7 @@ export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteId
             type="button"
             onClick={confirm}
             aria-disabled={busy || undefined}
-            className={buttonClass(
-              "secondary",
-              "border-error bg-error text-on-accent hover:bg-[color-mix(in_oklab,var(--error)_84%,var(--ink))] hover:text-on-accent",
-            )}
+            className={DANGER_SOLID}
           >
             {busy ? t("deleting") : t("confirm")}
           </button>

@@ -163,11 +163,9 @@ export function ProblemPicker(props: ProblemPickerProps) {
                   <li key={problem.id} className="flex items-start justify-between gap-3 border-t border-line py-3">
                     <div className="min-w-0">
                       <p className="font-medium [overflow-wrap:anywhere] text-ink">{problem.title}</p>
-                      <p className="text-sm text-ink-soft">
-                        {problem.niche?.label ?? null}
-                        {problem.source === "developer" ? (
-                          <span className={problem.niche ? "ml-2" : undefined}>{f("developerReported")}</span>
-                        ) : null}
+                      <p className="flex flex-wrap gap-x-3 text-sm text-ink-soft">
+                        {problem.niche ? <span>{problem.niche.label}</span> : null}
+                        {problem.source === "developer" ? <span>{f("developerReported")}</span> : null}
                       </p>
                       <p className="mt-1 line-clamp-2 text-sm text-ink [overflow-wrap:anywhere]">{problem.statement}</p>
                     </div>

@@ -486,7 +486,6 @@
     "filesLabel": "Attached files",
     "reviewTitle": "Check before you publish",
     "missingTitle": "Before you can publish",
-    "fieldIssue": "{field}: {problem}",
     "fixIn": "Go to step {step}",
     "attestationsTitle": "Confirm that this is yours",
     "attestationRequired": "Confirm this statement.",
