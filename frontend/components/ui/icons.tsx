@@ -113,3 +113,44 @@ export function ChevronDownIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** My ideas: a page with a folded corner and two lines of writing. */
+export function IdeasIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 2.75h6.75L15.5 6.5v10.75H5Z" />
+      <path d="M11.5 2.75V6.75h4" />
+      <path d="M7.75 10.25h4.5M7.75 13.25h3" />
+    </Icon>
+  );
+}
+
+/** A draft: a pencil. */
+export function PencilIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12.75 4.25 15.75 7.25 7.5 15.5l-3.75.75.75-3.75Z" />
+      <path d="m11 6 3 3" />
+    </Icon>
+  );
+}
+
+/** Waiting (held for review, timestamp pending): a clock. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 6v4.25l2.75 1.75" />
+    </Icon>
+  );
+}
+
+/** Confidential (Tier 2): a padlock. */
+export function LockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4.25" y="8.75" width="11.5" height="8.5" rx="1.5" />
+      <path d="M6.75 8.75V6.5a3.25 3.25 0 0 1 6.5 0v2.25" />
+    </Icon>
+  );
+}
