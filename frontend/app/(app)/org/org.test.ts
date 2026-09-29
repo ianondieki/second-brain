@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import en from "@/locales/en.json";
 
-import { inboxHref, isUuid, orgQuery, pickMembership, proposalHref, type Membership } from "./membership";
+import {
+  engagementsHref,
+  inboxHref,
+  isUuid,
+  orgQuery,
+  pickMembership,
+  proposalHref,
+  type Membership,
+} from "./membership";
 import { ACTION_HREF, REFUSAL_ACTION, REFUSALS, refusalOf } from "./refusals";
 
 const A: Membership = { org_id: "01a0ee62-0000-7000-8000-00000000000a", org_name: "Amani Foods", roles: ["reviewer"] };
@@ -36,6 +44,8 @@ describe("the organisation a screen acts for (org picker)", () => {
     expect(proposalHref([A, B], B.org_id, PROPOSAL, { view: true })).toBe(
       `/org/inbox/${PROPOSAL}?org=${B.org_id}&view=full`,
     );
+    expect(engagementsHref([A], A.org_id)).toBe("/org/engagements");
+    expect(engagementsHref([A, B], B.org_id, PROPOSAL)).toBe(`/org/engagements/${PROPOSAL}?org=${B.org_id}`);
   });
 
   it("checks ids before they reach the API", () => {

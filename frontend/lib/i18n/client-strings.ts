@@ -16,6 +16,7 @@ export const PLACEHOLDER_NAMES = [
   "limit",
   "max",
   "name",
+  "number",
   "org",
   "step",
   "title",
@@ -34,6 +35,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "pitch",
   "tagWithdraw",
   "orgProposal",
+  "trackerActions",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

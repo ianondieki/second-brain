@@ -8,7 +8,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 
 import { getInbox, orgContext, type InboxPage, type OrgVerification } from "../data";
 import { EmptyState } from "../EmptyState";
-import { first, inboxHref, proposalHref, type Membership } from "../membership";
+import { engagementsHref, first, inboxHref, proposalHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
 import { InboxRow } from "./InboxRow";
@@ -150,7 +150,12 @@ async function InboxList({
       {held}
       <section aria-label={t("listLabel", { org: orgName })}>
         {page.items.map((item) => (
-          <InboxRow key={item.tag_id} item={item} href={proposalHref(memberships, org.org_id, item.proposal.id)} />
+          <InboxRow
+            key={item.tag_id}
+            item={item}
+            href={proposalHref(memberships, org.org_id, item.proposal.id)}
+            trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
+          />
         ))}
       </section>
       {cursor || page.next_cursor ? (

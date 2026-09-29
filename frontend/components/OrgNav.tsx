@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import type { ComponentType, SVGProps } from "react";
 
 import { InboxIcon } from "./org-icons";
+import { EngagementsIcon } from "./tracker/icons";
 import { cn } from "./ui/cn";
 import { HomeIcon } from "./ui/icons";
 
@@ -14,6 +15,7 @@ import { HomeIcon } from "./ui/icons";
 export const ORG_SECTIONS = [
   { key: "home", href: "/org", Icon: HomeIcon },
   { key: "inbox", href: "/org/inbox", Icon: InboxIcon },
+  { key: "engagements", href: "/org/engagements", Icon: EngagementsIcon },
 ] as const satisfies ReadonlyArray<{ key: string; href: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }>;
 
 export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];

@@ -13,21 +13,22 @@ import { IdeaStatusBadge } from "./IdeaStatusBadge";
  * One idea in the list: its title as the link, the niche, and at most two chips (docs/spec/07 item 2): the status
  * and, for a published idea with saved edits, "Unpublished changes".
  */
-export function IdeaRow({ item }: { item: MyProposalItem }) {
+export function IdeaRow({ item, headingLevel = 2 }: { item: MyProposalItem; headingLevel?: 2 | 3 }) {
+  const Heading = headingLevel === 3 ? "h3" : "h2";
   const t = useTranslations("ideas");
   const fields = useTranslations("ideaFields");
   const locale = useLocale();
   const changes = hasUnpublishedChanges(item);
   return (
     <article className="relative flex flex-col gap-1.5 border-t border-line py-5">
-      <h2 className="text-lg [overflow-wrap:anywhere] text-ink">
+      <Heading className="text-lg [overflow-wrap:anywhere] text-ink">
         <Link
           href={ideaHref(item.id)}
           className="underline decoration-line decoration-1 underline-offset-4 after:absolute after:inset-0 hover:decoration-jacaranda"
         >
           {item.title?.trim() || t("untitled")}
         </Link>
-      </h2>
+      </Heading>
       {item.niche ? <p className="text-sm text-ink-soft">{item.niche.label}</p> : null}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
         <IdeaStatusBadge status={ideaStatus(item.status, item.moderation_state)} className="text-sm" />

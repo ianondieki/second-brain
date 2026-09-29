@@ -197,6 +197,15 @@ describe("InboxRow (Tier 1 only)", () => {
     expect(container.querySelector("[data-chip]")?.textContent).toBe("New");
   });
 
+  it("links the stage chip to the engagement's tracker (REQ-ENG-03), keeping the chosen organisation", () => {
+    const href = `/org/engagements/${item.engagement!.id}?org=01a0ee62-0000-7000-8000-000000000001`;
+    const { container } = renderWithIntl(<InboxRow item={item} href="/x" trackerHref={href} />);
+    const chip = container.querySelector("[data-chip='stage']")!;
+    expect(chip.tagName).toBe("A");
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(screen.getByRole("link", { name: "New" })).toBe(chip);
+  });
+
   it("names the stage once the organisation has moved it, and 'New' before an engagement exists", () => {
     const moved = { ...item, engagement: { ...item.engagement!, state: "DECLINED" as const } };
     const { container, unmount } = renderWithIntl(<InboxRow item={moved} href="/x" />);

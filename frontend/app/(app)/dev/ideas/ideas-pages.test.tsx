@@ -117,3 +117,10 @@ describe("deleting an idea", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+describe("an idea row under another section", () => {
+  it("takes the heading level it is given (h3 on Home, under My ideas)", () => {
+    renderWithIntl(<IdeaRow item={item()} headingLevel={3} />);
+    expect(screen.getByRole("heading", { level: 3, name: "Cold chain for dairy co-ops" })).toBeTruthy();
+  });
+});
