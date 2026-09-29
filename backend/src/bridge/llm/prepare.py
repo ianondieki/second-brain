@@ -146,6 +146,7 @@ def prepare(
                 max_chars=cap,
                 base64_run_chars=policy.base64_run_chars,
                 base64_segment_chars=policy.base64_segment_chars,
+                max_input_ratio=policy.max_input_ratio,
             )
             blocks.append(TextBlock(frame(part.name, part.tier, clean.text, nonce)))
             records.append(field_record(part, clean.text, clean.removed))

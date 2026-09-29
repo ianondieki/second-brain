@@ -89,6 +89,7 @@ class SanitiserPolicy:
     max_field_chars: int
     base64_run_chars: int
     base64_segment_chars: int
+    max_input_ratio: int  # the input is cut to this many times the field's cap before cleaning
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +298,7 @@ def parse(data: Mapping[str, Any]) -> Registry:
         max_field_chars=_positive_int(data["sanitiser"]["max_field_chars"], "sanitiser.max_field_chars"),
         base64_run_chars=_positive_int(data["sanitiser"]["base64_run_chars"], "sanitiser.base64_run_chars"),
         base64_segment_chars=_positive_int(data["sanitiser"]["base64_segment_chars"], "sanitiser.base64_segment_chars"),
+        max_input_ratio=_positive_int(data["sanitiser"]["max_input_ratio"], "sanitiser.max_input_ratio"),
     )
     ratio = _decimal(data["budget"]["soft_cap_ratio"], "budget.soft_cap_ratio")
     if not 0 < ratio <= 1:

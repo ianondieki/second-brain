@@ -8,7 +8,9 @@ and tab, surrogates and unassigned code points); script and style blocks, commen
 decoded; markdown links, images and reference links reduced to their text with balanced brackets and parentheses, and
 reference definitions removed even with the URL on the next line; base64-like runs over the limit replaced, counted
 across whitespace between long segments (MIME-wrapped blocks); leftover angle brackets turned into single guillemets;
-blank-line runs collapsed; the result cut to the field's length cap.
+blank-line runs collapsed; the result cut to the field's length cap. The input is cut first, to a multiple of the cap
+(``max_input_ratio``), and every pass is linear in its length, so sanitising (synchronous, before the budget check)
+stays cheap whatever an author sends.
 
 ``frame`` wraps sanitised text in a ``<submission nonce="..." ...>`` block. The nonce is random (64 bits) per
 ``LLMService`` instance (a request or a job run; see ``bridge.llm.client``), and the
@@ -60,7 +62,8 @@ _IGNORABLE_RANGES = (
     (0x1D173, 0x1D17A),  # musical symbol format controls
     (0xE0000, 0xE0FFF),  # tags and variation selectors 17-256
 )
-_BLOCKS = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_BLOCK_OPENER = re.compile(r"<(script|style)\b", re.IGNORECASE)
+_BLOCK_CLOSERS = {name: re.compile(rf"</{name}\s*>", re.IGNORECASE) for name in ("script", "style")}
 _COMMENTS = re.compile(r"<!--.*?(?:-->|$)", re.DOTALL)
 _TAGS = re.compile(r"<[^<>]*>")
 # A reference definition, with the URL on the same line or the next one.
@@ -80,6 +83,35 @@ def is_ignorable(char: str) -> bool:
         return True
     category = unicodedata.category(char)
     return category == "Cc" or category in _REMOVED_CATEGORIES
+
+
+def strip_blocks(text: str) -> str:
+    r"""Script and style blocks removed, each from its opening tag to the first closing tag of the same name, as the
+    regex ``<(script|style)\b[^>]*>.*?</\1\s*>`` (case-insensitive, dot matching newlines) would, but in linear
+    time: that regex rescans to the end of the text for every opener without a closer. Here an opener with no closer
+    marks its name as having none further on (later openers of that name are skipped at once), and the first ``>``
+    after an opener is found once and reused by every opener before it; an unclosed opener is left for the tag pass."""
+    out: list[str] = []
+    kept = position = 0
+    unclosed: set[str] = set()
+    angle = -1  # the first ">" at or after the last opener looked at
+    while (opener := _BLOCK_OPENER.search(text, position)) is not None:
+        name = opener.group(1).lower()
+        position = opener.start() + 1
+        if name in unclosed:
+            continue
+        if angle < opener.end():
+            angle = text.find(">", opener.end())
+            if angle == -1:
+                break  # no opening tag can end from here on
+        closer = _BLOCK_CLOSERS[name].search(text, angle + 1)
+        if closer is None:
+            unclosed.add(name)
+            continue
+        out.append(text[kept : opener.start()])
+        kept = position = closer.end()
+    out.append(text[kept:])
+    return "".join(out)
 
 
 def _pairs(text: str, opener: str, closer: str) -> dict[int, int]:
@@ -150,7 +182,7 @@ def _clean(text: str, encoded: Callable[[str], str], removed: set[str]) -> str:
     if visible != text:
         removed.add("invisible")
     text = visible
-    stripped = _TAGS.sub("", _COMMENTS.sub("", _BLOCKS.sub("", text)))
+    stripped = _TAGS.sub("", _COMMENTS.sub("", strip_blocks(text)))
     if stripped != text:
         removed.add("html")
     text = html.unescape(stripped)
@@ -182,12 +214,28 @@ def _finish(text: str, max_chars: int, removed: set[str]) -> str:
     return text
 
 
-def sanitise(text: str, *, max_chars: int, base64_run_chars: int, base64_segment_chars: int = 20) -> Sanitised:
-    """Clean untrusted ``text`` for a prompt (see the module docstring). Idempotent."""
+def sanitise(
+    text: str,
+    *,
+    max_chars: int,
+    base64_run_chars: int,
+    base64_segment_chars: int = 20,
+    max_input_ratio: int = 8,
+) -> Sanitised:
+    """Clean untrusted ``text`` for a prompt (see the module docstring). Idempotent.
+
+    The input is cut to ``max_input_ratio`` times ``max_chars`` before any pass (a second truncation, besides the
+    output's): the work stays bounded whatever the input's length, since markup that cleans to nothing could otherwise
+    make it read an unbounded text. A cut input is reported as ``truncated``; its tail never reaches the prompt."""
     if max_chars <= len(TRUNCATION_MARK):
         raise ValueError("max_chars must leave room for the truncation mark")
+    if max_input_ratio < 1:
+        raise ValueError("max_input_ratio must be at least 1")
     encoded = _encoded_runs(base64_run_chars, min(base64_segment_chars, base64_run_chars + 1))
     removed: set[str] = set()
+    if len(text) > max_chars * max_input_ratio:
+        text = text[: max_chars * max_input_ratio]
+        removed.add("truncated")
 
     def full_pass(value: str) -> str:
         # Clean until stable (tags cannot reassemble), then finish; repeating the whole pass until it changes

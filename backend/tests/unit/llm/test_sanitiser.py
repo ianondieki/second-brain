@@ -19,6 +19,7 @@ from bridge.llm.sanitiser import (
     new_nonce,
     nonce_instruction,
     sanitise,
+    strip_blocks,
     strip_links,
 )
 from bridge.llm.types import Tier
@@ -210,12 +211,41 @@ def test_script_and_style_scanning_is_linear_on_pathological_input(raw: str) -> 
     start = time.perf_counter()
     clean(raw)
     assert time.perf_counter() - start < LINEAR_SECONDS
+    start = time.perf_counter()
+    strip_blocks(raw)  # linear on its own, not only thanks to the input cut: the whole megabyte
+    assert time.perf_counter() - start < LINEAR_SECONDS
+
+
+# The regex the linear scan replaces, kept as the oracle for what a block is.
+BLOCKS_REGEX = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+BLOCK_PIECES = ["<script", "<SCRIPT", "<style", "<scripts", ">", "</script>", "</style >", "</STYLE>", "</script", "x"]
+
+
+@settings(max_examples=500, deadline=None)
+@given(st.lists(st.sampled_from([*BLOCK_PIECES, " ", "\n", 'a="', "<"]), max_size=40))
+def test_strip_blocks_removes_exactly_what_the_block_regex_did(pieces: list[str]) -> None:
+    text = "".join(pieces)
+    assert strip_blocks(text) == BLOCKS_REGEX.sub("", text)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("a<script>x</script>b<style>y</style>c", "abc"),
+        ('<script a="<style>b</style>">c', '<script a="">c'),  # the unclosed script: the style block inside goes
+        ("<script>x<style>y</style>z", "<script>xz"),
+        ("<SCRIPT type=x>\nbad\n</script  >ok", "ok"),
+        ("<scripts>kept</scripts>", "<scripts>kept</scripts>"),
+    ],
+)
+def test_strip_blocks_cases(raw: str, expected: str) -> None:
+    assert strip_blocks(raw) == expected == BLOCKS_REGEX.sub("", raw)
 
 
 def test_the_input_is_cut_before_cleaning_and_reported_as_truncated() -> None:
     """A second truncation, of the input, at eight times the field's cap: markup that cleans to nothing cannot make
     the sanitiser read an unbounded text. Text past the cut never reaches the prompt, and ``truncated`` says so."""
-    raw = "<b></b>" * 200 + "tail"  # 1404 characters that clean to "tail"
+    raw = "<br>" * 350 + "tail"  # 1404 characters that clean to "tail"
     assert clean(raw, max_chars=1000) == "tail"  # within eight times the cap: nothing is cut
     cut = sanitise(raw, max_chars=100, base64_run_chars=B64)  # the input is cut at 800 characters
     assert cut.text == ""

@@ -88,6 +88,7 @@ def test_unknown_task_is_a_config_error() -> None:
         (lambda d: d["tasks"]["moderation_prescreen"].update(colour="red"), "unknown keys"),
         (lambda d: d["tasks"]["moderation_prescreen"].update(max_tokens=10**9), "exceeds"),
         (lambda d: d["tasks"]["moderation_prescreen"].update(max_tokens=0), "positive integer"),
+        (lambda d: d["sanitiser"].update(max_input_ratio=0), "sanitiser.max_input_ratio"),
         (lambda d: d["tasks"]["moderation_prescreen"].update(purpose="marketing"), "marketing"),
         (lambda d: d["tasks"]["moderation_prescreen"].update(fallback_model="nope"), "another model"),
         (
