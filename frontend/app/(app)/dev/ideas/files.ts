@@ -12,6 +12,9 @@ const TYPE_BY_EXTENSION: Record<string, string> = {
   txt: "text/plain",
 };
 
+/** The API's limit on the X-File-Name header (the percent-encoded name). */
+export const MAX_FILE_NAME_HEADER = 1000;
+
 export const ACCEPT_ATTRIBUTE = ".pdf,.png,.jpg,.jpeg,.md,.markdown,.txt";
 
 export function attachmentType(name: string): string | null {

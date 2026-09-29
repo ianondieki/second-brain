@@ -3,20 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
-import type { Outcome } from "../calls";
-import {
-  EMPTY_STATE,
-  type Attachment,
-  type AttestationText,
-  type EditorState,
-  type MyProposal,
-  type NicheNode,
-  type ProblemCard,
-  type PublishResult,
-} from "../ideas";
-import type { PublishProblem, SaveProblem, UploadProblem } from "../outcomes";
+import type { Attachment, AttestationText } from "../ideas";
 import { Attachments } from "./Attachments";
-import { Editor, type EditorProps } from "./Editor";
+import { calls, NICHES, PROBLEM, READY, renderEditor, settleLazy, TEXT } from "./fixtures";
 import { ProblemPicker, type ProblemPickerProps } from "./ProblemPicker";
 
 // REQ-PROP-01 (F2): the three-step editor. docs/spec/07 items 2 and 6 (one primary action per step; the stepper is an
@@ -35,110 +24,13 @@ afterEach(() => {
   push.mockReset();
 });
 
-const NICHES: NicheNode[] = [
-  {
-    id: "0199a000-0000-7000-8000-00000000000a",
-    slug: "agriculture",
-    name: "Agriculture",
-    label: "Agriculture",
-    isic_code: null,
-    children: [
-      {
-        id: "0199a000-0000-7000-8000-00000000000b",
-        slug: "dairy",
-        name: "Dairy",
-        label: "Agriculture › Dairy",
-        isic_code: null,
-      },
-    ],
-  },
-];
-
-const TEXT: AttestationText = {
-  version: "2026-09-29.1",
-  sha256: "ab",
-  statements: [
-    { key: "created_it", text: "I created this proposal." },
-    { key: "not_owned_by_employer_or_client", text: "It is not owned by my employer, a university or a client." },
-    { key: "no_third_party_confidential", text: "It contains no confidential information that belongs to anyone else." },
-  ],
-};
-
-const PROBLEM: ProblemCard = {
-  id: "0199a000-0000-7000-8000-000000000101",
-  title: "Milk spoils before collection",
-  source: "developer",
-  label: "Developer-reported",
-  niche: null,
-  statement: "Co-ops lose a fifth of the evening milk.",
-  published_at: "2026-09-28T09:00:00Z",
-};
-
-const READY: EditorState = {
-  ...EMPTY_STATE,
-  title: "Cold chain for dairy co-ops",
-  nicheId: "0199a000-0000-7000-8000-00000000000b",
-  maturity: "prototype",
-  ask: "pilot",
-  problemStatement: "Milk spoils.",
-  summary: "Solar chillers.",
-  problemMode: "pick",
-  problems: [{ id: PROBLEM.id, title: PROBLEM.title, source: "developer", label: null, niche: null }],
-};
-
-const SAVED = { id: "p1", draft: { confidential: { attachments: [] } } } as unknown as MyProposal;
-
-type Calls = NonNullable<EditorProps["calls"]>;
-
-function calls(overrides: Partial<Calls> = {}) {
-  return {
-    saveState: vi.fn<Calls["saveState"]>(async () => ({
-      outcome: { ok: true, value: SAVED } as Outcome<MyProposal, SaveProblem>,
-      held: [],
-    })),
-    publish: vi.fn<Calls["publish"]>(async (): Promise<Outcome<PublishResult, PublishProblem>> => ({
-      ok: true,
-      value: { cert_id: "C1" } as PublishResult,
-    })),
-    attestationText: vi.fn(async (): Promise<Outcome<AttestationText, PublishProblem>> => ({ ok: true, value: TEXT })),
-    ...overrides,
-  };
-}
-
-/** Lets the lazily loaded steps (Full details, Review) resolve. */
-async function settleLazy() {
-  await act(async () => {
-    await Promise.all([import("./DetailsStep"), import("./Review")]);
-  });
-}
-
-async function renderEditor(props: Partial<Omit<EditorProps, "calls">> & { calls?: ReturnType<typeof calls> } = {}) {
-  const fake = props.calls ?? calls();
-  renderWithIntl(
-    <Editor
-      id={null}
-      initial={EMPTY_STATE}
-      attachments={[]}
-      step={1}
-      niches={NICHES}
-      counties={[{ code: "KE-30", name: "Nairobi City" }]}
-      attestations={TEXT}
-      problems={[PROBLEM]}
-      {...props}
-      calls={fake}
-    />,
-  );
-  await settleLazy();
-  return fake;
-}
-
 const primary = () => document.querySelectorAll("[data-primary]");
 
 describe("the stepper and primary action", () => {
   it("is an ordered list marking the current step, with one primary action per step", async () => {
     await renderEditor();
-    const steps = within(screen.getByRole("navigation", { name: "Steps" })).getAllByRole("listitem");
-    expect(steps).toHaveLength(3);
+    const steps = within(screen.getByRole("navigation", { name: "Steps" })).getAllByRole("button");
+    expect(within(screen.getByRole("navigation", { name: "Steps" })).getAllByRole("listitem")).toHaveLength(3);
     expect(steps[0].getAttribute("aria-current")).toBe("step");
     expect(primary()).toHaveLength(1);
     expect(primary()[0].textContent).toBe("Continue");
@@ -376,37 +268,49 @@ describe("attachments", () => {
     av_status: "clean",
   };
 
+  function renderFiles(list: Attachment[], fake = calls()) {
+    let current = list;
+    const onAttachments = vi.fn((change: (l: Attachment[]) => Attachment[]) => {
+      current = change(current);
+    });
+    renderWithIntl(
+      <Attachments
+        attachments={list}
+        onAttachments={onAttachments}
+        ensureDraft={async () => ({ id: "p1", attachments: current })}
+        getCalls={async () => fake}
+      />,
+    );
+    return { fake, list: () => current };
+  }
+
   function choose(name: string, content = "x") {
     const input = screen.getByLabelText("Add a file");
     fireEvent.change(input, { target: { files: [new File([content], name)] } });
   }
 
-  it("refuses a type the API does not accept before sending it", async () => {
-    const uploadImpl = vi.fn();
-    renderWithIntl(<Attachments attachments={[]} onChange={vi.fn()} ensureId={async () => "p1"} uploadImpl={uploadImpl} />);
+  it("refuses a type the API does not accept, or a name too long to send, before sending it", async () => {
+    const { fake } = renderFiles([]);
     await act(async () => choose("setup.exe"));
-    expect(uploadImpl).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toBe("Attach a PDF, PNG, JPG, Markdown or plain-text file.");
+    await act(async () => choose(`${"ü".repeat(200)}.pdf`)); // 1,204 characters once percent-encoded
+    expect(screen.getByRole("alert").textContent).toBe("Rename the file, then try again.");
+    expect(fake.uploadAttachment).not.toHaveBeenCalled();
   });
 
-  it("uploads with the type for its extension and lists the file", async () => {
-    const onChange = vi.fn();
-    const uploadImpl = vi.fn(async (): Promise<Outcome<Attachment, UploadProblem>> => ({ ok: true, value: FILE }));
-    renderWithIntl(
-      <Attachments attachments={[]} onChange={onChange} ensureId={async () => "p1"} uploadImpl={uploadImpl} />,
-    );
+  it("uploads with the type for its extension and adds the file to the latest list", async () => {
+    const fake = calls({ uploadAttachment: vi.fn(async () => ({ ok: true as const, value: FILE })) });
+    const files = renderFiles([], fake);
     await act(async () => choose("plan.pdf", "%PDF-1.7"));
-    expect(uploadImpl).toHaveBeenCalledWith("p1", expect.any(File), "plan.pdf", "application/pdf");
-    expect(onChange).toHaveBeenCalledWith([FILE]);
+    expect(fake.uploadAttachment).toHaveBeenCalledWith("p1", expect.any(File), "plan.pdf", "application/pdf");
+    expect(files.list()).toEqual([FILE]);
   });
 
   it("says when the scan refused a file", async () => {
-    const uploadImpl = vi.fn(async (): Promise<Outcome<Attachment, UploadProblem>> => ({
-      ok: false,
-      problem: "infected",
-      fields: [],
-    }));
-    renderWithIntl(<Attachments attachments={[FILE]} onChange={vi.fn()} ensureId={async () => "p1"} uploadImpl={uploadImpl} />);
+    const fake = calls({
+      uploadAttachment: vi.fn(async () => ({ ok: false as const, problem: "infected" as const, fields: [] })),
+    });
+    renderFiles([FILE], fake);
     expect(screen.getByText("820 KB")).toBeTruthy();
     await act(async () => choose("eicar.txt"));
     expect(screen.getByRole("alert").textContent).toBe("This file did not pass the malware check, so it was not kept.");

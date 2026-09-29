@@ -141,4 +141,6 @@ export interface Calls {
   saveState: typeof saveState;
   publish: typeof publish;
   attestationText: typeof attestationText;
+  uploadAttachment: typeof uploadAttachment;
+  removeAttachment: typeof removeAttachment;
 }

@@ -6,7 +6,15 @@ import { isFieldName, type FieldIssue } from "./ideas";
 // every case below has its own [[COPY-REVIEW]] string under `ideaEditor.*`, so it can be translated and reviewed.
 
 /** Problems every call shares. */
-export type CommonProblem = "signedOut" | "notFound" | "hidden" | "unavailable" | "network" | "failed";
+export type CommonProblem =
+  | "signedOut"
+  | "mfaRequired"
+  | "rateLimited"
+  | "notFound"
+  | "hidden"
+  | "unavailable"
+  | "network"
+  | "failed";
 
 export type SaveProblem = CommonProblem | "fields" | "validation";
 
@@ -66,7 +74,8 @@ const REFERENCE_FIELD: Record<string, FieldIssue> = {
 
 function common(status: number, code: string | undefined): CommonProblem | null {
   if (status === 0) return "network";
-  if (status === 401) return "signedOut";
+  if (status === 401) return code === "mfa_required" ? "mfaRequired" : "signedOut";
+  if (status === 429) return "rateLimited";
   if (status === 404) return "notFound";
   if (status === 409 && code === "proposal_hidden") return "hidden";
   if (status === 503) return "unavailable";

@@ -67,7 +67,7 @@ test.describe("a signed-in developer", () => {
 
     await page.getByRole("link", { name: "New idea" }).click();
     await expect(page).toHaveURL(/\/dev\/ideas\/new$/, SERVER_STEP);
-    await expect(page.locator("ol li[aria-current='step']")).toContainText("Problem and teaser");
+    await expect(page.locator("ol [aria-current='step']")).toContainText("Problem and teaser");
     await expect(page.locator("[data-primary]")).toHaveText("Continue");
     await checkScreen(page);
 
@@ -99,7 +99,7 @@ test.describe("a signed-in developer", () => {
     await fillStepOne(page, "Dairy cold chain");
 
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.locator("ol li[aria-current='step']")).toContainText("Full details");
+    await expect(page.locator("ol [aria-current='step']")).toContainText("Full details");
     await expect(page.getByText("Confidential", { exact: true })).toBeVisible();
     await expect(page.getByText(/shown to verified people at organisations that accepted our NDA/)).toBeVisible();
     await page.getByLabel("Approach").fill("Solar chillers with a shared booking queue.");
@@ -122,7 +122,7 @@ test.describe("a signed-in developer", () => {
     await checkScreen(page);
 
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.locator("ol li[aria-current='step']")).toContainText("Review and publish");
+    await expect(page.locator("ol [aria-current='step']")).toContainText("Review and publish");
     await expect(page.locator("[data-primary]")).toHaveText("Publish");
     await expect(page.getByText("1 file")).toBeVisible();
     await checkScreen(page);
@@ -131,7 +131,7 @@ test.describe("a signed-in developer", () => {
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByText("Confirm this statement.")).toHaveCount(3);
     await expect(page.getByRole("checkbox")).toHaveCount(3); // the step loads when opened
-  for (const box of await page.getByRole("checkbox").all()) await box.check();
+    for (const box of await page.getByRole("checkbox").all()) await box.check();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "needs a verified mobile number" })).toBeVisible(
       SERVER_STEP,
@@ -151,7 +151,7 @@ test.describe("a signed-in developer", () => {
     await waitForSave(page);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByRole("checkbox")).toHaveCount(3); // the step loads when opened
-  for (const box of await page.getByRole("checkbox").all()) await box.check();
+    for (const box of await page.getByRole("checkbox").all()) await box.check();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await expect(page).toHaveURL(/\/dev\/ideas\/[0-9a-f-]{36}\?published=1$/, SERVER_STEP);

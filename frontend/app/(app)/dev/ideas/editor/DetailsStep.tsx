@@ -6,15 +6,17 @@ import { LockIcon } from "@/components/ui/icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
 import { LIMITS, linksProblem, type Attachment, type EditorState } from "../ideas";
-import { Attachments } from "./Attachments";
+import type { Calls } from "../calls";
+import { Attachments, type AttachmentsProps } from "./Attachments";
 import { useIssueMessage } from "./issues";
 
 export interface DetailsStepProps {
   state: EditorState;
   update: (patch: Partial<EditorState>) => void;
   attachments: Attachment[];
-  onAttachments: (attachments: Attachment[]) => void;
-  ensureId: () => Promise<string | null>;
+  onAttachments: AttachmentsProps["onAttachments"];
+  ensureDraft: AttachmentsProps["ensureDraft"];
+  getCalls: () => Promise<Calls>;
 }
 
 const WRITTEN = ["approach", "architecture", "pricing", "notes"] as const;
@@ -23,7 +25,7 @@ const WRITTEN = ["approach", "architecture", "pricing", "notes"] as const;
  * Step 2, Full details (Tier 2): marked confidential with who can read it, in the approved wording (docs/spec/04 4.2).
  * Loaded when the step opens.
  */
-export function DetailsStep({ state, update, attachments, onAttachments, ensureId }: DetailsStepProps) {
+export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
   const t = useTranslations("ideaEditor");
   const f = useTranslations("ideaFields");
   const issueMessage = useIssueMessage();
@@ -61,7 +63,7 @@ export function DetailsStep({ state, update, attachments, onAttachments, ensureI
         error={linkProblem ? issueMessage({ field: "links", code: linkProblem }) : undefined}
         onChange={(e) => update({ links: e.target.value })}
       />
-      <Attachments attachments={attachments} onChange={onAttachments} ensureId={ensureId} />
+      <Attachments {...files} />
     </section>
   );
 }

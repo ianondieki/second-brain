@@ -511,7 +511,12 @@
       "wrongType": "Attach a PDF, PNG, JPG, Markdown or plain-text file.",
       "empty": "This file is empty.",
       "badName": "Rename the file, then try again.",
-      "tooMany": "A version can have up to 10 files. Remove one first."
+      "tooMany": "A version can have up to 10 files. Remove one first.",
+      "mfaRequired": "Your session needs the code from your authenticator app. Log in again, then come back to this idea.",
+      "rateLimited": "Too many attempts. Wait a minute, then try again.",
+      "notSaved": "Fix the marked fields first, so your changes can be saved.",
+      "fileGone": "This file was already removed or replaced. Reload the page to see the current list.",
+      "checklist": "Before you can publish, fix what is listed below."
     },
     "required": {
       "title": "Add a title.",

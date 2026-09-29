@@ -45,6 +45,9 @@ const Review = lazy(() => import("./Review").then((m) => ({ default: m.Review })
 export interface EditorProps {
   /** The proposal's id; null for a new idea (the first save creates it). */
   id: string | null;
+  /** The proposal has a draft version. A published one without a draft shows its registered version's files; the
+   * first save or file action drafts the next version, whose copies of those files have new ids. */
+  hasDraft?: boolean;
   initial: EditorState;
   attachments: Attachment[];
   step: Step;
@@ -104,8 +107,13 @@ export function Editor(props: EditorProps) {
   const [save, setSave] = useState<Save>({ kind: "clean" });
   const [issues, setIssues] = useState<FieldIssue[]>([]);
   const [showRequired, setShowRequired] = useState(false);
+  const [created, setCreated] = useState(props.id !== null);
+  const [publishing, setPublishing] = useState(false);
 
   const idRef = useRef<string | null>(props.id);
+  const draftRef = useRef(props.hasDraft ?? props.id !== null);
+  const attachmentsRef = useRef(attachments); // the list as the last change left it, read by file actions
+  const mounted = useRef(true);
   const latest = useRef(state); // what the fields hold now, read by saves that run after a render
   const edits = useRef(0); // bumped on every change
   const savedEdits = useRef(0); // the edit count the last successful save covered
@@ -144,16 +152,22 @@ export function Editor(props: EditorProps) {
       return outcome.problem;
     }
     savedEdits.current = started;
+    draftRef.current = true;
     if (creating) {
       idRef.current = outcome.value.id;
+      setCreated(true);
       // The address now names the draft, so a reload or the back button returns to it (no navigation, no refetch).
-      window.history.replaceState(window.history.state, "", editHref(outcome.value.id, stepRef.current));
+      if (mounted.current) {
+        window.history.replaceState(window.history.state, "", editHref(outcome.value.id, stepRef.current));
+      }
     }
-    setAttachments(outcome.value.draft?.confidential.attachments ?? []);
+    // The draft's own files (after a published idea was drafted again, their ids are new).
+    changeAttachments(() => outcome.value.draft?.confidential.attachments ?? []);
     setIssues([]);
     if (edits.current !== started) {
-      setSave({ kind: "dirty" }); // typed during the save: the next one follows shortly
-      schedule(AUTOSAVE_MS);
+      setSave({ kind: "dirty" }); // typed during the save: the next one follows (at once when the editor has gone)
+      if (mounted.current) schedule(AUTOSAVE_MS);
+      else void flush();
     } else {
       setSave({ kind: "saved", partial: held.length > 0 });
     }
@@ -202,7 +216,29 @@ export function Editor(props: EditorProps) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [save.kind]);
 
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  // Leaving the editor (a link, the back button) saves what was typed instead of dropping the pending autosave.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (timer.current) void flush();
+    };
+    // flush reads only refs, so the first render's copy stays current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function changeAttachments(change: (list: Attachment[]) => Attachment[]) {
+    attachmentsRef.current = change(attachmentsRef.current);
+    setAttachments(attachmentsRef.current);
+  }
+
+  /** Makes sure the draft version exists and is saved, for a file action; its id and files, or why not. */
+  async function ensureDraft(): Promise<{ id: string; attachments: Attachment[] } | { problem: SaveProblem }> {
+    if ((!idRef.current || !draftRef.current) && edits.current === savedEdits.current) edits.current += 1;
+    const problem = await saveAll();
+    if (problem) return { problem };
+    return idRef.current ? { id: idRef.current, attachments: attachmentsRef.current } : { problem: "failed" };
+  }
 
   function goTo(next: Step) {
     void flush();
@@ -216,13 +252,6 @@ export function Editor(props: EditorProps) {
     });
   }
 
-  async function ensureId(): Promise<string | null> {
-    if (!idRef.current) {
-      edits.current += 1; // a file alone is reason enough to create the draft
-      await flush();
-    }
-    return idRef.current;
-  }
 
   // --- issues shown by the fields ---------------------------------------------------------------------------------
 
@@ -240,15 +269,20 @@ export function Editor(props: EditorProps) {
   const statusLine = <SaveStatus save={save} onRetry={() => void flush()} />;
 
   return (
-    // Disabled until React runs: anything typed into the server-rendered fields before then would be lost (slow
-    // connections take seconds to hydrate). `data-hydrated` tells tests when the editor is live.
+    <>
+    {/* "Edit idea" from the moment the first save made the draft. */}
+    <h1 className="mb-6 text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
+      {created ? t("pageTitleEdit") : t("pageTitleNew")}
+    </h1>
+    {/* Disabled until React runs: anything typed into the server-rendered fields before then would be lost (slow
+        connections take seconds to hydrate). `data-hydrated` tells tests when the editor is live. */}
     <fieldset
       disabled={!hydrated}
       data-hydrated={hydrated ? "true" : "false"}
       className="m-0 flex min-w-0 flex-col gap-8 border-0 p-0"
     >
       <div className="flex flex-col gap-3">
-        <Stepper step={step} onStep={goTo} />
+        <Stepper step={step} onStep={goTo} disabled={publishing} />
         {statusLine}
       </div>
 
@@ -406,8 +440,9 @@ export function Editor(props: EditorProps) {
             state={state}
             update={update}
             attachments={attachments}
-            onAttachments={setAttachments}
-            ensureId={ensureId}
+            onAttachments={changeAttachments}
+            ensureDraft={ensureDraft}
+            getCalls={getCalls}
           />
         </Suspense>
       ) : null}
@@ -424,12 +459,14 @@ export function Editor(props: EditorProps) {
             onShowRequired={() => setShowRequired(true)}
             initialText={props.attestations}
             saveAll={() => {
-              if (!idRef.current) edits.current += 1; // publishing straight away still needs the draft
+              // Publishing straight away still needs a draft; a save already under way creates it.
+              if (!idRef.current && edits.current === savedEdits.current) edits.current += 1;
               return saveAll();
             }}
             getId={() => idRef.current}
             getCalls={getCalls}
             onGoTo={goTo}
+            onBusy={setPublishing}
           />
         </Suspense>
       ) : (
@@ -447,6 +484,7 @@ export function Editor(props: EditorProps) {
         </div>
       )}
     </fieldset>
+    </>
   );
 }
 

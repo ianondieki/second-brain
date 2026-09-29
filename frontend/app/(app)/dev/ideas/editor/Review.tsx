@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +41,8 @@ export interface ReviewProps {
   getId: () => string | null;
   getCalls: () => Promise<Calls>;
   onGoTo: (step: Step) => void;
+  /** Publishing is under way: the editor locks its stepper meanwhile. */
+  onBusy: (busy: boolean) => void;
 }
 
 type Publishing =
@@ -64,6 +66,15 @@ export function Review(props: ReviewProps) {
   const [text, setText] = useState(props.initialText);
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
   const [publishing, setPublishing] = useState<Publishing>({ kind: "idle" });
+  const alert = useRef<HTMLDivElement>(null);
+  const busy = publishing.kind === "busy";
+  const { onBusy } = props;
+
+  // A refusal or a checklist is announced (role="alert") and takes focus, so the reason is where the reader is.
+  useEffect(() => {
+    if (publishing.kind === "checklist" || publishing.kind === "failed") alert.current?.focus();
+    onBusy(publishing.kind === "busy");
+  }, [publishing, onBusy]);
 
   const keys = text.statements.map((s) => s.key);
   const attempted = publishing.kind !== "idle";
@@ -174,13 +185,17 @@ export function Review(props: ReviewProps) {
             label={statement.text}
             checked={Boolean(confirmed[statement.key])}
             error={attempted && !confirmed[statement.key] ? t("attestationRequired") : undefined}
+            disabled={busy}
             onChange={(event) => setConfirmed((current) => ({ ...current, [statement.key]: event.target.checked }))}
           />
         ))}
       </fieldset>
 
+      {publishing.kind === "checklist" ? (
+        <Alert ref={alert}>{blocking.length > 0 ? t("problem.checklist") : t("problem.attestationsRequired")}</Alert>
+      ) : null}
       {publishing.kind === "failed" ? (
-        <Alert>
+        <Alert ref={alert}>
           {publishing.problem === "planLimit"
             ? publishing.limit !== undefined
               ? t("problem.planLimit", { limit: publishing.limit })
@@ -190,7 +205,7 @@ export function Review(props: ReviewProps) {
       ) : null}
 
       <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <Button variant="secondary" onClick={() => props.onGoTo(2)}>
+        <Button variant="secondary" busy={busy} onClick={() => props.onGoTo(2)}>
           {t("back")}
         </Button>
         <Button variant="primary" busy={publishing.kind === "busy"} onClick={() => void publish()}>

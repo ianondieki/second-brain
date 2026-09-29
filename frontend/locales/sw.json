@@ -511,7 +511,12 @@
       "wrongType": "Ambatisha faili ya PDF, PNG, JPG, Markdown au maandishi matupu.",
       "empty": "Faili hii haina kitu.",
       "badName": "Badilisha jina la faili, kisha ujaribu tena.",
-      "tooMany": "Toleo linaweza kuwa na hadi faili 10. Ondoa moja kwanza."
+      "tooMany": "Toleo linaweza kuwa na hadi faili 10. Ondoa moja kwanza.",
+      "mfaRequired": "Muda wako unahitaji msimbo kutoka programu yako ya uthibitishaji. Ingia tena, kisha urudi kwenye wazo hili.",
+      "rateLimited": "Majaribio mengi mno. Subiri dakika moja, kisha ujaribu tena.",
+      "notSaved": "Rekebisha sehemu zilizowekwa alama kwanza, ili mabadiliko yako yahifadhiwe.",
+      "fileGone": "Faili hii ilikwisha ondolewa au kubadilishwa. Pakia ukurasa upya uone orodha ya sasa.",
+      "checklist": "Kabla ya kuchapisha, rekebisha yaliyoorodheshwa hapa chini."
     },
     "required": {
       "title": "Weka kichwa.",

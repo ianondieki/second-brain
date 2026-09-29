@@ -53,12 +53,10 @@ export async function EditorScreen({ id, step }: { id: string | null; step: Step
           {idea ? t("backToIdea") : ideas("back")}
         </Link>
       </p>
-      <h1 className="mb-6 text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
-        {idea ? t("pageTitleEdit") : t("pageTitleNew")}
-      </h1>
       <IntlScope namespaces={["ideaEditor", "ideaFields"]}>
         <Editor
           id={idea?.id ?? null}
+          hasDraft={idea?.draft != null}
           initial={stateFromVersion(version)}
           attachments={version?.confidential.attachments ?? []}
           step={step}
