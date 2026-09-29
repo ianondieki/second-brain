@@ -66,7 +66,7 @@ def test_other_records_pass_unchanged() -> None:
     other = logging.LogRecord("procrastinate.worker", logging.INFO, __file__, 1, "m", None, None)
     other.job = {"task_kwargs": {"engagement_id": "e"}, "call_string": "t[1](engagement_id='e')"}
     assert redact.filter(other)
-    assert other.job["task_kwargs"] == {"engagement_id": "e"}
+    assert other.job["task_kwargs"] == {"engagement_id": "e"}  # type: ignore[attr-defined]
     quoted = logging.LogRecord(
         "procrastinate.worker", logging.INFO, __file__, 1, 'Job t[1](reason_text="it\'s \\"x\\"") ended', None, None
     )
