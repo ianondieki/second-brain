@@ -6,17 +6,15 @@ organisation) the organisation's. RLS decides what each may read; a name or titl
 back empty and is worded generically. Times are the shared clock's (``app_clock_now()``, so the dev/test clock moves
 reminders with deadlines) and become Nairobi dates here.
 
-What is read per engagement: its state, stage entry and deadline; the milestones of its **signed** agreement; the
-parties that signed the current stage's document since the stage began (mutual NDA, the final agreement, the
-acceptance certificate); the developer's confirmation of first contact; a recorded final payment; who proposed the
-latest terms; the tracker's ``submit_milestone`` and ``request_changes`` events (submission dates and rework loops);
+What is read per engagement: its state, stage entry and deadline; the tracker's own facts and the signed agreement's
+milestones through P5's service (``bridge.engagements.service.load``), and whose turn it is from the state machine
+(``bridge.engagements.state_machine.pending``: docs/spec/06 6.9, the only definition); each milestone's review due date
+(``bridge.engagements.history.review_due_dates``) and its rework loops (the tracker's ``request_changes`` events);
 and the developer's latest action (an event, a non-automatic endorsement or a signature).
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Final
 from uuid import UUID
@@ -26,43 +24,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.admin.models import Holiday
 from bridge.auth.models import User
+from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import local_date
-from bridge.engagements.models import (
-    Agreement,
-    Engagement,
-    EngagementEndorsement,
-    EngagementEvent,
-    Milestone,
-    PaymentRecord,
-    Signature,
-)
+from bridge.engagements.history import review_due_dates
+from bridge.engagements.models import Engagement, EngagementEndorsement, EngagementEvent, Milestone, Signature
+from bridge.engagements.service import load as load_tracker
 from bridge.models.enums import (
     TERMINAL_STATES,
-    AgreementStatus,
     EndorsementMethod,
     EngagementActorRole,
     EngagementOrigin,
     EngagementParty,
-    EngagementState,
     ProposalStatus,
-    SignatureDocumentKind,
 )
 from bridge.proposals.models import Proposal, ProposalVersion
-from bridge.reminders.health import EngagementFact, MilestoneFact, whose_turn
+from bridge.reminders.health import EngagementFact, MilestoneFact
 from bridge.reminders.nudge import DeveloperFacts
 from bridge.reminders.org_digest import Cadence, OrgFacts
 from bridge.tenancy.models import Organization
 
-S = EngagementState
-DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
+DEV = EngagementParty.DEVELOPER
 MAX_DRAFTS: Final = 5
-REWORK: Final = "request_changes"  # the tracker's commands (P5 state machine)
-SUBMIT: Final = "submit_milestone"
-_STAGE_DOCUMENT: Final = {
-    S.NDA_PENDING: SignatureDocumentKind.MUTUAL_NDA,
-    S.AGREEMENT_SIGNING: SignatureDocumentKind.AGREEMENT,
-    S.SIGN_OFF: SignatureDocumentKind.ACCEPTANCE_CERTIFICATE,
-}
 _CLOCK = text("SELECT app_clock_now()")
 
 
@@ -81,7 +63,9 @@ def _day(value: datetime | None) -> date | None:
     return local_date(value) if value is not None else None
 
 
-async def engagement_facts(db: AsyncSession, condition: ColumnElement[bool]) -> tuple[EngagementFact, ...]:
+async def engagement_facts(
+    db: AsyncSession, condition: ColumnElement[bool], *, deals_enabled: bool
+) -> tuple[EngagementFact, ...]:
     """The active engagements matching ``condition`` that the bound recipient may read, oldest first."""
     rows = (
         await db.execute(
@@ -95,25 +79,13 @@ async def engagement_facts(db: AsyncSession, condition: ColumnElement[bool]) -> 
     ).all()
     if not rows:
         return ()
-    ids = [row[0].id for row in rows]
     engagements = {row[0].id: row[0] for row in rows}
-    milestones = await _milestones(db, ids)
-    signed = await _signed(db, engagements)
-    confirmed = await _contact_confirmed(db, engagements)
-    paid = set(
-        (
-            await db.scalars(
-                select(PaymentRecord.engagement_id).where(
-                    PaymentRecord.engagement_id.in_(ids), PaymentRecord.milestone_id.is_(None)
-                )
-            )
-        ).all()
-    )
-    terms_by = await _terms_by(db, engagements)
+    loops = await _rework_loops(db, list(engagements))
     last_update = await _last_developer_update(db, engagements)
     facts = []
     for engagement, org_name, title, developer_name in rows:
-        own = milestones.get(engagement.id, ())
+        tracker = await load_tracker(db, engagement, deals_enabled=deals_enabled)
+        review_due = await review_due_dates(db, engagement.id, tracker.milestones)
         facts.append(
             EngagementFact(
                 id=engagement.id,
@@ -125,15 +97,8 @@ async def engagement_facts(db: AsyncSession, condition: ColumnElement[bool]) -> 
                 created_on=local_date(engagement.created_at),
                 entered_on=local_date(engagement.stage_entered_at),
                 stage_deadline_on=_day(engagement.stage_deadline_at),
-                awaiting=whose_turn(
-                    engagement.state,
-                    signed=signed.get(engagement.id, frozenset()),
-                    contact_confirmed=engagement.id in confirmed,
-                    milestones=tuple(m.state for m in own),
-                    payment_recorded=engagement.id in paid,
-                    terms_by=terms_by.get(engagement.id),
-                ),
-                milestones=own,
+                awaiting=frozenset(p.party for p in sm.pending(engagement.state, tracker.facts)),
+                milestones=tuple(_milestone(m, loops, review_due) for m in tracker.milestones),
                 last_developer_update_on=_day(last_update.get(engagement.id)),
                 tagged=engagement.origin is EngagementOrigin.TAGGED,
             )
@@ -141,93 +106,26 @@ async def engagement_facts(db: AsyncSession, condition: ColumnElement[bool]) -> 
     return tuple(facts)
 
 
-async def _milestones(db: AsyncSession, ids: Sequence[UUID]) -> dict[UUID, tuple[MilestoneFact, ...]]:
-    """The signed agreement's milestones, with submission dates and rework loops from the tracker's events."""
-    rows = (
-        (
-            await db.execute(
-                select(Milestone)
-                .join(Agreement, Agreement.id == Milestone.agreement_id)
-                .where(Milestone.engagement_id.in_(ids), Agreement.status == AgreementStatus.SIGNED)
-                .order_by(Milestone.engagement_id, Milestone.seq)
-            )
-        )
-        .scalars()
-        .all()
+def _milestone(m: Milestone, loops: dict[str, int], review_due: dict[UUID, date]) -> MilestoneFact:
+    return MilestoneFact(
+        seq=m.seq,
+        deliverable=m.deliverable,
+        due_on=m.due_date,
+        state=m.state,
+        rework_loops=loops.get(str(m.id), 0),
+        review_due_on=review_due.get(m.id),
     )
+
+
+async def _rework_loops(db: AsyncSession, ids: list[UUID]) -> dict[str, int]:
+    """How many times each milestone was sent back for changes (the tracker's ``request_changes`` events)."""
     milestone_id = EngagementEvent.payload["milestone_id"].astext
-    events = await db.execute(
-        select(EngagementEvent.command, milestone_id, func.count(), func.max(EngagementEvent.created_at))
-        .where(EngagementEvent.engagement_id.in_(ids), EngagementEvent.command.in_((REWORK, SUBMIT)))
-        .group_by(EngagementEvent.command, milestone_id)
-    )
-    loops: dict[str, int] = {}
-    submitted: dict[str, datetime] = {}
-    for command, key, count, latest in events.all():
-        if command == REWORK:
-            loops[str(key)] = int(count)
-        else:
-            submitted[str(key)] = latest
-    found: dict[UUID, list[MilestoneFact]] = defaultdict(list)
-    for m in rows:
-        found[m.engagement_id].append(
-            MilestoneFact(
-                seq=m.seq,
-                deliverable=m.deliverable,
-                due_on=m.due_date,
-                state=m.state,
-                rework_loops=loops.get(str(m.id), 0),
-                submitted_on=_day(submitted.get(str(m.id))),
-                review_window_bd=m.review_window_bd,
-            )
-        )
-    return {key: tuple(value) for key, value in found.items()}
-
-
-async def _signed(db: AsyncSession, engagements: dict[UUID, Engagement]) -> dict[UUID, frozenset[EngagementParty]]:
-    """The parties that signed the current stage's document since the stage began."""
-    signing = {i: e for i, e in engagements.items() if e.state in _STAGE_DOCUMENT}
-    if not signing:
-        return {}
     rows = await db.execute(
-        select(Signature.engagement_id, Signature.document_kind, Signature.party, Signature.signed_at).where(
-            Signature.engagement_id.in_(list(signing))
-        )
+        select(milestone_id, func.count())
+        .where(EngagementEvent.engagement_id.in_(ids), EngagementEvent.command == sm.Command.REQUEST_CHANGES.value)
+        .group_by(milestone_id)
     )
-    found: dict[UUID, set[EngagementParty]] = defaultdict(set)
-    for engagement_id, kind, party, signed_at in rows.all():
-        e = signing[engagement_id]
-        if kind is _STAGE_DOCUMENT[e.state] and signed_at >= e.stage_entered_at:
-            found[engagement_id].add(party)
-    return {key: frozenset(value) for key, value in found.items()}
-
-
-async def _contact_confirmed(db: AsyncSession, engagements: dict[UUID, Engagement]) -> set[UUID]:
-    contact = {i: e for i, e in engagements.items() if e.state is S.CONTACT_MADE}
-    if not contact:
-        return set()
-    rows = await db.execute(
-        select(EngagementEndorsement.engagement_id, EngagementEndorsement.endorsed_at).where(
-            EngagementEndorsement.engagement_id.in_(list(contact)),
-            EngagementEndorsement.stage == S.CONTACT_MADE,
-            EngagementEndorsement.party == DEV,
-        )
-    )
-    return {i for i, at in rows.all() if at >= contact[i].stage_entered_at}
-
-
-async def _terms_by(db: AsyncSession, engagements: dict[UUID, Engagement]) -> dict[UUID, EngagementParty]:
-    """Who created the latest agreement version of an engagement in negotiation."""
-    negotiating = {i: e for i, e in engagements.items() if e.state is S.NEGOTIATION}
-    if not negotiating:
-        return {}
-    rows = await db.execute(
-        select(Agreement.engagement_id, Agreement.created_by)
-        .where(Agreement.engagement_id.in_(list(negotiating)))
-        .order_by(Agreement.engagement_id, Agreement.version.desc())
-        .distinct(Agreement.engagement_id)
-    )
-    return {i: DEV if by == negotiating[i].developer_id else ORG for i, by in rows.all()}
+    return {str(key): int(count) for key, count in rows.tuples()}
 
 
 async def _last_developer_update(db: AsyncSession, engagements: dict[UUID, Engagement]) -> dict[UUID, datetime]:
@@ -255,9 +153,9 @@ async def _last_developer_update(db: AsyncSession, engagements: dict[UUID, Engag
     return latest
 
 
-async def developer_facts(db: AsyncSession, user_id: UUID, today: date) -> DeveloperFacts:
+async def developer_facts(db: AsyncSession, user_id: UUID, today: date, *, deals_enabled: bool) -> DeveloperFacts:
     """Read as the developer (``db`` bound to ``user_id``, no organisation)."""
-    engagements = await engagement_facts(db, Engagement.developer_id == user_id)
+    engagements = await engagement_facts(db, Engagement.developer_id == user_id, deals_enabled=deals_enabled)
     drafts = await db.execute(
         select(func.coalesce(Proposal.title, ProposalVersion.title))
         .outerjoin(ProposalVersion, ProposalVersion.id == Proposal.draft_version_id)
@@ -268,8 +166,8 @@ async def developer_facts(db: AsyncSession, user_id: UUID, today: date) -> Devel
     return DeveloperFacts(user_id, today, engagements, tuple(drafts.scalars().all()))
 
 
-async def org_facts(db: AsyncSession, org_id: UUID, today: date, cadence: Cadence) -> OrgFacts:
+async def org_facts(db: AsyncSession, org_id: UUID, today: date, cadence: Cadence, *, deals_enabled: bool) -> OrgFacts:
     """Read as a member of the organisation (``db`` bound to the member and ``org_id``)."""
     name = await db.scalar(select(Organization.legal_name).where(Organization.id == org_id))
-    engagements = await engagement_facts(db, Engagement.org_id == org_id)
+    engagements = await engagement_facts(db, Engagement.org_id == org_id, deals_enabled=deals_enabled)
     return OrgFacts(org_id, name or "", today, cadence, engagements)

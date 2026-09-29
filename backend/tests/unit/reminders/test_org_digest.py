@@ -58,7 +58,7 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
     )
     review = engagement(
         title="Ledger",
-        milestones=(milestone(days(-10), M.SUBMITTED_FOR_REVIEW, submitted_on=days(-20)),),
+        milestones=(milestone(days(-10), M.SUBMITTED_FOR_REVIEW, review_due_on=days(-13)),),
         awaiting=frozenset({ORG}),
         last_developer_update_on=days(-1),
     )
@@ -120,7 +120,7 @@ def test_the_organisations_stage_step_and_its_overdue_step_are_its_own() -> None
     (entry,) = compose_digest(facts(developer_turn), NO_HOLIDAYS).entries
     assert "Wanjiru's step (Organisation interested) was due 4 Oct 2026 and is 1 day overdue." in entry.line
     review_soon = engagement(
-        milestones=(milestone(days(3), M.SUBMITTED_FOR_REVIEW, submitted_on=days(-6), review_window_bd=5),),
+        milestones=(milestone(days(3), M.SUBMITTED_FOR_REVIEW, review_due_on=days(1)),),
         awaiting=frozenset({ORG}),
         last_developer_update_on=MONDAY,
     )

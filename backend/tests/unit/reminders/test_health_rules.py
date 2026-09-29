@@ -24,7 +24,6 @@ from bridge.reminders.health import (
     nairobi_today,
     quiet_since,
     repo_cold,
-    whose_turn,
 )
 from bridge.reminders.nudge import DeveloperFacts, compose_nudge, fallback_wording, render_nudge
 
@@ -122,7 +121,7 @@ def test_a_submitted_or_accepted_milestone_is_not_the_developers_risk(state: Mil
 
 def test_a_review_past_its_window_is_the_organisations_overdue_item() -> None:
     """A milestone submitted on 21 September with a 5 BD review window is due for review on the 28th."""
-    submitted = milestone(TUESDAY, M.SUBMITTED_FOR_REVIEW, submitted_on=date(2026, 9, 21), review_window_bd=5)
+    submitted = milestone(TUESDAY, M.SUBMITTED_FOR_REVIEW, review_due_on=date(2026, 9, 28))  # history.review_due_dates
     result = assess(engagement(milestones=(submitted,), awaiting=frozenset({ORG})), MONDAY, NO_HOLIDAYS)
     assert [(r.code, r.party, r.due_on, r.days) for r in result.reasons] == [
         (ReasonCode.REVIEW_OVERDUE, ORG, date(2026, 9, 28), 7)
@@ -214,47 +213,6 @@ def test_quiet_since_names_the_developers_last_update_once_it_is_old_enough() ->
     never = engagement(last_developer_update_on=None, created_on=MONDAY - timedelta(days=9))
     assert quiet_since(never, MONDAY) == MONDAY - timedelta(days=9)
     assert quiet_since(engagement(S.CLOSED, last_developer_update_on=last), MONDAY) is None
-
-
-# ------------------------------------------------------------------------------------------------------ whose turn
-
-
-@pytest.mark.parametrize(
-    ("state", "facts", "expected"),
-    [
-        (S.ORG_INTEREST, {}, {DEV}),
-        (S.SUBMITTED, {}, {ORG}),
-        (S.UNDER_REVIEW, {}, {ORG}),
-        (S.INTEREST_CONFIRMED, {}, {ORG}),
-        (S.PROCUREMENT_ROUTE, {}, {ORG}),
-        (S.CONTACT_MADE, {}, {DEV}),
-        (S.CONTACT_MADE, {"contact_confirmed": True}, {DEV, ORG}),
-        (S.NDA_PENDING, {}, {DEV, ORG}),
-        (S.NDA_PENDING, {"signed": frozenset({DEV})}, {ORG}),
-        (S.NDA_SIGNED, {}, {DEV, ORG}),
-        (S.NEGOTIATION, {}, {DEV, ORG}),
-        (S.NEGOTIATION, {"terms_by": DEV}, {ORG}),
-        (S.NEGOTIATION, {"terms_by": ORG}, {DEV}),
-        (S.AGREEMENT_SIGNING, {"signed": frozenset({ORG})}, {DEV}),
-        (S.IN_IMPLEMENTATION, {"milestones": (M.PLANNED,)}, {DEV}),
-        (S.IN_IMPLEMENTATION, {"milestones": (M.SUBMITTED_FOR_REVIEW,)}, {ORG}),
-        (S.IN_IMPLEMENTATION, {"milestones": (M.CHANGES_REQUESTED, M.SUBMITTED_FOR_REVIEW)}, {DEV, ORG}),
-        (S.IN_IMPLEMENTATION, {"milestones": (M.ACCEPTED, M.ACCEPTED)}, {DEV}),
-        (S.IN_IMPLEMENTATION, {}, set()),
-        (S.DELIVERED, {}, {ORG}),
-        (S.SIGN_OFF, {}, {ORG}),
-        (S.SIGN_OFF, {"signed": frozenset({ORG})}, {DEV}),
-        (S.PAYMENT_FINAL, {}, {ORG}),
-        (S.PAYMENT_FINAL, {"payment_recorded": True}, {DEV}),
-        (S.INFO_REQUESTED, {}, {DEV}),
-        (S.ON_HOLD, {}, set()),
-        (S.CLOSED, {}, set()),
-    ],
-)
-def test_whose_turn_follows_the_tracker_table(
-    state: EngagementState, facts: dict[str, object], expected: set[EngagementParty]
-) -> None:
-    assert whose_turn(state, **facts) == frozenset(expected)  # type: ignore[arg-type]
 
 
 def test_the_reminder_text_names_the_milestone_and_its_due_date() -> None:

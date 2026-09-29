@@ -306,7 +306,8 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
         if in_app_done and not email_open:
             status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", email=status, email_skipped=block)
-        composed = developer.compose_nudge(await developer_facts(db, r.id, today), holidays)
+        facts = await developer_facts(db, r.id, today, deals_enabled=deps.settings.feature_deals_enabled)
+        composed = developer.compose_nudge(facts, holidays)
         if composed.empty:
             status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", email=status, email_skipped=block)
@@ -401,7 +402,8 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
         if in_app_done and not email_open:
             status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", org_id=org_id, email=status, email_skipped=block)
-        digest = org_digest.compose_digest(await org_facts(db, org_id, today, cadence), holidays)
+        facts = await org_facts(db, org_id, today, cadence, deals_enabled=deps.settings.feature_deals_enabled)
+        digest = org_digest.compose_digest(facts, holidays)
         if digest.empty:
             status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", org_id=org_id, email=status, email_skipped=block)

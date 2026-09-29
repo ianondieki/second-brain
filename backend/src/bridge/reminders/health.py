@@ -8,7 +8,7 @@ I/O. Dates are Nairobi calendar dates (``nairobi_today``) and "BD" are Kenyan bu
 The rules (docs/spec/06 6.11), for the engagement's main-path stages only (side and terminal states are not assessed):
 
 - an item is the developer's milestone (from the **signed** agreement, not yet submitted or accepted), the
-  organisation's review of a submitted milestone (due its review window in BD after submission), or the current
+  organisation's review of a submitted milestone (due its review date, ``history.review_due_dates``), or the current
   stage's deadline for each party awaited;
 - ``at_risk``: an item due within ``DUE_SOON_BD`` (2) BD with no action, an item overdue by 1 to 7 days, or (only
   with a linked repository, during ``IN_IMPLEMENTATION``, never on a weekend or holiday) no repository activity for
@@ -18,8 +18,8 @@ The rules (docs/spec/06 6.11), for the engagement's main-path stages only (side 
 - otherwise ``on_track``. Each reason is a code tuple (code, party, date, days, milestone), never prose and never a
   percentage: the renderers word it.
 
-``whose_turn`` mirrors ``bridge.engagements.state_machine.pending`` (P5, parallel branch) from the tracker's rows;
-once P5 merges, the fact loader calls the state machine instead and this table goes.
+Whose turn it is (``EngagementFact.awaiting``) is the state machine's: the fact loader asks
+``bridge.engagements.state_machine.pending`` (docs/spec/06 6.9: the only definition of stages and next actors).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
-from bridge.engagements.calendar import add_business_days, business_days_between, is_business_day, local_date
+from bridge.engagements.calendar import business_days_between, is_business_day, local_date
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
 
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
@@ -42,7 +42,6 @@ OFF_TRACK_AFTER_DAYS: Final = 7  # "overdue >7 days"
 REWORK_LOOPS_OFF_TRACK: Final = 2  # "a rework loop >= 2"
 COLD_AFTER_BD: Final = 3  # repo-cold rule (Release 2: a linked repository)
 QUIET_AFTER_DAYS: Final = 5  # "No update from {party} since {date}" once a party has been quiet this long
-DEFAULT_REVIEW_WINDOW_BD: Final = 5  # docs/spec/06 6.9 milestone sub-tracker
 
 # Main-path stages (docs/spec/06 6.9). Side branches pause or freeze the clock; terminal states have nothing due.
 ASSESSED_STATES: Final = frozenset(
@@ -101,17 +100,16 @@ class Reason:
 
 @dataclass(frozen=True, slots=True)
 class MilestoneFact:
-    """A milestone of the engagement's signed agreement. ``submitted_on`` is the Nairobi date of its latest submission
-    for review (the tracker's ``submit_milestone`` event), when known; ``rework_loops`` counts its ``request_changes``
-    events."""
+    """A milestone of the engagement's signed agreement. ``review_due_on`` is the tracker's review due date while it is
+    submitted for review (``bridge.engagements.history.review_due_dates``: its latest submission plus its review
+    window in BD); ``rework_loops`` counts its ``request_changes`` events."""
 
     seq: int
     deliverable: str
     due_on: date
     state: MilestoneState
     rework_loops: int = 0
-    submitted_on: date | None = None
-    review_window_bd: int = DEFAULT_REVIEW_WINDOW_BD
+    review_due_on: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,11 +176,10 @@ def _milestone_reasons(m: MilestoneFact, today: date, holidays: Collection[date]
     if m.rework_loops >= REWORK_LOOPS_OFF_TRACK:
         reasons.append(Reason(ReasonCode.REWORK_LOOP, Health.OFF_TRACK, DEV, m.due_on, m.rework_loops, m.seq))
     if m.state is M.SUBMITTED_FOR_REVIEW:
-        if m.submitted_on is not None:
-            review_due = add_business_days(m.submitted_on, m.review_window_bd, holidays)
+        if m.review_due_on is not None:
             found = _item(
                 ORG,
-                review_due,
+                m.review_due_on,
                 today,
                 holidays,
                 soon=ReasonCode.REVIEW_DUE_SOON,
@@ -248,41 +245,3 @@ def quiet_since(e: EngagementFact, today: date) -> date | None:
         return None
     last = e.last_developer_update_on or e.created_on
     return last if (today - last).days >= QUIET_AFTER_DAYS else None
-
-
-def whose_turn(
-    state: EngagementState,
-    *,
-    signed: frozenset[EngagementParty] = frozenset(),
-    contact_confirmed: bool = False,
-    milestones: tuple[MilestoneState, ...] = (),
-    payment_recorded: bool = False,
-    terms_by: EngagementParty | None = None,
-) -> frozenset[EngagementParty]:
-    """The parties whose action moves the engagement on (docs/spec/06 6.9 "Next actor"). ``signed`` holds the parties
-    that signed the stage's document (mutual NDA, final agreement or acceptance certificate); ``terms_by`` is the
-    party that proposed the latest terms."""
-    both = frozenset({DEV, ORG})
-    if state is S.ORG_INTEREST or state is S.INFO_REQUESTED:
-        return frozenset({DEV})
-    if state in (S.SUBMITTED, S.UNDER_REVIEW, S.INTEREST_CONFIRMED, S.PROCUREMENT_ROUTE, S.DELIVERED):
-        return frozenset({ORG})
-    if state is S.CONTACT_MADE:
-        return both if contact_confirmed else frozenset({DEV})
-    if state in (S.NDA_PENDING, S.AGREEMENT_SIGNING):
-        return both - signed
-    if state is S.NDA_SIGNED:
-        return both
-    if state is S.NEGOTIATION:
-        return both if terms_by is None else both - {terms_by}
-    if state is S.IN_IMPLEMENTATION:
-        if milestones and all(m is M.ACCEPTED for m in milestones):
-            return frozenset({DEV})  # the final delivery
-        parties = {DEV} if any(m in _DEVELOPER_WORK for m in milestones) else set()
-        parties |= {ORG} if M.SUBMITTED_FOR_REVIEW in milestones else set()
-        return frozenset(parties)
-    if state is S.SIGN_OFF:
-        return frozenset({DEV}) if ORG in signed else frozenset({ORG})  # the organisation signs first
-    if state is S.PAYMENT_FINAL:
-        return frozenset({DEV}) if payment_recorded else frozenset({ORG})
-    return frozenset()

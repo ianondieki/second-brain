@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant
+from bridge.engagements.calendar import add_business_days
 from bridge.ids import uuid7
 from bridge.models.enums import EngagementParty, MilestoneState
 from bridge.reminders.facts import developer_facts, engagement_facts, org_facts
@@ -33,7 +34,7 @@ async def as_developer(w: World) -> EngagementFact:
     await w.conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
     async with w.factory() as db:
         await bind_tenant(db, user_id=w.p.developer)
-        facts = await developer_facts(db, w.p.developer, TODAY)
+        facts = await developer_facts(db, w.p.developer, TODAY, deals_enabled=True)
     (fact,) = facts.engagements
     return fact
 
@@ -42,7 +43,7 @@ async def as_member(w: World, member: UUID) -> EngagementFact:
     await w.conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
     async with w.factory() as db:
         await bind_tenant(db, user_id=member, org_id=w.p.org)
-        facts = await org_facts(db, w.p.org, TODAY, "weekly")
+        facts = await org_facts(db, w.p.org, TODAY, "weekly", deals_enabled=True)
     assert facts.org_name == "Tracker Ltd"
     (fact,) = facts.engagements
     return fact
@@ -172,7 +173,8 @@ async def test_milestones_carry_rework_loops_and_submission_dates_from_the_event
             date(2027, 3, 31),
             MilestoneState.SUBMITTED_FOR_REVIEW,
         )
-        assert (m.rework_loops, m.submitted_on, m.review_window_bd) == (2, today, 5)
+        holidays = frozenset(row[0] for row in await w.owner_rows("SELECT observed_on FROM holidays"))
+        assert (m.rework_loops, m.review_due_on) == (2, add_business_days(today, 5, holidays))  # P5's review date
         assert fact.awaiting == frozenset({ORG})
         assert fact.last_developer_update_on == today
 
@@ -189,7 +191,7 @@ async def test_the_developers_drafts_are_listed_newest_first(owner_engine: Async
         await conn.execute(sa.text("SET LOCAL ROLE bridge_app"))
         async with w.factory() as db:
             await bind_tenant(db, user_id=w.p.developer)
-            facts = await developer_facts(db, w.p.developer, TODAY)
-            outsider = await engagement_facts(db, sa.true())
+            facts = await developer_facts(db, w.p.developer, TODAY, deals_enabled=True)
+            outsider = await engagement_facts(db, sa.true(), deals_enabled=True)
         assert facts.drafts == ("RLS proposal",)
         assert [e.id for e in outsider] == [w.engagement]  # RLS: only the developer's own engagement is read
