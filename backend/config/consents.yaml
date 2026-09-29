@@ -2,7 +2,9 @@
 # the version and the SHA-256 of the exact text shown. Changing a text means a new version. Wording is draft
 # product copy for the G2 legal review ([[COPY-REVIEW]]); it makes no claim about protection or law.
 # 2026-09-25.1: review markers moved out of the texts (users saw them); wording otherwise unchanged.
-version: "2026-09-25.1"
+# 2026-09-29.1: tier2_llm_assistant says the opt-in lasts one sign-in and ends at sign-out (REQ-PROP-05; D-39 item 6,
+# [[COPY-REVIEW]] with the G2 legal pack); the other texts are unchanged.
+version: "2026-09-29.1"
 # Version of the terms of service text a signup accepts ([[LEGAL-PLACEHOLDER:tos]] until G2); recorded in the audit event.
 terms_version: "placeholder-0"
 # Every text below is [[COPY-REVIEW]] draft copy. The marker stays in this comment, never in a text: texts are shown
@@ -24,7 +26,9 @@ purposes:
     text: "Read the GitHub repositories I link to show progress on my milestones (available later)."
     default: false
   tier2_llm_assistant:
-    text: "Let the writing assistant read my confidential (Tier 2) text to suggest improvements."
+    text: >-
+      Let the writing assistant send my proposal, including my confidential (Tier 2) text, to an AI model to suggest a
+      clearer teaser. This lasts for this sign-in only: it ends when I sign out or turn the assistant off.
     default: false
   tier2_llm_moderation:
     text: "Let automated moderation read my confidential (Tier 2) text before it is shown to organisations."

@@ -78,7 +78,7 @@ async def test_developer_signup_verify_and_me(client: httpx.AsyncClient) -> None
     consents = {c["purpose"]: c["granted"] for c in (await client.get("/api/me/consents")).json()}
     assert consents["reminders"] is True
     assert consents["marketing"] is False
-    assert consents["tier2_llm_assistant"] is False
+    assert "tier2_llm_assistant" not in consents  # per sign-in, from the proposal editor (REQ-PROP-05)
 
 
 async def test_signup_does_not_reveal_existing_accounts(client: httpx.AsyncClient) -> None:
