@@ -344,3 +344,45 @@ Follow-ups (MINOR, not built):
 - Commit sizes: `access.py` (about 330 lines) and the routes commit (about 330) exceed the ~300-line guidance; recorded
   as a deviation (one module each).
 
+
+## Notes (P8 frontend part 3, branch `feat/REQ-REPO-01-org-screens`)
+
+Built (F4/F5, organisation; REQ-PROP-03's Inbox with this card's NDA step and Tier-2 view):
+
+- `/org`: the greeting and two-step sign-in status as before (owners without it: "Turn on two-step sign-in" is the
+  primary action and the Inbox summary waits, since the API refuses org routes until then), then the newest proposal
+  or the empty/held sentence and "Open the Inbox".
+- `/org/inbox`: `GET /api/orgs/{org_id}/inbox` on the server; delivered tags newest first as Tier-1 rows (stage chip,
+  sent date, title link, niche, summary, stage and ask; at most two chips), keyset paging, the held count for E1
+  organisations (their empty state's one sentence), empty states by verification (E2 / E1 / not yet verified) with
+  "Back to home", refusals `mfa_enrolment_required` / `mfa_required` with the second-factor step as the primary
+  action. Members of several organisations get a GET-form picker; `?org=` acts only for one of `me.memberships`.
+- `/org/inbox/{proposal_id}`: the teaser (`GET /api/proposals/{id}`), then "Full proposal" behind the fold, one of:
+  a refusal (every code of the gate and predicate has its own sentence and at most one action, `refusals.ts`;
+  `step_up_required` is an in-page code form posting `/api/auth/step-up`); the Evaluation NDA (`GET …/nda`: body in a
+  focusable scroll region, version, SHA-256 fingerprint, the logging notice verbatim from the API, "Accept and view"
+  posting `template_id`, `sha256`, `logging_notice_version`; `nda_outdated` offers "Show the new version"); accepted
+  ("View full proposal", so the page never logs a view by itself); viewing (`?view=full`: the marked page in an
+  iframe on the same-origin `/api` rewrite, `sandbox="allow-popups allow-popups-to-escape-sandbox"`,
+  `referrerpolicy="no-referrer"`, 70 dvh on phones, 80 vh from 1024 px).
+- Files: `frontend/app/(app)/org/` (pages, `data.ts`, `membership.ts`, `refusals.ts`, `labels.ts`, `format.ts`,
+  `EmptyState`, `StageChip`, `OrgPicker`, `inbox/InboxRow`, `inbox/[proposalId]/{TeaserDetails,FullProposal,NdaAccept,
+  StepUp}`, tests), `frontend/components/{OrgNav,org-icons}.tsx` (+ test), `frontend/e2e/org-inbox.spec.ts`,
+  `frontend/e2e/support/org-scene.ts`. Shared: `lib/i18n/client-strings.ts` (`orgProposal` is a client-string
+  namespace; `org`, `version`, `date`, `id` placeholders). Copy `nav.organisation`, `nav.inbox`, `home.orgLead*`,
+  `orgHome.*`, `inbox.*`, `orgProposal.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8c`); Swahili drafts `[[SW-REVIEW]]`.
+- E2E state (`org-scene.ts`): API for signups, TOTP, publishing and the Pitch; the owner role (E2E_DATABASE_OWNER_URL)
+  only for D1, the organisation's E1/E2 level and verified domain, the signatory role and its Master Enterprise Terms
+  acceptance. The API must run with `FEATURE_TIER2_ENABLED=true`.
+- JS (production build, `scripts/js-budget.mjs`, until network idle): `/org` and `/org/inbox` 140,046 B; the proposal
+  page in every state 142,702 B (budget 150,000).
+
+Follow-ups, not built:
+
+- The render's "Verify this record" link has no `target="_blank"`: inside the frame it navigates to `/verify/…`, which
+  the web app serves with `X-Frame-Options: DENY`, so the frame shows a blocked page (backend `render.py`).
+- A refusal between the NDA step and the frame (a grant revoked meanwhile) shows the API's JSON error inside the frame;
+  the page shows the right sentence on the next load.
+- The stage chip becomes the tracker link (`/org/engagements/{id}`) when REQ-ENG-03's screen exists; the empty
+  Inbox's action becomes "Set up Scout Agent" (docs/spec/07 item 4) once scouts exist.
+- axe cannot run inside the script-less sandboxed frame; the e2e check of the viewing state waits for it (about 25 s).
