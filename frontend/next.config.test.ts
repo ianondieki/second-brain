@@ -16,6 +16,12 @@ describe("next.config.ts", () => {
     expect(nextConfig.experimental?.caseSensitiveRoutes).toBe(true);
   });
 
+  it("routes /api and the published provenance keys, and nothing else, to the API", async () => {
+    const rewrites = await nextConfig.rewrites?.();
+    const sources = (Array.isArray(rewrites) ? rewrites : []).map((rule) => rule.source);
+    expect(sources).toEqual(["/api/:path*", "/.well-known/provenance-keys.json"]);
+  });
+
   it("sends exactly the header rules of security-headers.ts", async () => {
     expect(await nextConfig.headers?.()).toEqual(HEADER_RULES);
   });

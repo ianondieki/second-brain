@@ -32,6 +32,14 @@ export const textLinkClass =
   "py-2.5 font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
   "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
 
+/**
+ * Links that stand on their own line (lists of links, back links, paging, empty-state actions): each gets its own
+ * 44 px band (WCAG 2.2 target size), so stacked links never share or overlap a tap area.
+ */
+export const standaloneLinkClass =
+  "inline-flex min-h-11 items-center font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
+  "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
+
 export function buttonClass(variant: ButtonVariant, className?: string) {
   return cn(base, variants[variant], className);
 }

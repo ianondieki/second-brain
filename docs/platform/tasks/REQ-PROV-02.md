@@ -32,3 +32,36 @@ follows in the frontend batch. Deviations:
   certificate is `GET /api/provenance/certificates/{cert_id}/certificate.pdf`. Both answer 404 to anyone else.
 - The certificate uses the PDF base font Helvetica (Latin-1): names outside Latin-1 need an embedded font later.
   Labels are `[[COPY-REVIEW]]`; the footer is the spec text verbatim.
+
+## Notes (P8 frontend, branch `feat/REQ-DIR-01-screens`)
+
+Built (F3, public):
+
+- `/verify`: a plain GET form for the certificate id (spaces, hyphens and lower case tidied; `/verify?id=…` redirects
+  to `/verify/{id}`, a malformed id shows the field error with no request) and "Check a file" against every
+  registered record (`POST /api/verify`, raw body through `withCsrf`, 10 MB checked first).
+- `/verify/{cert_id}`: rendered on the server from `GET /api/verify/{cert_id}`: status (icon + words + colour),
+  SHA-256 fingerprint (eight groups, monospace columns, copies as one string), timestamp in Nairobi time and UTC, TSA
+  serial, key id, signature, the `.tsr` download and the published keys, the 6.4 footer verbatim, and never the owner
+  or the title (D-33 default). "Check a file" against this certificate is the page's primary action. Unknown id,
+  throttling (429) and API failure are one sentence and one action. `noindex`.
+- Files: `frontend/app/(public)/verify/` (pages, `VerifyShell`, `VerifyRecord`, `Fingerprint`, `FileCheck`,
+  `certificate.ts`, `lookup.ts`, `upload.ts`, tests), `frontend/e2e/verify.spec.ts`, `frontend/e2e/support/screen.ts`.
+  Copy `verify.*`, `verifyFile.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8`); Swahili drafts `[[SW-REVIEW]]`.
+
+Shared files changed: `frontend/lib/api/server.ts` (exports `serverApi`; `forwardHeaders()` forwards the session
+cookie and a pattern-checked X-Forwarded-For), `frontend/next.config.ts` (rewrite of
+`/.well-known/provenance-keys.json` to the API, tested in `next.config.test.ts`), `frontend/components/ui/Button.tsx`
+(`standaloneLinkClass`: own 44 px band for links on their own line).
+
+Follow-ups, not built:
+
+- `E2E_VERIFY_CERT_ID`: the registered-certificate Playwright test skips without it (no certificate exists on a stack
+  until T2.3 publishing). Remove the skip once P9's demo seed exports a certificate id for E2E.
+- The "matching file" Playwright test stubs `POST /api/verify` (the plaintext manifest is only reachable through the
+  owner's download); a real match end to end comes with P2/P9 data.
+- THREAT_MODEL note to add: the Phase 8 edge proxy must overwrite X-Forwarded-For (Next.js keeps a client-sent value),
+  and only then may TRUSTED_PROXIES list the web hop; until then the public /verify limits are per web server in dev.
+- JS budget: `/verify` and `/verify/{id}` measure about 145 KB gzipped of 150 KB; add the Lighthouse CI budget
+  (AC-UX-3) before the next screen.
+- Owner opt-in to show name and title (D-33) needs the schema column first.
