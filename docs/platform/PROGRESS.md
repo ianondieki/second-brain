@@ -365,14 +365,15 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-PROP-01-proposals` (P2) | `803062a`+ | built (1823 passed); reviewer CHANGES_REQUIRED (3 MAJOR: `name @host` emails, Unicode confusables, moderation decision not tied to the reviewed version); impl-backend fixing | reviewer re-check, CI, merge |
-| `feat/REQ-SEC-01-tier2-access` (P3) | — | impl-backend (from the P2 head) | merge P2 in, reviewer + security-reviewer, merge |
-| `feat/REQ-LLM-01-providers` (P7) | `ca92383` | built (2185 passed); reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
-| `feat/REQ-LLM-01-calls-since` (revision 0004) | — | db-migrations: `app_llm_calls_since` so P7's free-slot caps count platform-wide | review, merge, then P7 switches to it |
+| `feat/REQ-SEC-01-tier2-access` (P3) | `99541b9` | built on schema v3 (2373 passed); reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
+| `feat/REQ-PROP-03-pitch` (P4) | — | impl-backend: directory/repo search, tags, held tags, 402/409, EM1, org inbox; hooks for P3 `grant_on_tag` and P5 `open_engagement_for_tag` | review, merge |
 | `feat/REQ-ENG-02-tracker` (P5) | — | impl-backend: state machine, API, EM2, contact reveal, NDA placeholder, agreement, signatures, payment, test clock router | reviewer + security-reviewer, merge |
+| `feat/REQ-REM-01-reminders` (P6) | — | impl-backend: EM7 nudge (LLM wording + fixed fallback), org digest (facts), jobs on the test clock | review, merge |
+| `feat/REQ-PROP-01-screens` (P8 part 2) | — | impl-frontend: My Ideas list, 3-step editor, proposal page | ux-reviewer + reviewer, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
+Merged on 2026-09-29 after P1: P2 proposals `79dc401` (reviewer PASS round 2), revision 0004 `dd37106` (`app_llm_calls_since`), P7 LLM providers `029caa9` (reviewer PASS; security-reviewer PASS round 2); 2506 backend tests on the merged tree.
 Also merged on 2026-09-29: P1 schema v3 `3bb82b3` (revision 0003; reviewer + security-reviewer PASS round 2) and P8 part 1 `b787d8b` (`/verify`, Companies; reviewer PASS, ux-reviewer PASS round 2); 2084 backend and 244 frontend tests on the merged tree. CI note: `pr.yml`'s gitleaks step scans every branch's commits with the checked-out branch's `.gitleaksignore`, so reviewed fixture fingerprints go on the integration branch and reach feature branches by merge. Decisions opened this session: D-38 (research excerpts), D-39 (attestation wording).
 
 **Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
@@ -400,12 +401,12 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | P0 schema v2 round 6 → merge | done (`ba42e69`) | reviewer + security-reviewer PASS; CI green |
 | P0 T2.4, T2.6a, D1, T2.2 → merge | done | 1998 backend tests on the merged tree |
 | P1 schema v3 (prototype) | done (`3bb82b3`) | revision 0003 |
-| P2 proposals | review fixes | 3 MAJOR being fixed |
-| P3 Tier-2 access | in progress | impl-backend |
-| P4 directory search + Pitch + EM1 | todo | |
+| P2 proposals | done (`79dc401`) | |
+| P3 Tier-2 access | in review | |
+| P4 directory search + Pitch + EM1 | in progress | |
 | P5 tracker main path + test clock | in progress | impl-backend |
-| P6 reminders | todo | |
-| P7 LLM providers (D-37) | in review | + revision 0004 for platform-wide request counts |
+| P6 reminders | in progress | |
+| P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
 | P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
 | P9 `make demo` (basic) | todo | |
 | M1 merged, tag `prototype-m1`, M1 report | todo | |
