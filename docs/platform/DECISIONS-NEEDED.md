@@ -92,6 +92,13 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing; the OAuth buttons ship in F4.
 - Decision:
 
+### D-38 · Storing short publisher excerpts for the research-agent demo (P11, REQ-RES-01)
+- Why: P11 drafts problems from 19 short verbatim excerpts (12–41 words each) saved in `backend/seed/research_excerpts.yaml` with URL, publisher and date (branch `feat/REQ-RES-01-sources`; method in `research/research-excerpts-2026-09.md`). Six come from official sources (CA, SASRA, the agriculture ministry) and thirteen from Kenyan news sites (Business Daily, Standard, Star, Capital FM). The publishers' terms for storing and showing short excerpts were not reviewed; Business Daily pages show a premium banner although the text was served without a login. This is a legal question, so agents do not decide it.
+- Options: (a) keep all 19 for the local demo only (never hosted), each shown with its source link and date; (b) keep only the six official-source excerpts and replace the news ones with more official sources; (c) have the terms reviewed before any excerpt is shown.
+- Recommended default: (a) for the local prototype, because nothing is hosted (D-36) and each quote is short and attributed; before any hosted release, (c).
+- Blocks: nothing in the prototype; any hosted release of the research cards.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
