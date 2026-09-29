@@ -5,10 +5,13 @@ active; publishing the next version of an active proposal is not a new proposal.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.proposals import tags
 from tests.integration.proposals.helpers import (
     Developers,
     ProposalWorld,
@@ -157,3 +160,26 @@ async def test_tags_never_paywalled(
         assert response.status_code == 201, response.text
         assert response.json()["tags"][0]["engagement_id"] is not None
     assert (await counts(owner_engine, user_of(dev)))["engagements"] == 5
+
+
+async def test_concurrent_pitches_cannot_pass_the_cap(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three sessions of one developer pitch the 5th, 6th and 7th organisation of one proposal at once: the
+    per-developer lock lets exactly one through. Each Pitch pauses after reading the cap, so without the lock all
+    three read ``used = 4`` and insert (the review's race, made deterministic)."""
+    orgs = await _orgs(owner_engine, 7, "unclaimed")
+    dev, proposal_id = await pitchable(developers, proposal_world)
+    assert (await pitch(dev, proposal_id, *orgs[:4])).status_code == 201
+    read_cap = tags.cap
+
+    async def slow_cap(*args: Any, **kwargs: Any) -> Any:
+        found = await read_cap(*args, **kwargs)
+        await asyncio.sleep(0.3)
+        return found
+
+    monkeypatch.setattr(tags, "cap", slow_cap)
+    twins = [await developers(user_id=user_of(dev)) for _ in range(3)]
+    answers = await asyncio.gather(*(pitch(twin, proposal_id, org) for twin, org in zip(twins, orgs[4:7], strict=True)))
+    assert sorted(a.status_code for a in answers) == [201, 402, 402], [a.text for a in answers]
+    assert (await counts(owner_engine, user_of(dev)))["tags"] == 5
