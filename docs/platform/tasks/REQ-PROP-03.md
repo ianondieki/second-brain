@@ -132,3 +132,37 @@ Follow-ups (MINOR, not built):
 - The `_USED` branch that counts a closed `delivered` or `expired` tag (and a tag with an engagement) is not tested:
   add a cap test with a declined (closed, delivered) tag and an expired one once P5 writes those states.
 - Commit sizes: several P4 commits exceed the ~300-line guidance (test files, one service module).
+
+## Notes (P8 frontend, branch `feat/REQ-PROP-03-screens`)
+
+Built (F2, developer): `/dev/ideas/{id}/pitch` (the picker, its own route so the idea page does not carry it) and,
+on `/dev/ideas/{id}`, the idea's pitches with Withdraw and "Who has seen this" (REQ-PROV-03). Files:
+`frontend/app/(app)/dev/ideas/[id]/pitch/` (`picker.ts`, `refusals.ts`, `calls.ts`, `data.ts`, `PitchForm.tsx`,
+`page.tsx`, tests), `frontend/app/(app)/dev/ideas/[id]/{Pitches,WithdrawTag,WhoHasSeen}.tsx`,
+`frontend/e2e/pitch.spec.ts`, `frontend/e2e/support/pitch-scene.ts`. Copy `pitch.*`, `tagWithdraw.*`,
+`ideaPitches.*`, `ideaViews.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8d`); Swahili drafts `[[SW-REVIEW]]`.
+
+- One GET form holds the search, the niche, the page and the choices (`sel`). Review round 1, MAJOR 1: nothing is
+  sent that the developer has not seen by name with its outcome. Choices from another page or search are resolved
+  on the server (`data.ts::chosenOptions`: `GET /api/directory/orgs/{id}` for the name, then the picker searched by
+  that name for the outcome and availability; at most 20 ids) and listed first under "Chosen in other searches"
+  with an untick box; an id either read cannot resolve is dropped (neither shown nor sent). The client only ever
+  chooses ids of rows shown as available (`PitchForm.tsx::initialChoices`); no hidden inputs.
+- Refusals and the limit line sit in the page's flow above the list and take focus; the sticky bar is the summary
+  and Pitch only (its height plus the tab bar stays inside `globals.css`'s focus scroll padding; e2e asserts it).
+- A published idea with pitches left makes "Pitch to companies" the idea page's primary action (Edit beside it).
+
+Follow-ups (not built):
+
+- "Who has seen this" does not show `duration` (the API sends null until the client heartbeat of REQ-PROV-03).
+- Copy review: the break-glass clause of the confidentiality wording, and whether the views note should mention it.
+- JS budget headroom is small: picker 144,834 B, idea page 144,997 B of 150,000 (LCP 2.28 s with 5 pitches in the UX
+  review); keep new client JS on these routes minimal.
+- `chosenOptions` makes up to two reads per off-page choice (40 at most); an API filter by org ids on the picker
+  (`GET …/pitch/orgs?id=…`) would make it one read. A company whose name search returns more than 100 matches
+  is dropped from the chosen group (not shown, not sent).
+- `e2e/support/pitch-scene.ts` overlaps part 3's `org-scene.ts` (org member, E2 verification): merge them when both
+  are on the integration branch.
+- Commit sizes: 1156db1 (683 lines) and 60df2af (448, tests) exceed the ~300-line guideline; no history rewrite.
+- Vitest 5: a `vi.fn` implementation that throws or rejects fails the test even when the code under test catches it
+  (seen in `chosen.test.ts`); the failed-read case is covered with a 503 answer instead.
