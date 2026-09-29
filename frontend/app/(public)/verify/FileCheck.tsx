@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Field } from "@/components/ui/Field";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -118,7 +118,7 @@ function Result({ result, certId }: { result: UploadCheck; certId?: string }) {
       <p className="mt-4 text-sm font-medium text-ink-soft">{t("yourHash")}</p>
       <Fingerprint hex={result.content_hash} className="mt-1" />
       {matched && found && !certId ? (
-        <Link href={`/verify/${encodeURIComponent(found)}`} className={cn(textLinkClass, "mt-2 inline-block")}>
+        <Link href={`/verify/${encodeURIComponent(found)}`} className={cn(standaloneLinkClass, "mt-2")}>
           {t("view", { certId: found })}
         </Link>
       ) : null}

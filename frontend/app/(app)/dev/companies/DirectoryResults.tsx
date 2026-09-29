@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 
 import {
   BASE_PATH,
@@ -49,14 +49,14 @@ export function DirectoryResults(props: ResultsProps) {
       {filters.cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
           {filters.cursor ? (
-            <Link href={firstPage} className={textLinkClass}>
+            <Link href={firstPage} className={standaloneLinkClass}>
               {t("firstPage")}
             </Link>
           ) : (
             <span />
           )}
           {page.next_cursor ? (
-            <Link href={filtersHref({ ...filters, cursor: page.next_cursor })} className={textLinkClass}>
+            <Link href={filtersHref({ ...filters, cursor: page.next_cursor })} className={standaloneLinkClass}>
               {t("nextPage")}
             </Link>
           ) : null}
@@ -91,7 +91,7 @@ export function Empty({ sentence, action, href }: { sentence: string; action: st
   return (
     <div data-empty-state="" className="border-t border-line pt-6">
       <p className="text-ink">{sentence}</p>
-      <Link href={href} className={textLinkClass}>
+      <Link href={href} className={standaloneLinkClass}>
         {action}
       </Link>
     </div>

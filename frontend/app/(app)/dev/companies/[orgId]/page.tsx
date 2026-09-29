@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -38,7 +38,7 @@ export default async function OrganisationPage({ params }: PageProps<"/dev/compa
       {org ? (
         <>
           <p className="-mt-2 mb-4">
-            <Link href={BASE_PATH} className={textLinkClass}>
+            <Link href={BASE_PATH} className={standaloneLinkClass}>
               {t("detailBack")}
             </Link>
           </p>

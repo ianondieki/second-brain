@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { buttonClass, textLinkClass } from "@/components/ui/Button";
+import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -105,7 +105,7 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
 
       {showClear && isNarrowed(filters) ? (
         <p>
-          <Link href={BASE_PATH} className={textLinkClass}>
+          <Link href={BASE_PATH} className={standaloneLinkClass}>
             {t("clear")}
           </Link>
         </p>

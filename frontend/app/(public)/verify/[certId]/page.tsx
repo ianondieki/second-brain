@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { IntlScope } from "@/components/IntlScope";
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 
 import { normaliseCertId } from "../certificate";
 import { FileCheck } from "../FileCheck";
@@ -57,11 +57,11 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
         </p>
         <div className="mt-6">
           {again && certId ? (
-            <Link href={`/verify/${certId}`} className={textLinkClass}>
+            <Link href={`/verify/${certId}`} className={standaloneLinkClass}>
               {t("retry")}
             </Link>
           ) : (
-            <Link href="/verify" className={textLinkClass}>
+            <Link href="/verify" className={standaloneLinkClass}>
               {t("another")}
             </Link>
           )}
@@ -82,7 +82,7 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
         </IntlScope>
       </div>
       <p className="mt-10">
-        <Link href="/verify" className={textLinkClass}>
+        <Link href="/verify" className={standaloneLinkClass}>
           {t("another")}
         </Link>
       </p>
