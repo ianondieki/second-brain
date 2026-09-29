@@ -295,17 +295,20 @@ async def deliver(
         company = org.legal_name if org is not None else "The organisation"
         title = (version.title if version is not None else None) or "your proposal"
         composed = compose(event, company, title, reason_text=reason_text)
-        if composed is None:
-            return True
-        party, notice = composed
-        people = await _org_people(db, engagement) if party is ORG else []
-        if party is DEV:
-            await _in_app(db, developer_id, None, notice, event.id)
+        people: list[UUID] = []
+        if composed is not None:
+            party, notice = composed
+            if party is ORG:
+                people = await _org_people(db, engagement)
+            else:
+                await _in_app(db, developer_id, None, notice, event.id)
         if event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state:
             # EM2 goes to the developer whoever moved the engagement there (the signatory's approval, or the
             # developer's own acceptance of an organisation's interest at stage 0).
             done = await _send_em2(db, provider, settings, engagement)
         await db.commit()
+    if composed is None:
+        return done
     for user_id in people:
         async with factory() as db:
             await bind_tenant(db, user_id=user_id, org_id=engagement.org_id)
