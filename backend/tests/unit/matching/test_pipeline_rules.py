@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from bridge.matching.config import get_weights
-from bridge.matching.pipeline import Candidate, Filters, excluded, final_score, matched_on, score, select
+from bridge.matching.pipeline import Candidate, Filters, excluded, final_score, matched_on, score, select_top
 from bridge.models.enums import ProposalMaturity
 
 T0 = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
@@ -74,12 +74,12 @@ def test_selection_keeps_min_fit_and_orders_by_score_then_age() -> None:
     old, new = candidate(published_at=T0), candidate(published_at=T0 + timedelta(days=1))
     low = candidate(title="Unrelated", summary="", problem_statement="", impact_claims=None, has_problem=False)
     scored = [score(c, filters(), W) for c in (new, low, old)]
-    picked = select(scored, 60, 10)
+    picked = select_top(scored, 60, 10)
     assert [s.candidate for s in picked] == [old, new]  # the low one (30) is under 60; ties: older first
-    assert select(scored, 60, 1)[0].candidate == old
-    assert [s.candidate for s in select(scored, 0, 10)] == [old, new, low]
+    assert select_top(scored, 60, 1)[0].candidate == old
+    assert [s.candidate for s in select_top(scored, 0, 10)] == [old, new, low]
     same = [score(candidate(proposal_id=UUID(int=i), published_at=T0), filters(), W) for i in (2, 1)]
-    assert [s.candidate.proposal_id for s in select(same, 0, 10)] == [UUID(int=1), UUID(int=2)]
+    assert [s.candidate.proposal_id for s in select_top(same, 0, 10)] == [UUID(int=1), UUID(int=2)]
 
 
 def test_the_final_score_mixes_the_model_in_only_when_it_answered() -> None:

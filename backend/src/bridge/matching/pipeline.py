@@ -14,7 +14,8 @@ delivered tags and whether the version links a published problem. Nothing here r
 2. ``score``: points from ``config/matching/weights_v1.yaml``: include keywords found in the teaser (the prototype's
    stand-in for the fake embedder's meaningless cosine, simulated), the niche (exact or through its parent), a
    delivered tag to this organisation and Tier-1 evidence (impact claims, a linked published problem).
-3. ``select``: scores at or above ``min_fit``, highest first (ties: earlier publication, then id), at most ``limit``.
+3. ``select_top``: scores at or above ``min_fit``, highest first (ties: earlier publication, then id), at most
+   ``limit``.
 
 The budget band is recorded on the scout but not applied: proposals carry no budget yet.
 """
@@ -180,7 +181,17 @@ def excluded(text_value: str, exclude_keywords: Sequence[str]) -> bool:
     return any(word.lower() in lowered for word in exclude_keywords)
 
 
-async def candidates(db: AsyncSession, filters: Filters, window: Window, *, limit: int) -> list[Candidate]:
+@dataclass(frozen=True, slots=True)
+class Page:
+    """The candidates of one read; ``last`` is the last proposal read (published_at, id) and ``full`` whether the read
+    hit its limit (the next run continues strictly after ``last``)."""
+
+    items: list[Candidate]
+    last: tuple[datetime, UUID] | None
+    full: bool
+
+
+async def candidates(db: AsyncSession, filters: Filters, window: Window, *, limit: int) -> Page:
     """The proposals that pass the hard filters, oldest publication first, at most ``limit``."""
     conditions = list(_HARD_FILTERS)
     params: dict[str, Any] = {
@@ -209,7 +220,9 @@ async def candidates(db: AsyncSession, filters: Filters, window: Window, *, limi
     sql = f"{_SELECT} WHERE {' AND '.join(conditions)} ORDER BY p.published_at, p.id LIMIT :limit"
     rows = (await db.execute(text(sql), params)).all()
     found = [_row(row) for row in rows]
-    return [c for c in found if not excluded(c.text, filters.exclude_keywords)]
+    last = (found[-1].published_at, found[-1].proposal_id) if found else None
+    kept = [c for c in found if not excluded(c.text, filters.exclude_keywords)]
+    return Page(kept, last, len(found) >= limit)
 
 
 def _round(value: float) -> int:
@@ -235,7 +248,7 @@ def score(candidate: Candidate, filters: Filters, weights: Weights) -> Scored:
     return Scored(candidate, _round(math.fsum(points.values())), found, points)
 
 
-def select(scored: Sequence[Scored], min_fit: int, limit: int) -> list[Scored]:
+def select_top(scored: Sequence[Scored], min_fit: int, limit: int) -> list[Scored]:
     """The matches: at or above ``min_fit``, highest first (ties: earlier publication, then id), at most ``limit``."""
     kept = [s for s in scored if s.score >= min_fit]
     kept.sort(key=lambda s: (-s.score, s.candidate.published_at, s.candidate.proposal_id))
