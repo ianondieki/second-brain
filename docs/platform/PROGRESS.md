@@ -365,14 +365,14 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-ENG-03-tracker-screens` (P8 part 5) | `8f0bb60` | reviewer CHANGES_REQUIRED (MAJOR: the stepper's copy of `STAGE_GROUPS`/`MILESTONE_STEPS` is not pinned to the state machine; the decline attestation went to D-39 item 7); fix round with the cheap MINORs (step-up Cancel race, contact reveal on ended engagements, Home split test, org link query, members error, policy-number test); ux-reviewer running | reviewer + ux-reviewer re-check, CI, merge |
-| `feat/REQ-SCOUT-01-schema-0005` (M2, revision 0005) | `9b0f5f5` | db-migrations: the M2 schema per `prototype-m2-plan.md` §2 | reviewer + security-reviewer; merge after the M1 tag |
-| `feat/REQ-PROP-05-assistant` (M2, P13 backend) | `dfa1ae8` | impl-ai: assistant routes with per-session consent, demo fallback, fixed budget message, consent text version (D-39 item 6) | reviewer + security-reviewer; merge after the M1 tag |
-| `feat/REQ-FND-02-demo` (P9) | `b387adf` | security-reviewer PASS; fix round done: the seed only drives engagements it just opened and logs refusals on a used database (regression test), `-p bridge-demo` always, `WITH_TEST_CLOCK` renamed `WITH_DEV_TOOLS` and the demo packages deleted from images built without it (exclusion test, THREAT_MODEL §1 row), 0600 secret files, `e2e-env` writes gitignored `frontend/.env.e2e`, README Windows steps; restart after a live step verified; Playwright 78/78 against the demo | reviewer re-check; CI + CodeQL dispatched; merge |
+| `feat/REQ-SCOUT-02-scouts` (M2, P10 backend) | `2d305c9` | impl-backend on top of 0005: scouts CRUD and preview, pipeline (keyword/niche rules + LLM rationale with demo fallback), EM3 digest, `scouts.scan` and `on_new`, Express interest, Share Tier 2, demo scouts, D-43 tests | reviewer + security-reviewer; merge after 0005 |
+| `feat/REQ-AUTH-01-followups-7-8` (P17 backend) | `97b9454`+ | impl-backend: merge integration, fix the TOTP BLOCKER (store only the secret on confirm), finish follow-ups 7–8 | security-reviewer + reviewer; merge after the M1 tag |
+| `feat/REQ-SCOUT-01-schema-0005` (M2, revision 0005) | `2d305c9` | done: 5 tables, 5 enums, 3 columns, 4 definers + `app_trend_aggregates` (owned by `bridge_owner`: the migration role cannot own objects as `aggregate_worker`), guards; 3173 backend tests; 36/36 mutations red | reviewer + security-reviewer running; merge after the M1 tag |
+| `feat/REQ-PROP-05-assistant` (M2, P13 backend) | `b43822c` | reviewer PASS round 2, security-reviewer PASS round 2 (per-user in-flight and daily limits, owner test, refused-call audit, Tier-2 overlap check, flag gate) | CI; merge after the M1 tag |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
-| `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
-Environment incidents: P9 ran `docker compose -p bridge down` (no `-v`) at about 19:10 to measure the demo alone, which stopped the shared dev stack other agents used; it was restarted and briefs now keep every agent on its own containers and ports. A reviewer's tool output showed the sandbox `RECOVERY_CODE_PEPPER` from a scratchpad env file (dev value, never committed; regenerate the laptop's own values, which never came from here). Then P8 part 4 Pitch screens (reviewer PASS and ux-reviewer PASS round 2; MINORs on the card). Merged after P6: P8 part 3 org screens `2491f24` (reviewer PASS round 2, ux-reviewer PASS; MINORs on the card). Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
+
+Environment incidents: P9 ran `docker compose -p bridge down` (no `-v`) at about 19:10 to measure the demo alone, which stopped the shared dev stack other agents used; it was restarted and briefs now keep every agent on its own containers and ports. A reviewer's tool output showed the sandbox `RECOVERY_CODE_PEPPER` from a scratchpad env file (dev value, never committed; regenerate the laptop's own values, which never came from here). **M1 done** (2026-09-29): the tracker screens merged (`b2ce311`), the M1 check passed on a clean `make demo` (Playwright 86/86, walkthrough 5/5, CI green), `prototype-m1` tagged at `fa5aeb6` (local: this container cannot push tags); the M1 report is below. Merged after P8 part 4: P9 `make demo` `203aa4e` (reviewer PASS round 2, security-reviewer PASS; CodeQL on the branch caught three new high results, fixed before merge: the demo commands no longer print the shared password, a test regex made linear). Then P8 part 4 Pitch screens (reviewer PASS and ux-reviewer PASS round 2; MINORs on the card). Merged after P6: P8 part 3 org screens `2491f24` (reviewer PASS round 2, ux-reviewer PASS; MINORs on the card). Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
 
 Merged after P4: P8 part 2 My Ideas `ebcbd1a` (reviewer PASS and ux-reviewer PASS round 2; CI green after moving a test fixture out of `app/`, which broke the web image build; a lint rule now refuses test imports in app code). Still to build for M1: the Engagements tracker screens (after P5), Home, P9 `make demo`.
 
@@ -485,6 +485,94 @@ M2:
 - P13 assistant: handle LLMBudgetExceeded scope global with a fixed message (T2.2 security MINOR 3); demo_fallback = no suggestion.
 - P15 admin: if staff can decide claims, fix schema v2 round-6 MINORs 1–3 (seat-aware domain rule, first verification by non-owner, E2 attributes by non-owner) first; else keep the claims queue read-only.
 
+### M1 report (2026-09-29): the core flow works end to end on `make demo`
+
+**Result.** M1 (P0–P9) is merged into the integration branch and tagged `prototype-m1` at `fa5aeb6` (an annotated tag made in this session; this container's git access pushes branches but refuses tag pushes, so the tag is local here: push it from the laptop with `git fetch origin && git tag -a prototype-m1 fa5aeb6 -m "Prototype M1" && git push origin prototype-m1`). On a clean
+`make demo` rebuilt from that head (1 min 37 s with cached layers; 2 min 18 s with a fresh build), the full Playwright
+suite passed against the demo (86 of 86: 85 in the full run on both projects, and the one wizard spec whose trace file my parallel walkthrough disturbed passed 5/5 when re-run alone), a scripted walk of the seeded story passed at 375 and 1440 px (5/5; Amina's
+Home, ideas, Engagements and both trackers; the Telco A reviewer's home, Inbox, Engagements and tracker; public
+`/verify`), and CI `pr.yml` is green on the head (run 36633475849: lint, types, the full backend suite, vitest, the
+legacy suite, migrations, scanners and the Playwright job on the CI stack seeded by the demo seed, with no e2e skip
+left). CodeQL stays red on the eight known findings of D-42 only (each merged branch was checked for new ones; P9's
+three new findings were fixed before it merged).
+
+**What works (the M1 story).**
+- Sign-up, sign-in, two-step sign-in (TOTP), phone verification D1 (fake SMS); D2 and organisation levels E1/E2 are
+  set by the seed.
+- A developer writes an idea (public teaser, confidential part encrypted per proposal, attachments through the demo
+  scanner), attests ownership and publishes it; publishing registers the version: hash, Ed25519 signature, a real
+  RFC 3161 timestamp from DigiCert (FreeTSA fallback) and a certificate anyone can check at `/verify` (file check
+  included).
+- Companies directory (provisional E0 listings plus the fixtures) and the Pitch picker: E2 organisations get the idea
+  at once, E0/E1 pitches are held until they verify; plan cap (402), one open pitch per organisation (409); a crafted
+  link cannot pitch an organisation the developer never saw. "Who has seen this" on the idea page.
+- The organisation's Inbox, the Evaluation NDA step, and the confidential part in a sandboxed frame (each view logged
+  and shown to the owner).
+- The tracker for both parties: Submitted → Under review → Approved to proceed (EM2) → contact → mutual NDA →
+  terms and agreement with milestones → implementation, milestone reviews → sign-off → payment recorded by the
+  organisation and confirmed by the developer → Closed; decline and withdraw; signatures, endorsements and payments
+  ask for a fresh TOTP code after 12 h; History with a hash-chain check; deadlines on the Kenyan business-day calendar
+  and a test clock to move time in the demo.
+- Reminders: the developer's daily nudge (EM7, wording chosen from code-rendered variants) and the organisations'
+  digest, in Mailpit, on the test clock.
+- LLM layer: free OpenAI-compatible slots or Anthropic behind one router, with caps, a kill switch and a labelled
+  "demo fallback"; only the seeded demo accounts' data may go to a free provider (D-37).
+
+**Run it on the Windows laptop (Docker Desktop, 4 GB).** Full steps are in README "Run the demo".
+1. Docker Desktop with the WSL 2 backend; give WSL 4 GB in `%UserProfile%\.wslconfig` (`[wsl2]`, `memory=4GB`), then
+   `wsl --shutdown` and start Docker Desktop again. Git and Python 3.9+ installed.
+2. `git fetch origin && git checkout prototype-m1` (or the integration branch), stop the dev stack if it runs
+   (`make down`), then in PowerShell: `python infra/demo/demo.py up`. The first run writes throwaway secrets to the
+   gitignored `infra/demo/.env` and `infra/demo/backend.env`, builds the images (several minutes), seeds and prints the
+   logins. `make` is optional (every target is a `python infra/demo/demo.py …` command).
+3. Open http://localhost:3000 (web), http://localhost:8025 (Mailpit), http://localhost:8000/api/docs (API).
+   Password for every demo login: see README "Demo logins"; TOTP codes: `python infra/demo/demo.py totp`.
+4. Memory: about 420 MB once seeded (caps 2.75 GB). `python infra/demo/demo.py down` keeps the data;
+   `reset --yes` starts fresh (use it if the very first start was interrupted).
+
+**Demo script (about 3 minutes).**
+1. `amina@developers.example`: Home shows "Needs you" (the SACCO B negotiation). Open My ideas → "Repayment nudges for
+   SACCO members": certificate, "Who has seen this" (a SACCO B reviewer opened it), its pitches. Click the certificate
+   id → public `/verify` page (timestamped by DigiCert).
+2. Engagements → the SACCO B negotiation: the stepper (Review and Contact done, Agreement current), "Awaiting: you",
+   the draft agreement with two milestones, both NDA signatures. Then open the closed Telco A engagement: every stage
+   endorsed, payment recorded and confirmed, History intact.
+3. Sign out; `reviewer@telco-a.example` (+ TOTP): Inbox → Brian's "Cashless market-fee collection for counties" (New)
+   → accept the Evaluation NDA → read the confidential part in its frame. Then Engagements → the same proposal: the
+   tracker shows only the steps that are Telco A's to take; take the first one (the signatory seat takes the approval
+   and signature steps).
+4. Sign in as `brian@developers.example`: My ideas → the pitch to Telco A shows its new stage; two pitches are held
+   until County C and NGO D verify.
+5. `python infra/demo/demo.py clock --days 1` then `python infra/demo/demo.py reminders`: open Mailpit to show the
+   developer nudge and the organisation digest.
+
+**Decision defaults applied (nothing here is decided for you; `DECISIONS-NEEDED.md` has the options).**
+- Earlier defaults (D-35): D-26 (c) OAuth buttons hidden; D-27 (a) Swahili off; D-28 (a) JS budget on gzipped
+  bodies; D-29 (a) no refusal fallback models; D-30 (c); D-31 (a); D-32 (a); D-33 (no name or title on `/verify`);
+  D-34 (a).
+- Opened this session, running on their recommended defaults: D-38 (a) research excerpts local only; D-39 (a) the
+  seven legal or privacy texts are `[[COPY-REVIEW]]` drafts until the G2 legal pack; D-40 (a)+(c) Tier-2 routes 404 to
+  non-members, 403 to others while the flag is off; D-41 (a) the spec's model allocation; D-42 CodeQL: nothing
+  changed in the gate, each branch runs CodeQL before merging (your decision needed: recommended (a)+(d));
+  D-43 (a) scout Tier-2 isolation by tests in the prototype; D-44 (a) sample prices labelled; D-45 (a) research cards
+  naming an organisation need an official source; D-46 (a) trend aggregates definer owned by `bridge_owner`.
+- The demo timestamps with the real DigiCert/FreeTSA services (free; only a hash leaves the machine), so no
+  "simulated" label is needed; offline shows "Timestamp pending".
+
+**LLM variables to fill in on the laptop** (in `backend/.env`; names only, never values in chat or git):
+`LLM_PROVIDER`, `LLM_PROTOTYPE_TOTAL_CAP_USD`, `LLM_FREE_<N>_BASE_URL`, `LLM_FREE_<N>_API_KEY`, `LLM_FREE_<N>_MODEL`,
+`LLM_FREE_<N>_DAILY_REQUESTS`, `LLM_FREE_<N>_RESPONSE_FORMAT` (N = 1 to 3), `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`,
+`LLM_GLOBAL_DAILY_CAP_USD`. Without them every AI feature answers with the labelled demo fallback.
+
+**Deviations and notes.** Four implementers ran at once twice (re-check #47, #49); CodeQL had been red unnoticed since
+2026-09-28 (D-42, re-check #50); P9 once stopped the shared dev stack; my disk clean-up removed one review copy still in
+use (the reviewer re-ran from another copy; nothing lost); the org Inbox still writes "Sept" where the tracker writes
+"Sep" (P16 polish). MINOR follow-ups are on each task card.
+
+**Next (M2, already running).** Revision 0005 (M2 schema; reviewer and security-reviewer PASS, pre-merge MINOR round
+in progress), P10 Scout backend, P13 assistant backend (reviews PASS), P17 auth follow-ups 7–8 (BLOCKER fix). They
+merge after this tag, in the order of `docs/platform/prototype-m2-plan.md`.
+
 ### Prototype checklist (updated after every task; commit and push after each)
 
 | Item | Status | Notes |
@@ -502,9 +590,9 @@ M2:
 | P5 tracker main path + test clock | done (`1b2e6b9`) | P4's hook opens tracked engagements |
 | P6 reminders | done (`28783cf`) | whose turn from P5's state machine; thresholds in `policy.yaml` |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
-| P8 M1 screens | parts 1–4 merged (`b787d8b`, `ebcbd1a`, `2491f24`, part 4 on 2026-09-29); part 5 (tracker, Home) in progress | |
+| P8 M1 screens | done (parts 1–5; tracker and Home `b2ce311`) | |
 | P9 `make demo` (basic) | in review (`4443470`) | demo TSA is the real DigiCert/FreeTSA (free, hash only); offline shows "Timestamp pending" |
-| M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
+| M1 merged, tag `prototype-m1`, M1 report | done (`fa5aeb6`; tag local, push from the laptop) | Playwright 86/86 on `make demo`; no e2e skip left; CI green |
 | P10 scout | todo | M2 |
 | P11 research | todo | M2 |
 | P12 trending + ranker | todo | M2 |

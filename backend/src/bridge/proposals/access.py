@@ -345,6 +345,7 @@ async def can_view_tier2(
 class Purpose(StrEnum):
     RENDER = "render"
     NDA = "nda"
+    ASSISTANT = "assistant"  # the owner's Tier 2 to the submission assistant (REQ-PROP-05; refusals only)
 
 
 async def refuse(
@@ -423,7 +424,8 @@ async def tier2_gate(
         raise ApiError(401, "mfa_required", "Enter the code from your authenticator app.")
     org_param = "org_id" in request.path_params
     org_id, proposal_id = _path_uuid(request, "org_id"), _path_uuid(request, "proposal_id")
-    purpose = Purpose.NDA if request.url.path.endswith("/nda") else Purpose.RENDER
+    path = request.url.path
+    purpose = Purpose.NDA if path.endswith("/nda") else Purpose.ASSISTANT if "/assistant/" in path else Purpose.RENDER
     user_id = None if live is None else live.user.id
     if user_id is not None and org_param:
         rows = [] if org_id is None else (await db.execute(_MEMBERSHIP, {"org": org_id, "user": user_id})).all()

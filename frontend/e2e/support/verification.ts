@@ -8,7 +8,8 @@ import { spawnSync } from "node:child_process";
  * the backend's integration builders create D1 developers.
  *
  * E2E_DATABASE_OWNER_URL is a libpq URL of the stack's database as bridge_owner (for example
- * postgresql://bridge_owner:…@127.0.0.1:5432/bridge). Without it, tests that need D1 skip. Test accounts only.
+ * postgresql://bridge_owner:…@127.0.0.1:5432/bridge). Without it, tests that need D1 fail. Test accounts only.
+ * CI's e2e job sets it; for a local stack, `python infra/demo/demo.py e2e-env` prints it (make demo's stack).
  */
 export const OWNER_DATABASE_URL = process.env.E2E_DATABASE_OWNER_URL;
 

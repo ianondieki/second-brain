@@ -249,6 +249,121 @@
         "title": "ApproveBody",
         "type": "object"
       },
+      "AssistantConsentIn": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "description": "The consents.yaml version whose wording was shown",
+            "maxLength": 64,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "AssistantConsentIn",
+        "type": "object"
+      },
+      "AssistantConsentOut": {
+        "properties": {
+          "granted": {
+            "description": "True while the assistant is on for this sign-in",
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "purpose": {
+            "const": "tier2_llm_assistant",
+            "default": "tier2_llm_assistant",
+            "title": "Purpose",
+            "type": "string"
+          },
+          "scope": {
+            "const": "this_session",
+            "default": "this_session",
+            "title": "Scope",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "granted",
+          "text",
+          "version"
+        ],
+        "title": "AssistantConsentOut",
+        "type": "object"
+      },
+      "AssistantSuggestionOut": {
+        "properties": {
+          "ai_drafted": {
+            "description": "True when a model wrote the teaser or a reason (label it 'AI-drafted')",
+            "title": "Ai Drafted",
+            "type": "boolean"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no suggestion, in plain words",
+            "title": "Message"
+          },
+          "placement": {
+            "items": {
+              "$ref": "#/components/schemas/PlacementHintOut"
+            },
+            "title": "Placement",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SuggestionStatus"
+          },
+          "teaser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestedTeaserOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version_id": {
+            "description": "The version the suggestion was made for",
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "ai_drafted",
+          "version_id",
+          "teaser",
+          "placement"
+        ],
+        "title": "AssistantSuggestionOut",
+        "type": "object"
+      },
       "AttachmentOut": {
         "properties": {
           "av_status": {
@@ -2723,6 +2838,14 @@
         "title": "ModerationState",
         "type": "string"
       },
+      "Move": {
+        "enum": [
+          "to_tier1",
+          "to_tier2"
+        ],
+        "title": "Move",
+        "type": "string"
+      },
       "MyOrgOut": {
         "properties": {
           "org": {
@@ -4057,6 +4180,42 @@
         "title": "PitchResult",
         "type": "object"
       },
+      "PlacementField": {
+        "enum": [
+          "title",
+          "problem_statement",
+          "impact_claims",
+          "summary",
+          "approach",
+          "architecture",
+          "pricing",
+          "notes"
+        ],
+        "title": "PlacementField",
+        "type": "string"
+      },
+      "PlacementHintOut": {
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/PlacementField"
+          },
+          "move": {
+            "$ref": "#/components/schemas/Move"
+          },
+          "reason": {
+            "description": "AI-drafted; plain text",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "move",
+          "reason"
+        ],
+        "title": "PlacementHintOut",
+        "type": "object"
+      },
       "PlanSide": {
         "enum": [
           "developer",
@@ -4849,6 +5008,35 @@
           "passkey"
         ],
         "title": "StepUpMethod",
+        "type": "string"
+      },
+      "SuggestedTeaserOut": {
+        "properties": {
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "summary"
+        ],
+        "title": "SuggestedTeaserOut",
+        "type": "object"
+      },
+      "SuggestionStatus": {
+        "enum": [
+          "suggested",
+          "no_suggestion",
+          "demo_fallback",
+          "injection_suspected",
+          "unavailable"
+        ],
+        "title": "SuggestionStatus",
         "type": "string"
       },
       "TagCap": {
@@ -12648,6 +12836,7 @@
     },
     "/api/me/consents": {
       "get": {
+        "description": "Your decision on each purpose the settings page offers. The writing assistant's opt-in\n(``tier2_llm_assistant``) is not listed: it lasts one sign-in and is given in the proposal editor.",
         "operationId": "get_consents_api_me_consents_get",
         "responses": {
           "200": {
@@ -12751,7 +12940,7 @@
         ]
       },
       "put": {
-        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since).",
+        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose\ndecided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``.",
         "operationId": "set_consents_api_me_consents_put",
         "requestBody": {
           "content": {
@@ -13973,6 +14162,482 @@
         "summary": "Save Draft",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/assistant/consent": {
+      "delete": {
+        "description": "Turn the writing assistant off (it also ends when you sign out). Works from a deleted proposal too.",
+        "operationId": "withdraw_assistant_consent_api_me_proposals__proposal_id__assistant_consent_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Withdraw Assistant Consent",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "get": {
+        "description": "Whether the writing assistant is on for this sign-in, with the wording to show before turning it on.",
+        "operationId": "assistant_consent_api_me_proposals__proposal_id__assistant_consent_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Assistant Consent",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "post": {
+        "description": "Turn the writing assistant on for this sign-in only: it may read the confidential (Tier 2) text of your\nproposals until you sign out or turn it off.",
+        "operationId": "grant_assistant_consent_api_me_proposals__proposal_id__assistant_consent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Grant Assistant Consent",
+        "tags": [
+          "assistant",
+          "assistant",
+          "tier2"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/assistant/suggestions": {
+      "post": {
+        "description": "One suggested clearer teaser and which fields might move between Tier 1 and Tier 2. Nothing is saved.",
+        "operationId": "suggest_teaser_api_me_proposals__proposal_id__assistant_suggestions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSuggestionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Suggest Teaser",
+        "tags": [
+          "assistant",
+          "assistant",
+          "tier2"
         ]
       }
     },

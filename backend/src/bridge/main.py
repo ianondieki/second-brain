@@ -31,6 +31,7 @@ from bridge.notifications.email import provider_from_settings
 from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.proposals.assistant_router import router as assistant_router
 from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
 from bridge.provenance.router import router as provenance_router
@@ -50,7 +51,7 @@ SECURITY_HEADERS = {
 
 def dev_clock_router(settings: Settings) -> APIRouter | None:
     """The dev/test clock router (REQ-ENG-12): never in production, and only where the image carries the module
-    (``backend/Dockerfile`` deletes it unless built with ``WITH_TEST_CLOCK=true``)."""
+    (``backend/Dockerfile`` deletes it unless built with ``WITH_DEV_TOOLS=true``)."""
     if settings.app_env == "production" or importlib.util.find_spec(TEST_CLOCK_MODULE) is None:
         return None
     router: APIRouter = importlib.import_module(TEST_CLOCK_MODULE).build_router(settings)
@@ -122,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(provenance_router)
     app.include_router(pitch_router)
     app.include_router(proposals_router)
+    app.include_router(assistant_router)
     app.include_router(problems_router)
     app.include_router(engagements_router)
     clock_router = dev_clock_router(settings)

@@ -66,3 +66,11 @@ export function proposalHref(
 ): string {
   return `${INBOX_PATH}/${encodeURIComponent(proposalId)}${orgQuery(memberships, orgId, { view: view ? "full" : undefined })}`;
 }
+
+export const ENGAGEMENTS_PATH = "/org/engagements";
+
+/** The organisation's Engagements list, or one engagement's tracker, for the chosen organisation. */
+export function engagementsHref(memberships: readonly Membership[], orgId: string, engagementId?: string): string {
+  const path = engagementId ? `${ENGAGEMENTS_PATH}/${encodeURIComponent(engagementId)}` : ENGAGEMENTS_PATH;
+  return `${path}${orgQuery(memberships, orgId)}`;
+}

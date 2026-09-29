@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Final
 from uuid import UUID
 
 import yaml
@@ -21,6 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.config import Settings
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles.models import Consent
+
+# Purposes decided for one login session only (ADR-005 decision 4; docs/spec/06 6.3): the submission assistant's
+# opt-in is recorded by ``bridge.llm.guard.grant_session_consent`` from the assistant's own endpoint and ends with the
+# session. The settings API neither lists nor records them (REQ-PROP-05): a settings or signup row never opens one.
+SESSION_ONLY: Final = frozenset({ConsentPurpose.TIER2_LLM_ASSISTANT})
+SETTINGS_PURPOSES: Final = tuple(p for p in ConsentPurpose if p not in SESSION_ONLY)
 
 
 @dataclass(frozen=True, slots=True)

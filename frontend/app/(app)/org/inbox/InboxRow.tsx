@@ -8,10 +8,10 @@ import { StageChip } from "../StageChip";
 
 /**
  * One proposal in the Inbox, Tier 1 only (the teaser the API returns): the stage chip and when it was sent, the title
- * (a link to the proposal page), its niche, the summary, and how far along it is and what the developer asks for.
+ * (a link to the proposal page; the chip links to the engagement's tracker), its niche, the summary, and how far along it is and what the developer asks for.
  * Nothing names another organisation it was sent to (AC-REPO-6/a).
  */
-export function InboxRow({ item, href }: { item: InboxItem; href: string }) {
+export function InboxRow({ item, href, trackerHref }: { item: InboxItem; href: string; trackerHref?: string }) {
   const t = useTranslations("inbox");
   const tp = useTranslations("orgProposal");
   const tf = useTranslations("ideaFields");
@@ -20,7 +20,7 @@ export function InboxRow({ item, href }: { item: InboxItem; href: string }) {
   return (
     <article className="flex min-w-0 flex-col gap-1.5 border-t border-line py-5" data-proposal={item.proposal.id}>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <StageChip engagement={item.engagement} />
+        <StageChip engagement={item.engagement} href={trackerHref} />
         <p className="text-sm text-ink-soft">
           <time dateTime={item.pitched_at}>{t("sent", { date: formatDay(locale, item.pitched_at) })}</time>
         </p>

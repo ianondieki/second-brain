@@ -1,7 +1,7 @@
 """REQ-ENG-12 / REQ-BD-01: the dev/test clock router and the business-day deadlines it drives.
 
 - Production has no test-clock route (404): the app does not mount it when ``APP_ENV=production`` or when the image
-  left the module out, and the backend image leaves it out unless built with ``WITH_TEST_CLOCK=true``.
+  left the module out, and the backend image leaves it out unless built with ``WITH_DEV_TOOLS=true``.
 - In dev and test a signed-in user moves the shared clock forward (``app_set_test_clock``); in staging only staff
   admin may (everyone else 404); a database whose clock is not enabled refuses (409).
 - Tracker deadlines are Kenyan business days on that clock: weekends and gazetted holidays are skipped, and the next
@@ -85,20 +85,30 @@ async def test_the_router_is_not_mounted_when_the_image_left_the_module_out(monk
     assert await probe(get_settings()) == 404
 
 
-def test_the_backend_image_leaves_the_module_out_unless_asked() -> None:
+REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf (\S+(?: \S+)*); fi$', re.MULTILINE)
+
+
+def image_removals() -> list[str]:
+    """The paths the backend image deletes unless built with WITH_DEV_TOOLS=true (backend/Dockerfile)."""
     dockerfile = (BACKEND_DIR / "Dockerfile").read_text(encoding="utf-8")
-    assert re.search(r"^ARG WITH_TEST_CLOCK=false$", dockerfile, re.MULTILINE)
-    removal = re.search(r'^RUN if \[ "\$WITH_TEST_CLOCK" != "true" \]; then rm -f (\S+); fi$', dockerfile, re.MULTILINE)
+    assert re.search(r"^ARG WITH_DEV_TOOLS=false$", dockerfile, re.MULTILINE)
+    removal = REMOVAL.search(dockerfile)
     assert removal is not None
-    assert (BACKEND_DIR / removal.group(1)).is_file()  # the path it deletes is the module
-    assert Path(bridge.main.__file__).parent / "testclock.py" == BACKEND_DIR / removal.group(1)
     assert (
         dockerfile.index("COPY src ./src")
-        < dockerfile.index("ARG WITH_TEST_CLOCK")
+        < dockerfile.index("ARG WITH_DEV_TOOLS")
         < dockerfile.index("uv sync --frozen --no-dev &&")
     )
+    return removal.group(1).split()
+
+
+def test_the_backend_image_leaves_the_module_out_unless_asked() -> None:
+    removals = image_removals()
+    clock_module = Path(bridge.main.__file__).parent / "testclock.py"
+    assert clock_module.is_file()  # the path it deletes is the module
+    assert str(clock_module.relative_to(BACKEND_DIR)) in removals
     compose = (REPO / "infra" / "docker-compose.dev.yml").read_text(encoding="utf-8")
-    assert 'WITH_TEST_CLOCK: "true"' in compose
+    assert 'WITH_DEV_TOOLS: "true"' in compose
 
 
 @pytest.fixture

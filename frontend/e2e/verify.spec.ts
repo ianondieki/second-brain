@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { checkScreen, expectSeparateTargets } from "./support/screen";
 
 // REQ-PROV-02 (F3): the public /verify pages against the compose stack, in both projects (360 px and desktop).
-// A certificate exists only once a proposal is published (T2.3); E2E_VERIFY_CERT_ID names one (the demo seed, P9,
-// or a local fixture) for the record test, which cannot run without it.
+// A certificate exists only once a proposal is published (T2.3); E2E_VERIFY_CERT_ID names one: CI's e2e job and
+// `python infra/demo/demo.py e2e-env` take it from the demo seed (P9, REQ-FND-02). The record test fails without it.
 
 const SERVER_STEP = { timeout: 20_000 };
 const UNKNOWN_ID = "ZZZZZZZZZZZZZZZZ";
@@ -111,7 +111,7 @@ test("a matching file links to its certificate", async ({ page }) => {
 });
 
 test("a registered certificate shows its evidence, and no name or title", async ({ page }) => {
-  test.skip(!CERT_ID, "needs E2E_VERIFY_CERT_ID: a certificate registered on the stack under test");
+  expect(CERT_ID, "E2E_VERIFY_CERT_ID: a certificate registered on the stack (the demo seed)").toBeTruthy();
   await page.goto(`/verify/${CERT_ID}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Certificate ${CERT_ID}`);
   await expect(page.getByTestId("verify-status")).toHaveText(/^(Timestamped|Timestamp pending)$/);

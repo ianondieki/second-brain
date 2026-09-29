@@ -21,7 +21,7 @@ x-backend: &backend
   build:
     context: ../backend
     args:
-      WITH_TEST_CLOCK: "true"  # REQ-ENG-12: the dev stack carries the test-clock router; a production build never does
+      WITH_DEV_TOOLS: "true"  # REQ-ENG-12, REQ-FND-02: the test-clock router and the demo seed; never in production
   env_file: ../backend/.env
   environment: *backend-env
   depends_on:

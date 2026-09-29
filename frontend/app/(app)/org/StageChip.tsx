@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { cn } from "@/components/ui/cn";
@@ -12,24 +13,27 @@ const ENDED: ReadonlySet<State> = new Set(["DECLINED", "WITHDRAWN", "TERMINATED"
 /**
  * Where the proposal stands with this organisation: the card's one chip (docs/spec/07 item 2, at most two). A dot and
  * words (status is never colour alone): filled jacaranda while it is new, an open ring once it has ended.
- *
- * The tracker screen does not exist yet (REQ-ENG-03): when it lands, this becomes the link to
- * /org/engagements/{engagement.id}. Until then it names the stage only.
+ * With an engagement and `href` (its tracker, REQ-ENG-03), the chip is the link to /org/engagements/{id}.
  */
-export function StageChip({ engagement, className }: { engagement: InboxItem["engagement"]; className?: string }) {
+export function StageChip({
+  engagement,
+  href,
+  className,
+}: {
+  engagement: InboxItem["engagement"];
+  href?: string;
+  className?: string;
+}) {
   const t = useTranslations("inbox");
   const state: State = engagement?.state ?? "SUBMITTED";
   const tone = state === "SUBMITTED" ? "new" : ENDED.has(state) ? "ended" : "open";
-  return (
-    <span
-      data-chip="stage"
-      data-engagement={engagement?.id}
-      className={cn(
-        "inline-flex items-center gap-1.5 text-sm font-semibold",
-        tone === "ended" ? "text-ink-soft" : "text-jacaranda",
-        className,
-      )}
-    >
+  const look = cn(
+    "inline-flex items-center gap-1.5 text-sm font-semibold",
+    tone === "ended" ? "text-ink-soft" : "text-jacaranda",
+    className,
+  );
+  const content = (
+    <>
       <svg aria-hidden="true" focusable="false" width="10" height="10" viewBox="0 0 10 10" className="shrink-0">
         <circle
           cx="5"
@@ -41,6 +45,23 @@ export function StageChip({ engagement, className }: { engagement: InboxItem["en
         />
       </svg>
       {t(stageKey(state))}
+    </>
+  );
+  if (engagement && href) {
+    return (
+      <Link
+        href={href}
+        data-chip="stage"
+        data-engagement={engagement.id}
+        className={cn(look, "-my-2 min-h-11 py-2 underline decoration-1 underline-offset-[0.2em] hover:decoration-2")}
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <span data-chip="stage" data-engagement={engagement?.id} className={look}>
+      {content}
     </span>
   );
 }
