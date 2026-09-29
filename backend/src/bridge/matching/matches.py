@@ -5,7 +5,9 @@
   the proposal if one exists, and whether the caller may express interest now (and why not: ``org_not_e2``,
   ``org_suspended``, ``role_required``, ``engagement_exists``, ``proposal_unavailable``).
 - ``POST /api/orgs/{org_id}/matches/{id}/feedback``: a member who acts on proposals (owner, admin, signatory or
-  reviewer; else 403) marks it relevant or not relevant (with a reason code), as themselves.
+  reviewer; else 403) marks it relevant or not relevant (with a reason code), as themselves. A feedback stays its
+  author's: another member's answer is 409 ``feedback_given`` (the database's ``agent_matches_feedback_guard`` is
+  the backstop).
 
 Reads have no side effect (a digest link only opens a page: nothing changes on GET). Each match shows the proposal's
 current teaser (Tier 1 only, through ``current_version_id``), or none once the proposal is no longer published and
@@ -19,11 +21,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.auth.deps import Db
 from bridge.directory.service import niche_label
-from bridge.errors import ERROR_RESPONSES, forbidden, not_found
+from bridge.errors import ERROR_RESPONSES, ApiError, forbidden, not_found
 from bridge.matching.schemas import FeedbackIn, InterestState, MatchDetail, MatchList, MatchOut
 from bridge.models.enums import OrgRole, OrgVerification
 from bridge.proposals.schemas import NicheOut, TeaserOut
@@ -46,6 +49,7 @@ _MATCHES: Final = (
 )
 _ORG = text("SELECT verification, suspended_at FROM organizations WHERE id = :org")
 _ENGAGEMENT = text("SELECT id FROM engagements WHERE proposal_id = :proposal AND org_id = :org")
+_FEEDBACK_BY = text("SELECT feedback_by FROM agent_matches WHERE id = :id AND org_id = :org")
 _FEEDBACK = text(
     "UPDATE agent_matches SET feedback = CAST(:feedback AS match_feedback), feedback_reason = :reason,"
     " feedback_by = :user, feedback_at = app_clock_now() WHERE id = :id AND org_id = :org"
@@ -150,6 +154,9 @@ async def match_feedback(match_id: UUID, body: FeedbackIn, org: OrgMember, db: D
     await _row(db, org.org_id, match_id)  # 404 before 403: another organisation's match is not confirmed
     if not org.roles & ACTING:
         raise forbidden("role_required", "Only owners, admins, signatories and reviewers give feedback on matches.")
+    given_by = (await db.execute(_FEEDBACK_BY, {"id": match_id, "org": org.org_id})).scalar_one_or_none()
+    if given_by is not None and given_by != org.live.user.id:
+        raise ApiError(409, "feedback_given", "Another member already gave feedback on this match.")
     params = {
         "feedback": body.feedback.value,
         "reason": body.reason,
@@ -157,6 +164,12 @@ async def match_feedback(match_id: UUID, body: FeedbackIn, org: OrgMember, db: D
         "id": match_id,
         "org": org.org_id,
     }
-    await db.execute(_FEEDBACK, params)
-    await db.commit()
+    try:
+        await db.execute(_FEEDBACK, params)
+        await db.commit()
+    except DBAPIError as exc:  # the guard: another member answered meanwhile
+        await db.rollback()
+        if getattr(exc.orig, "sqlstate", None) != "42501":
+            raise
+        raise ApiError(409, "feedback_given", "Another member already gave feedback on this match.") from exc
     return await _detail(db, org, match_id)

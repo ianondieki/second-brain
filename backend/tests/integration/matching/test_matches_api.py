@@ -124,10 +124,12 @@ async def test_feedback_is_recorded_as_the_caller(owner_engine: AsyncEngine, app
         given = await reviewer.post(url, json={"feedback": "not_relevant", "reason": "wrong_county"})
         assert given.status_code == 200
         assert (given.json()["feedback"], given.json()["feedback_reason"]) == ("not_relevant", "wrong_county")
-        changed = await signatory.post(url, json={"feedback": "relevant"})
+        taken = await signatory.post(url, json={"feedback": "relevant"})  # the feedback stays its author's
+        assert (taken.status_code, taken.json()["detail"]["code"]) == (409, "feedback_given")
+        changed = await reviewer.post(url, json={"feedback": "relevant"})
         assert (changed.json()["feedback"], changed.json()["feedback_reason"]) == ("relevant", None)
     [row] = await rows(owner_engine, "SELECT feedback_by, feedback_at FROM agent_matches WHERE id = :m", m=match)
-    assert row.feedback_by == org.signatory
+    assert row.feedback_by == org.reviewer
     assert row.feedback_at is not None
 
 

@@ -12,11 +12,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.config import get_settings
 from bridge.llm.fakes import FakeLLMClient
 from bridge.matching import scan as scan_module
 from bridge.matching.rationale import ScoutFit
 from bridge.matching.scan import clock_now, run_on_new, run_periodic
 from bridge.models.enums import DeliveryStatus
+from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
     MOMBASA_CODE,
     NAIROBI_CODE,
@@ -326,3 +328,28 @@ async def test_nothing_runs_before_the_scan_time_unless_forced(app_engine: Async
     scan_deps, _ = deps(app_engine)
     early = (await clock_now(scan_deps.factory)).replace(hour=3, minute=0)  # 06:00 EAT at the latest
     assert await run_periodic(scan_deps, now=early) == []
+
+
+async def test_the_digest_marks_a_match_carrying_another_members_feedback(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """0005 fix round: feedback stays its author's, yet the digest job records digest_sent_at on any match."""
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, world.org, [world.niche], recipients=[])  # no digest yet
+    await weekly(app_engine)
+    [match] = await matches(owner_engine, scout)
+    assert match.digest_sent_at is None
+    async with clients(app_engine, get_settings(), world.org.reviewer) as (reviewer,):  # the reviewer's own feedback
+        url = f"/api/orgs/{world.org.id}/matches/{match.id}/feedback"
+        assert (await reviewer.post(url, json={"feedback": "relevant"})).status_code == 200
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE scout_agents SET recipients = ARRAY[CAST(:r AS uuid)] WHERE id = :s"),
+            {"r": world.org.reviewer, "s": scout},
+        )
+    later = mine(await weekly(app_engine, 1), scout)
+    assert later.digest is not None
+    assert later.digest.marked == (match.id,)
+    [marked] = await matches(owner_engine, scout)
+    assert marked.digest_sent_at is not None
