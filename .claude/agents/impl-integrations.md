@@ -2,7 +2,7 @@
 name: impl-integrations
 description: Implements provider adapters behind their interfaces (EmailProvider/Postmark, WhatsApp, PaymentProvider/Daraja and Paystack, SmsProvider, KycProvider, GitHub, TSA, eTIMS) with Fakes and respx cassettes. Never calls a real provider from tests.
 model: opus
-effort: xhigh
+effort: high
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 Implement exactly one task card (`docs/platform/tasks/<REQ-ID>.md`) for an external integration. Read the
