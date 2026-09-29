@@ -135,3 +135,53 @@ Follow-ups (MINOR, not built):
 - The `_USED` branch that counts a closed `delivered` or `expired` tag (and a tag with an engagement) is not tested:
   add a cap test with a declined (closed, delivered) tag and an expired one once P5 writes those states.
 - Commit sizes: several P4 commits exceed the ~300-line guidance (test files, one service module).
+
+## Notes (P8 frontend, branch `feat/REQ-PROP-03-screens`)
+
+Built (F2, developer): `/dev/ideas/{id}/pitch` (the picker, its own route so the idea page does not carry it) and,
+on `/dev/ideas/{id}`, the idea's pitches with Withdraw and "Who has seen this" (REQ-PROV-03). Files:
+`frontend/app/(app)/dev/ideas/[id]/pitch/` (`picker.ts`, `refusals.ts`, `calls.ts`, `data.ts`, `PitchForm.tsx`,
+`page.tsx`, tests), `frontend/app/(app)/dev/ideas/[id]/{Pitches,WithdrawTag,WhoHasSeen}.tsx`,
+`frontend/e2e/pitch.spec.ts`, `frontend/e2e/support/pitch-scene.ts`. Copy `pitch.*`, `tagWithdraw.*`,
+`ideaPitches.*`, `ideaViews.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8d`); Swahili drafts `[[SW-REVIEW]]`.
+
+- One GET form holds the search, the niche, the page and the choices (`sel`). Review round 1, MAJOR 1: nothing is
+  sent that the developer has not seen by name with its outcome. Choices from another page or search are resolved
+  on the server (`data.ts::chosenOptions`: `GET /api/directory/orgs/{id}` for the name, then the picker searched by
+  that name for the outcome and availability; at most 20 ids) and listed first under "Chosen in other searches"
+  with an untick box; an id either read cannot resolve is dropped (neither shown nor sent). The client only ever
+  chooses ids of rows shown as available (`PitchForm.tsx::initialChoices`); no hidden inputs.
+- Refusals and the limit line sit in the page's flow above the list and take focus; the sticky bar is the summary
+  and Pitch only (its height plus the tab bar stays inside `globals.css`'s focus scroll padding; e2e asserts it).
+- A published idea with pitches left makes "Pitch to companies" the idea page's primary action (Edit beside it).
+
+Follow-ups (not built):
+
+- "Who has seen this" does not show `duration` (the API sends null until the client heartbeat of REQ-PROV-03).
+- Copy review: the break-glass clause of the confidentiality wording, and whether the views note should mention it.
+- JS budget headroom is small: picker 144,834 B, idea page 144,997 B of 150,000 (LCP 2.28 s with 5 pitches in the UX
+  review); keep new client JS on these routes minimal.
+- `chosenOptions` makes up to two reads per off-page choice (40 at most); an API filter by org ids on the picker
+  (`GET …/pitch/orgs?id=…`) would make it one read. A company whose name search returns more than 100 matches
+  is dropped from the chosen group (not shown, not sent).
+- `e2e/support/pitch-scene.ts` overlaps part 3's `org-scene.ts` (org member, E2 verification): merge them when both
+  are on the integration branch.
+- Commit sizes: 1156db1 (683 lines) and 60df2af (448, tests) exceed the ~300-line guideline; no history rewrite.
+- Vitest 5: a `vi.fn` implementation that throws or rejects fails the test even when the code under test catches it
+  (seen in `chosen.test.ts`); the failed-read case is covered with a 503 answer instead.
+
+## P8 part 4 round 2 (reviewer PASS and ux-reviewer PASS at `2c1ba97`, 2026-09-29): MINOR follow-ups
+
+- `pitch/chosen.test.ts:47`: no test pins that `chosenOptions` matches the picker row by id, not by name (mutation N7,
+  match by name, survives). Add a case where the picker returns a same-name decoy first and assert the target's id and
+  availability.
+- `pitch/data.ts:66`: an off-page choice that the name search cannot reach (more than 100 org × niche rows ahead of
+  it) is dropped without a word. It fails closed; say in one sentence how many choices were dropped, or add the
+  picker-by-ids filter (already a follow-up above).
+- At the cap on phones the limit line sits above the list, so after ticking the last box far down the list it is off
+  screen and only "2 of 2 chosen" shows (role=status is still announced). Add a short cue to the bar summary, or dim
+  the names of rows locked at the cap.
+- Each off-page choice costs two server-side API calls (up to 40 for 20 choices): watch picker TTFB and LCP as the
+  directory grows (picker LCP 1.2–2.5 s on a loaded host).
+- Round-1 MINORs kept: the "Who has seen this" note needs the staff break-glass clause when break-glass ships; the
+  merge commit `2c1ba97` carries git's `# Conflicts:` note after the trailer (pushed; no rewrite).

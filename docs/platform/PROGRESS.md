@@ -365,14 +365,12 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-REPO-01-org-screens` (P8 part 3) | `b535fdd` | ux-reviewer PASS; fix round done (FullProposal frame vitest with mutation proofs, not-member message instead of a silent org switch, `?org=` kept, cursor cap, `nda_not_needed` sentence, UX copy) | reviewer re-check running; CI + CodeQL dispatched; merge |
-| `feat/REQ-PROP-03-screens` (P8 part 4) | `52233ef` | reviewer and ux-reviewer CHANGES_REQUIRED (3 MAJOR: unseen off-page `sel` ids reach the Pitch; alerts in the sticky bar hide focused controls at 360 px; the lead and `maxReached` misstate the plan cap); impl-frontend fix round with the cheap MINORs | reviewer + ux-reviewer re-check, CI, merge |
 | `feat/REQ-ENG-03-tracker-screens` (P8 part 5) | `2515cb7` | impl-frontend: developer and org Engagements lists and tracker (stepper, chips, whose-turn banner, endorsement rows, actions from the API with step-up), developer Home | merges integration after parts 3–4; ux-reviewer + reviewer, merge |
-| `feat/REQ-FND-02-demo` (P9) | — | impl-backend: `make demo`, `seed --demo`, TOTP helper, CI e2e env, the two e2e skips removed | reviewer, CI, merge; then the M1 exit |
+| `feat/REQ-FND-02-demo` (P9) | `4443470` | security-reviewer PASS (5 MINOR); reviewer CHANGES_REQUIRED (MAJOR: after a live demo step, the next `make demo` re-drives the seeded engagement and fails, so the stack never starts); fix round: re-seed tolerance with a regression test, `-p bridge-demo` always (else COMPOSE_PROJECT_NAME can make `demo-reset` wipe the dev volumes), demo modules out of the production image plus a THREAT_MODEL row, 0600 secret files, masked `e2e-env`, README Windows steps (`.wslconfig`, make-free commands) | reviewer re-check, CI, merge; then the M1 exit |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
-Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
+Environment incidents: P9 ran `docker compose -p bridge down` (no `-v`) at about 19:10 to measure the demo alone, which stopped the shared dev stack other agents used; it was restarted and briefs now keep every agent on its own containers and ports. A reviewer's tool output showed the sandbox `RECOVERY_CODE_PEPPER` from a scratchpad env file (dev value, never committed; regenerate the laptop's own values, which never came from here). Then P8 part 4 Pitch screens (reviewer PASS and ux-reviewer PASS round 2; MINORs on the card). Merged after P6: P8 part 3 org screens `2491f24` (reviewer PASS round 2, ux-reviewer PASS; MINORs on the card). Merged after P5: P6 reminders `28783cf` (reviewer PASS round 4 on the P5 switch; its MINORs on the card; `4d88143` is a pure rename in `engagements/`, checked by the reviewer, so no separate security round). Merged after P6's review round 3: P5 tracker `1b2e6b9` (security-reviewer PASS, reviewer PASS round 3; 2812 backend tests on the merged tree). CodeQL (D-42): red on every integration push since `da0a98d` (2026-09-28), unnoticed because no feature branch runs it; until D-42 is decided, `codeql.yml` is dispatched on each feature branch before merging and any finding outside the eight in D-42 blocks. The P8 part 4 implementer ran a broad `pkill` of Next servers once, which may have stopped another agent's dev server; every brief now forbids `pkill`/`killall`.
 
 Merged after P4: P8 part 2 My Ideas `ebcbd1a` (reviewer PASS and ux-reviewer PASS round 2; CI green after moving a test fixture out of `app/`, which broke the web image build; a lint rule now refuses test imports in app code). Still to build for M1: the Engagements tracker screens (after P5), Home, P9 `make demo`.
 
@@ -500,8 +498,8 @@ M2:
 | P5 tracker main path + test clock | done (`1b2e6b9`) | P4's hook opens tracked engagements |
 | P6 reminders | done (`28783cf`) | whose turn from P5's state machine; thresholds in `policy.yaml` |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
-| P8 M1 screens | parts 1–2 merged (`b787d8b`, `ebcbd1a`); parts 3–4 in fix rounds; part 5 (tracker, Home) in progress | |
-| P9 `make demo` (basic) | in progress | |
+| P8 M1 screens | parts 1–4 merged (`b787d8b`, `ebcbd1a`, `2491f24`, part 4 on 2026-09-29); part 5 (tracker, Home) in progress | |
+| P9 `make demo` (basic) | in review (`4443470`) | demo TSA is the real DigiCert/FreeTSA (free, hash only); offline shows "Timestamp pending" |
 | M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |
 | P11 research | todo | M2 |

@@ -76,6 +76,16 @@
     }
   }
 
+  /* A sticky action bar (the pitch picker's "Pitch") sits above the tab bar: focus scrolling clears both. */
+  html:has([data-action-bar]) {
+    scroll-padding-block-end: 7rem;
+  }
+  @media (width < 64rem) {
+    html:has([data-action-bar]) {
+      scroll-padding-block-end: calc(12rem + env(safe-area-inset-bottom));
+    }
+  }
+
   body {
     line-height: 1.6;
   }
