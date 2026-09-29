@@ -29,7 +29,7 @@ its engagement is (the developer; members of the organisation, narrowed by `app.
 
 | Table | Columns | Rules |
 |---|---|---|
-| `engagements` (new columns) | `stage_entered_at` (NOT NULL), `stage_deadline_at`, `ended_at`, `lock_version` (int, 0), `contact_user_id`, `contact_channel`, `contact_by` (date) | The chain's projection (below). CHECK `ended_at` set exactly in a terminal state; contact person, channel and date together; the contact is an active member of the organisation (guard). bridge_app: INSERT; UPDATE of the contact columns and `updated_at` only |
+| `engagements` (new columns) | `stage_entered_at` (NOT NULL), `stage_deadline_at`, `ended_at`, `lock_version` (int, 0), `contact_user_id`, `contact_channel`, `contact_by` (date) | The chain's projection (below). CHECKs: `ended_at` set exactly in a terminal state; DECLINED and EXPIRED carry their reason codes (0002's CHECK replaced by a NULL-safe one); contact person, channel and date together; the contact is an active member of the organisation (guard). bridge_app: INSERT; UPDATE of the contact columns and `updated_at` only |
 | `engagement_events` | id, engagement_id, seq (gapless per engagement), actor_user_id (NULL for the system), actor_role, command (`^[a-z][a-z0-9_]{0,39}$`), from_state (NULL only for the genesis), to_state, end_reason, stage_deadline_at, payload (jsonb), prev_hash, hash, created_at | Append-only, hash-chained (below). UNIQUE (engagement_id, seq), (engagement_id, prev_hash). CHECKs: a system event names nobody and a user event its actor; DECLINED/EXPIRED carry their reason codes (NULL-safe); 32-byte hashes; `app_event_payload_is_valid(payload)`. bridge_app: SELECT, INSERT |
 | `engagement_endorsements` | id, engagement_id, stage, stage_round (the database's), milestone_id, party, user_id (NULL for auto), role, method, endorsed_at | Append-only. Unique index `uq_engagement_endorsements_once` (engagement, stage, stage_round, party, milestone_id) NULLS NOT DISTINCT. Only the stage the engagement is in (under its row lock); a milestone only at `IN_IMPLEMENTATION`; `auto` names no user and acts as the system; a `totp` endorsement needs TOTP enrolled. bridge_app: SELECT, INSERT |
 | `agreements` | id, engagement_id, version (≥ 1), ip_terms, exclusivity (≤ 500 chars), deemed_acceptance_days (0–90; 0 = never deemed accepted), status, final_pdf_sha256, created_by, timestamps | UNIQUE (engagement_id, version), (id, engagement_id); one `signed` per engagement (partial unique index). Inserted as a draft; `final` needs the IP terms, the clause, the PDF hash (CHECK) and ≥ 1 milestone (trigger) and freezes them; `signed` needs both parties' `agreement` signatures of that hash; a signed one never changes; only drafts are deleted (owner; bridge_app has no DELETE). bridge_app: SELECT, INSERT, UPDATE (terms, status, hash, updated_at) |
@@ -103,8 +103,8 @@ transaction, then `bridge_app` acting for each party):
 - `test_parties.py`: parties only (another developer, another organisation, a forged org context and no user read
   and write nothing; staff admin reads and writes nothing); actors in roles they hold; the main path to `CLOSED`
   with each legal step refused until its evidence exists; the assignment refusal; endorsements per stage entry;
-  the milestone sub-tracker; payments recorded by the organisation and confirmed once; the 0002 NULL-reason gap
-  closed by the genesis; `demo_account`; the test clock.
+  the milestone sub-tracker; payments recorded by the organisation and confirmed once; DECLINED and EXPIRED
+  refused at the table without their reason (the replaced 0002 CHECK); `demo_account`; the test clock.
 - Catalogs (`test_migrations.py`): the grant matrix and column UPDATEs, the function catalog (EXECUTE and SECURITY
   DEFINER), the trigger catalog, bridge_app's column INSERT on `users`, and the round trip, which now also asserts
   that 0003 leaves every object of 0002 exactly as it found it. `world.py`: one row of each tracker table per tenant
@@ -129,6 +129,7 @@ from the revision file per run): `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://p
 | M10 | payload strings: any text | `test_chain.py::test_event_payloads_hold_ids_codes_dates_amounts_and_digests_only` |
 | M11 | the canonical text leaves the payload out | `test_chain.py::test_events_extend_the_chain_and_move_the_projection` (the Python verifier disagreed) |
 | M12 | `engagement_endorsements_guard`: only the current stage | `test_parties.py::test_endorsements_are_of_the_current_stage_once_per_party_and_entry` |
+| M13 | `ck_engagements_end_reason_matches_state` recreated without `coalesce(…, false)` (ruling 1) | `test_parties.py::test_a_declined_or_expired_engagement_needs_its_reason` |
 
 Result on the branch: full backend suite 1022 passed (951 before, 71 new), `ruff check`, `ruff format --check`, `mypy`
 (strict) and `python -m bridge.openapi --check` clean, `alembic check` clean in the round trip.
@@ -154,15 +155,25 @@ Result on the branch: full backend suite 1022 passed (951 before, 71 new), `ruff
 6. bridge_app's INSERT on `users` became column-scoped (every column but `demo_account`) so the app cannot insert a
    demo account either; it is otherwise unchanged.
 
-## Findings on earlier revisions (no change made to them)
+## Findings on earlier revisions
 
-- Revision 0002's `ck_engagements_end_reason_matches_state` lets a DECLINED or EXPIRED engagement without a reason
-  through (`NULL IN (...)` is NULL, which a CHECK accepts). 0003's event CHECK is NULL-safe and the genesis mirrors a
-  new engagement, so no engagement can be inserted or moved there without its reason any more
-  (`test_the_owner_cannot_create_a_declined_engagement_without_its_reason`).
+- Revision 0002's `ck_engagements_end_reason_matches_state` let a DECLINED or EXPIRED engagement without a reason
+  through (`NULL IN (...)` is NULL, which a CHECK accepts). Fixed in 0003 (ruling 1 below): the constraint is replaced
+  by the NULL-safe `coalesce(<same expression>, false)` (validated, so an existing row without its reason stops the
+  upgrade), and the downgrade restores 0002's exactly (the round trip compares the constraint definitions). The events'
+  CHECK is NULL-safe too. Tested at the table, for every role:
+  `test_parties.py::test_a_declined_or_expired_engagement_needs_its_reason` (proof M13).
 - bridge_app may still insert `users.staff_role`, `status` and `subject_salt` (table-wide INSERT since 0001, kept
-  column for column here). An app bug could create a staff user or choose a user's salt. Narrowing is a one-line grant
-  change in a later revision; not done here because other branches' fixtures may insert them as bridge_app.
+  column for column here). Follow-up below (ruling 2).
+
+## Orchestrator rulings (2026-09-29, on the first report)
+
+1. Tighten the 0002 end-reason CHECK inside 0003, the downgrade restoring the old one, with a table-level test: done
+   (above).
+2. Narrowing bridge_app's INSERT on `users.staff_role`, `status` and `subject_salt`: a follow-up, not changed now.
+3. System events (and `auto` endorsements) written by a job bound to a party: accepted for the prototype; recorded
+   as a residual in THREAT_MODEL §2 (the "party acts in a role they do not hold" row).
+4. Deadline values stay the state machine's (P5).
 
 ## Notes for P5 and P9 (operating rules)
 
@@ -188,6 +199,13 @@ Result on the branch: full backend suite 1022 passed (951 before, 71 new), `ruff
 - `signatures.ip` and `user_agent` are personal data kept with the evidence; their retention belongs to the Phase 8
   retention schedule.
 - "Signed outside the platform" (assignment, exclusive licence) needs a new `step_up_method` value and path later.
+- Narrow bridge_app's INSERT on `users` to leave out `staff_role`, `status` and `subject_salt` (ruling 2): an app bug
+  could create a staff user or choose a user's salt (and so make their digests guessable). One grant change in a later
+  revision once no branch's fixtures insert those columns as bridge_app (grep `INSERT INTO users` under
+  `backend/tests` and `backend/src` first).
+- System events and `auto` endorsements: the database cannot tell a job bound to a party from that party's request,
+  so a party-bound job (or a bug in the party's request path) can write a system event on that party's engagements
+  (ruling 3, accepted for the prototype). A separate login role for jobs (D-32) would let the policy tell them apart.
 - The database trusts the state machine for deadline values (`stage_deadline_at` on an event, from `policy.yaml` on
   the business-day calendar): a same-state event can move a deadline. Every change is an event, so it is visible and
   verifiable in the History tab, but a policy check of the value belongs to P5.
