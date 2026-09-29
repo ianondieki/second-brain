@@ -282,6 +282,10 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_opt_out_org_invitations(uuid)": (True, {"bridge_app"}),
     "app_llm_spend_usd(timestamp with time zone)": (True, {"bridge_app"}),
     "app_llm_call_inputs(uuid)": (True, {"bridge_app"}),
+    "app_llm_batch_owned(character varying)": (True, {"bridge_app"}),  # batch_poll, before fetching results
+    "app_llm_settle_batch_item(character varying, character varying, uuid, character varying, character varying,"
+    " character varying, integer, integer, integer, integer, numeric, integer, character varying,"
+    " character varying, character varying, jsonb)": (True, {"bridge_app"}),  # batch_poll settles each item
     "app_add_niche(text, text, text, text)": (True, {"bridge_app"}),
     "app_audit_chain_heads()": (True, {"provenance_worker"}),
     "app_unanchored_chain_heads()": (True, {"provenance_worker"}),
@@ -291,6 +295,12 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": (True, {"bridge_app"}),
     "org_claims_guard()": (True, set()),
     "org_claims_dns_guard()": (False, set()),
+    "org_claims_status_guard()": (False, set()),
+    "app_claim_competes(uuid, uuid)": (False, set()),  # called only inside the claim functions and org_claims_guard()
+    "app_relabel_open_claims(uuid)": (False, set()),  # the claim functions and memberships_claims_relabel()
+    "app_seat_claimant(uuid, uuid)": (False, set()),  # app_decide_claim() and app_approve_claim_e1()
+    "memberships_claims_relabel()": (True, set()),
+    "llm_calls_batch_guard()": (True, set()),
     "phone_verifications_guard()": (False, set()),
     "evidence_time_guard()": (False, set()),
     "chain_anchors_guard()": (True, set()),
@@ -1914,6 +1924,10 @@ V2_TRIGGERS = {
     ("proposals", "proposals_guard"): ("proposals_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
+    ("org_claims", "org_claims_status_guard"): ("org_claims_status_guard", ROW | BEFORE | ON_UPDATE),
+    # Round 6: an AFTER trigger on the 0001 table relabels the organisation's open claims on every roster change.
+    ("memberships", "memberships_claims_relabel"): ("memberships_claims_relabel", ROW | ON_INSERT | ON_UPDATE),
+    ("llm_calls", "llm_calls_batch_guard"): ("llm_calls_batch_guard", ROW | BEFORE | ON_INSERT),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
     ("provenance_records", "provenance_records_hash_guard"): (

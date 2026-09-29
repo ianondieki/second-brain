@@ -780,6 +780,23 @@ async def test_users_only_report_and_system_sources_file_through_the_function(ow
 
 # What the app's DNS-check code calls once it has resolved the claim's TXT record (the lookup itself is app-side).
 MARK_DNS = "SELECT app_mark_claim_dns_verified(:id)"
+CLAIM_STATUS = "SELECT status::text FROM org_claims WHERE id = :id"
+DISPUTE_MARK = "only the claim functions mark a claim disputed"  # org_claims_status_guard()
+# The organisation's owner group: its active members holding owner or admin.
+OWNER_GROUP = (
+    "SELECT array_agg(user_id ORDER BY user_id) FROM memberships"
+    " WHERE org_id = :org AND status = 'active' AND roles && '{owner,admin}'::org_role[]"
+)
+# Its active owners only, and one member's roles (sorted).
+OWNERS = (
+    "SELECT array_agg(user_id ORDER BY user_id) FROM memberships"
+    " WHERE org_id = :org AND status = 'active' AND 'owner' = ANY (roles)"
+)
+ROLES_OF = (
+    "SELECT ARRAY(SELECT CAST(r AS text) FROM unnest(roles) AS r ORDER BY 1) FROM memberships"
+    " WHERE org_id = :org AND user_id = :u"
+)
+VERIFIED = "SELECT verification::text, verified_domain::text FROM organizations WHERE id = :id"
 
 
 async def _claim(conn: AsyncConnection, org: UUID, claimant: UUID, domain: str, level: str, otp_hash: bytes) -> UUID:
@@ -831,6 +848,8 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         official = await add_org(conn, official_domains="{telco-a.example.test}")
         lookalike = await add_org(conn, official_domains="{telco-b.example.test}")
         verified = await add_org(conn, verification="e2")
+        holder = await w.add_user(conn, _email("e2-holder"), "Holder")
+        await _add_membership(conn, verified, holder, "{owner,admin}")  # an E2 organisation is held by its claimant
         tag = await _held_tag(conn, official, "held_unclaimed")
         claimant = await w.add_user(conn, _email("claimant"), "Claimant")
         await act(conn, claimant)
@@ -868,20 +887,26 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         assert (
             await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=lookalike) == "unclaimed"
         )
-        # A claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2).
+        # An outsider's claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2). (A claim on an E2
+        # organisation that competes with nobody, its own member's, goes to manual review instead: round 6 item 8,
+        # test_a_routine_e2_approval_never_makes_a_member_an_owner.)
         dispute = await _claim(conn, verified, claimant, "verified.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=dispute, h=right) is True
         assert await run(conn, MARK_DNS, id=dispute) is True
         assert await run(conn, approve, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_is_member(:id)", id=verified) is False
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=verified) == [holder]
 
 
 async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     """The app cannot touch the OTP columns. app_reissue_claim_otp() replaces the code but keeps the cumulative
-    attempt count (budget: 5 attempts per code issued); after 5 reissues the claim goes to manual review. A new claim
-    cannot reset the limits: one open claim per claimant and organisation, one new claim per 24 hours."""
+    attempt count (budget: 5 attempts per code issued); after 5 reissues the claim goes to manual review, except a
+    disputed claim, which is reissued the same way and stays disputed. A new claim cannot reset the limits: one open
+    claim per claimant and organisation, one new claim per 24 hours."""
     right, wrong = otp
     fresh = hashlib.sha256(b"111111").digest()
     confirm = "SELECT app_confirm_claim_otp(:id, :h)"
@@ -889,10 +914,17 @@ async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(
     counters = "SELECT otp_attempts, otp_reissues, status::text AS status FROM org_claims WHERE id = :id"
     async with as_app(owner_engine) as conn:
         org = await add_org(conn, official_domains="{capped.example.test}")
-        other_org = await add_org(conn)
+        other_org, held_org = await add_org(conn), await add_org(conn)
         claimant = await w.add_user(conn, _email("otp-claimant"), "Claimant")
         stranger = await w.add_user(conn, _email("otp-stranger"), "Stranger")
+        await _add_membership(conn, held_org, stranger, "{owner,admin}")  # the held organisation's owner
         await act(conn, claimant)
+        held = await _claim(conn, held_org, claimant, "held.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=held) == "disputed"
+        for _ in range(5):  # a disputed claim's code is reissued like any other
+            assert await run(conn, reissue, id=held, h=fresh) is True
+        assert await run(conn, reissue, id=held, h=fresh) is False
+        assert tuple((await conn.execute(text(counters), {"id": held})).one()) == (0, 5, "disputed")  # still a dispute
         claim = await _claim(conn, org, claimant, "capped.example.test", "e1", right)
         for column in ("otp_attempts = 0", "otp_reissues = 0", "otp_hash = NULL", "otp_expires_at = now()"):
             await expect(conn, f"UPDATE org_claims SET {column} WHERE id = :id", "permission denied", id=claim)
@@ -1098,7 +1130,8 @@ async def test_e2_approval_is_staff_admin_only_needs_the_terms_and_delivers_held
         claim = await _claim(conn, org, claimant, "signatory.example.test", "e2", right)
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=claim, h=right) is True
         assert await run(conn, MARK_DNS, id=claim) is True
-        await run(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", id=claim)
+        # Not a member, on an organisation with an owner: in review as a dispute (approving it below transfers).
+        assert await run(conn, CLAIM_STATUS, id=claim) == "disputed"
         await act(conn, moderator)
         await expect(conn, decide, "staff admin only", id=claim)
         await act(conn, admin)
@@ -1209,15 +1242,17 @@ async def _prove_domain(conn: AsyncConnection, claim: UUID, otp_hash: bytes) -> 
     assert await run(conn, MARK_DNS, id=claim) is True
 
 
-async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str) -> UUID:
+async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: str, status: str = "active") -> UUID:
     membership = uuid7()
     await run(
         conn,
-        "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :u, CAST(:roles AS org_role[]))",
+        "INSERT INTO memberships (id, org_id, user_id, roles, status)"
+        " VALUES (:id, :org, :u, CAST(:roles AS org_role[]), CAST(:status AS membership_status))",
         id=membership,
         org=org,
         u=user,
         roles=roles,
+        status=status,
     )
     return membership
 
@@ -1249,9 +1284,10 @@ async def test_an_upheld_dispute_transfers_the_organisation(
     upholding the dispute transfers the organisation in the same transaction, and the new claimant is its only owner
     and admin: the earlier claimant's approved claim is rejected, naming the claim that superseded it, and their
     membership is removed with no role but viewer (nobody reactivates them with power); every other member loses
-    owner and admin but keeps their other roles (viewer when none is left), so the self-signup founder can no longer
-    remove the new owner; and every pending invitation issued under the old control (by anyone but the new claimant),
-    or carrying owner or admin, is revoked. The new claimant re-promotes people afterwards."""
+    owner, admin and signatory but keeps their other roles (viewer when none is left), so the self-signup founder can
+    no longer remove the new owner; every pending invitation issued under the old control (by anyone but the new
+    claimant), or carrying owner, admin or signatory, is revoked; and a membership removed before the dispute loses
+    those roles too, so reactivating it restores no power. The new claimant re-appoints people afterwards."""
     right, _ = otp
     async with as_app(owner_engine) as conn:
         admin = await w.add_user(conn, _email("dispute-admin"), "Admin", staff_role="admin")
@@ -1261,17 +1297,24 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         second = await w.add_user(conn, _email("second"), "Second claimant")
         reviewer = await w.add_user(conn, _email("dispute-reviewer"), "Reviewer")
         signer = await w.add_user(conn, _email("dispute-signer"), "Signer")
+        departed = await w.add_user(conn, _email("departed"), "Departed owner")
         await _add_membership(conn, org, founder, "{owner,admin}")  # app_create_organization() at self-signup
         met = await add_legal_template(conn, "master_enterprise_terms")
         elsewhere = await add_org(conn)
         await _invite(conn, elsewhere, founder, "{owner}")  # another organisation's invitation: untouched
-        await act(conn, first)  # E1 at once on an official domain; the owner then builds the roster
+        await act(conn, first)  # the founder holds the organisation: even an official domain's claim is a dispute
         earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
         await _prove_domain(conn, earlier, right)
-        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "approved"
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=earlier) == "disputed"
+        await act(conn, admin)
+        await run(conn, "SELECT app_decide_claim(:id, true, 'first claim upheld')", id=earlier)
+        await act(conn, first)  # the new owner re-promotes the founder and builds the roster
+        promote = "UPDATE memberships SET roles = '{owner,admin}' WHERE org_id = :org AND user_id = :u"
+        assert (await conn.execute(text(promote), {"org": org, "u": founder})).rowcount == 1
         await _add_membership(conn, org, reviewer, "{reviewer}")
         await _add_membership(conn, org, signer, "{admin,signatory}")
-        await _add_membership(conn, org, second, "{admin}")
+        await _add_membership(conn, org, second, "{owner,admin}")
+        await _add_membership(conn, org, departed, "{owner,admin}", status="removed")  # left before the dispute
         by_first = await _invite(conn, org, first, "{reviewer}")
         accepted = await _invite(conn, org, first, "{viewer}", accepted=True)
         await act(conn, founder)
@@ -1279,12 +1322,17 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         await act(conn, second)
         by_second = await _invite(conn, org, second, "{viewer}")
         admin_by_second = await _invite(conn, org, second, "{admin}")
-        # another domain, proven, and the claim disputed
+        signatory_by_second = await _invite(conn, org, second, "{signatory}")
+        await act(conn, first)  # second is removed (an active owner's claim would be no dispute) ...
+        remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        assert (await conn.execute(text(remove), {"org": org, "u": second})).rowcount == 1
+        await act(conn, second)  # ... and claims another domain: marked disputed when filed, and it stays so
         disputed = await _claim(conn, org, second, "second.example.test", level, right)
+        assert await run(conn, CLAIM_STATUS, id=disputed) == "disputed"
+        await expect(conn, "UPDATE org_claims SET status = 'pending_review' WHERE id = :id", DISPUTE_MARK, id=disputed)
         await _prove_domain(conn, disputed, right)
         if level == "e2":
             await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=second, t=met)
-        await run(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", id=disputed)
         await act(conn, admin)
         await run(conn, "SELECT app_decide_claim(:id, true, 'dispute upheld')", id=disputed)
 
@@ -1302,8 +1350,9 @@ async def test_an_upheld_dispute_transfers_the_organisation(
             first: ("removed", ["viewer"]),
             second: ("active", ["admin", "owner"]),
             founder: ("active", ["viewer"]),
-            signer: ("active", ["signatory"]),
+            signer: ("active", ["viewer"]),  # the new owner re-appoints signatories
             reviewer: ("active", ["reviewer"]),
+            departed: ("removed", ["viewer"]),
         }
         revoked = await conn.execute(
             text("SELECT id, revoked_at IS NOT NULL AS revoked FROM invitations WHERE org_id = ANY (:orgs)"),
@@ -1311,7 +1360,8 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         )
         invitations = {row.id: row.revoked for row in revoked.all()}
         assert {accepted, by_second} <= set(invitations)  # kept: accepted, or the new claimant's without power
-        assert {i for i, is_revoked in invitations.items() if is_revoked} == {by_first, by_founder, admin_by_second}
+        revoked_ids = {by_first, by_founder, admin_by_second, signatory_by_second}
+        assert {i for i, is_revoked in invitations.items() if is_revoked} == revoked_ids
         verified = "SELECT verification::text, verified_domain::text FROM organizations WHERE id = :id"
         assert tuple((await conn.execute(text(verified), {"id": org})).one()) == (level, "second.example.test")
         remove_second = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
@@ -1330,12 +1380,59 @@ async def test_an_upheld_dispute_transfers_the_organisation(
         assert await run(conn, "SELECT app_is_member(:id, '{owner,admin,signatory}')", id=org) is False
 
 
+@pytest.mark.parametrize("level", ["e1", "e2"])
+async def test_signatories_appointed_under_the_ousted_control_lose_the_role(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes], level: str
+) -> None:
+    """The reviewer's round-5 probe: a signatory appointed under the ousted control kept ``{signatory}`` after the
+    transfer, so their later claim competed with nobody, and a routine approval (E2 through the shortcut, with no email
+    code or DNS record; E1 on the organisation's own domain) made them an owner next to the new owner, whom they could
+    then remove. The transfer strips signatory from every other membership too (the new owner re-appoints), so that
+    claim is filed as a dispute, has no E2 shortcut, and the automatic E1 check marks it disputed."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("sig-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{corp.example.test}")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        first, signatory, newcomer = [await w.add_user(conn, _email(n), n) for n in ("sig-first", "sig-s", "sig-new")]
+        await act(conn, first)
+        original = await _claim(conn, org, first, "corp.example.test", "e1", right)
+        await _prove_domain(conn, original, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=original) == "approved"
+        await _add_membership(conn, org, signatory, "{signatory}")  # appointed by the first owner
+        await act(conn, newcomer)
+        upheld = await _claim(conn, org, newcomer, "corp-ke.example.test", "e1", right)
+        await _prove_domain(conn, upheld, right)
+        await act(conn, admin)
+        await run(conn, decide, id=upheld)
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [newcomer]
+        assert await run(conn, ROLES_OF, org=org, u=signatory) == ["viewer"]
+        await act(conn, signatory)
+        if level == "e2":  # on the organisation's verified domain, as the probe did
+            await expect(conn, MET_ACCEPTANCE, "row-level security", id=uuid7(), org=org, u=signatory, t=met)
+            claim = await _claim(conn, org, signatory, "corp-ke.example.test", "e2", right)
+            assert await run(conn, CLAIM_STATUS, id=claim) == "disputed"
+            await act(conn, admin)
+            await expect(conn, decide, "domain is not proven", id=claim)  # no E2 shortcut for a former signatory
+        else:
+            claim = await _claim(conn, org, signatory, "corp.example.test", "e1", right)
+            assert await run(conn, CLAIM_STATUS, id=claim) == "disputed"
+            await _prove_domain(conn, claim, right)
+            assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=claim) == "disputed"
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [newcomer]
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e1", "corp-ke.example.test")
+
+
 async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(
     owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
 ) -> None:
     """Only an upheld dispute transfers the organisation: staff approving an ordinary claim (here the E2 upgrade of
     an E1 organisation by its own signatory, through the E1 shortcut) leaves the earlier approved claim of another
-    claimant approved and every membership as it was."""
+    claimant approved and every membership as it was, the signatory's included (round 6: a routine approval never
+    makes a member an owner)."""
     right, _ = otp
     async with as_app(owner_engine) as conn:
         admin = await w.add_user(conn, _email("upgrade-admin"), "Admin", staff_role="admin")
@@ -1367,9 +1464,379 @@ async def test_approving_a_claim_that_is_not_disputed_transfers_nothing(
         )
         assert {row.user_id: (row.status, sorted(row.roles)) for row in members.all()} == {
             first: ("active", ["admin", "owner"]),
-            signatory: ("active", ["admin", "owner", "signatory"]),
+            signatory: ("active", ["signatory"]),
         }
         assert await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=org) == "e2"
+
+
+async def test_a_routine_e2_approval_never_makes_a_member_an_owner(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The security review's N3 and N6 (round 5): approving a claim that competes with nobody added owner and admin
+    unconditionally, so an admin appointed by another admin, or a signatory through the E2 shortcut (no email code or
+    DNS record), became an owner through a routine verification and could then strip or remove the real owners. A
+    claimant who already holds an active membership now keeps their roles, so the E2 upgrade or re-verification by the
+    organisation's own admin or signatory changes nobody's roles. An E1 claim by an E2 organisation's admin competes
+    with nobody either: the automatic check sends it to manual review, not to a dispute (N7b)."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'E2 documents checked')"
+    strip = "UPDATE memberships SET roles = '{viewer}' WHERE org_id = :org AND user_id = :u"
+    remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("routine-admin"), "Admin", staff_role="admin")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        org, e1 = await add_org(conn, verification="e2"), await add_org(conn, verification="e1")
+        for verified, domain in ((org, "corp.example.test"), (e1, "e1.example.test")):
+            await run(conn, "UPDATE organizations SET verified_domain = :d WHERE id = :id", id=verified, d=domain)
+        owner, first_admin, second_admin, e1_owner, signatory = [
+            await w.add_user(conn, _email(n), n) for n in ("r-owner", "r-admin1", "r-admin2", "r-e1owner", "r-sig")
+        ]
+        await _add_membership(conn, org, owner, "{owner}")
+        await _add_membership(conn, e1, e1_owner, "{owner,admin}")
+        await _add_membership(conn, e1, signatory, "{signatory}")
+        # N3: the sole owner appoints an admin, who appoints another; that admin's routine E2 re-verification.
+        await act(conn, owner)
+        await _add_membership(conn, org, first_admin, "{admin}")
+        await act(conn, first_admin)
+        await _add_membership(conn, org, second_admin, "{admin}")
+        await act(conn, second_admin)
+        claim = await _claim(conn, org, second_admin, "corp.example.test", "e2", right)
+        assert await run(conn, CLAIM_STATUS, id=claim) == "otp_sent"  # an active admin competes with nobody
+        await _prove_domain(conn, claim, right)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=org, u=second_admin, t=met)
+        await act(conn, admin)
+        await run(conn, decide, id=claim)
+        await as_owner(conn)
+        assert await run(conn, CLAIM_STATUS, id=claim) == "approved"
+        assert await run(conn, ROLES_OF, org=org, u=second_admin) == ["admin"]
+        assert await run(conn, OWNERS, org=org) == [owner]
+        await act(conn, second_admin)
+        assert (await conn.execute(text(strip), {"org": org, "u": owner})).rowcount == 0
+        # N7b: an E2 organisation's admin's E1 claim: manual review (where staff refuse it), never a dispute.
+        await act(conn, first_admin)
+        e1_claim = await _claim(conn, org, first_admin, "corp.example.test", "e1", right)
+        await _prove_domain(conn, e1_claim, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=e1_claim) == "pending_review"
+        # N6: an E1 organisation's signatory upgrades it to E2 through the shortcut: no role changes.
+        await act(conn, signatory)
+        await run(conn, MET_ACCEPTANCE, id=uuid7(), org=e1, u=signatory, t=met)
+        upgrade = await _claim(conn, e1, signatory, "e1.example.test", "e2", right)
+        await act(conn, admin)
+        await run(conn, decide, id=upgrade)
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": e1})).one()) == ("e2", "e1.example.test")
+        assert await run(conn, ROLES_OF, org=e1, u=signatory) == ["signatory"]
+        assert await run(conn, OWNERS, org=e1) == [e1_owner]
+        await act(conn, signatory)
+        assert (await conn.execute(text(remove), {"org": e1, "u": e1_owner})).rowcount == 0
+
+
+async def test_a_routine_e1_approval_keeps_the_owners_domain_and_roles(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The E1 variant of N3 (round 5): staff approving an admin's E1 claim on another domain of an organisation already
+    E1 rewrote its verified domain and made the admin an owner. An E1 approval of an organisation already E1 now keeps
+    its verified domain unless the claimant is an active owner, and the admin keeps their roles; the automatic E1 check
+    likewise approves a self-signup organisation's admin on an official domain without making them an owner. Only
+    when the organisation has no active owner does the approved member become owner and admin."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("e1-routine-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, verification="e1")
+        await run(conn, "UPDATE organizations SET verified_domain = 'old.example.test' WHERE id = :id", id=org)
+        signup = await add_org(conn, source="self_signup", official_domains="{signup.example.test}")
+        orphan = await add_org(conn)
+        owner, member, founder, insider, lone, gone = [
+            await w.add_user(conn, _email(n), n) for n in ("o", "member", "founder", "insider", "lone", "gone")
+        ]
+        await _add_membership(conn, org, owner, "{owner,admin}")
+        await _add_membership(conn, org, member, "{admin}")
+        await _add_membership(conn, signup, founder, "{owner,admin}")
+        await _add_membership(conn, signup, insider, "{admin}")
+        await _add_membership(conn, orphan, gone, "{owner,admin}", status="removed")  # the only owner has left
+        await _add_membership(conn, orphan, lone, "{admin}")
+        claims: dict[UUID, UUID] = {}
+        for user, target, domain in (
+            (member, org, "member.example.test"),
+            (owner, org, "new.example.test"),
+            (insider, signup, "signup.example.test"),
+            (lone, orphan, "orphan.example.test"),
+        ):
+            await act(conn, user)
+            claims[user] = await _claim(conn, target, user, domain, "e1", right)
+            assert await run(conn, CLAIM_STATUS, id=claims[user]) == "otp_sent"  # members compete with nobody
+            await _prove_domain(conn, claims[user], right)
+        await act(conn, insider)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=claims[insider]) == "approved"
+        await act(conn, admin)
+        await run(conn, decide, id=claims[member])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e1", "old.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=member) == ["admin"]
+        await act(conn, admin)
+        for user in (owner, lone):
+            await run(conn, decide, id=claims[user])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e1", "new.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=owner) == ["admin", "owner"]
+        assert tuple((await conn.execute(text(VERIFIED), {"id": signup})).one()) == ("e1", "signup.example.test")
+        assert await run(conn, ROLES_OF, org=signup, u=insider) == ["admin"]
+        assert await run(conn, OWNERS, org=signup) == [founder]
+        assert tuple((await conn.execute(text(VERIFIED), {"id": orphan})).one()) == ("e1", "orphan.example.test")
+        assert await run(conn, ROLES_OF, org=orphan, u=lone) == ["admin", "owner"]
+
+
+async def test_a_routine_e2_approval_keeps_the_owners_domain(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Round 6, Q3: the E1 rule for the verified domain holds for E2 too. Staff approving an admin's E2 claim on another
+    domain of an organisation already E1 (email code and DNS record proven) verifies the organisation at E2 but keeps
+    its verified domain, and the admin keeps their roles; the owner's E2 re-verification on another domain moves it.
+    Q2 (accepted as built): through the E2 shortcut on an organisation with no active owner, the approved member (here
+    a signatory) gains owner and admin."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'E2 documents checked')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("q3-admin"), "Admin", staff_role="admin")
+        met = await add_legal_template(conn, "master_enterprise_terms")
+        org, orphan = await add_org(conn, verification="e1"), await add_org(conn, verification="e1")
+        for verified, domain in ((org, "old.example.test"), (orphan, "orphan.example.test")):
+            await run(conn, "UPDATE organizations SET verified_domain = :d WHERE id = :id", id=verified, d=domain)
+        owner, member, gone, signatory = [
+            await w.add_user(conn, _email(n), n) for n in ("q3-owner", "q3-member", "q3-gone", "q3-signatory")
+        ]
+        await _add_membership(conn, org, owner, "{owner,admin}")
+        await _add_membership(conn, org, member, "{admin}")
+        await _add_membership(conn, orphan, gone, "{owner,admin}", status="removed")  # the only owner has left
+        await _add_membership(conn, orphan, signatory, "{signatory}")
+        claims: dict[UUID, UUID] = {}
+        for user, target, domain, proven in (
+            (member, org, "member.example.test", True),
+            (owner, org, "new.example.test", True),
+            (signatory, orphan, "orphan.example.test", False),  # the shortcut: no email code or DNS record
+        ):
+            await act(conn, user)
+            await run(conn, MET_ACCEPTANCE, id=uuid7(), org=target, u=user, t=met)
+            claims[user] = await _claim(conn, target, user, domain, "e2", right)
+            assert await run(conn, CLAIM_STATUS, id=claims[user]) == "otp_sent"  # members compete with nobody
+            if proven:
+                await _prove_domain(conn, claims[user], right)
+        await act(conn, admin)
+        await run(conn, decide, id=claims[member])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e2", "old.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=member) == ["admin"]
+        assert await run(conn, OWNERS, org=org) == [owner]
+        await act(conn, admin)
+        for user in (owner, signatory):
+            await run(conn, decide, id=claims[user])
+        await as_owner(conn)
+        assert tuple((await conn.execute(text(VERIFIED), {"id": org})).one()) == ("e2", "new.example.test")
+        assert await run(conn, ROLES_OF, org=org, u=owner) == ["admin", "owner"]
+        assert tuple((await conn.execute(text(VERIFIED), {"id": orphan})).one()) == ("e2", "orphan.example.test")
+        assert await run(conn, ROLES_OF, org=orphan, u=signatory) == ["admin", "owner", "signatory"]
+
+
+async def test_a_competing_claim_is_decided_as_a_dispute_whatever_its_label(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """Whether a claim is a dispute is decided in SQL, never by its label (round 5): a claim competes when another
+    user holds an approved claim on the organisation or is an active owner or admin of it, and the claimant is not an
+    active owner, admin or signatory. It is marked disputed when filed (org_claims_guard) or when the automatic E1
+    check finds the competition (app_approve_claim_e1, not manual review), and staff approving it is the dispute's
+    outcome, the transfer. The claimant can neither mark a claim disputed nor clear the mark. An approved outsider
+    never ends up next to the earlier owner: one owner group, never two. An approved claim alone makes a claim
+    compete, even once staff have removed its claimant's membership (approving the newcomer rejects it); a removed
+    ex-owner alone does not."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'documents checked')"
+    approve = "SELECT app_approve_claim_e1(:id)::text"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("compete-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{first.example.test}")
+        held, left, plain = await add_org(conn), await add_org(conn), await add_org(conn)
+        first, stranger, a, b, c = [await w.add_user(conn, _email(n), n) for n in ("first", "stranger", "a", "b", "c")]
+        # The reviewer's probe: an outsider's claim on an organisation already E1, on another domain, proven.
+        await act(conn, first)
+        earlier = await _claim(conn, org, first, "first.example.test", "e1", right)
+        await _prove_domain(conn, earlier, right)
+        assert await run(conn, approve, id=earlier) == "approved"
+        await act(conn, stranger)
+        competing = await _claim(conn, org, stranger, "second.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=competing) == "disputed"
+        await _prove_domain(conn, competing, right)  # the email code and the DNS record still verify
+        assert await run(conn, approve, id=competing) == "disputed"
+        for status in ("pending_review", "otp_sent", "dns_pending"):
+            await expect(conn, f"UPDATE org_claims SET status = '{status}' WHERE id = :id", DISPUTE_MARK, id=competing)
+        filed_disputed = (  # nor is an ordinary claim marked by its claimant, when filed or later
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :u, 'plain.example.test', 'info@plain.example.test', 'e1', CAST(:s AS claim_status))"
+        )
+        refused = "marked disputed only by the database"
+        await expect(conn, filed_disputed, refused, id=uuid7(), org=plain, u=stranger, s="disputed")
+        ordinary = uuid7()
+        await run(conn, filed_disputed, id=ordinary, org=plain, u=stranger, s="otp_sent")
+        await expect(conn, "UPDATE org_claims SET status = 'disputed' WHERE id = :id", DISPUTE_MARK, id=ordinary)
+        await act(conn, admin)
+        await run(conn, decide, id=competing)
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [stranger]
+        assert await run(conn, CLAIM_STATUS, id=earlier) == "rejected"
+        assert await run(conn, "SELECT verified_domain::text FROM organizations WHERE id = :id", id=org) == (
+            "second.example.test"
+        )
+        # M16: another user's approved claim alone makes a claim a dispute, even once staff have removed that user's
+        # membership, and approving the newcomer's claim rejects it.
+        await act(conn, a)
+        held_claim = await _claim(conn, held, a, "a.held.example.test", "e1", right)
+        await _prove_domain(conn, held_claim, right)
+        assert await run(conn, approve, id=held_claim) == "pending_review"  # not an official domain: manual review
+        await act(conn, admin)
+        await run(conn, decide, id=held_claim)  # nobody held the organisation: no dispute
+        await as_owner(conn)
+        membership = await run(conn, "SELECT id FROM memberships WHERE org_id = :org AND user_id = :u", org=held, u=a)
+        await act(conn, admin)
+        assert await run(conn, "SELECT app_staff_remove_membership(:id, 'left the company')", id=membership) is True
+        await act(conn, b)
+        newcomer = await _claim(conn, held, b, "b.held.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=newcomer) == "disputed"
+        await _prove_domain(conn, newcomer, right)
+        await act(conn, admin)
+        await run(conn, decide, id=newcomer)
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=held) == [b]
+        assert await run(conn, CLAIM_STATUS, id=held_claim) == "rejected"
+        # M17: a removed ex-owner alone (no approved claim) holds nothing, so a claim on that organisation is ordinary.
+        await _add_membership(conn, left, a, "{owner,admin}", status="removed")
+        await act(conn, c)
+        unheld = await _claim(conn, left, c, "c.left.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=unheld) == "otp_sent"
+
+
+async def test_a_claims_label_follows_the_organisations_control(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The review's N4, N5 and PROBE3 (round 5): app_decide_claim decided by app_claim_competes but never reconciled
+    the stored label, so staff acted on stale labels both ways: a demoted admin's claim still read otp_sent and its
+    approval silently transferred the organisation; an outsider made an admin still read disputed although approving
+    it transfers nothing; and once A was approved, B's competing claim still read pending_review. Every roster change
+    and every approval now relabels the organisation's open claims (disputed when a claim competes, pending_review
+    when it no longer does), so staff decide with the dispute visible; app_decide_claim approves only when the stored
+    label agrees with the predicate and refuses a label written past the claim functions."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    approve = "SELECT app_approve_claim_e1(:id)::text"
+    demote = "UPDATE memberships SET roles = '{viewer}' WHERE org_id = :org AND user_id = :u"
+    relabel = "UPDATE org_claims SET status = CAST(:s AS claim_status) WHERE id = :id"
+    stale = "is labelled"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("label-admin"), "Admin", staff_role="admin")
+        demoted_org, promoted_org, contested = await add_org(conn), await add_org(conn), await add_org(conn)
+        owner, member, outsider, a, b = [
+            await w.add_user(conn, _email(n), n) for n in ("l-owner", "l-member", "l-outsider", "l-a", "l-b")
+        ]
+        await _add_membership(conn, demoted_org, owner, "{owner,admin}")
+        await _add_membership(conn, demoted_org, member, "{admin}")
+        await _add_membership(conn, promoted_org, owner, "{owner,admin}")
+        # N4: an admin's claim competes with nobody; once the admin is demoted it is a dispute at once, decided as one.
+        await act(conn, member)
+        demoted = await _claim(conn, demoted_org, member, "member.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=demoted) == "otp_sent"
+        await _prove_domain(conn, demoted, right)
+        await act(conn, owner)
+        assert (await conn.execute(text(demote), {"org": demoted_org, "u": member})).rowcount == 1
+        assert await run(conn, CLAIM_STATUS, id=demoted) == "disputed"
+        await act(conn, admin)
+        await run(conn, decide, id=demoted)  # upholding the dispute staff can see: the transfer
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=demoted_org) == [member]
+        # N5: an outsider's disputed claim; once the outsider is an admin it is no dispute, and approving it keeps them
+        # an admin next to the owner. A disputed label written past the claim functions is never decided on.
+        await act(conn, outsider)
+        promoted = await _claim(conn, promoted_org, outsider, "outsider.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=promoted) == "disputed"
+        await _prove_domain(conn, promoted, right)
+        await act(conn, owner)
+        await _add_membership(conn, promoted_org, outsider, "{admin}")
+        assert await run(conn, CLAIM_STATUS, id=promoted) == "pending_review"
+        await as_owner(conn)  # the owner role passes org_claims_status_guard: a stale label for the test
+        await run(conn, relabel, s="disputed", id=promoted)
+        await act(conn, admin)
+        await expect(conn, decide, stale, id=promoted)
+        await as_owner(conn)
+        await run(conn, relabel, s="pending_review", id=promoted)
+        await act(conn, admin)
+        await run(conn, decide, id=promoted)
+        await as_owner(conn)
+        assert await run(conn, OWNERS, org=promoted_org) == [owner]
+        assert await run(conn, ROLES_OF, org=promoted_org, u=outsider) == ["admin"]
+        # PROBE3: A and B claim an organisation nobody holds; approving A marks B's claim disputed at once, and B cannot
+        # clear the mark. A stale pending_review written past the claim functions is refused.
+        claims: dict[UUID, UUID] = {}
+        for user, name in ((a, "a"), (b, "b")):
+            await act(conn, user)
+            claims[user] = await _claim(conn, contested, user, f"{name}.contested.example.test", "e1", right)
+            await _prove_domain(conn, claims[user], right)
+            assert await run(conn, approve, id=claims[user]) == "pending_review"  # other open claims: manual review
+        await act(conn, admin)
+        await run(conn, decide, id=claims[a])
+        await as_owner(conn)
+        assert await run(conn, CLAIM_STATUS, id=claims[b]) == "disputed"
+        await act(conn, b)
+        await expect(conn, relabel, DISPUTE_MARK, s="pending_review", id=claims[b])
+        await as_owner(conn)
+        await run(conn, relabel, s="pending_review", id=claims[b])
+        await act(conn, admin)
+        await expect(conn, decide, stale, id=claims[b])
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=contested) == [a]
+
+
+async def test_an_ousted_claimant_cannot_rejoin_through_a_new_claim(
+    owner_engine: AsyncEngine, otp: tuple[bytes, bytes]
+) -> None:
+    """The security review's T9 to T15: after an upheld dispute the ousted owner, and a co-owner demoted to viewer,
+    file new claims a day later. Each is marked disputed when filed and the claimant cannot relabel it for a routine
+    review; approving one is again the dispute's outcome (the claimant becomes the only owner and admin), so nobody
+    rejoins next to the new owner and then demotes them."""
+    right, _ = otp
+    decide = "SELECT app_decide_claim(:id, true, 'reviewed')"
+    async with as_app(owner_engine) as conn:
+        admin = await w.add_user(conn, _email("ousted-admin"), "Admin", staff_role="admin")
+        org = await add_org(conn, official_domains="{corp.example.test}")
+        ousted, demoted, newcomer = [await w.add_user(conn, _email(n), n) for n in ("ousted", "demoted", "newcomer")]
+        await act(conn, ousted)
+        original = await _claim(conn, org, ousted, "corp.example.test", "e1", right)
+        await _prove_domain(conn, original, right)
+        assert await run(conn, "SELECT app_approve_claim_e1(:id)::text", id=original) == "approved"
+        await _add_membership(conn, org, demoted, "{owner}")
+        await act(conn, newcomer)
+        upheld = await _claim(conn, org, newcomer, "corp-ke.example.test", "e1", right)
+        await _prove_domain(conn, upheld, right)
+        await act(conn, admin)
+        await run(conn, decide, id=upheld)
+        await as_owner(conn)  # a day later (the claim cooldown)
+        await run(conn, "UPDATE org_claims SET created_at = now() - interval '2 days' WHERE org_id = :org", org=org)
+        refiled: dict[UUID, UUID] = {}
+        for user in (ousted, demoted):
+            await act(conn, user)
+            refiled[user] = await _claim(conn, org, user, "corp.example.test", "e1", right)
+            assert await run(conn, CLAIM_STATUS, id=refiled[user]) == "disputed"
+            relabel = "UPDATE org_claims SET status = 'pending_review' WHERE id = :id"
+            await expect(conn, relabel, DISPUTE_MARK, id=refiled[user])
+        await act(conn, ousted)
+        await _prove_domain(conn, refiled[ousted], right)
+        await act(conn, admin)
+        await run(conn, decide, id=refiled[ousted])
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=org) == [ousted]
+        assert await run(conn, CLAIM_STATUS, id=upheld) == "rejected"
+        await act(conn, newcomer)
+        assert await run(conn, "SELECT app_is_member(:id, '{owner,admin}')", id=org) is False
+        await act(conn, demoted)  # a disputed claim is still the claimant's to withdraw
+        withdraw = "UPDATE org_claims SET status = 'withdrawn' WHERE id = :id"
+        assert (await conn.execute(text(withdraw), {"id": refiled[demoted]})).rowcount == 1
 
 
 async def test_staff_admin_removes_a_membership_with_a_reason(owner_engine: AsyncEngine) -> None:
@@ -1574,9 +2041,10 @@ NAIROBI_TODAY = "SELECT CAST(now() AT TIME ZONE 'Africa/Nairobi' AS date)"
 async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engine: AsyncEngine) -> None:
     """chain_anchors and transparency_roots are append-only and one per head or day, so a forged row would be
     permanent and block the real one. provenance_worker (the only writer) may anchor only an existing audit event
-    (its chain, sequence number and hash) at a TSA time no later than the database clock allows (one minute of
-    clock skew), and publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended
-    and no later than now (``snapshot_at``, when given)."""
+    (its chain, sequence number and hash) at a TSA time no later than the database clock allows and no earlier than
+    the anchored event (one minute of clock skew either way: a real head anchored ten years back is refused), and
+    publish a root only for a Nairobi day that has ended, from a snapshot taken after that day ended and no later than
+    now (``snapshot_at``, when given)."""
     chain = f"test:{uuid4().hex}"
     async with as_app(owner_engine) as conn:
         for _ in range(2):
@@ -1605,6 +2073,10 @@ async def test_anchors_name_a_real_chain_event_and_roots_a_closed_day(owner_engi
         future = datetime.now(UTC) + timedelta(hours=1)
         await expect(
             conn, ANCHOR, "TSA time is later than the database clock", id=uuid7(), **(anchor | {"tsa_time": future})
+        )
+        long_ago = datetime.now(UTC) - timedelta(days=3650)
+        await expect(
+            conn, ANCHOR, "TSA time is earlier than the anchored event", id=uuid7(), **(anchor | {"tsa_time": long_ago})
         )
         await run(conn, ANCHOR, id=uuid7(), **anchor)
         await run(conn, ANCHOR, id=uuid7(), **(anchor | {"seq": earlier.seq, "hash": earlier.event_hash}))
@@ -1774,7 +2246,8 @@ async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engi
             batch=None,
             item=None,
         )
-        # A system job's item (no user, no organisation) settles the same way.
+        # A system job's item (no user, no organisation; the job binds no user) settles the same way.
+        await act(conn, None)
         system = {"u": None, "batch": batch, "item": "item-2"}
         await run(conn, BATCH_CALL, id=uuid7(), status="batch_reserved", cost=Decimal("1.00"), **system)
         for _ in range(2):
@@ -1784,6 +2257,188 @@ async def test_a_batch_reservation_counts_until_its_item_settles_once(owner_engi
         assert await run(conn, "SELECT count(*) FROM llm_spend WHERE user_id = :u", u=user) == 0
         assert await run(conn, "SELECT count(*) FROM llm_calls WHERE batch_id = :b", b=batch) == 0
         assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal("1.75")  # the total, never the rows
+
+
+TENANT_BATCH_CALL = (
+    "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, batch_id, custom_id)"
+    " VALUES (:id, :org, :u, 't', 'm', :status, :cost, :batch, :item)"
+)
+ORG_SPEND = "SELECT coalesce(sum(cost_usd), 0) FROM llm_spend WHERE org_id = :org"
+SETTLES_ONLY = "settles only a reservation of its own tenant"  # llm_calls_batch_guard()
+
+
+async def test_a_batch_item_belongs_to_its_tenant(owner_engine: AsyncEngine) -> None:
+    """The review probes L1, L1b, L2, L2b and L9 (round 5): a batch item is identified within its tenant (org_id and
+    user_id, NULL for none), so another tenant's rows naming the same (batch_id, custom_id) neither settle, cancel nor
+    block it. A settlement settles only a reservation of its own tenant: one for an item only another tenant reserved
+    is refused, as is one under another organisation or user than the reservation's (a mis-bound ledger).
+    Reservations of different tenants for one pair coexist, each counting until its own tenant settles it. A request
+    bound to a user writes no platform job's batch row (no user, no organisation); the job, binding no user, does."""
+    async with as_app(owner_engine) as conn:
+        victim = await w.add_user(conn, _email("batch-victim"), "Victim")
+        intruder = await w.add_user(conn, _email("batch-intruder"), "Intruder")
+        org = await add_org(conn, verification="e1")
+        await _add_membership(conn, org, victim, "{owner,admin}")
+        since = await run(conn, "SELECT now() - interval '1 second'")
+        before = await run(conn, GLOBAL_SPEND, t=since)
+        batch = f"msgbatch_{uuid4().hex[:20]}"
+        mine, theirs = {"org": org, "u": victim, "batch": batch}, {"org": None, "u": intruder, "batch": batch}
+        system = {"org": None, "u": None, "batch": batch}
+        settle = TENANT_BATCH_CALL + " ON CONFLICT DO NOTHING"
+        reserved = {"status": "batch_reserved"}
+        await act(conn, victim, org)
+        for item, cost in (("item-1", 50), ("item-2", 40)):
+            await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(cost), item=item, **mine)
+        await act(conn, intruder)  # L1: a zero-cost settlement of the victim's item, as a user or a system row
+        for tenant in (theirs, system):
+            for sql in (TENANT_BATCH_CALL, settle):
+                await expect(conn, sql, SETTLES_ONLY, id=uuid7(), status="ok", cost=Decimal(0), item="item-1", **tenant)
+        # L2: the intruder reserves a pair the victim has not reserved yet: the intruder's own item.
+        await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(5), item="item-3", **theirs)
+        await act(conn, victim, org)  # L2b: the victim still reserves that pair, and settles it as the victim's
+        await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, cost=Decimal(30), item="item-3", **mine)
+        for item, cost in (("item-1", 38), ("item-3", 20)):  # L1b: the real settlement is never dropped
+            params = {"id": uuid7(), "status": "ok", "cost": Decimal(cost), "item": item, **mine}
+            assert (await conn.execute(text(settle), params)).rowcount == 1
+        # L9: settled under no organisation although reserved under one (a mis-bound ledger): refused.
+        unbound = mine | {"org": None}
+        await expect(conn, settle, SETTLES_ONLY, id=uuid7(), status="ok", cost=Decimal(1), item="item-2", **unbound)
+        assert await run(conn, ORG_SPEND, org=org) == Decimal(98)  # 38 settled, 40 reserved, 20 settled
+        await act(conn, intruder)  # the victim's settlement of item-3 cancelled only the victim's reservation
+        assert await run(conn, USER_SPEND, u=intruder) == Decimal(5)
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(103)
+        job_item = {"id": uuid7(), **reserved, "cost": Decimal(1), "item": "item-4", **system}
+        await expect(conn, TENANT_BATCH_CALL, "row-level security", **job_item)
+        await act(conn, None)
+        await run(conn, TENANT_BATCH_CALL, **job_item)
+        await act(conn, intruder)
+        job_settles = {"id": uuid7(), "status": "ok", "cost": Decimal(0), "item": "item-4", **system}
+        await expect(conn, settle, "row-level security", **job_settles)
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(104)
+
+
+BATCH_OWNED = "SELECT app_llm_batch_owned(:b)"
+# A reservation sent with a created_at :at seconds from the transaction's start; the database replaces it with the
+# moment the row is written (round 6, Q5), so reservations order by when they were written, whatever is sent.
+TIMED_RESERVATION = (
+    "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, batch_id, custom_id, created_at)"
+    " VALUES (:id, :org, :u, 't', 'm', 'batch_reserved', 1, :batch, :item, now() + make_interval(secs => :at))"
+)
+
+
+async def test_a_batch_is_owned_only_by_its_tenant(owner_engine: AsyncEngine) -> None:
+    """For batch_poll (one provider account serves every tenant, and bridge_app cannot read other tenants' rows or
+    system rows): app_llm_batch_owned(batch_id) is true only for the batch's tenant, the tenant of its earliest
+    reservation (round 6: the real tenant reserves every item right after the provider assigns the batch id, so it
+    reserves first), judged as for the rows the caller could have written: its own user, an organisation it is an
+    active member of (the bound one when app.org_id is set), and a platform job's batch (no user, no organisation) only
+    with nothing bound. A later reservation of anybody else (a squatted item, the security review's N10a) changes
+    nothing, even sent with a created_at an hour back (Q5: a reservation's time is the database's), and a batch with no
+    reservation is owned by nobody, so an unknown batch and another tenant's look alike."""
+    async with as_app(owner_engine) as conn:
+        owner = await w.add_user(conn, _email("batch-owner"), "Owner")
+        other = await w.add_user(conn, _email("batch-other"), "Other")
+        org, elsewhere = await add_org(conn, verification="e1"), await add_org(conn, verification="e1")
+        for membership in (elsewhere, org):
+            await _add_membership(conn, membership, owner, "{owner,admin}")
+        mine, jobs, squatted, theirs, unreserved, unknown = (f"msgbatch_{uuid4().hex[:20]}" for _ in range(6))
+        await act(conn, owner, org)
+        for batch, item, tenant in ((mine, "a", org), (mine, "b", None), (squatted, "a", org)):  # org and user rows
+            await run(conn, TIMED_RESERVATION, id=uuid7(), org=tenant, u=owner, batch=batch, item=item, at=0)
+        await act(conn, None)  # a platform job: rows with no user and no organisation, one a later, backdated squat
+        for batch, at in ((jobs, 0), (squatted, -3600)):
+            await run(conn, TIMED_RESERVATION, id=uuid7(), org=None, u=None, batch=batch, item="z", at=at)
+        await act(conn, other)  # another user squats an item later (backdated), reserves a batch first, settles one
+        for batch, item, at in ((squatted, "q", -3600), (theirs, "x", 0)):
+            await run(conn, TIMED_RESERVATION, id=uuid7(), org=None, u=other, batch=batch, item=item, at=at)
+        ok = {"status": "ok", "cost": Decimal(0), "org": None, "u": other}
+        await run(conn, TENANT_BATCH_CALL, id=uuid7(), **ok, batch=unreserved, item="x")
+        await act(conn, owner, org)
+        await run(conn, TIMED_RESERVATION, id=uuid7(), org=org, u=owner, batch=theirs, item="y", at=-3600)
+        for user, scope, owned in (
+            (owner, org, {mine, squatted}),
+            (owner, None, {mine, squatted}),  # a request not scoped to one organisation
+            (owner, elsewhere, set()),  # scoped to another organisation of the owner's
+            (other, None, {theirs}),
+            (None, None, {jobs}),
+        ):
+            await act(conn, user, scope)
+            for batch in (mine, jobs, squatted, theirs, unreserved, unknown):
+                assert await run(conn, BATCH_OWNED, b=batch) is (batch in owned), (user, scope, batch)
+        await as_owner(conn)
+        stored = "SELECT bool_and(created_at >= now()) FROM llm_calls WHERE batch_id IN (:a, :b)"
+        assert await run(conn, stored, a=squatted, b=theirs) is True  # no reservation kept the time it was sent with
+
+
+# How the ledger settles a batch item from round 6 (named arguments: the full signature).
+SETTLE_ITEM = (
+    "SELECT app_llm_settle_batch_item(p_batch_id => :batch, p_custom_id => :item, p_id => :id, p_task => 'nightly',"
+    " p_purpose => NULL, p_model => 'm', p_input_tokens => :tokens, p_output_tokens => 0, p_cache_read_tokens => 0,"
+    " p_cache_write_tokens => 0, p_cost_usd => :cost, p_latency_ms => 1200, p_status => :status,"
+    " p_stop_reason => 'end_turn', p_trace_id => 'trace-settle', p_inputs => CAST('{}' AS jsonb))"
+)
+NOT_THE_CALLERS = "no batch of the caller's with that id"
+
+
+async def test_a_batch_item_settles_once_through_the_function_even_after_its_user_left(
+    owner_engine: AsyncEngine,
+) -> None:
+    """The security review's N9 (round 5): a reservation whose user has left the organisation could never settle (RLS
+    refuses that user's insert, llm_calls_batch_guard everybody else's), so its estimate kept counting against the caps
+    for the rest of the window. app_llm_settle_batch_item writes an item's settlement with the batch tenant's own
+    org_id and user_id for the caller that owns the batch (app_llm_batch_owned) or the platform job (nothing bound):
+    once (false when the item has settled), with every CHECK of a ledger row, a final status and the database's time.
+    Anybody else, another member of the organisation included, is refused exactly as for an unknown batch."""
+    async with as_app(owner_engine) as conn:
+        member = await w.add_user(conn, _email("settle-member"), "Member")
+        colleague = await w.add_user(conn, _email("settle-colleague"), "Colleague")
+        stranger = await w.add_user(conn, _email("settle-stranger"), "Stranger")
+        org = await add_org(conn, verification="e1")
+        await _add_membership(conn, org, member, "{reviewer}")
+        await _add_membership(conn, org, colleague, "{owner,admin}")
+        since = await run(conn, "SELECT now() - interval '1 second'")
+        before = await run(conn, GLOBAL_SPEND, t=since)
+        batch, unknown = (f"msgbatch_{uuid4().hex[:20]}" for _ in range(2))
+        await act(conn, member, org)
+        for item, cost in (("item-1", 40), ("item-2", 30)):
+            reserved = {"status": "batch_reserved", "cost": Decimal(cost), "org": org, "u": member}
+            await run(conn, TENANT_BATCH_CALL, id=uuid7(), **reserved, batch=batch, item=item)
+        settle = {"batch": batch, "tokens": 900, "status": "ok"}
+        assert await run(conn, SETTLE_ITEM, **settle, item="item-1", id=uuid7(), cost=Decimal(38)) is True
+        assert await run(conn, SETTLE_ITEM, **settle, item="item-1", id=uuid7(), cost=Decimal(38)) is False  # once
+        assert await run(conn, ORG_SPEND, org=org) == Decimal(68)  # 38 settled, 30 still reserved
+        for change, error in (
+            ({"status": "batch_reserved"}, "has a final status"),
+            ({"cost": Decimal(150)}, "ck_llm_calls_cost_usd_range"),
+            ({"cost": Decimal(-1)}, "ck_llm_calls_cost_usd_range"),
+            ({"tokens": -1}, "ck_llm_calls_counts_not_negative"),
+        ):
+            await expect(
+                conn, SETTLE_ITEM, error, **({"item": "item-2", "id": uuid7(), "cost": Decimal(1)} | settle | change)
+            )
+        for caller, scope in ((stranger, None), (colleague, org)):  # N9a: another member is not the batch's tenant
+            await act(conn, caller, scope)
+            await expect(conn, SETTLE_ITEM, NOT_THE_CALLERS, **settle, item="item-2", id=uuid7(), cost=Decimal(1))
+        # N9: the member leaves; neither they nor any other tenant settles item-2 now, the platform job does, as the
+        # reservation's own organisation and user.
+        await act(conn, colleague, org)
+        leave = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        assert (await conn.execute(text(leave), {"org": org, "u": member})).rowcount == 1
+        await act(conn, member, org)
+        await expect(conn, SETTLE_ITEM, NOT_THE_CALLERS, **settle, item="item-2", id=uuid7(), cost=Decimal(1))
+        plain = {"status": "ok", "cost": Decimal(1), "org": org, "u": member, "batch": batch, "item": "item-2"}
+        await expect(conn, TENANT_BATCH_CALL, "row-level security", id=uuid7(), **plain)
+        await act(conn, None)
+        unknown_item = {"batch": unknown, "tokens": 0, "status": "ok", "item": "item-2", "cost": Decimal(1)}
+        await expect(conn, SETTLE_ITEM, NOT_THE_CALLERS, **unknown_item, id=uuid7())
+        job = uuid7()
+        assert await run(conn, SETTLE_ITEM, **settle, item="item-2", id=job, cost=Decimal(25)) is True
+        assert await run(conn, SETTLE_ITEM, **settle, item="item-2", id=uuid7(), cost=Decimal(25)) is False
+        await as_owner(conn)
+        row = "SELECT org_id, user_id, cost_usd, created_at = now() AS database_time FROM llm_calls WHERE id = :id"
+        assert tuple((await conn.execute(text(row), {"id": job})).one()) == (org, member, Decimal(25), True)
+        assert await run(conn, ORG_SPEND, org=org) == Decimal(63)
+        assert await run(conn, GLOBAL_SPEND, t=since) - before == Decimal(63)
 
 
 LLM_CALL = (

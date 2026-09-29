@@ -9,8 +9,11 @@ length: Tier-2 plaintext is never stored here, with or without consent (the LLM 
 no SELECT on the column, so the mapper never loads it.
 
 Message Batches: an item is reserved at submission (``status = 'batch_reserved'``, the estimated cost, ``batch_id`` and
-``custom_id``) and settled once its result arrives (a second row with the same pair and the final status and cost,
-inserted with ``ON CONFLICT DO NOTHING``; partial unique indexes allow one reservation and one settlement per item).
+``custom_id``) and settled once its result arrives (a second row with the same pair, the same ``org_id`` and ``user_id``
+and the final status and cost, inserted with ``ON CONFLICT DO NOTHING``). An item is its tenant's: the partial unique
+indexes allow one reservation and one settlement per item and tenant (NULLS NOT DISTINCT), and the database refuses a
+settlement for an item only other tenants reserved (``llm_calls_batch_guard``, revision 0002 round 5). A platform job's
+batch rows (no user, no organisation) are written only by a session that binds no user.
 Spend is read from the ``llm_spend`` view (org_id, user_id, cost_usd, created_at; revision 0002), the one rule that
 counts a reservation until its item settles and then only the settled row: the tenant monthly sum reads the view
 under RLS, and ``app_llm_spend_usd`` the platform total.
@@ -51,18 +54,25 @@ class LlmCall(IdMixin, CreatedMixin, Base):
         CheckConstraint(COUNTS_NOT_NEGATIVE, name="counts_not_negative"),
         CheckConstraint("(batch_id IS NULL) = (custom_id IS NULL)", name="batch_pair"),
         CheckConstraint(f"status <> '{BATCH_RESERVED}' OR batch_id IS NOT NULL", name="batch_reserved_has_batch"),
+        # One reservation and one settlement per item within its tenant (NULL counts as one value).
         Index(
             "uq_llm_calls_batch_reservation",
             "batch_id",
             "custom_id",
+            "org_id",
+            "user_id",
             unique=True,
+            postgresql_nulls_not_distinct=True,
             postgresql_where=text(f"status = '{BATCH_RESERVED}'"),
         ),
         Index(
             "uq_llm_calls_batch_settlement",
             "batch_id",
             "custom_id",
+            "org_id",
+            "user_id",
             unique=True,
+            postgresql_nulls_not_distinct=True,
             postgresql_where=text(f"batch_id IS NOT NULL AND status <> '{BATCH_RESERVED}'"),
         ),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "user_id"}},
