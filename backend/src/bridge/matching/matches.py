@@ -3,7 +3,7 @@
 - ``GET /api/orgs/{org_id}/matches[?scout_id=]``: any member; newest first (at most 200).
 - ``GET /api/orgs/{org_id}/matches/{id}``: any member; the match with its rules, the organisation's engagement for
   the proposal if one exists, and whether the caller may express interest now (and why not: ``org_not_e2``,
-  ``org_suspended``, ``role_required``, ``engagement_exists``, ``proposal_unavailable``).
+  ``org_unavailable`` (suspended or delisted), ``role_required``, ``engagement_exists``, ``proposal_unavailable``).
 - ``POST /api/orgs/{org_id}/matches/{id}/feedback``: a member who acts on proposals (owner, admin, signatory or
   reviewer; else 403) marks it relevant or not relevant (with a reason code), as themselves. A feedback stays its
   author's: another member's answer is 409 ``feedback_given`` (the database's ``agent_matches_feedback_guard`` is
@@ -11,7 +11,8 @@
 
 Reads have no side effect (a digest link only opens a page: nothing changes on GET). Each match shows the proposal's
 current teaser (Tier 1 only, through ``current_version_id``), or none once the proposal is no longer published and
-clear (``available`` false); ``demo_fallback`` is true when no model wrote the why.
+clear (``available`` false: then no why and no rules either, since both quote or describe the teaser);
+``demo_fallback`` is true when no model wrote the why.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ _MATCHES: Final = (
     " LEFT JOIN niches n ON n.id = coalesce(v.niche_id, m.niche_id) LEFT JOIN niches pn ON pn.id = n.parent_id"
     " WHERE m.org_id = :org"
 )
-_ORG = text("SELECT verification, suspended_at FROM organizations WHERE id = :org")
+_ORG = text("SELECT verification, suspended_at, delisted_at FROM organizations WHERE id = :org")
 _ENGAGEMENT = text("SELECT id FROM engagements WHERE proposal_id = :proposal AND org_id = :org")
 _FEEDBACK_BY = text("SELECT feedback_by FROM agent_matches WHERE id = :id AND org_id = :org")
 _FEEDBACK = text(
@@ -83,8 +84,8 @@ def _out(row: Any) -> dict[str, Any]:
         "teaser": teaser,
         "niche": niche,
         "score": row.score,
-        "why": row.rationale,
-        "why_source": "model" if source == "model" else "code",
+        "why": row.rationale if row.available else None,
+        "why_source": "model" if source == "model" and row.available else "code",
         "demo_fallback": row.rationale_demo_fallback,
         "injection_suspected": row.injection_suspected,
         "created_at": row.created_at,
@@ -109,8 +110,8 @@ async def interest_state(db: AsyncSession, org: OrgContext, proposal_id: UUID, a
     reason = None
     if found.verification != OrgVerification.E2:
         reason = "org_not_e2"
-    elif found.suspended_at is not None:
-        reason = "org_suspended"
+    elif found.suspended_at is not None or found.delisted_at is not None:
+        reason = "org_unavailable"
     elif OrgRole.SIGNATORY not in org.roles:
         reason = "role_required"
     elif engagement is not None:
@@ -125,7 +126,7 @@ async def _detail(db: AsyncSession, org: OrgContext, match_id: UUID) -> MatchDet
     engagement = (await db.execute(_ENGAGEMENT, {"proposal": row.proposal_id, "org": org.org_id})).scalar_one_or_none()
     return MatchDetail(
         **_out(row),
-        rule_breakdown=dict(row.rule_breakdown or {}),
+        rule_breakdown=dict(row.rule_breakdown or {}) if row.available else {},
         engagement_id=engagement,
         interest=await interest_state(db, org, row.proposal_id, row.available),
     )

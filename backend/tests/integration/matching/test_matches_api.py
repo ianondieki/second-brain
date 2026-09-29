@@ -145,6 +145,7 @@ async def test_a_match_whose_proposal_is_held_shows_no_teaser(
     async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
         body = (await signatory.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
     assert (body["available"], body["teaser"], body["owner_handle"]) == (False, None, None)
+    assert (body["why"], body["why_source"], body["rule_breakdown"]) == (None, "code", {})  # nothing of the teaser
     assert body["niche"]["label"].endswith(f"Microfinance {world.tag}")
     assert body["interest"] == {"allowed": False, "reason": "proposal_unavailable"}
 
@@ -158,3 +159,19 @@ async def test_an_e1_organisation_cannot_express_interest_yet(
     async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
         body = (await signatory.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
     assert body["interest"] == {"allowed": False, "reason": "org_not_e2"}
+
+
+async def test_a_suspended_or_delisted_organisation_cannot_express_interest(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    world = await build(owner_engine)
+    _, match = await scanned(owner_engine, app_engine, world)
+    for change in (
+        "UPDATE organizations SET suspended_at = now() WHERE id = :o",
+        "UPDATE organizations SET suspended_at = NULL, delisted_at = now() WHERE id = :o",
+    ):
+        async with owner_engine.begin() as conn:
+            await conn.execute(text(change), {"o": world.org.id})
+        async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
+            body = (await signatory.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
+        assert body["interest"] == {"allowed": False, "reason": "org_unavailable"}, change
