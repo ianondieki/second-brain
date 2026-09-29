@@ -132,7 +132,9 @@ from the revision file per run): `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://p
 | M13 | `ck_engagements_end_reason_matches_state` recreated without `coalesce(…, false)` (ruling 1) | `test_parties.py::test_a_declined_or_expired_engagement_needs_its_reason` |
 
 Result on the branch: full backend suite 1022 passed (951 before, 71 new), `ruff check`, `ruff format --check`, `mypy`
-(strict) and `python -m bridge.openapi --check` clean, `alembic check` clean in the round trip.
+(strict) and `python -m bridge.openapi --check` clean, `alembic check` clean in the round trip. After ruling 1 (M13)
+and the merge of the integration branch (schema v2, T2.6a, D1, T2.4; `3a81d5b`, no conflict, `uv sync --frozen`):
+1728 passed, the same static checks clean, `check_traceability.py` 0 errors.
 
 ## Deviations from the brief (reported, for the orchestrator)
 
