@@ -291,6 +291,35 @@
         "title": "Badge",
         "type": "object"
       },
+      "BrowsePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TeaserItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "BrowsePage",
+        "type": "object"
+      },
       "CaseList": {
         "properties": {
           "items": {
@@ -977,6 +1006,35 @@
         "title": "EmailRequest",
         "type": "object"
       },
+      "EngagementState": {
+        "description": "Every stage and side-branch state of docs/spec/06 6.9, spelled as the spec's codes.",
+        "enum": [
+          "ORG_INTEREST",
+          "SUBMITTED",
+          "UNDER_REVIEW",
+          "INTEREST_CONFIRMED",
+          "PROCUREMENT_ROUTE",
+          "CONTACT_MADE",
+          "NDA_PENDING",
+          "NDA_SIGNED",
+          "NEGOTIATION",
+          "AGREEMENT_SIGNING",
+          "IN_IMPLEMENTATION",
+          "DELIVERED",
+          "SIGN_OFF",
+          "PAYMENT_FINAL",
+          "CLOSED",
+          "DECLINED",
+          "WITHDRAWN",
+          "EXPIRED",
+          "ON_HOLD",
+          "DISPUTED",
+          "TERMINATED",
+          "INFO_REQUESTED"
+        ],
+        "title": "EngagementState",
+        "type": "string"
+      },
       "EntitlementsOut": {
         "properties": {
           "limits": {
@@ -1112,6 +1170,111 @@
           "linked_at"
         ],
         "title": "IdentityOut",
+        "type": "object"
+      },
+      "InboxEngagement": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "stage_deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Deadline At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "stage_deadline_at"
+        ],
+        "title": "InboxEngagement",
+        "type": "object"
+      },
+      "InboxItem": {
+        "properties": {
+          "engagement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxEngagement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until the engagement is opened"
+          },
+          "pitched_at": {
+            "format": "date-time",
+            "title": "Pitched At",
+            "type": "string"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/TeaserItem"
+          },
+          "tag_id": {
+            "format": "uuid",
+            "title": "Tag Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag_id",
+          "pitched_at",
+          "engagement",
+          "proposal"
+        ],
+        "title": "InboxItem",
+        "type": "object"
+      },
+      "InboxPage": {
+        "properties": {
+          "held_count": {
+            "description": "Proposals waiting until this organisation is verified (E1 sees only this)",
+            "title": "Held Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/OrgVerification"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "held_count",
+          "verification"
+        ],
+        "title": "InboxPage",
         "type": "object"
       },
       "LoggingNotice": {
@@ -1521,6 +1684,26 @@
           "items"
         ],
         "title": "MyProposals",
+        "type": "object"
+      },
+      "MyTags": {
+        "properties": {
+          "cap": {
+            "$ref": "#/components/schemas/TagCap"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "cap"
+        ],
+        "title": "MyTags",
         "type": "object"
       },
       "NdaAcceptIn": {
@@ -2304,6 +2487,163 @@
         "title": "PhoneCodeSent",
         "type": "object"
       },
+      "PitchGroup": {
+        "properties": {
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orgs": {
+            "items": {
+              "$ref": "#/components/schemas/PitchOption"
+            },
+            "title": "Orgs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "niche",
+          "orgs"
+        ],
+        "title": "PitchGroup",
+        "type": "object"
+      },
+      "PitchOption": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "card": {
+            "$ref": "#/components/schemas/OrgCard"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not available, or why a tag would be held",
+            "title": "Message"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/TagStatus",
+            "description": "What a tag does: delivered (E2), or held until the organisation verifies"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "own_organisation",
+                  "tagged",
+                  "open_elsewhere",
+                  "already_pitched",
+                  "cooldown",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "card",
+          "outcome",
+          "available",
+          "reason",
+          "message"
+        ],
+        "title": "PitchOption",
+        "type": "object"
+      },
+      "PitchPicker": {
+        "properties": {
+          "cap": {
+            "$ref": "#/components/schemas/TagCap"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/PitchGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "proposal_public": {
+            "description": "False until the proposal is published and clear of moderation",
+            "title": "Proposal Public",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "groups",
+          "next_cursor",
+          "cap",
+          "proposal_public"
+        ],
+        "title": "PitchPicker",
+        "type": "object"
+      },
+      "PitchResult": {
+        "properties": {
+          "cap": {
+            "$ref": "#/components/schemas/TagCap"
+          },
+          "email_sent": {
+            "description": "Whether the disclosure-record email (EM1) goes to you",
+            "title": "Email Sent",
+            "type": "boolean"
+          },
+          "saved_count": {
+            "title": "Saved Count",
+            "type": "integer"
+          },
+          "sent_count": {
+            "title": "Sent Count",
+            "type": "integer"
+          },
+          "tags": {
+            "description": "The tags this Pitch created, in the order asked",
+            "items": {
+              "$ref": "#/components/schemas/TagOut"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tags",
+          "sent_count",
+          "saved_count",
+          "email_sent",
+          "cap"
+        ],
+        "title": "PitchResult",
+        "type": "object"
+      },
       "PlanSide": {
         "enum": [
           "developer",
@@ -3018,6 +3358,166 @@
         "title": "StaffRole",
         "type": "string"
       },
+      "TagCap": {
+        "properties": {
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null means unlimited",
+            "title": "Limit"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used",
+          "limit",
+          "plan"
+        ],
+        "title": "TagCap",
+        "type": "object"
+      },
+      "TagOrg": {
+        "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/Badge"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "badge"
+        ],
+        "title": "TagOrg",
+        "type": "object"
+      },
+      "TagOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engagement_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engagement Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a held tag waits, and that nobody was emailed",
+            "title": "Message"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagOrg"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null once the organisation is no longer listed"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TagStatus"
+          }
+        },
+        "required": [
+          "id",
+          "org",
+          "status",
+          "open",
+          "created_at",
+          "engagement_id",
+          "message"
+        ],
+        "title": "TagOut",
+        "type": "object"
+      },
+      "TagStatus": {
+        "description": "docs/spec/06 6.9 Codes: a projection of the engagement (the source of truth from Phase 3).",
+        "enum": [
+          "held_unclaimed",
+          "held_pending_verification",
+          "delivered",
+          "withdrawn",
+          "expired",
+          "released"
+        ],
+        "title": "TagStatus",
+        "type": "string"
+      },
+      "TagsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "org_ids": {
+            "description": "Organisations to pitch to (repeats are ignored)",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Org Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "org_ids"
+        ],
+        "title": "TagsIn",
+        "type": "object"
+      },
       "TeaserCard": {
         "description": "A published teaser (Tier 1 only) with the owner's pseudonymous handle and the certificate id.",
         "properties": {
@@ -3169,6 +3669,46 @@
           }
         },
         "title": "TeaserIn",
+        "type": "object"
+      },
+      "TeaserItem": {
+        "description": "A published teaser in a list: Tier 1 only, the owner's handle and the certificate id.",
+        "properties": {
+          "cert_id": {
+            "title": "Cert Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_handle": {
+            "title": "Owner Handle",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "teaser": {
+            "$ref": "#/components/schemas/TeaserOut"
+          },
+          "version_no": {
+            "title": "Version No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "owner_handle",
+          "cert_id",
+          "version_no",
+          "published_at",
+          "teaser"
+        ],
+        "title": "TeaserItem",
         "type": "object"
       },
       "TeaserOut": {
@@ -6754,7 +7294,7 @@
             }
           },
           {
-            "description": "Name contains",
+            "description": "Keywords: each word matches the name, a niche or the county",
             "in": "query",
             "name": "q",
             "required": false,
@@ -6770,7 +7310,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Name contains",
+              "description": "Keywords: each word matches the name, a niche or the county",
               "title": "Q"
             }
           },
@@ -8557,6 +9097,236 @@
         ]
       }
     },
+    "/api/me/proposals/{proposal_id}/pitch/orgs": {
+      "get": {
+        "description": "The directory grouped by niche for this proposal's Pitch (the Companies page's filters and cursor).",
+        "operationId": "pitch_picker_api_me_proposals__proposal_id__pitch_orgs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Org type; repeat for several",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/OrgKind"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Org type; repeat for several",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "ISO 3166-2:KE county code; repeat",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "pattern": "^KE-\\d{2}$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2:KE county code; repeat",
+              "title": "County"
+            }
+          },
+          {
+            "description": "Niche slug (a parent includes its children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 80,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes its children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "Keywords: name, niche or county",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keywords: name, niche or county",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PitchPicker"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Pitch Picker",
+        "tags": [
+          "pitch"
+        ]
+      }
+    },
     "/api/me/proposals/{proposal_id}/publish": {
       "post": {
         "description": "Register the draft version: the one primary action of the editor.",
@@ -8688,6 +9458,365 @@
         "summary": "Publish",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/tags": {
+      "get": {
+        "operationId": "list_tags_api_me_proposals__proposal_id__tags_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTags"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Tags",
+        "tags": [
+          "pitch"
+        ]
+      },
+      "post": {
+        "description": "Pitch the proposal to organisations (the Pitch picker's one primary action).",
+        "operationId": "pitch_api_me_proposals__proposal_id__tags_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PitchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Pitch",
+        "tags": [
+          "pitch"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/tags/{tag_id}/withdraw": {
+      "post": {
+        "description": "Withdraw a held tag (a delivered one is withdrawn on the tracker).",
+        "operationId": "withdraw_tag_api_me_proposals__proposal_id__tags__tag_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tag Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Withdraw Tag",
+        "tags": [
+          "pitch"
         ]
       }
     },
@@ -9628,6 +10757,150 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/inbox": {
+      "get": {
+        "description": "Proposals pitched to this organisation (Tier 1 and the engagement), newest first.",
+        "operationId": "org_inbox_api_orgs__org_id__inbox_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Org Inbox",
+        "tags": [
+          "pitch",
+          "organisations"
+        ]
+      }
+    },
     "/api/orgs/{org_id}/members": {
       "get": {
         "operationId": "list_members_api_orgs__org_id__members_get",
@@ -10463,6 +11736,262 @@
         "summary": "List Problems",
         "tags": [
           "problems"
+        ]
+      }
+    },
+    "/api/proposals": {
+      "get": {
+        "description": "Published teasers (Tier 1 only) matching the keywords and filters; the most relevant, then newest, first.",
+        "operationId": "browse_proposals_api_proposals_get",
+        "parameters": [
+          {
+            "description": "Keywords",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keywords",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Niche slug (a parent includes its children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 80,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes its children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "ISO 3166-2:KE county code; repeat",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "pattern": "^KE-\\d{2}$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2:KE county code; repeat",
+              "title": "County"
+            }
+          },
+          {
+            "in": "query",
+            "name": "maturity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalMaturity"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Maturity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ask",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalAsk"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ask"
+            }
+          },
+          {
+            "description": "A linked Problem",
+            "in": "query",
+            "name": "problem",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A linked Problem",
+              "title": "Problem"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowsePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Browse Proposals",
+        "tags": [
+          "pitch"
         ]
       }
     },

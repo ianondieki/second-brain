@@ -2,7 +2,7 @@
 
 A gated action asks for the subject's ``Entitlements`` and calls ``check_count`` or ``require_feature``; over the
 plan limit the API answers **402** with the next plan up (``upgrade``; null at the top of the ladder) and the action
-creates nothing. Proposals, tags and unlocks (Phase 2) call these helpers.
+creates nothing. Proposals, tags and unlocks (Phase 2) call these helpers; a batch of tags calls ``check_room``.
 """
 
 from __future__ import annotations
@@ -92,8 +92,16 @@ async def for_subject(
 
 def check_count(settings: Settings, ent: Entitlements, key: str, *, used: int) -> None:
     """Raise 402 when one more item would exceed the cap ``key`` (``used`` = items that already count)."""
+    check_room(settings, ent, key, used=used, adding=1)
+
+
+def check_room(settings: Settings, ent: Entitlements, key: str, *, used: int, adding: int) -> None:
+    """Raise 402 when ``adding`` more items would exceed the cap ``key`` (``used`` = items that already count), so a
+    batch (several tags at once) is refused whole: nothing of it is created. The body reports ``used`` as it is."""
+    if adding < 1:
+        raise ValueError("adding must be at least 1")
     cap = ent.limit(key)
-    if cap is not None and used >= cap:
+    if cap is not None and used + adding > cap:
         raise PlanLimitExceeded(settings, ent, key, limit=cap, used=used)
 
 

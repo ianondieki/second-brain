@@ -7,7 +7,9 @@ queries repeat the rule, so a member of a pending or delisted organisation never
 Browsing groups organisations under two-level niche headings (``Parent › Child``). The page is a keyset over (niche
 heading, organisation) pairs, so an organisation with two niches appears under both headings; organisations without a
 niche come last under a null heading. Filters: org type, county (ISO 3166-2:KE), niche (a parent niche includes its
-children) and a name search.
+children) and keywords: each word of the search must appear in the organisation's name, one of its niches (or that
+niche's parent) or its county's name (P4: the Pitch picker searches the directory this way). A matching organisation
+is listed under each of its headings.
 """
 
 from __future__ import annotations
@@ -131,16 +133,45 @@ def decode_cursor(value: str) -> Cursor:
 # --- browse ---
 
 
+MAX_TERMS: Final = 10  # words of a keyword search that are used; the rest are ignored
+
+
 @dataclass(frozen=True, slots=True)
 class DirectoryFilters:
     kinds: Sequence[OrgKind] = ()
     counties: Sequence[str] = ()
     niches: Sequence[str] = ()  # slugs; a parent slug includes its children
-    q: str | None = None
+    q: str | None = None  # keywords: every word matches the name, a niche (or its parent) or the county
+
+    def terms(self) -> list[str]:
+        return list(dict.fromkeys((self.q or "").split()))[:MAX_TERMS]
 
 
 def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def keyword_match(term: str) -> ColumnElement[bool]:
+    """The organisation's name, one of its niches (or that niche's parent) or its county contains ``term`` (case
+    and LIKE wildcards ignored). Correlated on ``Organization``."""
+    pattern = f"%{_escape_like(term)}%"
+    niche, parent = aliased(Niche), aliased(Niche)
+    in_niche = (
+        select(OrgNiche.org_id)
+        .join(niche, niche.id == OrgNiche.niche_id)
+        .outerjoin(parent, parent.id == niche.parent_id)
+        .where(
+            OrgNiche.org_id == Organization.id,
+            or_(niche.name_en.ilike(pattern, escape="\\"), parent.name_en.ilike(pattern, escape="\\")),
+        )
+        .exists()
+    )
+    in_county = (
+        select(Region.code)
+        .where(Region.code == Organization.county_code, Region.name.ilike(pattern, escape="\\"))
+        .exists()
+    )
+    return or_(Organization.legal_name.ilike(pattern, escape="\\"), in_niche, in_county)
 
 
 async def list_directory(
@@ -172,8 +203,8 @@ async def list_directory(
         stmt = stmt.where(Organization.county_code.in_(filters.counties))
     if filters.niches:
         stmt = stmt.where(or_(Niche.slug.in_(filters.niches), parent.slug.in_(filters.niches)))
-    if filters.q:
-        stmt = stmt.where(Organization.legal_name.ilike(f"%{_escape_like(filters.q)}%", escape="\\"))
+    for term in filters.terms():
+        stmt = stmt.where(keyword_match(term))
     if cursor is not None:
         stmt = stmt.where(
             tuple_(rank, label, niche_key, Organization.legal_name, Organization.id)

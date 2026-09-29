@@ -680,6 +680,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/proposals/{proposal_id}/pitch/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pitch Picker
+         * @description The directory grouped by niche for this proposal's Pitch (the Companies page's filters and cursor).
+         */
+        get: operations["pitch_picker_api_me_proposals__proposal_id__pitch_orgs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/proposals/{proposal_id}/publish": {
         parameters: {
             query?: never;
@@ -694,6 +714,47 @@ export interface paths {
          * @description Register the draft version: the one primary action of the editor.
          */
         post: operations["publish_api_me_proposals__proposal_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tags */
+        get: operations["list_tags_api_me_proposals__proposal_id__tags_get"];
+        put?: never;
+        /**
+         * Pitch
+         * @description Pitch the proposal to organisations (the Pitch picker's one primary action).
+         */
+        post: operations["pitch_api_me_proposals__proposal_id__tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/tags/{tag_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Tag
+         * @description Withdraw a held tag (a delivered one is withdrawn on the tracker).
+         */
+        post: operations["withdraw_tag_api_me_proposals__proposal_id__tags__tag_id__withdraw_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -836,6 +897,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Inbox
+         * @description Proposals pitched to this organisation (Tier 1 and the engagement), newest first.
+         */
+        get: operations["org_inbox_api_orgs__org_id__inbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/members": {
         parameters: {
             query?: never;
@@ -926,6 +1007,26 @@ export interface paths {
         };
         /** List Problems */
         get: operations["list_problems_api_problems_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Proposals
+         * @description Published teasers (Tier 1 only) matching the keywords and filters; the most relevant, then newest, first.
+         */
+        get: operations["browse_proposals_api_proposals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1251,6 +1352,16 @@ export interface components {
              */
             text: string;
         };
+        /** BrowsePage */
+        BrowsePage: {
+            /** Items */
+            items: components["schemas"]["TeaserItem"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
+        };
         /** CaseList */
         CaseList: {
             /** Items */
@@ -1473,6 +1584,12 @@ export interface components {
              */
             email: string;
         };
+        /**
+         * EngagementState
+         * @description Every stage and side-branch state of docs/spec/06 6.9, spelled as the spec's codes.
+         * @enum {string}
+         */
+        EngagementState: "ORG_INTEREST" | "SUBMITTED" | "UNDER_REVIEW" | "INTEREST_CONFIRMED" | "PROCUREMENT_ROUTE" | "CONTACT_MADE" | "NDA_PENDING" | "NDA_SIGNED" | "NEGOTIATION" | "AGREEMENT_SIGNING" | "IN_IMPLEMENTATION" | "DELIVERED" | "SIGN_OFF" | "PAYMENT_FINAL" | "CLOSED" | "DECLINED" | "WITHDRAWN" | "EXPIRED" | "ON_HOLD" | "DISPUTED" | "TERMINATED" | "INFO_REQUESTED";
         /** EntitlementsOut */
         EntitlementsOut: {
             /** Limits */
@@ -1530,6 +1647,46 @@ export interface components {
              */
             linked_at: string;
             provider: components["schemas"]["AuthProvider"];
+        };
+        /** InboxEngagement */
+        InboxEngagement: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Stage Deadline At */
+            stage_deadline_at: string | null;
+            state: components["schemas"]["EngagementState"];
+        };
+        /** InboxItem */
+        InboxItem: {
+            /** @description Null until the engagement is opened */
+            engagement: components["schemas"]["InboxEngagement"] | null;
+            /**
+             * Pitched At
+             * Format: date-time
+             */
+            pitched_at: string;
+            proposal: components["schemas"]["TeaserItem"];
+            /**
+             * Tag Id
+             * Format: uuid
+             */
+            tag_id: string;
+        };
+        /** InboxPage */
+        InboxPage: {
+            /**
+             * Held Count
+             * @description Proposals waiting until this organisation is verified (E1 sees only this)
+             */
+            held_count: number;
+            /** Items */
+            items: components["schemas"]["InboxItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            verification: components["schemas"]["OrgVerification"];
         };
         /** LoggingNotice */
         LoggingNotice: {
@@ -1669,6 +1826,12 @@ export interface components {
         MyProposals: {
             /** Items */
             items: components["schemas"]["MyProposalItem"][];
+        };
+        /** MyTags */
+        MyTags: {
+            cap: components["schemas"]["TagCap"];
+            /** Items */
+            items: components["schemas"]["TagOut"][];
         };
         /**
          * NdaAcceptIn
@@ -1981,6 +2144,58 @@ export interface components {
              */
             verification_id: string;
         };
+        /** PitchGroup */
+        PitchGroup: {
+            niche: components["schemas"]["NicheRef"] | null;
+            /** Orgs */
+            orgs: components["schemas"]["PitchOption"][];
+        };
+        /** PitchOption */
+        PitchOption: {
+            /** Available */
+            available: boolean;
+            card: components["schemas"]["OrgCard"];
+            /**
+             * Message
+             * @description Why it is not available, or why a tag would be held
+             */
+            message: string | null;
+            /** @description What a tag does: delivered (E2), or held until the organisation verifies */
+            outcome: components["schemas"]["TagStatus"];
+            /** Reason */
+            reason: ("own_organisation" | "tagged" | "open_elsewhere" | "already_pitched" | "cooldown" | "unavailable") | null;
+        };
+        /** PitchPicker */
+        PitchPicker: {
+            cap: components["schemas"]["TagCap"];
+            /** Groups */
+            groups: components["schemas"]["PitchGroup"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /**
+             * Proposal Public
+             * @description False until the proposal is published and clear of moderation
+             */
+            proposal_public: boolean;
+        };
+        /** PitchResult */
+        PitchResult: {
+            cap: components["schemas"]["TagCap"];
+            /**
+             * Email Sent
+             * @description Whether the disclosure-record email (EM1) goes to you
+             */
+            email_sent: boolean;
+            /** Saved Count */
+            saved_count: number;
+            /** Sent Count */
+            sent_count: number;
+            /**
+             * Tags
+             * @description The tags this Pitch created, in the order asked
+             */
+            tags: components["schemas"]["TagOut"][];
+        };
         /**
          * PlanSide
          * @enum {string}
@@ -2259,6 +2474,70 @@ export interface components {
          * @enum {string}
          */
         StaffRole: "admin" | "moderator" | "support";
+        /** TagCap */
+        TagCap: {
+            /**
+             * Limit
+             * @description Null means unlimited
+             */
+            limit: number | null;
+            /** Plan */
+            plan: string;
+            /** Used */
+            used: number;
+        };
+        /** TagOrg */
+        TagOrg: {
+            badge: components["schemas"]["Badge"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /** TagOut */
+        TagOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Engagement Id */
+            engagement_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Message
+             * @description Why a held tag waits, and that nobody was emailed
+             */
+            message: string | null;
+            /** Open */
+            open: boolean;
+            /** @description Null once the organisation is no longer listed */
+            org: components["schemas"]["TagOrg"] | null;
+            status: components["schemas"]["TagStatus"];
+        };
+        /**
+         * TagStatus
+         * @description docs/spec/06 6.9 Codes: a projection of the engagement (the source of truth from Phase 3).
+         * @enum {string}
+         */
+        TagStatus: "held_unclaimed" | "held_pending_verification" | "delivered" | "withdrawn" | "expired" | "released";
+        /** TagsIn */
+        TagsIn: {
+            /**
+             * Org Ids
+             * @description Organisations to pitch to (repeats are ignored)
+             */
+            org_ids: string[];
+        };
         /**
          * TeaserCard
          * @description A published teaser (Tier 1 only) with the owner's pseudonymous handle and the certificate id.
@@ -2307,6 +2586,29 @@ export interface components {
             summary?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * TeaserItem
+         * @description A published teaser in a list: Tier 1 only, the owner's handle and the certificate id.
+         */
+        TeaserItem: {
+            /** Cert Id */
+            cert_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Owner Handle */
+            owner_handle: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            teaser: components["schemas"]["TeaserOut"];
+            /** Version No */
+            version_no: number;
         };
         /** TeaserOut */
         TeaserOut: {
@@ -5038,7 +5340,7 @@ export interface operations {
                 county?: string[] | null;
                 /** @description Niche slug (a parent includes its children) */
                 niche?: string[] | null;
-                /** @description Name contains */
+                /** @description Keywords: each word matches the name, a niche or the county */
                 q?: string | null;
                 cursor?: string | null;
                 limit?: number;
@@ -6514,6 +6816,111 @@ export interface operations {
             };
         };
     };
+    pitch_picker_api_me_proposals__proposal_id__pitch_orgs_get: {
+        parameters: {
+            query?: {
+                /** @description Org type; repeat for several */
+                kind?: components["schemas"]["OrgKind"][] | null;
+                /** @description ISO 3166-2:KE county code; repeat */
+                county?: string[] | null;
+                /** @description Niche slug (a parent includes its children) */
+                niche?: string[] | null;
+                /** @description Keywords: name, niche or county */
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitchPicker"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     publish_api_me_proposals__proposal_id__publish_post: {
         parameters: {
             query?: never;
@@ -6612,6 +7019,293 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_tags_api_me_proposals__proposal_id__tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTags"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    pitch_api_me_proposals__proposal_id__tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitchResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    withdraw_tag_api_me_proposals__proposal_id__tags__tag_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7399,6 +8093,103 @@ export interface operations {
             };
         };
     };
+    org_inbox_api_orgs__org_id__inbox_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     list_members_api_orgs__org_id__members_get: {
         parameters: {
             query?: never;
@@ -7938,6 +8729,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    browse_proposals_api_proposals_get: {
+        parameters: {
+            query?: {
+                /** @description Keywords */
+                q?: string | null;
+                /** @description Niche slug (a parent includes its children) */
+                niche?: string[] | null;
+                /** @description ISO 3166-2:KE county code; repeat */
+                county?: string[] | null;
+                maturity?: components["schemas"]["ProposalMaturity"][] | null;
+                ask?: components["schemas"]["ProposalAsk"][] | null;
+                /** @description A linked Problem */
+                problem?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowsePage"];
                 };
             };
             /** @description Bad Request */
