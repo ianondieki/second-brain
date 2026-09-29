@@ -35,6 +35,13 @@ describe("locale files", () => {
     expect(Object.keys(SW).sort()).toEqual(Object.keys(EN).sort());
   });
 
+  // next-intl refuses these as message id segments (the catalogue fails to load and every page answers 500).
+  it("use no key segment next-intl refuses", () => {
+    for (const key of Object.keys(EN)) {
+      for (const segment of key.split(".")) expect(["prototype", "constructor", "__proto__"], key).not.toContain(segment);
+    }
+  });
+
   it("have no empty messages", () => {
     for (const [key, value] of [...visible(EN), ...visible(SW)]) expect(value.trim(), key).not.toBe("");
   });
