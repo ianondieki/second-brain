@@ -255,6 +255,11 @@ Result on the branch before the fix round: full backend suite 3173 passed (3048 
 `mypy --strict`, `python -m bridge.openapi --check` (no drift) and `check_traceability.py` (0 errors) clean;
 `alembic check` clean at head in the round trip.
 
+Result after the fix round (`3792f12`): full backend suite 3210 passed; `ruff check`, `ruff format --check`,
+`mypy --strict` (409 files), `python -m bridge.openapi --check` (no drift) and `check_traceability.py` (0 errors, 7
+allowed warnings) clean; upgrade to head, `alembic check`, downgrade to 0004, upgrade to head and `alembic check` again,
+all clean (a fresh database; `test_upgrade_downgrade_upgrade_without_drift` in the suite as well).
+
 ### Review fix round (2026-09-29)
 
 The reviewer and the security-reviewer both passed 0005 (no BLOCKER or MAJOR). Their MINORs were folded into the
