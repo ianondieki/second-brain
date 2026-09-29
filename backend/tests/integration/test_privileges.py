@@ -34,6 +34,7 @@ from sqlalchemy.sql.elements import TextClause
 
 from bridge.db import TIER2_ROLES, as_role, bind_tenant
 from bridge.ids import uuid7
+from bridge.llm.ledger import NOT_SENT as LEDGER_NOT_SENT
 from bridge.llm.ledger import CallStatus
 from bridge.models.enums import VersionStatus
 from bridge.proposals.models import ProposalVersion
@@ -2196,8 +2197,9 @@ LLM_ROW = (
     "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, batch_id, custom_id, created_at)"
     " VALUES (:id, :org, :u, 't', :m, :status, :batch, :item, :at)"
 )
-# The rows of calls that never reached a provider (P7's ledger.NOT_SENT): every blocked_* status and a reservation.
-NOT_SENT = {"blocked_kill_switch", "blocked_budget", "blocked_tier2", "blocked_consent", "batch_reserved"}
+# The rows of calls that never reached a provider: the in-memory ledger's set (bridge.llm.ledger.NOT_SENT), so the SQL
+# count and the in-memory one cannot drift apart unnoticed.
+NOT_SENT = {status.value for status in LEDGER_NOT_SENT}
 
 
 async def test_llm_calls_since_counts_every_tenants_sent_calls(owner_engine: AsyncEngine) -> None:

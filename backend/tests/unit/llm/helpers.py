@@ -29,6 +29,7 @@ def settings(**overrides: Any) -> Settings:
         "data_encryption_key": SecretStr("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
         "recovery_code_pepper": SecretStr("y" * 32),
         "llm_global_daily_cap_usd": Decimal("100"),
+        "llm_prototype_total_cap_usd": Decimal("1000"),  # roomy: tests of the total set it themselves
         "_env_file": None,
     }
     values.update(overrides)

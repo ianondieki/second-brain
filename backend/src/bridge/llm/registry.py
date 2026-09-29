@@ -3,13 +3,19 @@
 Every model id, effort, token budget, price, cap ratio and length cap lives in the YAML; code asks the registry and
 never names a model. ``parse`` validates strictly (unknown keys, models and purposes fail), so a typo cannot silently
 change behaviour.
+
+Free provider slots (D-37): a slot's model id comes from ``backend/.env`` (``bridge.config.FreeSlot``), never from code.
+``Registry.for_free_slot`` derives the registry a slot's calls run under: one zero-priced model named
+``free<N>:<model>`` (``free_model_key``, the ``llm_calls.model`` of its rows) with the slot's daily request cap, and
+the tasks that list the slot in ``free_slots``, without effort, fallback or tools, and with the schema in the prompt.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from functools import lru_cache
@@ -18,6 +24,7 @@ from typing import Any, Literal, cast
 
 import yaml
 
+from bridge.config import LLM_FREE_SLOTS, FreeSlot
 from bridge.llm.errors import LLMConfigError
 from bridge.llm.types import TokenUsage
 from bridge.models.enums import ConsentPurpose
@@ -28,6 +35,8 @@ PRECISIONS: frozenset[str] = frozenset({"fp32", "fp16", "int8"})
 MILLION = Decimal(1_000_000)
 COST_QUANTUM = Decimal("0.000001")  # llm_calls.cost_usd is numeric(12,6)
 NAME_CHARS = 80  # llm_calls.task and llm_calls.model are varchar(80): a longer name could not be recorded
+VERIFIED = "verified"
+PRICING_STATUSES = frozenset({VERIFIED, "placeholder-unverified"})
 
 
 class Purpose(StrEnum):
@@ -54,12 +63,24 @@ class Prices:
     cache_write_1h: Decimal
 
 
+ZERO_PRICES = Prices(Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0))
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
+    """``daily_requests``: a free provider slot's cap on attempts per UTC day, counted in the ledger (None: no cap)."""
+
     id: str
     supports_effort: bool
     max_output_tokens: int
     prices: Prices
+    daily_requests: int | None = None
+
+    @property
+    def paid(self) -> bool:
+        """Whether an attempt on the model can cost anything (the spend caps apply); only free slots are not."""
+        p = self.prices
+        return any(price > 0 for price in (p.input, p.output, p.cache_read, p.cache_write_5m, p.cache_write_1h))
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +97,7 @@ class TaskSpec:
     allowed_tools: tuple[str, ...]
     max_field_chars: int
     json_schema_format: bool = True
+    free_slots: tuple[int, ...] = ()  # the free provider slots that may serve the task (D-37), in order
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +129,16 @@ class EmbeddingPolicy:
     reembed_batch_size: int
 
 
+@dataclass(frozen=True, slots=True)
+class FreePolicy:
+    max_output_tokens: int  # a free model's output cap: a task's max_tokens is lowered to it
+
+
+def free_model_key(slot: FreeSlot) -> str:
+    """The registry and ledger name of a free slot's model (at most 80 characters: the settings cap the model id)."""
+    return f"{slot.name}:{slot.model}"
+
+
 @dataclass(frozen=True)
 class Registry:
     models: Mapping[str, ModelSpec]
@@ -117,6 +149,34 @@ class Registry:
     transport: TransportPolicy
     embeddings: EmbeddingPolicy
     pricing_status: str
+    free: FreePolicy = FreePolicy(max_output_tokens=4096)
+    pricing_verified_on: date | None = None
+    pricing_source: str | None = None
+
+    @property
+    def prices_verified(self) -> bool:
+        """Whether the price table was checked against the provider's page (the Anthropic provider needs it)."""
+        return self.pricing_status == VERIFIED
+
+    def for_free_slot(self, slot: FreeSlot) -> Registry:
+        """The registry of one free slot's calls: its zero-priced model and the tasks listing the slot."""
+        key = _name(free_model_key(slot), "model")
+        spec = ModelSpec(key, False, self.free.max_output_tokens, ZERO_PRICES, daily_requests=slot.daily_requests)
+        tasks = {
+            name: replace(
+                task,
+                model=key,
+                effort=None,
+                max_tokens=min(task.max_tokens, spec.max_output_tokens),
+                fallback_model=None,
+                fallback_effort=None,
+                allowed_tools=(),
+                json_schema_format=False,  # the schema goes in the system prompt; the reply is validated as ever
+            )
+            for name, task in self.tasks.items()
+            if slot.number in task.free_slots
+        }
+        return replace(self, models={key: spec}, tasks=tasks)
 
     def task(self, name: str) -> TaskSpec:
         try:
@@ -187,6 +247,7 @@ _TASK_KEYS = {
     "allowed_tools",
     "max_field_chars",
     "json_schema_format",
+    "free_slots",
 }
 _PRICE_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
 
@@ -239,11 +300,15 @@ def _model(model_id: str, raw: Mapping[str, Any]) -> ModelSpec:
     prices = raw["price_usd_per_mtok"]
     if set(prices) != set(_PRICE_KEYS):
         raise ValueError(f"{model_id} prices need exactly {', '.join(_PRICE_KEYS)}")
+    parsed = Prices(*(_decimal(prices[key], f"{model_id}.{key}") for key in _PRICE_KEYS))
+    if parsed.input <= 0 or parsed.output <= 0:
+        # A zero price would take the model out of the spend caps; free slots are priced in code, never here.
+        raise ValueError(f"{model_id} input and output prices must be positive")
     return ModelSpec(
         id=model_id,
         supports_effort=bool(raw["supports_effort"]),
         max_output_tokens=_positive_int(raw["max_output_tokens"], f"{model_id}.max_output_tokens"),
-        prices=Prices(*(_decimal(prices[key], f"{model_id}.{key}") for key in _PRICE_KEYS)),
+        prices=parsed,
     )
 
 
@@ -273,6 +338,13 @@ def _task(name: str, raw: Mapping[str, Any], models: Mapping[str, ModelSpec], de
     tools = raw.get("allowed_tools") or []
     if not isinstance(tools, list) or not all(isinstance(tool, str) and tool for tool in tools):
         raise ValueError(f"task {name} allowed_tools must be a list of tool type names")
+    slots = raw.get("free_slots", [])
+    if (
+        not isinstance(slots, list)
+        or not all(isinstance(n, int) and not isinstance(n, bool) and n in LLM_FREE_SLOTS for n in slots)
+        or len(set(slots)) != len(slots)
+    ):
+        raise ValueError(f"task {name} free_slots must be a list of distinct slot numbers from {list(LLM_FREE_SLOTS)}")
     return TaskSpec(
         name=name,
         model=model.id,
@@ -286,7 +358,29 @@ def _task(name: str, raw: Mapping[str, Any], models: Mapping[str, ModelSpec], de
         allowed_tools=tuple(tools),
         max_field_chars=min(cap, default_cap),
         json_schema_format=_flag(raw.get("json_schema_format", True), f"{name}.json_schema_format"),
+        free_slots=tuple(slots),
     )
+
+
+def _pricing(data: Mapping[str, Any]) -> tuple[str, date | None, str | None]:
+    """The price table's status; a verified table names the day it was checked and the https page it came from."""
+    status = data.get("pricing_status")
+    if status not in PRICING_STATUSES:
+        raise ValueError(f"pricing_status must be one of {sorted(PRICING_STATUSES)}")
+    if status != VERIFIED:
+        return str(status), None, None
+    checked = data.get("pricing_verified_on")
+    if isinstance(checked, str):
+        try:
+            checked = date.fromisoformat(checked)
+        except ValueError:
+            checked = None
+    if not isinstance(checked, date):
+        raise ValueError("pricing_verified_on must be the date the verified prices were checked (YYYY-MM-DD)")
+    source = data.get("pricing_source")
+    if not isinstance(source, str) or not source.startswith("https://"):
+        raise ValueError("pricing_source must be the https page the verified prices come from")
+    return VERIFIED, checked, source
 
 
 def parse(data: Mapping[str, Any]) -> Registry:
@@ -307,6 +401,12 @@ def parse(data: Mapping[str, Any]) -> Registry:
     if not 0 < batch_ratio <= 1:
         raise ValueError("batch_price_ratio must be in (0, 1]")
     tasks = {str(name): _task(str(name), raw, models, sanitiser.max_field_chars) for name, raw in data["tasks"].items()}
+    status, verified_on, source = _pricing(data)
+    if not isinstance(data.get("free_providers"), Mapping):
+        raise ValueError("free_providers must be set (max_output_tokens of a free model)")
+    free = FreePolicy(
+        _positive_int(data["free_providers"].get("max_output_tokens"), "free_providers.max_output_tokens")
+    )
     embed = data["embeddings"]
     if embed["precision"] not in PRECISIONS:
         raise ValueError(f"embeddings.precision must be one of {sorted(PRECISIONS)}")
@@ -330,7 +430,10 @@ def parse(data: Mapping[str, Any]) -> Registry:
             batch_size=_positive_int(embed["batch_size"], "embeddings.batch_size"),
             reembed_batch_size=_positive_int(embed["reembed_batch_size"], "embeddings.reembed_batch_size"),
         ),
-        pricing_status=str(data.get("pricing_status", "")),
+        pricing_status=status,
+        free=free,
+        pricing_verified_on=verified_on,
+        pricing_source=source,
     )
 
 
