@@ -18,9 +18,11 @@ import contextlib
 from uuid import UUID
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from bridge.ids import uuid7
 from bridge.notifications import em1
+from bridge.proposals.tag_hooks import TagHooks, default_hooks
 from tests.integration.api import make_client, outbox
 from tests.integration.proposals.helpers import Developers, ProposalWorld, create, draft_body, published, rows, user_of
 from tests.integration.proposals.pitch_helpers import (
@@ -369,3 +371,25 @@ async def test_signed_out_callers_get_401(app_engine: AsyncEngine, pitch_orgs: P
         assert (await anonymous.get(f"/api/me/proposals/{some}/tags")).status_code == 401
         assert (await anonymous.post(f"/api/me/proposals/{some}/tags", json={"org_ids": [some]})).status_code == 401
         assert (await anonymous.get(f"/api/orgs/{pitch_orgs.safaricom.id}/inbox")).status_code == 401
+
+
+async def test_a_lost_race_at_the_unique_index_answers_409_and_creates_nothing(
+    developers: Developers, proposal_world: ProposalWorld, pitch_orgs: PitchOrgs, owner_engine: AsyncEngine
+) -> None:
+    """The backstop behind the lock: an insert that hits ``uq_tags_open_developer_org`` rolls the Pitch back."""
+    dev, proposal_id = await pitchable(developers, proposal_world)
+    duplicate = text(
+        "INSERT INTO tags (id, proposal_id, org_id, developer_id, status) VALUES (uuid7(), :p, :org, :me, 'delivered')"
+    )
+
+    async def racing_engagement(db: AsyncSession, **kwargs: UUID) -> UUID:
+        await db.execute(duplicate, {"p": kwargs["proposal_id"], "org": kwargs["org_id"], "me": kwargs["developer_id"]})
+        return uuid7()
+
+    dev.app.state.tag_hooks = TagHooks(  # type: ignore[attr-defined]
+        open_engagement=racing_engagement, grant_on_tag=default_hooks().grant_on_tag
+    )
+    lost = await pitch(dev, proposal_id, pitch_orgs.telkom, pitch_orgs.safaricom)
+    assert (lost.status_code, lost.json()["detail"]["code"]) == (409, "tag_conflict")
+    assert (await counts(owner_engine, user_of(dev)))["tags"] == 0
+    assert sent(dev) == []

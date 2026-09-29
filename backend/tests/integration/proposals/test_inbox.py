@@ -5,6 +5,10 @@ without an engagement until one is opened (AC-PROP-1/b is P5's)."""
 
 from __future__ import annotations
 
+import base64
+import json
+
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -87,3 +91,21 @@ async def test_a_held_tag_delivered_on_verification_shows_without_an_engagement(
     assert (item["proposal"]["id"], item["engagement"], inbox["held_count"]) == (proposal_id, None, 0)
     await published(dev, proposal_world, title="Unrelated")  # the developer's other proposals do not appear
     assert len((await owner.get(f"/api/orgs/{pitch_orgs.claimed.id}/inbox")).json()["items"]) == 1
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [True, "x"],
+        ["2026-09-29T10:00:00", "01920000-0000-7000-8000-000000000000"],  # no time zone
+        [5, "01920000-0000-7000-8000-000000000000"],
+        ["2026-09-29T10:00:00+00:00", ["x"]],
+    ],
+)
+async def test_a_forged_inbox_cursor_answers_400(
+    pitch_orgs: PitchOrgs, member_client: Members, value: list[object]
+) -> None:
+    reviewer = await member_client(pitch_orgs.airtel.member)  # type: ignore[arg-type]
+    cursor = base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+    response = await reviewer.get(f"/api/orgs/{pitch_orgs.airtel.id}/inbox", params={"cursor": cursor})
+    assert (response.status_code, response.json()["detail"]["code"]) == (400, "invalid_cursor")
