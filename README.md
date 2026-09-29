@@ -69,18 +69,33 @@ A seeded local copy of the platform for demos: two developers, four fixture orga
 certificates, pitches and engagements at several stages. Nothing is paid for and nothing leaves the laptop except the
 certificate timestamps (below).
 
-**You need** Docker Desktop (Windows: the WSL 2 backend), Git, `make` and Python 3.9 or later (the same Python as the
-companion above). In Docker Desktop, Settings → Resources, 4 GB of memory is enough: the demo's containers are capped
-at 2.75 GB in all and use about 420 MB once seeded (API 131 MB, worker 104 MB, S3 stand-in 66 MB, Postgres 65 MB, web
-40 MB, Mailpit 11 MB; the seed step peaks at 153 MB and then exits; measured with `make demo-stats`).
+**You need** Docker Desktop (Windows: the WSL 2 backend), Git and Python 3.9 or later (the same Python as the companion
+above); `make` is optional (below). Give Docker 4 GB of memory: on Windows with the WSL 2 backend, memory is set in
+`%UserProfile%\.wslconfig`, not in Docker Desktop (a file with the two lines `[wsl2]` and `memory=4GB`, then
+`wsl --shutdown` and start Docker Desktop again); on macOS, Docker Desktop → Settings → Resources. The demo's
+containers are capped at 2.75 GB in all and use about 420 MB once seeded (API 131 MB, worker 104 MB, S3 stand-in 66 MB,
+Postgres 65 MB, web 40 MB, Mailpit 11 MB; the seed step peaks at 153 MB and then exits; measured with `make demo-stats`).
 
 **Start it** from the repository folder, in PowerShell or Git Bash:
 
-1. `make demo`. The first run writes throwaway secrets to `infra/demo/.env` and `infra/demo/backend.env` (both
-   gitignored, never commit them), creates `backend/.env` from `backend/.env.example` if it is missing, builds the
-   images (several minutes the first time), starts Postgres, Mailpit, the S3 stand-in, the API, the worker and the
-   web app, seeds the data and prints the addresses and logins. Later runs keep the data.
-2. Open the web app and sign in with a login below; the second factor is a TOTP code from `make demo-totp`.
+1. `python infra/demo/demo.py up` (or `make demo`). The first run writes throwaway secrets to `infra/demo/.env` and
+   `infra/demo/backend.env` (both gitignored and readable only by you; never commit them), creates `backend/.env` from
+   `backend/.env.example` if it is missing, builds the images (several minutes the first time), starts Postgres,
+   Mailpit, the S3 stand-in, the API, the worker and the web app, seeds the data and prints the addresses and logins.
+   Later starts keep the data and leave whatever you did in the app as it is.
+2. Open the web app and sign in with a login below; the second factor is a TOTP code from
+   `python infra/demo/demo.py totp` (`make demo-totp`).
+
+Every `make demo-…` target is a short `python infra/demo/demo.py …` command, so `make` is not needed; Windows and Git for
+Windows do not include it (install GNU make, for example with Chocolatey's `choco install make`, if you want the
+targets). On macOS and Linux, where `python` may be missing, use `make demo DEMO_PY=python3` or `python3 infra/demo/demo.py`.
+
+| make target | Without make |
+|---|---|
+| `make demo` / `make demo-down` / `make demo-reset` | `python infra/demo/demo.py up` / `down` / `reset --yes` |
+| `make demo-totp EMAIL=<address>` | `python infra/demo/demo.py totp <address>` (all logins without an address) |
+| `make demo-logins` / `make demo-stats` / `make demo-logs` | `python infra/demo/demo.py logins` / `stats` / `logs` |
+| `make demo-clock DAYS=3` / `make demo-reminders` | `python infra/demo/demo.py clock --days 3` / `reminders` |
 
 | What | Where |
 |---|---|
@@ -93,14 +108,12 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 
 | Login | Who | What they can show |
 |---|---|---|
-| `amina@developers.example` | Amina Wanjiru, developer (D2) | My ideas, certificates, "Who has seen this", engagements in negotiation and closed |
-| `brian@developers.example` | Brian Otieno, developer (D1) | held pitches, an engagement approved to proceed |
-| `owner@telco-a.example` | Telco A (fixture), owner and admin | the named contact; proposes terms |
-| `signatory@telco-a.example` | Telco A (fixture), signatory | approves, signs the NDA, agreement and certificate |
-| `reviewer@telco-a.example` | Telco A (fixture), reviewer | the inbox: Brian's submitted idea waits for review |
-| `finance@telco-a.example` | Telco A (fixture), finance | records payments |
-| `owner@sacco-b.example`, `signatory@sacco-b.example`, `reviewer@sacco-b.example`, `finance@sacco-b.example` | SACCO B (fixture), the same four seats | two engagements in progress |
-| `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | pitches to it are held |
+| `amina@developers.example` | Amina Wanjiru, developer (D2) | My ideas with certificates and pitches; "Who has seen this" (a SACCO B reviewer opened one) |
+| `brian@developers.example` | Brian Otieno, developer (D1) | My ideas; a pitch still new at Telco A, two held until the organisations are verified |
+| `reviewer@telco-a.example` | Telco A (fixture), reviewer | the Inbox: Brian's new proposal; open it, accept the Evaluation NDA and read the full proposal |
+| `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox with each proposal's stage |
+| `owner@sacco-b.example`, `signatory@sacco-b.example`, `reviewer@sacco-b.example`, `finance@sacco-b.example` | SACCO B (fixture), the same seats | the Inbox with two proposals in progress |
+| `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | the Inbox: proposals wait until it is E2 |
 
 `make demo-totp` prints the current code of every login; `make demo-totp EMAIL=reviewer@telco-a.example` prints one.
 A code is accepted once: if the sign-in was refused, wait for the next code (30 seconds).
@@ -110,7 +123,8 @@ nudges for SACCO members" (in negotiation with SACCO B, whose reviewer has opene
 off-grid tower sites" (closed with Telco A: NDA, agreement, two milestones, sign-off and a recorded payment); Brian's
 "Cashless market-fee collection for counties" (submitted to Telco A, held for County Government of C and NGO D) and
 "USSD repayment reminders for feature phones" (approved to proceed by SACCO B). NGO D (fixture) is an E0 listing with
-no members. The provisional directory of public organisations (E0) is loaded too.
+no members. The provisional directory of public organisations (E0) is loaded too. The Inbox shows each engagement's
+stage; the tracker screens come later (the API at http://localhost:8000/api/docs already runs every step).
 
 **Time and reminders.** `make demo-clock DAYS=3` moves the app's clock forward (deadlines, due dates and reminders
 follow it; it never moves back until `make demo-reset`). `make demo-reminders` sends the day's developer nudges and the
@@ -138,11 +152,19 @@ the seeded demo accounts' data is sent to a free provider.
 | AI features | the fake unless you add a provider (above) |
 
 **Stop, reset, check.** `make demo-down` stops the demo and keeps its data; `make demo-reset` wipes only the demo's
-data (its own `bridge-demo` volumes; the dev stack is untouched) and starts it fresh. `make demo-logins`,
-`make demo-stats` (memory per container) and `make demo-logs` help while it runs. The demo uses the dev stack's ports,
-so stop the dev stack (`make down`) before `make demo`. If the demo says `infra/demo/.env` is gone while its data
-exists, run `make demo-reset`. With the demo running, `python infra/demo/demo.py e2e-env` prints the two variables the
-Playwright suite needs (`E2E_VERIFY_CERT_ID`, `E2E_DATABASE_OWNER_URL`).
+data (its own `bridge-demo` project and volumes, whatever `COMPOSE_PROJECT_NAME` says; the dev stack is untouched) and
+starts it fresh. Starting again after using the demo keeps what you did: the seed only adds what is missing and leaves
+any engagement someone moved on, any changed password and any deleted idea as it is (its log says which). `make
+demo-logins`, `make demo-stats` (memory per container) and `make demo-logs` help while it runs. The demo uses the dev
+stack's ports, so stop the dev stack (`make down`) before `make demo`. If the demo says `infra/demo/.env` is gone while
+its data exists, run `make demo-reset`. With the demo running, `python infra/demo/demo.py e2e-env` writes the
+Playwright variables (`E2E_VERIFY_CERT_ID`, `E2E_DATABASE_OWNER_URL`, `E2E_BASE_URL`, `E2E_MAILPIT_URL`) to the
+gitignored `frontend/.env.e2e` and prints how to load them.
+
+**Variables the demo reads from your shell** (never from a file in the repository): `DEMO_PY`, the Python that `make`
+runs the launcher with (default `python`); `DEMO_COMPOSE_EXTRA`, extra compose files added after the demo's own, such
+as a CA override for a build machine behind a TLS-inspecting proxy or other host ports (separated by `;` on Windows
+and `:` elsewhere; keep them outside the repository).
 
 ## Legacy
 
