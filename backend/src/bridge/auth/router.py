@@ -59,7 +59,7 @@ from bridge.auth.schemas import (
 )
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.notifications.email import EmailProvider
-from bridge.profiles.router import SESSION_ONLY_MESSAGE
+from bridge.profiles.consents import SESSION_ONLY_MESSAGE
 from bridge.tenancy.service import my_memberships
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], responses=ERROR_RESPONSES)

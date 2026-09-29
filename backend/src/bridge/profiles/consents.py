@@ -28,6 +28,10 @@ from bridge.profiles.models import Consent
 # session. The settings API neither lists nor records them (REQ-PROP-05): a settings or signup row never opens one.
 SESSION_ONLY: Final = frozenset({ConsentPurpose.TIER2_LLM_ASSISTANT})
 SETTINGS_PURPOSES: Final = tuple(p for p in ConsentPurpose if p not in SESSION_ONLY)
+# The refusal's message wherever such a purpose is sent (the settings API; signup, REQ-AUTH-01). [[COPY-REVIEW]]
+SESSION_ONLY_MESSAGE: Final = (
+    "Turn the writing assistant on from the proposal editor: it lasts for one sign-in at a time."
+)
 
 
 @dataclass(frozen=True, slots=True)
