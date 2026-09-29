@@ -78,9 +78,13 @@ class OrgClaim(IdMixin, TimestampsMixin, Base):
 
     The DNS proof: ``dns_token`` is written with the claim and is write-once; ``dns_verified_at`` is set only by
     ``app_mark_claim_dns_verified`` once the app has resolved the TXT record, and is write-once too (trigger, every
-    role). Staff approving a ``disputed`` claim upholds the dispute and transfers the organisation: the new claimant
-    becomes its only owner and admin, earlier approved claims of other claimants are rejected and their memberships
-    removed, the other members lose owner and admin, and pending invitations of the old control are revoked.
+    role). Whether a claim is a dispute is decided in SQL (``app_claim_competes``: another user holds an approved claim
+    or an active owner or admin membership, and the claimant is no active owner, admin or signatory), never by the
+    status label: a competing claim is filed as ``disputed`` and only the claim functions set or clear that mark (the
+    claimant may still withdraw). Staff approving a competing claim, whatever its label, upholds the dispute and
+    transfers the organisation: the new claimant becomes its only owner and admin, earlier approved claims of other
+    claimants are rejected and their memberships removed, the other members (removed ones too) lose owner and admin,
+    and pending invitations of the old control are revoked.
     """
 
     __tablename__ = "org_claims"

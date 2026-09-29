@@ -58,23 +58,29 @@ Privileged changes run only through the SECURITY DEFINER functions below, which 
 decisions and holds, filing a moderation case from a system source (``app_open_moderation_case``: prescreen and regex by
 the subject's writer or staff, a claim dispute by the disputed claim's claimant or staff admin, the Tier-2 similarity
 job in a staff context), claim approval (E1 automatic, E1/E2 by staff admin, always with the domain proven; the E1
-shortcut for E2 only on the organisation's own verified domain; only approving a dispute transfers the organisation, the
-new claimant becoming its only owner and admin: earlier approved claims of other claimants are rejected and their
-memberships removed as viewers, the other members lose owner and admin, and pending invitations of the old control are
-revoked), marking a claim's DNS TXT record verified (``app_mark_claim_dns_verified``; the lookup is the app's and the
-database trusts its resolution), removing a membership (staff admin, with a reason), delisting, D1 confirmation (the OTP
-hash is compared in SQL), D2 decisions (staff admin), the KYC image purge bookkeeping (the kyc.purge job with no user
-bound, or staff admin), the invitation opt-out and the global LLM spend, reissuing a claim's email code, closing a tag,
-adding a niche (staff admin), the per-subject digests (``app_subject_digest``: bridge_app gets only the current user's;
-staff admin or moderator and the registration job, recognised by its ``SET ROLE provenance_worker``, any user's; the
-binding stops a query bug, not SQL the app role itself runs, see D-32), the LLM call inputs (staff admin) and the audit
-chain heads for the hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on
-``verification``, ``verification_level``, ``moderation_state``, ``tags.closed_at``, the claim OTP columns, the claim DNS
-proof (``dns_token`` is written with the claim; both it and ``dns_verified_at`` are write-once by trigger),
-``registered_at``, ``owner_handle`` or the registration hashes, and no SELECT on ``org_claims.otp_hash``,
-``phone_verifications.otp_hash``, ``users.subject_salt`` or ``llm_calls.inputs`` (column grants on the rest of each
-table). ``llm_calls.inputs`` never holds Tier-2 plaintext: the LLM layer stores Tier-2 fields only as name, tier and
-length (AC-SEC-6).
+shortcut for E2 only on the organisation's own verified domain; only approving a claim that competes with the
+organisation's current control transfers the organisation, the new claimant becoming its only owner and admin: earlier
+approved claims of other claimants are rejected and their memberships removed as viewers, every other member, removed
+ones too, loses owner and admin, and pending invitations of the old control are revoked), marking a claim's DNS TXT
+record verified (``app_mark_claim_dns_verified``; the lookup is the app's and the database trusts its resolution),
+removing a membership (staff admin, with a reason), delisting, D1 confirmation (the OTP hash is compared in SQL), D2
+decisions (staff admin), the KYC image purge bookkeeping (the kyc.purge job with no user bound, or staff admin), the
+invitation opt-out and the global LLM spend, reissuing a claim's email code, closing a tag, adding a niche (staff
+admin), the per-subject digests (``app_subject_digest``: bridge_app gets only the current user's; staff admin or
+moderator and the registration job, recognised by its ``SET ROLE provenance_worker``, any user's; the binding stops a
+query bug, not SQL the app role itself runs, see D-32), the LLM call inputs (staff admin) and the audit chain heads for
+the hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``,
+``verification_level``, ``moderation_state``, ``tags.closed_at``, the claim OTP columns, the claim DNS proof
+(``dns_token`` is written with the claim; both it and ``dns_verified_at`` are write-once by trigger), ``registered_at``,
+``owner_handle`` or the registration hashes, and no SELECT on ``org_claims.otp_hash``, ``phone_verifications.otp_hash``,
+``users.subject_salt`` or ``llm_calls.inputs`` (column grants on the rest of each table). ``llm_calls.inputs`` never
+holds Tier-2 plaintext: the LLM layer stores Tier-2 fields only as name, tier and length (AC-SEC-6).
+
+Disputes are decided in SQL, never by a claim's label (``app_claim_competes``): a claim competes when another user holds
+an approved claim on the organisation or is an active owner or admin of it and the claimant is not an active owner,
+admin or signatory of it. Such a claim is filed as ``disputed`` (``org_claims_guard``) or marked so by
+``app_approve_claim_e1``; only the claim functions set or clear the mark (``org_claims_status_guard``; the claimant may
+still withdraw); and ``app_decide_claim`` approving a competing claim transfers the organisation whatever its label.
 
 Consistency rules by trigger and index: ``proposals.current_version_id`` is a registered version of the proposal and
 ``draft_version_id`` a draft one. A tag is open while ``closed_at`` IS NULL (one open tag per developer and
@@ -96,8 +102,10 @@ other than filling empty signature/TSA/evidence columns and moving ``status`` fo
 attestations, acceptances and Tier-2 views (``created_at``, ``accepted_at``, ``started_at``) are the database's; an
 anchor names an existing audit event, and a root closes a Nairobi day that has ended. Registering a version needs at
 least one linked problem (trigger) and the complete Tier-1 snapshot (CHECK). One ``llm_calls`` row costs 0 to 100 USD
-and counts nothing negative; a Message Batches item is reserved once and settles once, and spend (the ``llm_spend``
-view) counts a reservation only until its item settles.
+and counts nothing negative; a Message Batches item is its tenant's (``org_id`` and ``user_id``): reserved once and
+settled once within that tenant, a settlement settles only its own tenant's reservation (``llm_calls_batch_guard``),
+spend (the ``llm_spend`` view) counts a reservation only until that settlement, and a request bound to a user writes no
+platform batch row (no user, no organisation).
 
 Refinements of the task card (listed in the card, approved by the orchestrator 2026-09-28): ``proposals`` also
 denormalises the current ``problem_statement``, ``impact_claims`` and ``summary`` (the generated ``search_tsv`` can
@@ -110,12 +118,12 @@ the two brief policies never read each other recursively; ``tags.closed_at`` mar
 and rules above. Templates and acceptances are tied by ``(template id, sha256)`` foreign keys, so an accepted template
 version cannot change; ``nda_templates`` follows its legal body ON UPDATE CASCADE until an acceptance pins it. The
 listed-organisations rule is a second SELECT policy (``bridge_app_select_listed``) next to 0001's, which stays
-untouched. The second, third and fourth review rounds (listed in the card) added the rules above: the verified email
+untouched. The second to fifth review rounds (listed in the card) added the rules above: the verified email
 and domain of Tier-2 viewers, the caller binding of the subject digests, reports-only inserts of moderation cases,
 records of registered versions only, the DNS proof through its function, the transfer on an upheld dispute, the
 database's handles and evidence times, access-log rows only from granted viewers, RLS on the originality buckets,
-the ledger and queue bounds, the anchor and root checks, the record-to-version ties, the current Evaluation NDA and
-the purge bookkeeping caller.
+the ledger and queue bounds, the anchor and root checks, the record-to-version ties, the current Evaluation NDA, the
+purge bookkeeping caller, disputes decided in SQL, batch items of one tenant and the anchor's earliest TSA time.
 
 Operating rules for the code that uses this schema:
 
