@@ -84,8 +84,11 @@ class Deps:
 
 @dataclass(frozen=True, slots=True)
 class Outcome:
-    """One recipient's result. ``email`` is the email row's status after the run (None: no email row);
-    ``email_skipped`` why no email was wanted; ``in_app`` whether the summary was written by this run."""
+    """One recipient's result. ``status``: ``sent`` (this run wrote the in-app summary or attempted the email),
+    ``already`` (every wanted channel is done for the period), ``quiet`` (nothing to say), ``not_opted_in`` (a member
+    without the reminders consent) or ``error`` (logged; the next run retries). ``email`` is the email row's status
+    after the run (None: no email row); ``email_skipped`` why no email was wanted; ``in_app`` whether this run wrote
+    the summary."""
 
     user_id: UUID
     status: Status
