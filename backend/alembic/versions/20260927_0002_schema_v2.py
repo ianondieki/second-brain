@@ -68,8 +68,9 @@ decisions (staff admin), the KYC image purge bookkeeping (the kyc.purge job with
 invitation opt-out and the global LLM spend, reissuing a claim's email code, closing a tag, adding a niche (staff
 admin), the per-subject digests (``app_subject_digest``: bridge_app gets only the current user's; staff admin or
 moderator and the registration job, recognised by its ``SET ROLE provenance_worker``, any user's; the binding stops a
-query bug, not SQL the app role itself runs, see D-32), the LLM call inputs (staff admin) and the audit chain heads for
-the hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``,
+query bug, not SQL the app role itself runs, see D-32), the LLM call inputs (staff admin), whether a Message Batches
+batch is wholly the caller's tenant's (``app_llm_batch_owned``, for ``batch_poll``) and the audit chain heads for the
+hourly anchor (EXECUTE for ``provenance_worker`` only). ``bridge_app`` holds no UPDATE on ``verification``,
 ``verification_level``, ``moderation_state``, ``tags.closed_at``, the claim OTP columns, the claim DNS proof
 (``dns_token`` is written with the claim; both it and ``dns_verified_at`` are write-once by trigger), ``registered_at``,
 ``owner_handle`` or the registration hashes, and no SELECT on ``org_claims.otp_hash``, ``phone_verifications.otp_hash``,
