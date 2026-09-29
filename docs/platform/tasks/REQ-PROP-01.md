@@ -89,3 +89,9 @@ Follow-ups (not in P2):
    `bridge/admin/moderation.py` (today the rules re-screen the current text).
 3. Commit sizes: several P2 commits exceed the ~300-line guideline (whole modules with their tests); later work
    splits by concern.
+
+## Review round 2 (2026-09-29): reviewer PASS; MINOR follow-ups (not built)
+
+1. `admin/moderation.py:160-205`: a decision locks case → proposal while a publish locks proposal → case, so a concurrent publish and decision can deadlock (the decision answers 500; nothing leaks). Lock the proposal row before the case, or map 40P01 to 409/retry; add a concurrent test of the post-lock version check.
+2. `proposal_versions` RLS lets signed-in readers read an earlier registered version (including a v1 held for a vulnerability) through `bridge_app`; no endpoint serves it. db-migrations: a per-version moderation flag or restrict non-owners to `current_version_id`.
+3. Sanitiser: false positives "Served 15 000 till now" (payment) and "ASP.NET" (domain); still accepted `O712345678` (letter O) and spelled-out "jane at gmail dot com" (after prototype).
