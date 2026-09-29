@@ -2318,7 +2318,8 @@ async def test_a_batch_item_belongs_to_its_tenant(owner_engine: AsyncEngine) -> 
 
 
 BATCH_OWNED = "SELECT app_llm_batch_owned(:b)"
-# A reservation written :at seconds after the transaction's start (ordering reservations within one test transaction).
+# A reservation sent with a created_at :at seconds from the transaction's start; the database replaces it with the
+# moment the row is written (round 6, Q5), so reservations order by when they were written, whatever is sent.
 TIMED_RESERVATION = (
     "INSERT INTO llm_calls (id, org_id, user_id, task, model, status, cost_usd, batch_id, custom_id, created_at)"
     " VALUES (:id, :org, :u, 't', 'm', 'batch_reserved', 1, :batch, :item, now() + make_interval(secs => :at))"
@@ -2332,7 +2333,8 @@ async def test_a_batch_is_owned_only_by_its_tenant(owner_engine: AsyncEngine) ->
     reserves first), judged as for the rows the caller could have written: its own user, an organisation it is an
     active member of (the bound one when app.org_id is set), and a platform job's batch (no user, no organisation) only
     with nothing bound. A later reservation of anybody else (a squatted item, the security review's N10a) changes
-    nothing, and a batch with no reservation is owned by nobody, so an unknown batch and another tenant's look alike."""
+    nothing, even sent with a created_at an hour back (Q5: a reservation's time is the database's), and a batch with no
+    reservation is owned by nobody, so an unknown batch and another tenant's look alike."""
     async with as_app(owner_engine) as conn:
         owner = await w.add_user(conn, _email("batch-owner"), "Owner")
         other = await w.add_user(conn, _email("batch-other"), "Other")
@@ -2343,16 +2345,16 @@ async def test_a_batch_is_owned_only_by_its_tenant(owner_engine: AsyncEngine) ->
         await act(conn, owner, org)
         for batch, item, tenant in ((mine, "a", org), (mine, "b", None), (squatted, "a", org)):  # org and user rows
             await run(conn, TIMED_RESERVATION, id=uuid7(), org=tenant, u=owner, batch=batch, item=item, at=0)
-        await act(conn, None)  # a platform job: rows with no user and no organisation, one of them a later squat
-        for batch, at in ((jobs, 0), (squatted, 1)):
+        await act(conn, None)  # a platform job: rows with no user and no organisation, one a later, backdated squat
+        for batch, at in ((jobs, 0), (squatted, -3600)):
             await run(conn, TIMED_RESERVATION, id=uuid7(), org=None, u=None, batch=batch, item="z", at=at)
-        await act(conn, other)  # another user squats an item later, reserves a batch first, settles an unreserved one
-        for batch, item, at in ((squatted, "q", 1), (theirs, "x", 0)):
+        await act(conn, other)  # another user squats an item later (backdated), reserves a batch first, settles one
+        for batch, item, at in ((squatted, "q", -3600), (theirs, "x", 0)):
             await run(conn, TIMED_RESERVATION, id=uuid7(), org=None, u=other, batch=batch, item=item, at=at)
         ok = {"status": "ok", "cost": Decimal(0), "org": None, "u": other}
         await run(conn, TENANT_BATCH_CALL, id=uuid7(), **ok, batch=unreserved, item="x")
         await act(conn, owner, org)
-        await run(conn, TIMED_RESERVATION, id=uuid7(), org=org, u=owner, batch=theirs, item="y", at=1)
+        await run(conn, TIMED_RESERVATION, id=uuid7(), org=org, u=owner, batch=theirs, item="y", at=-3600)
         for user, scope, owned in (
             (owner, org, {mine, squatted}),
             (owner, None, {mine, squatted}),  # a request not scoped to one organisation
@@ -2363,6 +2365,9 @@ async def test_a_batch_is_owned_only_by_its_tenant(owner_engine: AsyncEngine) ->
             await act(conn, user, scope)
             for batch in (mine, jobs, squatted, theirs, unreserved, unknown):
                 assert await run(conn, BATCH_OWNED, b=batch) is (batch in owned), (user, scope, batch)
+        await as_owner(conn)
+        stored = "SELECT bool_and(created_at >= now()) FROM llm_calls WHERE batch_id IN (:a, :b)"
+        assert await run(conn, stored, a=squatted, b=theirs) is True  # no reservation kept the time it was sent with
 
 
 # How the ledger settles a batch item from round 6 (named arguments: the full signature).

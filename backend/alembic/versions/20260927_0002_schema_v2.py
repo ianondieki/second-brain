@@ -1948,9 +1948,9 @@ $$;
 -- organisation) belongs only to a caller with nothing bound. False for a batch with no reservation, so an unknown
 -- batch and another tenant's answer alike. batch_poll calls it before fetching a batch's results: one provider
 -- account serves every tenant, and bridge_app cannot read other tenants' rows or system rows. SECURITY DEFINER: reads
--- the batch's reservations whatever the caller may read. created_at is the writer's value, so the rule stops a
--- request-path bug (a forged handle), not a compromised app role backdating a reservation (which holds the provider
--- key anyway).
+-- the batch's reservations whatever the caller may read. A reservation's created_at is the database's
+-- (llm_calls_batch_guard(), Q5), so a backdated reservation cannot take a batch; ties within one microsecond fall to
+-- the id, which the writer chooses.
 CREATE FUNCTION app_llm_batch_owned(p_batch_id varchar) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -2471,13 +2471,19 @@ $$;
 -- llm_spend rule), so a settlement settles only a reservation of its own tenant: one for an item that has
 -- reservations, none of them its tenant's, is refused (another tenant's request, or a ledger bound to another
 -- organisation or user than the reservation), so it can neither cancel that reservation from the spend nor pre-empt
--- its real settlement. Reservations of different tenants for one pair coexist. SECURITY DEFINER: sees every tenant's
--- reservations whatever the writer may read.
+-- its real settlement. Reservations of different tenants for one pair coexist. A reservation's created_at is the
+-- database's, the moment the row is written (clock_timestamp(), whatever is sent; round 6, Q5): app_llm_batch_owned()
+-- judges a batch by its earliest reservation, so a backdated reservation, or one from a transaction opened before the
+-- batch existed, could otherwise take another tenant's batch. SECURITY DEFINER: sees every tenant's reservations
+-- whatever the writer may read.
 CREATE FUNCTION llm_calls_batch_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
+    IF NEW.status = 'batch_reserved' THEN
+        NEW.created_at := clock_timestamp();
+    END IF;
     IF NEW.batch_id IS NOT NULL AND NEW.status <> 'batch_reserved'
        AND EXISTS (
            SELECT 1
