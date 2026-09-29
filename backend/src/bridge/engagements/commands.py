@@ -404,7 +404,7 @@ async def _approve(step: Step) -> None:
     if membership is None:
         raise sm.Invalid("invalid_contact", "Choose an active member of your organisation as the contact person.")
     roles = {OrgRole(r) for r in membership.roles}
-    role = next(r for r in CONTACT_ROLE_ORDER if r in roles)
+    role = next((r for r in CONTACT_ROLE_ORDER if r in roles), OrgRole.VIEWER)  # a member with no role reads as one
     engagement = step.engagement
     engagement.contact_user_id = contact.user_id
     engagement.contact_channel = contact.channel
