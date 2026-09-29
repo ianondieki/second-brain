@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from bridge.ids import uuid7
+from bridge.proposals import search
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, sign_in_as
 from tests.integration.proposals.helpers import (
@@ -57,6 +58,7 @@ class Catalogue:
     held: str
     hidden: str
     health_slug: str
+    owners: tuple[httpx.AsyncClient, ...]  # the three developers (Row-Level Security shows each their own rows)
 
 
 async def _health_niche(owner_engine: AsyncEngine, token: str) -> tuple[UUID, str]:
@@ -111,6 +113,7 @@ async def catalogue(developers: Developers, proposal_world: ProposalWorld, owner
         held=held["proposal_id"],
         hidden=hidden["proposal_id"],
         health_slug=health_slug,
+        owners=(first, second, third),
     )
 
 
@@ -245,3 +248,28 @@ async def test_bad_parameters_answer_422_and_signed_out_callers_401(
     assert too_many.json()["detail"]["code"] == "too_many_filter_values"
     async with make_client(app_engine) as anonymous:
         assert (await anonymous.get("/api/proposals")).status_code == 401
+
+
+@pytest.mark.parametrize("limit", [1, 2])
+async def test_every_full_page_is_full_and_no_cursor_names_a_hidden_teaser(
+    member: httpx.AsyncClient, catalogue: Catalogue, limit: int
+) -> None:
+    """The rows are filtered in SQL, not only in the items: a page with a next cursor holds exactly ``limit`` items,
+    and no cursor (the last row read) is a draft, held or hidden proposal. Searched by the owners too, whom Row-Level
+    Security lets read their own held and hidden proposals, so the query's own filter is what is tested."""
+    unseen = {UUID(p) for p in (catalogue.draft, catalogue.held, catalogue.hidden)}
+    for searcher in (member, *catalogue.owners):
+        cursor: str | None = None
+        found: list[str] = []
+        while True:
+            params: dict[str, str | int] = {"q": catalogue.token, "limit": limit}
+            if cursor:
+                params["cursor"] = cursor
+            page = (await searcher.get("/api/proposals", params=params)).json()
+            found.extend(ids(page["items"]))
+            cursor = page["next_cursor"]
+            if cursor is None:
+                break
+            assert len(page["items"]) == limit
+            assert search.decode_cursor(cursor).proposal_id not in unseen
+        assert len(found) == 3
