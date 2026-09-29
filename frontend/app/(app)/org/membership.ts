@@ -19,12 +19,19 @@ export function first(value: SearchValue): string | undefined {
 }
 
 /**
- * The membership a screen acts for: the one named by `requested` when the person is a member of it, else their
- * first membership (the API lists them by name). Null for an account without an active membership.
+ * The membership a screen acts for. Without `?org=`: the person's first membership (the API lists them by name), or
+ * "none" for an account without one. With `?org=`: that organisation when the person is a member of it, else
+ * "notMember" (never a silent switch to another organisation, so nothing is accepted in the wrong one's name).
  */
-export function pickMembership(memberships: readonly Membership[], requested: SearchValue): Membership | null {
-  const wanted = first(requested)?.toLowerCase();
-  return memberships.find((m) => m.org_id.toLowerCase() === wanted) ?? memberships[0] ?? null;
+export type Picked = { kind: "member"; membership: Membership } | { kind: "none" } | { kind: "notMember" };
+
+export function pickMembership(memberships: readonly Membership[], requested: SearchValue): Picked {
+  const wanted = first(requested)?.trim().toLowerCase();
+  if (wanted) {
+    const found = memberships.find((m) => m.org_id.toLowerCase() === wanted);
+    return found ? { kind: "member", membership: found } : { kind: "notMember" };
+  }
+  return memberships[0] ? { kind: "member", membership: memberships[0] } : { kind: "none" };
 }
 
 /**

@@ -11,16 +11,19 @@ const PROPOSAL = "01a0ee62-f783-733e-9321-9f34ec389ac2";
 
 describe("the organisation a screen acts for (org picker)", () => {
   it("is the first membership unless another one of the person's is asked for", () => {
-    expect(pickMembership([A, B], undefined)).toBe(A);
-    expect(pickMembership([A, B], B.org_id)).toBe(B);
-    expect(pickMembership([A, B], B.org_id.toUpperCase())).toBe(B);
-    expect(pickMembership([A, B], [B.org_id, A.org_id])).toBe(B);
+    const member = (m: Membership) => ({ kind: "member", membership: m });
+    expect(pickMembership([A, B], undefined)).toEqual(member(A));
+    expect(pickMembership([A, B], "")).toEqual(member(A));
+    expect(pickMembership([A, B], B.org_id)).toEqual(member(B));
+    expect(pickMembership([A, B], B.org_id.toUpperCase())).toEqual(member(B));
+    expect(pickMembership([A, B], [B.org_id, A.org_id])).toEqual(member(B));
   });
 
-  it("never acts for an organisation the person is not a member of", () => {
-    expect(pickMembership([A, B], "01a0ee62-0000-7000-8000-0000000000ff")).toBe(A);
-    expect(pickMembership([A], "not-a-uuid")).toBe(A);
-    expect(pickMembership([], A.org_id)).toBeNull();
+  it("never switches silently to another organisation than the one asked for", () => {
+    expect(pickMembership([A, B], "01a0ee62-0000-7000-8000-0000000000ff")).toEqual({ kind: "notMember" });
+    expect(pickMembership([A], "not-a-uuid")).toEqual({ kind: "notMember" });
+    expect(pickMembership([], A.org_id)).toEqual({ kind: "notMember" });
+    expect(pickMembership([], undefined)).toEqual({ kind: "none" });
   });
 
   it("names the organisation in links only when the person has several", () => {

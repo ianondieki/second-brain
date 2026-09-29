@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Keyset cursors are the API's own (URL-safe base64); anything else is dropped before it reaches the API.
-const CURSOR = /^[A-Za-z0-9_-]{1,512}$/;
+const CURSOR = /^[A-Za-z0-9_-]{1,500}$/;
 
 /**
  * Organisation › Inbox (REQ-PROP-03, F4): the proposals developers sent to this organisation, newest first, as
@@ -28,20 +28,24 @@ const CURSOR = /^[A-Za-z0-9_-]{1,512}$/;
  */
 export default async function InboxScreen({ searchParams }: PageProps<"/org/inbox">) {
   const params = await searchParams;
-  const { memberships, org } = await orgContext(params.org);
+  const { memberships, org, missing, query } = await orgContext(params.org);
   const t = await getTranslations("inbox");
   const cursorParam = first(params.cursor);
   const cursor = cursorParam && CURSOR.test(cursorParam) ? cursorParam : undefined;
 
   return (
-    <SignedInShell homeHref="/org" nav={<OrgNav current="inbox" />} wide>
+    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="inbox" query={query} />} wide>
       <div className="max-w-3xl">
         <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
         {org ? (
           <InboxBody memberships={memberships} org={org} cursor={cursor} />
         ) : (
           <div className="mt-6">
-            <EmptyState sentence={t("noOrg")} action={t("emptyAction")} href="/org" />
+            {missing === "notMember" ? (
+              <EmptyState sentence={t("notMember")} action={t("openOwnInbox")} href="/org/inbox" />
+            ) : (
+              <EmptyState sentence={t("noOrg")} action={t("emptyAction")} href="/org" />
+            )}
           </div>
         )}
       </div>

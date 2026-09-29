@@ -5,7 +5,7 @@ import type { components } from "@/lib/api/schema";
 import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeFor, type Me } from "@/lib/auth/routing";
 
-import { isUuid, pickMembership, type Membership } from "./membership";
+import { isUuid, orgQuery, pickMembership, type Membership } from "./membership";
 import { refusalOf, type Refusal } from "./refusals";
 
 // Server-side calls for the organisation screens, each bounded so a hung API ends in the route's error page. The
@@ -25,8 +25,12 @@ export const INBOX_PAGE_SIZE = 20;
 export interface OrgContext {
   me: Me;
   memberships: Membership[];
-  /** The organisation the screen acts for, or null for an account without an active membership. */
+  /** The organisation the screen acts for; null when there is none (see `missing`). */
   org: Membership | null;
+  /** Why `org` is null: no active membership at all, or `?org=` names an organisation the person is not a member of. */
+  missing: "none" | "notMember" | null;
+  /** "?org=<id>" for links that keep the chosen organisation (empty for single-organisation members). */
+  query: string;
 }
 
 /**
@@ -37,7 +41,10 @@ export async function orgContext(requested: string | string[] | undefined): Prom
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/org") redirect(home);
-  return { me, memberships: me.memberships, org: pickMembership(me.memberships, requested) };
+  const picked = pickMembership(me.memberships, requested);
+  if (picked.kind !== "member") return { me, memberships: me.memberships, org: null, missing: picked.kind, query: "" };
+  const org = picked.membership;
+  return { me, memberships: me.memberships, org, missing: null, query: orgQuery(me.memberships, org.org_id) };
 }
 
 async function options() {

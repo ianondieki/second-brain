@@ -27,10 +27,12 @@ export async function generateMetadata({ params }: PageProps<"/org/inbox/[propos
  */
 export default async function OrgProposalScreen({ params, searchParams }: PageProps<"/org/inbox/[proposalId]">) {
   const [{ proposalId }, query] = await Promise.all([params, searchParams]);
-  const { memberships, org } = await orgContext(query.org);
+  const { memberships, org, missing, query: orgParam } = await orgContext(query.org);
   const t = await getTranslations("orgProposal");
   const ti = await getTranslations("inbox");
-  const card = await getTeaser(proposalId);
+  // Not a member of the organisation asked for: nothing is read, and nothing can be accepted in another's name.
+  const card = org ? await getTeaser(proposalId) : null;
+  const nav = <OrgNav current="inbox" query={orgParam} />;
   const inbox = org ? inboxHref(memberships, org.org_id) : "/org/inbox";
 
   const back = (
@@ -41,7 +43,7 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
 
   if (!org || !card) {
     return (
-      <SignedInShell homeHref="/org" nav={<OrgNav current="inbox" />}>
+      <SignedInShell homeHref={`/org${orgParam}`} nav={nav}>
         {back}
         <h1 className="mt-4 text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
         <div className="mt-6">
@@ -51,6 +53,8 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
               action={t("action.inbox")}
               href={inbox}
             />
+          ) : missing === "notMember" ? (
+            <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
           ) : (
             <EmptyState sentence={ti("noOrg")} action={ti("emptyAction")} href="/org" />
           )}
@@ -62,7 +66,7 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
   const nda = await getNda(org.org_id, card.id);
   const title = card.teaser.title ?? ti("untitled");
   return (
-    <SignedInShell homeHref="/org" nav={<OrgNav current="inbox" />} wide>
+    <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
       <article className="max-w-4xl">
         {back}
         <header className="mt-4 max-w-3xl">

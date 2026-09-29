@@ -22,8 +22,9 @@ export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];
  * Bottom tabs under 1024 px, a left rail from 1024 px (one <nav>, restyled). The current section carries
  * aria-current="page" and is marked by colour, weight and a bar, not colour alone. The tab bar is fixed, so pages
  * that show it keep their last control clear of it (SignedInShell pads main; globals.css pads focus scrolling).
+ * `query` ("?org=<id>" for members of several organisations) keeps the chosen organisation across sections.
  */
-export function OrgNav({ current }: { current: OrgSection }) {
+export function OrgNav({ current, query = "" }: { current: OrgSection; query?: string }) {
   const t = useTranslations("nav");
   return (
     <nav
@@ -40,7 +41,7 @@ export function OrgNav({ current }: { current: OrgSection }) {
           return (
             <li key={key} className="flex-1 lg:flex-none">
               <Link
-                href={href}
+                href={`${href}${query}`}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-2 text-sm no-underline",
