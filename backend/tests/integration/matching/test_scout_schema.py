@@ -246,6 +246,10 @@ async def test_runs_are_written_by_acting_members_and_never_deleted(owner_engine
             params = run_params(scout, a.org, status=status, finished=datetime.now(NAIROBI), error=error)
             await expect(conn, RUN, "row-level security", **params)  # a run starts running
         running = run_params(scout, a.org)
+        dated = RUN.replace("error_code, window_end)", "error_code, window_end, started_at)").replace(
+            ":error, now())", ":error, now(), now() - interval '2 days')"
+        )
+        await expect(conn, dated, "permission denied", **run_params(scout, a.org))  # never forward- or back-dated
         await run(conn, RUN, **running)
         started = await run(
             conn,

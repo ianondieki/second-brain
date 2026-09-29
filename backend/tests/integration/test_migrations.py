@@ -1608,15 +1608,17 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
     assert {row.name for row in insertable} == {c.name for c in TABLES["users"].columns} - {"demo_account"}
 
 
-# Revision 0005: columns only app_create_research_candidate() writes (bridge_app inserts every other column; no UPDATE).
+# Revision 0005: columns bridge_app reads but neither inserts nor updates: the research columns only
+# app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problems": {"research_run_id", "named_orgs"},
     "problem_sources": {"excerpt_ref"},
+    "agent_runs": {"started_at"},
 }
 
 
 @pytest.mark.parametrize(("table", "columns"), sorted(DEFINER_ONLY_COLUMNS.items()))
-async def test_bridge_app_inserts_every_column_but_the_research_ones(
+async def test_bridge_app_inserts_every_column_but_the_databases_ones(
     owner_engine: AsyncEngine, table: str, columns: set[str]
 ) -> None:
     held = "SELECT has_column_privilege('bridge_app', CAST(:t AS text), CAST(:c AS text), CAST(:p AS text))"

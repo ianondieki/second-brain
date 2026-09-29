@@ -127,7 +127,12 @@ APP_GRANTS: dict[str, str] = {
         "SELECT, INSERT, DELETE, UPDATE (niches, counties, include_keywords, exclude_keywords, maturity, budget_band,"
         " min_fit, frequency, language, recipients, paused_at, cursor_at, cursor_proposal_id, updated_at)"
     ),
-    "agent_runs": "SELECT, INSERT, UPDATE (status, finished_at, scanned_count, matched_count, error_code)",
+    # started_at is the database's clock (its default, app_clock_now()): never inserted or updated by the app, so a
+    # run is never forward- or back-dated.
+    "agent_runs": (
+        "SELECT, INSERT (id, scout_id, org_id, trigger, status, finished_at, window_start, window_end, scanned_count,"
+        " matched_count, error_code), UPDATE (status, finished_at, scanned_count, matched_count, error_code)"
+    ),
     "agent_matches": "SELECT, INSERT, UPDATE (feedback, feedback_reason, feedback_by, feedback_at, digest_sent_at)",
     "research_runs": (
         "SELECT, INSERT, UPDATE (status, finished_at, searches, fetches, input_tokens, candidates, discarded, cost_usd,"
