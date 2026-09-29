@@ -122,17 +122,27 @@ async def test_a_stale_wording_is_refused_and_nothing_is_recorded(
     assert await audit_rows(owner_engine, user_of(client), "consent.changed") == []
 
 
+@pytest.mark.parametrize("published", [True, False], ids=["published", "draft"])
 async def test_the_assistant_is_the_owners_only(
-    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld
+    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld, published: bool
 ) -> None:
+    """A stranger who holds a live opt-in of their own (a demo account, so D-37 would not stop a call) gets 404 on
+    another developer's proposal, published or not, and nothing reaches the provider. A published teaser is readable
+    under RLS, so only the route's owner filter stands between it and the stranger's call (review MAJOR 1)."""
     owner = await developers()
+    await make_demo(owner_engine, user_of(owner))
     proposal_id = await new_draft(owner, proposal_world)
+    if published:
+        assert (await publish(owner, proposal_id)).status_code == 200
     stranger = await developers()
     await make_demo(owner_engine, user_of(stranger))
-    adapter = install(stranger, suggestion())
-    assert (await grant(stranger, proposal_id)).status_code == 404
+    adapter = install(stranger, suggestion(), suggestion())
+    own_id = await new_draft(stranger, proposal_world)
+    assert (await grant(stranger, own_id)).status_code == 200  # the stranger's opt-in is live in this session
     path = PATH.format(proposal_id)
+    version = (await stranger.get("/api/consents")).json()["version"]
     for response in (
+        await stranger.post(path + "/consent", json={"version": version}),
         await stranger.get(path + "/consent"),
         await stranger.delete(path + "/consent"),
         await ask(stranger, proposal_id),
@@ -140,7 +150,9 @@ async def test_the_assistant_is_the_owners_only(
     ):
         assert response.status_code == 404, response.text
     assert adapter.requests == []
-    assert await rows(owner_engine, "SELECT 1 FROM consents WHERE user_id = :u", u=user_of(stranger)) == []
+    decisions = await rows(owner_engine, "SELECT granted FROM consents WHERE user_id = :u", u=user_of(stranger))
+    assert [r.granted for r in decisions] == [True]  # only the grant from the stranger's own proposal
+    assert await audit_rows(owner_engine, user_of(stranger), "proposal.assistant_suggested") == []
 
 
 async def test_a_deleted_proposal_gets_no_assistant(
