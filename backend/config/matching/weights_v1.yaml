@@ -24,6 +24,8 @@ niche:
 
 final:
   model_weight: 0.4       # final = 0.4·model + 0.6·deterministic when the model answered (else the deterministic)
+  max_model_shift: 5      # ... moved at most 5 points from the deterministic score until REQ-SCOUT-06's injection eval
+                          # gate exists (AC-SCOUT-2: a score shift <= 5 vs the clean twin), never below the scout's min_fit
 
 limits:
   scan_per_run: 500       # proposals one run reads (the cursor continues in the next run)

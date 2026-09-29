@@ -83,11 +83,24 @@ def test_selection_keeps_min_fit_and_orders_by_score_then_age() -> None:
 
 
 def test_the_final_score_mixes_the_model_in_only_when_it_answered() -> None:
+    wide = replace(W, max_model_shift=100)  # the blend alone
     assert final_score(80, None, W) == 80
-    assert final_score(80, 40, W) == 64  # 0.6*80 + 0.4*40
-    assert final_score(81, 100, W) == 89  # 88.6 rounds half up
+    assert final_score(80, 40, wide) == 64  # 0.6*80 + 0.4*40
+    assert final_score(81, 100, wide) == 89  # 88.6 rounds half up
     assert final_score(0, 0, W) == 0
     assert final_score(100, 100, W) == 100
+
+
+def test_the_model_moves_the_score_at_most_five_points_and_never_below_min_fit() -> None:
+    """P10 security review MINOR d: until REQ-SCOUT-06's eval gate, the model shifts the rules' score by at most
+    final.max_model_shift (5), and a selected match never drops below the scout's min_fit."""
+    assert W.max_model_shift == 5
+    assert final_score(80, 40, W) == 75  # the blend (64) bounded to 80 - 5
+    assert final_score(80, 100, W) == 85  # the blend (88) bounded to 80 + 5
+    assert final_score(80, 85, W) == 82  # inside the bound: the blend
+    assert final_score(62, 0, W, floor=60) == 60  # 57 bounded, then held at min_fit
+    assert final_score(62, None, W, floor=60) == 62
+    assert final_score(98, 100, W) == 99
 
 
 def test_the_code_line_names_the_rules_that_fired() -> None:

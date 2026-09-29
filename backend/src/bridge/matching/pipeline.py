@@ -260,11 +260,15 @@ def select_top(scored: Sequence[Scored], min_fit: int, limit: int) -> list[Score
     return kept[:limit]
 
 
-def final_score(deterministic: int, model: int | None, weights: Weights) -> int:
-    """final = model_weight·model + (1 - model_weight)·deterministic when the model answered, else deterministic."""
+def final_score(deterministic: int, model: int | None, weights: Weights, *, floor: int = 0) -> int:
+    """final = model_weight·model + (1 - model_weight)·deterministic when the model answered, else deterministic;
+    moved at most ``final.max_model_shift`` points from the deterministic score (until REQ-SCOUT-06's injection eval
+    gate exists) and never below ``floor`` (the scout's ``min_fit``: the rules selected the match)."""
     if model is None:
-        return deterministic
-    return _round(weights.model_weight * model + (1 - weights.model_weight) * deterministic)
+        return max(deterministic, floor)
+    blended = weights.model_weight * model + (1 - weights.model_weight) * deterministic
+    shift = weights.max_model_shift
+    return max(_round(min(max(blended, deterministic - shift), deterministic + shift)), floor)
 
 
 def matched_on(s: Scored) -> str:

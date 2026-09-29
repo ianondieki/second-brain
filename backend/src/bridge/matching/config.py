@@ -26,7 +26,7 @@ _SECTIONS: Final = {
     "deterministic": {"keywords", "niche", "tagged", "evidence"},
     "keywords": {"saturation", "none_listed"},
     "niche": {"exact", "via_parent"},
-    "final": {"model_weight"},
+    "final": {"model_weight", "max_model_shift"},
     "limits": {
         "scan_per_run",
         "matches_per_run",
@@ -72,6 +72,7 @@ class Weights:
     niche_exact: float
     niche_via_parent: float
     model_weight: float
+    max_model_shift: int
     scan_per_run: int
     matches_per_run: int
     model_top_n: int
@@ -137,7 +138,7 @@ def parse_weights(data: Any) -> Weights:
     if sum(det.values()) != 100:
         raise WeightsError("weights_v1.yaml: the deterministic points must sum to 100")
     keywords, niche = _section(data, "keywords"), _section(data, "niche")
-    limits = _section(data, "limits")
+    limits, final = _section(data, "limits"), _section(data, "final")
     scan_after = _section(data, "schedule")["scan_after"]
     match = _TIME.fullmatch(scan_after) if isinstance(scan_after, str) else None
     if match is None:
@@ -154,7 +155,8 @@ def parse_weights(data: Any) -> Weights:
         keywords_none_listed=_share(keywords["none_listed"], "keywords.none_listed"),
         niche_exact=_share(niche["exact"], "niche.exact"),
         niche_via_parent=_share(niche["via_parent"], "niche.via_parent"),
-        model_weight=_share(_section(data, "final")["model_weight"], "final.model_weight"),
+        model_weight=_share(final["model_weight"], "final.model_weight"),
+        max_model_shift=_int(final["max_model_shift"], "final.max_model_shift", 0, 100),
         scan_after=time(int(match.group(1)), int(match.group(2))),
         budget_bands=_bands(data.get("budget_bands")),
         **values,

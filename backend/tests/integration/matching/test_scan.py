@@ -101,8 +101,9 @@ async def test_the_model_explains_the_top_n_and_the_rest_keep_the_rules(
     await weekly(app_engine, llm=llm, model_top_n=1)
     by_proposal = {m.proposal_id: m for m in await matches(owner_engine, scout)}
     top, rest = by_proposal[first], by_proposal[second]
-    assert (top.score, top.rationale, top.rule_breakdown["why_source"]) == (70, "Savings for SACCO members.", "model")
-    assert (top.rule_breakdown["deterministic"], top.rule_breakdown["model_fit"]) == (90, 40)  # 0.6*90 + 0.4*40
+    assert (top.score, top.rationale, top.rule_breakdown["why_source"]) == (85, "Savings for SACCO members.", "model")
+    # 0.6*90 + 0.4*40 = 70, moved at most 5 points from the rules' 90 (final.max_model_shift)
+    assert (top.rule_breakdown["deterministic"], top.rule_breakdown["model_fit"]) == (90, 40)
     assert rest.rule_breakdown["why_source"] == "code"
     assert rest.rule_breakdown["why_reason"] == "beyond_top_n"
     assert rest.rationale.startswith("Matched on niche")

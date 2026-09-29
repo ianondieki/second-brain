@@ -244,7 +244,7 @@ async def _insert_match(
     db: AsyncSession, settings: Settings, scout: ScoutAgent, s: Scored, why: Explanation, weights: Weights
 ) -> int:
     c = s.candidate
-    final = final_score(s.score, why.model_fit, weights)
+    final = final_score(s.score, why.model_fit, weights, floor=scout.min_fit)
     breakdown = s.breakdown() | {
         "final": final,
         "model_fit": why.model_fit,
