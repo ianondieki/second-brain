@@ -42,3 +42,8 @@ on this digest: a bare domain, an email and a Kenyan phone number are never auto
 **Open.** N23 says "org members opted in to the progress digest"; no separate digest opt-in exists, so the prototype
 uses the `reminders` consent ("Send me reminders about my proposals and engagements by email") as the opt-in, for
 every role. A dedicated opt-in (a consent purpose or a default-off preference) is a product decision.
+
+**Review round 1 (2026-09-29).** Developer text in the digest is defanged with the Tier-1 sanitiser's own phone
+patterns (`proposals.sanitise.PHONES`), which now include Kenyan landlines (020 2345678, 0203 123456,
+(020) 234-5678); the AC-MAIL-5 fixture carries a landline (`unit/reminders/test_org_digest.py`), and the P2 sanitiser
+tests gained landline and date-and-time cases (`unit/proposals/test_sanitise.py`).

@@ -55,11 +55,10 @@ Branch `feat/REQ-REM-01-reminders` (impl-backend). No schema change, no new envi
   `[1, 2, 3]`, Tier 1, no tools, not batchable): the model sees only `Nudge.fact_lines` (counts, codes, dates, milestone
   numbers, the developer's own titles) as one field owned by the developer, and writes `headline` and `next_step`
   (`NudgeWording`, `demo_fallback()` = `DEMO_TEXT` with `injection_suspected=True`). Its lines are used only when
-  `check_wording` passes (one plain line within 160/240 characters; no link, markup or contact detail; no number,
-  month, weekday, relative day, status or capitalised name the facts lack; no percentage; the next step keeps its
-  numbers). Otherwise the fixed text answers, with the reason (`not_eligible`, `demo_fallback:<reason>`,
-  `llm_error:<code>`, `injection_suspected`, `rejected:<check>`), logged `reminders.nudge_worded`, marked in the email
-  header `X-Bridge-Wording: model|fallback`; model wording is labelled "AI-drafted" in the email (docs/spec/09).
+  `check_wording` passes; since review round 1 it is an allowlist (`bridge/reminders/grounding.py`, see below).
+  Otherwise the fixed text answers, with the reason (`not_eligible`, `demo_fallback:<reason>`, `llm_error:<code>`,
+  `injection_suspected`, `retry`, `rejected:<check>`), logged `reminders.nudge_worded`, marked in the email header
+  `X-Bridge-Wording: model|fallback`; model wording is labelled "AI-drafted" in the email (docs/spec/09).
 - **Dispatch** (`bridge/reminders/dispatch.py`): `run_developer_nudges` from 07:30 EAT; per recipient in a session bound
   to them: the day's ledger rows first (done: no facts read, no LLM call), then facts, wording, the in-app summary
   (always on) and the email (the `reminders` consent, a verified address, the `em7`/email preference, a plan with
@@ -95,3 +94,33 @@ retries), `integration/reminders/test_health_agreement.py` (AC-REM-3), `integrat
 7. The trending line (REQ-TREND-02, Phase 5) is not built.
 8. Merge with P5: both branches edit `IMPORT_PATHS` in `bridge/jobs/app.py` and its assertion in
    `tests/unit/jobs/test_provenance_jobs.py` (keep all three task modules).
+
+## P6 review round 1 (2026-09-29, at 89851b6): CHANGES_REQUIRED, 2 MAJOR, fixed
+
+- **MAJOR 1** (`5c46e78` red, `c606cfd`, `816ac93`): `check_wording` was a denylist and let invented facts through
+  (a name opening a sentence, "paid", "twenty", an ordinal, 2026 as an amount, a day and month from different facts,
+  "within a week … cancelled"). It is now an allowlist (`bridge/reminders/grounding.py`): the facts and the model's
+  line are read with the same rules; quoted titles, dates (a day with its month, the year when written), counts (a
+  number with its noun and status) and milestone numbers are whole units that must be the facts'; every other word
+  must be a neutral vocabulary word (no state verbs, negations or names) or a word of the facts; capitalised words
+  must be in the facts unless a vocabulary word opens a sentence; ordinals, amounts, quantity words, months without
+  a day, weekdays and other time words, statuses the facts lack, symbols, links, contact details and every whitespace
+  but a space are refused; the next step keeps its title and dates. The nudge's fact lines state counts as units
+  ("2 things need the developer.", "1 engagement at risk.", "Today is 5 Oct 2026."). Reason codes: `invented_word`,
+  `invented_number`, `invented_date`, `invented_status`, `<field>_symbol`, `<field>_not_one_line`,
+  `<field>_link_or_contact`, `<field>_length`, `next_step_changed`. `unit/reminders/test_grounding.py` holds the
+  reviewer's probes. THREAT_MODEL row "Reminder wording misstates milestone status" updated.
+- **MAJOR 2** (`a23985a` red, `1e0f0d8`): the model was asked
+  for every nudge, though only the email uses its words. It is now asked only when the run sends a new email; a
+  resumed email carries the fixed text (reason `retry`), so one model call serves one email and no facts reach the
+  model for an in-app summary, a closed email channel (no consent, preference off, unverified, plan) or a retry
+  (`test_no_llm_call_when_no_email_will_be_sent`, `test_one_llm_call_per_email_not_per_attempt`).
+- MINORs done: a plan without `daily_email_reminders` gives `email_skipped == "plan"` (same test); queued emails of an
+  earlier period are swept to `failed` ("expired: its day passed") and a queued email a run will not send ends
+  `failed` ("withdrawn: …") (`df45efe`); any whitespace but a space refused (grounding commit); Kenyan landlines in the
+  shared phone patterns (`proposals.sanitise.PHONES`, used by `render.defang`; `1158d79`).
+- **Follow-up (not built):** the docs/spec/09 progress-reporter eval set (50 milestone-state fixtures, 100% factual
+  consistency, missing data always disclosed) belongs to REQ-EVAL-01; score it with `check_wording`.
+- Next (orchestrator, after P5 merges): merge the integration branch, switch `health.whose_turn` to P5's
+  `bridge.engagements.state_machine.pending` (docs/spec/06 6.9: the state machine is the only definition) and move the
+  thresholds into `config/policy.yaml`, before P6 merges.

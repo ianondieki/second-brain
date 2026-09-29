@@ -40,3 +40,10 @@ row for the key; in-app once; preferences), plus the dispatcher's runs in `integ
 DISTINCT) would enforce the tuple in the database as well: optional, for db-migrations. (2) The at-least-once window of
 REQ-NOT-01 stays: if the COMMIT fails after a successful send, the next run sends again (bounded by the three
 attempts only if each attempt is committed before the provider call; not built).
+
+**Review round 1 (2026-09-29).** A dispatcher run first ends every queued email of the recipient's kind for an
+earlier period (`failed`, "expired: its day passed": never sent late), and ends a queued email it will not send
+because nothing is left to say or its channel closed (`failed`, "withdrawn: <why>"): `integration/reminders/
+test_dispatch.py::test_a_past_days_queued_email_is_swept_never_sent_late`, `::test_a_queued_email_with_nothing_left_
+to_say_is_dead_lettered`, `::test_a_queued_email_whose_channel_closed_is_dead_lettered`,
+`integration/reminders/test_org_dispatch.py::test_a_past_weeks_queued_digest_is_swept_never_sent_late`.
