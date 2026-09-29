@@ -451,6 +451,8 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | 49 | Four implementers again for a short fix (org screens' render link while P6, P8 part 4 and P9 ran) | deviation, recorded | a one-line backend fix plus a merge; same rule as #47 |
 | 50 | Integration checks looked at `pr.yml` only (re-check #42) | change | CodeQL had been red since 2026-09-28 (D-42); the orchestrator's draft fix (test paths out of CodeQL, an accepted-findings list in the gate) was stopped by the session's permission check as a gate bypass and discarded, so it went to D-42; from now on each feature branch also runs `codeql.yml` before merging, and the integration push's CodeQL run is checked too |
 
+**M2 plan.** `docs/platform/prototype-m2-plan.md` (2026-09-29): revision 0005 contents, routes and screens per task, the slot order, reviewers, demo budget. New decisions: D-43 (scout Tier-2 isolation, default: prototype deviation with lint and red-team tests), D-44 (sample prices), D-45 (research cards naming organisations), D-39 item 6 (assistant consent text). Revision 0005 is built now and merges after the M1 tag.
+
 ### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
 
 P9:
