@@ -8,13 +8,18 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine
+from argon2 import PasswordHasher
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from bridge.auth import totp
+import bridge.clock
+from bridge.auth import passwords, service, totp
+from bridge.auth.models import User
 from bridge.config import get_settings
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
@@ -241,3 +246,151 @@ async def test_role_changes_need_owner_and_step_up(client: httpx.AsyncClient) ->
     )
     assert add_signatory.status_code == 200, add_signatory.text
     assert set(add_signatory.json()["roles"]) == {"owner", "signatory"}
+
+
+# ------------------------------------------------------------------ refusals and edge paths of the flows above
+
+
+async def signed_in(client: httpx.AsyncClient, side: str = "developer") -> str:
+    """A verified account signed in through its emailed link in this browser; returns the address."""
+    address = email()
+    assert (await signup(client, address, side)).status_code == 202
+    consumed = await client.post("/api/auth/magic-link/consume", json={"token": link_token(client, address)})
+    assert consumed.status_code == 200, consumed.text
+    await refresh_csrf(client)
+    return address
+
+
+def refusal(response: httpx.Response) -> tuple[int, str]:
+    return response.status_code, str(response.json()["detail"]["code"])
+
+
+def mails_to(client: httpx.AsyncClient, address: str) -> int:
+    return len([m for m in outbox(client).outbox if m.to == address])
+
+
+async def test_signup_refusals_create_no_account_and_send_nothing(client: httpx.AsyncClient) -> None:
+    valid: dict[str, object] = {
+        "password": PASSWORD,
+        "display_name": "Test User",
+        "side": "developer",
+        "accept_terms": True,
+        "consents": {},
+        "consents_version": consents_version(get_settings()),
+    }
+    cases: list[tuple[dict[str, object], tuple[int, str]]] = [
+        ({"email": "jörg@example.com"}, (422, "invalid_email")),  # a valid EmailStr, but not a plain ASCII mailbox
+        ({"accept_terms": False}, (422, "terms_not_accepted")),
+        ({"side": "org"}, (422, "org_details_required")),
+        ({"consents_version": "an older text"}, (409, "consent_text_changed")),
+        ({"password": "eleven char"}, (422, "weak_password")),
+    ]
+    for change, expected in cases:
+        body = {**valid, "email": email(), **change}
+        assert refusal(await client.post("/api/auth/signup", json=body)) == expected
+        assert mails_to(client, str(body["email"])) == 0
+
+
+async def test_a_signup_that_loses_the_race_for_its_address_answers_as_for_an_existing_account(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two signups for one address: the second passes the lookup before the first commits, and its insert then hits
+    the unique address. It answers 202 like any repeat signup (no 500 that would reveal the account)."""
+    address = await signed_in(client)
+    real = service.user_by_email
+    lookups = 0
+
+    async def before_the_other_commits(db: AsyncSession, address: str) -> User | None:
+        nonlocal lookups
+        lookups += 1
+        return None if lookups == 1 else await real(db, address)
+
+    monkeypatch.setattr(service, "user_by_email", before_the_other_commits)
+    again = await signup(client, address)
+    assert (again.status_code, again.json()) == (202, {"status": "check_email"})
+    assert lookups == 3  # the stale lookup, the check after the refused insert, the existing-account answer
+    assert any("already have" in m.subject for m in outbox(client).outbox if m.to == address)
+
+
+async def test_magic_links_go_only_to_active_accounts(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
+    unknown = email()
+    assert (await client.post("/api/auth/magic-link", json={"email": unknown})).status_code == 202
+    assert mails_to(client, unknown) == 0
+    address = await signed_in(client)
+    assert (await client.post("/api/auth/magic-link", json={"email": address})).status_code == 202
+    earlier = link_token(client, address)
+    sent = mails_to(client, address)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET status = 'suspended' WHERE email = :e"), {"e": address})
+    assert (await client.post("/api/auth/magic-link", json={"email": address})).status_code == 202
+    assert mails_to(client, address) == sent  # same answer, no link
+    spent = await client.post("/api/auth/magic-link/consume", json={"token": earlier})
+    assert refusal(spent) == (400, "invalid_or_expired_link")  # a link sent before the suspension signs no one in
+
+
+async def test_a_login_upgrades_a_hash_made_with_weaker_argon2_settings(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = await signed_in(client)
+    weak = PasswordHasher(time_cost=1, memory_cost=8 * 1024, parallelism=1).hash(PASSWORD)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET password_hash = :h WHERE email = :e"), {"h": weak, "e": address})
+    assert (await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})).status_code == 200
+    async with owner_engine.connect() as conn:
+        stored = (
+            await conn.execute(text("SELECT password_hash FROM users WHERE email = :e"), {"e": address})
+        ).scalar_one()
+    assert stored != weak
+    assert not passwords.needs_rehash(stored)
+    assert passwords.verify_password(stored, PASSWORD)
+
+
+async def test_a_new_password_must_meet_the_policy(client: httpx.AsyncClient) -> None:
+    address = await signed_in(client)
+    for new in ("eleven char", address):
+        body = {"current_password": PASSWORD, "new_password": new}
+        assert refusal(await client.post("/api/auth/password", json=body)) == (422, "weak_password")
+    login = await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
+    assert login.status_code == 200  # the old password still signs in
+
+
+async def test_a_step_up_without_two_step_sign_in_is_refused(client: httpx.AsyncClient) -> None:
+    await signed_in(client)
+    for code in ("123456", "abcd-efgh"):  # a TOTP code and a recovery code: neither exists for this account
+        assert refusal(await client.post("/api/auth/step-up", json={"code": code})) == (401, "invalid_code")
+
+
+async def test_the_second_factor_is_throttled_after_five_attempts(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await signed_in(client)
+    secret = await enrol_totp(client)
+    now = datetime.now(UTC)
+    monkeypatch.setattr(bridge.clock, "utcnow", lambda: now)  # no attempt ages out of the minute on a slow machine
+    for _ in range(5):
+        assert refusal(await client.post("/api/auth/step-up", json={"code": "1234567"})) == (401, "invalid_code")
+    right = totp.code_at(secret, _now_counter() + 1)
+    assert refusal(await client.post("/api/auth/step-up", json={"code": right})) == (429, "too_many_attempts")
+
+
+async def test_a_wrong_second_step_keeps_the_session_pending_and_the_right_one_shows_staff_status(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine
+) -> None:
+    address = await signed_in(client)
+    secret = await enrol_totp(client)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET staff_role = 'support' WHERE email = :e"), {"e": address})
+    await client.post("/api/auth/logout")
+    await refresh_csrf(client)
+    await client.post("/api/auth/login", json={"email": address, "password": PASSWORD})
+    await refresh_csrf(client)
+    name = get_settings().session_cookie_name
+    pending = client.cookies.get(name)
+    assert refusal(await client.post("/api/auth/mfa/verify", json={"code": "1234567"})) == (401, "invalid_code")
+    assert client.cookies.get(name) == pending
+    assert (await client.get("/api/auth/me")).json()["side"] == "pending"
+    right = totp.code_at(secret, _now_counter() + 1)
+    assert (await client.post("/api/auth/mfa/verify", json={"code": right})).status_code == 200
+    await refresh_csrf(client)
+    me = (await client.get("/api/auth/me")).json()
+    assert (me["side"], me["user"]["staff_role"]) == ("staff", "support")
