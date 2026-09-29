@@ -13,8 +13,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
+from bridge.db import bind_tenant, create_session_factory
 from bridge.llm.fakes import FakeLLMClient
 from bridge.matching import scan as scan_module
+from bridge.matching.pipeline import Filters, Window, candidates
 from bridge.matching.rationale import ScoutFit
 from bridge.matching.scan import clock_now, run_on_new, run_periodic
 from bridge.models.enums import DeliveryStatus
@@ -150,10 +152,10 @@ async def test_the_cursor_includes_each_new_proposal_exactly_once(
     assert mine(await weekly(app_engine, 2), scout).matched == 0  # the overlap re-reads nothing new
     assert sorted(m.proposal_id for m in await matches(owner_engine, scout)) == sorted([first, second])
     history = await runs(owner_engine, scout)
-    assert [(r.trigger, r.status, r.matched_count) for r in history] == [
-        ("weekly", "completed", 1),
-        ("weekly", "completed", 1),
-        ("weekly", "completed", 0),
+    assert [(r.trigger, r.status, r.scanned_count, r.matched_count) for r in history] == [
+        ("weekly", "completed", 1, 1),
+        ("weekly", "completed", 1, 1),  # the overlap re-reads the first: already matched, left out in SQL
+        ("weekly", "completed", 0, 0),
     ]
     assert history[0].window_start == history[0].window_end - timedelta(days=30)
     assert history[1].window_start == history[0].window_end - timedelta(hours=1)
@@ -310,7 +312,7 @@ async def test_scout_matches_write_signals(owner_engine: AsyncEngine, app_engine
         p=proposal,
     )
     assert len(signals) == 2
-    assert all(s.actor_hash is None for s in signals)
+    assert all(bytes(s.actor_hash) == bytes(s.org_hash) for s in signals)  # the scout acts for its organisation
     assert len({bytes(s.org_hash) for s in signals}) == 2  # one pseudonym per organisation, never its id
     assert all(world.org.id.bytes not in bytes(s.org_hash) for s in signals)
 
@@ -353,3 +355,16 @@ async def test_the_digest_marks_a_match_carrying_another_members_feedback(
     assert later.digest.marked == (match.id,)
     [marked] = await matches(owner_engine, scout)
     assert marked.digest_sent_at is not None
+
+
+async def test_exclusions_filter_in_sql_before_the_limit(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """AC-SCOUT-5: the exclude keywords are a hard filter in SQL (the code's re-check is a second layer)."""
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "crypto", Teaser(summary="A CRYPTO wallet"))
+    good = (await publish(owner_engine, world, "good"))[0]
+    filters = Filters(org_id=world.org.id, niches=(world.niche,), exclude_keywords=("crypto",))
+    async with create_session_factory(app_engine)() as db:
+        await bind_tenant(db, user_id=world.org.owner, org_id=world.org.id)
+        until = (await db.execute(text("SELECT now()"))).scalar_one()
+        page = await candidates(db, filters, Window(until=until, since=until - timedelta(days=1)), limit=1)
+    assert [c.proposal_id for c in page.items] == [good]

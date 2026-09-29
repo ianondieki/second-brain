@@ -5,7 +5,8 @@ transaction, so the signal exists if and only if its source event commits. A row
 pseudonyms, never a name:
 
 - ``actor_hash``: the acting user's salted digest (``app_subject_digest``, the database's per-user salt; bridge_app
-  computes only the current user's own), or none for a system signal such as a scout match;
+  computes only the current user's own); for a scout match, whose actor is the organisation's scout, the
+  organisation's pseudonym below;
 - ``org_hash``: ``HMAC-SHA-256(k, org_id)`` with ``k = HMAC-SHA-256(SECRET_KEY, "bridge.signal_events.org_hash.v1")``:
   stable per organisation (so ``app_trend_aggregates`` can count distinct organisations, and shows a count only from
   3), and unlinkable to an organisation without the server key. Rotating ``SECRET_KEY`` starts new pseudonyms.

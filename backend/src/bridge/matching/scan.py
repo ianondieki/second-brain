@@ -271,7 +271,11 @@ async def _insert_match(
     )
     if inserted.scalar_one_or_none() is None:
         return 0
-    await signals.record(db, settings, item_id=c.proposal_id, kind=signals.SCOUT_MATCH, org_id=scout.org_id)
+    # The scout acts for its organisation: its pseudonym is the signal's actor (P12 counts distinct actors).
+    actor = signals.org_hash(settings, scout.org_id)
+    await signals.record(
+        db, settings, item_id=c.proposal_id, kind=signals.SCOUT_MATCH, org_id=scout.org_id, actor=actor
+    )
     return 1
 
 
