@@ -31,6 +31,8 @@ export const CLIENT_STRING_NAMESPACES = [
   "ideaEditor",
   "ideaFields",
   "ideaDelete",
+  "pitch",
+  "tagWithdraw",
   "orgProposal",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];

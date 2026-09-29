@@ -64,3 +64,23 @@ export function LockIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Waiting (held for review, timestamp pending): a clock. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 6v4.25l2.75 1.75" />
+    </Icon>
+  );
+}
+
+/** Sent to an organisation (a pitch that reached it): a paper plane. */
+export function SendIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M16.75 3.25 8.5 11.5" />
+      <path d="M16.75 3.25 11.5 16.75 8.5 11.5 3.25 8.5Z" />
+    </Icon>
+  );
+}
