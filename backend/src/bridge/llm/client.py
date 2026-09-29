@@ -1,7 +1,8 @@
 """``LLMClient`` and its implementation ``LLMService`` (REQ-LLM-01; ADR-005; docs/spec/08 LLM layer).
 
 Every call: the task comes from ``ai/models.yaml`` (model, effort, max_tokens, purpose); the kill switch; the Tier-2
-guard (AC-SEC-6); the sanitiser and nonce framing; per attempt a pre-call budget check (global daily cap, the
+guard (AC-SEC-6); a free slot's service also runs the D-37 data rule (``bridge.llm.demo_data``: only seeded demo data
+goes to a free provider); the sanitiser and nonce framing; per attempt a pre-call budget check (global daily cap, the
 subject's monthly cap), the adapter call and one ledger row. Retry rules (ADR-005 decision 3):
 
 - ``stop_reason == "refusal"``: logged and sent to the human queue; at most one retry on the task's fallback model.
@@ -46,6 +47,7 @@ from bridge.config import Settings
 from bridge.ids import uuid7
 from bridge.llm.adapter import BatchItemError, BatchState, ModelAdapter, ModelRequest, ModelResponse
 from bridge.llm.budget import BudgetGuard, BudgetListener, CapProvider, Snapshot
+from bridge.llm.demo_data import DataRule
 from bridge.llm.errors import (
     ConsentRequired,
     LLMBatchNotOwned,
@@ -209,8 +211,10 @@ class LLMService:
         nonce: Callable[[], str] = new_nonce,
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] = time.perf_counter,
+        data_rule: DataRule | None = None,
     ) -> None:
         self._adapter = adapter
+        self._data_rule = data_rule
         self._registry = registry
         self._ledger = ledger
         self._consents = consents
@@ -334,12 +338,15 @@ class LLMService:
         )
 
     async def _refuse_early(self, call: _Call, messages: Sequence[Message]) -> None:
-        """The ledger's subject check (a call it cannot record is refused unrecorded), then the kill switch and the
-        Tier-2 guard: those refusals are recorded with names and lengths only, against the task's model."""
+        """The ledger's subject check (a call it cannot record is refused unrecorded), then the kill switch, the
+        Tier-2 guard and the data rule: those refusals are recorded with names and lengths only, against the task's
+        model (a ``NotDemoData`` is not: the router answers it with the fake)."""
         await self._ledger.check_subject(org_id=call.ctx.org_id, user_id=call.ctx.user_id)
         try:
             self._budget.check_kill_switch()
             await check_tier2(call.spec, messages, self._consents, session_id=call.ctx.session_id)
+            if self._data_rule is not None:
+                await self._data_rule.check_call(call.spec.name, messages, call.ctx)
         except (LLMKillSwitch, Tier2NotAllowed, ConsentRequired) as exc:
             status = (
                 CallStatus.BLOCKED_KILL_SWITCH

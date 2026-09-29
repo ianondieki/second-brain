@@ -105,6 +105,30 @@ class Tier2NotAllowed(LLMBlocked):
         self.fields = fields
 
 
+class Tier2DemoOnly(Tier2NotAllowed):
+    """A Tier-2 field of a non-demo account was routed to a free provider (D-37: only seeded demo data goes there),
+    refused whatever the consent says."""
+
+    code = "llm_tier2_demo_only"
+
+    def __init__(self, task: str, fields: tuple[str, ...]) -> None:
+        super().__init__(task, fields)
+        self.args = (
+            f"task {task}: Tier-2 fields {', '.join(fields)} of a non-demo account never go to a free provider",
+        )
+
+
+class NotDemoData(LLMBlocked):
+    """A call routed to a free provider is not seeded demo data (D-37): its user, or a field's owner, is not a demo
+    account, or it has no user. The router answers it with the labelled fake."""
+
+    code = "llm_not_demo_data"
+
+    def __init__(self, task: str) -> None:
+        super().__init__(f"task {task}: only seeded demo data goes to a free provider")
+        self.task = task
+
+
 class ConsentRequired(LLMBlocked):
     """A Tier-2 field's owner holds no live consent for the task's purpose (AC-SEC-6)."""
 
