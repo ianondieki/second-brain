@@ -229,8 +229,8 @@ async def test_the_opt_in_lives_only_as_long_as_the_owners_login_session(
     factory: async_sessionmaker[AsyncSession], owner_engine: AsyncEngine, user: UUID, other_user: UUID
 ) -> None:
     """The call's session must be a live login session of the owner (the rule of ``bridge.auth.sessions.lookup``):
-    an expired session, another user's session, a suspended owner or a revoked session ends the opt-in, although the
-    grant is the owner's latest decision and names that very session."""
+    an expired session, another user's session, a suspended owner, a login still waiting for its second factor or a
+    revoked session ends the opt-in, although the grant is the owner's latest decision and names that very session."""
     expired = await login(factory, user, expires_in=-timedelta(minutes=1))
     await _grant(factory, user, expired)
     assert not await _live(factory, user, ASSISTANT, expired)
@@ -248,6 +248,15 @@ async def test_the_opt_in_lives_only_as_long_as_the_owners_login_session(
             suspend = text("UPDATE users SET status = CAST(:s AS user_status) WHERE id = :u")
             await conn.execute(suspend, {"s": status, "u": user})
         assert await _live(factory, user, ASSISTANT, session) is live
+
+    async with factory() as db:  # a login waiting for its second factor is not live (security review 2026-09-29)
+        await db.execute(text("UPDATE sessions SET mfa_pending = true WHERE id = :id"), {"id": session})
+        await db.commit()
+    assert not await _live(factory, user, ASSISTANT, session)
+    async with factory() as db:
+        await db.execute(text("UPDATE sessions SET mfa_pending = false WHERE id = :id"), {"id": session})
+        await db.commit()
+    assert await _live(factory, user, ASSISTANT, session)
 
     async with factory() as db:  # logout, as bridge.auth.sessions.revoke does
         await db.execute(text("UPDATE sessions SET revoked_at = now() WHERE id = :id"), {"id": session})
