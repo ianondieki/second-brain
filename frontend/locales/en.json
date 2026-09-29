@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim",
+    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "review": "[[COPY-REVIEW]] G2/G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing"
@@ -282,6 +282,8 @@
     "newestPage": "Back to the newest",
     "staleCursor": "This page of the Inbox is no longer available.",
     "noOrg": "Your account is not a member of an organisation yet.",
+    "notMember": "Your account is not a member of this organisation.",
+    "openOwnInbox": "Open your Inbox",
     "refusedMfaSetup": "Turn on two-step sign-in to see the Inbox of {org}.",
     "refusedMfaCode": "Enter the code from your authenticator app to see the Inbox.",
     "refusedNotFound": "This Inbox is not available to your account."
@@ -308,7 +310,7 @@
     "ndaVersionLabel": "Version",
     "ndaFingerprint": "SHA-256 fingerprint",
     "ndaDraft": "This is a draft text: the final wording follows legal review.",
-    "noticeHeading": "What the developer sees",
+    "noticeHeading": "Who sees that you opened it",
     "accept": "Accept and view",
     "accepting": "Accepting…",
     "accepted": "You accepted version {version} of the Evaluation NDA on {date}.",
@@ -337,6 +339,7 @@
       "engagement_ended": "This engagement has ended, so the full proposal is closed to {org}.",
       "nda_required": "Accept the Evaluation NDA to open the full proposal.",
       "nda_outdated": "A newer version of the Evaluation NDA was published while you were reading. Read it, then accept it.",
+      "nda_not_needed": "You own this proposal, so it needs no NDA: your own preview shows the full proposal as organisations see it.",
       "not_configured": "The Evaluation NDA cannot be shown right now. Try again in a few minutes.",
       "not_found": "This proposal is not in the Inbox of {org}.",
       "generic": "Something went wrong while opening this proposal. Try again in a moment."
@@ -347,7 +350,8 @@
       "stepUp": "Confirm",
       "newVersion": "Show the new version",
       "reload": "Try again",
-      "inbox": "Back to the Inbox"
+      "inbox": "Back to the Inbox",
+      "ownerPreview": "Open your preview"
     }
   },
   "nav": {

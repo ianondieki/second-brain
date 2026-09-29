@@ -10,7 +10,7 @@ import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { api } from "@/lib/api/client";
 
-import { ACTION_HREF, REFUSAL_ACTION, refusalOf, type Refusal } from "../../refusals";
+import { ACTION_HREF, ownerPreviewHref, REFUSAL_ACTION, refusalOf, type Refusal } from "../../refusals";
 
 export interface NdaAcceptProps {
   orgId: string;
@@ -79,7 +79,12 @@ export function NdaAccept({
       {refusal ? (
         <Alert ref={notice} className="w-full" tone="error">
           <p data-refusal={refusal}>{t(`refusal.${refusal}`, { org: orgName })}</p>
-          {action && href ? (
+          {action === "ownerPreview" ? (
+            // A plain anchor: the preview is the API's page (no prefetch of it).
+            <a href={ownerPreviewHref(proposalId)} className={standaloneLinkClass}>
+              {t("action.ownerPreview")}
+            </a>
+          ) : action && href ? (
             <Link href={href} className={standaloneLinkClass}>
               {t(`action.${action}`)}
             </Link>

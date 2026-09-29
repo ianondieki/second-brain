@@ -9,7 +9,7 @@ import { Fingerprint } from "@/app/(public)/verify/Fingerprint";
 
 import { tier2Src, type EvaluationNda, type NdaResult } from "../../data";
 import { formatMoment } from "../../format";
-import { ACTION_HREF, REFUSAL_ACTION, type Refusal } from "../../refusals";
+import { ACTION_HREF, ownerPreviewHref, REFUSAL_ACTION, type Refusal } from "../../refusals";
 import { NdaAccept } from "./NdaAccept";
 import { StepUp } from "./StepUp";
 
@@ -37,7 +37,7 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
   let body: ReactNode;
   let open = false;
   if (nda.kind === "refused") {
-    body = await RefusalNotice({ refusal: nda.refusal, orgName, hrefs });
+    body = await RefusalNotice({ refusal: nda.refusal, orgName, proposalId, hrefs });
   } else if (nda.nda.acceptance_id === null) {
     body = await NdaStep({ nda: nda.nda, orgId, orgName, proposalId, hrefs });
   } else if (!viewing) {
@@ -86,10 +86,12 @@ function stateName(nda: NdaResult, viewing: boolean) {
 async function RefusalNotice({
   refusal,
   orgName,
+  proposalId,
   hrefs,
 }: {
   refusal: Refusal;
   orgName: string;
+  proposalId: string;
   hrefs: FullProposalProps["hrefs"];
 }) {
   const t = await getTranslations("orgProposal");
@@ -105,9 +107,21 @@ async function RefusalNotice({
         : action
           ? ACTION_HREF[action]
           : undefined;
+  const sentence = <p className="max-w-[60ch] text-ink">{t(`refusal.${refusal}`, { org: orgName })}</p>;
+  if (action === "ownerPreview") {
+    // A plain anchor, not <Link>: the preview is the API's page, and a prefetch would read (and audit) it.
+    return (
+      <div className="flex flex-col items-start gap-3" data-refusal={refusal}>
+        {sentence}
+        <a href={ownerPreviewHref(proposalId)} className={standaloneLinkClass}>
+          {t("action.ownerPreview")}
+        </a>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-start gap-3" data-refusal={refusal}>
-      <p className="max-w-[60ch] text-ink">{t(`refusal.${refusal}`, { org: orgName })}</p>
+      {sentence}
       {action && href ? (
         <Link
           href={href}

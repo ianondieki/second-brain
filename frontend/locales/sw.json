@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
+    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili"
@@ -282,6 +282,8 @@
     "newestPage": "Rudi kwa mapya zaidi",
     "staleCursor": "Ukurasa huu wa Kikasha haupatikani tena.",
     "noOrg": "Akaunti yako bado si mwanachama wa shirika lolote.",
+    "notMember": "Akaunti yako si mwanachama wa shirika hili.",
+    "openOwnInbox": "Fungua Kikasha chako",
     "refusedMfaSetup": "Washa kuingia kwa hatua mbili ili kuona Kikasha cha {org}.",
     "refusedMfaCode": "Weka msimbo kutoka kwa programu yako ya uthibitishaji ili kuona Kikasha.",
     "refusedNotFound": "Kikasha hiki hakipatikani kwa akaunti yako."
@@ -308,7 +310,7 @@
     "ndaVersionLabel": "Toleo",
     "ndaFingerprint": "Alama ya SHA-256",
     "ndaDraft": "Haya ni maandishi ya rasimu: maneno ya mwisho yatafuata ukaguzi wa kisheria.",
-    "noticeHeading": "Anachokiona msanidi programu",
+    "noticeHeading": "Nani anaona kwamba ulilifungua",
     "accept": "Kubali na utazame",
     "accepting": "Inakubali…",
     "accepted": "Ulikubali toleo {version} la NDA ya Tathmini tarehe {date}.",
@@ -337,6 +339,7 @@
       "engagement_ended": "Ushirikiano huu umekwisha, kwa hivyo pendekezo kamili limefungwa kwa {org}.",
       "nda_required": "Kubali NDA ya Tathmini ili kufungua pendekezo kamili.",
       "nda_outdated": "Toleo jipya la NDA ya Tathmini lilichapishwa ulipokuwa ukisoma. Lisome, kisha ulikubali.",
+      "nda_not_needed": "Pendekezo hili ni lako, kwa hivyo halihitaji NDA: onyesho lako la awali linaonyesha pendekezo kamili kama mashirika yanavyoliona.",
       "not_configured": "NDA ya Tathmini haiwezi kuonyeshwa kwa sasa. Jaribu tena baada ya dakika chache.",
       "not_found": "Pendekezo hili halimo kwenye Kikasha cha {org}.",
       "generic": "Hitilafu imetokea wakati wa kufungua pendekezo hili. Jaribu tena baada ya muda mfupi."
@@ -347,7 +350,8 @@
       "stepUp": "Thibitisha",
       "newVersion": "Onyesha toleo jipya",
       "reload": "Jaribu tena",
-      "inbox": "Rudi kwenye Kikasha"
+      "inbox": "Rudi kwenye Kikasha",
+      "ownerPreview": "Fungua onyesho lako la awali"
     }
   },
   "nav": {

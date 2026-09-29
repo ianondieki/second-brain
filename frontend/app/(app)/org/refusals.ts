@@ -22,6 +22,7 @@ export const REFUSALS = [
   "engagement_ended",
   "nda_required",
   "nda_outdated",
+  "nda_not_needed",
   "not_configured",
   "not_found",
 ] as const;
@@ -32,10 +33,19 @@ export type Refusal = (typeof REFUSALS)[number] | "generic";
 /**
  * What the one action does. `enterCode`: the second-factor page; `turnOnMfa`: security settings; `stepUp`: the code
  * form on the page itself; `newVersion`: show the NDA version published meanwhile; `reload`: fetch the page again (a
- * passing failure); `inbox`: back to the list.
+ * passing failure); `inbox`: back to the list; `ownerPreview`: the owner's own marked preview of their proposal (an
+ * owner who is also a member of the organisation needs no NDA: 409 `nda_not_needed`).
  * Null: nothing the person can do here (an admin, the developer or the platform has to act).
  */
-export type RefusalAction = "enterCode" | "turnOnMfa" | "stepUp" | "newVersion" | "reload" | "inbox" | null;
+export type RefusalAction =
+  | "enterCode"
+  | "turnOnMfa"
+  | "stepUp"
+  | "newVersion"
+  | "reload"
+  | "inbox"
+  | "ownerPreview"
+  | null;
 
 export const REFUSAL_ACTION: Record<Refusal, RefusalAction> = {
   mfa_required: "enterCode",
@@ -53,6 +63,7 @@ export const REFUSAL_ACTION: Record<Refusal, RefusalAction> = {
   engagement_ended: "inbox",
   nda_required: "reload",
   nda_outdated: "newVersion",
+  nda_not_needed: "ownerPreview",
   not_configured: "reload",
   not_found: "inbox",
   generic: "reload",
@@ -67,8 +78,16 @@ export function refusalOf(status: number, error: unknown): Refusal {
   return code !== undefined && KNOWN.has(code) ? (code as Refusal) : "generic";
 }
 
-/** Where a link action goes; `stepUp`, `newVersion` and `reload` are handled on the page, not by a link. */
+/**
+ * Where a link action goes; `stepUp`, `newVersion` and `reload` are handled on the page, and `inbox` and
+ * `ownerPreview` depend on the organisation and the proposal (`ownerPreviewHref`).
+ */
 export const ACTION_HREF: Partial<Record<Exclude<RefusalAction, null>, string>> = {
   enterCode: "/auth/mfa",
   turnOnMfa: "/settings/security",
 };
+
+/** The owner's marked preview of their own proposal (GET /api/me/proposals/{id}/tier2; never logged as a view). */
+export function ownerPreviewHref(proposalId: string): string {
+  return `/api/me/proposals/${encodeURIComponent(proposalId)}/tier2`;
+}
