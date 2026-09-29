@@ -32,7 +32,7 @@ from bridge.llm.types import Message, Tier
 from bridge.models.enums import ConsentPurpose
 from bridge.profiles import consents
 
-PER_SESSION = frozenset({ConsentPurpose.TIER2_LLM_ASSISTANT})
+PER_SESSION = consents.SESSION_ONLY
 SESSION_SOURCE_PREFIX = "session:"
 
 
