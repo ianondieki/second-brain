@@ -157,7 +157,7 @@ SACCO_B = DemoOrg(
     ),
 )
 COUNTY_C = DemoOrg(
-    legal_name="County C (fixture)",
+    legal_name="County Government of C (fixture)",  # contains "county government", as county names do
     slug="county-c-fixture",
     kind=OrgKind.COUNTY_GOVT,
     verification=OrgVerification.E1,
