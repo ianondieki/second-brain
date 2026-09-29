@@ -1,9 +1,11 @@
 """Fixtures for the Pitch tests (REQ-PROP-03, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02, REQ-DIR-04; docs/spec/06 6.2, 6.3).
 
 ``pitch_orgs`` is the AC-PROP-1 cast, written as the owner role with a random tag in every name: two E2 organisations
-("Safaricom <tag>", "Airtel <tag>") with a TOTP-enrolled reviewer each, an E0 one ("Telkom <tag>", no members), an E1
-one ("Claimed <tag>", its owner a member) and an untagged E2 bystander ("Bystander <tag>") with a reviewer, all under
-the proposal world's niche. ``member_client`` signs a member in with the second factor done (org routes need it).
+(``safaricom``, ``airtel``) with a TOTP-enrolled reviewer each, an E0 one (``telkom``, no members), an E1 one
+(``claimed``, its owner a member) and an untagged E2 bystander with a reviewer, all under the proposal world's niche.
+The rows stay in the session database (engagements and their events are append-only), so the names are made up
+("Safcell", "Airwave", "Telmark"): a directory test that searches for "safaricom" still finds the seeded listing
+only. ``member_client`` signs a member in with the second factor done (org routes need it).
 ``RecordingHooks`` wraps the default ``TagHooks`` and records every call.
 """
 
@@ -111,10 +113,10 @@ async def pitch_orgs(owner_engine: AsyncEngine, proposal_world: ProposalWorld) -
     niche = proposal_world.niche_id
     return PitchOrgs(
         tag=tag,
-        safaricom=await add_org(owner_engine, f"Safaricom {tag}", verification="e2", niche_id=niche),
-        airtel=await add_org(owner_engine, f"Airtel {tag}", verification="e2", niche_id=niche),
-        telkom=await add_org(owner_engine, f"Telkom {tag}", verification="unclaimed", niche_id=niche, roles=None),
-        claimed=await add_org(owner_engine, f"Claimed {tag}", verification="e1", niche_id=niche, roles="{owner}"),
+        safaricom=await add_org(owner_engine, f"Safcell {tag}", verification="e2", niche_id=niche),
+        airtel=await add_org(owner_engine, f"Airwave {tag}", verification="e2", niche_id=niche),
+        telkom=await add_org(owner_engine, f"Telmark {tag}", verification="unclaimed", niche_id=niche, roles=None),
+        claimed=await add_org(owner_engine, f"Claimco {tag}", verification="e1", niche_id=niche, roles="{owner}"),
         bystander=await add_org(owner_engine, f"Bystander {tag}", verification="e2", niche_id=niche),
     )
 
