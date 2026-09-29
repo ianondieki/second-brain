@@ -328,6 +328,19 @@ async def signed(conn: AsyncConnection, engagement: UUID, kind: str, ref: UUID, 
     return bool(found)
 
 
+async def document_ref(conn: AsyncConnection, engagement: UUID, command: str) -> UUID:
+    """The document the latest ``command`` event named (the mutual NDA sent, the certificate of an accepted delivery),
+    as P5's commands record it; a new id for an event written without one."""
+    ref = await run(
+        conn,
+        "SELECT payload->>'document_ref' FROM engagement_events WHERE engagement_id = :e AND command = :c"
+        " ORDER BY seq DESC LIMIT 1",
+        e=engagement,
+        c=command,
+    )
+    return UUID(ref) if ref else uuid7()
+
+
 @dataclass(slots=True)
 class Walk:
     """What a walk along the main path created."""
@@ -418,9 +431,11 @@ async def walk(conn: AsyncConnection, p: Parties, engagement: UUID, until: str) 
                 role="developer",
                 method="click",
             )
-            await append(conn, engagement, p.developer, "developer", "send_nda", here, there)
+            # P5's commands name the sent document in the event (bridge.engagements.service reads it back).
+            payload = {"document_ref": str(uuid7()), "document_sha256": PDF_SHA256.hex()}
+            await append(conn, engagement, p.developer, "developer", "send_nda", here, there, payload=payload)
         elif there == "NDA_SIGNED":
-            nda = uuid7()
+            nda = await document_ref(conn, engagement, "send_nda")
             await act(conn, p.developer)
             await run(conn, SIGN, **sign_params(engagement, "mutual_nda", nda, PDF_SHA256, p.developer, "developer"))
             await act(conn, p.signatory, p.org)
@@ -485,9 +500,10 @@ async def walk(conn: AsyncConnection, p: Parties, engagement: UUID, until: str) 
             await append(conn, engagement, p.developer, "developer", "deliver", here, there)
         elif there == "SIGN_OFF":
             await act(conn, p.signatory, p.org)
-            await append(conn, engagement, p.signatory, "signatory", "accept_delivery", here, there)
+            payload = {"document_ref": str(uuid7()), "document_sha256": CERTIFICATE_SHA256.hex()}
+            await append(conn, engagement, p.signatory, "signatory", "accept_delivery", here, there, payload=payload)
         elif there == "PAYMENT_FINAL":
-            done.certificate = uuid7()
+            done.certificate = await document_ref(conn, engagement, "accept_delivery")
             await act(conn, p.signatory, p.org)
             cert = sign_params(
                 engagement, "acceptance_certificate", done.certificate, CERTIFICATE_SHA256, p.signatory, "org"

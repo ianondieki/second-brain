@@ -12,7 +12,8 @@ every signed-in user, so they are plain text and carry no contact route: contact
   ("[.]", "(dot)", "x . com", "[at]") turned back into "." and "@".
 - ``contact_findings`` finds URLs, bare domains, email addresses (also "name @ host", "@host.tld" and "name [at]
   host"), phone numbers (E.164 with "+", Kenyan 07xx/01xx and 254 forms, with spaces, dots, hyphens, slashes, commas,
-  underscores or brackets) and M-Pesa till/paybill numbers (keyword before or after the number).
+  underscores or brackets; Kenyan landlines 020 2345678, 0203 123456, (020) 234-5678) and M-Pesa till/paybill numbers
+  (keyword before or after the number).
 - ``check_field`` checks the skeletons of the raw and the plain form of one value (a link hidden in HTML is still a
   link), the field's length after cleaning (NFKC can lengthen text) and, for the summary, the 150-word limit. Each
   error names the field and a plain reason, never the offending text.
@@ -178,9 +179,14 @@ _DOMAINS = (
     re.compile(r"\b[a-z0-9-]+\s+dot\s+(?:co|ac|or|go|ne|sc)\s+dot\s+ke\b", re.IGNORECASE),
 )
 _SEP = r"[\s.\-()/,_]*"
-_PHONES = (
+_LANDLINE_SEP = r"[\s\-()]*"  # landlines are written 020 2345678, (020) 234-5678: no dots or slashes (dates)
+# Shared with bridge.reminders.render.defang (the digests' contact removal), so both read phone numbers alike.
+PHONES: Final = (
     # Kenyan mobiles: 07xx/01xx, 254 or +254, then nine digits starting 7 or 1, separators anywhere.
     re.compile(rf"(?<![\d+])(?:\(?\+?254\)?|0){_SEP}[17](?:{_SEP}\d){{8}}(?!\d)"),
+    # Kenyan landlines (P6 review): 0 or 254, an area code starting 2 to 6 (020 Nairobi, 041 Mombasa, 0203 ...),
+    # then the local number: ten digits in all from the 0.
+    re.compile(rf"(?<![\d+])(?:\(?\+?254\)?|\(?0){_LANDLINE_SEP}[2-6](?:{_LANDLINE_SEP}\d){{8}}(?!\d)"),
     # E.164 written with its "+": 8 to 15 digits.
     re.compile(rf"(?<![\w+])\+(?:{_SEP}\d){{8,15}}(?!\d)"),
 )
@@ -193,7 +199,7 @@ _DETECTORS: Final = (
     ("contains_url", _URLS),
     ("contains_email", _EMAILS),  # before domains: an address's host is not a second finding
     ("contains_domain", _DOMAINS),
-    ("contains_phone", _PHONES),
+    ("contains_phone", PHONES),
     ("contains_payment_number", _PAYMENTS),
 )
 

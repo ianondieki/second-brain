@@ -1,4 +1,4 @@
-"""The delivery ledger around every email (REQ-NOT-01; AC-MAIL-3 closes with REQ-NOT-06 in Phase 3).
+"""The delivery ledger around every email (REQ-NOT-01; REQ-NOT-06 and AC-MAIL-3 for daily messages).
 
 ``send_email`` keeps one ``notification_deliveries`` row per message:
 
@@ -13,20 +13,29 @@
    with the same key resumes it; ``attempts`` keeps counting across calls. A resuming call must name the same
    recipient. A row without a key can never be resumed, so it ends ``failed`` (still ``last_error_transient=True``).
    Any other exception from a provider is a bug and propagates (the caller's transaction then drops the row).
+4. ``attempt_limit`` (REQ-NOT-06: retries <= 3 per message) caps the attempts of one row across every call: a call
+   makes at most ``attempt_limit - attempts`` of them, and a row whose limit is spent on transient errors ends
+   ``failed`` (a dead letter, logged ``email.dead_letter``), never resent; a queued row found already at its limit
+   ends there without a send. Without a limit the rules above are unchanged.
+
+A once-a-day message (EM7) uses ``daily_key``: its dedupe key is built from exactly (kind, channel, user, Nairobi date),
+and per organisation for an organisation's digest, so the unique ``dedupe_key`` allows at most one row, hence one
+message, per user, kind, date and channel (AC-MAIL-3).
 
 The caller owns the transaction: rows are flushed, never committed, on a session the caller has already scoped to a
 tenant (``bridge.db.bind_tenant``). The provider call therefore runs inside the caller's open transaction, holding the
 row lock taken by ``SqlDeliveryStore.find_by_dedupe_key``, for up to the backoff plus ``max_attempts`` provider
 timeouts. That leaves an at-least-once window: if the COMMIT fails after a successful send, the ledger row rolls back
-and a retry sends the message again. The Phase 3 worker path (REQ-NOT-06) will commit a ``queued`` claim first and send
-afterwards. Storage sits behind the narrow ``DeliveryStore`` seam: ``SqlDeliveryStore`` for
-PostgreSQL and ``InMemoryDeliveryStore`` for unit tests. Logs carry the delivery id and kind, never the address,
-subject or body (docs/spec/08 Observability).
+and a retry sends the message again (still open after P6: committing a ``queued`` claim, and each attempt, before the
+provider call would bound that window too; see ``docs/platform/tasks/REQ-NOT-06.md``). Storage sits behind the
+narrow ``DeliveryStore`` seam: ``SqlDeliveryStore`` for PostgreSQL and ``InMemoryDeliveryStore`` for unit tests. Logs
+carry the delivery id and kind, never the address, subject or body (docs/spec/08 Observability).
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, date, datetime
 from typing import Protocol
@@ -46,6 +55,7 @@ MAX_ATTEMPTS = 3
 DEFAULT_BACKOFF: tuple[float, ...] = (0.5, 2.0)  # seconds before attempts 2 and 3
 MAX_KIND_CHARS = 40  # notification_deliveries.kind
 MAX_DEDUPE_KEY_CHARS = 200  # notification_deliveries.dedupe_key
+_KIND = re.compile(r"[a-z][a-z0-9_.-]{0,39}")  # a code, never containing the key's ":" separator
 
 Sleep = Callable[[float], Awaitable[None]]
 Clock = Callable[[], datetime]
@@ -140,6 +150,17 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def daily_key(
+    kind: str, channel: NotificationChannel, user_id: UUID, local_date: date, *, org_id: UUID | None = None
+) -> str:
+    """The dedupe key of a once-a-day message to ``user_id`` (and about ``org_id``, for an organisation's digest):
+    ``kind:channel:user[:org]:YYYY-MM-DD``, with ``local_date`` the Nairobi date (or the period's first day)."""
+    if not _KIND.fullmatch(kind):
+        raise ValueError(f"kind must be a code of 1-{MAX_KIND_CHARS} characters from a-z 0-9 _ . - (no ':')")
+    scope = str(user_id) if org_id is None else f"{user_id}:{org_id}"
+    return f"{kind}:{channel.value}:{scope}:{local_date.isoformat()}"
+
+
 def _check_arguments(
     *,
     kind: str,
@@ -148,9 +169,12 @@ def _check_arguments(
     dedupe_key: str | None,
     max_attempts: int,
     backoff: Sequence[float],
+    attempt_limit: int | None,
 ) -> None:
     if not 1 <= max_attempts <= MAX_ATTEMPTS:
         raise ValueError(f"max_attempts must be between 1 and {MAX_ATTEMPTS}")
+    if attempt_limit is not None and not 1 <= attempt_limit <= MAX_ATTEMPTS:
+        raise ValueError(f"attempt_limit must be between 1 and {MAX_ATTEMPTS}")
     if any(delay < 0 for delay in backoff):
         raise ValueError("backoff delays must not be negative")
     if user_id is None and org_id is None:
@@ -175,14 +199,22 @@ async def send_email(
     backoff: Sequence[float] = DEFAULT_BACKOFF,
     sleep: Sleep = asyncio.sleep,
     clock: Clock = _utcnow,
+    attempt_limit: int | None = None,
 ) -> NotificationDelivery:
     """Send ``message`` once through ``provider`` and return its ledger row (see the module docstring).
 
     ``session`` is the caller's tenant-scoped ``AsyncSession`` (or any ``DeliveryStore``). ``backoff[i]`` is the
     wait before attempt ``i + 2``; the last value repeats. ``sleep`` and ``clock`` are injectable for tests.
+    ``attempt_limit`` caps the row's attempts across calls (rule 4).
     """
     _check_arguments(
-        kind=kind, user_id=user_id, org_id=org_id, dedupe_key=dedupe_key, max_attempts=max_attempts, backoff=backoff
+        kind=kind,
+        user_id=user_id,
+        org_id=org_id,
+        dedupe_key=dedupe_key,
+        max_attempts=max_attempts,
+        backoff=backoff,
+        attempt_limit=attempt_limit,
     )
     store: DeliveryStore = SqlDeliveryStore(session) if isinstance(session, AsyncSession) else session
     log = get_logger(__name__)  # per call, so a logger cached under an earlier configuration is never reused
@@ -221,6 +253,11 @@ async def send_email(
     elif suppressed:
         delivery.status = DeliveryStatus.SUPPRESSED
         await store.save(delivery)
+    elif attempt_limit is not None and delivery.attempts >= attempt_limit:
+        delivery.status = DeliveryStatus.FAILED  # its attempts are spent: a dead letter, never resent
+        await store.save(delivery)
+        log.warning("email.dead_letter", kind=kind, delivery_id=str(delivery.id), attempts=delivery.attempts)
+        return delivery
     else:
         log.info("email.resumed", kind=kind, delivery_id=str(delivery.id), attempts=delivery.attempts)
         delivery.provider = provider.name
@@ -228,8 +265,9 @@ async def send_email(
         log.info("email.suppressed", kind=kind, delivery_id=str(delivery.id))
         return delivery
 
+    budget = max_attempts if attempt_limit is None else min(max_attempts, attempt_limit - delivery.attempts)
     delays = tuple(backoff) or (0.0,)
-    for attempt in range(1, max_attempts + 1):
+    for attempt in range(1, budget + 1):
         if attempt > 1:
             await sleep(delays[min(attempt - 2, len(delays) - 1)])
         delivery.attempts += 1  # counts across calls when a queued row is resumed
@@ -241,11 +279,14 @@ async def send_email(
             if not exc.transient:
                 delivery.status = DeliveryStatus.FAILED  # terminal: never resent under this dedupe key
                 event = "email.failed"
-            elif attempt < max_attempts:
+            elif attempt < budget:
                 event = "email.retry"
             elif delivery.dedupe_key is None:
                 delivery.status = DeliveryStatus.FAILED  # nothing can ever resume a row without a dedupe key
                 event = "email.failed"
+            elif attempt_limit is not None and delivery.attempts >= attempt_limit:
+                delivery.status = DeliveryStatus.FAILED  # every attempt the message may have is spent
+                event = "email.dead_letter"
             else:
                 event = "email.deferred"  # stays queued: a later call with the same dedupe key resumes it
             await store.save(delivery)
