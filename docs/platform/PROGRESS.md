@@ -247,7 +247,11 @@ CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_han
 no grant and evidence timestamps are caller-set; 11 MINORs). Round-4 fixes done by db-migrations (`c555a9f`..`593dc2f`, 930
 passed; orchestrator decision applied: an upheld dispute leaves the new claimant the only owner/admin; T2.4 follow-ups
 F1–F3 done, F4 skipped and recorded as **D-33**). Item G (llm_calls batch reservations for T2.2) done
-(`6262483`, `abc4263`). Reviewer and security-reviewer round 4 are running on `abc4263`. Two items went to the human as **D-32**.
+(`6262483`, `abc4263`). Round 4 on `abc4263`: reviewer CHANGES_REQUIRED (every round-3 fix
+proven by mutation; new MAJOR: the transfer runs only when the claim is labelled `disputed`, a label the claimant can
+set, and a competing E1 claim goes to `pending_review`, so staff approval leaves two owner groups; MINORs: batch
+settlements not tied to the reservation's tenant, pre-removed owners keep owner/admin, the view's NDA tie untested).
+security-reviewer round 4 is running; round-5 fixes follow both. Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
