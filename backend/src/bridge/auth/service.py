@@ -564,19 +564,49 @@ async def confirm_totp_enrolment(
     check = totp.verify(secret, code, last_counter=None)
     if not check.ok:
         raise AuthError("invalid_code", 401)
-    codes = totp.new_recovery_codes()
-    key = settings.recovery_code_pepper.get_secret_value()
     now = clock.utcnow()
     user.totp_secret_enc, user.totp_pending_enc = user.totp_pending_enc, None
     user.totp_enabled_at = now
     user.totp_last_counter = check.counter
-    user.totp_recovery_hashes = [totp.recovery_hash(c, key) for c in codes]
+    codes = _issue_recovery_codes(settings, user)
     live.row.mfa_pending = False
     live.row.mfa_verified_at = now
     # Other sessions were created without the second factor: end them.
     await sessions.revoke_all(db, user.id, except_id=live.row.id)
     await audit(db, "auth.totp_enabled", actor_user_id=user.id, subject_type="user", subject_id=user.id)
     return codes, [notice_email(settings, user, "Two-step sign-in was turned on.")]
+
+
+def _issue_recovery_codes(settings: Settings, user: User) -> list[str]:
+    """Ten new codes whose hashes replace every stored one; the codes themselves are never stored. The caller holds
+    ``lock_user``."""
+    codes = totp.new_recovery_codes()
+    key = settings.recovery_code_pepper.get_secret_value()
+    user.totp_recovery_hashes = [totp.recovery_hash(c, key) for c in codes]
+    return codes
+
+
+async def replace_recovery_codes(
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, *, ip: str
+) -> tuple[list[str], list[PendingEmail]]:
+    """Ten new recovery codes replace the old ones in one step (follow-up 8): the way back to codes after the
+    confirmation's answer was lost, for roles that cannot turn two-step sign-in off and on again. The route needs a
+    second factor within 12 h (step-up); throttled like the re-auth checks (5 a minute for the account, from any IP;
+    ``REAUTH_IP_LIMIT`` a minute from one client IP). Under ``lock_user``: a step-up spending an old code either
+    commits first (its remaining hashes are then replaced here) or waits and re-reads only the new hashes, so it can
+    never write the old ones back."""
+    limit = settings.login_attempts_per_minute
+    keys = throttle.keys(settings.secret_key.get_secret_value(), "recovery_codes", str(live.user.id), ip)
+    if await throttle.blocked(db, keys, pair_limit=limit, account_limit=limit, ip_limit=REAUTH_IP_LIMIT):
+        raise AuthError("too_many_attempts", 429)
+    throttle.record(db, keys, succeeded=True)
+    user = await lock_user(db, live.user.id)
+    if user.totp_enabled_at is None:
+        raise AuthError("totp_not_enabled", 409)
+    codes = _issue_recovery_codes(settings, user)
+    await audit(db, "auth.recovery_codes_replaced", actor_user_id=user.id, subject_type="user", subject_id=user.id)
+    # [[COPY-REVIEW]] plain transactional copy
+    return codes, [notice_email(settings, user, "New recovery codes were created.")]
 
 
 async def mfa_required_for(db: AsyncSession, user: User) -> bool:

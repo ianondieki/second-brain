@@ -79,6 +79,7 @@ MESSAGES = {
     "invalid_code": "That code is not valid. Check your authenticator app and try again.",
     "totp_already_enabled": "Two-step sign-in is already on.",
     "no_pending_enrolment": "Start two-step sign-in setup first.",
+    "totp_not_enabled": "Turn on two-step sign-in first.",  # [[COPY-REVIEW]] plain transactional copy
     "mfa_mandatory_for_role": "Your role requires two-step sign-in, so it cannot be turned off.",
     "current_password_required": "Enter your current password to make this change.",
     "recent_sign_in_required": "Sign in again with an emailed link to make this change.",
@@ -338,6 +339,23 @@ async def totp_confirm(
         codes, pending = await service.confirm_totp_enrolment(db, settings, live, body.code)
     except service.AuthError as exc:
         await db.commit()  # keep an expired pending secret cleared
+        raise _fail(exc) from exc
+    await db.commit()
+    _send_later(tasks, request, email, pending)
+    return RecoveryCodesResponse(recovery_codes=codes)
+
+
+@router.post("/totp/recovery-codes")
+async def totp_recovery_codes(
+    request: Request, tasks: BackgroundTasks, live: StepUpSession, db: Db, settings: SettingsDep, email: EmailDep
+) -> RecoveryCodesResponse:
+    """Ten new recovery codes replace the old ones, which stop working; shown once. Needs a second factor within
+    12 hours (403 step_up_required) and two-step sign-in on (409 totp_not_enabled); 429 too_many_attempts after 5 a
+    minute for the account. The account gets a security notice."""
+    try:
+        codes, pending = await service.replace_recovery_codes(db, settings, live, ip=client_ip(request))
+    except service.AuthError as exc:
+        await db.commit()  # keep the throttle entry
         raise _fail(exc) from exc
     await db.commit()
     _send_later(tasks, request, email, pending)
