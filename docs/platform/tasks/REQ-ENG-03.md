@@ -63,6 +63,29 @@ skip); copy lint PASS; traceability PASS (0 errors). JS budget (`scripts/js-budg
 `/dev` 140,096; `/dev/engagements` 140,096; `/dev/engagements/[id]` 144,852 (+3,529 when a form opens: 148,381);
 `/org/engagements` 140,096; `/org/engagements/[id]` 144,852.
 
+## Review fix round (code review CHANGES_REQUIRED, ux-review CHANGES_REQUIRED on `8f0bb60`)
+
+- MAJOR 1: `components/tracker/state-machine-parity.test.ts` reads `backend/src/bridge/engagements/state_machine.py`
+  and fails when the frontend's copies of `STAGE_GROUPS`, `MILESTONE_STEPS` or `CONTACT_REVEALED` differ, and pins
+  `DUAL_ENDORSEMENT_STATES` (MINOR g). Mutations checked to fail it: `NDA_SIGNED: "agreement"`; `submit_milestone`
+  from `PLANNED` too; `start_milestone` without `CHANGES_REQUESTED`; `SIGN_OFF` dropped from the dual-endorsement
+  stages; `CLOSED` dropped from the reveal stages. It also reads `policy.yaml` `contact_by_max_bd` and checks the number
+  the en and sw copy states (MINOR f).
+- MAJOR 2 (decline attestation): kept as a `[[COPY-REVIEW]]` draft; `_meta.reviewP8e` references D-39 item 7.
+- UX MAJOR (focus, WCAG 2.4.3): a form or confirmation takes focus on its heading, the step-up on its code field;
+  Cancel returns focus to the opening button; removing a milestone focuses "Add a milestone"; "Done" sits outside the
+  actions section and keeps focus when the step leaves no buttons (vitest for each move).
+- MINORs: step-up Cancel inert while the code is checked and no retry after Cancel or unmount (a); the contact reveal
+  only for the named contact in the revealed stages (b); the Home "Needs you" split is `homeGroups`, tested with the
+  org's-turn mutation (c); the org tracker's links from `detail.org_id` (d/m); the approve form says when the members
+  could not be read (e); developer tab labels on one line at 360 px (h); field errors clear on change (i); idea rows
+  are h3 on Home (j); dates "23 Sep 2026" from one shared formatter (k); plainer copy for the history check,
+  "deemed acceptance" and D2 (l).
+- Checks after the round: eslint clean; tsc clean; api:check clean; vitest 39 files, 541 tests; `next build` ok; copy
+  lint PASS; traceability PASS; `e2e/tracker.spec.ts` 8 passed (360 px and 1440 px). JS: `/dev/engagements/[id]` and
+  `/org/engagements/[id]` 145,042 B; with the Decline form open 148,720 B (budget 150,000): anything new on the
+  tracker must load lazily.
+
 ## Follow-ups (MINOR, after M1)
 
 1. Reminders: P6 exposes no in-app route yet, so Home has no reminder summary (docs/spec/07 item 1). Trending
@@ -83,7 +106,14 @@ skip); copy lint PASS; traceability PASS (0 errors). JS budget (`scripts/js-budg
    list, not a board. Internal notes and the Messages tab come later.
 8. The whose-turn banner is at the top of the tracker, not pinned (sticky bars must not hide focus; Phase 7).
 9. Once P9 merges, the e2e can use the demo seed instead of its own fixtures.
-10. Commits 3 and 4 of this branch are over the ~300-line guide (display and actions with their tests).
+10. Six commits of this branch are over the ~300-line guide (the copy, the display and actions with their tests, the
+    e2e, and the two review-round commits with tests); no history rewrite.
+11. API fields to replace the pinned copies (items 2 and 3): `ended_in_group` (or the stage an ended engagement left)
+    and, per milestone command, the milestones it can take now; then the parity test's copies go.
+12. Keep a form's draft across a 409 `stale` refresh (`Actions.tsx` `run`): today the refreshed list replaces it.
+13. Backend (REQ-ENG-05): send the attestation text's version with the decline, so the stored boolean names the
+    wording the organisation confirmed (D-39 item 7).
+14. The stage label "Agreement signed: implementation" is the backend's `STAGE_LABELS` copy: change it there.
 
 ## After the prototype
 
