@@ -26,6 +26,7 @@ from bridge.reminders.health import (
     repo_cold,
     whose_turn,
 )
+from bridge.reminders.nudge import DeveloperFacts, compose_nudge, fallback_wording, render_nudge
 
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 S, M = EngagementState, MilestoneState
@@ -254,3 +255,15 @@ def test_whose_turn_follows_the_tracker_table(
     state: EngagementState, facts: dict[str, object], expected: set[EngagementParty]
 ) -> None:
     assert whose_turn(state, **facts) == frozenset(expected)  # type: ignore[arg-type]
+
+
+def test_the_reminder_text_names_the_milestone_and_its_due_date() -> None:
+    """AC-REM-1, third clause: the rendered reminder (both parts) carries the milestone's title and due date."""
+    at_risk = engagement(milestones=(milestone(TUESDAY, deliverable="County pilot dashboard"),))
+    late = engagement(milestones=(milestone(MONDAY - timedelta(days=8), seq=2, deliverable="Payments export"),))
+    nudge = compose_nudge(DeveloperFacts(uuid4(), MONDAY, (at_risk, late)), NO_HOLIDAYS)
+    message = render_nudge(nudge, fallback_wording(nudge, "test"), to="dev@example.com", base_url="https://b.test")
+    for part in (message.text, message.html or ""):
+        assert "Milestone 1 “County pilot dashboard” is due 6 Oct 2026" in part
+        assert "Milestone 2 “Payments export” was due 27 Sep 2026 and is 8 days overdue" in part
+    assert [row.health for row in nudge.health] == [Health.AT_RISK, Health.OFF_TRACK]
