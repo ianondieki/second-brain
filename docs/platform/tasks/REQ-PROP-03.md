@@ -55,7 +55,12 @@ API only (the picker screen is P8). Branch `feat/REQ-PROP-03-pitch`.
   inserted, first the engagement then the grant; neither commits; an exception rolls the Pitch back.
   - P5 plugs `open_engagement_for_tag` into `default_hooks()` as `open_engagement(db, *, developer_id, proposal_id,
     version_id, org_id, tag_id) -> UUID` (the engagement id) and deletes `interim_open_engagement` (today: a plain
-    INSERT of the `SUBMITTED`/`tagged` row, genesis by the database, no deadline).
+    INSERT of the `SUBMITTED`/`tagged` row, genesis by the database, no deadline). P5's function on
+    `feat/REQ-ENG-02-tracker` is `commands.open_engagement_for_tag(db, tag_id) -> Engagement` raising `OpenRefused`,
+    so the plug is a small adapter in `tag_hooks.py`:
+    `async def open_engagement(db, *, developer_id, proposal_id, version_id, org_id, tag_id): try: return (await
+    commands.open_engagement_for_tag(db, tag_id)).id` / `except commands.OpenRefused as exc: raise ApiError(409,
+    "tag_conflict", exc.message) from exc` (the Pitch's own checks make `engagement_exists` a lost race only).
   - P3 plugs `bridge.proposals.grants.grant_on_tag` (same signature: `(db, *, owner_id, proposal_id, org_id) -> UUID |
     None`) into `default_hooks()` and deletes `grant_nothing_until_p3` (today: no grant, fail closed).
 - Tests: `integration/proposals/test_tags.py` (`test_mixed_tags` AC-PROP-1/a with the EM1 clause,
