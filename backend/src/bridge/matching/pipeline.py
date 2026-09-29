@@ -42,7 +42,8 @@ _TEXT: Final = "concat_ws(' ', v.title, v.problem_statement, v.summary, v.impact
 _SELECT: Final = (
     "SELECT p.id AS proposal_id, p.current_version_id AS version_id, p.owner_id, p.published_at,"
     " v.title, v.problem_statement, v.summary, v.impact_claims, v.niche_id, v.county_code, v.maturity, v.ask,"
-    " n.name_en AS niche_name, pn.name_en AS parent_name, r.name AS county_name,"
+    " v.owner_handle, n.slug AS niche_slug, n.name_en AS niche_name, pn.name_en AS parent_name,"
+    " r.name AS county_name,"
     " (v.niche_id = ANY(:niches)) AS niche_exact,"
     " EXISTS (SELECT 1 FROM tags t WHERE t.proposal_id = p.id AND t.org_id = :org AND t.status = 'delivered')"
     " AS tagged,"
@@ -119,6 +120,8 @@ class Candidate:
     niche_exact: bool
     tagged: bool
     has_problem: bool
+    niche_slug: str | None = None
+    owner_handle: str | None = None  # the pseudonymous handle on Tier-1 cards
 
     @property
     def text(self) -> str:
@@ -172,6 +175,8 @@ def _row(row: Any) -> Candidate:
         niche_exact=bool(row.niche_exact),
         tagged=bool(row.tagged),
         has_problem=bool(row.has_problem),
+        niche_slug=row.niche_slug,
+        owner_handle=row.owner_handle,
     )
 
 
