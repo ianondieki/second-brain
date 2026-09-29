@@ -160,13 +160,21 @@ found the tests fail (they are never skipped) with these instructions: Linux, in
 
 `docs/spec/07` item 5 allows at most **150 KB of gzipped JavaScript per route, where 1 KB = 1,000 bytes: 150,000
 bytes**. This is the stricter reading of "KB" (150 KiB would be 153,600 bytes), so a route within it is within either
-reading. Counted: the gzip-compressed bodies of the scripts a first visit downloads (the route's `<script src>`
-files). Not counted: response headers, which depend on the protocol, and chunks that load later on demand. Measure
-against a production build, such as the `make dev` web container on port 3000 (not part of `make check`):
+reading. Counted: the gzip-compressed bodies of **every script the route fetches in a real browser until the
+network is idle** (the script loads the route in Playwright's Chromium): the `<script src>` files, and the chunks
+that load during hydration, such as those of server-rendered lazy components (React.lazy), which are part of the
+first visit. With `--first-edit` the count continues through the first keystroke in the page's first text field, so
+chunks loaded by the first edit count too (the idea editor's save path); it types into the page, so use a test
+account. Not counted: response headers (see D-28 below), and chunks loaded only by a later action, such as publishing
+or adding a file. Each script counts at its gzip size as sent (1 KB = 1,000 bytes, D-28 default (a)), or gzip at the
+default level when a response is not compressed. Measure against a production build, such as the `make dev` web
+container on port 3000 (not part of `make check`); Playwright's Chromium must be installed (`npx playwright install
+chromium`, or `PLAYWRIGHT_BROWSERS_PATH` where it is):
 
 ```bash
 make budget                                         # /, /login, /signup, /settings/security
 cd frontend && npm run budget -- /signup/check-email /org --allow-skip   # named routes
+cd frontend && npm run budget -- /dev/ideas/new --first-edit              # through the first keystroke
 ```
 
 Set `BUDGET_COOKIE` to a test account's session cookie (for example `__Host-bridge_session=<token>`, copied from the
@@ -176,8 +184,8 @@ The run fails when a route is over, answers with an error, or is skipped. In Git
 `MSYS_NO_PATHCONV=1`, or Git Bash rewrites `/signup` as a file path (`signup`, without the slash, also works).
 
 **Open: whether response headers count (DECISIONS-NEEDED D-28).** Lighthouse's script "transfer size", the
-instrument of AC-UX-3, includes response headers. The script prints that figure too ("with HTTP/1.1 response
-headers"). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
+instrument of AC-UX-3, includes response headers. The script prints that figure too ("with response headers", the
+header sizes Chromium reports). By that reading, over the local HTTP/1.1 server, `/signup` (151,195 bytes) and `/settings/security`
 (152,195) are over 150,000 on 2026-09-28, while their bodies are 147,898 and 148,518 (`/login`: 146,553 bodies,
 149,850 with headers). Behind HTTP/2 in production the headers shrink to a few bytes per script. Until the human
 decides D-28, the bodies count.
