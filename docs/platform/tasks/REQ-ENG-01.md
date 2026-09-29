@@ -411,12 +411,12 @@ router calls `app_set_test_clock`, is left out of the production image and is st
 
 ### Result (P5)
 
-Full backend suite: 2210 passed, 0 failed (P5 adds 23 test files), total coverage 98%; `engagements/` 98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification
-job 100%. `ruff check`, `ruff format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the frontend's
-`eslint`, `tsc`, `vitest` (244 passed) and `api:check` (types regenerated), the copy-lint and
-`check_traceability.py` (0 errors) are clean. The legacy suite passes except two `tests/test_adviser_cli.py` checks
-that need `cloudflared` in this Linux container (environmental; untouched by P5). Playwright (`check-e2e`) needs
-the running stack and was not run here.
+Full backend suite: 2210 passed, 0 failed (P5 adds 14 test modules and one helper), total coverage 98%; `engagements/`
+98% (state machine 100% of branches), `bridge.testclock` 96%, EM2 and the notification job 100%. `ruff check`, `ruff
+format --check`, `mypy` (strict), `python -m bridge.openapi --check`, the frontend's `eslint`, `tsc`, `vitest` (244
+passed) and `api:check` (types regenerated), the copy-lint and `check_traceability.py` (0 errors) are clean. The
+legacy suite passes except two `tests/test_adviser_cli.py` checks that need `cloudflared` in this Linux container
+(environmental; untouched by P5). Playwright (`check-e2e`) needs the running stack and was not run here.
 
 ### Follow-ups (not built)
 
