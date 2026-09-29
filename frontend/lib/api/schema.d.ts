@@ -442,6 +442,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/billing/checkouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Checkout
+         * @description Start a checkout of a paid plan: 422 ``plan_not_available`` (unknown, default, free, custom or approval
+         *     plans), 422 ``plan_wrong_side``, 403 ``not_a_developer``, 409 ``already_on_plan``, 409 ``checkout_pending`` (with
+         *     ``checkout_id``: another plan's checkout is in progress), 502 ``payment_provider_error``, 503 ``not_configured``.
+         */
+        post: operations["start_checkout_api_billing_checkouts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/checkouts/{checkout_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Checkout
+         * @description A checkout of the caller's (404 otherwise). Settles it when the provider has a final answer and activates a
+         *     success; without a provider on this server it is shown as it stands.
+         */
+        get: operations["get_checkout_api_billing_checkouts__checkout_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/consents": {
         parameters: {
             query?: never;
@@ -1560,6 +1603,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Plans
+         * @description The plan catalogue (one side, or both), in ``plans.yaml`` order.
+         */
+        get: operations["list_plans_api_plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/problems": {
         parameters: {
             query?: never;
@@ -1967,6 +2030,11 @@ export interface components {
              */
             text: string;
         };
+        /**
+         * BillingInterval
+         * @enum {string}
+         */
+        BillingInterval: "none" | "month" | "year";
         /** BrowsePage */
         BrowsePage: {
             /** Items */
@@ -2044,6 +2112,52 @@ export interface components {
             timestamp: string | null;
             /** Tsa Serial */
             tsa_serial: string | null;
+        };
+        /**
+         * CheckoutIn
+         * @description Only these fields: a checkout never takes an id or a reference from the client.
+         */
+        CheckoutIn: {
+            /** Org Id */
+            org_id?: string | null;
+            /** Plan Code */
+            plan_code: string;
+            simulate?: components["schemas"]["SimulatedOutcome"] | null;
+        };
+        /** CheckoutOut */
+        CheckoutOut: {
+            /** Amount Kes Minor */
+            amount_kes_minor: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Failure Code */
+            failure_code: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Org Id */
+            org_id: string | null;
+            /** Plan Active */
+            plan_active: boolean;
+            /** Plan Code */
+            plan_code: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Poll After Seconds */
+            poll_after_seconds: number | null;
+            /** Settled At */
+            settled_at: string | null;
+            side: components["schemas"]["PlanSide"];
+            /** Simulated */
+            simulated: boolean;
+            status: components["schemas"]["PaymentStatus"];
         };
         /** CodeRequest */
         CodeRequest: {
@@ -3226,6 +3340,13 @@ export interface components {
             /** Reference */
             reference: string | null;
         };
+        /**
+         * PaymentStatus
+         * @description A checkout (docs/spec/05). Settled once, pending -> succeeded | failed | cancelled, only through
+         *     ``app_settle_payment`` (revision 0005).
+         * @enum {string}
+         */
+        PaymentStatus: "pending" | "succeeded" | "failed" | "cancelled";
         /** PendingOut */
         PendingOut: {
             command: components["schemas"]["Command"];
@@ -3316,11 +3437,43 @@ export interface components {
              */
             tags: components["schemas"]["TagOut"][];
         };
+        /** PlanOut */
+        PlanOut: {
+            /** Code */
+            code: string;
+            interval: components["schemas"]["BillingInterval"];
+            /** Is Default */
+            is_default: boolean;
+            /** Limits */
+            limits: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /** Price Kes Minor */
+            price_kes_minor: number;
+            /** Purchasable */
+            purchasable: boolean;
+            side: components["schemas"]["PlanSide"];
+            /** Upgrade To */
+            upgrade_to: string | null;
+        };
         /**
          * PlanSide
          * @enum {string}
          */
         PlanSide: "developer" | "org";
+        /** PlansOut */
+        PlansOut: {
+            /** Currency */
+            currency: string;
+            /** Plans */
+            plans: components["schemas"]["PlanOut"][];
+            /** Sample Prices */
+            sample_prices: boolean;
+            /** Simulated Checkout */
+            simulated_checkout: boolean;
+        };
         /** ProblemCard */
         ProblemCard: {
             /**
@@ -3620,6 +3773,13 @@ export interface components {
              */
             side: "developer" | "org";
         };
+        /**
+         * SimulatedOutcome
+         * @description What a simulated checkout does (``FakePaymentProvider`` only): the demo and the tests pick it; a real provider
+         *     refuses any.
+         * @enum {string}
+         */
+        SimulatedOutcome: "succeed" | "fail" | "cancel";
         /** StaffMeOut */
         StaffMeOut: {
             role: components["schemas"]["StaffRole"];
@@ -6158,6 +6318,223 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    start_checkout_api_billing_checkouts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutIn"];
+            };
+        };
+        responses: {
+            /** @description The checkout of that plan already in progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_checkout_api_billing_checkouts__checkout_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                checkout_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutOut"];
                 };
             };
             /** @description Bad Request */
@@ -12704,6 +13081,100 @@ export interface operations {
                 };
                 content: {
                     "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_plans_api_plans_get: {
+        parameters: {
+            query?: {
+                side?: components["schemas"]["PlanSide"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlansOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
         };
