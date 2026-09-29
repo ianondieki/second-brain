@@ -5,7 +5,7 @@
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing",
-    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*; trackerActions.decline.attest is an attestation (D-39 family); stage labels come from the API (state_machine.STAGE_LABELS)"
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is an attestation (D-39 family); stage labels come from the API (state_machine.STAGE_LABELS)"
   },
   "app": {
     "name": "Bridge",
@@ -674,7 +674,8 @@
     "heldUnclaimed": "{name} isn't on the platform yet. Your proposal is saved and they'll see it if they join and verify. We don't email them on your behalf.",
     "heldPending": "{name} is still verifying its details. Your proposal is saved and they'll see it once they are verified.",
     "orgUnlisted": "A company no longer listed",
-    "loadFailed": "Your pitches did not load. Reload the page to try again."
+    "loadFailed": "Your pitches did not load. Reload the page to try again.",
+    "tracker": "Open the tracker"
   },
   "ideaViews": {
     "title": "Who has seen this",

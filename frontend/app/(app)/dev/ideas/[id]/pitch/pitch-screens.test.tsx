@@ -558,6 +558,14 @@ describe("the idea's pitches", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
+  it("links a pitch that opened an engagement to its tracker (REQ-ENG-03)", async () => {
+    const engagement = "0199b000-0000-7000-8000-00000000e001";
+    await renderPitches({ tags: { ...TAGS, items: [tag({ engagement_id: engagement })] } });
+    expect(screen.getByRole("link", { name: "Open the tracker" }).getAttribute("href")).toBe(
+      `/dev/engagements/${engagement}`,
+    );
+  });
+
   it("offers the first pitch as its empty state: one sentence and one action", async () => {
     const { container } = await renderPitches({ tags: { ...TAGS, items: [] } });
     const empty = container.querySelector("[data-empty-state]")!;

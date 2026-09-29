@@ -674,7 +674,8 @@
     "heldUnclaimed": "{name} bado haliko kwenye jukwaa. Pendekezo lako limehifadhiwa na wataliona wakijiunga na kuthibitishwa. Hatuwatumii barua pepe kwa niaba yako.",
     "heldPending": "{name} bado linathibitisha maelezo yake. Pendekezo lako limehifadhiwa na wataliona watakapothibitishwa.",
     "orgUnlisted": "Kampuni ambayo haijaorodheshwa tena",
-    "loadFailed": "Mawasilisho yako hayakupakia. Pakia ukurasa upya ili ujaribu tena."
+    "loadFailed": "Mawasilisho yako hayakupakia. Pakia ukurasa upya ili ujaribu tena.",
+    "tracker": "Fungua ufuatiliaji"
   },
   "ideaViews": {
     "title": "Nani ameliona",

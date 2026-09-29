@@ -118,6 +118,11 @@ function PitchRow({ tag, ideaId, locale, t }: { tag: TagOut; ideaId: string; loc
       </div>
       <p className="text-sm text-ink-soft">{t("pitchedOn", { date: formatDay(locale, tag.created_at) })}</p>
       {held ? <p className="max-w-[62ch] text-sm text-ink">{t(held, { name })}</p> : null}
+      {tag.engagement_id ? (
+        <Link href={`/dev/engagements/${encodeURIComponent(tag.engagement_id)}`} className={standaloneLinkClass}>
+          {t("tracker")}
+        </Link>
+      ) : null}
       {canWithdraw(tag) ? (
         <div className="mt-2">
           <WithdrawTag proposalId={ideaId} tagId={tag.id} orgName={name} returnFocusTo={PITCHES_HEADING} />
