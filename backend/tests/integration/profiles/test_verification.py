@@ -33,14 +33,11 @@ from bridge.config import get_settings
 from bridge.ids import uuid7
 from bridge.integrations.sms import FakeSmsProvider, SmsError
 from bridge.profiles import verification
-from bridge.profiles.models import DeveloperProfile
-from bridge.profiles.verification import D1Developer
 from tests.integration.api import make_client, sign_in_as, sms_outbox
+from tests.integration.proposals.helpers import ProposalWorld, attest, create, draft_body
 
 _ips = count(1)
 _numbers = count(100_000)
-
-PROBE = "/api/test-only/proposals/{proposal_id}/register"
 
 
 def new_ip() -> str:
@@ -128,44 +125,40 @@ def at(monkeypatch: pytest.MonkeyPatch, moment: datetime) -> None:
     monkeypatch.setattr(bridge.clock, "utcnow", lambda: moment)
 
 
-def mount_registration_probe(client: httpx.AsyncClient) -> None:
-    """A stand-in for the publish route of T2.3 (not built yet): a registration handler guarded by ``require_d1``
-    exactly as the real one will be (``profile: D1Developer``)."""
-
-    async def register(proposal_id: UUID, profile: D1Developer) -> dict[str, str]:
-        assert isinstance(profile, DeveloperProfile)
-        return {"status": "registered", "proposal_id": str(proposal_id)}
-
-    client.app.add_api_route(PROBE, register, methods=["POST"])  # type: ignore[attr-defined]
-
-
 # ----------------------------------------------------------------------------------------------------- AC-IP-5
 
 
-async def test_d1_required(signed_in: Client, app_engine: AsyncEngine) -> None:
-    """AC-IP-5: a developer without D1 who attempts a registration gets 403; after D1 the same call goes through."""
+async def test_d1_required(
+    signed_in: Client, app_engine: AsyncEngine, owner_engine: AsyncEngine, proposal_world: ProposalWorld
+) -> None:
+    """AC-IP-5 on the real publish route (``profile: D1Developer``): a developer without D1 who attempts a
+    registration gets 403 ``d1_required`` and nothing is registered; after D1 the same call registers the version."""
     developer = await signed_in()
-    mount_registration_probe(developer)
-    url = PROBE.format(proposal_id=uuid7())
+    created = await create(developer, draft_body(proposal_world))
+    url = f"/api/me/proposals/{created['id']}/publish"
 
-    refused = await developer.post(url)
+    refused = await developer.post(url, json=attest())
     assert refused.status_code == 403
     assert refused.json()["detail"]["code"] == "d1_required"
+    async with owner_engine.connect() as conn:
+        version = await conn.execute(
+            text("SELECT status, cert_id FROM proposal_versions WHERE id = :v"), {"v": created["draft"]["id"]}
+        )
+        assert tuple(version.one()) == ("draft", None)
 
     typed, _ = new_number()
     sent = (await ask(developer, typed)).json()
     assert (await confirm(developer, sent["verification_id"], last_code(developer))).status_code == 200
-    allowed = await developer.post(url)
+    allowed = await developer.post(url, json=attest())
     assert allowed.status_code == 200, allowed.text
-    assert allowed.json()["status"] == "registered"
+    assert allowed.json()["status"] == "published"
+    assert allowed.json()["version_id"] == created["draft"]["id"]
 
     no_profile = await signed_in(developer=False)  # an organisation-only account has no developer level at all
-    mount_registration_probe(no_profile)
-    assert (await no_profile.post(url)).json()["detail"]["code"] == "d1_required"
+    assert (await no_profile.post(url, json=attest())).json()["detail"]["code"] == "d1_required"
 
     async with make_client(app_engine) as anonymous:
-        mount_registration_probe(anonymous)
-        assert (await anonymous.post(url)).status_code == 401
+        assert (await anonymous.post(url, json=attest())).status_code == 401
 
 
 # ------------------------------------------------------------------------------------------------------ the flow
