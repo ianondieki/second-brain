@@ -37,11 +37,12 @@ export function isFinished(state: State): boolean {
 }
 
 /**
- * Where each main-path stage sits in the stepper, as backend state_machine.STAGE_GROUPS has it. The API sends
- * `stage_group` for the current stage, so this is read only for an engagement that ended or paused (the API sends
- * null then) to find the group it stopped in, from the stage it left (its last history event).
+ * Where each main-path stage sits in the stepper, as backend state_machine.STAGE_GROUPS has it (the state machine is
+ * the only definition: state-machine-parity.test.ts fails when the two differ). The API sends `stage_group` for the
+ * current stage, so this is read only for an engagement that ended or paused (the API sends null then) to find the
+ * group it stopped in, from the stage it left (its last history event).
  */
-const MAIN_PATH_GROUP: Partial<Record<State, Group>> = {
+export const MAIN_PATH_GROUP: Partial<Record<State, Group>> = {
   ORG_INTEREST: "review",
   SUBMITTED: "review",
   UNDER_REVIEW: "review",
@@ -142,6 +143,36 @@ export function theirNextSteps(detail: Pick<Detail, "awaiting" | "my_party">): C
   return [...new Set(detail.awaiting.filter((p) => p.party !== detail.my_party).map((p) => p.command))];
 }
 
+/**
+ * The main path from the organisation's approval on (state_machine.CONTACT_REVEALED, pinned by
+ * state-machine-parity.test.ts): the stages in which the named contact may reveal the developer's contact details.
+ */
+export const CONTACT_REVEALED_STATES: ReadonlySet<State> = new Set([
+  "INTEREST_CONFIRMED",
+  "CONTACT_MADE",
+  "NDA_PENDING",
+  "NDA_SIGNED",
+  "NEGOTIATION",
+  "AGREEMENT_SIGNING",
+  "IN_IMPLEMENTATION",
+  "DELIVERED",
+  "SIGN_OFF",
+  "PAYMENT_FINAL",
+  "CLOSED",
+]);
+
+/**
+ * Whether to offer "Show the developer's contact details": only to the organisation's named contact person, and only
+ * in the stages where the API reveals them (never before the approval, never on a declined, withdrawn or expired
+ * engagement). The API decides again on the request.
+ */
+export function offersContactReveal(
+  detail: Pick<Detail, "my_party" | "contact" | "state">,
+  userId: string,
+): boolean {
+  return detail.my_party === "org" && detail.contact?.user_id === userId && CONTACT_REVEALED_STATES.has(detail.state);
+}
+
 /** Stages whose rows show both parties' endorsements (docs/spec/06 6.9: 0, 4, 5, 8, 11, 12 and TERMINATED). */
 export const DUAL_ENDORSEMENT_STATES: ReadonlySet<State> = new Set([
   "ORG_INTEREST",
@@ -191,7 +222,10 @@ export type FormCommand = (typeof FORM_COMMANDS)[number];
 /** Commands that end the engagement: a confirmation first, never the primary button. */
 export const ENDING_COMMANDS = ["withdraw", "decline_interest", "decline"] as const satisfies readonly Command[];
 
-/** The milestone sub-tracker's commands, with the milestone states each can start from (state_machine.MILESTONE_STEPS). */
+/**
+ * The milestone sub-tracker's commands, with the milestone states each can start from (state_machine.MILESTONE_STEPS;
+ * pinned to it by state-machine-parity.test.ts). Used only to put each button on the milestones that can take it.
+ */
 export const MILESTONE_STEPS = {
   start_milestone: ["PLANNED", "CHANGES_REQUESTED"],
   submit_milestone: ["IN_PROGRESS"],
