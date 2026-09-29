@@ -1,10 +1,10 @@
 """The two seams of a delivered tag (P4, REQ-PROP-03): what happens when a Pitch reaches a verified (E2) organisation
 beyond the tag itself. Each is owned by a parallel task and plugged in here, so the Pitch code never changes:
 
-- ``open_engagement``: the ``SUBMITTED`` engagement of the tag (docs/spec/06 6.3, 6.9). **P5** (the tracker,
-  ``feat/REQ-ENG-02-tracker``) provides ``open_engagement_for_tag``, which opens it through the state machine (its
-  deadline from ``policy.yaml``). Until P5 merges, ``interim_open_engagement`` below inserts the row the way revision
-  0003 allows (the database writes the genesis event); P5 replaces it in ``default_hooks`` and deletes it.
+- ``open_engagement``: the ``SUBMITTED`` engagement of the tag (docs/spec/06 6.3, 6.9), opened by P5's
+  ``bridge.engagements.commands.open_engagement_for_tag`` (its deadline from ``policy.yaml``; the database writes the
+  genesis event) through the adapter below: its ``OpenRefused`` is the Pitch's 409 ``tag_conflict`` (the Pitch's own
+  checks run first, so a refusal here is a lost race or a change between them).
 - ``grant_on_tag``: the owner's Tier-2 policy applied to the organisation (docs/spec/06 6.1, "auto-grant to orgs I
   tagged"): P3's ``bridge.proposals.grants.grant_on_tag`` (an active ``auto_tagged`` grant under the default policy,
   none under ``manual``). A grant opens nothing on its own: ``can_view_tier2`` still needs every other condition,
@@ -24,10 +24,10 @@ from typing import Annotated, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bridge.ids import uuid7
+from bridge.engagements import commands
+from bridge.errors import ApiError
 from bridge.proposals import grants
 
 
@@ -58,29 +58,19 @@ class TagHooks:
     grant_on_tag: GrantOnTag
 
 
-_ENGAGE = text(
-    "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state)"
-    " VALUES (:id, :proposal, :org, :developer, :version, 'tagged', 'SUBMITTED')"
-)
-
-
-async def interim_open_engagement(
+async def open_engagement(
     db: AsyncSession, *, developer_id: UUID, proposal_id: UUID, version_id: UUID, org_id: UUID, tag_id: UUID
 ) -> UUID:
-    """INTERIM, replaced by P5's ``open_engagement_for_tag``: insert the ``SUBMITTED`` engagement (origin ``tagged``).
-    Revision 0003's INSERT policy admits it only for the developer's open delivered tag of this proposal and
-    organisation; its genesis event (seq 1, ``create``) is the database's. No deadline is set (P5's, from
-    ``policy.yaml``)."""
-    engagement_id = uuid7()
-    await db.execute(
-        _ENGAGE,
-        {"id": engagement_id, "proposal": proposal_id, "org": org_id, "developer": developer_id, "version": version_id},
-    )
-    return engagement_id
+    """P5's ``open_engagement_for_tag`` as the ``OpenEngagement`` hook (the tag names the developer, proposal and
+    organisation; the engagement takes the proposal's current registered version)."""
+    try:
+        return (await commands.open_engagement_for_tag(db, tag_id)).id
+    except commands.OpenRefused as exc:
+        raise ApiError(409, "tag_conflict", exc.message) from exc
 
 
 def default_hooks() -> TagHooks:
-    return TagHooks(open_engagement=interim_open_engagement, grant_on_tag=grants.grant_on_tag)
+    return TagHooks(open_engagement=open_engagement, grant_on_tag=grants.grant_on_tag)
 
 
 def get_tag_hooks(request: Request) -> TagHooks:
