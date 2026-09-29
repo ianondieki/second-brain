@@ -138,8 +138,11 @@ async def test_only_the_parties_read_or_write_an_engagement(owner_engine: AsyncE
                 ),
             )
             await act(conn, writer, org)
+            # An outsider is refused before anything is read (review P1, MAJOR 1); staff read the engagement and are
+            # refused by the table's RLS.
+            refused = "row-level security" if writer == p.staff else "no engagement of the caller's with that id"
             for sql, params in writes:
-                await expect(conn, sql, "row-level security", **params)
+                await expect(conn, sql, refused, **params)
         await act(conn, p.staff)
         await expect(
             conn,
@@ -318,12 +321,12 @@ async def test_the_main_path_runs_to_closed_only_with_its_evidence(owner_engine:
         await expect(conn, APPEND, "acceptance certificate signed by both", **into_payment | {"id": uuid7()})
         await as_owner(conn)  # nor is one person signing for both sides (MINOR 7; only the owner could write it)
         one_person = uuid7()
-        for party in ("org", "developer"):
+        for side in ("org", "developer"):
             await run(
                 conn,
                 SIGN,
                 **sign_params(
-                    engagement, "acceptance_certificate", one_person, CERTIFICATE_SHA256, p.signatory, party, "passkey"
+                    engagement, "acceptance_certificate", one_person, CERTIFICATE_SHA256, p.signatory, side, "passkey"
                 ),
             )
         await act(conn, p.developer)
@@ -430,13 +433,13 @@ async def test_endorsements_are_of_the_current_stage_once_per_party_and_entry(ow
         )
         await act(conn, p.owner, p.org)
         await append(conn, engagement, p.owner, "owner", "mark_contacted", "INTEREST_CONFIRMED", "CONTACT_MADE")
-        await run(conn, ENDORSE, **endorse_params(engagement, "CONTACT_MADE", "org", p.owner, "owner"))  # round 2
-        await expect(
+        await expect(  # checked after RLS (it reads the user), before the endorsement is written
             conn,
             ENDORSE,
             "TOTP endorsement needs TOTP enrolled",
             **endorse_params(engagement, "CONTACT_MADE", "org", p.owner, "owner", "totp"),
         )
+        await run(conn, ENDORSE, **endorse_params(engagement, "CONTACT_MADE", "org", p.owner, "owner"))  # round 2
         await act(conn, p.signatory, p.org)  # the organisation's side is endorsed once per entry, whoever endorses
         await expect(
             conn,

@@ -25,13 +25,16 @@ object, keys in this order, no whitespace outside the payload:
 Rules of the chain: every engagement starts it when inserted (``engagements_genesis()``, AFTER INSERT: seq 1, command
 ``create``, from_state NULL, the engagement's state, its ``stage_entered_at`` as the time, actor the inserting party or
 the system); an event names the engagement's current state as ``from_state`` (a stale one is refused) and none follows
-a terminal state (DECLINED, WITHDRAWN, EXPIRED, TERMINATED, CLOSED); entering ``IN_IMPLEMENTATION`` needs a signed
-agreement, ``PAYMENT_FINAL`` both parties' signatures of one acceptance certificate, and ``CLOSED`` from
-``PAYMENT_FINAL`` the developer's confirmation of the final payment (``milestone_id`` NULL) at the recorded amount
-(AC-TRACK-10, AC-TRACK-7, stage 13). The payload holds only ids, codes, dates, amounts and digests (docs/spec/06 6.4
-item 4; ``app_event_payload_is_valid``: an object of at most 4 KB, keys ``[a-z][a-z0-9_]{0,62}``, strings
-``[A-Za-z0-9_.:+-]{0,128}``, so no free text, e-mail address or URL fits). UPDATE, DELETE and TRUNCATE are refused
-(trigger for every role, and no grant).
+a terminal state (DECLINED, WITHDRAWN, EXPIRED, TERMINATED, CLOSED); a main-path state is entered only from its legal
+predecessors (``engagement_main_path_predecessors``, the database's backstop of the state machine's table; a side
+branch, ON_HOLD, DISPUTED or INFO_REQUESTED, resumes only to the state it was entered from; a dispute's close,
+DISPUTED -> CLOSED, is never the parties'); entering ``IN_IMPLEMENTATION``, ``DELIVERED``, ``SIGN_OFF`` or
+``PAYMENT_FINAL`` needs a signed agreement, ``PAYMENT_FINAL`` also both parties' signatures of one acceptance
+certificate, and ``CLOSED`` from ``PAYMENT_FINAL`` the developer's confirmation of the final payment (``milestone_id``
+NULL) at the recorded amount (AC-TRACK-10, AC-TRACK-7, stage 13); "both parties" is always two people. The payload
+holds only ids, codes, dates, amounts and digests (docs/spec/06 6.4 item 4; ``app_event_payload_is_valid``: an object
+of at most 4 KB, keys ``[a-z][a-z0-9_]{0,62}``, strings ``[A-Za-z0-9_.:+-]{0,128}``, so no free text, e-mail address
+or URL fits). UPDATE, DELETE and TRUNCATE are refused (trigger for every role, and no grant).
 
 The projection (``engagement_events_project()``, AFTER INSERT, SECURITY DEFINER) writes ``state``, ``end_reason``,
 ``stage_entered_at`` (the event's time when the state changes), ``stage_deadline_at`` (the event's, when the state
@@ -39,25 +42,38 @@ changes; a same-state event may set a new one) and ``ended_at`` (the time a term
 statement. ``engagements_guard()`` (BEFORE INSERT OR UPDATE, SECURITY DEFINER) sets ``stage_entered_at`` (the
 database clock), ``ended_at`` and ``lock_version`` (0) on insert; on update it bumps ``lock_version``, keeps the
 parties, proposal, version and origin, and refuses a ``state`` or ``end_reason`` that is not the latest event's (for
-every role, the owner included: the state changes only by appending an event); the named contact is an active member
-of the organisation. bridge_app holds no UPDATE on ``state``, ``end_reason``, the stage times or ``lock_version``.
+every role, the owner included: the state changes only by appending an event). ``engagements_members()`` (AFTER
+INSERT OR UPDATE, after RLS) requires the named contact to be an active member of the organisation and the developer
+not to be one. bridge_app holds no UPDATE on ``state``, ``end_reason``, the stage times or ``lock_version``.
+
+Refusals reveal nothing about another party's engagement (review P1): on every tracker table the first BEFORE INSERT
+trigger (``<table>_0_visible``, triggers fire in name order) is ``tracker_engagement_visible()``, SECURITY INVOKER,
+which refuses a row naming an engagement the caller cannot see with one ``insufficient_privilege`` error, the same as
+for an engagement that does not exist, before any SECURITY DEFINER trigger reads, locks or reports anything; checks
+that read other users (the roster, TOTP enrolment) run in AFTER triggers, after RLS. Finalising an agreement and
+planning its milestones are serialised on the agreement's row (``milestones_guard()`` reads it FOR SHARE).
 
 Who writes what (RLS; parties only: the engagement's developer and the members of its organisation, narrowed by
 ``app.org_id``; staff admin reads every tracker row; the other tables' visibility follows the engagement's):
 
-- ``engagements``: the developer inserts ``SUBMITTED`` (origin ``tagged``, with their open delivered tag), an
-  organisation signatory ``ORG_INTEREST`` (origin ``org_agent_match`` or ``org_browse``); both only for the proposal's
-  current registered version of a published, clear proposal and an E2 organisation that is neither suspended nor
-  delisted. Its owner, admin or signatory names the contact (UPDATE of the contact columns only).
+- ``engagements``: the developer inserts ``SUBMITTED`` (origin ``tagged``, with their open delivered tag, never with
+  an organisation they belong to), an organisation signatory ``ORG_INTEREST`` (origin ``org_agent_match`` or
+  ``org_browse``); both only for the proposal's current registered version of a published, clear proposal and an E2
+  organisation that is neither suspended nor delisted. Its owner, admin or signatory names the contact (UPDATE of the
+  contact columns only).
 - ``engagement_events``: a party appends as themselves in their role (the developer as ``developer``, a member in a
-  role they hold) or as the system (a job bound to a party; the row names no user).
+  role they hold) or as the system (a job bound to the developer or to a member who may act, never a viewer; the row
+  names no user).
 - ``engagement_endorsements``: a party endorses the stage the engagement is in (a milestone only at
-  ``IN_IMPLEMENTATION``), once per party, stage entry (``stage_round``, the database's) and milestone; ``auto`` names
-  no user and is written for the bound party's own side; a ``totp`` endorsement needs TOTP enrolled. Append-only.
+  ``IN_IMPLEMENTATION``; never a terminal stage), once per party, stage entry (``stage_round``, the database's) and
+  milestone; ``auto`` names no user and is written for the bound party's own side (not by a viewer); a ``totp``
+  endorsement needs TOTP enrolled. Append-only.
+- Nothing is added to (endorsements, agreements, milestones, signatures) or changed in (agreements, milestones) an
+  engagement that ended.
 - ``agreements`` (developer, or the organisation's owner, admin or signatory, from ``NDA_SIGNED`` to
   ``AGREEMENT_SIGNING``): inserted as a draft; ``final`` needs the IP terms, the deemed-acceptance clause (days, 0 =
   never deemed accepted), the final PDF's SHA-256 and at least one milestone, and freezes them; ``signed`` needs both
-  parties' signatures of that PDF; one signed agreement per engagement; never deleted once final.
+  parties' (two people's) signatures of that PDF; one signed agreement per engagement; never deleted once final.
 - ``milestones``: planned (inserted, edited, deleted) by the same editors while the agreement is a draft, then frozen;
   once it is signed and the engagement is ``IN_IMPLEMENTATION`` they move PLANNED -> IN_PROGRESS ->
   SUBMITTED_FOR_REVIEW (the developer) -> ACCEPTED or CHANGES_REQUESTED (the organisation's owner, admin, signatory or
@@ -90,7 +106,9 @@ Operating rules for the code that uses this schema:
 - Keep free text and personal data out of event payloads (a decline's free-text reason goes to a mutable store, with
   its salted digest in the payload), and out of ``payment_records.reference`` beyond the provider's reference.
 - Close the tag when its engagement ends (``app_close_tag``); the projection does not.
-- System events and ``auto`` endorsements are written by a job bound to the party it acts for.
+- System events and ``auto`` endorsements are written by a job bound to the party it acts for (never a viewer).
+- Map the tracker's one refusal for an engagement the caller cannot see ("no engagement of the caller's with that id",
+  insufficient_privilege) to 404, like any cross-tenant reference.
 
 Revision ID: 0003
 Revises: 0002
@@ -280,6 +298,11 @@ def _acts_in_role(table: str, role_column: str) -> str:
 
 
 _EDITOR = "e.developer_id = app_user_id() OR app_is_member(e.org_id, '{owner,admin,signatory}')"
+# Who may bind a job that writes system events or automatic endorsements: the developer or an organisation member who
+# may act (never a viewer; review P1, MINOR 5).
+_ACTING_PARTY = "e.developer_id = app_user_id() OR app_is_member(e.org_id, '{owner,admin,signatory,reviewer,finance}')"
+# Nothing is added to or changed in an engagement that ended (review P1, MINOR 6).
+_OPEN = "e.ended_at IS NULL"
 
 ENGAGEMENT_INSERT = (
     "end_reason IS NULL"
@@ -289,6 +312,7 @@ ENGAGEMENT_INSERT = (
     " AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = engagements.org_id AND o.verification = 'e2'"
     " AND o.suspended_at IS NULL AND o.delisted_at IS NULL)"
     " AND ((state = 'SUBMITTED' AND origin = 'tagged' AND developer_id = app_user_id() AND contact_user_id IS NULL"
+    " AND NOT app_is_member(org_id)"
     " AND EXISTS (SELECT 1 FROM tags t WHERE t.proposal_id = engagements.proposal_id AND t.org_id = engagements.org_id"
     " AND t.developer_id = app_user_id() AND t.status = 'delivered' AND t.closed_at IS NULL))"
     " OR (state = 'ORG_INTEREST' AND origin IN ('org_agent_match', 'org_browse')"
@@ -314,8 +338,10 @@ POLICIES: tuple[Policy, ...] = (
             " OR (engagement_events.actor_user_id = app_user_id() AND "
             + _acts_in_role("engagement_events", "actor_role")
             + ") OR (engagement_events.actor_role = 'system' AND engagement_events.actor_user_id IS NULL"
-            " AND (e.developer_id = app_user_id() OR app_is_member(e.org_id)))",
-        ),
+            f" AND ({_ACTING_PARTY}))",
+        )
+        # A dispute's closing outcome is the mediator's (after the prototype), never the parties' (review P1, MAJOR 4).
+        + " AND NOT (engagement_events.from_state = 'DISPUTED' AND engagement_events.to_state = 'CLOSED')",
     ),
     # --- engagement_endorsements: each party endorses its own side (auto: a job bound to that party) ---
     Policy("engagement_endorsements", "SELECT", _engagement("engagement_endorsements")),
@@ -324,12 +350,13 @@ POLICIES: tuple[Policy, ...] = (
         "INSERT",
         check=_engagement(
             "engagement_endorsements",
-            "(engagement_endorsements.party = 'developer' AND e.developer_id = app_user_id()"
+            f"{_OPEN} AND ((engagement_endorsements.party = 'developer' AND e.developer_id = app_user_id()"
             " AND (engagement_endorsements.user_id = app_user_id() OR engagement_endorsements.method = 'auto'))"
             " OR (engagement_endorsements.party = 'org' AND ((engagement_endorsements.method = 'auto'"
-            " AND app_is_member(e.org_id)) OR (engagement_endorsements.user_id = app_user_id() AND "
+            " AND app_is_member(e.org_id, '{owner,admin,signatory,reviewer,finance}'))"
+            " OR (engagement_endorsements.user_id = app_user_id() AND "
             + _acts_in_role("engagement_endorsements", "role")
-            + ")))",
+            + "))))",
         ),
     ),
     # --- agreements: drafted by the developer or the organisation's owner, admin or signatory, from NDA_SIGNED ---
@@ -338,12 +365,19 @@ POLICIES: tuple[Policy, ...] = (
         "agreements",
         "INSERT",
         check="created_by = app_user_id() AND status = 'draft' AND "
-        + _engagement("agreements", f"e.state IN ('NDA_SIGNED', 'NEGOTIATION', 'AGREEMENT_SIGNING') AND ({_EDITOR})"),
+        + _engagement(
+            "agreements", f"{_OPEN} AND e.state IN ('NDA_SIGNED', 'NEGOTIATION', 'AGREEMENT_SIGNING') AND ({_EDITOR})"
+        ),
     ),
-    Policy("agreements", "UPDATE", _engagement("agreements", _EDITOR), _engagement("agreements", _EDITOR)),
+    Policy(
+        "agreements",
+        "UPDATE",
+        _engagement("agreements", _EDITOR),
+        _engagement("agreements", f"{_OPEN} AND ({_EDITOR})"),
+    ),
     # --- milestones: planned by the same editors; the developer moves them forward, the organisation decides ---
     Policy("milestones", "SELECT", _engagement("milestones")),
-    Policy("milestones", "INSERT", check=_engagement("milestones", _EDITOR)),
+    Policy("milestones", "INSERT", check=_engagement("milestones", f"{_OPEN} AND ({_EDITOR})")),
     Policy("milestones", "DELETE", _engagement("milestones", _EDITOR)),
     Policy(
         "milestones",
@@ -354,10 +388,10 @@ POLICIES: tuple[Policy, ...] = (
         ),
         _engagement(
             "milestones",
-            f"(milestones.state = 'PLANNED' AND ({_EDITOR}))"
+            f"{_OPEN} AND ((milestones.state = 'PLANNED' AND ({_EDITOR}))"
             " OR (milestones.state IN ('IN_PROGRESS', 'SUBMITTED_FOR_REVIEW') AND e.developer_id = app_user_id())"
             " OR (milestones.state IN ('ACCEPTED', 'CHANGES_REQUESTED')"
-            " AND app_is_member(e.org_id, '{owner,admin,signatory,reviewer}'))",
+            " AND app_is_member(e.org_id, '{owner,admin,signatory,reviewer}')))",
         ),
     ),
     # --- signatures: the signer as themselves; the developer (D2 for an agreement) or an organisation signatory ---
@@ -368,10 +402,10 @@ POLICIES: tuple[Policy, ...] = (
         check="signer_user_id = app_user_id() AND "
         + _engagement(
             "signatures",
-            "(signatures.party = 'developer' AND e.developer_id = app_user_id()"
+            f"{_OPEN} AND ((signatures.party = 'developer' AND e.developer_id = app_user_id()"
             " AND (signatures.document_kind <> 'agreement' OR EXISTS (SELECT 1 FROM developer_profiles d"
             " WHERE d.user_id = app_user_id() AND d.verification_level >= 'd2')))"
-            " OR (signatures.party = 'org' AND app_is_member(e.org_id, '{signatory}'))",
+            " OR (signatures.party = 'org' AND app_is_member(e.org_id, '{signatory}')))",
         ),
     ),
     # --- payment_records: recorded by the organisation, confirmed once by the developer ---
@@ -484,13 +518,64 @@ $$;
 """
 
 TRIGGERS_SQL = r"""
+-- Runs first on every tracker table (its trigger, <table>_0_visible, sorts before the table's other BEFORE INSERT
+-- triggers, and triggers fire in name order): the new row names an engagement the caller can see (a party, or staff
+-- admin, whom the table's RLS then refuses), else one refusal, the same for an engagement that does not exist and one
+-- of other parties. So no SECURITY DEFINER trigger reads, locks (FOR UPDATE) or reports anything about another
+-- party's engagement (its state, stage, agreement, members) before RLS refuses the row (review P1, MAJOR 1). SECURITY
+-- INVOKER: the caller's RLS decides; the owner, and definer code such as the genesis, see every engagement.
+CREATE FUNCTION tracker_engagement_visible() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.engagement_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.engagements e WHERE e.id = NEW.engagement_id) THEN
+        RAISE EXCEPTION 'no engagement of the caller''s with that id' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- The main path's legal predecessors (docs/spec/06 6.9 main path; 3b PROCUREMENT_ROUTE around stage 3; a disputed
+-- first contact returns to stage 3; a new agreement version after a final one returns to NEGOTIATION; a dispute may
+-- close as the mediator's outcome). The state machine's transition table stays the authority: this is the database's
+-- backstop, so no evidence gate is skipped by jumping ahead (review P1, MAJOR 4). NULL for a side state (DECLINED,
+-- WITHDRAWN, EXPIRED, ON_HOLD, DISPUTED, TERMINATED, INFO_REQUESTED), entered as the state machine allows; SUBMITTED
+-- and ORG_INTEREST are only ever a genesis (or a resume). Internal: no EXECUTE for any role.
+CREATE FUNCTION engagement_main_path_predecessors(p_state engagement_state) RETURNS engagement_state[]
+    LANGUAGE sql IMMUTABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT CAST(CASE p_state
+        WHEN 'ORG_INTEREST' THEN '{}'
+        WHEN 'SUBMITTED' THEN '{}'
+        WHEN 'UNDER_REVIEW' THEN '{SUBMITTED}'
+        WHEN 'INTEREST_CONFIRMED' THEN '{ORG_INTEREST,UNDER_REVIEW,PROCUREMENT_ROUTE,CONTACT_MADE}'
+        WHEN 'PROCUREMENT_ROUTE' THEN '{UNDER_REVIEW,INTEREST_CONFIRMED}'
+        WHEN 'CONTACT_MADE' THEN '{INTEREST_CONFIRMED,PROCUREMENT_ROUTE}'
+        WHEN 'NDA_PENDING' THEN '{CONTACT_MADE}'
+        WHEN 'NDA_SIGNED' THEN '{NDA_PENDING}'
+        WHEN 'NEGOTIATION' THEN '{NDA_SIGNED,AGREEMENT_SIGNING}'
+        WHEN 'AGREEMENT_SIGNING' THEN '{NEGOTIATION}'
+        WHEN 'IN_IMPLEMENTATION' THEN '{AGREEMENT_SIGNING}'
+        WHEN 'DELIVERED' THEN '{IN_IMPLEMENTATION}'
+        WHEN 'SIGN_OFF' THEN '{DELIVERED}'
+        WHEN 'PAYMENT_FINAL' THEN '{SIGN_OFF}'
+        WHEN 'CLOSED' THEN '{PAYMENT_FINAL,DISPUTED}'
+    END AS public.engagement_state[])
+$$;
+
 -- Appends one event to its engagement's chain. The engagement's row lock serialises appends until commit (at READ
 -- COMMITTED the head read below then sees the previous append; at REPEATABLE READ or SERIALIZABLE a concurrent append
 -- makes the lock fail with a serialization error, so the caller retries). Sets seq, prev_hash, created_at and hash
 -- whatever was sent. The first event records the engagement as inserted (engagements_genesis(), or this revision's
--- backfill); every later one starts from the engagement's current state, none follows a terminal state, and the
--- main path's legal steps need their evidence (AC-TRACK-10, AC-TRACK-7). SECURITY DEFINER: reads the chain, the
--- engagement and its agreements, signatures and payments whatever the caller's visibility.
+-- backfill); every later one starts from the engagement's current state, none follows a terminal state, a main-path
+-- state is entered only from its legal predecessors (a side branch resumes only to the state it was entered from),
+-- and the main path's legal steps need their evidence (AC-TRACK-10, AC-TRACK-7): IN_IMPLEMENTATION, DELIVERED,
+-- SIGN_OFF and PAYMENT_FINAL a signed agreement, PAYMENT_FINAL also the acceptance certificate signed by both parties
+-- (two people), CLOSED from PAYMENT_FINAL the final payment confirmed at the recorded amount. Runs after
+-- tracker_engagement_visible(), so it locks and reports only an engagement the caller can see. SECURITY DEFINER:
+-- reads the chain and the engagement's agreements, signatures and payments whatever the caller's visibility.
 CREATE FUNCTION engagement_events_chain() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -498,6 +583,7 @@ AS $$
 DECLARE
     v_engagement public.engagements%ROWTYPE;
     v_last public.engagement_events%ROWTYPE;
+    v_resume public.engagement_state;
 BEGIN
     IF NEW.id IS NULL OR NEW.engagement_id IS NULL THEN
         RAISE EXCEPTION 'engagement_events: id and engagement_id are required' USING ERRCODE = 'not_null_violation';
@@ -528,18 +614,34 @@ BEGIN
                 coalesce(NEW.from_state::text, 'NULL')
                 USING ERRCODE = 'check_violation';
         END IF;
-        IF NEW.to_state IS DISTINCT FROM NEW.from_state THEN
-            IF NEW.to_state = 'IN_IMPLEMENTATION' AND NOT EXISTS (
+        IF NEW.to_state IS DISTINCT FROM NEW.from_state
+           AND public.engagement_main_path_predecessors(NEW.to_state) IS NOT NULL THEN
+            IF NEW.from_state IN ('ON_HOLD', 'DISPUTED', 'INFO_REQUESTED')
+               AND NOT (NEW.from_state = 'DISPUTED' AND NEW.to_state = 'CLOSED') THEN
+                SELECT ev.from_state INTO v_resume FROM public.engagement_events ev
+                 WHERE ev.engagement_id = NEW.engagement_id AND ev.to_state = NEW.from_state
+                   AND ev.from_state IS DISTINCT FROM ev.to_state
+                 ORDER BY ev.seq DESC LIMIT 1;
+                IF NEW.to_state IS DISTINCT FROM v_resume THEN
+                    RAISE EXCEPTION 'engagement_events: % resumes to % (the state it was entered from), not %',
+                        NEW.from_state, coalesce(v_resume::text, 'NULL'), NEW.to_state
+                        USING ERRCODE = 'check_violation';
+                END IF;
+            ELSIF NOT (NEW.from_state = ANY (public.engagement_main_path_predecessors(NEW.to_state))) THEN
+                RAISE EXCEPTION 'engagement_events: % cannot follow %', NEW.to_state, NEW.from_state
+                    USING ERRCODE = 'check_violation';
+            END IF;
+            IF NEW.to_state IN ('IN_IMPLEMENTATION', 'DELIVERED', 'SIGN_OFF', 'PAYMENT_FINAL') AND NOT EXISTS (
                 SELECT 1 FROM public.agreements a WHERE a.engagement_id = NEW.engagement_id AND a.status = 'signed'
             ) THEN
-                RAISE EXCEPTION 'engagement_events: IN_IMPLEMENTATION needs an agreement signed by both parties'
+                RAISE EXCEPTION 'engagement_events: % needs an agreement signed by both parties', NEW.to_state
                     USING ERRCODE = 'check_violation';
             END IF;
             IF NEW.to_state = 'PAYMENT_FINAL' AND NOT EXISTS (
                 SELECT 1 FROM public.signatures s
                  WHERE s.engagement_id = NEW.engagement_id AND s.document_kind = 'acceptance_certificate'
                  GROUP BY s.document_ref, s.document_sha256
-                HAVING count(DISTINCT s.party) = 2
+                HAVING count(DISTINCT s.party) = 2 AND count(DISTINCT s.signer_user_id) = 2
             ) THEN
                 RAISE EXCEPTION 'engagement_events: PAYMENT_FINAL needs the acceptance certificate signed by both'
                     ' parties' USING ERRCODE = 'check_violation';
@@ -589,8 +691,8 @@ $$;
 -- On insert: the database's stage time (its clock), end and lock_version. On update: lock_version moves on every
 -- change (the ORM's server-side version counter), the parties, proposal, version and origin never change, and the
 -- state and end reason are always the latest event's, for every role (the owner included), so they change only by
--- appending an event. The named contact is an active member of the organisation. SECURITY DEFINER: reads the chain
--- and the roster whatever the caller's visibility.
+-- appending an event. (Who the contact and the developer may be is engagements_members(), after RLS.) SECURITY
+-- DEFINER: reads the chain whatever the caller's visibility.
 CREATE FUNCTION engagements_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -598,13 +700,6 @@ AS $$
 DECLARE
     v_last public.engagement_events%ROWTYPE;
 BEGIN
-    IF NEW.contact_user_id IS NOT NULL AND NOT EXISTS (
-        SELECT 1 FROM public.memberships m
-         WHERE m.org_id = NEW.org_id AND m.user_id = NEW.contact_user_id AND m.status = 'active'
-    ) AND (TG_OP = 'INSERT' OR NEW.contact_user_id IS DISTINCT FROM OLD.contact_user_id) THEN
-        RAISE EXCEPTION 'engagements: the contact must be an active member of the organisation'
-            USING ERRCODE = 'check_violation';
-    END IF;
     IF TG_OP = 'INSERT' THEN
         NEW.stage_entered_at := public.app_clock_now();
         NEW.ended_at := CASE WHEN NEW.state IN ('DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED')
@@ -662,9 +757,10 @@ BEGIN
 END;
 $$;
 
--- An endorsement is of the stage the engagement is in (under its row lock, so no append slips in between), a milestone
--- only at IN_IMPLEMENTATION, and a TOTP endorsement needs TOTP enrolled. stage_round (the number of times the
--- engagement entered the stage) and endorsed_at are the database's. SECURITY DEFINER: reads the chain and users.
+-- An endorsement is of the stage the engagement is in (under its row lock, so no append slips in between), never of a
+-- terminal one, and a milestone only at IN_IMPLEMENTATION. stage_round (the number of times the engagement entered
+-- the stage) and endorsed_at are the database's. Runs after tracker_engagement_visible(); the TOTP check, which reads
+-- another user, runs after RLS (engagement_endorsements_totp()). SECURITY DEFINER: reads the chain.
 CREATE FUNCTION engagement_endorsements_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -677,14 +773,12 @@ BEGIN
         RAISE EXCEPTION 'engagement_endorsements: only the stage the engagement is in (%) can be endorsed', v_state
             USING ERRCODE = 'check_violation';
     END IF;
-    IF NEW.milestone_id IS NOT NULL AND NEW.stage <> 'IN_IMPLEMENTATION' THEN
-        RAISE EXCEPTION 'engagement_endorsements: a milestone is endorsed at IN_IMPLEMENTATION'
+    IF v_state IN ('DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED') THEN
+        RAISE EXCEPTION 'engagement_endorsements: the engagement ended in % and takes no endorsement', v_state
             USING ERRCODE = 'check_violation';
     END IF;
-    IF NEW.method = 'totp' AND NOT EXISTS (
-        SELECT 1 FROM public.users u WHERE u.id = NEW.user_id AND u.totp_enabled_at IS NOT NULL
-    ) THEN
-        RAISE EXCEPTION 'engagement_endorsements: a TOTP endorsement needs TOTP enrolled'
+    IF NEW.milestone_id IS NOT NULL AND NEW.stage <> 'IN_IMPLEMENTATION' THEN
+        RAISE EXCEPTION 'engagement_endorsements: a milestone is endorsed at IN_IMPLEMENTATION'
             USING ERRCODE = 'check_violation';
     END IF;
     NEW.stage_round := (
@@ -698,8 +792,12 @@ $$;
 
 -- An agreement version is inserted as a draft and edited while it is one. Marking it final needs at least one
 -- milestone (the CHECK needs the IP terms, the deemed-acceptance clause and the PDF hash) and freezes it; a final
--- version only becomes signed, once both parties signed its PDF hash; a signed one never changes; only drafts are
--- ever deleted. The keys never change. SECURITY DEFINER: reads milestones and signatures whatever the caller sees.
+-- version only becomes signed, once both parties (two people) signed its PDF hash; a signed one never changes; only
+-- drafts are ever deleted. The keys never change. Finalisation and milestone planning are serialised on the agreement's
+-- row: this UPDATE holds its row lock, and milestones_guard() takes FOR SHARE on it before reading the status, so a
+-- milestone written meanwhile waits for this transaction and then sees the final status, and a finalisation waits for
+-- a milestone deletion in flight and then counts what is left (review P1, MAJOR 2). SECURITY DEFINER: reads milestones
+-- and signatures whatever the caller sees.
 CREATE FUNCTION agreements_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -737,12 +835,13 @@ BEGIN
        OR NEW.status = 'draft' OR (OLD.status = 'signed' AND NEW.status <> 'signed') THEN
         RAISE EXCEPTION 'agreements: a final or signed agreement is frozen' USING ERRCODE = 'check_violation';
     END IF;
-    IF OLD.status = 'final' AND NEW.status = 'signed' AND (
-        SELECT count(DISTINCT s.party) FROM public.signatures s
+    IF OLD.status = 'final' AND NEW.status = 'signed' AND NOT EXISTS (
+        SELECT 1 FROM public.signatures s
          WHERE s.engagement_id = NEW.engagement_id AND s.document_kind = 'agreement' AND s.document_ref = NEW.id
            AND s.document_sha256 = NEW.final_pdf_sha256
-    ) < 2 THEN
-        RAISE EXCEPTION 'agreements: an agreement is signed once both parties signed its final PDF'
+        HAVING count(DISTINCT s.party) = 2 AND count(DISTINCT s.signer_user_id) = 2
+    ) THEN
+        RAISE EXCEPTION 'agreements: an agreement is signed once both parties signed its final PDF (two people)'
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -751,7 +850,9 @@ $$;
 
 -- Milestones are planned (inserted, edited, deleted, all PLANNED) while their agreement is a draft, and frozen once it
 -- is final. Once it is signed and the engagement is IN_IMPLEMENTATION they follow the sub-tracker (docs/spec/06 6.9);
--- which party makes each step is the UPDATE policy's. SECURITY DEFINER: reads the agreement and the engagement.
+-- which party makes each step is the UPDATE policy's. The agreement is read FOR SHARE (serialised with its
+-- finalisation, agreements_guard()) and only as the agreement of the row's own engagement, so naming another
+-- engagement's agreement reveals nothing of it. SECURITY DEFINER: reads the agreement and the engagement.
 CREATE FUNCTION milestones_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -761,14 +862,16 @@ DECLARE
     v_state public.engagement_state;
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        SELECT a.status INTO v_status FROM public.agreements a WHERE a.id = OLD.agreement_id;
+        SELECT a.status INTO v_status FROM public.agreements a
+         WHERE a.id = OLD.agreement_id AND a.engagement_id = OLD.engagement_id FOR SHARE;
         IF v_status IS DISTINCT FROM 'draft' THEN
             RAISE EXCEPTION 'milestones: a milestone of a final or signed agreement is never deleted'
                 USING ERRCODE = 'insufficient_privilege';
         END IF;
         RETURN OLD;
     END IF;
-    SELECT a.status INTO v_status FROM public.agreements a WHERE a.id = NEW.agreement_id;
+    SELECT a.status INTO v_status FROM public.agreements a
+     WHERE a.id = NEW.agreement_id AND a.engagement_id = NEW.engagement_id FOR SHARE;
     IF TG_OP = 'INSERT' THEN
         IF v_status IS DISTINCT FROM 'draft' OR NEW.state <> 'PLANNED' THEN
             RAISE EXCEPTION 'milestones: milestones are planned while their agreement is a draft'
@@ -811,8 +914,9 @@ $$;
 
 -- An internal e-signature: an agreement only in its final version, at its final PDF's hash, and never with IP terms
 -- that need an advanced e-signature (assignment, exclusive licence: AC-TRACK-10; "signed outside the platform" comes
--- later); a milestone confirmation names a milestone of the engagement; a TOTP step-up needs TOTP enrolled.
--- signed_at is the database's. SECURITY DEFINER: reads agreements, milestones and users whatever the caller sees.
+-- later); a milestone confirmation names a milestone of the engagement. signed_at is the database's. Runs after
+-- tracker_engagement_visible(); the TOTP check, which reads another user, runs after RLS (signatures_totp()). SECURITY
+-- DEFINER: reads agreements and milestones whatever the caller sees.
 CREATE FUNCTION signatures_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -838,11 +942,6 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'signatures: a milestone confirmation names a milestone of the engagement'
             USING ERRCODE = 'check_violation';
-    END IF;
-    IF NEW.step_up_method = 'totp' AND NOT EXISTS (
-        SELECT 1 FROM public.users u WHERE u.id = NEW.signer_user_id AND u.totp_enabled_at IS NOT NULL
-    ) THEN
-        RAISE EXCEPTION 'signatures: a TOTP step-up needs TOTP enrolled' USING ERRCODE = 'check_violation';
     END IF;
     NEW.signed_at := public.app_clock_now();
     RETURN NEW;
@@ -892,12 +991,79 @@ BEGIN
 END;
 $$;
 
+-- Checks that read other users (the roster, TOTP enrolment) run AFTER the row passed RLS, so a caller RLS refuses
+-- learns nothing from them (review P1, MAJOR 1). SECURITY DEFINER: read memberships and users.
+
+-- The named contact is an active member of the organisation, and the developer is never an active member of the
+-- counterpart organisation (review P1, MINOR 7: the two parties are two people).
+CREATE FUNCTION engagements_members() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.contact_user_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.contact_user_id IS DISTINCT FROM OLD.contact_user_id)
+       AND NOT EXISTS (
+            SELECT 1 FROM public.memberships m
+             WHERE m.org_id = NEW.org_id AND m.user_id = NEW.contact_user_id AND m.status = 'active') THEN
+        RAISE EXCEPTION 'engagements: the contact must be an active member of the organisation'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF TG_OP = 'INSERT' AND EXISTS (
+        SELECT 1 FROM public.memberships m
+         WHERE m.org_id = NEW.org_id AND m.user_id = NEW.developer_id AND m.status = 'active'
+    ) THEN
+        RAISE EXCEPTION 'engagements: the developer may not be a member of the counterpart organisation'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION engagement_endorsements_totp() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.method = 'totp' AND NOT EXISTS (
+        SELECT 1 FROM public.users u WHERE u.id = NEW.user_id AND u.totp_enabled_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'engagement_endorsements: a TOTP endorsement needs TOTP enrolled'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION signatures_totp() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.step_up_method = 'totp' AND NOT EXISTS (
+        SELECT 1 FROM public.users u WHERE u.id = NEW.signer_user_id AND u.totp_enabled_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'signatures: a TOTP step-up needs TOTP enrolled' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
 CREATE TRIGGER engagements_guard
     BEFORE INSERT OR UPDATE ON engagements
     FOR EACH ROW EXECUTE FUNCTION engagements_guard();
 CREATE TRIGGER engagements_genesis
     AFTER INSERT ON engagements
     FOR EACH ROW EXECUTE FUNCTION engagements_genesis();
+CREATE TRIGGER engagements_members
+    AFTER INSERT OR UPDATE ON engagements
+    FOR EACH ROW EXECUTE FUNCTION engagements_members();
+CREATE TRIGGER engagement_endorsements_totp
+    AFTER INSERT ON engagement_endorsements
+    FOR EACH ROW EXECUTE FUNCTION engagement_endorsements_totp();
+CREATE TRIGGER signatures_totp
+    AFTER INSERT ON signatures
+    FOR EACH ROW EXECUTE FUNCTION signatures_totp();
 CREATE TRIGGER engagement_events_chain
     BEFORE INSERT ON engagement_events
     FOR EACH ROW EXECUTE FUNCTION engagement_events_chain();
@@ -926,6 +1092,8 @@ CREATE TRIGGER payment_records_no_delete
 
 # Append-only tables (block_mutation() of revision 0002 refuses UPDATE and DELETE for every role) and tables that are
 # never truncated.
+# Every tracker table: tracker_engagement_visible() fires first on INSERT (<table>_0_visible sorts first by name).
+TRACKER_TABLES = RLS_TABLES
 APPEND_ONLY_TABLES = ("engagement_events", "engagement_endorsements", "signatures")
 NO_TRUNCATE_TABLES = (*APPEND_ONLY_TABLES, "agreements", "milestones", "payment_records")
 
@@ -936,8 +1104,15 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_set_test_clock(interval)": ("bridge_app",),  # the test-clock router (dev, test and staging only)
 }
 # Called only by the chain trigger, as the owner: no EXECUTE for any role.
-INTERNAL_FUNCTIONS = ("engagement_event_canonical(engagement_events)",)
+INTERNAL_FUNCTIONS = (
+    "engagement_event_canonical(engagement_events)",
+    "engagement_main_path_predecessors(engagement_state)",
+)
 TRIGGER_FUNCTIONS = (
+    "tracker_engagement_visible()",
+    "engagements_members()",
+    "engagement_endorsements_totp()",
+    "signatures_totp()",
     "engagement_events_chain()",
     "engagement_events_project()",
     "engagements_guard()",
@@ -1013,6 +1188,11 @@ def upgrade() -> None:
         "\n".join(
             [
                 *(
+                    f"CREATE TRIGGER {t}_0_visible BEFORE INSERT ON {t}"
+                    " FOR EACH ROW EXECUTE FUNCTION tracker_engagement_visible();"
+                    for t in TRACKER_TABLES
+                ),
+                *(
                     f"CREATE TRIGGER {t}_no_update_delete BEFORE UPDATE OR DELETE ON {t}"
                     " FOR EACH ROW EXECUTE FUNCTION block_mutation();"
                     for t in APPEND_ONLY_TABLES
@@ -1036,6 +1216,7 @@ def downgrade() -> None:
         "\n".join(
             [
                 *(f"DROP POLICY {p.name} ON {p.table};" for p in POLICIES if p.table == "engagements"),
+                "DROP TRIGGER engagements_members ON engagements;",
                 "DROP TRIGGER engagements_genesis ON engagements;",
                 "DROP TRIGGER engagements_guard ON engagements;",
                 *(f"DROP FUNCTION {signature};" for signature in INTERNAL_FUNCTIONS),

@@ -330,6 +330,11 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_clock_now()": (False, {"bridge_app"}),
     "app_set_test_clock(interval)": (True, {"bridge_app"}),  # the test-clock router (dev, test and staging only)
     "engagement_event_canonical(engagement_events)": (False, set()),  # the chain trigger only
+    "engagement_main_path_predecessors(engagement_state)": (False, set()),  # the chain trigger only
+    "tracker_engagement_visible()": (False, set()),  # SECURITY INVOKER: the caller's RLS decides
+    "engagements_members()": (True, set()),
+    "engagement_endorsements_totp()": (True, set()),
+    "signatures_totp()": (True, set()),
     "engagement_events_chain()": (True, set()),
     "engagement_events_project()": (True, set()),
     "engagements_guard()": (True, set()),
@@ -2006,9 +2011,14 @@ V2_TRIGGERS = {
 
 # Revision 0003: the chain and its projection, the tracker guards, and the append-only tracker tables.
 V3_APPEND_ONLY = ("engagement_events", "engagement_endorsements", "signatures")
+V3_TRACKER_TABLES = (*V3_APPEND_ONLY, "agreements", "milestones", "payment_records")
 V3_TRIGGERS = {
     ("engagements", "engagements_guard"): ("engagements_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("engagements", "engagements_genesis"): ("engagements_genesis", ROW | ON_INSERT),
+    # After RLS: checks that read other users (the roster, TOTP enrolment).
+    ("engagements", "engagements_members"): ("engagements_members", ROW | ON_INSERT | ON_UPDATE),
+    ("engagement_endorsements", "engagement_endorsements_totp"): ("engagement_endorsements_totp", ROW | ON_INSERT),
+    ("signatures", "signatures_totp"): ("signatures_totp", ROW | ON_INSERT),
     ("engagement_events", "engagement_events_chain"): ("engagement_events_chain", ROW | BEFORE | ON_INSERT),
     ("engagement_events", "engagement_events_project"): ("engagement_events_project", ROW | ON_INSERT),
     ("engagement_endorsements", "engagement_endorsements_guard"): (
@@ -2021,6 +2031,11 @@ V3_TRIGGERS = {
     ("payment_records", "payment_records_guard"): ("payment_records_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("payment_records", "payment_records_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
     **{(t, f"{t}_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE) for t in V3_APPEND_ONLY},
+    # Fires first on INSERT (name order): no definer trigger reads or locks an engagement the caller cannot see.
+    **{
+        (t, f"{t}_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT)
+        for t in (*V3_APPEND_ONLY, "agreements", "milestones", "payment_records")
+    },
     **{
         (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
         for t in (*V3_APPEND_ONLY, "agreements", "milestones", "payment_records")
@@ -2126,3 +2141,19 @@ async def test_app_can_defer_fetch_and_finish_a_job(app_engine: AsyncEngine) -> 
         await conn.execute(sa.text("SELECT procrastinate_finish_job_v1(:j, 'succeeded', false)"), {"j": fetched})
         status = sa.text("SELECT status::text FROM procrastinate_jobs WHERE id = :j")
         assert (await conn.execute(status, {"j": fetched})).scalar_one() == "succeeded"
+
+
+async def test_the_visibility_trigger_fires_first_on_every_tracker_table(owner_engine: AsyncEngine) -> None:
+    """Triggers of one timing and event fire in name order: on every tracker table the first BEFORE INSERT row trigger
+    is tracker_engagement_visible() (review P1, MAJOR 1)."""
+    found = await rows(
+        owner_engine,
+        "SELECT DISTINCT ON (c.relname) c.relname AS table_name, p.proname AS function FROM pg_trigger t"
+        " JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid"
+        " WHERE NOT t.tgisinternal AND c.relname = ANY (:tables) AND t.tgtype & 7 = 7"  # ROW | BEFORE | INSERT
+        ' ORDER BY c.relname, t.tgname COLLATE "C"',
+        tables=list(V3_TRACKER_TABLES),
+    )
+    assert {row.table_name: row.function for row in found} == dict.fromkeys(
+        V3_TRACKER_TABLES, "tracker_engagement_visible"
+    )

@@ -449,18 +449,22 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             org=org_id,
             user=user_id,
         )
+        # The organisation's engagement with another developer's proposal (revision 0003: the developer is never a
+        # member of the counterpart organisation), so the tracker rows are this tenant's through its organisation.
+        pitcher = await add_user(conn, f"pitcher-{label}-{tag}@example.test", f"Pitcher {label.upper()}")
+        pitched, pitched_version = await add_proposal(conn, pitcher, niche_id, public_problem)
         engagement_id = uuid7()
         await _insert(
             conn,
             "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state)"
             " VALUES (:id, :proposal, :org, :user, :version, 'tagged', 'SUBMITTED')",
             id=engagement_id,
-            proposal=published,
+            proposal=pitched,
             org=org_id,
-            user=user_id,
-            version=published_version,
+            user=pitcher,
+            version=pitched_version,
         )
-        await add_tracker_rows(conn, engagement_id, user_id)
+        await add_tracker_rows(conn, engagement_id, pitcher)
         await _insert(
             conn,
             "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source)"
