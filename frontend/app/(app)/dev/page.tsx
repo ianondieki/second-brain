@@ -112,7 +112,7 @@ export default async function DeveloperHome() {
             <ul className="mt-2 border-b border-line">
               {ideas.slice(0, IDEAS_SHOWN).map((item) => (
                 <li key={item.id}>
-                  <IdeaRow item={item} />
+                  <IdeaRow item={item} headingLevel={3} />
                 </li>
               ))}
             </ul>
