@@ -22,7 +22,7 @@ from bridge.reminders.nudge import (
     in_app_body,
     render_nudge,
 )
-from bridge.reminders.render import defang, eat_date, quote
+from bridge.reminders.render import defang, eat_date, platform_url, quote
 from tests.unit.reminders.builders import BASE_URL, DEV, MONDAY, NO_HOLIDAYS, ORG, M, S, days, engagement, milestone
 
 USER = uuid4()
@@ -199,3 +199,35 @@ def test_defang_and_quote() -> None:
     assert quote("  ​spaced\u0007 out\n text ") == "“spaced out text”"
     assert quote(None, fallback="Untitled") == "“Untitled”"
     assert eat_date(MONDAY) == "5 Oct 2026"
+
+
+@pytest.mark.parametrize(
+    ("fact", "line"),
+    [
+        (
+            engagement(S.CONTACT_MADE, awaiting=frozenset({DEV, ORG})),
+            "“Solar cold rooms” with Telco A (fixture): send the mutual NDA.",
+        ),
+        (
+            engagement(S.CONTACT_MADE),
+            "“Solar cold rooms” with Telco A (fixture): confirm first contact.",
+        ),
+        (
+            engagement(milestones=(milestone(days(-3), M.ACCEPTED),)),
+            "“Solar cold rooms” with Telco A (fixture): submit the final delivery.",
+        ),
+        (
+            engagement(S.PAYMENT_FINAL, stage_deadline_on=days(4)),
+            "“Solar cold rooms” with Telco A (fixture): confirm the payment received (due 9 Oct 2026).",
+        ),
+    ],
+)
+def test_the_developers_action_follows_the_stage(fact: object, line: str) -> None:
+    assert compose_nudge(facts(fact), NO_HOLIDAYS).needs_you == (line,)
+
+
+def test_links_are_platform_paths_only() -> None:
+    assert platform_url(BASE_URL + "/", "/engagements") == f"{BASE_URL}/engagements"
+    for path in ("https://evil.example", "//evil.example", "engagements"):
+        with pytest.raises(ValueError, match="platform path"):
+            platform_url(BASE_URL, path)

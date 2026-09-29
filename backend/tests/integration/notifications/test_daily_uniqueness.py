@@ -179,6 +179,17 @@ async def test_an_in_app_summary_is_written_once_per_key(factory: Factory, user:
     assert (row.channel, row.status, row.to_address, row.dedupe_key) == (IN_APP, DeliveryStatus.SENT, "in-app", key)
 
 
+async def test_an_in_app_title_is_one_to_two_hundred_characters(factory: Factory, user: tuple[UUID, str]) -> None:
+    user_id, _ = user
+    async with factory() as db:
+        await bind_tenant(db, user_id=user_id)
+        for title in ("  ", "t" * 201):
+            with pytest.raises(ValueError, match="title"):
+                await post_in_app(
+                    db, user_id=user_id, kind="em7", title=title, body=None, link=None, dedupe_key=f"k:{uuid7()}"
+                )
+
+
 @pytest.mark.parametrize("link", ["https://evil.example/x", "//evil.example", "engagements"])
 async def test_an_in_app_link_is_a_platform_path(factory: Factory, user: tuple[UUID, str], link: str) -> None:
     user_id, _ = user
