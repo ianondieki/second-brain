@@ -8,7 +8,9 @@ faked; data that is not seeded demo data never produces an HTTP request.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 import httpx
@@ -24,11 +26,12 @@ from bridge.llm.errors import (
     Tier2DemoOnly,
     Tier2NotAllowed,
 )
+from bridge.llm.fakes import FakeAdapter
 from bridge.llm.guard import StaticConsents
 from bridge.llm.ledger import CallStatus
 from bridge.llm.prepare import SCHEMA_INSTRUCTION
 from bridge.llm.registry import free_model_key
-from bridge.llm.types import CallContext, InputField, Instruction, Message, Tier
+from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message, Tier
 from bridge.models.enums import ConsentPurpose
 from tests.unit.llm.helpers import ORG, OTHER_OWNER, OWNER, SESSION, USER, settings
 from tests.unit.llm.rig import registry_with, screen
@@ -56,7 +59,10 @@ def assert_fallback(result: object, reason: str) -> None:
     assert getattr(result, "demo_fallback", None) is True
     assert getattr(result, "fallback_reason", None) == reason
     assert getattr(result, "model", None) == DEMO_FALLBACK_MODEL
-    assert getattr(result, "parsed", None) == fallback_output(Verdict)
+    parsed = getattr(result, "parsed", None)
+    assert parsed == fallback_output(Verdict)
+    assert isinstance(parsed, Verdict)
+    assert (parsed.verdict, parsed.injection_suspected) == ("hold", True)  # never a fabricated clean verdict
 
 
 # ------------------------------------------------------------------------------------------------ the fake
@@ -94,6 +100,28 @@ async def test_unknown_tasks_and_bad_schemas_are_the_callers_mistake() -> None:
         await r.client.complete("nope", demo_screen(), Verdict, ctx=DEMO)
     with pytest.raises(LLMConfigError):
         await r.client.complete(TASK, demo_screen(), dict, ctx=DEMO)  # type: ignore[type-var]
+
+
+class NoPlaceholder(LLMOutput):
+    verdict: Literal["clean", "hold"]
+
+
+@pytest.mark.parametrize("provider", ["fake", "free", "anthropic"])
+async def test_a_schema_without_a_placeholder_is_refused_up_front_on_local_runs(provider: str) -> None:
+    """Security review P7, MAJOR 2: the layer fabricates no verdict, so a schema used on a local run must bring its
+    own safe placeholder; it is refused before any provider is asked, not only when a call fails."""
+    r = routed(provider=provider, anthropic=FakeAdapter([OK]))  # type: ignore[arg-type]
+    with respx.mock(assert_all_called=False) as router:
+        route = router.route()
+        with pytest.raises(LLMConfigError, match=r"NoPlaceholder needs a demo_fallback\(\) classmethod"):
+            await r.client.complete(TASK, demo_screen(), NoPlaceholder, ctx=DEMO)
+    assert not route.called
+    assert r.ledger.entries == []
+    strict = routed(provider="anthropic", anthropic=FakeAdapter([{"injection_suspected": False, "verdict": "clean"}]))
+    strict_runtime = replace(strict.client._runtime, demo_fallback=False)
+    strict.client._runtime = strict_runtime
+    result = await strict.client.complete(TASK, demo_screen(), NoPlaceholder, ctx=DEMO)  # staging: no fallback needed
+    assert result.parsed.verdict == "clean"
 
 
 @pytest.mark.parametrize("provider", ["fake", "free"])

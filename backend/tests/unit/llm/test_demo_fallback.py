@@ -1,24 +1,25 @@
-"""REQ-LLM-01 P7 (D-37): the deterministic fake behind the "demo fallback" label.
+"""REQ-LLM-01 P7 (D-37): the answer behind the "demo fallback" label fails closed.
 
-The fallback answer is built from the output schema alone (it reads no input, so it can leak nothing): the schema's
-own ``demo_fallback()`` when it has one, else a value from its JSON schema. It is deterministic, always valid, and the
-result says it is a fallback so the API and the UI can label it.
+Security review P7, MAJOR 2: a fallback built from the schema alone fabricated a permissive verdict (the first enum
+member, ``injection_suspected=False``) for refusals, content-filter stops, schema failures, provider errors and hit
+caps. The layer now invents nothing: the answer is the schema's own ``demo_fallback()`` placeholder (its author
+chooses the safe answer, e.g. "hold"), which must say ``injection_suspected=True``; a schema without one is refused
+with ``LLMConfigError``. The result says it is a fallback so the API and the UI can label it.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 
 import pytest
-from pydantic import BaseModel, Field
 
-from bridge.llm import demo_fallback
 from bridge.llm.demo_fallback import (
     DEMO_FALLBACK_MODEL,
     DEMO_TEXT,
     DemoFallbackFlag,
     FallbackReason,
+    check_fallback,
     fallback_output,
     fallback_result,
 )
@@ -27,20 +28,9 @@ from bridge.llm.types import BudgetStatus, LLMOutput, TokenUsage
 from tests.unit.llm.schemas import Verdict
 
 
-class Point(BaseModel):
-    x: int = Field(ge=3)
-    label: str = Field(max_length=4)
-
-
-class Rich(LLMOutput):
-    kind: Literal["idea", "problem"]
-    score: float = Field(ge=0.5, le=0.9)
-    count: int = Field(gt=0)
-    note: str | None
-    points: list[Point] = Field(min_length=2)
-    tags: list[str]
-    words: str = Field(min_length=60)
-    optional: str = "kept"
+class NoHook(LLMOutput):
+    verdict: Literal["clean", "hold"]
+    reason: str
 
 
 class Hooked(LLMOutput):
@@ -48,51 +38,57 @@ class Hooked(LLMOutput):
 
     @classmethod
     def demo_fallback(cls) -> Self:
-        return cls(injection_suspected=False, verdict="hold")  # a classifier's safe answer: hold for a human
+        return cls(injection_suspected=True, verdict="hold")  # a classifier's safe answer: hold for a human
 
 
-class WrongHook(LLMOutput):
+class WrongType(LLMOutput):
     verdict: str
 
     @classmethod
     def demo_fallback(cls) -> Verdict:
-        return Verdict(injection_suspected=False, verdict="clean", reason="x")
+        return Verdict(injection_suspected=True, verdict="hold", reason="x")
 
 
-class Unfit(LLMOutput):
-    code: str = Field(pattern=r"^[A-Z]{3}-\d{4}$")
+class Permissive(LLMOutput):
+    verdict: Literal["clean", "hold"]
+
+    @classmethod
+    def demo_fallback(cls) -> Self:
+        return cls(injection_suspected=False, verdict="clean")
 
 
-def test_a_simple_schema_gets_false_the_first_member_and_the_demo_text() -> None:
+class NotCallable(LLMOutput):
+    verdict: str
+    demo_fallback: ClassVar[str] = "hold"
+
+
+def test_a_schema_without_its_own_placeholder_is_refused() -> None:
+    """Nothing is fabricated: no first enum member, no ``injection_suspected=False``."""
+    with pytest.raises(LLMConfigError, match=r"NoHook needs a demo_fallback\(\) classmethod"):
+        fallback_output(NoHook)
+    with pytest.raises(LLMConfigError, match="NotCallable needs"):
+        check_fallback(NotCallable)
+
+
+def test_the_schemas_own_placeholder_is_the_answer() -> None:
+    assert fallback_output(Hooked) == Hooked(injection_suspected=True, verdict="hold")
+    assert fallback_output(Hooked) == fallback_output(Hooked)  # deterministic
+
+
+def test_a_placeholder_must_be_its_own_schema() -> None:
+    with pytest.raises(LLMConfigError, match=r"WrongType\.demo_fallback\(\) must return a WrongType"):
+        fallback_output(WrongType)
+
+
+def test_a_placeholder_must_flag_injection_suspected() -> None:
+    """A fallback is never a clean verdict: code that holds on ``injection_suspected`` holds it."""
+    with pytest.raises(LLMConfigError, match="injection_suspected=True"):
+        fallback_output(Permissive)
+
+
+def test_the_test_verdict_schema_holds() -> None:
     out = fallback_output(Verdict)
-    assert out == Verdict(injection_suspected=False, verdict="clean", reason=DEMO_TEXT)
-
-
-def test_nested_models_lists_bounds_and_optional_fields_are_filled_validly() -> None:
-    out = fallback_output(Rich)
-    assert out.injection_suspected is False
-    assert (out.kind, out.score, out.count, out.note, out.tags, out.optional) == ("idea", 0.5, 1, None, [], "kept")
-    assert out.points == [Point(x=3, label=DEMO_TEXT[:4])] * 2
-    assert len(out.words) >= 60
-    assert out.words.startswith(DEMO_TEXT)
-
-
-def test_the_fallback_is_deterministic() -> None:
-    assert fallback_output(Rich) == fallback_output(Rich)
-
-
-def test_a_schema_hook_decides_its_own_fallback() -> None:
-    assert fallback_output(Hooked).verdict == "hold"
-
-
-def test_a_hook_must_return_its_own_schema() -> None:
-    with pytest.raises(LLMConfigError, match=r"WrongHook\.demo_fallback"):
-        fallback_output(WrongHook)
-
-
-def test_a_schema_the_generic_value_does_not_fit_asks_for_a_hook() -> None:
-    with pytest.raises(LLMConfigError, match=r"Unfit needs a demo_fallback\(\) classmethod"):
-        fallback_output(Unfit)
+    assert (out.injection_suspected, out.verdict, out.reason) == (True, "hold", DEMO_TEXT)
 
 
 def test_the_fallback_result_says_what_it_is() -> None:
@@ -122,32 +118,3 @@ def test_api_responses_carry_the_flag() -> None:
     assert Suggestion(text="x", **DemoFallbackFlag.of(real)).model_dump() == {"demo_fallback": True, "text": "x"}
     assert Suggestion(text="y").demo_fallback is False
     assert "demo_fallback" in Suggestion.model_json_schema()["properties"]
-
-
-@pytest.mark.parametrize(
-    ("node", "expected"),
-    [
-        ({"const": "fixed"}, "fixed"),
-        ({"allOf": [{"type": "integer", "minimum": 2}]}, 2),
-        ({"oneOf": [{"type": "boolean"}, {"type": "string"}]}, False),
-        ({"type": "integer", "exclusiveMaximum": 0}, -1),
-        ({"type": "number", "minimum": 5, "maximum": 3}, 3.0),
-        ({"type": "number", "exclusiveMinimum": 1}, 1.001),
-        ({"type": "array", "minItems": 1, "items": {"type": "boolean"}}, [False]),
-        ({"type": "array", "minItems": 1}, [None]),
-        ({"type": ["string", "null"]}, None),
-        ({"$ref": "#/$defs/Missing"}, None),
-    ],
-)
-def test_generic_values_for_other_schema_shapes(node: dict[str, object], expected: object) -> None:
-    assert demo_fallback._value(node, {}) == expected
-
-
-def test_a_recursive_schema_ends_in_null() -> None:
-    defs = {"Node": {"type": "object", "properties": {"next": {"$ref": "#/$defs/Node"}}, "required": ["next"]}}
-    value = demo_fallback._value({"$ref": "#/$defs/Node"}, defs)
-    depth = 0
-    while isinstance(value, dict):
-        value, depth = value["next"], depth + 1
-    assert value is None
-    assert depth <= demo_fallback.MAX_DEPTH

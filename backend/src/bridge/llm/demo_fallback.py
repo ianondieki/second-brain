@@ -1,34 +1,35 @@
-"""The deterministic fake behind the "demo fallback" label (D-37; REQ-LLM-01 P7).
+"""The answer behind the "demo fallback" label (D-37; REQ-LLM-01 P7): it fails closed.
 
 When a local run cannot or may not reach a model (the fake provider, no free slot or key, unverified prices, data that
 is not seeded demo data, a hit cap, the kill switch, a failed or refused call), the router answers with
-``fallback_result``: the schema's own ``demo_fallback()`` classmethod when it defines one, else a value built from its
-JSON schema (``false``, the first enum member, the lowest allowed number, the fewest items, a short fixed text). It
-reads no input, so it can leak nothing, and it is the same every time. The result carries ``demo_fallback=True`` and
-the reason; API responses that return LLM output embed ``DemoFallbackFlag`` so the UI shows a small "demo fallback"
-label. The demo fallback runs in dev and test only (``Settings.llm_demo_fallback``); staging and production raise.
+``fallback_result``: the output schema's own ``demo_fallback()`` classmethod, a fixed placeholder its author chose as
+the safe answer (a classifier holds for a human; a writer returns ``DEMO_TEXT``). The layer invents nothing (security
+review P7, MAJOR 2: a value built from the schema picked the first enum member and ``injection_suspected=False``, a
+permissive verdict for refusals, content-filter stops, schema failures, provider errors and hit caps): a schema
+without the classmethod is refused with ``LLMConfigError`` (the router checks it before routing on local runs), and
+the placeholder must say ``injection_suspected=True``. It reads no input, so it can leak nothing, and it is the same
+every time. The result carries ``demo_fallback=True`` and the reason; API responses that return LLM output embed
+``DemoFallbackFlag`` so the UI shows a small "demo fallback" label. The fallback runs in dev and test only
+(``Settings.llm_demo_fallback``); staging and production raise the typed error instead.
 
-A fallback answer is a placeholder, never a judgement. Code that decides on a model's output (plain code decides, the
-model only words or scores) treats ``demo_fallback`` as "no answer", or gives its schema a ``demo_fallback()`` that
-returns the safe answer (a classifier: hold for a human).
+A fallback answer is a placeholder, never a judgement: code that decides on a model's output treats
+``demo_fallback`` as "no answer".
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from bridge.llm.errors import LLMConfigError
 from bridge.llm.types import LLMOutput, Result, TokenUsage
 
-DEMO_TEXT = "Demo fallback: no model wrote this."  # [[COPY-REVIEW]]
+DEMO_TEXT = "Demo fallback: no model wrote this."  # [[COPY-REVIEW]] for placeholders' text fields
 DEMO_FALLBACK_MODEL = "demo-fallback"  # Result.model of a fallback answer (not a provider's model)
 DEMO_STOP_REASON = "demo_fallback"
-MAX_DEPTH = 16  # nested schemas deeper than this get null (a recursive model would never end)
 
 
 class FallbackReason(StrEnum):
@@ -60,86 +61,25 @@ class DemoFallbackFlag(BaseModel):
         return {"demo_fallback": result.demo_fallback}
 
 
-def _ref(node: Mapping[str, Any], defs: Mapping[str, Any]) -> Mapping[str, Any]:
-    name = str(node["$ref"]).rsplit("/", 1)[-1]
-    target = defs.get(name)
-    return target if isinstance(target, Mapping) else {}
-
-
-def _number(node: Mapping[str, Any], integer: bool) -> int | float:
-    step: int | float = 1 if integer else 0.001
-    value: int | float = 0
-    if "minimum" in node:
-        value = node["minimum"]
-    elif "exclusiveMinimum" in node:
-        value = node["exclusiveMinimum"] + step
-    if "maximum" in node and value > node["maximum"]:
-        value = node["maximum"]
-    elif "exclusiveMaximum" in node and value >= node["exclusiveMaximum"]:
-        value = node["exclusiveMaximum"] - step
-    return int(value) if integer else float(value)
-
-
-def _text(node: Mapping[str, Any]) -> str:
-    text = DEMO_TEXT
-    shortest = node.get("minLength", 0)
-    while len(text) < shortest:
-        text = f"{text} {DEMO_TEXT}"
-    longest = node.get("maxLength")
-    return text[:longest] if isinstance(longest, int) else text
-
-
-def _value(node: Mapping[str, Any], defs: Mapping[str, Any], depth: int = 0) -> Any:
-    if depth > MAX_DEPTH:
-        return None
-    if "$ref" in node:
-        return _value(_ref(node, defs), defs, depth + 1)
-    if "const" in node:
-        return node["const"]
-    if node.get("enum"):
-        return node["enum"][0]
-    for key in ("anyOf", "oneOf"):
-        branches = [b for b in node.get(key, ()) if isinstance(b, Mapping)]
-        if branches:
-            if any(b.get("type") == "null" for b in branches):
-                return None
-            return _value(branches[0], defs, depth + 1)
-    if node.get("allOf"):
-        return _value(node["allOf"][0], defs, depth + 1)
-    kind = node.get("type")
-    if kind == "boolean":
-        return False
-    if kind in ("integer", "number"):
-        return _number(node, kind == "integer")
-    if kind == "string":
-        return _text(node)
-    if kind == "array":
-        found = node.get("items")
-        items: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
-        return [_value(items, defs, depth + 1) for _ in range(int(node.get("minItems", 0)))]
-    if kind == "object":
-        properties = node.get("properties") or {}
-        required = node.get("required", [])
-        return {name: _value(properties[name], defs, depth + 1) for name in required if name in properties}
-    return None
+def check_fallback(schema: type[LLMOutput]) -> None:
+    """``LLMConfigError`` unless ``schema`` brings its own ``demo_fallback()`` placeholder (a code mistake)."""
+    if not callable(getattr(schema, "demo_fallback", None)):
+        raise LLMConfigError(
+            f"{schema.__name__} needs a demo_fallback() classmethod returning a safe placeholder with"
+            " injection_suspected=True (local runs answer a failed call with it; the layer invents no verdict)"
+        )
 
 
 def fallback_output[OutputT: LLMOutput](schema: type[OutputT]) -> OutputT:
-    """The fallback answer for ``schema``; ``LLMConfigError`` when neither its hook nor the generic value fits (a code
-    bug: give the schema a ``demo_fallback()`` classmethod)."""
-    hook = getattr(schema, "demo_fallback", None)
-    if callable(hook):
-        output = hook()
-        if not isinstance(output, schema):
-            raise LLMConfigError(f"{schema.__name__}.demo_fallback() must return a {schema.__name__}")
-        return output
-    raw = schema.model_json_schema()
-    try:
-        return schema.model_validate(_value(raw, raw.get("$defs", {})))
-    except ValidationError:
-        raise LLMConfigError(
-            f"{schema.__name__} needs a demo_fallback() classmethod: the generic fallback does not fit its schema"
-        ) from None
+    """The schema's own placeholder; ``LLMConfigError`` when it has none, returns another type, or does not flag
+    ``injection_suspected``."""
+    check_fallback(schema)
+    output = schema.demo_fallback()  # type: ignore[attr-defined]
+    if not isinstance(output, schema):
+        raise LLMConfigError(f"{schema.__name__}.demo_fallback() must return a {schema.__name__}")
+    if output.injection_suspected is not True:
+        raise LLMConfigError(f"{schema.__name__}.demo_fallback() must set injection_suspected=True (fail closed)")
+    return output
 
 
 def fallback_result[OutputT: LLMOutput](

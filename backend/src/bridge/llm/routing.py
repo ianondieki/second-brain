@@ -11,13 +11,14 @@
 
 The demo fallback (dev and test only, ``Settings.llm_demo_fallback``): no free slot, no key, unverified prices, data
 that is not demo data, a hit cap, the kill switch, an unavailable provider, a provider error or a failed call (refused,
-truncated, schema failure) answer with the fake, flagged ``demo_fallback`` with its reason and logged as
-``llm.demo_fallback``, so the demo never errors because of a model. A rule refusal is never faked: the Tier-2 consent
-guard (``Tier2NotAllowed``, ``ConsentRequired``), the D-37 Tier-2 refusal (``Tier2DemoOnly``, also when every slot is
-capped), a caller's mistake (``LLMConfigError``) and ``LLMBatchNotOwned`` propagate; the fallback runs the consent
-guard itself when the service did not get that far (the fake provider, a route with no provider, the kill switch). In
-staging and production nothing is faked: the typed error propagates (T2.2 behaviour), and the fake provider or
-unverified prices raise ``LLMUnavailable``.
+truncated, schema failure) answer with the output schema's own safe placeholder (``demo_fallback()``, which flags
+``injection_suspected``; the layer invents no verdict, and a schema without one is refused before routing), flagged
+``demo_fallback`` with its reason and logged as ``llm.demo_fallback``, so the demo never errors because of a model. A
+rule refusal is never faked: the Tier-2 consent guard (``Tier2NotAllowed``, ``ConsentRequired``), the D-37 Tier-2
+refusal (``Tier2DemoOnly``, also when every slot is capped), a caller's mistake (``LLMConfigError``) and
+``LLMBatchNotOwned`` propagate; the fallback runs the consent guard itself when the service did not get that far (the
+fake provider, a route with no provider, the kill switch). In staging and production nothing is faked: the typed error
+propagates (T2.2 behaviour), and the fake provider or unverified prices raise ``LLMUnavailable``.
 
 Batches: free providers and the fake have no batch API, so a batch outside the Anthropic route (or its fallback) gets a
 ``demo_fallback`` handle holding only the custom ids, and polling it returns the fake answer for each (stateless, safe
@@ -39,7 +40,7 @@ from bridge.llm.adapter import BatchState, ModelAdapter
 from bridge.llm.budget import day_start
 from bridge.llm.client import CUSTOM_ID, BatchHandle, BatchItem, BatchPoll, LLMService
 from bridge.llm.demo_data import DataRule
-from bridge.llm.demo_fallback import DEMO_FALLBACK_MODEL, FallbackReason, fallback_result
+from bridge.llm.demo_fallback import DEMO_FALLBACK_MODEL, FallbackReason, check_fallback, fallback_result
 from bridge.llm.errors import (
     LLMBudgetExceeded,
     LLMCallFailed,
@@ -212,6 +213,8 @@ class RoutedLLMClient:
         spec = self._runtime.registry.task(task)
         # A caller's mistake is refused on every route as the Anthropic service refuses it (tests on the fake see it).
         check_schema(schema)
+        if self._runtime.demo_fallback:  # a local run may answer with the schema's own placeholder: it must have one
+            check_fallback(schema)
         check_messages(messages)
         check_breakpoints(cache_breakpoints, len(messages))
         check_tools(spec, tools)
@@ -249,6 +252,9 @@ class RoutedLLMClient:
         cache_breakpoints: Sequence[int] | None = None,
     ) -> BatchHandle:
         spec = self._runtime.registry.task(task)
+        check_schema(schema)
+        if self._runtime.demo_fallback:
+            check_fallback(schema)
         ctx = replace(ctx, trace_id=ctx.trace_id or uuid7().hex)
         route = await self._route(spec, tools=False)
         if isinstance(route, _Service) and not route.free:
