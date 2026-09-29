@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import createClient from "openapi-fetch";
 
@@ -11,13 +11,36 @@ import type { paths } from "./schema";
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
-const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
+export const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
+
+/** The Cookie header carrying this request's session, or undefined (signed out). */
+async function sessionCookie(): Promise<string | undefined> {
+  const store = await cookies();
+  // COOKIE_SECURE must match the API's setting (frontend/.env.example); it picks the one session cookie name.
+  return sessionCookieHeader((name) => store.get(name)?.value, cookieSecure(process.env.COOKIE_SECURE));
+}
+
+// Addresses only (IPv4, IPv6, commas and spaces), and short: anything else is dropped rather than forwarded.
+const FORWARDED_FOR = /^[0-9A-Fa-f.:, ]{1,512}$/;
+
+/**
+ * Headers for a server-side API call made for this request: the session cookie (when `session` and signed in) and
+ * X-Forwarded-For as this server received it, the same hop the /api rewrite makes, so the API's per-address limits
+ * (for example public /verify lookups) count the visitor, not the web server. The API trusts it only from
+ * TRUSTED_PROXIES.
+ */
+export async function forwardHeaders({ session = true }: { session?: boolean } = {}): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const cookie = session ? await sessionCookie() : undefined;
+  if (cookie) out.cookie = cookie;
+  const forwardedFor = (await headers()).get("x-forwarded-for");
+  if (forwardedFor && FORWARDED_FOR.test(forwardedFor)) out["x-forwarded-for"] = forwardedFor;
+  return out;
+}
 
 /** The signed-in person for this request, or null when there is no live session. Forwards only the session cookie. */
 export async function getMe(): Promise<Me | null> {
-  const store = await cookies();
-  // COOKIE_SECURE must match the API's setting (frontend/.env.example); it picks the one session cookie name.
-  const cookie = sessionCookieHeader((name) => store.get(name)?.value, cookieSecure(process.env.COOKIE_SECURE));
+  const cookie = await sessionCookie();
   if (!cookie) return null;
   // Bounded: a hung API must end in the route's error page, not a page that never renders.
   const { data, response } = await serverApi().GET("/api/auth/me", {
