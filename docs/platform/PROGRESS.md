@@ -251,7 +251,10 @@ F1–F3 done, F4 skipped and recorded as **D-33**). Item G (llm_calls batch rese
 proven by mutation; new MAJOR: the transfer runs only when the claim is labelled `disputed`, a label the claimant can
 set, and a competing E1 claim goes to `pending_review`, so staff approval leaves two owner groups; MINORs: batch
 settlements not tied to the reservation's tenant, pre-removed owners keep owner/admin, the view's NDA tie untested).
-security-reviewer round 4 is running; round-5 fixes follow both. Two items went to the human as **D-32**.
+security-reviewer round 4 **PASS** (every round-3 finding re-probed as fixed; MINORs: the same claim path
+lets an ousted claimant rejoin through a routine approval; batch items are not scoped to their tenant; anchors have no
+lower time bound). db-migrations is on round 5 (orchestrator decision: whether a claim is a dispute is decided in SQL,
+not by the claimant-settable label; approving a claim on an organisation owned by others is the transfer path). Two items went to the human as **D-32**.
 The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
 round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
 `check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
