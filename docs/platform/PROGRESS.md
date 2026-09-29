@@ -365,11 +365,14 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-ENG-02-tracker` (P5) | `c8b3277` | security-reviewer PASS (3 MINOR); reviewer re-running after the container restart; CI green | fix security MINORs 1 and 3 and redact the decline text from worker logs (re-check #29); merge; then P4's hook swap and P6's `pending` switch |
-| `feat/REQ-REM-01-reminders` (P6) | `89851b6` | built (2762 passed on the merged tree); reviewer running | after P5 merges: import P5's `pending`, thresholds to `policy.yaml` (re-check #34); merge |
-| `feat/REQ-PROP-01-screens` (P8 part 2) | `9988462`+ | code reviewer: 1 BLOCKER, 3 MAJOR; ux-reviewer: 2 MAJOR (JS budget, silent publish failure); impl-frontend fixing (resumed after the restart) | re-reviews, merge |
+| `feat/REQ-ENG-02-tracker` (P5) | `c8b3277`+ | security-reviewer PASS; reviewer CHANGES_REQUIRED (2 MAJOR: milestone commands 404 instead of 409; `open_engagement_for_tag` lets DB refusals escape as 500); impl-backend fixing, plus P4's hook swap, the security MINORs and the log redaction (re-check #29) | reviewer re-check, CI, merge |
+| `feat/REQ-REM-01-reminders` (P6) | `6ff8e2f` | reviewer PASS (round 3: the model only chooses among code-rendered variants, re-check #46) | after P5 merges: import P5's `pending`, thresholds to `policy.yaml` (re-check #34); CI; merge |
+| `feat/REQ-REPO-01-org-screens` (P8 part 3) | — | impl-frontend: org Inbox, the Tier-2 view behind the Evaluation NDA, org home | ux-reviewer + reviewer, merge |
+| `feat/REQ-PROP-03-screens` (P8 part 4) | — | impl-frontend: Pitch to companies, the idea's tags, "Who has seen this" | ux-reviewer + reviewer, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+Merged after P4: P8 part 2 My Ideas `ebcbd1a` (reviewer PASS and ux-reviewer PASS round 2; CI green after moving a test fixture out of `app/`, which broke the web image build; a lint rule now refuses test imports in app code). Still to build for M1: the Engagements tracker screens (after P5), Home, P9 `make demo`.
 
 Merged on 2026-09-29 after P7: P3 Tier-2 access `5ab7a6a` (reviewer PASS, security-reviewer PASS), the sanitiser timing fix `c305d8a`, P4 Pitch and search `6f48205` (reviewer PASS; interim engagement hook until P5); 2657 backend tests on the merged tree. The container restarted once (the files survived; Docker, the test database and two running agents did not: restart `sudo dockerd`, `docker start bridge-testdb`, then resume agents).
 
@@ -442,6 +445,8 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 | 43 | Sanitiser linearity test on thread CPU time | keep | reviewer PASS; the quadratic mutant fails at 8–10 s CPU against a 3 s bound |
 | 44 | Cheap MINORs folded into fix rounds | keep | no extra review round (PLAN §8) |
 | 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
+| 46 | P6 EM7 wording: after two review rounds the free-text fact checker still admitted invented actions ("the other party did sign the mutual NDA") | change (made during the re-check) | the model now chooses among code-rendered variants (opening, fact order, next-step phrasing), so every fact in the email is written by code: docs/spec/09's 100% factual consistency by construction; free wording returns with the REQ-EVAL-01 eval set |
+| 47 | Four implementers ran at once for about an hour (P5, P6, P8 parts 2 and 3) | deviation, recorded | CLAUDE.md allows at most three; the fourth was a small P6 fix round; no new implementer starts until the count is back under three |
 
 ### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
 
@@ -490,7 +495,7 @@ M2:
 | P5 tracker main path + test clock | in review | security PASS |
 | P6 reminders | in review | merges after P5 |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
-| P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
+| P8 M1 screens | parts 1–2 merged (`b787d8b`, `ebcbd1a`); parts 3–4 in progress | tracker screens after P5 |
 | P9 `make demo` (basic) | todo | |
 | M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |

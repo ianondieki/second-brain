@@ -95,3 +95,90 @@ Follow-ups (not in P2):
 1. `admin/moderation.py:160-205`: a decision locks case → proposal while a publish locks proposal → case, so a concurrent publish and decision can deadlock (the decision answers 500; nothing leaks). Lock the proposal row before the case, or map 40P01 to 409/retry; add a concurrent test of the post-lock version check.
 2. `proposal_versions` RLS lets signed-in readers read an earlier registered version (including a v1 held for a vulnerability) through `bridge_app`; no endpoint serves it. db-migrations: a per-version moderation flag or restrict non-owners to `current_version_id`.
 3. Sanitiser: false positives "Served 15 000 till now" (payment) and "ASP.NET" (domain); still accepted `O712345678` (letter O) and spelled-out "jane at gmail dot com" (after prototype).
+
+## Notes (P8 frontend, branch `feat/REQ-PROP-01-screens`)
+
+Built (F2, developer):
+
+- `/dev/ideas` (My ideas): newest change first; each row has the title link, niche, at most two chips (status as icon
+  + words + colour: Draft, Published, Held for review, Not approved, Hidden; "Unpublished changes") and the last change
+  in Nairobi time. "New idea" is the one primary action, or the empty state's one action. "My ideas" joins DevNav.
+- `/dev/ideas/new` and `/dev/ideas/{id}/edit` (`?step=2|3`): the 3-step editor. The stepper is an `<ol>` with
+  `aria-current="step"`; every change autosaves 1.2 s after typing stops (POST once, then PATCH; saves never overlap;
+  the URL becomes `/edit` without a navigation); the sanitiser's 422 findings sit by their fields; the fields are
+  disabled until hydration so early typing is not lost. Step 1: title, niche, the problem choice (link up to five
+  published problems via `GET /api/problems`, or describe a new developer-reported one; a new idea starts with neither
+  chosen), then the public teaser. Step 2 (Tier 2) is marked confidential in the docs/spec/04 4.2 approved phrasing;
+  links (http/https, checked before sending) and attachments (raw body, `X-File-Name` percent-encoded; wrong type,
+  20 MB, EICAR/infected and 10-file limits explained). Step 3: teaser preview, detail counts, what still blocks
+  publishing (one link back per step), the three statements from `GET /api/proposals/attestations` verbatim (version
+  sent back), and Publish; 403 `d1_required`, 402 `plan_limit` (with the cap), 409 `attestation_text_outdated` (text
+  re-read, boxes cleared), 409 `nothing_to_publish`, 422 field lists and 503 are worded.
+- `/dev/ideas/{id}`: status and moderation notices, the teaser, the owner's Tier 2, the certificate id, registration
+  time, timestamp status, the `/verify/{cert_id}` link and the certificate PDF (shown once timestamped), and Delete
+  with a dialog stating what is kept (published: hidden, evidence kept; draft: removed). Slots for "Who has seen this"
+  (P3) and "Pitch to companies" (P4) are marked in the page, not built.
+- Copy `nav.ideas`, `ideaFields.*`, `ideas.*`, `ideaDelete.*`, `ideaEditor.*` is `[[COPY-REVIEW]]` (`_meta.reviewP8b`);
+  Swahili drafts `[[SW-REVIEW]]`.
+- Tests: `ideas.test.ts`, `ideas-pages.test.tsx`, `editor/editor.test.tsx`, `frontend/e2e/proposal-wizard.spec.ts`
+  (axe, one primary action, no horizontal scroll, both projects).
+
+Shared files changed: `components/DevNav.tsx` (My ideas), `components/ui/icons.tsx`, `components/ui/TextAreaField.tsx`
+(new), `components/ui/ButtonLink.tsx` (split out of `Button.tsx` so client bundles skip `next/link`),
+`locales/locales.test.ts` (refuses key segments next-intl cannot load, e.g. `prototype`), `frontend/.env.example`.
+
+Follow-ups, not built:
+
+- JS budget: superseded by review round 1 below (the old figures counted only the HTML's script tags).
+- D1 in e2e: the fake SMS outbox is in-process, so `e2e/support/verification.ts` raises the test developer to D1
+  through `E2E_DATABASE_OWNER_URL`; CI does not set it yet, so the publishing test skips there. Either export it in the
+  e2e job (the compose Postgres is on 127.0.0.1:5432) or add a dev/test-only way to read fake SMS codes.
+- No in-app phone verification screen exists: the 403 notice says so in plain text. Link it when the D1 flow ships.
+- 402 `plan_limit`: no billing page yet, so the notice has no upgrade link.
+- The certificate PDF link appears only once timestamped (the API answers 404 before the worker has registered the
+  version); owners cannot download a "Timestamp pending" certificate meanwhile.
+- Pagination of My ideas (API caps at 200).
+
+## P8 review round 1 (code reviewer CHANGES_REQUIRED, ux-reviewer CHANGES_REQUIRED): fixed
+
+Red tests first (`editor/editor-save.test.tsx`, 33ac9ff), then:
+
+- BLOCKER: a published idea without a draft showed its registered version's file ids; the API drafts copies under new
+  ids, so removing one answered 404 and the editor treated 404 as removed: the file stayed in the next registered
+  version. Every file action now drafts and saves first (`ensureDraft`), works on the draft's own copy (same id, or
+  the same file under its new id), never treats a refusal as removal, and changes the list functionally (44e834e).
+- Leaving the editor within the autosave delay saves (no `replaceState` once gone); publishing waits for a save under
+  way without forcing another; saves never overlap (tested with a slow fake); a failed publish check renders an alert
+  that takes focus (WCAG 4.1.3/3.3.1).
+- MINORs: stepper and statements lock while publishing; file input disabled while sending; names over 1,000 encoded
+  characters refused before sending; 401 `mfa_required` and 429 worded; `aria-current="step"` on the step's button;
+  "Edit idea" once the draft exists; every sanitiser finding per field; no "Save again" after a refusal; the idea
+  page's teaser hint follows the status; textareas keep clear of the tab bar; no layout shift while steps load
+  (steps read with `use()` from `lib/preloadable`, fields enabled from an effect).
+- JS budget (REQ-UX-05): `scripts/js-budget.mjs` counts every script fetched until the network is idle (Playwright),
+  and with `--first-edit` through the first keystroke; `docs/runbooks/dev-setup.md` matches. Signed-in client code
+  reads server-formatted strings (`lib/i18n/client-strings`, `components/ClientStrings`) instead of next-intl's
+  client runtime (about 7 KB); the five plural/select messages in those namespaces became plain arguments (a locale
+  test keeps it so). Sign out uses only the CSRF helper (`lib/api/csrf`, `lib/api/error-code`,
+  `lib/auth/remembered-email` split out and re-exported); the error screen loads when a page fails; client icons come
+  from `components/ui/status-icons`; the editor's first save loads only `save.ts`.
+  Measured 2026-09-30 (production build, gzipped bodies, 1 KB = 1,000 bytes): `/` 138,025; `/login` 147,036;
+  `/signup` 148,618; `/settings/security` 148,324; `/verify` 145,117; `/dev`, `/dev/companies`, `/dev/ideas`
+  140,046 (was 144,578); `/dev/ideas/{id}` 143,815; `/dev/ideas/new` 145,765 (147,753 through the first edit);
+  `/edit` 147,492 (149,480); `/edit?step=2` 147,979 (149,967); `/edit?step=3` 147,876 (147,876). Publishing and
+  adding a file load the remaining calls afterwards (not counted by the method). Headroom on the editor is small:
+  the next screen's shared additions should come with their own cuts. Lighthouse CI budget (AC-UX-3) still to add.
+
+Recorded for the orchestrator:
+
+- `[[COPY-REVIEW]]` the confidentiality notice (`ideaFields.confidentialNotice`) uses the docs/spec/04 4.2 approved
+  phrasing verbatim ("shown to verified people at organisations that accepted our NDA, plus platform staff under
+  logged, owner-notified break-glass"); whether the break-glass qualifier should be worded for developers, or the
+  notice should also say "organisations you tag", is for copy review (the locale test pins the approved phrase).
+- Commit sizes: these P8 commits exceed the ~300-line guideline (whole screens or modules with their tests):
+  c10f865 (353), b7430b3 (333), 46b4465 (369), 44aef13 (541), d97a989 (494), 45587fe (762), d0dd263 (388),
+  78c2da0 (367), 4f77096 (534). Round 1 commits stay under it.
+- Two intermediate commits do not build on their own (the branch head does): f7d2599 (`[id]/page.tsx` still
+  imports `ButtonLink` from `Button` until 78c2da0) and d97a989 (`Attachments.tsx`, `ProblemPicker.tsx` import
+  `../calls` before 45587fe). No history rewrite (never force-push).
+

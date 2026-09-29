@@ -9,7 +9,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Field } from "@/components/ui/Field";
 import { Form, SubmitButton } from "@/components/ui/Form";
-import { AlertIcon, CheckIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
 import type { UploadCheck } from "./certificate";
 import { Fingerprint } from "./Fingerprint";
