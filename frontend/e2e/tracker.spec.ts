@@ -18,7 +18,9 @@ import { OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type O
 const SERVER_STEP = { timeout: 20_000 };
 const DONE = "Done. The tracker is up to date.";
 
-test.skip(!OWNER_DATABASE_URL, "needs E2E_DATABASE_OWNER_URL for the test-only verification levels");
+test.beforeAll(() => {
+  expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL sets the test-only verification levels").toBeTruthy();
+});
 
 async function shot(page: Page, info: TestInfo, name: string) {
   const dir = process.env.E2E_SHOTS_DIR;
