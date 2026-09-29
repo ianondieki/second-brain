@@ -156,7 +156,7 @@ def test_developer_text_is_quoted_attributed_and_never_auto_linkable() -> None:
     """AC-MAIL-5 on the org digest: a teaser with a bare domain, an email and a Kenyan phone number."""
     hostile = engagement(
         S.SUBMITTED,
-        title="Solar kiosks: coldchain.co.ke, jane@coldchain.co.ke, 0712 345 678 <img src=x>",
+        title="Solar kiosks: coldchain.co.ke, jane@coldchain.co.ke, 0712 345 678, 020 2345678 <img src=x>",
         developer_name="Jane <b>www.jane.dev</b>",
         tagged=True,
         created_on=MONDAY,
@@ -165,9 +165,11 @@ def test_developer_text_is_quoted_attributed_and_never_auto_linkable() -> None:
     )
     message = render_digest(compose_digest(facts(hostile), NO_HOLIDAYS), to="o@example.com", base_url=BASE_URL)
     for part in (message.text, message.html or ""):
-        assert re.search(r"coldchain\.co|jane@|0712|712 345|www\.|x\.example|<img|<b>", part) is None
+        assert (
+            re.search(r"coldchain\.co|jane@|0712|712 345|020 2345678|2345678|www\.|x\.example|<img|<b>", part) is None
+        )
         assert all(link.startswith(BASE_URL + "/") for link in re.findall(r"https?://[^\s\"<>]+", part))
-    assert "“Solar kiosks: coldchain[.]co[.]ke, [email removed], [phone number removed]” by Jane [link removed]" in (
+    assert "“Solar kiosks: coldchain[.]co[.]ke, [email removed], [phone number removed], [phone number removed]”" in (
         message.text
     )
 

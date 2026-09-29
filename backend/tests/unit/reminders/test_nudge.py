@@ -195,6 +195,9 @@ def test_defang_and_quote() -> None:
         "see example[.]com or [link removed] mail [email removed], call [phone number removed], v1.2 e.g. 3.5"
     )
     assert defang("tel:0712345678 and 0712-345-678 and a@b") == "[link removed] and [phone number removed] and a[at]b"
+    assert defang("office 020 2345678 or (0203) 123-456 or +254 41 222 3344") == (
+        "office [phone number removed] or [phone number removed] or [phone number removed]"
+    )
     assert quote("x" * 200).endswith("…”")
     assert quote("  ​spaced\u0007 out\n text ") == "“spaced out text”"
     assert quote(None, fallback="Untitled") == "“Untitled”"
