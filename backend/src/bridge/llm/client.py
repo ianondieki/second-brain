@@ -19,11 +19,13 @@ so a block cannot be closed or opened from inside, and the nonce is never shown 
 
 Batches (``batch_submit``/``batch_poll``) apply the same guard, framing, caps and ledger. Once the provider accepts a
 batch, every item is reserved at its batch-price estimate (``batch_reserved`` rows), so both caps count a batch in
-flight. A poll of the ended batch settles each item once: its final row replaces the reservation in spend, and a
-repeat poll returns the same outcomes without writing, dead-lettering, queueing or counting anything again. A failed
-item is dead-lettered and reported, not retried (the caller may resubmit it). An item the provider's results lack
-stays reserved (the results may have been cut short and the item billed) and is reported as a transient provider
-error by every poll until one finds it.
+flight. A poll first asks the ledger whether the batch is the handle's tenant's (the tenant of its earliest
+reservation; one provider account serves every tenant) and refuses any other before reading the batch's state or
+results. A poll of the ended batch settles each item once, with the batch tenant's organisation and user: its final
+row replaces the reservation in spend, and a repeat poll returns the same outcomes without writing, dead-lettering,
+queueing or counting anything again. A failed item is dead-lettered and reported, not retried (the caller may
+resubmit it). An item the provider's results lack stays reserved (the results may have been cut short and the item
+billed) and is reported as a transient provider error by every poll until one finds it.
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ from bridge.llm.adapter import BatchItemError, BatchState, ModelAdapter, ModelRe
 from bridge.llm.budget import BudgetGuard, BudgetListener, CapProvider, Snapshot
 from bridge.llm.errors import (
     ConsentRequired,
+    LLMBatchNotOwned,
     LLMBlocked,
     LLMCallFailed,
     LLMConfigError,
@@ -638,7 +641,12 @@ class LLMService:
         check_schema(schema)
         ctx = CallContext(org_id=handle.org_id, user_id=handle.user_id, trace_id=handle.trace_id)
         call = _Call(spec, ctx, handle.trace_id)
-        await self._ledger.check_subject(org_id=ctx.org_id, user_id=ctx.user_id)  # before results are fetched
+        # Before the batch's state or results are read: one provider account serves every tenant, so a handle naming
+        # another tenant's batch (or one with no reservation) is refused here, never fetched.
+        await self._ledger.check_subject(org_id=ctx.org_id, user_id=ctx.user_id)
+        if not await self._ledger.batch_owned(handle.batch_id, org_id=ctx.org_id, user_id=ctx.user_id):
+            log.warning("llm.batch_not_owned", task=spec.name, batch_id=handle.batch_id, trace_id=call.trace_id)
+            raise LLMBatchNotOwned(handle.batch_id)
         state = await self._adapter.batch_state(handle.batch_id)
         if state is not BatchState.ENDED:
             return BatchPoll(state)

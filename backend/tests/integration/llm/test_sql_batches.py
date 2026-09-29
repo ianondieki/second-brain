@@ -1,14 +1,18 @@
-"""REQ-LLM-01 against PostgreSQL (T2.2 review M2 and m3; revision 0002 item G): Message Batches reservations.
+"""REQ-LLM-01 against PostgreSQL (T2.2 review M2 and m3; revision 0002 items G and H, rounds 5 and 6): Message
+Batches reservations.
 
 ``batch_submit`` writes one ``batch_reserved`` row per item (its batch-price estimate) as the bound tenant, so the
 subject's monthly sum and ``app_llm_spend_usd()`` (both read the ``llm_spend`` view) count a batch in flight and refuse
-the next one at the cap; ``batch_poll`` settles each item once with an untargeted ``ON CONFLICT DO NOTHING`` (a platform
-job's items too, whose rows bridge_app cannot read back), and a repeat poll writes and counts nothing again. An item
-missing from the provider's results keeps its reservation.
+the next one at the cap. ``batch_poll`` asks ``app_llm_batch_owned()`` first (the tenant of the batch's earliest
+reservation) and refuses another tenant's batch before reading its state or results; it settles each item once
+through ``app_llm_settle_batch_item()``, with the batch tenant's organisation and user (a platform job's items too,
+whose rows bridge_app cannot read back), and a repeat poll writes and counts nothing again. An item missing from the
+provider's results keeps its reservation.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from decimal import Decimal
 from typing import Literal
@@ -80,7 +84,7 @@ async def one_batch_estimate() -> Decimal:
 class ResultsWithout(FakeAdapter):
     """The provider's results lack the items in ``missing``."""
 
-    def __init__(self, replies: list[Reply], missing: set[str]) -> None:
+    def __init__(self, replies: Sequence[Reply], missing: set[str]) -> None:
         super().__init__(replies)
         self.missing = missing
 
@@ -213,7 +217,7 @@ async def test_an_item_missing_from_the_results_keeps_its_reservation(
 class Watched(FakeAdapter):
     """Records which batches' state and results were read."""
 
-    def __init__(self, replies: list[Reply]) -> None:
+    def __init__(self, replies: Sequence[Reply]) -> None:
         super().__init__(replies)
         self.reads: list[str] = []
 
@@ -256,9 +260,7 @@ async def submit_as_a(factory: Factory, people: People, adapter: FakeAdapter, tr
     async with factory() as db:
         await bind_tenant(db, user_id=people.a)
         ctx = CallContext(org_id=people.org_a, user_id=people.a, trace_id=trace)
-        return await service(db, factory, adapter, registry=BATCHABLE).batch_submit(
-            TASK, items(*IDS), Verdict, ctx=ctx
-        )
+        return await service(db, factory, adapter, registry=BATCHABLE).batch_submit(TASK, items(*IDS), Verdict, ctx=ctx)
 
 
 async def test_another_tenant_cannot_settle_or_cancel_an_items_reservation(
