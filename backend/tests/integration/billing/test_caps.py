@@ -4,6 +4,8 @@ active; publishing the next version of an active proposal is not a new proposal.
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.integration.proposals.helpers import (
@@ -68,3 +70,22 @@ async def test_fourth_proposal_402(
     allowed = await publish(owner, fourth["id"])
     assert allowed.status_code == 200, allowed.text
     assert allowed.json()["new_problem_id"] is not None
+
+
+async def test_concurrent_publications_cannot_pass_the_cap_together(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    """Three drafts published at once by a Free developer with 2 active proposals: one gets through, two get 402
+    (the per-owner advisory lock serialises the count)."""
+    owner = await developers()
+    for n in range(2):
+        await published(owner, proposal_world, title=f"Idea {n}")
+    drafts = [await create(owner, draft_body(proposal_world, title=f"Race {n}")) for n in range(3)]
+    results = await asyncio.gather(*(publish(owner, d["id"]) for d in drafts))
+    assert sorted(r.status_code for r in results) == [200, 402, 402]
+    [active] = await rows(
+        owner_engine,
+        "SELECT count(*) AS n FROM proposals WHERE owner_id = :u AND status = 'published'",
+        u=user_of(owner),
+    )
+    assert active.n == 3

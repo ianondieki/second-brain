@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import AsyncIterator
 from urllib.parse import quote
 from uuid import UUID
 
@@ -174,3 +175,24 @@ async def test_registered_attachments_are_in_the_manifest_and_carried_to_the_nex
     assert ("uploads", f"attachments/{pid}/{attachment['id']}") in store_of(owner).objects
     registered = (await owner.delete(f"/api/me/proposals/{pid}/attachments/{attachment['id']}")).status_code
     assert registered == 404  # a registered version's attachment is not the draft's to remove
+
+
+async def test_a_streamed_upload_without_a_length_is_cut_at_20_mb(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    owner = await developers()
+    pid = (await create(owner, draft_body(proposal_world)))["id"]
+    chunk = bytes(1024 * 1024)
+
+    async def body() -> AsyncIterator[bytes]:
+        yield b"%PDF-"
+        for _ in range(MAX_ATTACHMENT_BYTES // len(chunk) + 1):
+            yield chunk
+
+    response = await owner.post(
+        f"/api/me/proposals/{pid}/attachments", content=body(), headers={"Content-Type": "application/pdf"}
+    )
+    assert response.request.headers.get("content-length") is None  # chunked: the limit is enforced while reading
+    assert (response.status_code, response.json()["detail"]["code"]) == (413, "too_large")
+    assert store_of(owner).objects == {}
+    assert await rows(owner_engine, "SELECT id FROM proposal_attachments WHERE proposal_id = :p", p=pid) == []
