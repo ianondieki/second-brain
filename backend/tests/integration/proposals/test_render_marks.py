@@ -16,7 +16,16 @@ from structlog.testing import capture_logs
 
 from bridge.proposals.render import TILES, eat
 from tests.integration.proposals.helpers import SECRET_APPROACH, SECRET_LINK, TIER2_MARKERS, Developers, rows
-from tests.integration.proposals.tier2_scene import Scene, SceneFactory, add_engagement
+from tests.integration.proposals.tier2_scene import (
+    Scene,
+    SceneFactory,
+    add_member,
+    add_user,
+    approve_to_proceed,
+    engage,
+    run,
+    step,
+)
 
 VIEW_ROWS = (
     "SELECT d.id, d.viewer_user_id, d.org_id, d.owner_id, d.version_id, d.nda_acceptance_id, d.nda_template_version,"
@@ -110,20 +119,49 @@ async def test_each_render_is_its_own_view(scenes: SceneFactory, owner_engine: A
     assert [i["view_id"] for i in panel["items"]] == [str(v.id) for v in reversed(views)]  # newest first
 
 
+def named(html: str, scene: Scene) -> bool:
+    """True when the owner attribution carries the display name, False when it carries the handle (never both)."""
+    by_name, by_handle = "By Dev · Certificate" in html, f"By {scene.owner_handle} · Certificate" in html
+    assert by_name != by_handle
+    assert by_name == (scene.owner_handle not in html)  # the handle appears nowhere once the owner is named
+    return by_name  # "Dev": the owner's display name (helpers.add_developer)
+
+
 async def test_the_owner_is_named_once_the_organisation_approved_to_proceed(
-    scenes: SceneFactory, owner_engine: AsyncEngine
+    scenes: SceneFactory, app_engine: AsyncEngine, owner_engine: AsyncEngine
 ) -> None:
+    """The engagement moves as its parties move it (revision 0003 events): submitted and under review, the handle; a
+    public entity's procurement route before the approval, still the handle; approved to proceed, the display name;
+    paused afterwards, still the display name (the chain's history decides, not the current state)."""
     scene = await scenes()
-    async with owner_engine.begin() as conn:
-        await add_engagement(conn, scene.proposal_id, scene.org_id, scene.owner_id, "SUBMITTED")
-    assert f"By {scene.owner_handle} ·" in (await render(scene)).text
-    async with owner_engine.begin() as conn:
-        await conn.exec_driver_sql(
-            "UPDATE engagements SET state = 'INTEREST_CONFIRMED' WHERE proposal_id = %(p)s", {"p": scene.proposal_id}
-        )
-    html = (await render(scene)).text
-    assert "By Dev · Certificate" in html  # the owner's display name (helpers.add_developer)
-    assert scene.owner_handle not in html
+    org = scene.granted_org_id
+    assert not named((await render(scene)).text, scene)  # no engagement yet
+    engagement = await engage(app_engine, scene)
+    assert not named((await render(scene)).text, scene)
+    await step(app_engine, engagement, scene.viewer_id, org, "reviewer", "start_review", "SUBMITTED", "UNDER_REVIEW")
+    assert not named((await render(scene)).text, scene)
+    async with owner_engine.begin() as conn:  # a public entity, whose admin determines the procurement route (3b)
+        await run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=org)
+        admin = await add_user(conn, f"admin-{engagement.hex[-10:]}@example.test", "Ada Admin")
+        await add_member(conn, org, admin, "{admin}")
+    await step(app_engine, engagement, admin, org, "admin", "set_route", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
+    assert not named((await render(scene)).text, scene)
+    await approve_to_proceed(app_engine, scene, engagement, "PROCUREMENT_ROUTE")
+    assert named((await render(scene)).text, scene)
+    await step(app_engine, engagement, scene.owner_id, None, "developer", "pause", "INTEREST_CONFIRMED", "ON_HOLD")
+    assert named((await render(scene)).text, scene)
+    states = await rows(
+        owner_engine,
+        "SELECT ev.to_state::text AS state FROM engagement_events ev WHERE ev.engagement_id = :e ORDER BY ev.seq",
+        e=engagement,
+    )
+    assert [r.state for r in states] == [
+        "SUBMITTED",
+        "UNDER_REVIEW",
+        "PROCUREMENT_ROUTE",
+        "INTEREST_CONFIRMED",
+        "ON_HOLD",
+    ]
 
 
 async def test_who_has_seen_this_is_the_owners_alone(

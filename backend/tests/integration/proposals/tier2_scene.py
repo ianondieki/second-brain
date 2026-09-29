@@ -6,13 +6,18 @@ verified domain is confirmed and TOTP is enrolled; a signatory accepted the curr
 developer tagged the organisation (a ``delivered`` tag) and ``grant_on_tag`` applied the default policy; the reviewer
 accepted the current Evaluation NDA for the proposal. ``broken`` removes exactly one condition (``BREAKS``); the
 reviewer's client has ``FEATURE_TIER2_ENABLED`` on unless ``enabled=False``.
+
+Engagements (revision 0003) are driven as the application will: the developer creates the ``SUBMITTED`` engagement of
+their delivered tag, and each later state is an event appended by the party whose step it is, in a role they hold
+(``engage``, ``step``, ``approve_to_proceed``); ``engagements.state`` is the chain's projection.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from datetime import date
 from typing import Final
 from uuid import UUID
 
@@ -26,12 +31,13 @@ from bridge.db import bind_tenant, create_session_factory
 from bridge.ids import uuid7
 from bridge.proposals import grants
 from tests.integration.api import make_client, sign_in_as
-from tests.integration.proposals.helpers import Developers, ProposalWorld, published, user_of
+from tests.integration.engagements.tracker import APPEND, event_params
+from tests.integration.proposals.helpers import Developers, ProposalWorld, published, rows, user_of
 
 ENDED: Final = {
-    "engagement_withdrawn": ("WITHDRAWN", None),
-    "engagement_declined": ("DECLINED", "NOT_PRIORITY"),
-    "engagement_terminated": ("TERMINATED", None),
+    "engagement_withdrawn": "WITHDRAWN",
+    "engagement_declined": "DECLINED",
+    "engagement_terminated": "TERMINATED",
 }
 # Each breaks one condition; the expected (status, code) of the render. "none" and "met_by_the_approved_claimant"
 # break nothing (the second meets the terms condition the other way: the reviewer cannot see the claim).
@@ -84,6 +90,7 @@ class Scene:
     org_name: str
     viewer_id: UUID
     viewer_name: str
+    signatory_id: UUID  # the member who accepted the Master Enterprise Terms (a signatory unless ``broken`` says not)
     grant_id: UUID | None
 
     def path(self, leaf: str, org_id: UUID | None = None) -> str:
@@ -172,8 +179,10 @@ async def accept_nda(conn: AsyncConnection, user: UUID, org: UUID, proposal: UUI
     )
 
 
-async def add_e2_org(conn: AsyncConnection, name: str, domain: str, terms: UUID, acceptor_roles: str) -> UUID:
-    """An E2 organisation on ``domain`` whose member with ``acceptor_roles`` accepted ``terms``."""
+async def add_e2_org(
+    conn: AsyncConnection, name: str, domain: str, terms: UUID, acceptor_roles: str
+) -> tuple[UUID, UUID]:
+    """An E2 organisation on ``domain`` whose member with ``acceptor_roles`` accepted ``terms``; (org, that member)."""
     org = uuid7()
     await run(
         conn,
@@ -198,7 +207,7 @@ async def add_e2_org(conn: AsyncConnection, name: str, domain: str, terms: UUID,
             email=f"acceptor-{org.hex[-12:]}@{domain}",
         )
     await accept_terms(conn, org, acceptor, terms)
-    return org
+    return org, acceptor
 
 
 async def apply_grant(app_engine: AsyncEngine, owner_id: UUID, proposal_id: UUID, org_id: UUID) -> UUID | None:
@@ -259,7 +268,7 @@ async def build_scene(
             "met_by_the_approved_claimant": "{owner,admin}",
             "met_by_a_non_signatory": "{reviewer}",
         }.get(broken, "{signatory}")
-        org = await add_e2_org(conn, org_name, domain, terms, acceptor_roles)
+        org, signatory = await add_e2_org(conn, org_name, domain, terms, acceptor_roles)
         if broken == "no_master_terms":
             await new_template(conn, "master_enterprise_terms")  # nobody accepted the current version
         viewer = await add_user(conn, f"rita-{tag}@{domain}", viewer_name)
@@ -268,7 +277,7 @@ async def build_scene(
             await accept_nda(conn, viewer, org, proposal_id, nda)
         asked = org
         if broken == "another_org":  # everything but a grant, under a second organisation of the reviewer's
-            asked = await add_e2_org(conn, f"Other {tag} Limited", domain, terms, "{signatory}")
+            asked, _ = await add_e2_org(conn, f"Other {tag} Limited", domain, terms, "{signatory}")
             await add_member(conn, asked, viewer, "{reviewer}")
             await accept_nda(conn, viewer, asked, proposal_id, nda)
         if broken == "grant_requested":
@@ -289,7 +298,7 @@ async def build_scene(
     client = await viewer_client(stack, app_engine, owner, viewer, enabled=broken != "feature_disabled")
     await break_after(owner_engine, broken, proposal_id=proposal_id, org=org, viewer=viewer, owner_id=owner_id)
     handle = f"dev-{owner_id.hex[-12:]}"
-    return Scene(
+    scene = Scene(
         owner=owner,
         viewer=client,
         owner_id=owner_id,
@@ -302,8 +311,12 @@ async def build_scene(
         org_name=org_name,
         viewer_id=viewer,
         viewer_name=viewer_name,
+        signatory_id=signatory,
         grant_id=grant_id,
     )
+    if broken in ENDED:
+        await end_engagement(app_engine, owner_engine, scene, ENDED[broken])
+    return scene
 
 
 BREAK_SQL: Final = {
@@ -333,25 +346,94 @@ async def break_after(
             await new_template(conn, "master_enterprise_terms")
         if broken == "nda_superseded":
             await new_template(conn, "evaluation_nda")
-        if broken in ENDED:
-            await add_engagement(conn, proposal_id, org, owner_id, *ENDED[broken])
 
 
-async def add_engagement(
-    conn: AsyncConnection, proposal_id: UUID, org: UUID, owner_id: UUID, state: str, reason: str | None = None
+# --- engagements (revision 0003): created and moved by the parties, as bridge_app ------------------------------------
+
+
+@asynccontextmanager
+async def acting(app_engine: AsyncEngine, user_id: UUID, org_id: UUID | None = None) -> AsyncIterator[AsyncConnection]:
+    """One committed transaction as bridge_app acting for ``user_id`` (scoped to ``org_id``), as a request does."""
+    async with app_engine.begin() as conn:
+        await conn.execute(
+            text("SELECT set_config('app.user_id', :u, true), set_config('app.org_id', :o, true)"),
+            {"u": str(user_id), "o": "" if org_id is None else str(org_id)},
+        )
+        yield conn
+
+
+async def engage(app_engine: AsyncEngine, scene: Scene) -> UUID:
+    """The developer creates the engagement of their delivered tag: ``SUBMITTED``, origin ``tagged`` (stage 1)."""
+    engagement = uuid7()
+    async with acting(app_engine, scene.owner_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state)"
+                " VALUES (:id, :p, :org, :dev, :v, 'tagged', 'SUBMITTED')"
+            ),
+            {
+                "id": engagement,
+                "p": scene.proposal_id,
+                "org": scene.granted_org_id,
+                "dev": scene.owner_id,
+                "v": scene.version_id,
+            },
+        )
+    return engagement
+
+
+async def step(
+    app_engine: AsyncEngine,
+    engagement: UUID,
+    actor: UUID,
+    org_id: UUID | None,
+    role: str,
+    command: str,
+    from_state: str,
+    to_state: str,
+    reason: str | None = None,
 ) -> None:
-    await run(
-        conn,
-        "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state, end_reason)"
-        " SELECT :id, p.id, :org, :dev, p.current_version_id, 'tagged', CAST(:state AS engagement_state),"
-        " CAST(:reason AS engagement_end_reason) FROM proposals p WHERE p.id = :p",
-        id=uuid7(),
-        p=proposal_id,
-        org=org,
-        dev=owner_id,
-        state=state,
-        reason=reason,
+    """``actor`` (scoped to ``org_id`` for an organisation role) appends one event in ``role``."""
+    async with acting(app_engine, actor, org_id) as conn:
+        params = event_params(engagement, actor, role, command, from_state, to_state, reason=reason)
+        await conn.execute(text(APPEND), params)
+
+
+async def approve_to_proceed(app_engine: AsyncEngine, scene: Scene, engagement: UUID, from_state: str) -> None:
+    """Stage 3: the signatory names the contact (the reviewer, by email) and approves to proceed."""
+    async with acting(app_engine, scene.signatory_id, scene.granted_org_id) as conn:
+        await conn.execute(
+            text(
+                "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by"
+                " WHERE id = :id"
+            ),
+            {"c": scene.viewer_id, "by": date(2026, 12, 1), "id": engagement},
+        )
+        params = event_params(engagement, scene.signatory_id, "signatory", "approve", from_state, "INTEREST_CONFIRMED")
+        await conn.execute(text(APPEND), params)
+
+
+async def end_engagement(app_engine: AsyncEngine, owner_engine: AsyncEngine, scene: Scene, state: str) -> None:
+    """End the organisation's engagement the way each party does: the developer withdraws while it is submitted; the
+    reviewer declines it (a reason code); the signatory terminates it after approving to proceed (TERMINATED is a side
+    state of the state machine after the prototype; the database accepts it from any open state)."""
+    org, reviewer = scene.granted_org_id, scene.viewer_id
+    engagement = await engage(app_engine, scene)
+    if state == "WITHDRAWN":
+        await step(app_engine, engagement, scene.owner_id, None, "developer", "withdraw", "SUBMITTED", state)
+    elif state == "DECLINED":
+        await step(app_engine, engagement, reviewer, org, "reviewer", "decline", "SUBMITTED", state, "NOT_PRIORITY")
+    else:
+        await step(app_engine, engagement, reviewer, org, "reviewer", "start_review", "SUBMITTED", "UNDER_REVIEW")
+        await approve_to_proceed(app_engine, scene, engagement, "UNDER_REVIEW")
+        await step(
+            app_engine, engagement, scene.signatory_id, org, "signatory", "terminate", "INTEREST_CONFIRMED", state
+        )
+    [row] = await rows(
+        owner_engine, "SELECT state::text AS state, ended_at FROM engagements WHERE id = :id", id=engagement
     )
+    assert row.state == state
+    assert row.ended_at is not None  # the projection ended it
 
 
 SceneFactory = Callable[..., Awaitable[Scene]]

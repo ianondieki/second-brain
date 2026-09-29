@@ -29,7 +29,7 @@ async def _setup(
     proposal_id = UUID((await published(owner, world))["proposal_id"])
     async with owner_engine.begin() as conn:
         terms = await new_template(conn, "master_enterprise_terms")
-        org = await add_e2_org(conn, "Grantee Limited", f"g-{uuid7().hex[-10:]}.example.test", terms, "{signatory}")
+        org, _ = await add_e2_org(conn, "Grantee Limited", f"g-{uuid7().hex[-10:]}.example.test", terms, "{signatory}")
     if tag:
         await deliver_tag(owner_engine, proposal_id, org, user_of(owner))
     return user_of(owner), proposal_id, org
