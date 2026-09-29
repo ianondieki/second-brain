@@ -9,8 +9,10 @@ and never stops the run.
 
 Per recipient and period (the Nairobi day; for a weekly digest, its ISO week):
 
-1. The once-a-day guard: the ledger's rows under ``daily_key`` (in-app and email). When the in-app summary exists
-   and the email is finished or not wanted, nothing more happens (no facts are read, no LLM is called).
+1. The once-a-day guard: the ledger's rows under ``daily_key`` (in-app and email). A queued email of an earlier
+   period is ended first (``failed``, "expired": a reminder never goes out late). When the in-app summary exists and
+   the email is finished or not wanted, nothing more happens (no facts are read, no LLM is called); a queued email
+   this run will not send (its channel closed, or nothing is left to say) ends ``failed`` ("withdrawn").
 2. The facts (``bridge.reminders.facts``) and the composition (``compose_nudge`` / ``compose_digest``). Nothing open
    is quiet: nothing is sent and nothing is recorded, so a later run the same day may still send.
 3. The in-app summary (always on, code-rendered), then the email: only with the ``reminders`` consent, a verified
@@ -33,7 +35,7 @@ from datetime import date, datetime, time
 from typing import Final, Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.auth.models import User
@@ -70,6 +72,8 @@ SEND_AFTER: Final = time(7, 30)  # docs/spec/06 6.11: developers, at send_after_
 ORG_SEND_AFTER: Final = time(8, 30)  # docs/spec/06 6.11: reminders.org_digest 08:30
 EMAIL, IN_APP = NotificationChannel.EMAIL, NotificationChannel.IN_APP
 Status = Literal["sent", "already", "quiet", "not_opted_in", "error"]
+EXPIRED: Final = "expired: its day passed"
+NOTHING_TO_SEND: Final = "nothing to send any more"
 log = get_logger(__name__)
 
 
@@ -192,6 +196,38 @@ def _finished(row: NotificationDelivery | None) -> bool:
     return row is not None and row.status is not DeliveryStatus.QUEUED
 
 
+async def _sweep(db: AsyncSession, user_id: UUID, kind: str, period: date, org_id: UUID | None = None) -> None:
+    """End every queued email of ``kind`` for an earlier period: a reminder is never sent after its day (or week)."""
+    query = update(NotificationDelivery).where(
+        NotificationDelivery.user_id == user_id,
+        NotificationDelivery.kind == kind,
+        NotificationDelivery.channel == EMAIL,
+        NotificationDelivery.status == DeliveryStatus.QUEUED,
+        NotificationDelivery.local_date < period,
+    )
+    if org_id is not None:
+        query = query.where(NotificationDelivery.org_id == org_id)
+    swept = await db.execute(
+        query.values(status=DeliveryStatus.FAILED, last_error=EXPIRED).returning(NotificationDelivery.id)
+    )
+    ended = swept.scalars().all()
+    if ended:
+        log.warning("email.dead_letter", kind=kind, reason="expired", delivery_ids=[str(i) for i in ended])
+        await db.commit()
+
+
+async def _withdraw(db: AsyncSession, row: NotificationDelivery | None, why: str) -> DeliveryStatus | None:
+    """A queued email this run will not send (nothing left to say, or its channel closed) ends ``failed``, so it is
+    never resumed later with stale content. Returns the row's status (None: no row)."""
+    if row is None:
+        return None
+    if row.status is DeliveryStatus.QUEUED:
+        row.status, row.last_error = DeliveryStatus.FAILED, f"withdrawn: {why}"
+        log.warning("email.dead_letter", kind=row.kind, delivery_id=str(row.id), reason=row.last_error)
+        await db.commit()
+    return row.status
+
+
 async def _send(
     deps: Deps,
     db: AsyncSession,
@@ -258,6 +294,7 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
     in_key, email_key = daily_key(kind, IN_APP, r.id, today), daily_key(kind, EMAIL, r.id, today)
     async with deps.factory() as db:
         await bind_tenant(db, user_id=r.id)
+        await _sweep(db, r.id, kind, today)
         in_app_done = await _row(db, in_key) is not None
         email_row = await _row(db, email_key)
         block = await _email_block(db, r, kind)
@@ -267,9 +304,11 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
         email_open = block is None and not _finished(email_row)
         status = email_row.status if email_row is not None else None
         if in_app_done and not email_open:
+            status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", email=status, email_skipped=block)
         composed = developer.compose_nudge(await developer_facts(db, r.id, today), holidays)
         if composed.empty:
+            status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", email=status, email_skipped=block)
         wrote = not in_app_done and await post_in_app(
             db,
@@ -353,15 +392,18 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
         period = org_digest.period_start(today, cadence)
         in_key = daily_key(kind, IN_APP, r.id, period, org_id=org_id)
         email_key = daily_key(kind, EMAIL, r.id, period, org_id=org_id)
+        await _sweep(db, r.id, kind, period, org_id)
         in_app_done = await _row(db, in_key) is not None
         email_row = await _row(db, email_key)
         block = await _email_block(db, r, kind)
         email_open = block is None and not _finished(email_row)
         status = email_row.status if email_row is not None else None
         if in_app_done and not email_open:
+            status = await _withdraw(db, email_row, block or NOTHING_TO_SEND)
             return Outcome(r.id, "already", org_id=org_id, email=status, email_skipped=block)
         digest = org_digest.compose_digest(await org_facts(db, org_id, today, cadence), holidays)
         if digest.empty:
+            status = await _withdraw(db, email_row, NOTHING_TO_SEND)
             return Outcome(r.id, "quiet", org_id=org_id, email=status, email_skipped=block)
         wrote = not in_app_done and await post_in_app(
             db,
