@@ -385,4 +385,4 @@ Follow-ups, not built:
   the page shows the right sentence on the next load.
 - The stage chip becomes the tracker link (`/org/engagements/{id}`) when REQ-ENG-03's screen exists; the empty
   Inbox's action becomes "Set up Scout Agent" (docs/spec/07 item 4) once scouts exist.
-- axe cannot run inside the script-less sandboxed frame; the e2e check of the viewing state waits for it (about 25 s).
+- axe cannot run inside the script-less sandboxed frame; the e2e check of the viewing state waits for it (about 30 s, measured).
