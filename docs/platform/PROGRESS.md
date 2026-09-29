@@ -365,13 +365,13 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-SEC-01-tier2-access` (P3) | `99541b9` | built on schema v3 (2373 passed); reviewer + security-reviewer + CI running | fix BLOCKER/MAJOR, merge |
-| `feat/REQ-PROP-03-pitch` (P4) | — | impl-backend: directory/repo search, tags, held tags, 402/409, EM1, org inbox; hooks for P3 `grant_on_tag` and P5 `open_engagement_for_tag` | review, merge |
-| `feat/REQ-ENG-02-tracker` (P5) | — | impl-backend: state machine, API, EM2, contact reveal, NDA placeholder, agreement, signatures, payment, test clock router | reviewer + security-reviewer, merge |
-| `feat/REQ-REM-01-reminders` (P6) | — | impl-backend: EM7 nudge (LLM wording + fixed fallback), org digest (facts), jobs on the test clock | review, merge |
-| `feat/REQ-PROP-01-screens` (P8 part 2) | — | impl-frontend: My Ideas list, 3-step editor, proposal page | ux-reviewer + reviewer, merge |
+| `feat/REQ-ENG-02-tracker` (P5) | `c8b3277` | security-reviewer PASS (3 MINOR); reviewer re-running after the container restart; CI green | fix security MINORs 1 and 3 and redact the decline text from worker logs (re-check #29); merge; then P4's hook swap and P6's `pending` switch |
+| `feat/REQ-REM-01-reminders` (P6) | `89851b6` | built (2762 passed on the merged tree); reviewer running | after P5 merges: import P5's `pending`, thresholds to `policy.yaml` (re-check #34); merge |
+| `feat/REQ-PROP-01-screens` (P8 part 2) | `9988462`+ | code reviewer: 1 BLOCKER, 3 MAJOR; ux-reviewer: 2 MAJOR (JS budget, silent publish failure); impl-frontend fixing (resumed after the restart) | re-reviews, merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+Merged on 2026-09-29 after P7: P3 Tier-2 access `5ab7a6a` (reviewer PASS, security-reviewer PASS), the sanitiser timing fix `c305d8a`, P4 Pitch and search `6f48205` (reviewer PASS; interim engagement hook until P5); 2657 backend tests on the merged tree. The container restarted once (the files survived; Docker, the test database and two running agents did not: restart `sudo dockerd`, `docker start bridge-testdb`, then resume agents).
 
 Merged on 2026-09-29 after P1: P2 proposals `79dc401` (reviewer PASS round 2), revision 0004 `dd37106` (`app_llm_calls_since`), P7 LLM providers `029caa9` (reviewer PASS; security-reviewer PASS round 2); 2506 backend tests on the merged tree.
 Also merged on 2026-09-29: P1 schema v3 `3bb82b3` (revision 0003; reviewer + security-reviewer PASS round 2) and P8 part 1 `b787d8b` (`/verify`, Companies; reviewer PASS, ux-reviewer PASS round 2); 2084 backend and 244 frontend tests on the merged tree. CI note: `pr.yml`'s gitleaks step scans every branch's commits with the checked-out branch's `.gitleaksignore`, so reviewed fixture fingerprints go on the integration branch and reach feature branches by merge. Decisions opened this session: D-38 (research excerpts), D-39 (attestation wording).
@@ -390,6 +390,89 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
 
+### Orchestrator rulings re-checked at xhigh (2026-09-29)
+
+The main session ran at medium effort for part of session 2. Every orchestrator ruling and MINOR deferral of the
+session was re-checked at xhigh; sub-agent work kept its own effort and was not redone. Changes are applied as noted.
+
+| # | Ruling or deferral (where) | Keep / change | Reason |
+|---|---|---|---|
+| 1 | Schema v2 Q1–Q5 as recommended (round 6) | keep | the laptop Handoff's recommendations; reviewer and security-reviewer PASS |
+| 2 | Round-6 MINORs deferred: non-owner domain and E2 attributes, deadlocks, settle tenant and `OLD.org_id` tests (REQ-REPO-01 card) | keep, with a condition | reachable only through staff claim decisions; P15 ("queue only") must fix MINORs 1–3 before it lets staff decide claims |
+| 3 | Wip commit `2ca0347` stays in history | keep | no rewrite allowed; its content was verified (951 passed) and reviewed in round 6 |
+| 4 | T2.2 reviewer MINORs 1–4 deferred | keep | test gaps and crash-window edges with no prototype-visible effect |
+| 5 | T2.2 security MINORs 2–5 and 7 deferred (1 and 6 built) | keep, with a note | MINOR 3 (the global-cap error carries platform spend) must be handled when P13 first returns LLM output through an API |
+| 6 | T2.4: the test-only `database_clock_guard` kept | keep | removing a test needs the human |
+| 7 | T2.4 MINORs: `snapshot_at` unsigned, `SET NOT NULL`, head-order test | keep | the security reviewer found no exploit beyond the accepted audit residual |
+| 8 | Schema v2 merged into the waiting branches before round 6 was reviewed | keep | the later schema commits were docs only; each branch re-ran its suite and CI |
+| 9 | P1: tighten 0002's end-reason CHECK inside 0003 | keep | additive, tested, reviewed |
+| 10 | P1: `users` INSERT narrowing (staff_role, status, subject_salt) deferred | keep | pre-existing since Phase 1; the API controls the columns; listed for the Phase 8 audit |
+| 11 | P1: system events by party-bound jobs accepted | keep | tightened to non-viewer roles in review round 1; residual recorded |
+| 12 | P1: deadlines only in the state machine | keep | spec 06 6.9 makes the state machine the single definition |
+| 13 | P1: parties may not write `DISPUTED → CLOSED` | keep | otherwise either party skips the payment gate; the mediator path is after the prototype |
+| 14 | P1 round-2 MINORs: contact after the end; developer made a member later | keep | P5's API refuses one person on both sides (`both_parties`) and distinct signers are enforced |
+| 15 | P2: vulnerability holds reject-only | keep | spec MUST "never made public"; the check re-screens the current text |
+| 16 | D-39 recorded for the attestation wording only | change | the P3 viewer-logging notice and the P5 NDA cover are legal or privacy text too; D-39 now covers all four texts |
+| 17 | P2 MINOR: `proposal_versions` RLS shows older (possibly held) versions to signed-in readers | keep, with a condition | no endpoint serves older versions; any new reader (P10 scout, P12 ranker) reads `current_version_id` only until db-migrations restricts the policy |
+| 18 | Other P2 MINORs: moderation deadlock (500), sanitiser false positives | keep | fail closed; no leak |
+| 19 | P3: non-members get 404, not AC-SEC-2's 403, while the flag is off | change | two MUST criteria conflict (AC-SEC-1/b vs AC-SEC-2), which CLAUDE.md sends to the human; recorded as D-40 with the default applied |
+| 20 | P3: NDA check last; same-origin framing of the render; terms checked loosely in the app, finally by the database | keep | UX order; the database decides last; framing only by the app's own origin |
+| 21 | P3: manual grants, revocation and unlocks after the prototype | keep, with a note | P10's ORG_INTEREST path needs a manual grant (spec 06 6.9 stage 0): build it in P10 |
+| 22 | P3 security MINORs: NDA purpose skips the definer, view snapshots, revocation race, flag-off audit growth, grant after revocation | keep | each fails closed or is latent until a later feature |
+| 23 | P4: EM1 goes to the developer only | keep | spec 06 6.10 makes EM1 the developer's receipt; N01's org side is in-app plus the org digest "Needs us" line, which P6 renders |
+| 24 | P4 merged with the interim engagement hook | keep | consistent under schema v3; the swap to P5's `open_engagement_for_tag` is part of the P5 merge |
+| 25 | P4 MINORs: org level read without a lock, untested cap branch | keep | E1→E2 approvals are after the prototype |
+| 26 | P5 decisions 1–2: TOTP step-up within 12 h for signatures, endorsements and payments | keep | ADR-002 point 2 says exactly this; P9 must seed TOTP for demo developers, signatories and finance seats |
+| 27 | P5 decisions 3, 4, 5, 7, 9: deals flag, who marks final, org signs the certificate first, EM2 sentence, org notification recipients | keep | match spec 06 6.9 and the N-matrix |
+| 28 | P5 decision 6: a payment mismatch answers 409 | keep | AC-TRACK-7's DISPUTED is a side state rescheduled after the prototype (REQUIREMENTS §7) |
+| 29 | P5 decision 8: the decline's OTHER text in job arguments, deferred | change | the security review showed it also reaches the worker's logs; redact it from log records now (with a test); passing only an id stays a follow-up |
+| 30 | P5 security MINORs 1 (control characters in signed text) and 3 (endorsement method invariant) fixed before merge | keep | signed evidence must be exactly what the table and the parties see |
+| 31 | P5 schema needs 1–4 to db-migrations | keep | none blocks the M1 path |
+| 32 | P6: the org digest uses the `reminders` consent | keep | the N23 row names the reminders consent for both versions |
+| 33 | P6: fixed 07:30/08:30 send times, wording at send time, per-user loop, possible resend after a failed commit | keep | prototype scale; recorded in the cards |
+| 34 | P6: its own copy of the next-actor table (`health.whose_turn` mirrors P5's `pending`) | change | spec 06 6.9 makes the state machine the only definition; merge P5 first, then P6 imports `pending` and moves its thresholds to `policy.yaml` before it merges |
+| 35 | P7: platform-wide slot count (revision 0004); production refuses free providers and `LLM_PROVIDER=fake` | keep | D-37 is for local runs; fail closed |
+| 36 | P7: model ids unchanged | change | right that it is the human's call, but it was not recorded: now D-41 (Sonnet 5 legacy, Haiku 4.5 retirement not before 2026-10-15) |
+| 37 | P7 MINORs: `public=True` opt-out, placeholder answers, host patterns, cap overshoot | keep, with a note | the P11 reviewer checks that `public=True` is used only for saved public excerpts |
+| 38 | P8: e2e skips without `E2E_VERIFY_CERT_ID` / `E2E_DATABASE_OWNER_URL` | change (tightened) | a test skipped in CI is a gap; removing both skips is now an M1 exit item (P9 seeds a certificate; CI exports the owner URL) |
+| 39 | P8 part 1: the X-Forwarded-For threat note deferred | change | added now (THREAT_MODEL §7) |
+| 40 | P8 part 2: the JS budget counts every script fetched until idle | keep, with a doc fix | consistent with D-28 (a) and Lighthouse; `docs/runbooks/dev-setup.md` must describe the new method |
+| 41 | Merging into the integration branch without GitHub PRs | keep | PLAN §8's rule is reviewer PASS plus green `pr.yml` by `workflow_dispatch`; PRs only if the owner asks |
+| 42 | Integration push runs not checked after merges | change | the `5ab7a6a` run failed unnoticed (Docker Hub unreachable on the runner before any test; `c305d8a` then passed every job); every integration push run is now checked |
+| 43 | Sanitiser linearity test on thread CPU time | keep | reviewer PASS; the quadratic mutant fails at 8–10 s CPU against a 3 s bound |
+| 44 | Cheap MINORs folded into fix rounds | keep | no extra review round (PLAN §8) |
+| 45 | D-38 default (a) for the research excerpts | keep | nothing is hosted; short attributed quotes |
+
+### Carry-forward notes for P9 (`make demo`) and the M2 briefs (kept in git so a new container has them)
+
+P9:
+
+- Demo TSA: the seeded/test TSA is a local openssl test TSA (serial 0x01). The demo must label timestamps as from a
+- Reset demo DB before screenshots: provenance test builders write "Provenance niche" into shared DBs.
+- --demo seed must export a certificate id so e2e/verify.spec.ts removes its E2E_VERIFY_CERT_ID skip.
+- P1 hand-offs: seed demo_account + D2 for demo developers as the owner; test clock enabled only with explicit APP_ENV.
+- Production config needs EMBEDDER=bge-m3 and an Anthropic key or LLM_KILL_SWITCH=1; demo runs APP_ENV=dev with the fake embedder (no bge-m3 download).
+- Docker builds here need the scratchpad CA override (compose.ccr.json); the laptop does not.
+- Demo needs TIER2_LOCAL_KEK set (else Tier-2 endpoints 503) and ATTACHMENT_SCANNER=fake (dev/test only; demo uses APP_ENV=dev).
+- P7: callers acting on an LLM verdict (moderation pre-screen etc.) must treat demo_fallback as "no verdict" / hold.
+- Revision 0004 (db-migrations, after P1 merges): app_llm_calls_since(p_model, p_since) SECURITY DEFINER, excluding blocked_* and batch_reserved, EXECUTE bridge_app; then P7's free-slot cap becomes platform-wide.
+- LLM vars for the M1 report: LLM_PROVIDER, LLM_PROTOTYPE_TOTAL_CAP_USD, LLM_FREE_<N>_{BASE_URL,API_KEY,MODEL,DAILY_REQUESTS,RESPONSE_FORMAT} (N=1..3), ANTHROPIC_API_KEY, LLM_KILL_SWITCH, LLM_GLOBAL_DAILY_CAP_USD.
+- P5: FEATURE_DEALS_ENABLED=true for the demo (else every command from send_nda answers 403); FEATURE_TIER2_ENABLED=true too. Test clock needs image built WITH_TEST_CLOCK=true (dev compose sets it). Step-up = TOTP within 12 h: demo org seats need the TOTP helper.
+- e2e: CI pr.yml e2e job must export E2E_DATABASE_OWNER_URL (proposal-wizard D1 publish test skips without it) and E2E_VERIFY_CERT_ID from the demo seed; remove both skips in P9.
+- P6: seed must grant the 'reminders' consent to demo accounts (else no nudge emails); reminders CLI: python -m bridge.reminders run --now (refuses production). After P5 merges, P6 whose_turn should call P5's state machine; thresholds to policy.yaml.
+- M1 EXIT ITEM (re-check #38): remove the e2e skips — E2E_VERIFY_CERT_ID (verify.spec.ts, seed exports a certificate id) and E2E_DATABASE_OWNER_URL (proposal-wizard D1 publish) — CI pr.yml e2e job must provide both.
+- Re-check #26: seed TOTP for demo developers, org signatories, reviewers and finance seats (ADR-002 step-up ≤12 h for signatures, endorsements, payments); TOTP helper prints current codes for the demo logins.
+- APP_ENV=dev for make demo (fake scanner, test clock, free LLM providers and demo fallback all require dev/test); build api image WITH_TEST_CLOCK=true.
+- Re-check #42: after every merge, check the integration push run of pr.yml.
+
+M2:
+
+- P10 scout: ORG_INTEREST needs a manual Tier-2 grant by the developer (spec 6.9 stage 0) — build it; read proposal_versions only via current_version_id (P2 MINOR: older held versions readable by RLS); scout never reads Tier 2; demo_fallback() on every LLM schema; InputField owner set.
+- P11 research: public=True only for saved public excerpts (reviewer to check); D-38 excerpts; allowlist domains from the researcher (capitalfm.co.ke, capitalfm.africa, kilimo.go.ke, www.sasra.go.ke, www.ca.go.ke, businessdailyafrica.com, standardmedia.co.ke, the-star.co.ke); stale fixtures ke-tel-005, ke-agr-004; don't merge ke-hlt-001/002 numbers.
+- P12 ranker: read current_version_id only.
+- P13 assistant: handle LLMBudgetExceeded scope global with a fixed message (T2.2 security MINOR 3); demo_fallback = no suggestion.
+- P15 admin: if staff can decide claims, fix schema v2 round-6 MINORs 1–3 (seat-aware domain rule, first verification by non-owner, E2 attributes by non-owner) first; else keep the claims queue read-only.
+
 ### Prototype checklist (updated after every task; commit and push after each)
 
 | Item | Status | Notes |
@@ -402,14 +485,14 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | P0 T2.4, T2.6a, D1, T2.2 → merge | done | 1998 backend tests on the merged tree |
 | P1 schema v3 (prototype) | done (`3bb82b3`) | revision 0003 |
 | P2 proposals | done (`79dc401`) | |
-| P3 Tier-2 access | in review | |
-| P4 directory search + Pitch + EM1 | in progress | |
-| P5 tracker main path + test clock | in progress | impl-backend |
-| P6 reminders | in progress | |
+| P3 Tier-2 access | done (`5ab7a6a`) | |
+| P4 directory search + Pitch + EM1 | done (`6f48205`) | engagement hook swaps to P5's function at the P5 merge |
+| P5 tracker main path + test clock | in review | security PASS |
+| P6 reminders | in review | merges after P5 |
 | P7 LLM providers (D-37) | done (`029caa9`) | revision 0004 `dd37106` |
 | P8 M1 screens | part 1 merged (`b787d8b`) | rest after the APIs |
 | P9 `make demo` (basic) | todo | |
-| M1 merged, tag `prototype-m1`, M1 report | todo | |
+| M1 merged, tag `prototype-m1`, M1 report | todo | exit items: the two e2e skips removed (re-check #38); `make demo` end to end |
 | P10 scout | todo | M2 |
 | P11 research | todo | M2 |
 | P12 trending + ranker | todo | M2 |

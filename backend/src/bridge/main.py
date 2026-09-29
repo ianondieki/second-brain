@@ -31,6 +31,7 @@ from bridge.notifications.email import provider_from_settings
 from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
 from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
@@ -119,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(directory_router)
     app.include_router(admin_router)
     app.include_router(provenance_router)
+    app.include_router(pitch_router)
     app.include_router(proposals_router)
     app.include_router(problems_router)
     app.include_router(engagements_router)
