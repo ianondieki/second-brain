@@ -4,7 +4,7 @@ import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon, ClockIcon, EyeOffIcon, PencilIcon } from "@/components/ui/icons";
 
-import type { IdeaStatus } from "./ideas";
+import type { IdeaStatus } from "./status";
 
 const LOOK: Record<IdeaStatus, { Icon: ComponentType<SVGProps<SVGSVGElement>>; tone: string }> = {
   draft: { Icon: PencilIcon, tone: "text-ink-soft" },

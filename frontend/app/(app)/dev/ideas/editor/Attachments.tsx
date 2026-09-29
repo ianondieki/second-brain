@@ -9,13 +9,11 @@ import { cn } from "@/components/ui/cn";
 
 import { removeAttachment, uploadAttachment } from "../calls";
 import {
-  ACCEPT_ATTRIBUTE,
-  attachmentType,
-  fileSizeParts,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
   type Attachment,
 } from "../ideas";
+import { ACCEPT_ATTRIBUTE, attachmentType, fileSizeParts } from "../files";
 import type { UploadProblem } from "../outcomes";
 
 export interface AttachmentsProps {

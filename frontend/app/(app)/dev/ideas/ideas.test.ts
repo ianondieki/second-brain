@@ -1,22 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { publish, saveDraft, searchProblems, uploadAttachment } from "./calls";
+import { draftBody } from "./draft";
 import {
-  attachmentType,
-  draftBody,
   EMPTY_STATE,
   editHref,
-  fileSizeParts,
-  hasUnpublishedChanges,
-  ideaStatus,
   linksProblem,
   parseStep,
   publishChecklist,
-  stateFromVersion,
   wordCount,
   type EditorState,
   type Version,
 } from "./ideas";
+import { attachmentType, fileSizeParts } from "./files";
+import { hasUnpublishedChanges, ideaStatus } from "./status";
+import { stateFromVersion } from "./versions";
 import { fieldIssues, publishRefusal, saveRefusal, uploadRefusal } from "./outcomes";
 
 // REQ-PROP-01 (F2): the My ideas editor's logic. AC-REPO-4/a is the API's (422 cannot_publish); the screen shows the
@@ -38,6 +36,7 @@ const READY: EditorState = {
   ask: "pilot",
   problemStatement: "Milk spoils before collection.",
   summary: "Solar chillers with shared scheduling.",
+  problemMode: "pick",
   problems: [PROBLEM],
 };
 
@@ -112,7 +111,7 @@ describe("the editor's state", () => {
       maturity: "idea",
       approach: "Solar",
       links: "https://example.com/demo\nhttps://example.com/repo",
-      problemMode: "pick",
+      problemMode: null, // nothing linked or described yet: the editor asks
     });
   });
 
@@ -122,6 +121,13 @@ describe("the editor's state", () => {
     );
     expect(state.problemMode).toBe("new");
     expect(state.newProblemTitle).toBe("Late payments");
+  });
+
+  it("leaves the problems alone until a way of naming them is chosen", () => {
+    const { body } = draftBody({ ...READY, problemMode: null });
+    expect(body).not.toHaveProperty("problem_ids");
+    expect(body).not.toHaveProperty("new_problem");
+    expect(publishChecklist({ ...READY, problemMode: null })).toEqual([{ field: "problems", code: "problem_required" }]);
   });
 
   it("sends every field, empty ones as null, and clears the problem not chosen", () => {

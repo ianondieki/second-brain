@@ -1,10 +1,12 @@
 import { api, withCsrf, type ApiClient } from "@/lib/api/client";
 
+import { draftBody } from "./draft";
 import type {
   Attachment,
   Attestations,
   AttestationText,
   DraftBody,
+  EditorState,
   MyProposal,
   ProblemCard,
   PublishResult,
@@ -50,6 +52,12 @@ export function saveDraft(id: string | null, body: DraftBody, client: ApiClient 
         : client.POST("/api/me/proposals", { body }),
     saveRefusal,
   );
+}
+
+/** Save everything the editor holds; `held` names the parts left out as typed (links, a half-written problem). */
+export async function saveState(id: string | null, state: EditorState, client: ApiClient = api) {
+  const plan = draftBody(state);
+  return { outcome: await saveDraft(id, plan.body, client), held: plan.held };
 }
 
 export function publish(id: string, text: AttestationText, attestations: Attestations, client: ApiClient = api) {
@@ -126,4 +134,11 @@ export async function uploadAttachment(
   }
   if (response.ok && body) return { ok: true, value: body as Attachment };
   return { ok: false, ...uploadRefusal(response.ok ? 500 : response.status, body) };
+}
+
+/** What the editor loads on demand (its tests pass fakes). */
+export interface Calls {
+  saveState: typeof saveState;
+  publish: typeof publish;
+  attestationText: typeof attestationText;
 }

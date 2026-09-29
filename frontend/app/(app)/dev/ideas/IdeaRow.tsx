@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import { formatDay, hasUnpublishedChanges, ideaHref, ideaStatus, type MyProposalItem } from "./ideas";
+import {
+  ideaHref,
+  type MyProposalItem,
+} from "./ideas";
+import { formatDay } from "./dates";
+import { hasUnpublishedChanges, ideaStatus } from "./status";
 import { IdeaStatusBadge } from "./IdeaStatusBadge";
 
 /**

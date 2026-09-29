@@ -67,24 +67,6 @@ export function editHref(id: string, step?: Step): string {
   return `${ideaHref(id)}/edit${step && step > 1 ? `?step=${step}` : ""}`;
 }
 
-// --- status ----------------------------------------------------------------------------------------------------------
-
-/** What the owner sees: draft, published, held for review, not approved (a moderator refused it) or hidden. */
-export type IdeaStatus = "draft" | "published" | "held" | "rejected" | "hidden";
-
-export function ideaStatus(status: MyProposalItem["status"], moderation: MyProposalItem["moderation_state"]): IdeaStatus {
-  if (status === "hidden" || status === "archived") return "hidden";
-  if (status === "draft") return "draft";
-  if (moderation === "held") return "held";
-  if (moderation === "rejected") return "rejected";
-  return "published";
-}
-
-/** A published idea with edits that are saved but not published yet (the list's second chip). */
-export function hasUnpublishedChanges(item: Pick<MyProposalItem, "status" | "has_draft">): boolean {
-  return item.status === "published" && item.has_draft;
-}
-
 // --- the editor's state ----------------------------------------------------------------------------------------------
 
 export type Step = 1 | 2 | 3;
@@ -107,7 +89,8 @@ export interface EditorState {
   problemStatement: string;
   summary: string;
   impactClaims: string;
-  problemMode: ProblemMode;
+  /** Null until the developer chooses (a new idea asks first). */
+  problemMode: ProblemMode | null;
   problems: ProblemRef[];
   newProblemTitle: string;
   newProblemStatement: string;
@@ -128,7 +111,7 @@ export const EMPTY_STATE: EditorState = {
   problemStatement: "",
   summary: "",
   impactClaims: "",
-  problemMode: "pick",
+  problemMode: null,
   problems: [],
   newProblemTitle: "",
   newProblemStatement: "",
@@ -138,38 +121,6 @@ export const EMPTY_STATE: EditorState = {
   notes: "",
   links: "",
 };
-
-/** The version the editor continues: the draft when there is one, else the published one (the first save copies it
- * into the next version). */
-export function editableVersion(proposal: MyProposal): Version | null {
-  return proposal.draft ?? proposal.current;
-}
-
-export function stateFromVersion(version: Version | null): EditorState {
-  if (!version) return EMPTY_STATE;
-  const { teaser, confidential, new_problem: newProblem } = version;
-  return {
-    title: teaser.title ?? "",
-    nicheId: teaser.niche?.id ?? "",
-    countyCode: teaser.county_code ?? "",
-    maturity: teaser.maturity ?? "",
-    ask: teaser.ask ?? "",
-    problemStatement: teaser.problem_statement ?? "",
-    summary: teaser.summary ?? "",
-    impactClaims: teaser.impact_claims ?? "",
-    problemMode: newProblem && version.problems.length === 0 ? "new" : "pick",
-    problems: version.problems,
-    newProblemTitle: newProblem?.title ?? "",
-    newProblemStatement: newProblem?.statement ?? "",
-    approach: confidential.approach ?? "",
-    architecture: confidential.architecture ?? "",
-    pricing: confidential.pricing ?? "",
-    notes: confidential.notes ?? "",
-    links: confidential.links.join("\n"),
-  };
-}
-
-const orNull = (value: string) => (value.trim() === "" ? null : value);
 
 /** The non-empty lines of the links box. */
 export function linkLines(links: string): string[] {
@@ -196,54 +147,6 @@ export function linksProblem(links: string): LinkProblem | null {
     if ((url.protocol !== "http:" && url.protocol !== "https:") || !url.hostname) return "notWeb";
   }
   return null;
-}
-
-export interface DraftPlan {
-  body: DraftBody;
-  /** Parts left out of this save because the API would refuse them as typed; the field shows why. */
-  held: Array<"links" | "newProblem">;
-}
-
-/**
- * The PATCH (or POST) body for the whole state: every field is sent (the API applies what is sent, and null clears).
- * The problem not chosen is cleared: picking listed problems clears a described one and the other way round. Links
- * that are not web addresses, and a half-written new problem, are left out rather than refused.
- */
-export function draftBody(state: EditorState): DraftPlan {
-  const held: DraftPlan["held"] = [];
-  const body: DraftBody = {
-    teaser: {
-      title: orNull(state.title),
-      niche_id: orNull(state.nicheId),
-      county_code: orNull(state.countyCode),
-      maturity: state.maturity || null,
-      ask: state.ask || null,
-      problem_statement: orNull(state.problemStatement),
-      summary: orNull(state.summary),
-      impact_claims: orNull(state.impactClaims),
-    },
-    confidential: {
-      approach: orNull(state.approach),
-      architecture: orNull(state.architecture),
-      pricing: orNull(state.pricing),
-      notes: orNull(state.notes),
-    },
-  };
-  if (linksProblem(state.links)) held.push("links");
-  else body.confidential!.links = linkLines(state.links);
-
-  if (state.problemMode === "pick") {
-    body.problem_ids = state.problems.map((problem) => problem.id);
-    body.new_problem = null;
-  } else {
-    body.problem_ids = [];
-    const title = state.newProblemTitle.trim();
-    const statement = state.newProblemStatement.trim();
-    if (title && statement) body.new_problem = { title, statement, niche_id: orNull(state.nicheId) };
-    else if (!title && !statement) body.new_problem = null;
-    else held.push("newProblem");
-  }
-  return { body, held };
 }
 
 // --- checks before publishing ----------------------------------------------------------------------------------------
@@ -310,7 +213,7 @@ export function publishChecklist(state: EditorState): FieldIssue[] {
   ];
   for (const [field, value] of required) if (!value.trim()) issues.push({ field, code: "required" });
   if (wordCount(state.summary) > MAX_SUMMARY_WORDS) issues.push({ field: "summary", code: "too_many_words" });
-  if (state.problemMode === "pick" && state.problems.length === 0) {
+  if (state.problemMode === null || (state.problemMode === "pick" && state.problems.length === 0)) {
     issues.push({ field: "problems", code: "problem_required" });
   }
   if (state.problemMode === "new") {
@@ -321,7 +224,7 @@ export function publishChecklist(state: EditorState): FieldIssue[] {
   return issues;
 }
 
-// --- niches and attachments ------------------------------------------------------------------------------------------
+// --- niches ------------------------------------------------------------------------------------------
 
 /** A niche's label ("ICT › Networks & Telecoms") by id, for showing a chosen niche. */
 export function nicheLabel(niches: readonly NicheNode[], id: string): string | undefined {
@@ -331,48 +234,4 @@ export function nicheLabel(niches: readonly NicheNode[], id: string): string | u
     if (child) return child.label;
   }
   return undefined;
-}
-
-// The attachment types the API accepts (bridge/proposals/editor.py ACCEPTED_TYPES), by file extension: browsers
-// give Markdown files no type or several different ones, so the extension decides what is sent.
-const TYPE_BY_EXTENSION: Record<string, string> = {
-  pdf: "application/pdf",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  md: "text/markdown",
-  markdown: "text/markdown",
-  txt: "text/plain",
-};
-
-export const ACCEPT_ATTRIBUTE = ".pdf,.png,.jpg,.jpeg,.md,.markdown,.txt";
-
-export function attachmentType(name: string): string | null {
-  const dot = name.lastIndexOf(".");
-  return dot < 0 ? null : (TYPE_BY_EXTENSION[name.slice(dot + 1).toLowerCase()] ?? null);
-}
-
-/** File sizes as people read them: "820 KB", "4.2 MB" (1 KB = 1,000 bytes, as the size limit is stated). */
-export function fileSizeParts(bytes: number): { value: number; unit: "bytes" | "kb" | "mb" } {
-  if (bytes < 1000) return { value: bytes, unit: "bytes" };
-  if (bytes < 1_000_000) return { value: Math.round(bytes / 1000), unit: "kb" };
-  return { value: Math.round(bytes / 100_000) / 10, unit: "mb" };
-}
-
-// --- dates -----------------------------------------------------------------------------------------------------------
-
-/** A day as written in Kenya for the page's language ("29 Sept 2026"), in Nairobi time (the API stores UTC). */
-export function formatDay(locale: string, iso: string): string {
-  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(
-    new Date(iso),
-  );
-}
-
-/** A date and time in Nairobi ("29 September 2026 at 14:06"). */
-export function formatMoment(locale: string, iso: string): string {
-  return new Intl.DateTimeFormat(`${locale}-KE`, {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: "Africa/Nairobi",
-  }).format(new Date(iso));
 }

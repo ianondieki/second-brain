@@ -8,7 +8,8 @@ import { DevNav } from "@/components/DevNav";
 import { IntlScope } from "@/components/IntlScope";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Alert, type AlertTone } from "@/components/ui/Alert";
-import { ButtonLink, standaloneLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
 import { requireMe } from "@/lib/api/server";
@@ -18,14 +19,13 @@ import { countyName, myIdea } from "../data";
 import {
   BASE_PATH,
   editHref,
-  fileSizeParts,
-  formatMoment,
   MATURITY_KEY,
-  ideaStatus,
-  type IdeaStatus,
   type MyProposal,
   type Version,
 } from "../ideas";
+import { formatMoment } from "../dates";
+import { fileSizeParts } from "../files";
+import { ideaStatus, type IdeaStatus } from "../status";
 import { IdeaStatusBadge } from "../IdeaStatusBadge";
 import { DeleteIdea } from "./DeleteIdea";
 

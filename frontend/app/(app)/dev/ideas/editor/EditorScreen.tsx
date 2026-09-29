@@ -10,7 +10,12 @@ import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { editorOptions, myIdea } from "../data";
-import { BASE_PATH, editableVersion, ideaHref, stateFromVersion, type Step } from "../ideas";
+import {
+  BASE_PATH,
+  ideaHref,
+  type Step,
+} from "../ideas";
+import { editableVersion, stateFromVersion } from "../versions";
 import { Editor } from "./Editor";
 
 /**
