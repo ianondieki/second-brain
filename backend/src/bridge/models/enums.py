@@ -500,3 +500,48 @@ class KycStatus(StrEnum):
     SUBMITTED = "submitted"
     APPROVED = "approved"  # set only by app_decide_kyc()
     REJECTED = "rejected"
+
+
+# --- Schema v4 (revision 0005; prototype M2: docs/spec/05, docs/spec/06 6.5, 6.6, 6.8) -----------------------------
+
+
+class ScoutFrequency(StrEnum):
+    """How often a scout scans (docs/spec/06 6.8; allowed per plan in ``plans.yaml``). Also an agent run's trigger."""
+
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    ON_NEW = "on_new"  # on ``proposal.published``
+
+
+class AgentRunStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"  # carries an error code, never free text
+
+
+class MatchFeedback(StrEnum):
+    """A reviewer's verdict on a scout match (docs/spec/06 6.8 feedback loop)."""
+
+    RELEVANT = "relevant"
+    NOT_RELEVANT = "not_relevant"
+
+
+class ResearchRunStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    STOPPED = "stopped"  # a cap was reached (AC-RES-3); carries a stop reason
+    FAILED = "failed"  # carries a stop reason
+
+
+class PaymentStatus(StrEnum):
+    """A checkout (docs/spec/05). Settled once, pending -> succeeded | failed | cancelled, only through
+    ``app_settle_payment`` (revision 0005)."""
+
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+# Payment providers the database accepts (``payments.provider`` CHECK). The prototype has the fake one only (D-36).
+PAYMENT_PROVIDERS = ("fake",)
