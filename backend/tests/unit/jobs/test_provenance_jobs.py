@@ -99,7 +99,9 @@ def test_the_nightly_verification_retries_transient_failures_and_never_a_broken_
         decision = retry.get_retry_decision(exception=transient, job=job(attempts))
         assert decision is not None
         assert decision.retry_at is not None
-        delays.append((decision.retry_at - datetime.now(UTC)).total_seconds())
+        # retry_at is "now + delay" when the decision is made: whole seconds, so two capped delays compare equal
+        delays.append(round((decision.retry_at - datetime.now(UTC)).total_seconds()))
+    assert delays == [min(retry.cap, retry.base * 2**n) for n in range(retry.max_attempts)]
     assert delays == sorted(delays)
     assert delays[0] >= 30
     assert delays[-1] <= retry.cap + 5
