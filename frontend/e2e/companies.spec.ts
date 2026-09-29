@@ -51,6 +51,9 @@ test.describe("a signed-in developer", () => {
     await page.getByLabel("Search by name").fill("county government");
     await page.getByRole("button", { name: "Show companies" }).click();
     await expect(page).toHaveURL(/q=county\+government/, SERVER_STEP);
+    // A search that found nothing would pass the loop below vacuously.
+    await expect(rows(page).first()).toBeVisible();
+    expect(await rows(page).count()).toBeGreaterThan(0);
     for (const name of await rows(page).getByRole("link").allTextContents()) {
       expect(name.toLowerCase()).toContain("county government");
     }
