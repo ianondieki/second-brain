@@ -66,6 +66,12 @@ def test_plain_text_strips_html_and_invisible_characters(raw: str, clean: str) -
         ("call 07 12 34 56 78", "contains_phone"),
         ("call +1 (555) 123-4567", "contains_phone"),
         ("call +44 20 7946 0958", "contains_phone"),
+        # Kenyan landlines (P6 review MINOR): 0 + area code 2x-6x + the local number, ten digits in all
+        ("call the office on 020 2345678", "contains_phone"),
+        ("call 0203 123456", "contains_phone"),
+        ("call (020) 234-5678", "contains_phone"),
+        ("call +254 20 2345678", "contains_phone"),
+        ("Mombasa desk 041 222 3344", "contains_phone"),
         ("Pay via till 123456", "contains_payment_number"),
         ("Paybill: 400200, account 55", "contains_payment_number"),
         ("pay bill no. 247 247", "contains_payment_number"),
@@ -91,6 +97,8 @@ def test_contact_details_are_found(text: str, code: str) -> None:
         "Model number 0712 of the sensor",
         "The till is the shop counter where people pay.",
         "M-Pesa payments reconcile nightly.",
+        "Launch on 03/10/2026 14:00 in Kisumu.",
+        "Model 0203 of the sensor.",
     ],
 )
 def test_ordinary_teaser_text_passes(text: str) -> None:
@@ -253,3 +261,10 @@ def test_the_length_is_checked_after_cleaning() -> None:
     assert (error.field, error.code) == ("title", "too_long")
     assert check_field("title", "x" * 120) == []
     assert [e.code for e in check_field("new_problem.title", "y" * 91)] == ["too_long"]
+
+
+def test_a_teaser_with_a_kenyan_landline_is_refused() -> None:
+    """P6 review MINOR: a landline in a Tier-1 teaser is a contact route like a mobile number."""
+    assert [(e.field, e.code) for e in check_field("summary", "Call our Nairobi office on 020 2345678.")] == [
+        ("summary", "contains_phone")
+    ]
