@@ -147,6 +147,15 @@ Deviations and answers:
 - Q4, accepted: the stranded-reservation threat (item 5) is a denial of the spend caps, so its THREAT_MODEL row is under §6 D (cost controls), not §4 (payments and billing).
 - Q5, yes (`108a0f3`): `llm_calls_batch_guard` sets a reservation's `created_at` to `clock_timestamp()` whatever is sent, so a backdated reservation cannot become a batch's earliest (item 4).
 
+Mutation proofs of the round-6 tests for behaviour that already held (items 6 and 7; the other items' tests were shown red on the unfixed revision, 14 failures, before `2ca0347`). The brief named them M13, M14b, M16 and M17 without writing them down, so they are defined here: each breaks one guard of the revision on `0fcabad`, runs `tests/integration/test_privileges.py`, restores the file (`git checkout -- backend/alembic/versions/20260927_0002_schema_v2.py`) and reruns the named test green. Command (in `backend/`): `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres .venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/test_privileges.py` (the fixtures build a fresh database from the revision file for each run). No mutated state was committed.
+
+| Proof | Guard broken (revision 0002) | Mutated line | Red (1 failed, 69 passed) | Restored |
+|---|---|---|---|---|
+| M13 | `app_reissue_claim_otp` serves a disputed claim (item 6) | `IF v_claim.status NOT IN ('otp_sent', 'dns_pending', 'disputed') OR …` → `NOT IN ('otp_sent', 'dns_pending')` | `test_claim_otp_attempts_never_reset_and_reissues_are_capped`: `CheckViolation: app_reissue_claim_otp: the claim is not waiting for an email code` at the first reissue of the disputed claim (line 925) | 1 passed |
+| M14b | a disputed claim whose reissues run out stays disputed (item 6) | `SET status = CASE WHEN status = 'disputed' THEN status ELSE 'pending_review' END` → `SET status = 'pending_review'` | `test_claim_otp_attempts_never_reset_and_reissues_are_capped`: `assert (0, 5, 'pending_review') == (0, 5, 'disputed')` (line 927) | 1 passed |
+| M16 | `app_claim_competes`: another user's approved claim alone competes (item 7) | the `EXISTS (… org_claims c … c.status = 'approved')` branch → `false` | `test_a_competing_claim_is_decided_as_a_dispute_whatever_its_label`: `assert 'otp_sent' == 'disputed'` for the newcomer's claim once the approved claimant's membership was removed (line 1703) | 1 passed |
+| M17 | `app_claim_competes`: only an active owner or admin membership competes (item 7) | `WHERE m.org_id = p_org AND m.user_id <> p_claimant AND m.status = 'active'` → without `AND m.status = 'active'` | `test_a_competing_claim_is_decided_as_a_dispute_whatever_its_label`: `assert 'disputed' == 'otp_sent'` for a claim on an organisation held only by a removed ex-owner (line 1714) | 1 passed |
+
 Notes for the code on this schema:
 
 - OTP digests are HMAC-SHA-256 under a server pepper (T2.10a already does), never bare hashes; bridge_app can write them but never read them back, and the comparison stays in SQL (`app_confirm_phone_otp`, `app_confirm_claim_otp`).
