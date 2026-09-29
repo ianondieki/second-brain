@@ -1320,8 +1320,9 @@ $$;
 -- an approved claim on it or is an active owner or admin of it, and p_claimant is not an active owner, admin or
 -- signatory of it (the organisation's own member upgrading E1 to E2 competes with nobody). A dispute is decided here,
 -- never by a claim's status label: org_claims_guard() files such a claim as disputed, app_approve_claim_e1() marks it
--- when it finds the competition later, and app_decide_claim() transfers the organisation when it approves one,
--- whatever its label. Called only by those, as the owner; no role holds EXECUTE.
+-- when it finds the competition later, app_relabel_open_claims() keeps every open claim's label in step with it
+-- (round 6), and app_decide_claim() approves a claim only when its label agrees, transferring the organisation when
+-- it competes. Called only by those, as the owner; no role holds EXECUTE.
 CREATE FUNCTION app_claim_competes(p_org uuid, p_claimant uuid) RETURNS boolean
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
@@ -1342,6 +1343,52 @@ AS $$
                    AND m.roles && '{owner,admin}'::public.org_role[]))
 $$;
 REVOKE ALL ON FUNCTION app_claim_competes(uuid, uuid) FROM PUBLIC;
+
+-- Relabels p_org's open claims to agree with app_claim_competes (round 6): an open claim that competes is disputed, a
+-- disputed claim that no longer competes goes to manual review (pending_review). Run as the owner whenever what the
+-- predicate reads changes: after every roster change (memberships_claims_relabel()) and after every approval
+-- (app_decide_claim(), app_approve_claim_e1()), so staff always decide with the dispute visible: a demoted admin's
+-- claim becomes a dispute at once, an outsider made an admin is no dispute any more, and approving one claim marks
+-- the organisation's other claims that now compete. No role holds EXECUTE.
+CREATE FUNCTION app_relabel_open_claims(p_org uuid) RETURNS void
+    LANGUAGE sql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    UPDATE public.org_claims c
+       SET status = CAST(CASE WHEN c.status = 'disputed' THEN 'pending_review' ELSE 'disputed' END
+                         AS public.claim_status),
+           updated_at = now()
+     WHERE c.org_id = p_org AND c.status IN ('otp_sent', 'dns_pending', 'pending_review', 'disputed')
+       AND (c.status = 'disputed') <> public.app_claim_competes(c.org_id, c.claimant_user_id)
+$$;
+REVOKE ALL ON FUNCTION app_relabel_open_claims(uuid) FROM PUBLIC;
+
+-- The claimant's membership when staff or the automatic E1 check approve a claim that competes with nobody (round 6):
+-- a claimant who already holds an active membership keeps their roles, so an admin or a signatory never becomes an
+-- owner through a routine verification, unless the organisation has no active owner, when they gain owner and admin;
+-- a claimant without an active membership (so nobody else holds the organisation: app_claim_competes) becomes owner
+-- and admin, a removed membership being reactivated with owner and admin added. No role holds EXECUTE.
+CREATE FUNCTION app_seat_claimant(p_org uuid, p_claimant uuid) RETURNS void
+    LANGUAGE sql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
+    SELECT public.uuid7(), p_org, p_claimant, CAST('{owner,admin}' AS public.org_role[]),
+           CAST('active' AS public.membership_status)
+     WHERE NOT EXISTS (
+               SELECT 1
+                 FROM public.memberships a
+                WHERE a.org_id = p_org AND a.user_id = p_claimant AND a.status = 'active')
+        OR NOT EXISTS (
+               SELECT 1
+                 FROM public.memberships o
+                WHERE o.org_id = p_org AND o.status = 'active' AND 'owner' = ANY (o.roles))
+    ON CONFLICT (org_id, user_id) DO UPDATE
+       SET status = 'active',
+           roles = ARRAY(SELECT DISTINCT x FROM unnest(m.roles || EXCLUDED.roles) AS x ORDER BY x),
+           updated_at = now()
+$$;
+REVOKE ALL ON FUNCTION app_seat_claimant(uuid, uuid) FROM PUBLIC;
 
 -- E1 domain-email OTP: compares the stored hash of the claimant's open claim (until expiry) and on a match sets
 -- otp_verified_at, which the app cannot set (a disputed claim proves its domain the same way). otp_attempts counts
@@ -1459,10 +1506,12 @@ $$;
 -- Automatic E1 (docs/spec/06 6.2) for the claimant's own open E1 claim once the OTP and the DNS TXT record are
 -- verified. Automatic only when the organisation is unclaimed or pending, not delisted, has no other open claim, and
 -- the domain is in official_domains[] (or it is the claimant's own self-signup organisation); otherwise the claim goes
--- to manual review. A claim that is disputed, or competes with the organisation's current control
--- (app_claim_competes), or is on an E2 organisation, is (or stays) a dispute: never approved here, never manual review.
--- On approval: verification e1, verified_domain, the claimant's owner+admin membership, held_unclaimed tags ->
--- held_pending_verification.
+-- to manual review. A claim that competes with the organisation's current control (app_claim_competes) is (or stays)
+-- a dispute: never approved here, never manual review. A claim on an E2 organisation that competes with nobody (its
+-- own member's), or one still labelled disputed although it no longer competes, goes to manual review (round 6). On
+-- approval: verification e1, verified_domain, the claimant's membership (app_seat_claimant: a member keeps their roles
+-- unless the organisation has no active owner; anyone else becomes owner and admin), held_unclaimed tags ->
+-- held_pending_verification, and the organisation's other open claims are relabelled.
 CREATE FUNCTION app_approve_claim_e1(p_claim uuid) RETURNS claim_status
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1489,8 +1538,10 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
     SELECT * INTO v_org FROM public.organizations WHERE id = v_claim.org_id FOR UPDATE;
-    IF v_claim.status = 'disputed' OR v_org.verification = 'e2' OR public.app_claim_competes(v_org.id, v_user) THEN
+    IF public.app_claim_competes(v_org.id, v_user) THEN
         v_status := 'disputed';
+    ELSIF v_claim.status = 'disputed' OR v_org.verification = 'e2' THEN
+        v_status := 'pending_review';
     ELSIF v_org.verification IN ('unclaimed', 'pending')
           AND v_org.delisted_at IS NULL
           AND NOT EXISTS (
@@ -1508,12 +1559,7 @@ BEGIN
         UPDATE public.organizations
            SET verification = 'e1', verified_domain = v_claim.domain, updated_at = now()
          WHERE id = v_org.id;
-        INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
-        VALUES (public.uuid7(), v_org.id, v_user, '{owner,admin}', 'active')
-        ON CONFLICT (org_id, user_id) DO UPDATE
-           SET status = 'active',
-               roles = ARRAY(SELECT DISTINCT x FROM unnest(m.roles || EXCLUDED.roles) AS x ORDER BY x),
-               updated_at = now();
+        PERFORM public.app_seat_claimant(v_org.id, v_user);
         UPDATE public.tags
            SET status = 'held_pending_verification', updated_at = now()
          WHERE org_id = v_org.id AND status = 'held_unclaimed' AND closed_at IS NULL;
@@ -1523,26 +1569,34 @@ BEGIN
            decided_at = CASE WHEN v_status = 'approved' THEN now() END,
            updated_at = now()
      WHERE id = p_claim;
+    IF v_status = 'approved' THEN
+        PERFORM public.app_relabel_open_claims(v_org.id);
+    END IF;
     RETURN v_status;
 END;
 $$;
 
 -- Staff admin decision on an open claim (manual E1, E2 via ManualReviewVerifier, disputes). Approving E2 needs the
 -- current Master Enterprise Terms accepted by this claimant; it sets e2, verified_domain, e2_verified_at, the annual
--- re-verification date, public_entity as requested, and delivers the organisation's held tags. Approval makes the
--- claimant an owner and admin. Every approval needs the claimed domain proven: the email code (otp_verified_at) and
--- the DNS TXT record (dns_verified_at), or, for E2 only, a claimant who is an active owner, admin or signatory of an
--- organisation already E1 on that same domain. Staff never decide their own claim.
--- Approving a claim that competes with the organisation's current control (app_claim_competes, decided here whatever
--- the claim's status label) upholds the dispute (docs/spec/06 6.2: competing claims go to dispute review, never an
--- automatic transfer) and transfers the organisation in the same transaction, the new claimant becoming its only owner
--- and admin: every earlier approved claim of another claimant becomes rejected, its decision_reason naming this claim,
--- and those claimants' memberships are removed with no role but viewer (so nobody reactivates them with power); every
--- other membership, active or already removed, loses owner and admin and keeps its other roles (viewer when none is
--- left); every pending invitation issued by anyone but the new claimant (all issued under the old control), or
--- carrying owner or admin, is revoked. Approving a claim that competes with nobody transfers nothing. The new claimant
--- re-promotes people afterwards; staff correct a roster with app_staff_remove_membership. The caller audits every
--- change.
+-- re-verification date, public_entity as requested, and delivers the organisation's held tags. Every approval needs
+-- the claimed domain proven: the email code (otp_verified_at) and the DNS TXT record (dns_verified_at), or, for E2
+-- only, a claimant who is an active owner, admin or signatory of an organisation already E1 on that same domain. Staff
+-- never decide their own claim, and approve a claim only when its label agrees with app_claim_competes (disputed
+-- exactly when it competes; round 6): the claim functions keep labels in step (app_relabel_open_claims), so a label
+-- that disagrees was written past them and is refused rather than decided on.
+-- Approving a claim that competes with the organisation's current control upholds the dispute (docs/spec/06 6.2:
+-- competing claims go to dispute review, never an automatic transfer) and transfers the organisation in the same
+-- transaction, the new claimant becoming its only owner and admin: every earlier approved claim of another claimant
+-- becomes rejected, its decision_reason naming this claim, and those claimants' memberships are removed with no role
+-- but viewer (so nobody reactivates them with power); every other membership, active or already removed, loses owner,
+-- admin and signatory and keeps its other roles (viewer when none is left); every pending invitation issued by anyone
+-- but the new claimant (all issued under the old control), or carrying owner, admin or signatory, is revoked; the E1
+-- or E2 verified domain becomes the claim's. Approving a claim that competes with nobody transfers nothing and seats
+-- the claimant (app_seat_claimant): a member keeps their roles unless the organisation has no active owner (then
+-- owner and admin are added), anyone else becomes owner and admin; an E1 approval of an organisation already E1
+-- keeps its verified domain unless the claimant is an active owner. Every approval then relabels the organisation's
+-- other open claims. The new claimant re-appoints people afterwards; staff correct a roster with
+-- app_staff_remove_membership. The caller audits every change.
 CREATE FUNCTION app_decide_claim(p_claim uuid, p_approve boolean, p_reason text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -1552,6 +1606,7 @@ DECLARE
     v_claim public.org_claims%ROWTYPE;
     v_org public.organizations%ROWTYPE;
     v_dispute boolean;
+    v_owner boolean;
 BEGIN
     IF NOT public.app_is_staff('{admin}') THEN
         RAISE EXCEPTION 'app_decide_claim: staff admin only' USING ERRCODE = 'insufficient_privilege';
@@ -1570,6 +1625,17 @@ BEGIN
     IF p_approve THEN
         SELECT * INTO v_org FROM public.organizations WHERE id = v_claim.org_id FOR UPDATE;
         v_dispute := public.app_claim_competes(v_org.id, v_claim.claimant_user_id);
+        IF (v_claim.status = 'disputed') <> v_dispute THEN
+            RAISE EXCEPTION 'app_decide_claim: the claim is labelled % although it % the organisation''s current'
+                ' control; it is approved only under the label that says so', v_claim.status,
+                CASE WHEN v_dispute THEN 'competes with' ELSE 'does not compete with' END
+                USING ERRCODE = 'check_violation';
+        END IF;
+        v_owner := EXISTS (
+            SELECT 1
+              FROM public.memberships m
+             WHERE m.org_id = v_org.id AND m.user_id = v_claim.claimant_user_id AND m.status = 'active'
+               AND 'owner' = ANY (m.roles));
         IF NOT (
             (v_claim.otp_verified_at IS NOT NULL AND v_claim.dns_verified_at IS NOT NULL)
             OR (v_claim.level = 'e2' AND v_org.verification = 'e1' AND v_org.verified_domain = v_claim.domain
@@ -1587,9 +1653,11 @@ BEGIN
                 RAISE EXCEPTION 'app_decide_claim: an E2 organisation is not moved back to E1'
                     USING ERRCODE = 'check_violation';
             END IF;
-            UPDATE public.organizations
-               SET verification = 'e1', verified_domain = v_claim.domain, updated_at = now()
-             WHERE id = v_org.id;
+            IF v_dispute OR v_org.verification <> 'e1' OR v_owner THEN
+                UPDATE public.organizations
+                   SET verification = 'e1', verified_domain = v_claim.domain, updated_at = now()
+                 WHERE id = v_org.id;
+            END IF;
             UPDATE public.tags
                SET status = 'held_pending_verification', updated_at = now()
              WHERE org_id = v_org.id AND status = 'held_unclaimed' AND closed_at IS NULL;
@@ -1619,7 +1687,7 @@ BEGIN
                AND closed_at IS NULL;
         END IF;
         IF v_dispute THEN
-            -- The transfer: the new claimant becomes the only owner and admin (they re-promote people afterwards).
+            -- The transfer: the new claimant becomes the only owner and admin (they re-appoint people afterwards).
             WITH superseded AS (
                 UPDATE public.org_claims c
                    SET status = 'rejected',
@@ -1636,22 +1704,26 @@ BEGIN
               FROM superseded s
              WHERE m.org_id = v_org.id AND m.user_id = s.claimant_user_id;
             UPDATE public.memberships m
-               SET roles = coalesce(nullif(array_remove(array_remove(m.roles, 'owner'), 'admin'), '{}'),
+               SET roles = coalesce(nullif(array_remove(array_remove(array_remove(m.roles, 'owner'), 'admin'),
+                                                        'signatory'), '{}'),
                                     '{viewer}'::public.org_role[]),
                    updated_at = now()
              WHERE m.org_id = v_org.id AND m.user_id <> v_claim.claimant_user_id
-               AND m.roles && '{owner,admin}'::public.org_role[];
+               AND m.roles && '{owner,admin,signatory}'::public.org_role[];
             UPDATE public.invitations i
                SET revoked_at = now()
              WHERE i.org_id = v_org.id AND i.accepted_at IS NULL AND i.revoked_at IS NULL
-               AND (i.invited_by <> v_claim.claimant_user_id OR i.roles && '{owner,admin}'::public.org_role[]);
+               AND (i.invited_by <> v_claim.claimant_user_id
+                    OR i.roles && '{owner,admin,signatory}'::public.org_role[]);
+            INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
+            VALUES (public.uuid7(), v_org.id, v_claim.claimant_user_id, '{owner,admin}', 'active')
+            ON CONFLICT (org_id, user_id) DO UPDATE
+               SET status = 'active',
+                   roles = ARRAY(SELECT DISTINCT x FROM unnest(m.roles || EXCLUDED.roles) AS x ORDER BY x),
+                   updated_at = now();
+        ELSE
+            PERFORM public.app_seat_claimant(v_org.id, v_claim.claimant_user_id);
         END IF;
-        INSERT INTO public.memberships AS m (id, org_id, user_id, roles, status)
-        VALUES (public.uuid7(), v_org.id, v_claim.claimant_user_id, '{owner,admin}', 'active')
-        ON CONFLICT (org_id, user_id) DO UPDATE
-           SET status = 'active',
-               roles = ARRAY(SELECT DISTINCT x FROM unnest(m.roles || EXCLUDED.roles) AS x ORDER BY x),
-               updated_at = now();
     END IF;
     UPDATE public.org_claims
        SET status = CASE WHEN p_approve THEN 'approved' ELSE 'rejected' END::public.claim_status,
@@ -1660,6 +1732,9 @@ BEGIN
            decision_reason = p_reason,
            updated_at = now()
      WHERE id = p_claim;
+    IF p_approve THEN
+        PERFORM public.app_relabel_open_claims(v_org.id);
+    END IF;
 END;
 $$;
 
@@ -1859,35 +1934,85 @@ AS $$
     SELECT coalesce(sum(c.cost_usd), 0) FROM public.llm_spend c WHERE c.created_at >= p_since
 $$;
 
--- Whether every llm_calls row of a Message Batches batch belongs to the caller's bound tenant: the rows it could have
--- written (the llm_calls INSERT policy and the round-5 tenant scoping), that is a row naming a user names the current
--- user (app.user_id), a row naming an organisation names one the current user is an active member of (the bound one
--- when app.org_id is set), and a platform job's row (no user, no organisation) belongs only to a caller with nothing
--- bound. False for a batch with no row. batch_poll calls it before fetching a batch's results: one provider account
--- serves every tenant, and bridge_app cannot read other tenants' rows or system rows. SECURITY DEFINER: judges every
--- row of the batch whatever the caller may read (each half of the union uses one of the partial unique indexes).
+-- Whether the caller is the tenant of a Message Batches batch (round 6): the tenant (org_id, user_id) of the batch's
+-- earliest batch_reserved row, by created_at, then id. The real tenant reserves every item right after the provider
+-- assigns the batch id at submission, so it reserves first, and a later row of anybody else (a squatted item) changes
+-- nothing. The caller is judged as for the rows it could have written (the llm_calls INSERT policy and the round-5
+-- tenant scoping): a tenant naming a user is the current user (app.user_id), one naming an organisation is one the
+-- current user is an active member of (the bound one when app.org_id is set), and a platform job's batch (no user, no
+-- organisation) belongs only to a caller with nothing bound. False for a batch with no reservation, so an unknown
+-- batch and another tenant's answer alike. batch_poll calls it before fetching a batch's results: one provider
+-- account serves every tenant, and bridge_app cannot read other tenants' rows or system rows. SECURITY DEFINER: reads
+-- the batch's reservations whatever the caller may read. created_at is the writer's value, so the rule stops a
+-- request-path bug (a forged handle), not a compromised app role backdating a reservation (which holds the provider
+-- key anyway).
 CREATE FUNCTION app_llm_batch_owned(p_batch_id varchar) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    WITH batch AS (
-        SELECT c.org_id, c.user_id
-          FROM public.llm_calls c
-         WHERE c.batch_id = p_batch_id AND c.status = 'batch_reserved'
-        UNION ALL
-        SELECT c.org_id, c.user_id
-          FROM public.llm_calls c
-         WHERE c.batch_id = p_batch_id AND c.status <> 'batch_reserved'
-    )
-    SELECT count(*) > 0 AND coalesce(bool_and(coalesce(
-               CASE
+    SELECT coalesce((
+        SELECT CASE
                    WHEN b.user_id IS NULL AND b.org_id IS NULL
                        THEN public.app_user_id() IS NULL AND public.app_org_id() IS NULL
                    ELSE (b.user_id IS NULL OR b.user_id = public.app_user_id())
                         AND (b.org_id IS NULL OR (public.app_is_member(b.org_id)
                              AND (public.app_org_id() IS NULL OR b.org_id = public.app_org_id())))
-               END, false)), false)
-      FROM batch b
+               END
+          FROM public.llm_calls b
+         WHERE b.batch_id = p_batch_id AND b.status = 'batch_reserved'
+         ORDER BY b.created_at, b.id
+         LIMIT 1), false)
+$$;
+
+-- A Message Batches item's settlement, written with the batch tenant's own org_id and user_id (round 6): the tenant
+-- of the batch's earliest reservation, as app_llm_batch_owned judges it. For the caller that owns the batch
+-- (app_llm_batch_owned) or the platform job (nothing bound), so a reservation whose user has since left the
+-- organisation still settles (by the job: RLS refuses that user's own insert and llm_calls_batch_guard every other
+-- tenant's) instead of counting against the caps for the rest of the window. Anybody else, and an unknown batch, get
+-- the same refusal. Returns false, writing nothing, when the item has already settled for that tenant (the ledger's
+-- settle-once). The row keeps every CHECK and trigger of llm_calls (cost 0 to 100 USD, no negative count, a
+-- settlement of its own tenant's reservation), has a final status (never batch_reserved), and its time is the
+-- database's. p_id is the row's id (a new UUIDv7 when NULL); the other arguments are the row's columns as the ledger
+-- writes them. The caller logs the call.
+CREATE FUNCTION app_llm_settle_batch_item(
+    p_batch_id varchar, p_custom_id varchar, p_id uuid, p_task varchar, p_purpose varchar, p_model varchar,
+    p_input_tokens integer, p_output_tokens integer, p_cache_read_tokens integer, p_cache_write_tokens integer,
+    p_cost_usd numeric, p_latency_ms integer, p_status varchar, p_stop_reason varchar, p_trace_id varchar,
+    p_inputs jsonb
+) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_org uuid;
+    v_user uuid;
+    v_rows integer;
+BEGIN
+    IF p_batch_id IS NULL OR p_custom_id IS NULL OR p_status IS NULL OR p_status = 'batch_reserved' THEN
+        RAISE EXCEPTION 'app_llm_settle_batch_item: a settlement names its batch item and has a final status'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT c.org_id, c.user_id INTO v_org, v_user
+      FROM public.llm_calls c
+     WHERE c.batch_id = p_batch_id AND c.status = 'batch_reserved'
+     ORDER BY c.created_at, c.id
+     LIMIT 1;
+    IF NOT FOUND OR NOT ((public.app_user_id() IS NULL AND public.app_org_id() IS NULL)
+                         OR public.app_llm_batch_owned(p_batch_id)) THEN
+        RAISE EXCEPTION 'app_llm_settle_batch_item: no batch of the caller''s with that id'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    INSERT INTO public.llm_calls (id, org_id, user_id, task, purpose, model, input_tokens, output_tokens,
+                                  cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, status, stop_reason,
+                                  trace_id, batch_id, custom_id, inputs, created_at)
+    VALUES (coalesce(p_id, public.uuid7()), v_org, v_user, p_task, p_purpose, p_model, p_input_tokens,
+            p_output_tokens, p_cache_read_tokens, p_cache_write_tokens, p_cost_usd, p_latency_ms, p_status,
+            p_stop_reason, p_trace_id, p_batch_id, p_custom_id, p_inputs, now())
+    ON CONFLICT (batch_id, custom_id, org_id, user_id) WHERE batch_id IS NOT NULL AND status <> 'batch_reserved'
+    DO NOTHING;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
 $$;
 """
 
@@ -2320,6 +2445,23 @@ BEGIN
 END;
 $$;
 
+-- After every roster change (a membership inserted or updated: by the organisation, by staff, or inside the claim
+-- functions), the organisation's open claims are relabelled to agree with app_claim_competes (round 6;
+-- app_relabel_open_claims), so staff see a dispute as soon as it exists and no approval acts on a stale label.
+-- SECURITY DEFINER: relabels as the owner, the only writer org_claims_status_guard() lets set or clear the mark.
+CREATE FUNCTION memberships_claims_relabel() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    PERFORM public.app_relabel_open_claims(NEW.org_id);
+    IF TG_OP = 'UPDATE' AND OLD.org_id IS DISTINCT FROM NEW.org_id THEN
+        PERFORM public.app_relabel_open_claims(OLD.org_id);
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
 -- A Message Batches item is identified within its tenant (org_id and user_id, NULL for none: the unique indexes and the
 -- llm_spend rule), so a settlement settles only a reservation of its own tenant: one for an item that has
 -- reservations, none of them its tenant's, is refused (another tenant's request, or a ledger bound to another
@@ -2373,6 +2515,7 @@ REVOKE ALL ON FUNCTION org_claims_dns_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tags_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION org_claims_status_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION memberships_claims_relabel() FROM PUBLIC;
 REVOKE ALL ON FUNCTION llm_calls_batch_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION phone_verifications_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION block_mutation() FROM PUBLIC;
@@ -2408,6 +2551,9 @@ CREATE TRIGGER org_claims_dns_guard
 CREATE TRIGGER org_claims_status_guard
     BEFORE UPDATE ON org_claims
     FOR EACH ROW EXECUTE FUNCTION org_claims_status_guard();
+CREATE TRIGGER memberships_claims_relabel
+    AFTER INSERT OR UPDATE ON memberships
+    FOR EACH ROW EXECUTE FUNCTION memberships_claims_relabel();
 CREATE TRIGGER llm_calls_batch_guard
     BEFORE INSERT ON llm_calls
     FOR EACH ROW EXECUTE FUNCTION llm_calls_batch_guard();
@@ -2471,6 +2617,10 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_llm_spend_usd(timestamp with time zone)": ("bridge_app",),
     "app_llm_call_inputs(uuid)": ("bridge_app",),
     "app_llm_batch_owned(character varying)": ("bridge_app",),  # batch_poll, before fetching a batch's results
+    # batch_poll settles each item through it (the reservation's own tenant, even once its user has left).
+    "app_llm_settle_batch_item(character varying, character varying, uuid, character varying, character varying,"
+    " character varying, integer, integer, integer, integer, numeric, integer, character varying,"
+    " character varying, character varying, jsonb)": ("bridge_app",),
     "app_add_niche(text, text, text, text)": ("bridge_app",),
     "app_reissue_claim_otp(uuid, bytea, timestamp with time zone)": ("bridge_app",),
     "app_close_tag(uuid)": ("bridge_app",),
@@ -2478,7 +2628,11 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_unanchored_chain_heads()": ("provenance_worker",),
 }
 # Helpers only definer code calls, as the owner: no EXECUTE for any role (revoked from PUBLIC where created).
-INTERNAL_FUNCTIONS = ("app_claim_competes(uuid, uuid)",)
+INTERNAL_FUNCTIONS = (
+    "app_claim_competes(uuid, uuid)",
+    "app_relabel_open_claims(uuid)",
+    "app_seat_claimant(uuid, uuid)",
+)
 # Revision 0001 helpers the Tier-2 roles' policies call (revoked again on downgrade).
 FUNCTION_GRANTS_0001: dict[str, tuple[str, ...]] = {"app_user_id()": TIER2_ROLES}
 TRIGGER_FUNCTIONS = (
@@ -2492,6 +2646,7 @@ TRIGGER_FUNCTIONS = (
     "org_claims_guard()",
     "org_claims_dns_guard()",
     "org_claims_status_guard()",
+    "memberships_claims_relabel()",
     "llm_calls_batch_guard()",
     "phone_verifications_guard()",
     "evidence_time_guard()",
@@ -2572,6 +2727,7 @@ def downgrade() -> None:
     # policies on the 0001 columns dropped below), so no table could be dropped while they exist.
     _run_sql("\n".join(f"DROP POLICY {policy.name} ON {policy.table};" for policy in POLICIES))
     _run_sql("DROP VIEW llm_spend;")  # it reads llm_calls
+    _run_sql("DROP TRIGGER memberships_claims_relabel ON memberships;")  # memberships stays (revision 0001)
     op.drop_constraint("fk_proposals_current_version", "proposals", type_="foreignkey")
     op.drop_constraint("fk_proposals_draft_version", "proposals", type_="foreignkey")
     # Dropping a table drops its policies, triggers, indexes and grants. Referencing tables before referenced ones.
