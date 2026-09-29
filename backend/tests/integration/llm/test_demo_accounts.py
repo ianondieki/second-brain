@@ -16,6 +16,7 @@ from bridge.ids import uuid7
 from bridge.llm import demo_data
 from bridge.llm.demo_data import SqlDemoAccounts
 from tests.integration.llm.conftest import People
+from tests.integration.llm.helpers import as_app_with_demo_account
 
 Factory = async_sessionmaker[AsyncSession]
 
@@ -46,18 +47,7 @@ async def test_with_the_schema_v3_column_a_seeded_demo_account_reads_true(
     async with owner_engine.connect() as conn:
         outer = await conn.begin()
         try:
-            exists = await conn.execute(
-                text(
-                    "SELECT 1 FROM information_schema.columns"
-                    " WHERE table_name = 'users' AND column_name = 'demo_account'"
-                )
-            )
-            if exists.first() is None:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN demo_account boolean NOT NULL DEFAULT false"))
-            await conn.execute(text("GRANT SELECT (demo_account) ON users TO bridge_app"))
-            await conn.execute(text("UPDATE users SET demo_account = true WHERE id = :id"), {"id": people.a})
-            await conn.execute(text("SET LOCAL ROLE bridge_app"))  # read as the app role, under its grants and RLS
-            joined = async_sessionmaker(bind=conn, expire_on_commit=False)  # sessions join the open transaction
+            joined = await as_app_with_demo_account(conn, people.a)  # sessions join the open transaction
             caller = joined()
             await bind_tenant(caller, user_id=people.a)
             accounts = SqlDemoAccounts(joined, caller=caller)

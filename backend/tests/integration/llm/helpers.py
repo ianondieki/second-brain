@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import RowMapping, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge import clock
 from bridge.config import get_settings
@@ -57,6 +57,21 @@ async def stored(owner_engine: AsyncEngine, trace_id: str) -> list[RowMapping]:
     async with owner_engine.connect() as conn:
         result = await conn.execute(text("SELECT * FROM llm_calls WHERE trace_id = :t ORDER BY id"), {"t": trace_id})
         return list(result.mappings())
+
+
+DEMO_COLUMN = "SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'demo_account'"
+
+
+async def as_app_with_demo_account(conn: AsyncConnection, demo_user: UUID) -> async_sessionmaker[AsyncSession]:
+    """Inside the owner connection's open transaction (the caller rolls it back): add ``users.demo_account`` as
+    schema v3 does when it is missing, mark ``demo_user``, switch to ``bridge_app`` and return a session factory whose
+    sessions join that transaction (D-37 tests before schema v3 merges)."""
+    if (await conn.execute(text(DEMO_COLUMN))).first() is None:
+        await conn.execute(text("ALTER TABLE users ADD COLUMN demo_account boolean NOT NULL DEFAULT false"))
+    await conn.execute(text("GRANT SELECT (demo_account) ON users TO bridge_app"))
+    await conn.execute(text("UPDATE users SET demo_account = true WHERE id = :id"), {"id": demo_user})
+    await conn.execute(text("SET LOCAL ROLE bridge_app"))  # read as the app role, under its grants and RLS
+    return async_sessionmaker(bind=conn, expire_on_commit=False)
 
 
 async def login(
