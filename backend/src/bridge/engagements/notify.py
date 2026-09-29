@@ -1,0 +1,319 @@
+"""The tracker's notifications (REQ-NOT-04 EM2; the prototype's thin part of REQ-NOT-03; REQUIREMENTS.md §5).
+
+Generated from the state machine: a command whose row names a ``notice`` queues one job in the command's own
+transaction (``bridge.jobs.outbox``: the job exists if and only if the event committed), and the job tells the other
+party. Each recipient's rows are written in a session bound to that recipient (in-app rows are the user's own under
+RLS), with a ledger row per recipient and event (``notification_deliveries``, dedupe key ``inapp:<event>:<user>``)
+so a retried job never notifies twice. Entering ``INTEREST_CONFIRMED`` also sends EM2 to the developer, exactly once
+per engagement (dedupe key ``em2:<engagement>``, AC-MAIL-1), through the configured email provider (Mailpit in dev).
+
+Recipients: when the organisation acts, the developer; when the developer acts, the organisation's people on this
+engagement (its named contact and the members who acted on it, each still an active member). The developer cannot
+read the organisation's roster, so an engagement nobody at the organisation has touched yet notifies nobody there;
+the organisation's inbox shows it (the full dispatch to role seats, REQ-NOT-03, comes after the prototype).
+
+Wording is fixed product copy ([[COPY-REVIEW]]); a decline's written reason (``OTHER``) is the one free text, passed
+in the job's arguments to the developer's notification (it never enters the hash chain).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Final
+from uuid import UUID
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from bridge.auth.models import User
+from bridge.config import Settings
+from bridge.db import bind_tenant
+from bridge.engagements import state_machine as sm
+from bridge.engagements.models import Engagement, EngagementEvent
+from bridge.ids import uuid7
+from bridge.jobs.outbox import defer
+from bridge.logging import get_logger
+from bridge.models.enums import (
+    DeliveryStatus,
+    EngagementActorRole,
+    EngagementEndReason,
+    EngagementParty,
+    EngagementState,
+    GrantStatus,
+    NotificationChannel,
+)
+from bridge.notifications import em2
+from bridge.notifications.deliveries import send_email
+from bridge.notifications.email import EmailMessage, EmailProvider
+from bridge.notifications.models import InAppNotification, NotificationDelivery
+from bridge.proposals.models import DisclosureGrant, DocumentView, ProposalVersion
+from bridge.tenancy.models import Organization
+from bridge.tenancy.service import membership_of
+
+QUEUE: Final = "notifications"
+TASK: Final = "engagements.notify"
+C = sm.Command
+DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
+DECLINE_LABELS: Final = {  # docs/spec/06 6.9 Codes. [[COPY-REVIEW]]
+    EngagementEndReason.NOT_PRIORITY: "not a current priority",
+    EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY: "already solved internally",
+    EngagementEndReason.BUDGET: "budget",
+    EngagementEndReason.NOT_RELEVANT: "not relevant",
+    EngagementEndReason.NEEDS_MATURITY: "needs more maturity",
+    EngagementEndReason.OTHER: "other",
+    EngagementEndReason.BY_DEVELOPER: "declined by the developer",
+}
+# What the other party reads, by (command, the party that acted). {org} and {title} are filled in. [[COPY-REVIEW]]
+SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
+    (C.ACCEPT_INTEREST, DEV): 'The developer accepted your interest in "{title}".',
+    (C.DECLINE_INTEREST, DEV): 'The developer declined your interest in "{title}".',
+    (C.START_REVIEW, ORG): '{org} started reviewing "{title}".',
+    (C.DECLINE, ORG): '{org} declined "{title}". Reason: {reason}.',
+    (C.APPROVE, ORG): '{org} approved "{title}" to proceed (non-binding). They will contact you shortly.',
+    (C.WITHDRAW, DEV): 'The developer withdrew "{title}".',
+    (C.MARK_CONTACTED, ORG): '{org} marked first contact on "{title}". Confirm it on your tracker.',
+    (C.CONFIRM_CONTACT, DEV): 'The developer confirmed first contact on "{title}".',
+    (C.SEND_NDA, DEV): 'The developer sent the mutual NDA for "{title}". It needs your signatory\'s signature.',
+    (C.SEND_NDA, ORG): '{org} sent the mutual NDA for "{title}". It needs your signature.',
+    (C.SIGN_NDA, DEV): 'The developer signed the mutual NDA for "{title}".',
+    (C.SIGN_NDA, ORG): '{org} signed the mutual NDA for "{title}".',
+    (C.PROPOSE_TERMS, DEV): 'The developer proposed terms for "{title}".',
+    (C.PROPOSE_TERMS, ORG): '{org} proposed terms for "{title}".',
+    (
+        C.MARK_FINAL,
+        DEV,
+    ): 'The developer marked the agreement for "{title}" final. It needs your signatory\'s signature.',
+    (C.MARK_FINAL, ORG): '{org} marked the agreement for "{title}" final. It needs your signature.',
+    (C.REOPEN_NEGOTIATION, DEV): 'The developer reopened the terms of "{title}".',
+    (C.REOPEN_NEGOTIATION, ORG): '{org} reopened the terms of "{title}".',
+    (C.SIGN_AGREEMENT, DEV): 'The developer signed the agreement for "{title}".',
+    (C.SIGN_AGREEMENT, ORG): '{org} signed the agreement for "{title}".',
+    (C.SUBMIT_MILESTONE, DEV): 'The developer submitted a milestone of "{title}" for review.',
+    (C.ACCEPT_MILESTONE, ORG): '{org} accepted a milestone of "{title}".',
+    (C.REQUEST_CHANGES, ORG): '{org} asked for changes to a milestone of "{title}".',
+    (C.DELIVER, DEV): 'The developer submitted the final delivery of "{title}".',
+    (C.ACCEPT_DELIVERY, ORG): '{org} accepted the delivery of "{title}". They sign the acceptance certificate first.',
+    (C.SIGN_CERTIFICATE, DEV): 'The developer countersigned the acceptance certificate for "{title}".',
+    (C.SIGN_CERTIFICATE, ORG): '{org} signed the acceptance certificate for "{title}". Countersign it on your tracker.',
+    (C.RECORD_PAYMENT, ORG): '{org} recorded the final payment for "{title}". Confirm the amount you received.',
+    (C.CONFIRM_PAYMENT, DEV): 'The developer confirmed the final payment for "{title}". The project is closed.',
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Notice:
+    kind: str
+    title: str
+    body: str
+    link: str
+
+
+async def enqueue(
+    db: AsyncSession, engagement: Engagement, event: EngagementEvent, *, reason_text: str | None = None
+) -> int:
+    """Queue the notification of ``event`` in the caller's transaction (ids only, and a decline's written reason)."""
+    args: dict[str, Any] = {
+        "engagement_id": str(engagement.id),
+        "event_id": str(event.id),
+        "developer_id": str(engagement.developer_id),
+    }
+    if reason_text:
+        args["reason_text"] = reason_text
+    return await defer(db, TASK, args, queue=QUEUE, lock=f"engagement:{engagement.id}")
+
+
+def compose(
+    event: EngagementEvent, company: str, title: str, *, reason_text: str | None = None
+) -> tuple[EngagementParty, Notice] | None:
+    """The party to tell and what to tell them, or None for an event the table does not notify."""
+    try:
+        command = sm.Command(event.command)
+    except ValueError:  # the genesis ("create") and anything outside the table
+        return None
+    notice = sm.TABLE[command].notice
+    if event.actor_role is EngagementActorRole.SYSTEM:  # the prototype writes no system events; jobs come later
+        return None
+    acted = DEV if event.actor_role is EngagementActorRole.DEVELOPER else ORG
+    sentence = SENTENCES.get((command, acted))
+    if notice is None or sentence is None:
+        return None
+    reason = DECLINE_LABELS.get(event.end_reason, "") if event.end_reason else ""
+    body = sentence.format(org=em2.one_line(company), title=em2.one_line(title), reason=reason)
+    payload = dict(event.payload)
+    if event.end_reason is EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY and "internal_start_date" in payload:
+        body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
+    if reason_text:
+        body += f" Their reason: {reason_text}"
+    label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
+    link = f"/engagements/{event.engagement_id}"
+    return sm.other(acted), Notice(f"engagement.{notice.lower()}", label, body, link)
+
+
+async def _in_app(db: AsyncSession, user_id: UUID, org_id: UUID | None, notice: Notice, event_id: UUID) -> bool:
+    """One in-app notification for ``user_id`` (the session is bound to them), once per event."""
+    key = f"inapp:{event_id}:{user_id}"
+    if await db.scalar(select(NotificationDelivery.id).where(NotificationDelivery.dedupe_key == key)) is not None:
+        return False
+    db.add(
+        NotificationDelivery(
+            id=uuid7(),
+            user_id=user_id,
+            kind=notice.kind[:40],
+            channel=NotificationChannel.IN_APP,
+            to_address="in-app",
+            dedupe_key=key,
+            status=DeliveryStatus.SENT,
+            attempts=1,
+            provider="in_app",
+            sent_at=datetime.now(UTC),
+        )
+    )
+    db.add(
+        InAppNotification(
+            id=uuid7(),
+            user_id=user_id,
+            org_id=org_id,
+            kind=notice.kind[:40],
+            title=notice.title,
+            body=notice.body,
+            link=notice.link,
+        )
+    )
+    await db.flush()
+    return True
+
+
+async def _org_people(db: AsyncSession, engagement: Engagement) -> list[UUID]:
+    """The organisation's people on this engagement: its named contact and every member who acted on it."""
+    actors = await db.execute(
+        select(EngagementEvent.actor_user_id)
+        .where(
+            EngagementEvent.engagement_id == engagement.id,
+            EngagementEvent.actor_user_id.is_not(None),
+            EngagementEvent.actor_role.not_in((EngagementActorRole.DEVELOPER, EngagementActorRole.SYSTEM)),
+        )
+        .distinct()
+    )
+    people = {user_id for user_id in actors.scalars() if user_id is not None}
+    if engagement.contact_user_id is not None:
+        people.add(engagement.contact_user_id)
+    people.discard(engagement.developer_id)
+    return sorted(people)
+
+
+async def em2_facts(db: AsyncSession, engagement: Engagement, settings: Settings) -> em2.Em2Facts | None:
+    """EM2's values, read as the developer (their own proposal, the listed organisation, the Tier-2 access log)."""
+    if engagement.contact_user_id is None or engagement.contact_channel is None or engagement.contact_by is None:
+        return None
+    org = await db.get(Organization, engagement.org_id)
+    version = await db.get(ProposalVersion, engagement.version_id)
+    contact = await db.scalar(select(User.display_name).where(User.id == engagement.contact_user_id))
+    if org is None or version is None or version.registered_at is None or contact is None:
+        return None
+    role = await db.scalar(
+        select(EngagementEvent.payload["contact_role"].astext)
+        .where(EngagementEvent.engagement_id == engagement.id, EngagementEvent.payload.has_key("contact_role"))
+        .order_by(EngagementEvent.seq.desc())
+        .limit(1)
+    )
+    viewers = await db.scalar(
+        select(func.count(func.distinct(DocumentView.viewer_user_id))).where(
+            DocumentView.proposal_id == engagement.proposal_id, DocumentView.org_id == engagement.org_id
+        )
+    )
+    shared = await db.scalar(
+        select(DisclosureGrant.id)
+        .where(
+            DisclosureGrant.proposal_id == engagement.proposal_id,
+            DisclosureGrant.org_id == engagement.org_id,
+            DisclosureGrant.status == GrantStatus.ACTIVE,
+            DisclosureGrant.tier >= 2,
+        )
+        .limit(1)
+    )
+    return em2.Em2Facts(
+        engagement_id=engagement.id,
+        company_name=org.legal_name,
+        title=version.title or "your proposal",
+        contact_person_name=contact,
+        contact_person_role=role or "",
+        contact_channel=engagement.contact_channel,
+        contact_by=engagement.contact_by,
+        receipt_id=version.cert_id or "",
+        registered_at=version.registered_at,
+        viewers=int(viewers or 0),
+        shared=shared is not None,
+        public_entity=org.public_entity,
+        base_url=settings.public_base_url,
+    )
+
+
+async def _send_em2(db: AsyncSession, provider: EmailProvider, settings: Settings, engagement: Engagement) -> bool:
+    """EM2 to the developer, once per engagement; False while the send is still queued after transient errors."""
+    log = get_logger(__name__)
+    developer = await db.get(User, engagement.developer_id)
+    facts = await em2_facts(db, engagement, settings)
+    if developer is None or developer.email_verified_at is None or facts is None:
+        log.warning("em2.skipped", engagement_id=str(engagement.id))
+        return True
+    rendered = em2.render(facts)
+    message = EmailMessage(
+        to=developer.email, subject=rendered.subject, text=rendered.text, html=rendered.html, tag=em2.KIND
+    )
+    delivery = await send_email(
+        db, provider, message=message, kind=em2.KIND, user_id=developer.id, dedupe_key=em2.dedupe_key(engagement.id)
+    )
+    return delivery.status is not DeliveryStatus.QUEUED
+
+
+async def deliver(
+    factory: async_sessionmaker[AsyncSession],
+    provider: EmailProvider,
+    settings: Settings,
+    *,
+    engagement_id: UUID,
+    event_id: UUID,
+    developer_id: UUID,
+    reason_text: str | None = None,
+) -> bool:
+    """Notify the other party of one event (idempotent). Returns False when an email is still queued (retry)."""
+    done = True
+    async with factory() as db:
+        await bind_tenant(db, user_id=developer_id)
+        engagement = await db.get(Engagement, engagement_id)
+        event = await db.scalar(
+            select(EngagementEvent).where(
+                EngagementEvent.id == event_id, EngagementEvent.engagement_id == engagement_id
+            )
+        )
+        if engagement is None or event is None or engagement.developer_id != developer_id:
+            get_logger(__name__).warning("engagement.notify_skipped", event_id=str(event_id))
+            return True
+        org = await db.get(Organization, engagement.org_id)
+        version = await db.get(ProposalVersion, engagement.version_id)
+        company = org.legal_name if org is not None else "The organisation"
+        title = (version.title if version is not None else None) or "your proposal"
+        composed = compose(event, company, title, reason_text=reason_text)
+        people: list[UUID] = []
+        if composed is not None:
+            party, notice = composed
+            if party is ORG:
+                people = await _org_people(db, engagement)
+            else:
+                await _in_app(db, developer_id, None, notice, event.id)
+        if event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state:
+            # EM2 goes to the developer whoever moved the engagement there (the signatory's approval, or the
+            # developer's own acceptance of an organisation's interest at stage 0).
+            done = await _send_em2(db, provider, settings, engagement)
+        await db.commit()
+    if composed is None:
+        return done
+    for user_id in people:
+        async with factory() as db:
+            await bind_tenant(db, user_id=user_id, org_id=engagement.org_id)
+            if await membership_of(db, engagement.org_id, user_id) is None:
+                continue  # no longer a member: nothing to tell them
+            await _in_app(db, user_id, engagement.org_id, notice, event.id)
+            await db.commit()
+    return done

@@ -6,6 +6,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
+# REQ-ENG-12: the dev/test clock router is not in the image unless it is built for dev, test or staging with
+# --build-arg WITH_TEST_CLOCK=true (infra/docker-compose.dev.yml sets it). bridge.main mounts it only where this module
+# exists and APP_ENV is not production; a production image never carries it.
+ARG WITH_TEST_CLOCK=false
+RUN if [ "$WITH_TEST_CLOCK" != "true" ]; then rm -f src/bridge/testclock.py; fi
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY config ./config

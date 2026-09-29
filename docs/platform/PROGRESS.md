@@ -452,7 +452,7 @@ session was re-checked at xhigh; sub-agent work kept its own effort and was not 
 
 P9:
 
-- Demo TSA: the seeded/test TSA is a local openssl test TSA (serial 0x01). The demo must label timestamps as from a
+- Demo TSA: the seeded/test TSA is a local openssl test TSA (serial 0x01). The demo must label timestamps as from a "demo timestamp authority (simulated)" wherever `/verify` says "independent timestamp authority", and list it in the README real-vs-simulated table; check which TSA `make demo` uses.
 - Reset demo DB before screenshots: provenance test builders write "Provenance niche" into shared DBs.
 - --demo seed must export a certificate id so e2e/verify.spec.ts removes its E2E_VERIFY_CERT_ID skip.
 - P1 hand-offs: seed demo_account + D2 for demo developers as the owner; test clock enabled only with explicit APP_ENV.
