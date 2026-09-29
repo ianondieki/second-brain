@@ -217,12 +217,15 @@ def test_script_and_style_scanning_is_linear_on_pathological_input(raw: str) -> 
 
 
 # The regex the linear scan replaces, kept as the oracle for what a block is.
-BLOCKS_REGEX = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+# Tag names fold ASCII letters only (as HTML does): without re.ASCII, re.IGNORECASE also folds U+017F LATIN SMALL LETTER
+# LONG S to "s", U+0131 DOTLESS I and U+0130 CAPITAL I WITH DOT ABOVE to "i" (security re-check 2026-09-29).
+BLOCKS_REGEX = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL | re.ASCII)
 BLOCK_PIECES = ["<script", "<SCRIPT", "<style", "<scripts", ">", "</script>", "</style >", "</STYLE>", "</script", "x"]
+UNICODE_FOLDS = ["<\u017fcript", "<scr\u0131pt", "<scr\u0130pt", "<\u017ftyle", "</\u017fcript>", "</scr\u0131pt>"]
 
 
 @settings(max_examples=500, deadline=None)
-@given(st.lists(st.sampled_from([*BLOCK_PIECES, " ", "\n", 'a="', "<"]), max_size=40))
+@given(st.lists(st.sampled_from([*BLOCK_PIECES, *UNICODE_FOLDS, " ", "\n", 'a="', "<"]), max_size=40))
 def test_strip_blocks_removes_exactly_what_the_block_regex_did(pieces: list[str]) -> None:
     text = "".join(pieces)
     assert strip_blocks(text) == BLOCKS_REGEX.sub("", text)
@@ -240,6 +243,31 @@ def test_strip_blocks_removes_exactly_what_the_block_regex_did(pieces: list[str]
 )
 def test_strip_blocks_cases(raw: str, expected: str) -> None:
     assert strip_blocks(raw) == expected == BLOCKS_REGEX.sub("", raw)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        *UNICODE_FOLDS,
+        "<\u017fcript>x</script>",
+        "<script>x</\u017fcript>",
+        "&lt;\u017fcript&gt;x",  # the entity form, decoded after the first pass
+        "<\u017fcr\u200bipt>x",  # an invisible character removed in the same pass
+        "<scr\u0130pt>x</scr\u0130pt>ok",
+    ],
+)
+def test_the_sanitiser_is_total_on_non_ascii_tag_names(raw: str) -> None:
+    """No author input makes the sanitiser raise (a crash in prepare() writes no ledger row and blocks a whole
+    batch). A tag name with a non-ASCII letter is not a script or style block; its tags are removed as tags."""
+    result = sanitise(raw, max_chars=CAP, base64_run_chars=B64)
+    assert "<" not in result.text
+    assert ">" not in result.text
+
+
+@settings(max_examples=300, deadline=None)
+@given(st.text(alphabet=st.sampled_from([*BLOCK_PIECES, *UNICODE_FOLDS, "&lt;", "&gt;", "\u200b", "y"]), max_size=60))
+def test_the_sanitiser_never_raises_on_tag_like_input(text: str) -> None:
+    sanitise(text, max_chars=CAP, base64_run_chars=B64)
 
 
 def test_the_input_is_cut_before_cleaning_and_reported_as_truncated() -> None:
