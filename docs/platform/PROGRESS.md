@@ -365,11 +365,11 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-REPO-01-schema-v2` (T2.1) | `108a0f3` | round 6: code done and verified; docs, proofs and reviews left (db-migrations) | `2ca0347` was followed by `c933f0f` (catalog test, AC-DIR-2 claim on a held E2 organisation), `64c834e` (Q3: an E2 approval by a non-owner keeps the verified domain) and `108a0f3` (Q5: the database sets a batch reservation's `created_at`). Session 2 (2026-09-29) ran the full suite on `108a0f3` on Linux: **951 passed, 0 failed**. Q1–Q5 are applied as recommended (Q1 accepted as the deviation; Q2 accepted; Q3 and Q5 in code; Q4 is a doc placement). Next: write the Q1, Q2 and Q4 docs; mutation proofs M13/M14b/M16/M17; card "Sixth review round", THREAT_MODEL rows, revision docstring; static checks; compatibility list; then reviewer + security-reviewer round 6 (BLOCKER/MAJOR only), CI, merge |
-| `feat/REQ-PROV-01-provenance` (T2.4) | `9a414c0` | waiting for schema v2 | as in the laptop Handoff |
-| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `09ae48e` | waiting for schema v2 | as in the laptop Handoff |
-| `feat/REQ-PROV-04-verification` (D1) | `41164de` | waiting for schema v2 | as in the laptop Handoff |
-| `feat/REQ-LLM-01-llm-layer` (T2.2) | `c3cb248` | waiting for schema v2 | as in the laptop Handoff |
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `7fb11bf` | round 6 done (951 passed); reviewer + security-reviewer round 6 running; CI dispatched | Q1–Q5 docs, mutation proofs M13/M14b/M16/M17, card "Sixth review round", THREAT_MODEL rows, revision docstring, static checks and the compatibility list are in (`0fcabad`..`7fb11bf`). Next: fix BLOCKER/MAJOR from round 6 if any, CI green, merge first. MINOR follow-ups (cascade-delete relabel, disputed claim back to `otp_sent` in T2.6b, statement-level trigger) are in the card |
+| `feat/REQ-PROV-01-provenance` (T2.4) | (moving) | impl-backend merging schema v2, switching to `app_unanchored_chain_heads()`, writing `snapshot_at` | then quick reviewer re-check, CI, merge |
+| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `b70f9f9` | schema v2 (`108a0f3`) merged, 1095 passed, static clean; CI dispatched | merge after schema v2 (the later schema commits are docs only) |
+| `feat/REQ-PROV-04-verification` (D1) | `b5bcfb7` | schema v2 (`108a0f3`) merged, 1072 passed, static clean; CI dispatched | merge after schema v2 |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `dcf8afa` | schema v2 merged; settle via `app_llm_settle_batch_item`, `batch_poll` checks `app_llm_batch_owned`; 1265 passed; reviewer round 2 + security-reviewer running; CI dispatched | fix BLOCKER/MAJOR, merge after schema v2. Open for Phase 4: a job can't settle a batch whose user left the org |
 | `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
 
 **Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
@@ -393,7 +393,8 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 | D-35/D-36/D-37 recorded; `PLAN.md` §8; `REQUIREMENTS.md` §7; this checklist | done | |
 | Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | session 2: redone; `make dev` builds (CA override), Playwright shim, `npm ci` |
 | Anthropic price research (D-37) | done | verified 2026-09-29 |
-| P0 schema v2 round 6 → merge | in progress | db-migrations |
+| P11 source excerpts (research, early) | done (`feat/REQ-RES-01-sources` `0bb707d`) | 19 verbatim dated excerpts, 4 niches; D-38 (publisher terms) open, default (a) local only |
+| P0 schema v2 round 6 → merge | in progress | round 6 done `7fb11bf`; reviews running |
 | P0 T2.4, T2.6a, D1, T2.2 → merge | todo | after schema v2 |
 | P1 schema v3 (prototype) | todo | |
 | P2 proposals | todo | |
