@@ -25,6 +25,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.ids import uuid7
+from tests.integration import world as w
 from tests.integration.schema_v4 import (
     Proposals,
     act,
@@ -328,6 +329,32 @@ async def test_matches_name_the_current_version_of_a_published_clear_proposal(ow
         await act(conn, b.owner, b.org)
         for scout_id, org_id in ((scout, b.org), (scout, a.org), (uuid7(), b.org)):
             await expect(conn, MATCH, "no scout of the caller's with that id", **match_params(scout_id, org_id, found))
+
+
+async def test_a_members_own_held_or_hidden_proposal_is_never_matched(owner_engine: AsyncEngine) -> None:
+    """N6: the acting member owns the proposals, so they can read them all; only the policy's own clauses refuse a held
+    one (moderation_state = 'clear') and a hidden one (status = 'published'), while their published, clear one is
+    matched."""
+    async with as_app(owner_engine) as conn:
+        niche = await add_niche(conn)
+        a = await seats(conn)
+        problem = await w.add_problem(conn, a.reviewer, niche)
+        clear, clear_version = await w.add_proposal(conn, a.reviewer, niche, problem)
+        held, held_version = await w.add_proposal(conn, a.reviewer, niche, problem, moderation_state="held")
+        hidden, hidden_version = await w.add_proposal(conn, a.reviewer, niche, problem, status="hidden")
+        scout = await _scout(conn, a.org, a.owner, niche)
+        found = Proposals(a.reviewer, niche, clear, clear_version, clear, clear_version, held, held_version)
+        await act(conn, a.reviewer, a.org)
+        visible = "SELECT count(*) FROM proposals WHERE id = ANY (:ids)"
+        assert await run(conn, visible, ids=[held, hidden]) == 2  # the owner reads both
+        for proposal, version in ((held, held_version), (hidden, hidden_version)):
+            await expect(
+                conn,
+                MATCH,
+                "row-level security",
+                **match_params(scout, a.org, found, proposal=proposal, version=version),
+            )
+        await run(conn, MATCH, **match_params(scout, a.org, found))
 
 
 async def test_a_feedback_is_changed_or_cleared_only_by_its_author(owner_engine: AsyncEngine) -> None:
