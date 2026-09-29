@@ -11,6 +11,8 @@ import { cn } from "@/components/ui/cn";
 import { withdrawTag } from "./pitch/calls";
 import type { WithdrawProblem } from "./pitch/refusals";
 
+const STALE: ReadonlySet<WithdrawProblem> = new Set(["closed", "delivered", "notFound"]);
+
 export interface WithdrawTagProps {
   proposalId: string;
   tagId: string;
@@ -42,6 +44,8 @@ export function WithdrawTag({ proposalId, tagId, orgName, returnFocusTo, withdra
     setBusy(false);
     if (!outcome.ok) {
       setProblem(outcome.problem);
+      // The pitch changed elsewhere (closed, delivered or gone): the list behind the dialog catches up.
+      if (STALE.has(outcome.problem)) router.refresh();
       return;
     }
     dialog.current?.close();
@@ -54,7 +58,10 @@ export function WithdrawTag({ proposalId, tagId, orgName, returnFocusTo, withdra
       <Button
         variant="secondary"
         className="self-start"
-        onClick={() => dialog.current?.showModal()}
+        onClick={() => {
+          setProblem(null);
+          dialog.current?.showModal();
+        }}
         aria-haspopup="dialog"
         aria-label={t("openLabel", { name: orgName })}
       >
@@ -64,7 +71,10 @@ export function WithdrawTag({ proposalId, tagId, orgName, returnFocusTo, withdra
         ref={dialog}
         aria-labelledby={titleId}
         aria-describedby={bodyId}
-        onClose={() => setProblem(null)}
+        // While the withdrawal is under way the dialog stays open: Escape and "Keep it" wait for the answer.
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+        }}
         className={cn(
           "m-auto w-[calc(100%-2rem)] max-w-md rounded-panel border border-line bg-paper p-6 text-ink",
           "backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]",
@@ -78,7 +88,7 @@ export function WithdrawTag({ proposalId, tagId, orgName, returnFocusTo, withdra
         </p>
         {problem ? <Alert className="mt-4">{t(`problem.${problem}`)}</Alert> : null}
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={() => dialog.current?.close()} autoFocus>
+          <Button variant="secondary" busy={busy} onClick={() => dialog.current?.close()} autoFocus>
             {t("cancel")}
           </Button>
           {/* Styled as the dialog's main button but not the screen's primary action (data-primary stays on the page's). */}

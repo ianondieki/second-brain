@@ -191,6 +191,27 @@ describe("the picker", () => {
 });
 
 describe("what the picker sends", () => {
+  it("never sends a crafted choice the page does not show by name (MAJOR 1)", async () => {
+    // /dev/ideas/<id>/pitch?q=Safcell&sel=<an E2 organisation the developer never saw>: the server could not show it.
+    const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
+    const { container } = renderForm({ initialSelected: [ELSEWHERE], pitchImpl });
+    expect(screen.getByText("0 of 3 chosen")).toBeTruthy();
+    expect(container.querySelector(`input[value="${ELSEWHERE}"]`)).toBeNull();
+    fireEvent.click(box("Safcell"));
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledWith(PROPOSAL, [SAFCELL]);
+  });
+
+  it("compares ids in one case: an upper-case card id still matches its choice, and goes out in lower case", async () => {
+    const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
+    const upper = [{ ...GROUPS[0], rows: [row(SAFCELL.toUpperCase(), "Safcell", null)] }];
+    renderForm({ groups: upper, initialSelected: [SAFCELL], pitchImpl });
+    expect(box("Safcell").checked).toBe(true);
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledWith(PROPOSAL, [SAFCELL]);
+  });
+
+
   it("never sends an organisation the page shows as unavailable, even when the URL chose it", async () => {
     const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
     renderForm({ initialSelected: [OWN, SAFCELL], pitchImpl });
@@ -234,6 +255,43 @@ describe("what the picker sends", () => {
   });
 });
 
+describe("the picker's wording and state", () => {
+  it("words the lead and the limit by what stops more choices: the plan, or one pitch's batch", () => {
+    renderForm({ cap: { used: 3, limit: 5, plan: "dev_free" } });
+    expect(screen.getByText(/^Choose companies, up to 2 for this pitch\. Fully verified companies get your idea now\./)).toBeTruthy();
+    cleanup();
+    const many = Array.from({ length: 20 }, (_, i) => row(`0199a000-0000-7000-8000-${String(i + 100).padStart(12, "0")}`, `Org ${i}`, null));
+    renderForm({ cap: { used: 0, limit: null, plan: "dev_pro" }, groups: [{ key: "g", name: "G", rows: many }], initialSelected: many.map((r) => r.id) });
+    expect(screen.getByText(/^Choose companies, up to 20 for this pitch\./)).toBeTruthy();
+    expect(screen.getByText("That is the most one pitch can hold. Pitch these, then choose more.")).toBeTruthy();
+  });
+
+  it("keeps the search, niche, paging and Clear search still while a pitch is under way", async () => {
+    let settle: (value: PitchOutcome) => void = () => {};
+    const pitchImpl = vi.fn(() => new Promise<PitchOutcome>((resolve) => (settle = resolve)));
+    renderForm({ initialSelected: [SAFCELL], pitchImpl, narrowed: true, cursor: "c1", nextCursor: "c2" });
+    await clickPitch();
+    expect((screen.getByLabelText("Search by name, niche or county") as HTMLInputElement).matches(":disabled")).toBe(true);
+    expect((screen.getByRole("button", { name: "Next page" }) as HTMLButtonElement).matches(":disabled")).toBe(true);
+    const clear = screen.getByText("Clear search");
+    expect(clear.getAttribute("href")).toBeNull();
+    expect(clear.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => settle({ ok: false, problem: "failed", conflicts: [] }));
+    expect((screen.getByLabelText("Search by name, niche or county") as HTMLInputElement).matches(":disabled")).toBe(false);
+    expect(screen.getByRole("link", { name: "Clear search" })).toBeTruthy();
+  });
+
+  it("keeps the sticky bar to the summary and Pitch", async () => {
+    const pitchImpl = await pitchWith({ ok: false, problem: "failed", conflicts: [] });
+    renderForm({ cap: { used: 3, limit: 5, plan: "dev_free" }, initialSelected: [SAFCELL, TELMARK], pitchImpl });
+    await clickPitch();
+    const bar = document.querySelector("[data-action-bar]") as HTMLElement;
+    expect(bar.querySelector("[role=alert], [role=status], [data-max-reached]")).toBeNull();
+    expect(within(bar).getByText("2 of 2 chosen")).toBeTruthy();
+    expect(within(bar).getAllByRole("button")).toHaveLength(1);
+  });
+});
+
 describe("a refused pitch", () => {
   it("unticks the organisations of a 409 and puts the reason by each", async () => {
     const pitchImpl = await pitchWith({
@@ -263,6 +321,37 @@ describe("a refused pitch", () => {
     const alert = screen.getByRole("alert");
     expect(alert.closest("[data-action-bar]")).toBeNull();
     expect(document.activeElement).toBe(alert);
+  });
+
+  it("unticks the organisations a 404 says left the directory", async () => {
+    const pitchImpl = await pitchWith({ ok: false, problem: "orgsGone", conflicts: [], gone: [TELMARK] });
+    renderForm({ initialSelected: [SAFCELL, TELMARK], pitchImpl });
+    await clickPitch();
+    expect(box("Telmark").checked).toBe(false);
+    expect(box("Telmark").disabled).toBe(true);
+    expect(screen.getByText("Telmark is no longer listed, so it was unticked.")).toBeTruthy();
+    expect(box("Safcell").checked).toBe(true);
+  });
+
+  it("takes the plan's cap from a 402 and sends nothing more until the choices fit", async () => {
+    const pitchImpl = vi.fn(async (): Promise<PitchOutcome> => ({
+      ok: false,
+      problem: "planLimit",
+      conflicts: [],
+      limit: 5,
+      used: 4,
+    }));
+    renderForm({ initialSelected: [SAFCELL, TELMARK], pitchImpl });
+    await clickPitch();
+    expect(screen.getByText("1 of 5 pitches left for this idea on your plan.")).toBeTruthy();
+    expect(screen.getByText("2 of 1 chosen")).toBeTruthy();
+    expect(box("Airwave").disabled).toBe(true);
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledTimes(1); // refused here, without asking again
+    fireEvent.click(box("Telmark"));
+    await clickPitch();
+    expect(pitchImpl).toHaveBeenCalledTimes(2);
+    expect(pitchImpl).toHaveBeenLastCalledWith(PROPOSAL, [SAFCELL]);
   });
 
   it.each([
@@ -386,11 +475,48 @@ describe("withdrawing a saved pitch", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "This pitch already reached the company, so it cannot be withdrawn here.",
     );
+    expect(refresh).toHaveBeenCalled(); // the list behind the dialog catches up
+    // Opened again, the dialog starts without the old reason.
+    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw the pitch to Telmark" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the list as it is after a failure it can retry", async () => {
+    const withdrawImpl = vi.fn(async () => ({ ok: false as const, problem: "network" as const }));
+    renderWithIntl(
+      <WithdrawTag proposalId={PROPOSAL} tagId="t1" orgName="Telmark" returnFocusTo="x" withdrawImpl={withdrawImpl} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw the pitch to Telmark" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    });
+    expect(screen.getByRole("alert").textContent).toBe("We could not reach the server. Check your connection, then try again.");
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it("stays open while the withdrawal is under way: Escape and Keep it wait", async () => {
+    let settle: (value: { ok: false; problem: "failed" }) => void = () => {};
+    const withdrawImpl = vi.fn(() => new Promise<{ ok: false; problem: "failed" }>((resolve) => (settle = resolve)));
+    renderWithIntl(
+      <WithdrawTag proposalId={PROPOSAL} tagId="t1" orgName="Telmark" returnFocusTo="x" withdrawImpl={withdrawImpl} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw the pitch to Telmark" }));
+    const dialog = screen.getByRole("dialog");
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+    });
+    const escape = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    expect(dialog.hasAttribute("open")).toBe(true);
+    await act(async () => settle({ ok: false, problem: "failed" }));
+    const later = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(later);
+    expect(later.defaultPrevented).toBe(false);
+  });
 });
-
-
 
 describe("the idea's pitches", () => {
   const TAGS: MyTags = {
