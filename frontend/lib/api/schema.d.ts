@@ -280,7 +280,8 @@ export interface paths {
          *     spends its state server-side, so a replay gets oauth_state.
          *     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
          *     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-         *     consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
+         *     consents_version_required, consent_session_only, too_many_attempts (10 callbacks a minute from one IP that would
+         *     reach the provider).
          *     Success: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.
          */
         get: operations["oauth_callback_api_auth_oauth__provider__callback_get"];
@@ -306,8 +307,8 @@ export interface paths {
          * @description Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
          *     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
          *     a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
-         *     15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts
-         *     after 10 starts a minute from one IP.
+         *     15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms and no purpose decided per
+         *     sign-in (422 consent_session_only). 429 too_many_attempts after 10 starts a minute from one IP.
          */
         post: operations["oauth_start_api_auth_oauth__provider__start_post"];
         delete?: never;
@@ -346,7 +347,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Signup */
+        /**
+         * Signup
+         * @description Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
+         *     invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
+         *     consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.
+         */
         post: operations["signup_api_auth_signup_post"];
         delete?: never;
         options?: never;

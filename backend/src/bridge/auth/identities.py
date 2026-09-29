@@ -131,6 +131,7 @@ async def ensure_fresh_proof(
 
 
 def _check_consents(settings: Settings, choices: OAuthSignup) -> None:
+    service.refuse_session_only(choices.consents)
     if choices.consents and choices.consents_version is None:
         raise service.AuthError("consents_version_required", 422)
     if choices.consents_version is not None and choices.consents_version != consents_version(settings):

@@ -47,6 +47,7 @@ from bridge.models.enums import (
     UserStatus,
 )
 from bridge.notifications.email import is_mailbox
+from bridge.profiles import consents as consent_rules
 from bridge.profiles.consents import consents_version, record_decisions, terms_version
 from bridge.profiles.models import DeveloperProfile
 from bridge.tenancy.models import Membership
@@ -160,6 +161,14 @@ def _slug_from(name: str) -> str:
     return f"{base}-{secrets.token_hex(3)}"
 
 
+def refuse_session_only(decisions: Mapping[ConsentPurpose, bool]) -> None:
+    """Signup records lasting decisions only. A purpose decided for one sign-in (``tier2_llm_assistant``,
+    REQ-PROP-05) is refused whatever its value, as the settings API refuses it, so signup never writes a row of it.
+    The email form and both steps of an OAuth signup (start and callback) call this."""
+    if any(purpose in consent_rules.SESSION_ONLY for purpose in decisions):
+        raise AuthError("consent_session_only", 422)
+
+
 def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None:
     if not is_mailbox(email):
         # Only plain ASCII mailboxes can be emailed safely (no encoded words, quoted or Unicode local parts).
@@ -168,6 +177,7 @@ def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None
         raise AuthError("terms_not_accepted", 422)
     if req.side == "org" and req.org is None:
         raise AuthError("org_details_required", 422)
+    refuse_session_only(req.consents)
     if req.consents and req.consents_version is None:
         raise AuthError("consents_version_required", 422)
     if req.consents_version is not None and req.consents_version != consents_version(settings):

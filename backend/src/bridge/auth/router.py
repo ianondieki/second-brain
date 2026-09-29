@@ -58,6 +58,7 @@ from bridge.auth.schemas import (
 )
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.notifications.email import EmailProvider
+from bridge.profiles.router import SESSION_ONLY_MESSAGE
 from bridge.tenancy.service import my_memberships
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], responses=ERROR_RESPONSES)
@@ -71,6 +72,7 @@ MESSAGES = {
     "org_details_required": "Enter your organisation's name and type.",
     "consents_version_required": "Reload the page to see the current consent wording.",
     "consent_text_changed": "The consent wording has changed. Reload the page and choose again.",
+    "consent_session_only": SESSION_ONLY_MESSAGE,  # the settings API's words (REQ-PROP-05)
     "weak_password": "Use a password of at least 12 characters that is not your email address.",
     "invalid_credentials": "That email and password do not match an account.",
     "email_unverified": "Confirm your email first. We have sent you a new link.",
@@ -129,6 +131,9 @@ async def signup(
     settings: SettingsDep,
     email: EmailDep,
 ) -> AcceptedResponse:
+    """Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
+    invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
+    consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed."""
     try:
         outcome = await service.signup(db, settings, body, client_ip(request))
     except service.AuthError as exc:
@@ -396,8 +401,8 @@ async def oauth_start(
     """Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the
     short-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with
     a fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within
-    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts
-    after 10 starts a minute from one IP."""
+    15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms and no purpose decided per
+    sign-in (422 consent_session_only). 429 too_many_attempts after 10 starts a minute from one IP."""
     client = oauth.configured(settings, provider)
     if client is None:
         raise not_found()
@@ -443,7 +448,8 @@ async def oauth_callback(
     spends its state server-side, so a replay gets oauth_state.
     Error codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,
     oauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,
-    consents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).
+    consents_version_required, consent_session_only, too_many_attempts (10 callbacks a minute from one IP that would
+    reach the provider).
     Success: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER."""
     client = oauth.configured(settings, provider)
     if client is None:

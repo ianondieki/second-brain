@@ -284,6 +284,9 @@ async def test_signup_refusals_create_no_account_and_send_nothing(client: httpx.
         ({"side": "org"}, (422, "org_details_required")),
         ({"consents_version": "an older text"}, (409, "consent_text_changed")),
         ({"password": "eleven char"}, (422, "weak_password")),
+        # The writing assistant's opt-in lasts one sign-in (REQ-PROP-05): signup records no decision on it either way.
+        ({"consents": {"tier2_llm_assistant": True}}, (422, "consent_session_only")),
+        ({"consents": {"marketing": True, "tier2_llm_assistant": False}}, (422, "consent_session_only")),
     ]
     for change, expected in cases:
         body = {**valid, "email": email(), **change}

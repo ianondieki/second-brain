@@ -7616,7 +7616,7 @@
     },
     "/api/auth/oauth/{provider}/callback": {
       "get": {
-        "description": "The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is\nspent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another\nstate (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also\nspends its state server-side, so a replay gets oauth_state.\nError codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,\noauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,\nconsents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).\nSuccess: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.",
+        "description": "The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is\nspent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another\nstate (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also\nspends its state server-side, so a replay gets oauth_state.\nError codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,\noauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,\nconsents_version_required, consent_session_only, too_many_attempts (10 callbacks a minute from one IP that would\nreach the provider).\nSuccess: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.",
         "operationId": "oauth_callback_api_auth_oauth__provider__callback_get",
         "parameters": [
           {
@@ -7770,7 +7770,7 @@
     },
     "/api/auth/oauth/{provider}/start": {
       "post": {
-        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within\n15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts\nafter 10 starts a minute from one IP.",
+        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within\n15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms and no purpose decided per\nsign-in (422 consent_session_only). 429 too_many_attempts after 10 starts a minute from one IP.",
         "operationId": "oauth_start_api_auth_oauth__provider__start_post",
         "parameters": [
           {
@@ -7998,6 +7998,7 @@
     },
     "/api/auth/signup": {
       "post": {
+        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.",
         "operationId": "signup_api_auth_signup_post",
         "requestBody": {
           "content": {
