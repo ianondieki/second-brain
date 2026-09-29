@@ -8,7 +8,8 @@
   ``directory.niche_added`` with ids only.
 - ``GET /moderation/cases``: the moderation queue, unresolved cases first-in first-out (``?decided=true`` for the
   decided ones), each with a Tier-1 preview of its proposal or problem (staff admin or moderator; REQ-MOD-01).
-- ``POST /moderation/cases/{case_id}/decision``: approve or reject (``bridge.admin.moderation``); audited as
+- ``POST /moderation/cases/{case_id}/decision``: approve or reject the version reviewed (``subject_version_id``;
+  409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``; audited as
   ``moderation.case_decided``.
 """
 
@@ -153,4 +154,10 @@ async def moderation_queue(
 async def decide_case(
     case_id: UUID, body: moderation.DecisionIn, staff: StaffModerator, db: Db
 ) -> moderation.DecisionOut:
-    return await moderation.decide(db, staff_id=staff.live.user.id, case_id=case_id, decision=body.decision)
+    return await moderation.decide(
+        db,
+        staff_id=staff.live.user.id,
+        case_id=case_id,
+        decision=body.decision,
+        subject_version_id=body.subject_version_id,
+    )

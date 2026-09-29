@@ -16,6 +16,7 @@ from tests.integration.proposals.helpers import (
     Staff,
     cases_about,
     create,
+    decide,
     draft_body,
     publish,
     rows,
@@ -26,10 +27,12 @@ from tests.integration.proposals.helpers import (
 async def test_the_queue_is_staff_only(developers: Developers, moderators: Staff) -> None:
     developer = await developers()
     assert (await developer.get("/api/admin/moderation/cases")).status_code == 404
-    decision = await developer.post(f"/api/admin/moderation/cases/{uuid7()}/decision", json={"decision": "approve"})
+    body = {"decision": "approve", "subject_version_id": None}
+    decision = await developer.post(f"/api/admin/moderation/cases/{uuid7()}/decision", json=body)
     assert decision.status_code == 404
     support = await moderators(role="support")
     assert (await support.get("/api/admin/moderation/cases")).status_code == 403
+    assert (await support.post(f"/api/admin/moderation/cases/{uuid7()}/decision", json=body)).status_code == 403
     admin = await moderators(role="admin")
     assert (await admin.get("/api/admin/moderation/cases")).status_code == 200
 
@@ -47,7 +50,7 @@ async def test_a_problem_case_is_decided_once_and_audited(
     [case] = await cases_about(moderator, problem_id)
     url = f"/api/admin/moderation/cases/{case['id']}/decision"
     assert (await moderator.post(url, json={"decision": "maybe"})).status_code == 422
-    rejected = await moderator.post(url, json={"decision": "reject"})
+    rejected = await decide(moderator, case, "reject")
     assert rejected.status_code == 200, rejected.text
     assert rejected.json() == {"id": case["id"], "status": "rejected", "subject_state": "rejected"}
     sql = "SELECT status, moderation_state, moderator_id FROM problems WHERE id = :id"
@@ -60,7 +63,7 @@ async def test_a_problem_case_is_decided_once_and_audited(
     reader = await developers(level="d0")
     assert (await reader.get("/api/problems", params={"q": "Solar pumps stall"})).json()["items"] == []
 
-    again = await moderator.post(url, json={"decision": "approve"})
+    again = await decide(moderator, case, "approve")
     assert (again.status_code, again.json()["detail"]["code"]) == (409, "already_decided")
     assert await cases_about(moderator, problem_id) == []
     [decided] = await cases_about(moderator, problem_id, decided=True)
@@ -78,7 +81,8 @@ async def test_a_problem_case_is_decided_once_and_audited(
     )
     assert (event.kind, event.actor_user_id) == ("staff", user_of(moderator))
     assert event.payload == {"subject_type": "problem", "subject_id": problem_id, "decision": "reject"}
-    unknown = await moderator.post(f"/api/admin/moderation/cases/{uuid7()}/decision", json={"decision": "approve"})
+    unknown_body = {"decision": "approve", "subject_version_id": None}
+    unknown = await moderator.post(f"/api/admin/moderation/cases/{uuid7()}/decision", json=unknown_body)
     assert unknown.status_code == 404
 
 
@@ -88,7 +92,7 @@ async def test_a_moderator_never_decides_on_their_own_content(
     moderator = await moderators()
     case_id = uuid7()
     async with owner_engine.begin() as conn:
-        proposal_id, _ = await w.add_proposal(
+        proposal_id, version_id = await w.add_proposal(
             conn, user_of(moderator), proposal_world.niche_id, proposal_world.problem_id, moderation_state="held"
         )
         await conn.execute(
@@ -98,7 +102,8 @@ async def test_a_moderator_never_decides_on_their_own_content(
             ),
             {"id": case_id, "subject": proposal_id},
         )
-    refused = await moderator.post(f"/api/admin/moderation/cases/{case_id}/decision", json={"decision": "approve"})
+    own = {"id": str(case_id), "subject_version_id": str(version_id)}
+    refused = await decide(moderator, own, "approve")
     assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "own_content")
     [proposal] = await rows(owner_engine, "SELECT moderation_state FROM proposals WHERE id = :p", p=proposal_id)
     assert proposal.moderation_state == "held"

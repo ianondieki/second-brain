@@ -1197,6 +1197,11 @@ export interface components {
             subject_state: components["schemas"]["ModerationState"] | null;
             /** Subject Type */
             subject_type: string;
+            /**
+             * Subject Version Id
+             * @description The proposal version the preview shows; null for problems
+             */
+            subject_version_id: string | null;
         };
         /**
          * CasePreview
@@ -1327,6 +1332,11 @@ export interface components {
              * @enum {string}
              */
             decision: "approve" | "reject";
+            /**
+             * Subject Version Id
+             * @description The case's subject_version_id as reviewed (required)
+             */
+            subject_version_id: string | null;
         };
         /** DecisionOut */
         DecisionOut: {

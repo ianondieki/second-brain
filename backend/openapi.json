@@ -353,6 +353,19 @@
           "subject_type": {
             "title": "Subject Type",
             "type": "string"
+          },
+          "subject_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The proposal version the preview shows; null for problems",
+            "title": "Subject Version Id"
           }
         },
         "required": [
@@ -364,6 +377,7 @@
           "status",
           "created_at",
           "subject_state",
+          "subject_version_id",
           "preview"
         ],
         "title": "CaseOut",
@@ -783,10 +797,24 @@
             ],
             "title": "Decision",
             "type": "string"
+          },
+          "subject_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case's subject_version_id as reviewed (required)",
+            "title": "Subject Version Id"
           }
         },
         "required": [
-          "decision"
+          "decision",
+          "subject_version_id"
         ],
         "title": "DecisionIn",
         "type": "object"

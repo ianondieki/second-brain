@@ -20,6 +20,7 @@ from tests.integration.proposals.helpers import (
     ProposalWorld,
     Staff,
     create,
+    decide,
     draft_body,
     publish,
     rows,
@@ -64,9 +65,7 @@ async def test_tier2_never_reaches_tier1_responses_logs_or_audit(
         await run_pipeline(UUID(published.json()["version_id"]), user_of(owner), sessions, wrapper, store, signer, tsa)
         queue = await moderator.get("/api/admin/moderation/cases")
         [case] = [c for c in queue.json()["items"] if c["subject_id"] == pid]
-        approved = await moderator.post(
-            f"/api/admin/moderation/cases/{case['id']}/decision", json={"decision": "approve"}
-        )
+        approved = await decide(moderator, case, "approve")
         tier1 = {
             "publish": published.text,
             "teaser": (await reader.get(f"/api/proposals/{pid}")).text,
