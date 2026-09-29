@@ -124,7 +124,7 @@ test.describe("a signed-in developer", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.locator("ol [aria-current='step']")).toContainText("Review and publish");
     await expect(page.locator("[data-primary]")).toHaveText("Publish");
-    await expect(page.getByText("1 file")).toBeVisible();
+    await expect(page.getByText("Files: 1")).toBeVisible();
     await checkScreen(page);
 
     // The three statements come from the API and must all be confirmed.
