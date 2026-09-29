@@ -155,7 +155,11 @@ async def test_publishing_registers_the_version_end_to_end(
     assert document["tier1"]["problem_ids"] == [str(built.problem_id)]
     assert len(document["attestations"]) == 1
     assert document["cert_id"] == built.cert_id
-    assert "dev-handle" not in manifest.decode()
+    handle = (
+        await fetch(owner_engine, "SELECT handle FROM developer_profiles WHERE user_id = :u", u=built.owner_id)
+    ).handle
+    assert version.owner_handle == handle
+    assert handle not in manifest.decode()
 
     # The signature verifies with the published key; the .tsr verifies with openssl.
     assert record.key_id == signer.key_id

@@ -87,9 +87,8 @@ async def registered_version(
         await _exec(
             conn,
             "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, county_code, maturity, ask,"
-            " problem_statement, impact_claims, summary, owner_handle) VALUES (:id, :p, :no, 'Cold-chain alerts', :n,"
-            " NULL, 'prototype', 'pilot', 'Milk spoils before chilling.', NULL, 'SMS when a cooler warms.',"
-            " 'dev-handle')",
+            " problem_statement, impact_claims, summary) VALUES (:id, :p, :no, 'Cold-chain alerts', :n, NULL,"
+            " 'prototype', 'pilot', 'Milk spoils before chilling.', NULL, 'SMS when a cooler warms.')",
             id=version_id,
             p=proposal_id,
             no=version_no,
@@ -143,11 +142,16 @@ async def registered_version(
             sha=hashlib.sha256(b"attestation text v1").digest(),
         )
         if register:
+            # A draft has no owner_handle (schema v2 refuses one on INSERT); a registered version carries the owner's
+            # developer handle. Schema v2 sets it at registration whatever is sent; the handle is sent for schema
+            # versions that only check it is there.
             await _exec(
                 conn,
-                "UPDATE proposal_versions SET status = 'registered', cert_id = :cert WHERE id = :id",
+                "UPDATE proposal_versions SET status = 'registered', cert_id = :cert, owner_handle ="
+                " (SELECT handle FROM developer_profiles WHERE user_id = :owner) WHERE id = :id",
                 id=version_id,
                 cert=cert_id,
+                owner=owner_id,
             )
             await _exec(
                 conn,
