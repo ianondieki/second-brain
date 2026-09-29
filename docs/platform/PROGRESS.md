@@ -236,126 +236,64 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
 
-### Handoff (resume from here; updated 2026-09-28 at the end of the cloud session)
+### Handoff (resume from here; updated 2026-09-29 at the end of the laptop session)
 
-**Laptop session 2026-09-28 (in progress).** Two network outages killed running agents mid-task (five, then four); all were
-resumed from their pushed state. Wip `6481de6` (schema v2) reviewed and verified: ruff, format, mypy,
-`openapi --check` clean, 901 passed on a long-lived Postgres (the drift test runs `alembic check`). Round-3 items 3–8
-done by db-migrations (`bf1bf29`..`0fd9159`, 905 passed; no call site on the other branches breaks); round 3 on `0fd9159`: reviewer
-CHANGES_REQUIRED (MAJOR: no negative test that only an upheld dispute transfers; 4 MINORs) and security-reviewer
-CHANGES_REQUIRED (MAJOR: a registered version carries a caller-chosen `owner_handle`; MAJOR: `document_views` rows need
-no grant and evidence timestamps are caller-set; 11 MINORs). Round-4 fixes done by db-migrations (`c555a9f`..`593dc2f`, 930
-passed; orchestrator decision applied: an upheld dispute leaves the new claimant the only owner/admin; T2.4 follow-ups
-F1–F3 done, F4 skipped and recorded as **D-33**). Item G (llm_calls batch reservations for T2.2) done
-(`6262483`, `abc4263`). Round 4 on `abc4263`: reviewer CHANGES_REQUIRED (every round-3 fix
-proven by mutation; new MAJOR: the transfer runs only when the claim is labelled `disputed`, a label the claimant can
-set, and a competing E1 claim goes to `pending_review`, so staff approval leaves two owner groups; MINORs: batch
-settlements not tied to the reservation's tenant, pre-removed owners keep owner/admin, the view's NDA tie untested).
-security-reviewer round 4 **PASS** (every round-3 finding re-probed as fixed; MINORs: the same claim path
-lets an ousted claimant rejoin through a routine approval; batch items are not scoped to their tenant; anchors have no
-lower time bound). Round 5 done by db-migrations (`eff9955`..`f55cd81`, 940 passed; orchestrator decision applied:
-whether a claim is a dispute is decided in SQL, not by the claimant-settable label; batch items tenant-scoped;
-anchor lower time bound; item H `app_llm_batch_owned` for T2.2; two deviations accepted: the batch guard compares
-settlements with reservations only, and platform batch rows need an unbound session). Round 5: reviewer CHANGES_REQUIRED (every
-round-4 finding closed and mutation-proven; new MAJOR: signatories appointed under the ousted control keep
-`{signatory}` after a transfer and can rejoin as owners through the E1 shortcut; MINORs: other open claims keep stale
-labels after an approval, the disputed-claim OTP reissue path is untested, two `app_claim_competes` branches untested).
-security-reviewer round 5 **PASS** (MINORs: stale labels in both directions; a non-dispute approval makes an
-admin or signatory an owner who can strip the real owners; one foreign row makes a batch nobody's; a departed member's
-reservation can never settle). db-migrations is on round 6 (orchestrator decisions: transfers also strip `signatory`;
-staff approve only when the stored label matches the SQL decision, otherwise the label is corrected and staff decide
-again; a non-dispute approval never adds `owner` while the organisation has an active owner; a batch belongs to the
-tenant of its first reservation; settlements go through a definer `app_llm_settle_batch_item`, which T2.2 then adopts). Merge note for T2.4: its `_unanchored` trial insert (epoch `tsa_time`) now fails the anchor lower
-bound; switch to `app_unanchored_chain_heads()` when merging. Two items went to the human as **D-32**.
-The wip commit `6481de6` stays in history (merge commits, no rewrite): recorded with the oversized-commit deviation. T2.2 SQL ledger done by impl-ai (`9b643c7`..`9884a17`: `SqlLedger`, SQL caps, wiring as default; the store clamps to the
-round-4 CHECKs; 1186 passed); first full review: CHANGES_REQUIRED (MAJOR: the membership branch of
-`check_subject` is untested; MAJOR: `batch_submit` reserves no spend, so batches pass the caps until polled; MINORs:
-`batch_poll` not idempotent, the per-session consent does not check the session is live, a user-bound call with no
-subject skips the plan cap, `httpx2` undeclared, T4.3 deferral (now in PLAN), the wip commit and oversized commits as
-deviations). Fix round (`d0e9dc4`..`0c0ac6d`, 1191 passed): M1, m4 (the per-session
-consent now needs the owner's live login session: new `bridge.auth.sessions.is_live`, so T2.2 also needs
-security-reviewer), m5, m6 fixed; m3 half done (missing batch items reported). M2 (batch reservations) and settle-once
-need `llm_calls.batch_id`/`custom_id`, a `batch_reserved` status and a spend rule: done as schema item G; impl-ai
-merged schema `abc4263` into T2.2 (`73cc085`) and finished M2 and settle-once (`47e801a`..`c3cb248`; 1241 passed, 1 test
-waiting for schema round 5's tenant scoping: `test_another_tenant_cannot_settle_or_cancel_an_items_reservation`).
-Decision to confirm in review: an item missing from the provider's results now stays reserved (errs toward stopping
-spend). Batch ownership check `app_llm_batch_owned` went to db-migrations as item H. Next for T2.2: merge round 5 in,
-then reviewer round 2 and security-reviewer (`bridge.auth.sessions.is_live`). Carry to T2.9 and Phase 4 as the card notes
-say (settings API still offers `tier2_llm_assistant`; consent wording; audit on grant; org jobs must bind a member user). Follow-ups reviewer round 2: CHANGES_REQUIRED (MAJOR: after an ambiguous confirm failure "Cancel
-setup" can tell a user whose two-step is already on to delete their only factor; MINOR: a wrong comment about `/api`
-headers in `security-headers.test.ts`). Fixed in `2721771`..`bfaf69b` (Cancel asks GET /api/auth/me first; the MINOR's
-premise was disputed with the Next source and pinned by an E2E test; D-28 figures updated: `/settings/security` 148,441
-bytes of bodies, 152,118 with headers; 174 Vitest). Round 3: reviewer **PASS** (the MINOR dispute went the implementer's way;
-4 MINORs: no test of the 10 s status-check timeout, the Cancel/confirm race untracked, no recovery-code path untracked,
-`next.config.test.ts` needs a longer timeout) and ux-reviewer CHANGES_REQUIRED (MAJOR: the status-unknown notice renders
-off-screen with no focus move; MINORs: reload copy, focus after turn-off and after cancel, no next step for required
-roles). Fixed in `48d7a03`..`a05cc54` (notices take focus via `reveal.ts`; timeout
-test; follow-ups 7 and 8 on the REQ-AUTH-01 card: `DELETE /api/auth/totp/enrol` under `lock_user`, a step-up "new
-recovery codes" route; 180 Vitest; `/settings/security` 148,518 bytes of bodies). ux-reviewer round 4 **PASS** (MINOR carried to T2.11:
-an error notice with `role="alert"` that is then focused may be read twice; add an `announce={false}` option to `Alert`).
-Reviewer round 4 **PASS** (doc MINORs fixed in `1317915`; carried to T2.11: after a
-`current_password_required` answer focus does not reach the new password field, `SecuritySettings.tsx:135`). Integration
-merged in (`b1d1c5c`); CI run 36477150562 green; **merged** into the integration branch (`228e1b6`).
-Follow-ups from this fix: a step-up-protected route to regenerate recovery codes (mandatory-MFA roles cannot get codes
-after a lost confirm answer), and `DELETE /api/auth/totp/enrol` under `lock_user` so Cancel cannot race a committing
-confirm. T2.6a reviewer round 2: **PASS** (4 MINORs: two bad-input 500s in the directory cursor and `q`, fixed in `a690ebe` and `09ae48e`, 1038 passed; E2 badge copy recorded as **D-31**; commit `a0734e0` at 483 lines recorded as a size deviation). Wip `09b4a2e`
-(T2.4) reviewed and verified (1080 passed, `openapi --check` clean). Wip `c509ea6` (T2.2, per-session
-`tier2_llm_assistant` consent) reviewed and verified at `85f444f` (ruff, format, mypy, `openapi --check` clean; 1157
-passed). T2.4 fix round done by impl-backend (`8976166`..`f8bbcb6`, 19 commits; plus an ESS issuerSerial bug and an
-anchor-outage stop; 1124 passed; `bridge/provenance` 99%); security-reviewer round 2 **PASS** (MINORs, to fix
-before merge: store anchors per savepoint and use one clock-skew bound with the schema's `chain_anchors_guard`; a
-Procrastinate lock on the hourly anchor task; a THREAT_MODEL row for rogue/MITM/replayed TSA tokens; `_key_path` must
-not print owner-chosen Tier-2 key names; the test builder's `owner_handle` breaks under schema round 4; the
-verify-offline runbook's POST needs the CSRF header). Reviewer round 2 **PASS** (MINORs: `test_the_nightly_task_closes_the_day_through_the_runtime`
-uses a fixed epoch that closes a future day and fails under schema round 4's `transparency_roots_guard`; the runbook's
-pre-release check should probe with the worker's own verifier, not only `openssl ts -verify`). Done in `21fdd54`..`9a414c0` (1140
-passed; `bridge/provenance` ~99%; verified against the round-4 schema in a scratch copy: 196 provenance/jobs tests pass).
-Next: merge schema v2 in once it is merged, switch to `app_unanchored_chain_heads()` and write `snapshot_at`, quick
-reviewer re-check (fail-first evidence for the S1 batch/budget tests was uneven), CI, merge. Its four
-schema follow-ups (chain-head time, `transparency_roots.snapshot_at`, a `content_hash` index, the `/verify` opt-in
-column) went to db-migrations with round 4. The legacy `CheckTests` fail in worktrees without the untracked
-`tools/cloudflared.exe` (D-13); they pass in the main checkout.
-OAuth MINOR follow-ups done on `feat/REQ-AUTH-02-followups` (`c89ced0`..`77892bc`; 765 passed; `bridge/auth` 96%; fixed a
-real bug: a session signed out or an account suspended during the provider call still linked or signed in).
-`TRUSTED_PROXIES` warning left for Phase 8. The 12 h link/unlink residual is **D-34**. security-reviewer **PASS** (MINORs: a forged
-callback still clears the victim's live flow cookie; the forged-callback test never sends a live cookie;
-`reload_session` should assert nothing is pending; residual text for `TRUSTED_PROXIES`). Reviewer **PASS** (MINORs: per-IP re-auth
-tested only on the password route; "touch no database" wording; `c89ced0`..`daa31ac` each fail the OpenAPI drift check
-because the regeneration landed in `77892bc` — recorded as a deviation, history not rewritten). MINOR round done (`f040615`..`9e392fd`: a
-forged callback keeps the live flow cookie; `reload_session` refuses pending changes; live-cookie and four-route
-per-IP tests; 231 passed, auth 96%; 7 mutants killed; orchestrator read the cookie change). Integration merged in
-(`a24dd47`); CI run 36538966699 green; **merged** into the integration branch.
-REQ-AUTH-01 follow-ups 7 and 8 (backend: `DELETE /api/auth/totp/enrol` under `lock_user`; step-up "new recovery
-codes" route) started on `feat/REQ-AUTH-01-followups-7-8` (impl-backend, worktree `sb-wt/REQ-AUTH-01-f78`); the frontend
-halves follow. Run `npm ci` again in `sb-wt/REQ-AUTH-02/frontend` (it timed out half-installed).
-New follow-up: other free-text inputs (query strings, JSON bodies) likely answer 500 on U+0000 or a lone surrogate, as the
-directory did; add one app-wide guard (a request validator or a psycopg `DataError` handler answering 400) with tests. D-30 (E2 dispute) recorded. Laptop test note: the testcontainers
-reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`), so every integration test errors;
-set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container instead (`reviewer-repo01-pg` on
-55432, password `review`; `bridge-testdb-1`/`-2` on 55433/55434, password `postgres`). Stop stale `next start`
-servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`). A leftover `sb-wt/REQ-AUTH-01-followups/backend/.venv` fragment
-(git no longer lists the worktree) could not be deleted; remove it by hand after a reboot.
+The laptop session (2026-09-28/29) ended with a clean hand-off to a cloud session: every branch is pushed and clean,
+no sub-agent is running, and no review was running at the stop (so none was discarded). The dev containers were
+stopped, not deleted.
 
-Integration branch `claude/eloquent-hypatia-aa3577`: only T2.12's backend is merged (`da0a98d`). Every other branch below
-is pushed, clean, and unmerged. The order of merges matters: schema v2 first, then the branches that contain it.
+**Integration branch** `claude/eloquent-hypatia-aa3577`: T2.12 backend (`da0a98d`), the Phase 1 follow-ups
+(`228e1b6`) and the OAuth MINOR follow-ups (`c2216b2`) are merged. **Merge order:** schema v2 first; then T2.6a, D1,
+T2.4 and T2.2, each after merging the final schema v2 into it (they all carry an older copy), running its suite and a
+CI dispatch (`gh workflow run pr.yml --ref <branch>`).
 
 | Branch | Last commit | Status | Exact next step |
 |---|---|---|---|
-| `feat/REQ-REPO-01-schema-v2` (T2.1) | `6481de6` | WIP | Round 3 is part done. Done: the dispute transfer, `app_staff_remove_membership` (`816dc5b`), `app_mark_claim_dns_verified` plus the write-once DNS columns (`6481de6`, wip, unverified; 901 passed; `alembic check` and `openapi --check` not re-run). Remaining (db-migrations): (3) bind `app_subject_digest` to `app_user_id()` unless the caller is staff or `provenance_worker`; (4) `u.email_verified_at IS NOT NULL` in `app_tier2_granted` plus a `TIER2_CASES` case; (5) `moderation_cases` INSERT only `source='report'`, with `app_open_moderation_case` for system sources; (6) `provenance_records` only for registered versions; (7) test the E1-shortcut domain equality; (8) THREAT_MODEL rows, card notes, docstring. Then re-run **reviewer + security-reviewer** (round 3). The E2-dispute policy question is recorded as **D-30** (for the human; default (c) keeps the path closed) |
-| `feat/REQ-PROV-01-provenance` (T2.4) | `09b4a2e` | WIP | Fix round is part done. Done: schema merged and adapted (`app_subject_digest`, worker-only hash fill), the signing key kept out of the API container, and item 1 in code and tests (pinned `TSA_CA_BUNDLE`/`TSA_FALLBACK_CA_BUNDLE`, chain valid at genTime, sole critical EKU, ESS v1/v2, ±15 min). 1080 passed at `09b4a2e` (wip, unverified; `openapi --check`, coverage and copy-lint not run). Remaining: the intermediate-CA policy test gap; verify-offline doc (ops supply the DigiCert/FreeTSA bundles before staging); items 2–8 and 10–12 of the round (no Tier-2 values in canonicalisation errors; audit events on `manifest.json` and certificate reads; overall TSA deadline; oldest-first anchors; verify_chain retry; D2-gate and grantee owner-filter tests; audit only when this call stored the token; buckets created in migrate; retired key on roots plus snapshot time; card notes incl. the REQ-SEC-01 owner exemption and the schema follow-ups list). Then re-run **reviewer + security-reviewer** |
-| `feat/REQ-LLM-01-llm-layer` (T2.2) | `85f444f` | WIP | Clean stop after merging schema v2 (1157 passed). Next (impl-ai): the SQL `llm_calls` ledger store, SQL budget reads (monthly per tenant, global daily via the revision's definer), integration tests (one row per call, blocked rows, tenant isolation, `inputs` staff-only, AC-SEC-6 against SQL), wire it as the default. Then **reviewer** (never reviewed as a whole). Carry to T2.9: the settings API still offers `tier2_llm_assistant`; consent wording; an audit event on grant |
-| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `396b2e3` | in review | Final round done (`POST /api/admin/niches`, 7 MINORs, 1019 passed). Round-1 reviewer PASS. **Re-run the round-2 reviewer** (it was discarded unfinished). After schema v2 merges, merge it in again and merge this branch. T2.6b (claims) builds on it: use `app_mark_claim_dns_verified`, write `dns_token` at insert |
-| `feat/REQ-PROV-04-verification` (T2.10a, D1) | `41164de` | done (reviewer PASS round 2) | Merge after schema v2 is merged, re-merging the final schema first (it contains schema v2). Dispatch CI first. `test_concurrent_confirmations_of_two_numbers_verify_one` made deterministic (`41164de`: forced lock order, both orders, 5/5 runs, mutation-checked). Optional: the same lock-and-wait pattern for `test_concurrent_requests_from_one_account_send_one_code` and `..._for_one_number_from_several_accounts_respect_its_limit`. The kyc.purge job (D2) must call `app_mark_kyc_images_purged` with no user bound or as staff admin. D2 (KYC) waits for T2.4's object store |
-| `feat/REQ-AUTH-01-phase1-followups` | `b1d1c5c` | done (merged `228e1b6`) | reviewer PASS and ux-reviewer PASS (round 4); CI run 36477150562 green. Carried: follow-ups 7 (`DELETE /api/auth/totp/enrol` under `lock_user`) and 8 (step-up "new recovery codes" route) in the REQ-AUTH-01 card, backend work with security-reviewer; T2.11: `Alert` `announce={false}` when focused, focus after `current_password_required` (`SecuritySettings.tsx:135`). D-28 figures current on the integration branch |
-| `feat/REQ-AUTH-02-oauth` (T2.12) | `7ae57b6` | done (merged `da0a98d`) | Buttons and the linked-accounts UI come in F4. MINOR follow-ups done and merged from `feat/REQ-AUTH-02-followups` (see the laptop-session notes); `TRUSTED_PROXIES` start-up check in Phase 8; D-34 open |
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `2ca0347` | WIP, round 6 unverified | Rounds 3–5 are done and reviewed (round 5: reviewer CHANGES_REQUIRED, security-reviewer PASS). `2ca0347` holds all round-6 code and tests in one **wip commit (unverified)**: the red run failed 14 tests as expected; the green run was killed at the stop. Round-6 items: (1) transfers also strip `signatory`; (2) stale labels: a `memberships` trigger (`app_relabel_open_claims`) relabels open claims on roster changes and after approvals, and `app_decide_claim` refuses when the label disagrees with `app_claim_competes`; (3) `app_seat_claimant`: a non-dispute approval never adds `owner` while an active owner exists, and an E1 approval of an E1 org keeps its domain unless the claimant is an owner; (4) `app_llm_batch_owned` judges the tenant of the earliest reservation; (5) `app_llm_settle_batch_item(...)` definer for settlements; (6)/(7) tests for the disputed OTP reissue and two `app_claim_competes` branches; (8) a non-competing E1 claim on an E2 org goes to `pending_review`. Next (db-migrations): run the full suite on `2ca0347` and fix; run the mutation proofs M13/M14b/M16/M17; follow up with clean commits; write the docs (card "Sixth review round", THREAT_MODEL rows, revision docstring); static checks; compatibility grep. The implementer's five questions need the orchestrator: Q1 item (2) deviates from the brief (writing the label and then raising would roll the label back) — recommended: accept; Q2 the E2 shortcut on an org with no active owner adds owner+admin — recommended: accept; Q3 apply "keep the domain unless owner" to E2 approvals by non-owners on another domain too — recommended: yes; Q4 put the stranded-reservation row under THREAT_MODEL §6 D (§4 is payments) — accept; Q5 let the database set reservation `created_at` so a backdated row cannot take a batch — recommended: yes. Then reviewer + security-reviewer round 6, CI, merge |
+| `feat/REQ-PROV-01-provenance` (T2.4) | `9a414c0` | done, waiting for schema v2 | reviewer PASS and security-reviewer PASS (round 2); the eight pre-merge MINORs are fixed (`21fdd54`..`9a414c0`; 1140 passed; `bridge/provenance` ~99%). Next: merge the final schema v2; switch `transparency._unanchored` (trial inserts with an epoch `tsa_time`, now refused by the anchor lower bound) to `app_unanchored_chain_heads()`; write `transparency_roots.snapshot_at`; take the schema branch's versions of the shared T2.1 test files; full suite; quick reviewer re-check (fail-first evidence for the S1 batch/budget tests was uneven); CI; merge |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `c3cb248` | review fixes done, waiting for schema v2 | First full review CHANGES_REQUIRED; fixes `d0e9dc4`..`c3cb248` (M1; m4, the live login session via new `bridge.auth.sessions.is_live`; m5; m6; M2 batch reservations; m3 settle-once; 1241 passed). One test, `test_another_tenant_cannot_settle_or_cancel_an_items_reservation`, fails until schema round 5 is merged in (intended, not skipped). Next (impl-ai): merge the final schema v2; switch the settle path to `app_llm_settle_batch_item`; call `app_llm_batch_owned` in `batch_poll`; full suite; then reviewer round 2 and security-reviewer (`bridge.auth.sessions.is_live` is auth scope). Confirm in review: an item missing from the provider's results stays reserved. D-29 open. Carries to T2.9 and Phase 4 are in the card |
+| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `09ae48e` | done, waiting for schema v2 | reviewer PASS (round 2); its two bad-input MINORs fixed (`a690ebe`, `09ae48e`; 1038 passed). Next: merge the final schema v2, suite, CI, merge. E2 badge copy is D-31 |
+| `feat/REQ-PROV-04-verification` (T2.10a, D1) | `41164de` | done, waiting for schema v2 | reviewer PASS (round 2); the flaky concurrency test made deterministic (`41164de`). Next: merge the final schema v2, suite, CI, merge. Optional: the same lock-and-wait pattern for the two other D1 race tests. The future kyc.purge job must call `app_mark_kyc_images_purged` with no user bound or as staff admin |
+| `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, **BLOCKER** | Backend of follow-ups 7 (`DELETE /api/auth/totp/enrol` under `lock_user`, 15-minute pending secret) and 8 (`POST /api/auth/totp/recovery-codes`, step-up, audit, email). **Do not merge:** `2494cdf` seals `"{secret}|{start}"` into `totp_pending_enc` and `confirm_totp_enrolment` copies that blob into `totp_secret_enc`, so every TOTP code is refused after enrolment (`binascii.Error`; 5 existing auth tests fail; recovery codes still work). Next (impl-backend): in `confirm_totp_enrolment` store only the secret and clear `totp_pending_enc`; add a TOTP-code step-up after enrolment to `test_auth_totp_setup.py`; rerun the auth selection; lift `service.py` coverage from 91% to ≥95%; then security-reviewer (question: start time inside the envelope vs a column) and reviewer; then the frontend halves (impl-frontend: Cancel acts on DELETE's answer; a "Get new recovery codes" action) with ux-reviewer |
+| `feat/REQ-AUTH-02-followups` | `a24dd47` | done (merged `c2216b2`) | reviewer PASS, security-reviewer PASS, MINOR round, CI green. D-34 open; `TRUSTED_PROXIES` start-up check in Phase 8 |
+| `feat/REQ-AUTH-01-phase1-followups` | `b1d1c5c` | done (merged `228e1b6`) | T2.11 carries: `Alert` `announce={false}` when focused; focus after `current_password_required` (`SecuritySettings.tsx:135`) |
+| `feat/REQ-AUTH-02-oauth` (T2.12) | `7ae57b6` | done (merged `da0a98d`) | Buttons and the linked-accounts UI come in F4 |
 
-Reviews to re-run: follow-ups reviewer round 2; T2.6a reviewer round 2 (both discarded unfinished); schema v2
-reviewer + security round 3; T2.4 reviewer + security round 2; T2.2 reviewer (first full review). Not started in Phase 2:
-T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11. Decisions for the human: D-26, D-27, D-28 (JS budget),
-D-29, D-30 (the E2-dispute question), D-31 (E2 badge copy), D-32 (digest hardening), D-33 (`/verify` opt-in) and D-34 (fresh code to link or
-unlink). Reviewer notes carried: oversized laptop commits (schema v2, OAuth, D1, T2.4)
-are recorded as a deviation (history is not rewritten); Phase 1 THREAT_MODEL rows cite five test files that don't exist;
-`/api/openapi.json` lists admin routes in production (Phase 8).
+**Reviews to run next:** schema v2 reviewer + security-reviewer round 6 (after `2ca0347` is verified); T2.2 reviewer
+round 2 + security-reviewer (after the schema merge); T2.4 quick reviewer re-check (after the schema merge); auth
+follow-ups 7-8 security-reviewer + reviewer (after the blocker fix); ux-reviewer on the frontend halves. No review was
+running at the stop, so none was discarded.
+
+**Wip commits to check before building on them:** `2ca0347` (schema round 6, unverified). The earlier wip commits
+`6481de6`, `09b4a2e` and `c509ea6` were reviewed and verified in this session (they stay in history; recorded as a
+deviation with the oversized commits).
+
+**Decisions for the human (open in `DECISIONS-NEEDED.md`):** D-26 (OAuth test apps), D-27 (Swahili banned claims),
+D-28 (JS budget; `/settings/security` is 148,518 bytes of bodies, 152,195 with HTTP/1.1 headers), D-29 (refusal
+fallback models), D-30 (upholding a dispute against an E2 organisation), D-31 (E2 badge copy), D-32 (digest
+hardening), D-33 (`/verify` name-and-title opt-in), D-34 (fresh code to link or unlink). **D-35/D-36/D-37 (prototype
+track): not recorded.** No such entry exists on any branch and there is no prototype plan in the repository; nothing
+of the prototype track was started in this session, and no `make demo` target exists yet.
+
+**Not started in Phase 2:** T2.3, T2.5, T2.6b–d, T2.7, T2.8, T2.9, T2.10b (D2), F1–F4, T2.11, the phase exit.
+**Follow-ups (not blocking):** an app-wide guard for U+0000 and lone surrogates in free text (answer 400, not 500);
+report rate limits (T8.4); the ModelPool/TokenPacer port (T4.3); the `TRUSTED_PROXIES` start-up check (Phase 8).
+**Deviations recorded:** wip and oversized commits stay in history; `c89ced0`..`daa31ac` each fail the per-commit
+OpenAPI drift check (regenerated in `77892bc`); `1671c29`'s message describes a change that landed in `6d6ddee`.
+
+**Laptop resource rule.** The laptop has 8 GB RAM and Docker Desktop has 4 GB. `make demo` (when the prototype track
+adds it) must fit there. No heavy parallel work on the laptop: this session ran up to four implementers, two reviewers
+and four Postgres containers at once, which made a test-database `CREATE DATABASE` take 15–40 minutes, `npm ci` time
+out and `uv run` hang. On the laptop, run one implementer or reviewer at a time with one test Postgres.
+
+**Laptop notes.** The testcontainers reaper (ryuk) hangs at "Created" (`ReadTimeout` on `NpipeHTTPConnectionPool`),
+so set `TEST_DATABASE_ADMIN_URL` to a long-lived `pgvector/pgvector:pg16` container: `reviewer-repo01-pg` (port
+55432, password `review`) and `bridge-testdb-1/-2/-3` (ports 55433/55434/55435, password `postgres`) exist and are
+stopped (`docker start <name>`). If `uv run` hangs, use `backend/.venv/Scripts/python.exe -m ...`. Stop stale
+`next start` servers before `npm ci` (they lock `next-swc.win32-x64-msvc.node`). `sb-wt/REQ-AUTH-02/frontend/node_modules`
+is half-installed (run `npm ci` again). A leftover `sb-wt/REQ-AUTH-01-followups/backend/.venv` fragment (no longer a
+git worktree) could not be deleted; remove it by hand after a reboot. The legacy `CheckTests` fail in worktrees
+without the untracked `tools/cloudflared.exe` (D-13).
 
 Environment. Windows laptop: nothing new is needed beyond `uv sync` and `npm ci` (dependencies added on branches:
 rfc8785, asn1crypto, reportlab, boto3). Keep `UV_NATIVE_TLS=1` and system Chrome. Integration tests start a
@@ -384,16 +322,17 @@ Checklist (updated after every task; commit and push after each):
 |---|---|---|
 | Phase 2 plan: task cards, this checklist, D-26 (OAuth test apps) | done | |
 | Phase 1 follow-ups 1–4 (JS budget/headers, local E2E workers, username autocomplete, enrolment noise) | done (merge `228e1b6`) | reviewer + ux-reviewer PASS round 4; CI green; item 5 ships with the first `/admin` route; follow-ups 7 and 8 open |
-| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | WIP (`feat/REQ-REPO-01-schema-v2` `6481de6`, review round 3 fixes part done) | db-migrations; security-reviewer |
-| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | WIP (`feat/REQ-LLM-01-llm-layer` `85f444f`; SQL ledger store left) | impl-ai; fakes and synthetic cassettes only |
+| REQ-AUTH-01 follow-ups 7–8 (Cancel via `DELETE /api/auth/totp/enrol`; new recovery codes) | WIP, BLOCKER (`feat/REQ-AUTH-01-followups-7-8` `97b9454`) | backend written; TOTP codes refused after enrolment, fix first; frontend halves todo |
+| T2.1 Schema v2 (REQ-REPO-01, REQ-PROV-01, REQ-TEN-01) | WIP (`feat/REQ-REPO-01-schema-v2` `2ca0347`, round 6 unverified) | db-migrations; security-reviewer; rounds 3–5 reviewed |
+| T2.2 LLM layer + embeddings (REQ-LLM-01, REQ-EMB-01) | review fixes done (`feat/REQ-LLM-01-llm-layer` `c3cb248`); waiting for schema v2 | impl-ai; reviewer round 2 + security-reviewer next |
 | Copy-lint `copy/banned_claims.txt` (REQ-PROV-02, AC-IP-4) | done (merge `23e8104`) | reviewer PASS after 3 rounds (mutation-checked); pr.yml hygiene step + `make check-copy`; D-27 (Swahili claim copy) opened |
 | Directory sources research `backend/seed/ke_provisional.yaml` (REQ-DIR-02) | done (branch `feat/REQ-DIR-02-provisional-seed`, merges with T2.6a) | 85 E0 rows from CA, CBK, SASRA, CUE, TVETA, government and PBORA registers; no contacts; basic education skipped (no official list) |
-| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | WIP (`feat/REQ-PROV-01-provenance` `09b4a2e`, review fixes part done) | security-reviewer |
-| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | in review (`feat/REQ-DIR-02-provisional-seed` `396b2e3`) | |
+| T2.4 Provenance: manifest, signing, TSA, certificate, `/verify`, keys, anchors (REQ-PROV-01/02, REQ-AUD-01) | done, waiting for schema v2 (`feat/REQ-PROV-01-provenance` `9a414c0`) | reviewer PASS + security-reviewer PASS round 2; pre-merge MINORs fixed |
+| T2.6a Directory browse + seed loader (REQ-DIR-01/02) | done, waiting for schema v2 (`feat/REQ-DIR-02-provisional-seed` `09ae48e`) | reviewer PASS round 2 |
 | T2.6b Claims E1/E2, admin claim queue, MET acceptance (REQ-DIR-03, REQ-ADM-01) | todo | security-reviewer |
 | T2.3 Proposals: editor API, sanitiser, holds, moderation queue, attachments (REQ-PROP-01/02, REQ-MOD-01, REQ-BIL-02) | todo | |
-| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | D1 reviewed PASS (`feat/REQ-PROV-04-verification` `a4a1c4d`); D2 and REQ-PROV-05 todo | |
-| T2.12 GitHub + Google OAuth (REQ-AUTH-02) | backend done (merge `da0a98d`); UI in F4 | reviewer PASS and security-reviewer PASS (round 2); CI green on `7ae57b6`; 756 passed, `bridge/auth` 96%; respx fakes only (D-26 open). MINOR follow-ups on `feat/REQ-AUTH-02-followups`: callback throttle after the state check, re-check the session after the provider call, spend-window test, per-IP re-auth throttle key, threat-model residual (12 h), `TRUSTED_PROXIES` start-up warning (Phase 8) |
+| T2.10 Developer verification D1/D2, attestations, delete retains evidence (REQ-PROV-04/05) | D1 done, waiting for schema v2 (`feat/REQ-PROV-04-verification` `41164de`); D2 and REQ-PROV-05 todo | |
+| T2.12 GitHub + Google OAuth (REQ-AUTH-02) | backend done (merge `da0a98d`); MINOR follow-ups merged (`c2216b2`); UI in F4 | D-26, D-34 open; `TRUSTED_PROXIES` check in Phase 8 |
 | T2.5 Tier-2 access: predicate, NDA, grants, unlocks, renders, access log, flag (REQ-REPO-01, REQ-PROV-03, REQ-BIL-03, REQ-SEC-01) | todo | security-reviewer |
 | T2.7 Pitch to company: tags, held tags, 409, cooldown, EM1, tag privacy (REQ-PROP-03, REQ-REPO-03, REQ-NOT-02, REQ-BIL-02) | todo | |
 | T2.6c Invitations + suppression, delisting (REQ-DIR-04) | todo | |
