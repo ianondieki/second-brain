@@ -85,6 +85,7 @@ from bridge.tenancy.service import membership_of
 
 C = sm.Command
 S = EngagementState
+UNKNOWN_CONTACT_ROLE: Final = "member"  # a contact whose role the developer cannot read (stage 0)
 ATTESTATION_VERSION: Final = "v1"  # the wording of the "already in progress internally" checkbox (frontend copy)
 CONTACT_ROLE_ORDER: Final = (
     OrgRole.SIGNATORY,
@@ -371,10 +372,25 @@ async def _nothing(step: Step) -> None:
 
 
 async def _accept_interest(step: Step) -> None:
-    contact_by = step.engagement.contact_by
-    step.named_deadline = contact_by
-    if contact_by is not None:
-        step.payload["contact_by"] = contact_by.isoformat()
+    """The contact the organisation named when it expressed interest, recorded like an approval's. The developer
+    cannot read the organisation's roster: the role is the one an earlier event recorded, else ``member`` (the
+    database holds the contact to be an active member)."""
+    engagement = step.engagement
+    if engagement.contact_user_id is None or engagement.contact_channel is None or engagement.contact_by is None:
+        raise sm.Conflict("contact_not_named", "The organisation has not named its contact person yet.")
+    role = await step.db.scalar(
+        select(EngagementEvent.payload["contact_role"].astext)
+        .where(EngagementEvent.engagement_id == engagement.id, EngagementEvent.payload.has_key("contact_role"))
+        .order_by(EngagementEvent.seq.desc())
+        .limit(1)
+    )
+    step.named_deadline = engagement.contact_by
+    step.payload.update(
+        contact_user_id=str(engagement.contact_user_id),
+        contact_role=role or UNKNOWN_CONTACT_ROLE,
+        contact_channel=engagement.contact_channel.value,
+        contact_by=engagement.contact_by.isoformat(),
+    )
 
 
 async def _decline(step: Step) -> None:

@@ -256,3 +256,15 @@ class _PartyWithUser:
     def __init__(self, party: service.Party) -> None:
         self.actor = party.actor
         self.user_id = ID
+
+
+async def test_accepting_an_interest_needs_the_named_contact() -> None:
+    @dataclass
+    class Unnamed:
+        id: UUID = ID
+        contact_user_id: UUID | None = None
+        contact_channel: object = None
+        contact_by: date | None = None
+
+    with pytest.raises(sm.Conflict, match="contact"):
+        await commands._accept_interest(step(sm.Command.ACCEPT_INTEREST, engagement=Unnamed()))
