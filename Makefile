@@ -6,9 +6,13 @@
 COMPOSE = docker compose --env-file infra/.env -f infra/docker-compose.dev.yml
 LEGACY_PY ?= python
 UV = uv
+# The local demo (infra/demo/demo.py, standard-library Python): the same commands on Windows, macOS and Linux.
+DEMO_PY ?= $(LEGACY_PY)
+DEMO = $(DEMO_PY) infra/demo/demo.py
 
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
-        check-legacy check-copy check-e2e test-integration e2e budget
+        check-legacy check-copy check-e2e test-integration e2e budget \
+        demo demo-down demo-reset demo-totp demo-logins demo-logs demo-stats demo-clock
 
 help:
 	@echo "dev             start the seeded local stack (Postgres+pgvector, Mailpit, S3 stand-in, api, worker, web)"
@@ -22,6 +26,11 @@ help:
 	@echo "check-e2e       Playwright smoke against the running stack (make dev first)"
 	@echo "budget          gzipped JS per route against a running production web app (make dev first; not in check)"
 	@echo "openapi         regenerate backend/openapi.json;  api-types  regenerate frontend/lib/api/schema.d.ts"
+	@echo "demo            the local demo: seeded stack without ClamAV, fits Docker Desktop's 4 GB (README: Run the demo)"
+	@echo "demo-down       stop the demo (its data is kept);  demo-reset  wipe the demo's data and start it again"
+	@echo "demo-totp       current TOTP codes of the demo logins (one: make demo-totp EMAIL=<address>)"
+	@echo "demo-logins     the demo logins;  demo-stats  memory per demo container;  demo-logs  follow its logs"
+	@echo "demo-clock      show the demo's dev/test clock, or move it: make demo-clock DAYS=3 (HOURS=5)"
 
 dev:
 	$(COMPOSE) up -d --build --wait
@@ -62,6 +71,32 @@ check-copy:
 
 check-e2e:
 	cd frontend && npm run e2e
+
+# The local demo (P9; REQ-FND-02): infra/docker-compose.demo.yml over the dev stack, as its own project (bridge-demo).
+# demo-reset is the only target that wipes the demo's volumes, and nothing depends on it.
+demo:
+	$(DEMO) up
+
+demo-down:
+	$(DEMO) down
+
+demo-reset:
+	$(DEMO) reset --yes
+
+demo-totp:
+	$(DEMO) totp $(EMAIL)
+
+demo-logins:
+	$(DEMO) logins
+
+demo-logs:
+	$(DEMO) logs
+
+demo-stats:
+	$(DEMO) stats
+
+demo-clock:
+	$(DEMO) clock --days $(or $(DAYS),0) --hours $(or $(HOURS),0)
 
 # docs/spec/07 item 5: at most 150,000 bytes of gzipped JS per route (frontend/scripts/js-budget.mjs). Measures the
 # default routes; BUDGET_BASE_URL and BUDGET_COOKIE (frontend/.env.example) come from the shell.
