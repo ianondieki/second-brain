@@ -16,12 +16,15 @@ from bridge.billing import plans
 from bridge.billing.models import Plan
 from bridge.config import BACKEND_DIR, Settings
 from bridge.directory.models import Niche, Region
+from bridge.engagements.models import DevTestClock
 from bridge.ids import uuid7
 from bridge.legal.models import LegalTemplate, NdaTemplate
 from bridge.seed.legal import load_legal_templates, seed_legal_templates
 
 REFERENCE_FILE = BACKEND_DIR / "seed" / "reference.yaml"
 SEED_TABLES = ("regions", "niches", "holidays", "plans", "legal_templates", "nda_templates")
+# Where the shared dev/test clock may be moved (revision 0003; the test-clock router runs only there too).
+TEST_CLOCK_ENVS = frozenset({"dev", "test", "staging"})
 
 
 def load_reference(path: Path = REFERENCE_FILE) -> dict[str, Any]:
@@ -151,6 +154,13 @@ async def seed_plans(conn: AsyncConnection, settings: Settings) -> None:
         )
 
 
+async def seed_test_clock(conn: AsyncConnection, settings: Settings) -> None:
+    """Enable the dev/test clock in dev, test and staging databases and disable it anywhere else (production): only
+    an enabled clock moves (``app_set_test_clock``) and shifts ``app_clock_now()``. The offset is kept, so running the
+    seed again does not reset a moved clock."""
+    await conn.execute(update(DevTestClock).values(enabled=settings.app_env in TEST_CLOCK_ENVS))
+
+
 async def counts(conn: AsyncConnection) -> dict[str, int]:
     models = {
         "regions": Region,
@@ -178,4 +188,5 @@ async def seed_all(
     await seed_holidays(conn, data["holidays"])
     await seed_plans(conn, settings)
     await seed_legal_templates(conn, legal or load_legal_templates())
+    await seed_test_clock(conn, settings)
     return await counts(conn)

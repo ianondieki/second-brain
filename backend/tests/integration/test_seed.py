@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
-from bridge.seed.reference import SEED_TABLES, seed_all
+from bridge.seed.reference import SEED_TABLES, seed_all, seed_test_clock
 
 DRAFT_HEADER = "DRAFT — NOT LEGAL ADVICE — MUST BE REVIEWED BY A KENYAN ADVOCATE BEFORE USE"
 # A seeded body is the header, a blank line and marker lines only: no legal wording (REQ-REPO-01 T2.1).
@@ -76,3 +76,22 @@ async def test_legal_templates_are_hashed_placeholders_only(owner_engine: AsyncE
         ("evaluation", "evaluation_nda", True),
         ("mutual", "mutual_nda", True),
     }
+
+
+async def test_the_seed_enables_the_test_clock_outside_production_only(owner_engine: AsyncEngine) -> None:
+    """Revision 0003: the dev/test clock moves only where the owner enabled it; the seed (the owner) enables it in dev,
+    test and staging and disables it in production, keeping its offset either way."""
+    enabled = text("SELECT enabled FROM test_clock")
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()  # rolled back: the session database keeps its clock as it was
+        try:
+            await seed_all(conn, get_settings())  # APP_ENV=test
+            assert (await conn.execute(enabled)).scalar_one() is True
+            await conn.execute(text("UPDATE test_clock SET clock_offset = interval '3 days'"))
+            for app_env, expected in (("production", False), ("staging", True), ("dev", True), ("production", False)):
+                await seed_test_clock(conn, get_settings().model_copy(update={"app_env": app_env}))
+                assert (await conn.execute(enabled)).scalar_one() is expected
+            offset = (await conn.execute(text("SELECT extract(day FROM clock_offset) FROM test_clock"))).scalar_one()
+            assert offset == 3
+        finally:
+            await transaction.rollback()
