@@ -25,9 +25,14 @@ const FORWARDED_FOR = /^[0-9A-Fa-f.:, ]{1,512}$/;
 
 /**
  * Headers for a server-side API call made for this request: the session cookie (when `session` and signed in) and
- * X-Forwarded-For as this server received it, the same hop the /api rewrite makes, so the API's per-address limits
- * (for example public /verify lookups) count the visitor, not the web server. The API trusts it only from
- * TRUSTED_PROXIES.
+ * X-Forwarded-For as this server received it, the same value the /api rewrite passes on, so the API's per-address
+ * limits (for example public /verify lookups) can count the visitor rather than the web server.
+ *
+ * The value is client-controlled until an edge proxy overwrites it: Next.js keeps a client-sent X-Forwarded-For and
+ * only fills it in when absent. Until the Phase 8 edge (Caddy) replaces the header, a visitor can choose the address
+ * the API sees; the dev stack therefore does not list the web hop in the API's TRUSTED_PROXIES, and the API ignores
+ * the header from untrusted peers (all web-originated calls then share one throttle key). The pattern below only
+ * stops header injection and junk, not spoofing.
  */
 export async function forwardHeaders({ session = true }: { session?: boolean } = {}): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
