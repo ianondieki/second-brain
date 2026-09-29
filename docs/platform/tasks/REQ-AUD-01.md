@@ -39,3 +39,9 @@ Hourly `provenance.anchor_chain_heads` job: an RFC 3161 token over each audit ch
   are listed on the REQ-PROV-01 card.
 - Tests run on their own database (`tests/integration/provenance/test_transparency.py`): the shared one holds chains
   other tests break on purpose.
+- Review round 2 (T2.4): each anchor is inserted in its own savepoint, so one the database refuses is logged
+  (`provenance.anchor_rejected`) and retried next hour; a run fails only when none landed (`TsaError` when nothing
+  was timestamped, `AnchorRejectedError` when every token was refused). The anchor path takes no token more than
+  60 s ahead of the worker clock (`ANCHOR_MAX_AHEAD`, the bound of `chain_anchors_guard`). The task holds the
+  Procrastinate lock `provenance:anchors`, commits every 25 anchors and requests no timestamp after a 15-minute
+  budget. The transparency tests read the database clock (the one the guards read) and close yesterday in Nairobi.

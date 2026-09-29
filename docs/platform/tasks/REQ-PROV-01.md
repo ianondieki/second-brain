@@ -83,6 +83,29 @@ adapters), `bridge/provenance/{manifest,signing,tsa,service,transparency}.py`, `
   (`test_a_tier2_grantee_gets_neither_the_manifest_nor_the_certificate`), and audits every read. The same round
   decided that `/verify` may serve the Ed25519 signature, its key id and the `.tsr` (REQ-PROV-02 card).
 
+## Notes (T2.4 review round 2, pre-merge MINORs)
+
+- **Anchor runs** (REQ-AUD-01 card): each anchor in its own savepoint, one skew bound with `chain_anchors_guard`
+  (the anchor path takes no token more than 60 s ahead of the worker clock; registration keeps ±15 minutes), lock
+  `provenance:anchors`, batches of 25, a 15-minute budget per run.
+- **`python -m bridge.provenance probe-tsa`** timestamps a random digest at each configured TSA on its own with the
+  worker's client (pinned bundles, the one-minute bound); `docs/runbooks/verify-offline.md` step 4 runs it from the
+  worker host before a release, `openssl ts -verify` stays as a second check. Real TSA calls: never in tests or CI
+  (`tests/unit/provenance/test_probe_tsa.py` uses the local openssl TSA transport).
+- **Tier-2 key paths.** Below `manifest.tier2` a refusal gives positions only (`manifest.tier2.<key 0>[1]`): the
+  owner's keys are content too, even when they look like field names. Only the manifest's own fields are named.
+- **Drafts carry no `owner_handle`** (`builders.registered_version`): schema v2 round 4 refuses one on insert and sets
+  it at registration from `developer_profiles.handle`; the builder sends that same handle at registration, which the
+  current schema's `registered_is_complete` check needs.
+- **`POST /api/verify` from the command line** needs the CSRF pair (`GET /api/auth/csrf`, cookie plus
+  `X-CSRF-Token`); the runbook shows it, the route stays protected.
+- **Compatibility with schema v2 round 4** (`feat/REQ-REPO-01-schema-v2` at `abc4263`): `tests/integration/provenance`,
+  `tests/unit/provenance` and `tests/unit/jobs` (196 tests) pass on a scratch copy of this branch carrying round 4's
+  migrations, models, `world.py` and schema tests (`chain_anchors_guard`, `transparency_roots_guard`, the pinned
+  `owner_handle`, the `(version_id, cert_id)` foreign key, database-set evidence times). After the merge,
+  `app_unanchored_chain_heads()` can replace the anchor's trial-insert probe, and `transparency_roots.snapshot_at` can
+  be written (`RootReport.snapshot_at`) and served.
+
 ## Schema follow-ups for db-migrations (schema v2; none blocks T2.4)
 
 1. `app_audit_chain_heads()` also returns each head's `occurred_at`, so capped anchor runs take the oldest heads
