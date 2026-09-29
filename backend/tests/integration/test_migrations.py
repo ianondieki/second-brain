@@ -1,11 +1,13 @@
 """Revisions 0001 to 0005 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0005, 0004, 0003 and 0002 leaves the revision before it exactly as it found it), table
-classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role attributes, the
-helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence triggers of schema v2 and
-the tracker triggers of schema v3, the listed-organisations policy and the Procrastinate schema. The tracker's
-behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``.
+Migration round trip and drift (each of 0005, 0004, 0003 and 0002 leaves the revision before it exactly as it found
+it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role
+attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence triggers
+of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the listed-organisations
+policy and the Procrastinate schema. The tracker's behaviour (chain, projection, parties, payments, clock) is tested in
+``integration/engagements/``; schema v4's in ``integration/matching/``, ``integration/problems/`` and
+``integration/billing/``.
 """
 
 from __future__ import annotations
@@ -399,6 +401,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_trend_aggregates(timestamp with time zone, timestamp with time zone)": (True, {"bridge_app"}),
     "app_research_source_is_valid(jsonb)": (False, set()),  # app_create_research_candidate() only
     "app_is_payment_subject(uuid, uuid)": (False, set()),  # the payment definers only
+    "scout_row_visible()": (False, set()),  # SECURITY INVOKER: the caller's RLS decides
     "payments_guard()": (False, set()),
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
@@ -2199,6 +2202,8 @@ V5_TRIGGERS = {
     ("problems", "problems_research_guard"): ("problems_research_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     # After RLS: reads the organisation's roster.
     ("scout_agents", "scout_agents_recipients"): ("scout_agents_recipients", ROW | ON_INSERT | ON_UPDATE),
+    # Fires first on INSERT (name order): no unique or foreign key error reveals another organisation's scout.
+    **{(t, f"{t}_0_visible"): ("scout_row_visible", ROW | BEFORE | ON_INSERT) for t in ("agent_runs", "agent_matches")},
 }
 
 

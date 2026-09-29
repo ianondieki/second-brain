@@ -18,6 +18,10 @@ Who writes what (RLS; bridge_app; ``app.org_id`` narrows every organisation pred
   characters, maturity at most 4, ``min_fit`` 0 to 100 (default 60), language ``en`` or ``sw``, recipients at most 20
   distinct ids, each an active reviewer of the organisation when the list is written (``scout_agents_recipients``,
   AFTER, after RLS; the digest re-checks at send time).
+- On ``agent_runs`` and ``agent_matches`` the first BEFORE INSERT trigger (``<table>_0_visible``,
+  ``scout_row_visible()``, SECURITY INVOKER) refuses a row naming a scout the caller cannot see under that
+  organisation, with one message, before any unique or foreign key check could tell another organisation that the
+  scout exists or what it matched.
 - ``agent_runs`` (ORG): members read; an acting member (owner, admin, signatory or reviewer: a job binds the
   ``act_as_user_id`` that ``app_scouts_due`` names) inserts a running run and updates its status, counts and error code;
   no DELETE. ``error_code`` is a code, never free text; a failed run carries one, no other does.
@@ -710,6 +714,31 @@ BEGIN
 END;
 $$;
 
+-- Runs first on agent_runs and agent_matches (its trigger, <table>_0_visible, sorts before any other BEFORE INSERT
+-- trigger, and triggers fire in name order): the new row names a scout of the named organisation that the caller can
+-- see (a member of it), else one refusal, the same as for a scout that does not exist. So no unique or foreign key
+-- error tells another organisation that a scout exists or what it matched. SECURITY INVOKER: the caller's RLS
+-- decides; the owner sees every scout.
+CREATE FUNCTION scout_row_visible() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.scout_id IS NULL OR NEW.org_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.scout_agents s WHERE s.id = NEW.scout_id AND s.org_id = NEW.org_id
+    ) THEN
+        RAISE EXCEPTION 'no scout of the caller''s with that id' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER agent_runs_0_visible
+    BEFORE INSERT ON agent_runs
+    FOR EACH ROW EXECUTE FUNCTION scout_row_visible();
+CREATE TRIGGER agent_matches_0_visible
+    BEFORE INSERT ON agent_matches
+    FOR EACH ROW EXECUTE FUNCTION scout_row_visible();
 CREATE TRIGGER payments_guard
     BEFORE INSERT OR UPDATE OR DELETE ON payments
     FOR EACH ROW EXECUTE FUNCTION payments_guard();
@@ -736,7 +765,12 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
 }
 # Called only inside this revision's definer functions, as the owner: no EXECUTE for any role.
 INTERNAL_FUNCTIONS = ("app_research_source_is_valid(jsonb)", "app_is_payment_subject(uuid, uuid)")
-TRIGGER_FUNCTIONS = ("payments_guard()", "problems_research_guard()", "scout_agents_recipients()")
+TRIGGER_FUNCTIONS = (
+    "scout_row_visible()",
+    "payments_guard()",
+    "problems_research_guard()",
+    "scout_agents_recipients()",
+)
 
 
 def _run_sql(script: str) -> None:

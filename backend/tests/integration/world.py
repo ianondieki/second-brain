@@ -259,7 +259,8 @@ async def add_scout_rows(
     scout_id = uuid7()
     await _insert(
         conn,
-        "INSERT INTO scout_agents (id, org_id, niches, created_by) VALUES (:id, :org, ARRAY[CAST(:niche AS uuid)], :user)",
+        "INSERT INTO scout_agents (id, org_id, niches, created_by)"
+        " VALUES (:id, :org, ARRAY[CAST(:niche AS uuid)], :user)",
         id=scout_id,
         org=org_id,
         niche=niche_id,
