@@ -255,3 +255,18 @@ describe("a row in the Engagements list", () => {
     expect(container.querySelectorAll("[data-chip]")).toHaveLength(1);
   });
 });
+
+describe("the contact person", () => {
+  it("names the contact's role in words", async () => {
+    const { ContactPerson } = await import("./Deal");
+    renderWithIntl(
+      <ContactPerson
+        detail={detail({
+          contact: { user_id: "u1", name: "Rita Wanjiru", role: "signatory", channel: "whatsapp", contact_by: "2026-10-01" },
+        })}
+      />,
+    );
+    expect(screen.getByText("Signatory")).toBeTruthy();
+    expect(screen.getByText("WhatsApp")).toBeTruthy();
+  });
+});

@@ -21,6 +21,9 @@ import { Day, Eat, useDay, useEat } from "./When";
 // The deal's records as both parties see them (docs/spec/06 6.9; AC-TRACK-10): the agreement versions with their
 // milestones, the signatures and the payments. Read-only: the buttons live in Actions.
 
+/** Organisation roles the API names the contact person by (EngagementActorRole values have labels). */
+const ROLES: ReadonlySet<string> = new Set(["owner", "admin", "reviewer", "signatory", "finance"]);
+
 const MILESTONE_CHIP: Record<MilestoneState, ChipKind> = {
   PLANNED: "pending",
   IN_PROGRESS: "current",
@@ -266,7 +269,11 @@ export function ContactPerson({ detail }: { detail: Pick<Detail, "contact" | "my
       <dl className={cn("mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-[minmax(10rem,auto)_1fr]")}>
         <Field label={t("contact.person")}>
           {contact.name ?? t("endorsements.platform")}
-          {contact.role ? <span className="ml-2 text-sm text-ink-soft">{contact.role}</span> : null}
+          {contact.role ? (
+            <span className="ml-2 text-sm text-ink-soft">
+              {ROLES.has(contact.role) ? t(`role.${contact.role as Endorsement["role"]}`) : contact.role}
+            </span>
+          ) : null}
         </Field>
         <Field label={t("contact.channel")}>{t(`channel.${contact.channel}`)}</Field>
         <Field label={t("contact.by")}>

@@ -27,7 +27,7 @@ async function shot(page: Page, info: TestInfo, name: string) {
   const size = page.viewportSize()!;
   const width = info.project.name.startsWith("mobile") ? 375 : 1440;
   await page.setViewportSize({ width, height: size.height });
-  await page.screenshot({ path: join(dir, `${name}-${width}.jpg`), fullPage: true, type: "jpeg", quality: 70 });
+  await page.screenshot({ path: join(dir, `${name}-${width}.jpg`), fullPage: true, type: "jpeg", quality: 70, scale: "css" });
   await page.setViewportSize(size);
 }
 

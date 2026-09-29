@@ -46,11 +46,11 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
             : "border-ink-soft bg-transparent",
       )}
     >
-      <p id="whose-turn" className="flex items-center gap-2 text-lg font-semibold text-ink">
+      <p id="whose-turn" className="flex items-start gap-2 text-lg font-semibold text-ink">
         <ChipMark
           kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : "current"}
           className={cn(
-            "size-5",
+            "mt-1 size-5",
             turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-jacaranda",
           )}
         />
