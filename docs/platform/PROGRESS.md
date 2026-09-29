@@ -236,7 +236,7 @@ Phase 1 approved 2026-09-27 (`GATES.md` sign-off log). D-24 (a) and D-25 (a) dec
 
 ## Phase 2 — Repository, directory, provenance (in progress, started 2026-09-27)
 
-### Handoff (resume from here; updated 2026-09-29 at the end of the laptop session)
+### Handoff of the laptop session (2026-09-29; superseded for current state by the Prototype track Handoff at the end of this file; its laptop, Windows and environment notes still apply)
 
 The laptop session (2026-09-28/29) ended with a clean hand-off to a cloud session: every branch is pushed and clean,
 no sub-agent is running, and no review was running at the stop (so none was discarded). The dev containers were
@@ -343,3 +343,73 @@ Checklist (updated after every task; commit and push after each):
 | T2.11 Frontend polish (frontend-design → impeccable → Playwright 375/1440, chrome-devtools) | todo | |
 | Exit: X2-1 OpenAPI drift, X2-2 coverage ≥95% on `provenance/`, `auth/`, `tenancy/`, every Phase 2 AC | todo | |
 | ECC code review, security-reviewer (Fable) phase pass, traceability, Phase 2 report | todo | |
+
+## Prototype track (D-35, D-36, D-37; started 2026-09-29 in a Linux cloud session)
+
+### Handoff (resume from here; updated 2026-09-29)
+
+Cloud session on a Linux container (4 CPUs, 15 GB RAM), started 2026-09-29 from handoff commit `913c6ae`. Every branch
+named in the laptop Handoff exists on origin at the recorded commit. The owner recorded D-35 (prototype first), D-36
+(zero spend) and D-37 (LLM providers for local runs) on 2026-09-29; the plan is `PLAN.md` §8 and the scheduling note
+`REQUIREMENTS.md` §7. D-26..D-34 stay open and use their recorded defaults for the prototype (list below).
+
+**Linux environment (this container; the laptop needs none of it).** `sudo dockerd &`; one long-lived test server
+`bridge-testdb` (`pgvector/pgvector:pg16`, port 55432, password `postgres`, started with `fsync=off`), used through
+`TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres`; the full backend suite takes
+about 70 s here. Backend venvs per worktree with `uv sync --frozen --python /usr/bin/python3.12`. Legacy suite:
+Python 3.13 venv at `/home/user/.venv-legacy` with `requirements.txt` and a `cloudflared` stub on PATH
+(`/home/user/bin`); `scripts/run_legacy_tests.py` → 307 OK. Worktrees live in `/home/user/sb-wt/<REQ-ID>`. The Windows
+workarounds in the laptop notes stay in their files.
+
+**In flight.**
+
+| Branch | Last commit | Status | Next step |
+|---|---|---|---|
+| `feat/REQ-REPO-01-schema-v2` (T2.1) | `2ca0347` | round 6 being finished (db-migrations) | `2ca0347` verified on Linux: 948 passed, 2 failed (`test_every_trigger_is_installed_and_enabled`, `test_e1_claims_approve_automatically_only_on_an_official_domain`). Fix both, apply Q1–Q5 as recommended in the laptop Handoff, mutation proofs, docs, static checks, compatibility list; then reviewer + security-reviewer round 6 (BLOCKER/MAJOR only), CI, merge |
+| `feat/REQ-PROV-01-provenance` (T2.4) | `9a414c0` | waiting for schema v2 | as in the laptop Handoff |
+| `feat/REQ-DIR-02-provisional-seed` (T2.6a) | `09ae48e` | waiting for schema v2 | as in the laptop Handoff |
+| `feat/REQ-PROV-04-verification` (D1) | `41164de` | waiting for schema v2 | as in the laptop Handoff |
+| `feat/REQ-LLM-01-llm-layer` (T2.2) | `c3cb248` | waiting for schema v2 | as in the laptop Handoff |
+| `feat/REQ-AUTH-01-followups-7-8` | `97b9454` | WIP, BLOCKER, parked until after M1 (P17) | do not merge; fix per the laptop Handoff after M1 |
+
+**Decision defaults applied for the prototype (D-35).** D-26 (c): OAuth buttons stay hidden until the test-app
+variables are set. D-27 (a): Swahili stays off; English copy-lint only. D-28 (a): the JS budget counts gzipped bodies,
+1 KB = 1,000 bytes. D-29 (a): no refusal fallback models. D-30 (c): a dispute against an E2 organisation is rejected
+in-app and handled off-platform. D-31 (a): "Legal entity verified" as the `[[COPY-REVIEW]]` placeholder. D-32 (a):
+digest hardening deferred to Phase 8. D-33: `/verify` shows no name or title (the opt-in switch, default 1(c)/2(a)/3(a),
+comes after the prototype). D-34 (a): the 12-hour step-up rule for linking and unlinking.
+
+**LLM variables the owner fills in on the laptop (D-37; names only, never values in chat or git).** The final list is
+set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`,
+`LLM_GLOBAL_DAILY_CAP_USD` (1.00 for the prototype).
+
+**Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
+(`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### Prototype checklist (updated after every task; commit and push after each)
+
+| Item | Status | Notes |
+|---|---|---|
+| D-35/D-36/D-37 recorded; `PLAN.md` §8; `REQUIREMENTS.md` §7; this checklist | done | |
+| Linux environment (dockerd, test Postgres, venvs, legacy 3.13 suite 307 OK) | done | Playwright shim and frontend install next |
+| Anthropic price research (D-37) | done | verified 2026-09-29 |
+| P0 schema v2 round 6 → merge | in progress | db-migrations |
+| P0 T2.4, T2.6a, D1, T2.2 → merge | todo | after schema v2 |
+| P1 schema v3 (prototype) | todo | |
+| P2 proposals | todo | |
+| P3 Tier-2 access | todo | |
+| P4 directory search + Pitch + EM1 | todo | |
+| P5 tracker main path + test clock | todo | |
+| P6 reminders | todo | |
+| P7 LLM providers (D-37) | todo | |
+| P8 M1 screens | todo | |
+| P9 `make demo` (basic) | todo | |
+| M1 merged, tag `prototype-m1`, M1 report | todo | |
+| P10 scout | todo | M2 |
+| P11 research | todo | M2 |
+| P12 trending + ranker | todo | M2 |
+| P13 submission assistant | todo | M2 |
+| P14 subscriptions + fake M-Pesa | todo | M2 |
+| P15 admin queues | todo | M2 |
+| P16 packaging: polish, walkthrough video, README Demo | todo | M2 |
+| P17 auth follow-ups 7–8 (BLOCKER fix) | todo | after M1 |
