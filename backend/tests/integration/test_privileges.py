@@ -848,6 +848,8 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         official = await add_org(conn, official_domains="{telco-a.example.test}")
         lookalike = await add_org(conn, official_domains="{telco-b.example.test}")
         verified = await add_org(conn, verification="e2")
+        holder = await w.add_user(conn, _email("e2-holder"), "Holder")
+        await _add_membership(conn, verified, holder, "{owner,admin}")  # an E2 organisation is held by its claimant
         tag = await _held_tag(conn, official, "held_unclaimed")
         claimant = await w.add_user(conn, _email("claimant"), "Claimant")
         await act(conn, claimant)
@@ -885,12 +887,17 @@ async def test_e1_claims_approve_automatically_only_on_an_official_domain(
         assert (
             await run(conn, "SELECT verification::text FROM organizations WHERE id = :id", id=lookalike) == "unclaimed"
         )
-        # A claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2).
+        # An outsider's claim on an E2 organisation becomes a dispute, never a transfer (AC-DIR-2). (A claim on an E2
+        # organisation that competes with nobody, its own member's, goes to manual review instead: round 6 item 8,
+        # test_a_routine_e2_approval_never_makes_a_member_an_owner.)
         dispute = await _claim(conn, verified, claimant, "verified.example.test", "e1", right)
+        assert await run(conn, CLAIM_STATUS, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_confirm_claim_otp(:id, :h)", id=dispute, h=right) is True
         assert await run(conn, MARK_DNS, id=dispute) is True
         assert await run(conn, approve, id=dispute) == "disputed"
         assert await run(conn, "SELECT app_is_member(:id)", id=verified) is False
+        await as_owner(conn)
+        assert await run(conn, OWNER_GROUP, org=verified) == [holder]
 
 
 async def test_claim_otp_attempts_never_reset_and_reissues_are_capped(

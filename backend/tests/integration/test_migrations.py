@@ -1925,6 +1925,8 @@ V2_TRIGGERS = {
     ("org_claims", "org_claims_guard"): ("org_claims_guard", ROW | BEFORE | ON_INSERT),
     ("org_claims", "org_claims_dns_guard"): ("org_claims_dns_guard", ROW | BEFORE | ON_UPDATE),
     ("org_claims", "org_claims_status_guard"): ("org_claims_status_guard", ROW | BEFORE | ON_UPDATE),
+    # Round 6: an AFTER trigger on the 0001 table relabels the organisation's open claims on every roster change.
+    ("memberships", "memberships_claims_relabel"): ("memberships_claims_relabel", ROW | ON_INSERT | ON_UPDATE),
     ("llm_calls", "llm_calls_batch_guard"): ("llm_calls_batch_guard", ROW | BEFORE | ON_INSERT),
     ("phone_verifications", "phone_verifications_guard"): ("phone_verifications_guard", ROW | BEFORE | ON_INSERT),
     ("chain_anchors", "chain_anchors_guard"): ("chain_anchors_guard", ROW | BEFORE | ON_INSERT),
