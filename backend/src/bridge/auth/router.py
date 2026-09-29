@@ -418,7 +418,7 @@ async def oauth_callback(
     now = clock.utcnow()
     flow = oauth.unseal(settings, request.cookies.get(settings.oauth_cookie_name), now=now)
     presented = flow is not None and _state_matches(state, flow)
-    # The checks up to the throttle touch no database and cannot reach the provider, so a forged callback (a page
+    # The checks up to the throttle charge no throttle row and never reach the provider, so a forged callback (a page
     # loading this URL in someone's browser with a junk state) never uses up that person's budget.
     if flow is None or flow.provider != client.provider.name or not presented:
         outcome = identities.failed(None, "oauth_state", client.provider.name)

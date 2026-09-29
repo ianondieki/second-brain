@@ -34,8 +34,8 @@ Fix round 1 (reviewer and security-reviewer CHANGES_REQUIRED), orchestrator deci
 Round-2 MINOR follow-ups (branch `feat/REQ-AUTH-02-followups`):
 
 - The callback throttle is charged only once the `state` matched the flow cookie and a code is present, just before
-  the state is spent and the provider called. No separate limit guards the earlier refusals: they touch no database
-  and never reach the provider, and a 256-bit state sealed in the cookie is nothing to guess.
+  the state is spent and the provider called. No separate limit guards the earlier refusals: they charge no throttle
+  row and never reach the provider, and a 256-bit state sealed in the cookie is nothing to guess.
 - After the provider call the callback forgets every row read before it and looks the session up again
   (`identities.reload_session`): a link whose session ended, or whose account was suspended, meanwhile gets
   `oauth_session`; a sign-in reads the account afresh.
