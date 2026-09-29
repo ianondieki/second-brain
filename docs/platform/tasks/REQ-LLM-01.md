@@ -32,3 +32,15 @@ AC-SEC-6 (`unit/llm/test_no_tier2_in_llm_calls.py`; against the stored `llm_call
 2. `budget.py:174` — soft-cap crossings are judged on a snapshot that includes in-flight batch reservations and `batch_submit` never calls `after()`, so a crossing can be missed. Judge the crossing on spend without reservations, or re-check when reservations are released (before the Phase 4 soft-cap email).
 3. `client.py:630` — if writing the reservations fails after `batch_create`, the provider batch runs unpolled and uncounted. Cancel the batch through the adapter (or retry the reservation) and add a unit test.
 4. `client.py:700` — the settlement commits before the dead-letter/human-queue event; a crash in between loses it. When T2.3 turns the sinks into tables, write both in one transaction or make the sinks idempotent on `(batch_id, custom_id)`.
+
+## Security review (2026-09-29): MINOR follow-ups
+
+The review's one MAJOR is fixed: the sanitiser cut its output only and was quadratic on unclosed `<script>`/`<style>` openers (1 MB took 541 s, synchronously, before the budget check). `strip_blocks` now scans linearly (the old regex is its test oracle), and `sanitise` cuts its input to `sanitiser.max_input_ratio` (8, `ai/models.yaml`) times the field's cap before any pass, reported as `truncated`; timing regressions in `unit/llm/test_sanitiser.py` (`12adf27` red, `6e592ae` fix). MINORs:
+
+1. **Done (`526a0eb` red, `af0d846` fix).** `auth/sessions.py` `is_live` requires `sessions.mfa_pending = false`, so the per-session Tier-2 opt-in is never live in a login waiting for its second factor (`integration/llm/test_session_consent.py`).
+2. `logging.py:16-19` — `_redact` substring-matches `token`, so `input_tokens`, `output_tokens` and `cache_read_tokens` log as `[redacted]`. Match whole key names (or rename the logged keys) and add a test.
+3. `budget.py:150` and `errors.py:79` — a global-scope `LLMBudgetExceeded` carries the platform's spend and cap in `str(exc)`. The API mapping must send a fixed message for scope `global` (never the platform's figures) when the first route maps LLM errors.
+4. `guard.py:90-96` — cross-owner consent reads fail closed under RLS (a moderator's session cannot read the author's `tier2_llm_moderation` consent). Phase 4 moderation needs an `app_has_consent` SECURITY DEFINER (db-migrations), never a widened SELECT policy.
+5. `registry.py:169` and `anthropic_adapter.py:76-93` — server-tool fees (web search, web fetch) are not priced into estimates or costs, and `check_tools` does not require `allowed_domains`. Fix both before any task in `ai/models.yaml` lists a web tool.
+6. **Done (`526a0eb` red, `af0d846` fix).** `deps.py` `get_llm` depends on `CurrentSession`: 401 without a signed-in session (or `mfa_required`), and the database session is bound to the user before the service is built, so a request never makes an unbound platform call (`unit/llm/test_deps.py`).
+7. `client.py:538-601` — `batch_submit` accepts any number of items; add `max_batch_items` to `ai/models.yaml` (below the provider's limit) and refuse larger batches before anything is sent.
