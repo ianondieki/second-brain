@@ -184,3 +184,11 @@ schema-v3 column added in a rolled-back transaction).
      pass): bounded by the calls in flight across the platform; revisit with a row lock or an advisory lock per slot.
   3. Commit sizes: `5412dbb` (router and its tests, about 690 lines) exceeded the ~300-line guideline; later rounds split
      tests from code.
+
+## P7 reviews (2026-09-29): reviewer PASS; security-reviewer PASS round 2; MINOR follow-ups (not built)
+
+1. `InputField(public=True)` is an explicit opt-out of the demo-data rule: the reviewers of P10/P11/P13 check it is used only for repo-saved public excerpts, never for a user's text.
+2. Each schema's `demo_fallback()` placeholder must be the non-granting answer (the layer enforces the type and `injection_suspected=True`, not the enum value); callers keep treating `demo_fallback` as "no verdict".
+3. `.env.example`-only free-provider model ids and hosts: extend `test_no_model_ids_in_code` to common OpenAI-compatible model families and provider hosts.
+4. Concurrent calls can overshoot a slot's cap (check before send); a per-slot advisory lock or row lock later.
+5. Commit sizes over ~300 lines on this branch (no rewrite).
