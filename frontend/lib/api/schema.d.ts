@@ -2563,11 +2563,19 @@ export interface components {
             contact: components["schemas"]["ContactOut"] | null;
             /**
              * Developer Id
-             * Format: uuid
+             * @description The developer's user id; null for the organisation until the developer is named
              */
-            developer_id: string;
-            /** Developer Name */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
             developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
             /** Documents */
             documents: components["schemas"]["DocumentRefOut"][];
             due: components["schemas"]["DueOut"] | null;
@@ -2665,11 +2673,19 @@ export interface components {
         EngagementSummary: {
             /**
              * Developer Id
-             * Format: uuid
+             * @description The developer's user id; null for the organisation until the developer is named
              */
-            developer_id: string;
-            /** Developer Name */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
             developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
             due: components["schemas"]["DueOut"] | null;
             end_reason: components["schemas"]["EngagementEndReason"] | null;
             /** Ended At */

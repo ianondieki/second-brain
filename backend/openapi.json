@@ -1597,13 +1597,27 @@
             ]
           },
           "developer_id": {
-            "format": "uuid",
-            "title": "Developer Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
           },
           "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
             "title": "Developer Name",
             "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
           },
           "documents": {
             "items": {
@@ -1768,6 +1782,7 @@
           "org_name",
           "developer_id",
           "developer_name",
+          "developer_named",
           "origin",
           "state",
           "stage_label",
@@ -1878,13 +1893,27 @@
       "EngagementSummary": {
         "properties": {
           "developer_id": {
-            "format": "uuid",
-            "title": "Developer Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
           },
           "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
             "title": "Developer Name",
             "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
           },
           "due": {
             "anyOf": [
@@ -2010,6 +2039,7 @@
           "org_name",
           "developer_id",
           "developer_name",
+          "developer_named",
           "origin",
           "state",
           "stage_label",
