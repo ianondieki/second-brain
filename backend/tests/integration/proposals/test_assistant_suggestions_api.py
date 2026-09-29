@@ -71,7 +71,7 @@ async def test_a_demo_owner_gets_one_checked_suggestion_and_the_proposal_is_unch
     assert not any(marker in json.dumps(row.inputs) for marker in TIER2_MARKERS)
     [event] = await audit_rows(owner_engine, owner, "proposal.assistant_suggested")
     assert (event["status"], event["demo_fallback"]) == ("suggested", False)
-    assert event["tier2_fields"] == ["approach", "architecture", "pricing"]
+    assert event["tier2_fields_read"] == ["approach", "architecture", "pricing"]
 
 
 async def test_a_published_proposal_is_read_from_its_current_version(

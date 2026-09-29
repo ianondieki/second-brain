@@ -22,6 +22,8 @@ EXPECTED = {
     ("POST", "/api/orgs/{org_id}/proposals/{proposal_id}/nda"),
     ("GET", "/api/orgs/{org_id}/proposals/{proposal_id}/tier2"),
     ("GET", "/api/me/proposals/{proposal_id}/tier2"),
+    ("POST", "/api/me/proposals/{proposal_id}/assistant/consent"),  # REQ-PROP-05: Tier 2 to an LLM
+    ("POST", "/api/me/proposals/{proposal_id}/assistant/suggestions"),
 }
 WRITES = (
     "SELECT (SELECT count(*) FROM document_views WHERE proposal_id = :p)"

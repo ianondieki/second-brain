@@ -33,6 +33,7 @@ from bridge.llm.types import InputField, Tier, TokenUsage
 from bridge.models.enums import ConsentPurpose
 from bridge.proposals import assistant
 from bridge.proposals.assistant import DraftText, Move, PlacementField, SuggestionStatus, TeaserSuggestion
+from bridge.proposals.assistant_policy import get_assistant_policy
 from tests.unit.proposals.assistant_fixtures import DRAFT, OWNER, SECRET, SESSION, answer, detail_of, result
 
 # --- the call ----------------------------------------------------------------------------------------------------
@@ -127,7 +128,7 @@ def test_placement_hints_move_a_field_with_text_away_from_its_tier_once() -> Non
         (PlacementField.APPROACH, Move.TO_TIER1),
     ]
     assert got.placement[1].reason.startswith("It only says what it does.")
-    assert len(got.placement[1].reason) <= assistant.MAX_REASON_CHARS
+    assert len(got.placement[1].reason) <= get_assistant_policy().max_reason_chars
 
 
 # --- errors --------------------------------------------------------------------------------------------------------

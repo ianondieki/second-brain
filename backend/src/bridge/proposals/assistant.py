@@ -3,25 +3,33 @@ and which fields might move between Tier 1 and Tier 2. The model words; plain co
 
 Rules, in the order the route applies them (``bridge.proposals.assistant_router``):
 
-1. **Owner only.** ``owned`` answers 404 for anyone else's proposal (or none) and 409 ``proposal_hidden`` for a
-   deleted one; drafts and published proposals are served (a published proposal without a draft is read from its
-   current version).
+1. **Owner only.** ``owned`` answers 404 for anyone else's proposal (or none), published or not (a published
+   teaser is readable under RLS, so the owner filter is the rule), and 409 ``proposal_hidden`` for a deleted one
+   (except for turning the assistant off); drafts and published proposals are served (a published proposal without a
+   draft is read from its current version).
 2. **Per-session consent** (ADR-005 decision 4). ``require_consent`` answers 403 ``consent_required`` unless the
    owner's latest ``tier2_llm_assistant`` decision is a grant from this very login session, still live
    (``bridge.llm.guard.SessionConsentChecker``). It runs before anything is read for the model, so without it nothing
    reaches any provider, not even the Tier-1 teaser (the LLM layer's own guard would refuse only Tier-2 fields).
-3. **Only the owner's own saved text** is sent: the version's Tier-1 teaser fields and Tier-2 text fields (never the
+3. **Limits** (``policy.yaml`` ``assistant``): at most ``max_in_flight_per_user`` suggestions running at once per
+   user (``InFlight``, per API process: 429 ``assistant_busy``) and ``max_calls_per_user_day`` ``submission_assistant``
+   ledger rows per user and UTC day (429 ``assistant_rate_limited``), both before the confidential text is read. The
+   daily count is read with the in-flight slot held, so one user's burst is serialised; the LLM layer's caps then
+   check before the call as ever.
+4. **Only the owner's own saved text** is sent: the version's Tier-1 teaser fields and Tier-2 text fields (never the
    links or attachments), each an ``InputField`` owned by the owner, Tier-2 fields tagged ``Tier.TIER2``. The LLM
    layer sanitises and wraps each in a ``<submission nonce=...>`` block, records the call in ``llm_calls``, checks the
    caps first and, on a free provider, applies the D-37 rule (``bridge.llm.demo_data``): only a demo account's fields
    go there; another account's Tier-2 text is refused (403 ``assistant_demo_only``) and a non-demo account's Tier-1
    text is answered by the labelled demo fallback. No tools.
-4. **Code decides** (``evaluate``). A demo fallback (``TeaserSuggestion.demo_fallback()``) is "no suggestion",
+5. **Code decides** (``evaluate``). A demo fallback (``TeaserSuggestion.demo_fallback()``) is "no suggestion",
    labelled; ``injection_suspected`` is "no suggestion"; a suggested title and summary are kept only when the Tier-1
-   sanitiser accepts them (no contact details or links, the length limits, 150 words) and they change something;
+   sanitiser accepts them (no contact details or links, the length limits, 150 words), share no run of
+   ``tier2_overlap_words`` words with a confidential field that was sent (``rejected:tier2_overlap``: a model, maybe
+   steered by text inside Tier 2, must not move confidential text into the public teaser) and change something;
    a placement hint is kept only for a field that has text and only in the direction away from its tier, with a
    plain-text reason carrying no contact details.
-5. **Nothing is written to the proposal**, and nothing is published: the owner applies a suggestion through the
+6. **Nothing is written to the proposal**, and nothing is published: the owner applies a suggestion through the
    editor's own routes.
 
 LLM errors map to fixed, plain messages (``refusal``): a budget (a global or total cap never shows the platform's
@@ -31,7 +39,8 @@ or failing ends as "no suggestion" (on local runs the router has already answere
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Self
@@ -41,9 +50,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge import clock
 from bridge.crypto.envelope import KeyWrapper
 from bridge.errors import ApiError, not_found
 from bridge.ids import uuid7
+from bridge.llm.budget import day_start
 from bridge.llm.client import LLMClient
 from bridge.llm.errors import (
     ConsentRequired,
@@ -62,12 +73,12 @@ from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Me
 from bridge.logging import get_logger
 from bridge.models.enums import ConsentPurpose, ProposalStatus
 from bridge.proposals import tier2
+from bridge.proposals.assistant_policy import AssistantPolicy, get_assistant_policy
 from bridge.proposals.sanitise import TIER1_FIELDS, contact_findings, detection_skeleton, plain_text, sanitise
 
 TASK: Final = "submission_assistant"
 PURPOSE: Final = ConsentPurpose.TIER2_LLM_ASSISTANT
 TIER2_FIELDS: Final = tier2.TEXT_FIELDS
-MAX_REASON_CHARS: Final = 300  # a placement reason is one sentence; longer text is cut
 
 # [[COPY-REVIEW]] every message below is shown to the owner.
 CONSENT_REQUIRED: Final = "Turn on the writing assistant for this sign-in first."
@@ -80,6 +91,8 @@ NO_SUGGESTION: Final = "The assistant has no suggestion for this teaser."
 DEMO_FALLBACK: Final = "Demo fallback: no model answered, so there is no suggestion."
 INJECTION: Final = "Part of your proposal reads like instructions to the assistant, so it made no suggestion."
 UNAVAILABLE: Final = "The writing assistant could not answer just now. Try again later."
+BUSY: Final = "The writing assistant is still working on your last request. Try again in a moment."
+RATE_LIMITED: Final = "You have asked the writing assistant for many suggestions today. Try again tomorrow."
 
 log = get_logger(__name__)
 
@@ -165,12 +178,13 @@ _OWN = text(
 _TEASER = text("SELECT title, problem_statement, impact_claims, summary FROM proposal_versions WHERE id = :version")
 
 
-async def owned(db: AsyncSession, user_id: UUID, proposal_id: UUID) -> Owned:
-    """The caller's draft or published proposal; 404 for anyone else's (or none), 409 once it was deleted."""
+async def owned(db: AsyncSession, user_id: UUID, proposal_id: UUID, *, allow_hidden: bool = False) -> Owned:
+    """The caller's draft or published proposal; 404 for anyone else's (or none), 409 once it was deleted unless
+    ``allow_hidden`` (turning the assistant off works from any of the owner's proposals)."""
     row = (await db.execute(_OWN, {"id": proposal_id, "user": user_id})).one_or_none()
     if row is None:
         raise not_found("No proposal of yours has this id.")
-    if ProposalStatus(row.status) not in (ProposalStatus.DRAFT, ProposalStatus.PUBLISHED):
+    if not allow_hidden and ProposalStatus(row.status) not in (ProposalStatus.DRAFT, ProposalStatus.PUBLISHED):
         raise ApiError(409, "proposal_hidden", "This proposal was deleted; its record is kept but it cannot change.")
     version_id = row.draft_version_id or row.current_version_id
     if version_id is None:  # a proposal always has one of them; fail closed if not
@@ -182,6 +196,44 @@ async def require_consent(checker: ConsentChecker, owner_id: UUID, *, session_id
     """403 ``consent_required`` unless this login session holds the owner's live per-session opt-in."""
     if not await checker.has_live_consent(owner_id, PURPOSE, session_id=session_id):
         raise ApiError(403, "consent_required", CONSENT_REQUIRED)
+
+
+class InFlight:
+    """Suggestions running per user in this API process (a single process in the prototype). Claiming and releasing
+    never await, so on one event loop the check and the increment cannot interleave. Several workers would each
+    allow the limit: they need a reservation row in the ledger instead (REQ-PROP-05 card)."""
+
+    def __init__(self) -> None:
+        self._running: dict[UUID, int] = {}
+
+    def claim(self, user_id: UUID, limit: int) -> bool:
+        running = self._running.get(user_id, 0)
+        if running >= limit:
+            return False
+        self._running[user_id] = running + 1
+        return True
+
+    def release(self, user_id: UUID) -> None:
+        running = self._running.get(user_id, 0) - 1
+        if running > 0:
+            self._running[user_id] = running
+        else:
+            self._running.pop(user_id, None)
+
+    def running(self, user_id: UUID) -> int:
+        return self._running.get(user_id, 0)
+
+
+_CALLS_TODAY = text("SELECT count(*) FROM llm_calls WHERE user_id = :user AND task = :task AND created_at >= :since")
+
+
+async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: AssistantPolicy) -> None:
+    """429 ``assistant_rate_limited`` once the user's ``submission_assistant`` rows today (UTC, every status: a
+    refused attempt counts too) reach the policy's limit. The user's own ledger rows are readable under RLS."""
+    since = day_start(clock.utcnow())
+    count = (await db.execute(_CALLS_TODAY, {"user": user_id, "task": TASK, "since": since})).scalar_one()
+    if count >= policy.max_calls_per_user_day:
+        raise ApiError(429, "assistant_rate_limited", RATE_LIMITED)
 
 
 async def load_text(db: AsyncSession, wrapper: KeyWrapper, own: Owned) -> DraftText:
@@ -241,7 +293,24 @@ class Suggestion:
     trace_id: str | None = None
 
 
-def _teaser(output: TeaserSuggestion, draft: DraftText) -> tuple[tuple[str, str] | None, str]:
+_WORD = re.compile(r"\w+")
+
+
+def shingles(value: str, size: int) -> set[tuple[str, ...]]:
+    """Every run of ``size`` consecutive words of the plain, case-folded text."""
+    words = _WORD.findall(plain_text(value).casefold())
+    return {tuple(words[i : i + size]) for i in range(len(words) - size + 1)}
+
+
+def copies_tier2(values: Iterable[str], confidential: Iterable[str], size: int) -> bool:
+    """True when any of ``values`` shares a run of ``size`` words with any confidential value."""
+    secret: set[tuple[str, ...]] = set()
+    for value in confidential:
+        secret |= shingles(value, size)
+    return any(shingles(value, size) & secret for value in values)
+
+
+def _teaser(output: TeaserSuggestion, draft: DraftText, policy: AssistantPolicy) -> tuple[tuple[str, str] | None, str]:
     if not output.has_suggestion:
         return None, "none"
     cleaned, errors = sanitise({"title": output.title, "summary": output.summary})
@@ -250,18 +319,20 @@ def _teaser(output: TeaserSuggestion, draft: DraftText) -> tuple[tuple[str, str]
     title, summary = cleaned["title"] or "", cleaned["summary"] or ""
     if not title or not summary:
         return None, "rejected:empty"
+    if copies_tier2((title, summary), draft.tier2.values(), policy.tier2_overlap_words):
+        return None, "rejected:tier2_overlap"
     if (title, summary) == (draft.tier1.get("title"), draft.tier1.get("summary")):
         return None, "unchanged"
     return (title, summary), "suggested"
 
 
-def _placement(hints: Sequence[PlacementHint], draft: DraftText) -> tuple[Hint, ...]:
+def _placement(hints: Sequence[PlacementHint], draft: DraftText, policy: AssistantPolicy) -> tuple[Hint, ...]:
     kept: dict[PlacementField, Hint] = {}
     for hint in hints:
         in_tier1 = hint.field.value in TIER1_FIELDS
         wanted = Move.TO_TIER2 if in_tier1 else Move.TO_TIER1
         has_text = hint.field.value in (draft.tier1 if in_tier1 else draft.tier2)
-        reason = plain_text(hint.reason)[:MAX_REASON_CHARS].strip()
+        reason = plain_text(hint.reason)[: policy.max_reason_chars].strip()
         if (
             hint.field in kept
             or hint.move is not wanted
@@ -274,8 +345,9 @@ def _placement(hints: Sequence[PlacementHint], draft: DraftText) -> tuple[Hint, 
     return tuple(kept.values())
 
 
-def evaluate(result: Result[TeaserSuggestion], draft: DraftText) -> Suggestion:
+def evaluate(result: Result[TeaserSuggestion], draft: DraftText, policy: AssistantPolicy | None = None) -> Suggestion:
     """What the owner is shown: the model's output only when code accepts it."""
+    policy = policy or get_assistant_policy()
     trace = result.trace_id
     if result.demo_fallback:
         return Suggestion(
@@ -288,8 +360,8 @@ def evaluate(result: Result[TeaserSuggestion], draft: DraftText) -> Suggestion:
     output = result.parsed
     if output.injection_suspected:
         return Suggestion(SuggestionStatus.INJECTION_SUSPECTED, "injection_suspected", INJECTION, trace_id=trace)
-    teaser, why = _teaser(output, draft)
-    hints = _placement(output.placement, draft)
+    teaser, why = _teaser(output, draft, policy)
+    hints = _placement(output.placement, draft, policy)
     if teaser is None and not hints:
         return Suggestion(SuggestionStatus.NO_SUGGESTION, why, NO_SUGGESTION, trace_id=trace)
     title, summary = teaser if teaser is not None else (None, None)

@@ -58,7 +58,7 @@ async def test_the_opt_in_lasts_this_session_only_and_ends_at_sign_out(
     assert granted.status_code == 200, granted.text
     assert granted.json()["granted"] is True
     assert granted.json()["scope"] == "this_session"
-    assert "this sign-in only" in granted.json()["text"]
+    assert "During this sign-in only" in granted.json()["text"]
     assert (await ask(client, proposal_id)).json()["status"] == "suggested"
     assert len(adapter.requests) == 1
 
@@ -99,7 +99,7 @@ async def test_grant_and_withdrawal_are_audited_and_withdrawal_stops_the_assista
     assert adapter.requests == []
     trail = await audit_rows(owner_engine, owner, "consent.changed")
     assert trail == [
-        {"tier2_llm_assistant": granted, "scope": "session", "text_version": version, "proposal_id": proposal_id}
+        {"tier2_llm_assistant": granted, "scope": "session", "text_version": version, "from_proposal_id": proposal_id}
         for granted in (True, False)
     ]
     decisions = await rows(
@@ -114,6 +114,7 @@ async def test_a_stale_wording_is_refused_and_nothing_is_recorded(
     developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld
 ) -> None:
     client = await developers()
+    install(client)
     proposal_id = await new_draft(client, proposal_world)
     stale = await client.post(PATH.format(proposal_id) + "/consent", json={"version": "2026-09-25.1"})
     assert stale.status_code == 409
@@ -169,3 +170,6 @@ async def test_a_deleted_proposal_gets_no_assistant(
     assert hidden.status_code == 409
     assert hidden.json()["detail"]["code"] == "proposal_hidden"
     assert adapter.requests == []
+    withdrawn = await client.delete(PATH.format(proposal_id) + "/consent")  # turning it off always works
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["granted"] is False
