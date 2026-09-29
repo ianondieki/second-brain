@@ -105,6 +105,31 @@ test("pages carry the security headers", async ({ request }) => {
   expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
 });
 
+test("a page at a near miss of the build-asset path still carries the page headers", async ({ request }) => {
+  // Only /_next/static/ in exact case is exempt (next.config.ts experimental.caseSensitiveRoutes): this is a 404 page.
+  const response = await request.get("/_NEXT/static/x.js");
+  expect(response.headers()["content-type"]).toContain("text/html");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
+});
+
+test("API answers through the web origin carry the API's security headers, not the page headers", async ({
+  request,
+}) => {
+  // Next.js sets no headers() values on a rewrite to another origin (see security-headers.test.ts): the /api answer
+  // is FastAPI's, with its own headers (backend main.py SECURITY_HEADERS).
+  const response = await request.get("/api/auth/me"); // signed out: 401, still through the security middleware
+  expect(response.status()).toBe(401);
+  const headers = response.headers();
+  expect(headers["content-security-policy"]).toBe("default-src 'none'; frame-ancestors 'none'");
+  expect(headers["x-frame-options"]).toBe("DENY");
+  expect(headers["x-content-type-options"]).toBe("nosniff");
+  expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(headers["cache-control"]).toBe("no-store");
+  expect(headers["permissions-policy"]).toBeUndefined();
+  expect(headers["content-security-policy-report-only"]).toBeUndefined();
+});
+
 test("before JavaScript runs, submitting the login form never puts credentials in the URL", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
@@ -269,19 +294,36 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
 
   // Enrolment asks for the current password first.
   const twoStep = page.getByRole("region", { name: "Two-step sign-in" });
+  const passwordSection = page.getByRole("region", { name: "Password" });
+  await expect(passwordSection).toBeVisible();
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(twoStep.getByText("Enter your current password to make this change.")).toBeVisible(SERVER_STEP);
   await twoStep.getByLabel("Confirm with your current password", { exact: true }).fill(PASSWORD);
   await twoStep.getByRole("button", { name: "Turn on two-step sign-in" }).click();
   await expect(page.getByTestId("totp-key")).toBeVisible(SERVER_STEP);
+  await expect(passwordSection).toBeHidden(); // one task at a time while the setup steps are shown
   const key = (await page.getByTestId("totp-key").innerText()).replace(/\s+/g, "");
   expect(key).toMatch(/^[A-Z2-7]{16,}$/);
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
   await checkScreen(page);
 
+  // While the code is being checked (the answer is held back here), "Cancel setup" ignores presses and looks it.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/auth/totp/confirm", async (route) => {
+    await held;
+    await route.continue();
+  });
   await page.getByLabel("Code from your app").fill(totp(key));
   await page.getByRole("button", { name: "Confirm code" }).click();
+  const cancel = page.getByRole("button", { name: "Cancel setup" });
+  await expect(cancel).toHaveAttribute("aria-disabled", "true");
+  await expect(cancel).toHaveCSS("cursor", "progress");
+  await expect(cancel).toHaveCSS("color", "rgb(74, 88, 102)"); // --ink-soft: 6.8:1 on paper
+  await expect(cancel).toHaveCSS("text-decoration-style", "dotted");
+  release();
   await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10, SERVER_STEP);
+  await page.unroute("**/api/auth/totp/confirm");
   await checkScreen(page);
 
   await page.getByRole("button", { name: "I have saved my codes" }).click();

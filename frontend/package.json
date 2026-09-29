@@ -11,8 +11,15 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "api:types": "openapi-typescript ../backend/openapi.json -o lib/api/schema.d.ts",
-    "api:check": "node scripts/check-api-types.mjs"
+    "api:check": "node scripts/check-api-types.mjs",
+    "budget": "node scripts/js-budget.mjs"
   },
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 111",
+    "safari 16.4"
+  ],
   "dependencies": {
     "next": "16.3.6",
     "next-intl": "4.14.7",

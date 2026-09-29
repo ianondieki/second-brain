@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useRef, useState, type FormEvent } from "react";
 
+import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Button, textLinkClass } from "@/components/ui/Button";
@@ -16,33 +17,102 @@ import type { ErrorKey } from "@/lib/api/errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { EnrolmentSteps, loadEnrolmentSteps, StepUpForm } from "./lazy";
 import { usePasswordState } from "./PasswordState";
+import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
 type Phase = { name: "intro" } | { name: "setup"; secret: string; otpauthUri: string } | { name: "on" };
+/**
+ * What just happened, with the name the authenticator app shows for the entry where it matters: two-step sign-in
+ * was turned off, its setup was cancelled (delete that entry), or it is on but the recovery codes never arrived
+ * (keep that entry).
+ */
+type Notice = { key: "off" } | { key: "cancelled" | "codesNotShown"; product: string } | null;
+
+/**
+ * The issuer an authenticator app lists the account under: "Bridge" in otpauth://totp/Bridge:a%40b.c?issuer=Bridge.
+ * The API takes it from its product name setting, so a rename reaches this line without a copy change.
+ */
+export function issuerOf(otpauthUri: string): string | null {
+  try {
+    return new URL(otpauthUri).searchParams.get("issuer")?.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 export interface SecuritySettingsProps {
   enrolled: boolean;
   /** The person's role makes two-step sign-in mandatory: it cannot be turned off here. */
   required: boolean;
   homeHref: string;
-  /** For "Email me a sign-in link" when an account without a password must sign in again first. */
+  /**
+   * The account's email: the hidden username beside the password field (for password managers), and the address for
+   * "Email me a sign-in link" when an account without a password must sign in again first.
+   */
   email: string;
+  /** The product's name (the `app.name` brand token), for the cancelled notice if the setup key names no issuer. */
+  productName: string;
 }
 
-export function SecuritySettings({ enrolled, required, homeHref, email }: SecuritySettingsProps) {
+export function SecuritySettings({ enrolled, required, homeHref, email, productName }: SecuritySettingsProps) {
   const t = useTranslations("security");
-  const tf = useTranslations("fields");
   const te = useTranslations("errors");
 
   const [phase, setPhase] = useState<Phase>(enrolled ? { name: "on" } : { name: "intro" });
-  const [justTurnedOff, setJustTurnedOff] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [stepUp, setStepUp] = useState(false);
+  // What just happened (one notice at a time) and an API error: each takes focus when it appears after an action.
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   // Without a password, enrolment needs a fresh sign-in instead; the flag is shared with the Password section.
-  const { hasPassword, markPasswordSet } = usePasswordState();
+  const { hasPassword, markPasswordSet, setEnrolling } = usePasswordState();
+
+  /** The setup steps hide the Password section; it comes back when they end (cancelled, restarted or left). */
+  function show(next: Phase) {
+    setPhase(next);
+    setEnrolling(next.name === "setup");
+  }
+
+  /**
+   * Back to the start (setup cancelled, or the server lost it), with focus on what happened: the "cancelled" notice
+   * or the error. They sit above the steps, off screen at 360 px after the long setup steps, and the next Tab reaches
+   * where setup begins again (the password field when the account has one, else the start button), which takes
+   * focus itself when there is nothing to read. The server's pending key is replaced on the next start.
+   */
+  function backToStart(nextError: ErrorKey | null, nextNotice: Notice) {
+    reveal(
+      () => {
+        setError(nextError);
+        setNotice(nextNotice);
+        show({ name: "intro" });
+      },
+      () =>
+        noticeRef.current ??
+        errorRef.current ??
+        document.getElementById(hasPassword ? "enrol-password" : "two-step-start"),
+    );
+  }
+
+  /**
+   * Two-step sign-in is on at the server, but the answer with the recovery codes was lost: the "on" screen, with focus
+   * on the notice that says to keep the app entry. No route shows or replaces the codes yet (a step-up-protected one
+   * that issues new codes is follow-up 8 in docs/platform/tasks/REQ-AUTH-01.md), so the notice says how to get new
+   * ones only where the role allows turning two-step sign-in off.
+   */
+  function onWithoutCodes(product: string) {
+    reveal(
+      () => {
+        setError(null);
+        setNotice({ key: "codesNotShown", product });
+        show({ name: "on" });
+      },
+      () => noticeRef.current,
+    );
+  }
 
   /** Enrolment is a privilege change: the API asks for the current password (or a fresh sign-in without one). */
   async function start(event: FormEvent<HTMLFormElement>) {
@@ -51,14 +121,14 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setBusy(true);
     setError(null);
     setPasswordError(undefined);
-    setJustTurnedOff(false);
+    setNotice(null);
     // Fetch the next screen's code while the server works; a failed fetch surfaces later through React.lazy.
     const steps = loadEnrolmentSteps().catch(() => undefined);
     const outcome = await settle(api.POST("/api/auth/totp/enrol", { body: { password: password || null } }));
     if (!outcome.ok) {
       setBusy(false);
       if (outcome.key === "totp_already_enabled") {
-        setPhase({ name: "on" });
+        show({ name: "on" });
       } else if (outcome.key === "current_password_required") {
         markPasswordSet(); // the account has a password after all: keep asking for it
         setPasswordError(te("current_password_required"));
@@ -71,7 +141,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     await steps;
     setBusy(false);
     setPassword("");
-    setPhase({ name: "setup", secret: outcome.data.secret, otpauthUri: outcome.data.otpauth_uri });
+    show({ name: "setup", secret: outcome.data.secret, otpauthUri: outcome.data.otpauth_uri });
   }
 
   async function turnOff() {
@@ -79,13 +149,20 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setBusy(true);
     setError(null);
     const outcome = await settle(api.POST("/api/auth/totp/disable"));
-    setBusy(false);
     if (outcome.ok) {
-      setStepUp(false);
-      setJustTurnedOff(true);
-      setPhase({ name: "intro" });
+      // Focus on the "off" notice: the button that had it is gone, and the notice starts above the screen at 360 px.
+      reveal(
+        () => {
+          setBusy(false);
+          setStepUp(false);
+          setNotice({ key: "off" });
+          show({ name: "intro" });
+        },
+        () => noticeRef.current,
+      );
       return;
     }
+    setBusy(false);
     if (outcome.key === "step_up_required") {
       setStepUp(true); // StepUpForm asks for a fresh code, then calls turnOff again
       return;
@@ -93,7 +170,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
     setError(outcome.key);
   }
 
-  const errorBlock = <ErrorNotice error={error} email={email} />;
+  const errorBlock = <ErrorNotice error={error} email={email} alertRef={errorRef} />;
 
   if (phase.name === "on") {
     return (
@@ -103,6 +180,11 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
           <CheckIcon className="mt-0.5 size-5 shrink-0" />
           {t("on")}
         </p>
+        {notice?.key === "codesNotShown" ? (
+          <Alert ref={noticeRef}>
+            {t(required ? "codesNotShown" : "codesNotShownTurnOff", { product: notice.product })}
+          </Alert>
+        ) : null}
         {required ? (
           <p className="text-ink-soft">{t("mandatory")}</p>
         ) : stepUp ? (
@@ -122,6 +204,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
   }
 
   if (phase.name === "setup") {
+    const entryName = issuerOf(phase.otpauthUri) ?? productName;
     return (
       <div className="mt-8">
         <Suspense fallback={<p role="status" className="text-ink-soft">{t("starting")}</p>}>
@@ -129,10 +212,10 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
             secret={phase.secret}
             otpauthUri={phase.otpauthUri}
             homeHref={homeHref}
-            onRestart={(key) => {
-              setError(key);
-              setPhase({ name: "intro" });
-            }}
+            entryName={entryName}
+            onRestart={(key) => backToStart(key, null)}
+            onCancel={() => backToStart(null, { key: "cancelled", product: entryName })}
+            onEnrolled={() => onWithoutCodes(entryName)}
           />
         </Suspense>
       </div>
@@ -141,7 +224,16 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
 
   return (
     <div className="mt-8 flex flex-col gap-6">
-      {justTurnedOff ? <Alert tone="info">{t("off")}</Alert> : null}
+      {notice?.key === "off" ? (
+        <Alert ref={noticeRef} tone="info">
+          {t("off")}
+        </Alert>
+      ) : null}
+      {notice?.key === "cancelled" ? (
+        <Alert ref={noticeRef} tone="info">
+          {t("cancelled", { product: notice.product })}
+        </Alert>
+      ) : null}
       {errorBlock}
       <Steps
         label={t("stepsLabel")}
@@ -151,25 +243,24 @@ export function SecuritySettings({ enrolled, required, homeHref, email }: Securi
       />
       <Form onSubmit={start} className="flex flex-col gap-5">
         {hasPassword ? (
-          <PasswordField
-            id="enrol-password"
-            name="password"
-            label={t("currentPassword")}
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setPasswordError(undefined);
-            }}
-            error={passwordError}
-            showLabel={tf("showPassword")}
-            hideLabel={tf("hidePassword")}
-            showName={tf("showPasswordName")}
-            hideName={tf("hidePasswordName")}
-          />
+          <>
+            <AccountUsername email={email} />
+            <PasswordField
+              id="enrol-password"
+              name="password"
+              label={t("currentPassword")}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(undefined);
+              }}
+              error={passwordError}
+            />
+          </>
         ) : null}
         <div>
-          <SubmitButton variant="primary" busy={busy}>
+          <SubmitButton id="two-step-start" variant="primary" busy={busy}>
             {busy ? t("starting") : t("start")}
           </SubmitButton>
         </div>

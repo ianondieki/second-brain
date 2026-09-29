@@ -24,6 +24,32 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing before G5.
 - Decision:
 
+### D-28 · What the 150 KB JS budget counts: unit, and whether response headers count (REQ-UX-05, AC-UX-3)
+- Why: `docs/spec/07` item 5 says "≤150 KB JS gzipped per route", and AC-UX-3 checks it with Lighthouse. The Phase 1 follow-up branch reads it as 150,000 bytes of gzip-compressed script **bodies** on first load (`npm run budget`, `make budget`; `docs/runbooks/dev-setup.md`). Lighthouse's script "transfer size" also counts **response headers**. Headers depend on the protocol: about 0.4 KB per script over the local HTTP/1.1 server (after page-only security headers; about 0.8 KB before), a few bytes each once HTTP/2 or HTTP/3 compresses them (HPACK or QPACK) behind Caddy and Cloudflare in production (Phase 8). By the Lighthouse reading, over local HTTP/1.1, two routes are over. By the body reading, every route passes.
+- Measured 2026-09-27 (production build, `next start`, HTTP/1.1; signed-in route with an org-owner test session). The body cuts on this branch: openapi-fetch's runtime left the browser bundle (its types stay), and the password field reads its own show/hide labels. A custom `global-error` saved nothing; the error styles are in Next's router bundle.
+
+  | Route | Bodies before (`515227f`) | Bodies now | Bodies + HTTP/1.1 headers now | 150 KiB = 153,600 B |
+  |---|---|---|---|---|
+  | `/`, `/legal/terms` | 141,327 | 141,327 | 144,624 | within |
+  | `/login` | 148,775 | 146,315 | 149,612 | within |
+  | `/signup` | 150,378 | 147,658 | **150,955** | within |
+  | `/signup/check-email` | 146,774 | 144,733 | 148,030 | within |
+  | `/auth/link` | not measured | 146,431 | 149,728 | within |
+  | `/org` | 146,453 | 144,411 | 147,708 | within |
+  | `/settings/security` | 150,051 | 147,976 | **151,653** | within |
+
+  Re-measured 2026-09-28 at `5b41434`, every route (after the round-3 review fixes, where notices on `/settings/security` take focus; stand-in API, same build mode): `/settings/security` 148,518 bytes of bodies, **152,195** with headers (148,441 / 152,118 at `335fd0a`); `/signup` 147,898 / **151,195**; `/auth/link` 146,671 / 149,968; `/login` 146,553 / 149,850; `/signup/check-email` 144,972 / 148,269; `/org` 144,655 / 147,952; `/`, `/legal/terms` 141,327 / 144,624. `/auth/link`, `/signup/check-email` and `/org` are about 240 bytes over the table's 2026-09-27 figures, as `/signup` and `/login` already were at `335fd0a`; the round-3 fixes changed only `/settings/security`.
+
+  At the Phase 1 end (`00fc8f2`), every script also carried the page headers: `/signup` was 150,378 bytes of bodies, 157,741 with headers. The remaining first load is about 130 KB of Next.js and React runtime; the app's own code is 6–10 KB per route.
+- Options:
+  (a) **Bodies only**, 1 KB = 1,000 bytes (this branch). The T7.4 Lighthouse job reports transfer size for information, and the pass/fail check is `npm run budget` until an HTTP/2 target exists. From staging (D-22) or Phase 8 on, Lighthouse's own number is asserted against the HTTP/2 edge.
+  (b) **Lighthouse transfer size including headers, measured on local HTTP/1.1.** `/signup` and `/settings/security` must lose about 1–2 KB more in T7.4. Candidates: server-rendered strings instead of client-side `useTranslations` in the auth forms (the use-intl client runtime is about 2.9 KB); fewer client components per route.
+  (c) **Lighthouse transfer size including headers, measured against the production-like HTTP/2 edge** (staging or Phase 8). This is expected to be the bodies plus under 1 KB (not measured here). Until that edge exists, (a) applies.
+  (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 152,195 with headers, `/settings/security`).
+- Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 1.5 KB of headroom on the heaviest route (`/settings/security`, 1,482 bytes) for Phase 2 screens.
+- Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
+- Decision:
+
 ### D-30 · Upholding a claim dispute against an E2 organisation (T2.1 schema v2, T2.6b claims, REQ-DIR-03)
 - Why: `docs/spec/06` 6.2 and AC-DIR-2 say a claim on an E2 organisation opens a dispute instead of transferring it, and the platform never rules on legal ownership (6.12). Schema v2 sends such a claim to `disputed`, and staff can uphold a dispute with `app_decide_claim` (it rejects the earlier approved claims and removes those claimants' memberships in the same transaction). Against an **E2** organisation that path is closed on purpose today: an E1-level claim cannot be approved (there is no E2 → E1 step), and an E2-level claim cannot be approved either, because the claimant may accept the Master Enterprise Terms only on an unclaimed or E1 organisation and E2 approval requires that acceptance. So a dispute against an E2 organisation can be rejected but never upheld in the product.
 - Options: (a) allow an E2-level disputed claim to be upheld: the claimant of an open **disputed E2** claim may record the Master Enterprise Terms acceptance on that E2 organisation; staff admin approval keeps E2 (new `e2_verified_at`, new re-verification date) and transfers ownership as for E1 disputes; (b) add a staff-only step `app_staff_revoke_verification(org, reason)` (E2 → unclaimed, held engagements frozen, Tier-2 grants revoked) that staff run first, after which the disputed claim follows the normal E1/E2 path; (c) keep it closed: disputes against E2 organisations are handled off-platform under the 6.12 process (suspend the organisation with `organizations.suspended_at`, which already stops Tier-2 access, and reject the in-app claim with a reason), revisited when real disputes occur; (d) decide at G2 with the advocate, keep (c) until then.
@@ -47,6 +73,23 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
   (d) Both (b) and (c).
 - Recommended default: (a) now. Then (c) before staging (cheap while no real digests exist), and (b) with the Phase 8 hardening.
 - Blocks: nothing in Phase 2. (c) must be decided before real digests are stored (staging, D-22).
+- Decision:
+
+### D-33 · What the owner's "show name and title" opt-in on `/verify` means (T2.4, REQ-PROV-02)
+- Why: `docs/spec/06` 6.4 item 2 says public `/verify` shows only the hash, timestamp, TSA serial and match/no-match "unless the owner opts to show name and title". It does not say which name, at what scope, or what withdrawing does. The answer decides a schema column (T2.1 follow-up F4 was skipped for this reason) and what strangers can learn about an owner. Today `/verify` shows no name or title (fails closed).
+- Questions and options:
+  1. Which name: (a) the pseudonymous handle; (b) the display name; (c) the D2-verified legal name only (the certificate's rule), with the handle for owners below D2.
+  2. Scope: (a) per proposal (every version); (b) per registered version.
+  3. Withdrawal: (a) the owner can turn it off again, and `/verify` hides the name and title from then on (copies already seen cannot be recalled); (b) once on, it stays on for that version (it becomes part of the public record).
+- Recommended default: 1(c), 2(a), 3(a): the strongest identity only where it is verified, one switch per proposal, and a reversible choice. It needs one nullable column on `proposals` and an audit event on each change.
+- Blocks: the opt-in switch on `/verify` (F1–F4 screens); nothing else. Until then nothing is shown.
+- Decision:
+
+### D-34 · A fresh code to link or unlink a sign-in method (T2.12 follow-ups, REQ-AUTH-02)
+- Why: linking or unlinking a GitHub or Google sign-in uses the step-up rule from `docs/spec/06` (a second factor within the last 12 hours). For an account without a password but with two-step sign-in, a stolen session can therefore link the thief's own GitHub or Google account for up to about 12 h 10 min after the owner last entered a code. The thief can then sign in without the session. The `feat/REQ-AUTH-02-followups` threat model rates this Medium.
+- Options: (a) keep the 12-hour step-up rule for link and unlink (the spec's rule; today's behaviour); (b) ask for a new two-step code (or the password) at every link and unlink, whatever the last one was; (c) (b) for link only, and (a) for unlink.
+- Recommended default: (a) until you decide. (c) is a small change (one extra code prompt on a rare action) and closes the takeover path.
+- Blocks: nothing; the OAuth buttons ship in F4.
 - Decision:
 
 ## Decided
