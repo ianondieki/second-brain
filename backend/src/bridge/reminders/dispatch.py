@@ -16,7 +16,9 @@ Per recipient and period (the Nairobi day; for a weekly digest, its ISO week):
 3. The developer's wording (``word_nudge``: the LLM's two lines or the fixed text; the organisation's digest has no
    LLM), then the in-app summary (always on) and the email: only with the ``reminders`` consent, a verified address,
    the kind's email preference on and, for developers, a plan with ``daily_email_reminders``; ``send_email`` checks
-   suppressions and caps attempts at 3 per message (dead letter after). One commit per recipient.
+   suppressions. One attempt per run and at most 3 per message (REQ-NOT-06), so the 15-minute runs space the retries
+   of a transient failure; a permanent failure, or the third, ends the message ``failed`` (dead letter). One commit
+   per recipient.
 
 Organisation digests go to members who opted in (the ``reminders`` consent), one per member, organisation and period
 (``daily_key(..., org_id=...)``), cadence from the organisation's plan (``progress_digest``: daily or weekly).
@@ -24,7 +26,6 @@ Organisation digests go to members who opted in (the ``reminders`` consent), one
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
@@ -50,7 +51,7 @@ from bridge.models.enums import (
     NotificationChannel,
     UserStatus,
 )
-from bridge.notifications.deliveries import DEFAULT_BACKOFF, MAX_ATTEMPTS, Sleep, daily_key, send_email
+from bridge.notifications.deliveries import MAX_ATTEMPTS, daily_key, send_email
 from bridge.notifications.email import EmailMessage, EmailProvider, provider_from_settings
 from bridge.notifications.in_app import post_in_app
 from bridge.notifications.models import NotificationDelivery
@@ -79,8 +80,6 @@ class Deps:
     settings: Settings
     email: EmailProvider
     llm: LLMRuntime | None = None
-    backoff: Sequence[float] = DEFAULT_BACKOFF
-    sleep: Sleep = asyncio.sleep
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,9 +208,8 @@ async def _send(
         org_id=org_id,
         dedupe_key=key,
         local_date=period,
+        max_attempts=1,  # one per run: the next run (15 minutes later) retries a transient failure
         attempt_limit=MAX_ATTEMPTS,
-        backoff=deps.backoff,
-        sleep=deps.sleep,
     )
     return delivery.status
 
