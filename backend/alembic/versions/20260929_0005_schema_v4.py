@@ -225,12 +225,9 @@ POLICIES: tuple[Policy, ...] = (
     # --- agent_matches (ORG only): matches of published proposals; feedback as oneself ---
     Policy("agent_matches", "SELECT", _ORG_MEMBER),
     Policy("agent_matches", "INSERT", check=MATCH_INSERT),
-    Policy(
-        "agent_matches",
-        "UPDATE",
-        _SCOUT_ACTOR,
-        f"{_SCOUT_ACTOR} AND (feedback_by IS NULL OR feedback_by = app_user_id())",
-    ),
+    # Whose feedback it is needs OLD: agent_matches_feedback_guard (a CHECK here on feedback_by would also stop every
+    # other member, the digest job included, from updating a match someone judged).
+    Policy("agent_matches", "UPDATE", _SCOUT_ACTOR, _SCOUT_ACTOR),
     # --- research_runs (STAFF): staff admin only ---
     Policy("research_runs", "SELECT", _STAFF_ADMIN),
     Policy(
@@ -755,6 +752,64 @@ BEGIN
 END;
 $$;
 
+-- A match's feedback is its author's (docs/spec/06 6.8 feedback loop), for every role: a feedback is given as oneself,
+-- and once given only the member who gave it changes or clears it; anyone else who may update the match (an acting
+-- member, the digest job) still writes digest_sent_at. SECURITY INVOKER: reads nothing.
+CREATE FUNCTION agent_matches_feedback_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.feedback, NEW.feedback_reason, NEW.feedback_by, NEW.feedback_at)
+       IS DISTINCT FROM (OLD.feedback, OLD.feedback_reason, OLD.feedback_by, OLD.feedback_at) THEN
+        IF OLD.feedback_by IS NOT NULL AND OLD.feedback_by IS DISTINCT FROM public.app_user_id() THEN
+            RAISE EXCEPTION 'agent_matches: only the member who gave a feedback changes or clears it'
+                USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF NEW.feedback_by IS NOT NULL AND NEW.feedback_by IS DISTINCT FROM public.app_user_id() THEN
+            RAISE EXCEPTION 'agent_matches: a feedback is given as oneself' USING ERRCODE = 'insufficient_privilege';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A research run's lifecycle, for every role: its niche, region, starter and start never change; only the staff
+-- admin who started it changes its status (and with it its finish and stop reason); a finished run (completed,
+-- stopped or failed) never changes again: never back to running, nor its counts, cost or flags. SECURITY INVOKER:
+-- reads nothing.
+CREATE FUNCTION research_runs_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.id, NEW.niche_id, NEW.country, NEW.county_code, NEW.started_by, NEW.created_at)
+       IS DISTINCT FROM (OLD.id, OLD.niche_id, OLD.country, OLD.county_code, OLD.started_by, OLD.created_at) THEN
+        RAISE EXCEPTION 'research_runs: the niche, region, starter and start of a run never change'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF OLD.status <> 'running'
+       AND (NEW.status, NEW.finished_at, NEW.searches, NEW.fetches, NEW.input_tokens, NEW.candidates, NEW.discarded,
+            NEW.cost_usd, NEW.stop_reason, NEW.demo_fallback)
+           IS DISTINCT FROM (OLD.status, OLD.finished_at, OLD.searches, OLD.fetches, OLD.input_tokens, OLD.candidates,
+                             OLD.discarded, OLD.cost_usd, OLD.stop_reason, OLD.demo_fallback) THEN
+        RAISE EXCEPTION 'research_runs: a finished run never changes (it is %)', OLD.status
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status AND OLD.started_by IS DISTINCT FROM public.app_user_id() THEN
+        RAISE EXCEPTION 'research_runs: only the staff admin who started a run changes its status'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER agent_matches_feedback_guard
+    BEFORE UPDATE ON agent_matches
+    FOR EACH ROW EXECUTE FUNCTION agent_matches_feedback_guard();
+CREATE TRIGGER research_runs_guard
+    BEFORE UPDATE ON research_runs
+    FOR EACH ROW EXECUTE FUNCTION research_runs_guard();
 CREATE TRIGGER agent_runs_0_visible
     BEFORE INSERT ON agent_runs
     FOR EACH ROW EXECUTE FUNCTION scout_row_visible();
@@ -789,6 +844,8 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
 INTERNAL_FUNCTIONS = ("app_research_source_is_valid(jsonb)", "app_is_payment_subject(uuid, uuid)")
 TRIGGER_FUNCTIONS = (
     "scout_row_visible()",
+    "agent_matches_feedback_guard()",
+    "research_runs_guard()",
     "payments_guard()",
     "problems_research_guard()",
     "scout_agents_recipients()",

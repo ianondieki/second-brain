@@ -312,7 +312,7 @@ async def test_matches_name_the_current_version_of_a_published_clear_proposal(ow
             "UPDATE agent_matches SET feedback = 'not_relevant', feedback_reason = :reason, feedback_by = :by,"
             " feedback_at = now() WHERE id = :id"
         )
-        await expect(conn, judge, "row-level security", reason="off_niche", by=a.owner, id=match["id"])  # not as self
+        await expect(conn, judge, "a feedback is given as oneself", reason="off_niche", by=a.owner, id=match["id"])
         await expect(conn, judge, "feedback_complete", reason="Not for us!", by=a.reviewer, id=match["id"])
         assert await rowcount(conn, judge, reason="off_niche", by=a.reviewer, id=match["id"]) == 1
         sent = "UPDATE agent_matches SET digest_sent_at = now() WHERE id = :id"
@@ -324,6 +324,41 @@ async def test_matches_name_the_current_version_of_a_published_clear_proposal(ow
         await act(conn, b.owner, b.org)
         for scout_id, org_id in ((scout, b.org), (scout, a.org), (uuid7(), b.org)):
             await expect(conn, MATCH, "no scout of the caller's with that id", **match_params(scout_id, org_id, found))
+
+
+async def test_a_feedback_is_changed_or_cleared_only_by_its_author(owner_engine: AsyncEngine) -> None:
+    """Another acting member (or the owner role) neither overwrites nor clears a reviewer's feedback, but still records
+    the digest time; the author changes and clears their own; a cleared feedback is anyone's to give again."""
+    async with as_app(owner_engine) as conn:
+        niche = await add_niche(conn)
+        a = await seats(conn)
+        found = await proposals(conn, niche)
+        scout = await _scout(conn, a.org, a.owner, niche)
+        match = match_params(scout, a.org, found)
+        await run(conn, MATCH, **match)
+        judge = (
+            "UPDATE agent_matches SET feedback = CAST(:f AS match_feedback), feedback_reason = NULL,"
+            " feedback_by = :by, feedback_at = now() WHERE id = :id"
+        )
+        clear = (
+            "UPDATE agent_matches SET feedback = NULL, feedback_reason = NULL, feedback_by = NULL, feedback_at = NULL"
+            " WHERE id = :id"
+        )
+        await act(conn, a.reviewer, a.org)
+        assert await rowcount(conn, judge, f="relevant", by=a.reviewer, id=match["id"]) == 1
+        await act(conn, a.owner, a.org)
+        await expect(conn, judge, "only the member who gave a feedback", f="not_relevant", by=a.owner, id=match["id"])
+        await expect(conn, clear, "only the member who gave a feedback", id=match["id"])
+        assert (
+            await rowcount(conn, "UPDATE agent_matches SET digest_sent_at = now() WHERE id = :id", id=match["id"]) == 1
+        )
+        await as_owner(conn)
+        await expect(conn, clear, "only the member who gave a feedback", id=match["id"])
+        await act(conn, a.reviewer, a.org)
+        assert await rowcount(conn, judge, f="not_relevant", by=a.reviewer, id=match["id"]) == 1
+        assert await rowcount(conn, clear, id=match["id"]) == 1
+        await act(conn, a.owner, a.org)
+        assert await rowcount(conn, judge, f="relevant", by=a.owner, id=match["id"]) == 1
 
 
 async def test_deleting_a_scout_removes_its_runs_and_matches(owner_engine: AsyncEngine) -> None:

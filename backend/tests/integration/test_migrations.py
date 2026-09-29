@@ -402,6 +402,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_research_source_is_valid(jsonb)": (False, set()),  # app_create_research_candidate() only
     "app_is_payment_subject(uuid, uuid)": (False, set()),  # the payment definers only
     "scout_row_visible()": (False, set()),  # SECURITY INVOKER: the caller's RLS decides
+    "agent_matches_feedback_guard()": (False, set()),
+    "research_runs_guard()": (False, set()),
     "payments_guard()": (False, set()),
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
@@ -2202,6 +2204,8 @@ V5_TRIGGERS = {
     ("problems", "problems_research_guard"): ("problems_research_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     # After RLS: reads the organisation's roster.
     ("scout_agents", "scout_agents_recipients"): ("scout_agents_recipients", ROW | ON_INSERT | ON_UPDATE),
+    ("agent_matches", "agent_matches_feedback_guard"): ("agent_matches_feedback_guard", ROW | BEFORE | ON_UPDATE),
+    ("research_runs", "research_runs_guard"): ("research_runs_guard", ROW | BEFORE | ON_UPDATE),
     # Fires first on INSERT (name order): no unique or foreign key error reveals another organisation's scout.
     **{(t, f"{t}_0_visible"): ("scout_row_visible", ROW | BEFORE | ON_INSERT) for t in ("agent_runs", "agent_matches")},
 }
