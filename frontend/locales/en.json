@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim",
+    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim",
     "review": "[[COPY-REVIEW]] G2/G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing"
@@ -252,9 +252,25 @@
     "listLabel": "Proposals sent to {org}",
     "sent": "Sent {date}",
     "from": "From {handle}",
-    "stage": "{state, select, SUBMITTED {New} UNDER_REVIEW {In review} INFO_REQUESTED {Information asked for} DECLINED {Declined} WITHDRAWN {Withdrawn} TERMINATED {Ended} EXPIRED {Expired} CLOSED {Closed} other {In progress}}",
-    "maturity": "{maturity, select, idea {Idea} prototype {Prototype} mvp {Minimum viable product} live {Live with users} other {Not stated}}",
-    "ask": "{ask, select, sale {Wants to sell it} licence {Offers a licence} co_build {Wants to build it together} pilot {Wants to run a pilot} hire {Available to hire} other {Not stated}}",
+    "stage": {
+      "SUBMITTED": "New",
+      "UNDER_REVIEW": "In review",
+      "INFO_REQUESTED": "Information asked for",
+      "DECLINED": "Declined",
+      "WITHDRAWN": "Withdrawn",
+      "TERMINATED": "Ended",
+      "EXPIRED": "Expired",
+      "CLOSED": "Closed",
+      "other": "In progress"
+    },
+    "notStated": "Not stated",
+    "ask": {
+      "sale": "Wants to sell it",
+      "licence": "Offers a licence",
+      "co_build": "Wants to build it together",
+      "pilot": "Wants to run a pilot",
+      "hire": "Available to hire"
+    },
     "untitled": "Untitled proposal",
     "held": "{count, plural, one {# proposal waits} other {# proposals wait}} until {org} is verified with registration documents (E2).",
     "emptyE2": "No proposals yet: when a developer sends one to {org}, it arrives here.",

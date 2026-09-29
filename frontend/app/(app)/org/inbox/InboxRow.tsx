@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import type { InboxItem } from "../data";
+import { MATURITY_KEY } from "../labels";
 import { formatDay } from "../format";
 import { StageChip } from "../StageChip";
 
@@ -13,6 +14,7 @@ import { StageChip } from "../StageChip";
 export function InboxRow({ item, href }: { item: InboxItem; href: string }) {
   const t = useTranslations("inbox");
   const tp = useTranslations("orgProposal");
+  const tf = useTranslations("ideaFields");
   const locale = useLocale();
   const { teaser } = item.proposal;
   return (
@@ -39,11 +41,13 @@ export function InboxRow({ item, href }: { item: InboxItem; href: string }) {
       <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-1.5">
           <dt className="text-ink-soft">{tp("maturityLabel")}</dt>
-          <dd className="font-medium text-ink">{t("maturity", { maturity: teaser.maturity ?? "none" })}</dd>
+          <dd className="font-medium text-ink">
+            {teaser.maturity ? tf(MATURITY_KEY[teaser.maturity]) : t("notStated")}
+          </dd>
         </div>
         <div className="flex gap-1.5">
           <dt className="text-ink-soft">{tp("askLabel")}</dt>
-          <dd className="font-medium text-ink">{t("ask", { ask: teaser.ask ?? "none" })}</dd>
+          <dd className="font-medium text-ink">{teaser.ask ? t(`ask.${teaser.ask}`) : t("notStated")}</dd>
         </div>
       </dl>
     </article>

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { standaloneLinkClass } from "@/components/ui/Button";
 
 import type { TeaserCard } from "../../data";
+import { MATURITY_KEY } from "../../labels";
 import { formatDay } from "../../format";
 
 /**
@@ -15,6 +16,7 @@ import { formatDay } from "../../format";
 export function TeaserDetails({ card }: { card: TeaserCard }) {
   const t = useTranslations("orgProposal");
   const ti = useTranslations("inbox");
+  const tf = useTranslations("ideaFields");
   const locale = useLocale();
   const { teaser } = card;
   const sections = [
@@ -39,8 +41,8 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
           {t("details")}
         </h2>
         <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-[auto_1fr]">
-          <Row label={t("maturityLabel")}>{ti("maturity", { maturity: teaser.maturity ?? "none" })}</Row>
-          <Row label={t("askLabel")}>{ti("ask", { ask: teaser.ask ?? "none" })}</Row>
+          <Row label={t("maturityLabel")}>{teaser.maturity ? tf(MATURITY_KEY[teaser.maturity]) : ti("notStated")}</Row>
+          <Row label={t("askLabel")}>{teaser.ask ? ti(`ask.${teaser.ask}`) : ti("notStated")}</Row>
           <Row label={t("from")}>{card.owner_handle}</Row>
           <Row label={t("registered")}>
             <time dateTime={card.registered_at}>{formatDay(locale, card.registered_at)}</time>

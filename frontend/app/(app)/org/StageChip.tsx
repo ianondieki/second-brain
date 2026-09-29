@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/components/ui/cn";
 
 import type { InboxItem } from "./data";
+import { stageKey } from "./labels";
 
 type State = NonNullable<InboxItem["engagement"]>["state"];
 
@@ -39,7 +40,7 @@ export function StageChip({ engagement, className }: { engagement: InboxItem["en
           strokeWidth="1.5"
         />
       </svg>
-      {t("stage", { state })}
+      {t(stageKey(state))}
     </span>
   );
 }

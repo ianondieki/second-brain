@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
+    "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili"
@@ -252,11 +252,27 @@
     "listLabel": "Mapendekezo yaliyotumwa kwa {org}",
     "sent": "Lilitumwa {date}",
     "from": "Kutoka kwa {handle}",
-    "stage": "{state, select, SUBMITTED {Mpya} UNDER_REVIEW {Inakaguliwa} INFO_REQUESTED {Taarifa imeombwa} DECLINED {Imekataliwa} WITHDRAWN {Imeondolewa} TERMINATED {Imesitishwa} EXPIRED {Muda umeisha} CLOSED {Imefungwa} other {Inaendelea}}",
-    "maturity": "{maturity, select, idea {Wazo} prototype {Mfano wa majaribio} mvp {Bidhaa ya awali inayofanya kazi} live {Inatumiwa na watu} other {Haijatajwa}}",
-    "ask": "{ask, select, sale {Anataka kuiuza} licence {Anatoa leseni} co_build {Anataka kuijenga pamoja} pilot {Anataka kufanya majaribio} hire {Yuko tayari kuajiriwa} other {Haijatajwa}}",
+    "stage": {
+      "SUBMITTED": "Mpya",
+      "UNDER_REVIEW": "Inakaguliwa",
+      "INFO_REQUESTED": "Taarifa imeombwa",
+      "DECLINED": "Imekataliwa",
+      "WITHDRAWN": "Imeondolewa",
+      "TERMINATED": "Imesitishwa",
+      "EXPIRED": "Muda umeisha",
+      "CLOSED": "Imefungwa",
+      "other": "Inaendelea"
+    },
+    "notStated": "Haijatajwa",
+    "ask": {
+      "sale": "Anataka kuiuza",
+      "licence": "Anatoa leseni",
+      "co_build": "Anataka kuijenga pamoja",
+      "pilot": "Anataka kufanya majaribio",
+      "hire": "Yuko tayari kuajiriwa"
+    },
     "untitled": "Pendekezo lisilo na jina",
-    "held": "{count, plural, one {Pendekezo # linasubiri} other {Mapendekezo # yanasubiri}} hadi {org} ithibitishwe kwa hati za usajili (E2).",
+    "held": "{count, plural, one {# pendekezo linasubiri} other {# mapendekezo yanasubiri}} hadi {org} ithibitishwe kwa hati za usajili (E2).",
     "emptyE2": "Bado hakuna mapendekezo: msanidi programu akituma moja kwa {org}, litafika hapa.",
     "emptyE1": "Mapendekezo yatafika kwa {org} baada ya kuthibitishwa kwa hati za usajili (E2).",
     "emptyUnverified": "Mapendekezo yatafika kwa {org} baada ya uthibitisho wake kukamilika.",
