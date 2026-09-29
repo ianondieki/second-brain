@@ -28,8 +28,8 @@ Branch `feat/REQ-PROP-05-assistant` (impl-backend). No schema change, no new env
   is true only while this login session holds the opt-in.
 - `POST .../assistant/consent` `{version}`: 409 `consent_text_changed` unless it is the current `consents.yaml`
   version; then `grant_session_consent` (source `session:<session id>`), a `consent.changed` audit event
-  (`{tier2_llm_assistant: true, scope: "session", text_version, proposal_id}`) and a commit.
-- `DELETE .../assistant/consent`: `withdraw_session_consent`, the same audit event with `false`, a commit.
+  (`{tier2_llm_assistant: true, scope: "session", text_version, from_proposal_id}`: the scope is the session, the proposal only where it was turned on) and a commit.
+- `DELETE .../assistant/consent`: `withdraw_session_consent`, the same audit event with `false`, a commit; works from a deleted proposal too.
 - `POST .../assistant/suggestions`: 403 `consent_required` unless this session's opt-in is live, checked before
   anything is read or sent (so a Tier-1-only draft is gated too: the LLM layer's guard covers Tier-2 fields only).
   Reads the saved draft version (else the current version): the four Tier-1 teaser fields and the four Tier-2 text
@@ -37,7 +37,7 @@ Branch `feat/REQ-PROP-05-assistant` (impl-backend). No schema change, no new env
   request's `RoutedLLMClient` (sanitiser, nonce framing, caps before the call, `llm_calls` row, D-37 rule on free
   slots). Returns `{demo_fallback, status, message, ai_drafted, version_id, teaser: {title, summary} | null,
   placement: [{field, move, reason}]}` and writes a `proposal.assistant_suggested` audit event (version, status,
-  reason code, demo flag, trace id, the Tier-2 field names sent). It never writes the proposal: the editor applies a
+  reason code, demo flag, trace id, `tier2_fields_read`), also for a refusal after the confidential text was read (status `refused`). It never writes the proposal: the editor applies a
   suggestion through `PATCH /api/me/proposals/{id}`.
 
 **Code decides** (`assistant.evaluate`): a demo fallback (`TeaserSuggestion.demo_fallback()`: no suggestion,
@@ -55,9 +55,9 @@ router has already answered with the labelled fallback). `LLMConfigError` and a 
 mistakes and propagate.
 
 **Consents (REQ-LLM-01 carry-over).** `GET /api/me/consents` no longer lists `tier2_llm_assistant`; `PUT` refuses it
-with 422 `consent_session_only` (the whole body). `consents.yaml` 2026-09-29.1: "Let the writing assistant send my
-proposal, including my confidential (Tier 2) text, to an AI model to suggest a clearer teaser. This lasts for this
-sign-in only: it ends when I sign out or turn the assistant off." (`[[COPY-REVIEW]]`, D-39 item 6). The public
+with 422 `consent_session_only` (the whole body). `consents.yaml` 2026-09-29.2: "During this sign-in only, let the
+writing assistant send my proposals, including their confidential (Tier 2) text, to an AI model when I ask it to suggest
+a clearer teaser. It ends when I sign out or turn the assistant off." (`[[COPY-REVIEW]]`, D-39 item 6). The public
 `GET /api/consents` still lists every text.
 
 **Tests.** `unit/proposals/test_assistant_consent.py` (per-session gate, nothing sent without it, framing and
@@ -80,17 +80,46 @@ fallback treated as an answer: 3 red; (M6) the global budget message carrying th
 
 **Open (follow-ups, not built).**
 
-1. Signup still records a `tier2_llm_assistant` decision if a client sends one (`source = "signup"`; the guard never
-   counts it and `GET /api/me/consents` no longer shows it). Refusing it in `auth/service.py` is a small change in
-   security-reviewer territory.
+1. Signup still records a `tier2_llm_assistant` decision if a client sends one (`source = "signup"`; the guard counts
+   only `session:` rows and `GET /api/me/consents` no longer shows it). Refuse session-only purposes in
+   `validate_signup` after P17 merges (it touches `auth/`, which P17 is changing); THREAT_MODEL §1 lists the residual.
 2. docs/spec/09 says "Sync, streaming": the prototype answers in one response; streaming later.
-3. No over-disclosure check of the suggested teaser against the Tier-2 text: the prompt forbids copying Tier 2 and the
-   owner reviews before applying. The Haiku over-disclosure check (docs/spec/09) or a code overlap check with its
-   threshold in YAML belongs with REQ-PROP-02's warn-only check.
+3. **Done in review round 1:** a code overlap check (`tier2_overlap_words`). Still open: a paraphrase or a shorter copy
+   passes; the Haiku over-disclosure check (docs/spec/09) belongs with REQ-PROP-02's warn-only check.
 4. No eval set covers the assistant (docs/spec/09 lists none); the injection behaviour is covered by the tests above.
-5. The Tier-2 read for the assistant is audited as `proposal.assistant_suggested` (with the field names sent), not as a
+5. The Tier-2 read for the assistant is audited as `proposal.assistant_suggested` (`tier2_fields_read`), not as a
    separate `proposal.tier2_read`.
 6. Frontend P13-F: the editor panel (consent dialog from `GET .../assistant/consent`, "AI-drafted" and "demo fallback"
-   labels, apply through the editor's PATCH), after P12-F.
+   labels, apply through the editor's PATCH), after P12-F. **P13-F must never apply a suggestion automatically**: the
+   owner applies it (reviewer note, review round 1).
 7. Reviews: `reviewer` and one `security-reviewer` round (Tier-2 text to an LLM under per-session consent,
    `prototype-m2-plan.md` §5). The REQUIREMENTS row status is left to the orchestrator.
+
+## Review round 1 (2026-09-29): reviewer and security-reviewer CHANGES_REQUIRED, fixed
+
+- **MAJOR 1 (reviewer):** the owner-only test used a draft, which RLS hides anyway; removing `AND owner_id = :user`
+  from `assistant.owned` left every test green while a stranger's call sent a published teaser under the owner's id.
+  `integration/proposals/test_assistant_consent_api.py::test_the_assistant_is_the_owners_only` now runs on a published
+  and a draft proposal, the stranger holding a live opt-in of their own (a demo account), and asserts 404 on every
+  route with no provider request (`0e07294`). Mutation: the filter removed turns the published case red.
+- **MAJOR 2 (security):** no per-user limit; a 12-call burst sent 12 requests. Now, before the confidential text is
+  read: one suggestion in flight per user (`assistant.InFlight` on `app.state`, 429 `assistant_busy`) and a daily limit
+  of the user's `submission_assistant` ledger rows since the UTC day start (429 `assistant_rate_limited`), both in
+  `policy.yaml` `assistant` (`bridge/proposals/assistant_policy.py`, strict loader). The in-flight count is per API
+  process: **several workers need a ledger reservation row** (a row written before the call and settled after it)
+  instead. Tests: `integration/proposals/test_assistant_limits_api.py` (a held 12-request burst: exactly one provider
+  request, eleven 429 with no ledger row; the daily limit per user). Mutations: the claim ignored (burst red), the
+  daily check removed (daily test red).
+- (a) Refusals after the confidential text was read (403 `assistant_demo_only`, 429 `assistant_budget`, 503) write
+  `proposal.assistant_suggested` with status `refused` and the code, commit, and re-raise.
+- (b) The audit key is `tier2_fields_read` (names read for the call; `llm_calls` shows what left).
+- (c) Per session, not per proposal: new wording (2026-09-29.2), `from_proposal_id` in the grant's audit, withdrawal
+  from a deleted proposal.
+- (d) `test_on_the_anthropic_route_a_consenting_owners_tier2_goes_through_once` (and nothing without consent).
+- (e) `rejected:tier2_overlap`: a suggested title or summary sharing `tier2_overlap_words` (8) consecutive words (plain,
+  case-folded) with a confidential field that was sent is not shown; an injection inside Tier 2 is tested. Mutation:
+  the check disabled turns the unit and the API test red. THREAT_MODEL §6 has the new row.
+- (f) The two `POST` routes carry the `tier2` tag and `access.tier2_gate` (403 `tier2_disabled` while
+  `FEATURE_TIER2_ENABLED` is off; refusals audited with purpose `assistant`); `test_feature_flags.py::EXPECTED` lists
+  them. `GET` and `DELETE .../assistant/consent` stay open (turning the assistant off always works).
+- THREAT_MODEL: §1 (signup residual), §2 (one user starves others), §5 (flag), §6 (cost loops; tier crossing).
