@@ -16,6 +16,8 @@ import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
 import {
   actionItems,
+  DOCUMENT_KINDS,
+  documentKinds,
   DUAL_ENDORSEMENT_STATES,
   isFinished,
   kesAmount,
@@ -32,7 +34,6 @@ import { WhoseTurn } from "./WhoseTurn";
 export const TABS = ["tracker", "documents", "history"] as const;
 export type Tab = (typeof TABS)[number];
 
-const DOCUMENT_KINDS: readonly DocumentKind[] = ["mutual_nda", "agreement", "acceptance_certificate", "milestone_confirmation"];
 
 export function asTab(value: string | string[] | undefined): Tab {
   const first = Array.isArray(value) ? value[0] : value;
@@ -170,7 +171,8 @@ async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
 
 async function DocumentsTab({ detail, doc, href }: { detail: Detail; doc: DocumentKind | null; href: string }) {
   const t = await getTranslations("tracker");
-  if (detail.documents.length === 0) {
+  const kinds = documentKinds(detail);
+  if (kinds.length === 0) {
     return (
       <div data-empty-state="" className="flex flex-col items-start gap-3">
         <p className="text-ink">{t("documents.empty")}</p>
@@ -180,7 +182,7 @@ async function DocumentsTab({ detail, doc, href }: { detail: Detail; doc: Docume
       </div>
     );
   }
-  const shown = doc && detail.documents.some((d) => d.kind === doc) ? doc : detail.documents[0].kind;
+  const shown = doc && kinds.includes(doc) ? doc : kinds[0];
   const text = await engagementDocument(detail.id, shown);
   return (
     <section aria-labelledby="documents-heading">
@@ -189,14 +191,14 @@ async function DocumentsTab({ detail, doc, href }: { detail: Detail; doc: Docume
       </h2>
       <p className="mt-1 text-sm text-ink-soft">{t("documents.lead")}</p>
       <ul className="mt-3 flex flex-wrap gap-x-5">
-        {detail.documents.map((d) => (
-          <li key={d.kind}>
+        {kinds.map((kind) => (
+          <li key={kind}>
             <Link
-              href={`${href}?tab=documents&doc=${d.kind}`}
-              aria-current={d.kind === shown ? "page" : undefined}
-              className={cn(standaloneLinkClass, d.kind === shown && "text-ink no-underline")}
+              href={`${href}?tab=documents&doc=${kind}`}
+              aria-current={kind === shown ? "page" : undefined}
+              className={cn(standaloneLinkClass, kind === shown && "text-ink no-underline")}
             >
-              {t(`document.${d.kind}`)}
+              {t(`document.${kind}`)}
             </Link>
           </li>
         ))}

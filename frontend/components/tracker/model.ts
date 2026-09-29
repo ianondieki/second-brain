@@ -162,6 +162,26 @@ export function endorsementRows(detail: Pick<Detail, "endorsements" | "state">):
   };
 }
 
+/** Document kinds in stage order. */
+export const DOCUMENT_KINDS: readonly DocumentKind[] = [
+  "mutual_nda",
+  "agreement",
+  "acceptance_certificate",
+  "milestone_confirmation",
+];
+
+/**
+ * The documents the engagement has so far, in stage order. The API's `documents` lists the current stage's document
+ * only, so the signed ones (their signatures) and a final or signed agreement are added; GET …/documents/{kind} serves
+ * each. Milestone confirmations have no document route yet.
+ */
+export function documentKinds(detail: Pick<Detail, "documents" | "signatures" | "agreements">): DocumentKind[] {
+  const found = new Set<DocumentKind>(detail.documents.map((d) => d.kind));
+  for (const s of detail.signatures) found.add(s.document_kind);
+  if (detail.agreements.some((a) => a.status !== "draft")) found.add("agreement");
+  return DOCUMENT_KINDS.filter((kind) => kind !== "milestone_confirmation" && found.has(kind));
+}
+
 // --------------------------------------------------------------------------------------------- actions → requests
 
 /** Commands whose request carries more than `lock_version`: each opens a small form first. */

@@ -138,7 +138,7 @@ function MilestoneRow({
   const eat = useEat();
   const day = useDay();
   return (
-    <div data-milestone={milestone.seq} data-milestone-state={milestone.state}>
+    <div data-milestone-row={milestone.seq} data-milestone-state={milestone.state}>
       <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <span className="font-semibold text-ink">
           {t("milestone.name", { number: milestone.seq, deliverable: milestone.deliverable })}

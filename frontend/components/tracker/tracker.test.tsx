@@ -152,14 +152,14 @@ describe("dual endorsement rows (AC-TRACK-3)", () => {
 describe("the deal's records", () => {
   it("shows the signed agreement with its milestones, amounts and the review due date", () => {
     renderWithIntl(<Agreements detail={inImplementation()} />);
-    const m1 = document.querySelector("[data-milestone='1']")!;
+    const m1 = document.querySelector("[data-milestone-row='1']")!;
     expect(m1.textContent).toContain("Milestone 1: Pilot at two co-ops");
     expect(m1.textContent).toContain("KES 250,000");
     expect(m1.textContent).toContain("Submitted for review");
     expect(m1.textContent).toMatch(/Review due by 9 Oct 2026/);
     expect(screen.getByText("Non-exclusive licence")).toBeTruthy();
     expect(screen.getByText("Never: every milestone needs an acceptance")).toBeTruthy();
-    expect(document.querySelector("[data-milestone='2']")!.textContent).toContain("KES 1,000,000");
+    expect(document.querySelector("[data-milestone-row='2']")!.textContent).toContain("KES 1,000,000");
   });
 
   it("lists signatures with signer, party, method and fingerprint", () => {

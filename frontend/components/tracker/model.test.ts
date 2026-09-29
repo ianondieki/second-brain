@@ -6,6 +6,7 @@ import {
   actionItems,
   awaitsMe,
   commandRequest,
+  documentKinds,
   eatParts,
   endorsementRows,
   formatDate,
@@ -203,5 +204,28 @@ describe("formatting", () => {
     expect(toMinor("0")).toBeNull();
     expect(toMinor("12abc")).toBeNull();
     expect(toMinor("1.234")).toBeNull();
+  });
+});
+
+describe("the Documents tab", () => {
+  it("offers the current stage's document, every signed one and a final agreement, in stage order", () => {
+    const signed = {
+      id: "s1",
+      document_kind: "mutual_nda" as const,
+      document_ref: "r1",
+      document_sha256: "ab",
+      party: "org" as const,
+      signer_user_id: "u1",
+      signer_name: "Rita Wanjiru",
+      step_up_method: "totp" as const,
+      signed_at: "2026-09-23T11:05:00Z",
+    };
+    expect(documentKinds(detail())).toEqual([]);
+    expect(documentKinds(detail({ documents: [{ kind: "mutual_nda", ref: "r1", sha256: "ab" }] }))).toEqual(["mutual_nda"]);
+    const later = inImplementation({
+      signatures: [signed, { ...signed, id: "s2", document_kind: "milestone_confirmation" }],
+      documents: [{ kind: "acceptance_certificate", ref: "r2", sha256: "cd" }],
+    });
+    expect(documentKinds(later)).toEqual(["mutual_nda", "agreement", "acceptance_certificate"]);
   });
 });
