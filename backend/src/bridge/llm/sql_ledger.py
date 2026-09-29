@@ -21,27 +21,33 @@ logged (``llm.ledger_clamped``, error level) naming the columns. A clamped row s
 so the subject and the platform stop sooner, never later (fail closed); the pre-call caps keep real attempts far
 below the bound.
 
+Message Batches (revision 0002): ``reserve`` inserts an accepted batch's ``batch_reserved`` rows in one transaction;
+``settle`` inserts an item's final row with an untargeted ``ON CONFLICT DO NOTHING`` (the partial unique index allows
+one settlement per item; a targeted conflict clause is refused by RLS for system rows), and a row count of 0 means an
+earlier poll settled it. Both sums follow the ``llm_spend`` rule: the tenant sum reads the view (``security_invoker``,
+so the caller's RLS applies as on ``llm_calls``) and ``app_llm_spend_usd()`` sums it as the owner.
+
 Stored as the table defines it: ``purpose`` only for consent-covered tasks (NULL for Tier-1-only ones). The entry's
-``attempt``, ``batch_id``, ``error`` and ``output`` have no column in ``llm_calls``: the attempt reaches the
-``llm.call`` log, errors the exception and the dead-letter queue, and non-confidential outputs are not kept (no task
-is non-confidential today).
+``attempt``, ``error`` and ``output`` have no column in ``llm_calls``: the attempt reaches the ``llm.call`` log, errors
+the exception and the dead-letter queue, and non-confidential outputs are not kept (no task is non-confidential today).
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import DateTime, Numeric, Uuid, column, func, insert, select, table
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.db import bind_tenant, tenant_of
 from bridge.llm.errors import LLMConfigError
-from bridge.llm.ledger import LedgerEntry
+from bridge.llm.ledger import LedgerEntry, check_plain, check_reservation, check_settlement
 from bridge.llm.models import LlmCall
 from bridge.llm.registry import Purpose
 from bridge.logging import get_logger
@@ -50,6 +56,14 @@ STOP_REASON_CHARS = 40  # llm_calls.stop_reason; provider stop reasons are short
 MAX_ROW_COST_USD = Decimal(100)  # the llm_calls CHECK on cost_usd (a schema bound, not a spending cap)
 COUNT_COLUMNS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "latency_ms")
 log = get_logger("bridge.llm")
+# The spend rule (revision 0002): every llm_calls row except a batch reservation whose item has settled.
+LLM_SPEND = table(
+    "llm_spend",
+    column("org_id", Uuid),
+    column("user_id", Uuid),
+    column("cost_usd", Numeric(12, 6)),
+    column("created_at", DateTime(timezone=True)),
+)
 
 
 def row_values(entry: LedgerEntry) -> dict[str, Any]:
@@ -71,13 +85,15 @@ def row_values(entry: LedgerEntry) -> dict[str, Any]:
         "status": entry.status.value,
         "stop_reason": entry.stop_reason[:STOP_REASON_CHARS] if entry.stop_reason is not None else None,
         "trace_id": entry.trace_id,
+        "batch_id": entry.batch_id,
+        "custom_id": entry.custom_id,
         "inputs": dict(entry.inputs),
     }
     clamped = ["cost_usd"] if values["cost_usd"] != entry.cost_usd else []
-    for column in COUNT_COLUMNS:
-        if values[column] < 0:
-            values[column] = 0
-            clamped.append(column)
+    for name in COUNT_COLUMNS:
+        if values[name] < 0:
+            values[name] = 0
+            clamped.append(name)
     if clamped:
         log.error("llm.ledger_clamped", columns=clamped, task=entry.task, trace_id=entry.trace_id)
     return values
@@ -126,21 +142,42 @@ class SqlLedger:
         return member
 
     async def record(self, entry: LedgerEntry) -> None:
+        check_plain(entry)
         values = row_values(entry)
         async with self._session() as db:
             # No RETURNING: a system row (no user, no organisation) is not readable by bridge_app.
             await db.execute(insert(LlmCall).values(**values))
             await db.commit()
 
+    async def reserve(self, entries: Sequence[LedgerEntry]) -> None:
+        for entry in entries:
+            check_reservation(entry)
+        if not entries:
+            return
+        async with self._session() as db:
+            conn = await db.connection()
+            await conn.execute(insert(LlmCall), [row_values(e) for e in entries])  # one transaction: all or none
+            await db.commit()
+
+    async def settle(self, entry: LedgerEntry) -> bool:
+        check_settlement(entry)
+        stmt = pg_insert(LlmCall).values(**row_values(entry)).on_conflict_do_nothing()
+        async with self._session() as db:
+            conn = await db.connection()
+            inserted = (await conn.execute(stmt)).rowcount
+            await db.commit()
+        return inserted == 1
+
     async def tenant_spent_usd(self, *, org_id: UUID | None, user_id: UUID | None, since: datetime) -> Decimal:
         await self.check_subject(org_id=org_id, user_id=user_id)
+        spend = LLM_SPEND.c
         if org_id is not None:
-            subject = LlmCall.org_id == org_id
+            subject = spend.org_id == org_id
         elif user_id is not None:
-            subject = LlmCall.org_id.is_(None) & (LlmCall.user_id == user_id)
+            subject = spend.org_id.is_(None) & (spend.user_id == user_id)
         else:
             raise LLMConfigError("a platform call has no tenant spend (the global cap applies)")
-        stmt = select(func.coalesce(func.sum(LlmCall.cost_usd), 0)).where(subject, LlmCall.created_at >= since)
+        stmt = select(func.coalesce(func.sum(spend.cost_usd), 0)).where(subject, spend.created_at >= since)
         async with self._session() as db:
             return Decimal((await db.execute(stmt)).scalar_one())
 
