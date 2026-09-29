@@ -160,3 +160,11 @@ test run, and the file restored; all 13 transparency and 8 job tests pass again 
 | S2 budget | `time.monotonic()` instead of the run's clock | same | fails (budget spent at once) |
 | S2 budget | a spent budget before any timestamp does not fail the run | same | fails (did not raise) |
 | S2 lock | drop `lock=ANCHOR_LOCK` | `unit/jobs/test_provenance_jobs.py::test_hourly_anchor_runs_never_overlap` | fails (lock `None`) |
+
+## Re-check after the schema v2 merge (2026-09-29, prototype track): reviewer PASS, security-reviewer PASS; MINOR follow-ups
+
+1. `test_transparency.py:225-243`: no test proves "oldest head first" (dropping `occurred_at` from the ORDER BY survives). Add a capped `limit=1` case whose later chain id has the older head.
+2. `snapshot_at` is outside the signed root message. When the root message next changes, fold it in (`bridge-transparency-root-v2:<day>:<snapshot_at>:<root>`); meanwhile the runbook says to rely on the signed `day`, and THREAT_MODEL row 107's residual should name the unsigned time.
+3. `transparency_roots.snapshot_at SET NOT NULL` (db-migrations), then drop the "may be left out" case in `test_privileges.py:2097` and make the router field non-optional.
+4. Note in `.env.example`/dev setup: `AUDIT_READER_DATABASE_URL` must point at the primary, never a replica.
+5. The test-only `database_clock_guard` helper stays (tests are never removed without the human; it is harmless under the real guard).
