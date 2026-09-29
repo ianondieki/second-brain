@@ -311,7 +311,8 @@ async def publish(
     if document is None:
         raise ApiError(409, "nothing_to_publish", "This draft's confidential part is missing.")
     new_problem: dict[str, Any] | None = document.body.get(tier2.DRAFT_KEY, {}).get("new_problem")
-    linked = (await db.execute(_LINKED, {"version": version_id})).scalars().all()
+    # Only a published, clear problem counts: one rejected or held after it was linked does not.
+    linked = await problems.linkable(db, (await db.execute(_LINKED, {"version": version_id})).scalars().all())
     values = row._asdict()
     errors = editor.publish_errors(values, has_problem=bool(linked) or new_problem is not None, new_problem=new_problem)
     if errors:

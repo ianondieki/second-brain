@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge.crypto.envelope import LocalKeyWrapper, Purpose, Sealed, open_data_key, open_sealed
@@ -18,6 +19,7 @@ from bridge.provenance import service as provenance
 from bridge.provenance.signing import LocalSigner
 from bridge.provenance.tsa import TsaClient
 from bridge.storage.objects import InMemoryObjectStore
+from tests.integration import world as w
 from tests.integration.proposals.helpers import (
     SECRET_APPROACH,
     Developers,
@@ -271,3 +273,24 @@ async def test_editing_a_published_proposal_starts_the_next_version(
     }
     assert hashes[2][1] == hashes[1][0]
     assert (await reader.get(f"/api/verify/{first['cert_id']}")).status_code == 200
+
+
+async def test_only_a_linkable_problem_counts_at_publishing(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    """A linked problem rejected (or held) after it was linked no longer satisfies "at least one Problem"."""
+    async with owner_engine.begin() as conn:
+        author = await w.add_user(conn, f"gone-{uuid4().hex[:8]}@example.test", "Gone")
+        problem_id = await w.add_problem(conn, author, proposal_world.niche_id)
+    owner = await developers()
+    body = draft_body(proposal_world, link=False)
+    body["problem_ids"] = [str(problem_id)]
+    created = await create(owner, body)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE problems SET status = 'rejected', moderation_state = 'rejected' WHERE id = :id"),
+            {"id": problem_id},
+        )
+    refused = await publish(owner, created["id"])
+    assert refused.status_code == 422
+    assert [(e["field"], e["code"]) for e in refused.json()["detail"]["errors"]] == [("problems", "problem_required")]
