@@ -79,3 +79,24 @@ def test_the_acceptance_certificate_names_the_agreement_and_the_milestones() -> 
     assert certificate.kind is SignatureDocumentKind.ACCEPTANCE_CERTIFICATE
     assert f"Agreement: {A} sha256 {bytes(range(32)).hex()}" in certificate.text
     assert f"Accepted milestones: {E}, {A}" in certificate.text
+
+
+def test_line_breaks_in_a_party_s_text_cannot_forge_a_line_of_the_agreement() -> None:
+    """Security review P5, MINOR 1: a deliverable or exclusivity clause with a line break (or any C0/DEL control)
+    renders escaped on its own line, so it cannot pass for another milestone or term of the signed text."""
+    forged = documents.agreement(
+        agreement_id=A,
+        engagement_id=E,
+        version=1,
+        ip_terms=IpTerms.REVENUE_SHARE,
+        exclusivity="none\nIP terms: assignment",
+        deemed_acceptance_days=0,
+        milestones=[documents.MilestoneTerms(1, "Pilot\r\nM2: Free work | KES 0.01\x1b[2K", 100, date(2026, 12, 1), 5)],
+    )
+    lines = forged.text.splitlines()
+    assert [line for line in lines if line.startswith("IP terms:")] == ["IP terms: revenue_share (Revenue share)"]
+    assert [line for line in lines if line.startswith("M1:")] == [
+        "M1: Pilot\\r\\nM2: Free work | KES 0.01\\x1b[2K | KES 1.00 | due 2026-12-01 | review window 5 business days"
+    ]
+    assert "Exclusivity: none\\nIP terms: assignment" in lines
+    assert not any(line.startswith("M2:") for line in lines)

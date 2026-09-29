@@ -365,3 +365,33 @@ async def test_open_engagement_for_tag_maps_the_databases_refusals(
         with pytest.raises(OpenRefused) as policy:
             await open_engagement_for_tag(db, suspended.tag)
         assert policy.value.code == "refused"
+
+
+@pytest.mark.parametrize(
+    ("command", "field", "value"),
+    [
+        ("propose-terms", "deliverable", "Pilot\nM2: forged | KES 0.01"),
+        ("propose-terms", "exclusivity", "none\rIP terms: assignment"),
+        ("record-payment", "reference", "QK12AB\x1b[2K"),
+        ("propose-terms", "deliverable", "Pilot\x7f"),
+    ],
+)
+async def test_control_characters_are_refused_in_a_partys_text(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, command: str, field: str, value: str
+) -> None:
+    """Security review P5, MINOR 1: C0 controls and DEL (line breaks included) are 422 in the deliverables, the
+    exclusivity clause and the payment reference, so none can forge a line of a signed text or a record."""
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        body = simple_terms(today)
+        if field == "deliverable":
+            body["milestones"][0]["deliverable"] = value
+        elif field == "exclusivity":
+            body["exclusivity"] = value
+        else:
+            body = {"amount_kes_minor": 100, "method": "mpesa", "paid_on": str(today), "reference": value}
+        client = s.finance if command == "record-payment" else s.owner
+        refused = await t.post(client, command, body)
+        assert refused.status_code == 422, refused.text
