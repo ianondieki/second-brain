@@ -119,7 +119,10 @@ class MilestoneInput:
     deliverable: str
     amount_kes_minor: int
     due_date: date
-    review_window_bd: int
+    review_window_bd: int | None = None  # None: policy.yaml's milestones.review_window_bd_default
+
+    def window(self, policy: TrackerPolicy) -> int:
+        return policy.review_window_bd_default if self.review_window_bd is None else self.review_window_bd
 
 
 @dataclass(frozen=True, slots=True)
@@ -538,7 +541,7 @@ def _check_terms(terms: TermsInput, step: Step) -> None:
     if terms.exclusivity is not None and not 0 < len(terms.exclusivity.strip()) <= policy.exclusivity_max_chars:
         raise sm.Invalid("invalid_terms", f"The exclusivity clause is 1 to {policy.exclusivity_max_chars} characters.")
     for m in terms.milestones:
-        if not 1 <= m.review_window_bd <= policy.review_window_bd_max or m.due_date < today:
+        if not 1 <= m.window(policy) <= policy.review_window_bd_max or m.due_date < today:
             raise sm.Invalid(
                 "invalid_terms",
                 f"Each milestone needs a due date from today and a review window of 1 to"
@@ -574,7 +577,7 @@ async def _propose_terms(step: Step) -> None:
                 deliverable=m.deliverable.strip(),
                 amount_kes_minor=m.amount_kes_minor,
                 due_date=m.due_date,
-                review_window_bd=m.review_window_bd,
+                review_window_bd=m.window(step.policy),
                 state=MilestoneState.PLANNED,
             )
         )

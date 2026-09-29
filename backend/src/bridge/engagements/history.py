@@ -14,14 +14,14 @@ from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.audit.service import record as audit
 from bridge.auth.models import User
 from bridge.engagements import chain, documents
 from bridge.engagements import state_machine as sm
-from bridge.engagements.calendar import local_date
+from bridge.engagements.calendar import add_business_days, local_date
 from bridge.engagements.commands import agreement_document
 from bridge.engagements.models import (
     Agreement,
@@ -58,6 +58,7 @@ from bridge.models.enums import (
     EngagementEndReason,
     EngagementParty,
     EngagementState,
+    MilestoneState,
     SignatureDocumentKind,
 )
 from bridge.proposals.models import ProposalVersion
@@ -177,6 +178,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             )
         ).scalars()
     )
+    review_due = await _review_due(db, engagement.id, milestones)
     endorsements = [
         e
         for e in await _endorsements(db, engagement.id)
@@ -226,7 +228,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
                 drafted_by=EngagementParty.DEVELOPER
                 if a.created_by == engagement.developer_id
                 else EngagementParty.ORG,
-                milestones=[_milestone(m) for m in milestones if m.agreement_id == a.id],
+                milestones=[_milestone(m, review_due.get(m.id)) for m in milestones if m.agreement_id == a.id],
                 created_at=a.created_at,
             )
             for a in agreements
@@ -265,7 +267,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
     )
 
 
-def _milestone(m: Milestone) -> MilestoneOut:
+def _milestone(m: Milestone, review_due_on: date | None) -> MilestoneOut:
     return MilestoneOut(
         id=m.id,
         seq=m.seq,
@@ -274,7 +276,31 @@ def _milestone(m: Milestone) -> MilestoneOut:
         due_date=m.due_date,
         review_window_bd=m.review_window_bd,
         state=m.state,
+        review_due_on=review_due_on,
     )
+
+
+async def _review_due(db: AsyncSession, engagement_id: UUID, milestones: Sequence[Milestone]) -> dict[UUID, date]:
+    """REQ-ENG-09: a milestone under review is due its review window in business days after the Nairobi date of its
+    latest submission (a resubmission after changes starts a new window)."""
+    waiting = {str(m.id): m for m in milestones if m.state is MilestoneState.SUBMITTED_FOR_REVIEW}
+    if not waiting:
+        return {}
+    milestone_id = EngagementEvent.payload["milestone_id"].astext
+    rows = await db.execute(
+        select(milestone_id, func.max(EngagementEvent.created_at))
+        .where(
+            EngagementEvent.engagement_id == engagement_id,
+            EngagementEvent.command == sm.Command.SUBMIT_MILESTONE.value,
+            milestone_id.in_(list(waiting)),
+        )
+        .group_by(milestone_id)
+    )
+    submitted = {key: local_date(at) for key, at in rows.tuples()}  # the chain records every submission
+    holidays = await load_holidays(db, min(submitted.values())) if submitted else frozenset()
+    return {
+        waiting[key].id: add_business_days(on, waiting[key].review_window_bd, holidays) for key, on in submitted.items()
+    }
 
 
 async def history(db: AsyncSession, engagement_id: UUID) -> HistoryOut:

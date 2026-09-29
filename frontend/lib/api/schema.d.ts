@@ -2768,9 +2768,9 @@ export interface components {
             due_date: string;
             /**
              * Review Window Bd
-             * @default 5
+             * @description business days; omitted: policy.yaml's review_window_bd_default
              */
-            review_window_bd: number;
+            review_window_bd?: number | null;
         };
         /** MilestoneOut */
         MilestoneOut: {
@@ -2788,6 +2788,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Review Due On
+             * @description while submitted for review: the submission's Nairobi date plus the review window
+             */
+            review_due_on?: string | null;
             /** Review Window Bd */
             review_window_bd: number;
             /** Seq */

@@ -2566,7 +2566,7 @@
           "deliverable": {
             "maxLength": 500,
             "minLength": 1,
-            "pattern": "^[^\\x00]*$",
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
             "title": "Deliverable",
             "type": "string"
           },
@@ -2576,11 +2576,18 @@
             "type": "string"
           },
           "review_window_bd": {
-            "default": 5,
-            "maximum": 60.0,
-            "minimum": 1.0,
-            "title": "Review Window Bd",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "business days; omitted: policy.yaml's review_window_bd_default",
+            "title": "Review Window Bd"
           }
         },
         "required": [
@@ -2610,6 +2617,19 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "review_due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "while submitted for review: the submission's Nairobi date plus the review window",
+            "title": "Review Due On"
           },
           "review_window_bd": {
             "title": "Review Window Bd",
@@ -3667,7 +3687,7 @@
             "anyOf": [
               {
                 "maxLength": 64,
-                "pattern": "^[^\\x00]*$",
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
                 "type": "string"
               },
               {
@@ -5303,7 +5323,7 @@
             "anyOf": [
               {
                 "maxLength": 500,
-                "pattern": "^[^\\x00]*$",
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
                 "type": "string"
               },
               {

@@ -60,7 +60,9 @@ class MilestoneBody(BaseModel):
     deliverable: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
     amount_kes_minor: int = Field(gt=0, le=MAX_KES_MINOR)
     due_date: date
-    review_window_bd: int = Field(default=5, ge=1, le=60)
+    review_window_bd: int | None = Field(
+        default=None, ge=1, le=60, description="business days; omitted: policy.yaml's review_window_bd_default"
+    )
 
 
 class TermsBody(CommandBody):
@@ -148,6 +150,9 @@ class MilestoneOut(BaseModel):
     due_date: date
     review_window_bd: int
     state: MilestoneState
+    review_due_on: date | None = Field(
+        default=None, description="while submitted for review: the submission's Nairobi date plus the review window"
+    )
 
 
 class AgreementOut(BaseModel):
