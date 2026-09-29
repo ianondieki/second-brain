@@ -120,8 +120,9 @@ class AheadOfTheDatabase(TsaClient):
 
 @asynccontextmanager
 async def database_clock_guard(owner: AsyncEngine) -> AsyncIterator[None]:
-    """A test trigger refusing anchors timed more than a minute after the database clock, as schema v2's
-    chain_anchors_guard does (the trial inserts of the unanchored-head probe are timed at the epoch and pass)."""
+    """A test trigger refusing anchors timed more than a minute after the database clock. Schema v2's
+    chain_anchors_guard applies the same bound; this trigger keeps the refusal explicit in the tests that rely on it,
+    whatever the guard's other checks become."""
     async with owner.begin() as conn:
         await conn.execute(
             text(
@@ -213,9 +214,11 @@ async def test_the_hourly_anchor_timestamps_each_moved_head_once(
     async with sessions() as s:
         limited = await anchor_chain_heads(s, tsa.client(), limit=2)
     assert len(limited.anchored) == 2
+    assert limited.heads == 3  # every head waiting for an anchor, not only the ones this run takes
     async with sessions() as s:
         rest = await anchor_chain_heads(s, tsa.client())
     assert len(rest.anchored) == 1
+    assert rest.heads == 1
     assert {(r.chain_id, r.seq) for r in await anchors(reader)} >= {("org:anchor-a", 3), ("org:anchor-a", 4)}
 
 

@@ -2,11 +2,10 @@
 
 Hourly ``anchor_chain_heads``: an RFC 3161 token over the head (last ``event_hash``) of every audit chain that moved
 since its last anchor, into ``chain_anchors``, at most ``MAX_ANCHORS_PER_RUN`` per run in ``anchor_order`` (oldest head
-first, then chain id). The heads come from ``app_audit_chain_heads()`` (ids, sequence numbers and hashes only);
-``provenance_worker`` executes it and inserts anchors but may not read ``chain_anchors``, so a head is known to be
-anchored when a trial insert of it inside a savepoint conflicts (the savepoint is always rolled back, so the
-append-only table never sees it). A cleaner definer function (``app_unanchored_chain_heads()``) is noted for
-db-migrations. TSA calls happen outside any transaction.
+first, then chain id). The heads waiting for an anchor come from the definer function ``app_unanchored_chain_heads()``
+(schema v2: chain ids, sequence numbers, hashes and the heads' times only, for the heads with no anchor at their
+sequence number); ``provenance_worker`` executes it and inserts anchors but may not read ``chain_anchors`` or
+``audit_events``. TSA calls happen outside any transaction.
 
 A token's time may be at most ``ANCHOR_MAX_AHEAD`` (one minute) ahead of the worker's clock, the bound schema v2's
 ``chain_anchors_guard`` applies with the database's clock (``tsa_time <= clock_timestamp() + 1 minute``); the past
@@ -81,7 +80,7 @@ class ChainHead:
 
 @dataclass(slots=True)
 class AnchorReport:
-    heads: int = 0
+    heads: int = 0  # heads with no anchor when the run started (the run takes at most its limit of them)
     anchored: list[ChainHead] = field(default_factory=list)
     failed: list[ChainHead] = field(default_factory=list)
     rejected: list[ChainHead] = field(default_factory=list)  # timestamped, but the database refused the anchor
@@ -106,9 +105,12 @@ def root_over(heads: Sequence[ChainHead]) -> bytes:
     return merkle_root([leaf(h) for h in sorted(heads, key=lambda h: h.chain_id)])
 
 
-# Every column the heads function returns: today chain_id, seq and event_hash; occurred_at (the head's time) once
-# db-migrations adds it (schema follow-up on the REQ-PROV-01 card). Until then heads are ordered by chain id alone.
-_HEADS = text("SELECT h.* FROM app_audit_chain_heads() AS h")
+# The first ``limit`` heads with no anchor at their sequence number, in anchor_order (chain ids compared by code
+# point, as Python compares them, whatever the database's collation), and how many heads wait in all.
+_UNANCHORED = text(
+    "SELECT h.chain_id, h.seq, h.event_hash, h.occurred_at, count(*) OVER () AS waiting"
+    ' FROM app_unanchored_chain_heads() AS h ORDER BY h.occurred_at, h.chain_id COLLATE "C" LIMIT :limit'
+)
 
 
 def anchor_order(heads: Sequence[ChainHead]) -> list[ChainHead]:
@@ -121,29 +123,6 @@ _INSERT_ANCHOR = text(
     "INSERT INTO chain_anchors (id, chain_id, seq, event_hash, tsa_token, tsa_time, tsa_serial)"
     " VALUES (:id, :chain_id, :seq, :event_hash, :token, :tsa_time, :serial) ON CONFLICT DO NOTHING"
 )
-
-
-async def _unanchored(session: AsyncSession, heads: Sequence[ChainHead]) -> list[ChainHead]:
-    """Heads with no anchor yet: a trial insert that conflicts means the head is anchored (always rolled back)."""
-    fresh: list[ChainHead] = []
-    for head in heads:
-        trial = await session.begin_nested()
-        result = await session.execute(
-            _INSERT_ANCHOR,
-            {
-                "id": uuid7(),
-                "chain_id": head.chain_id,
-                "seq": head.seq,
-                "event_hash": head.event_hash,
-                "token": b"\x00",
-                "tsa_time": _EPOCH,
-                "serial": "trial",
-            },
-        )
-        await trial.rollback()
-        if cast(CursorResult[Any], result).rowcount == 1:
-            fresh.append(head)
-    return fresh
 
 
 async def _store(
@@ -198,10 +177,9 @@ async def anchor_chain_heads(
     started = clock()
     report = AnchorReport()
     async with session.begin(), as_role(session, WORKER):
-        rows = (await session.execute(_HEADS)).all()
-        heads = [ChainHead(r.chain_id, r.seq, bytes(r.event_hash), r._mapping.get("occurred_at")) for r in rows]
-        report.heads = len(heads)
-        pending = anchor_order(await _unanchored(session, heads))[:limit]
+        rows = (await session.execute(_UNANCHORED, {"limit": limit})).all()
+    report.heads = rows[0].waiting if rows else 0
+    pending = anchor_order([ChainHead(r.chain_id, r.seq, bytes(r.event_hash), r.occurred_at) for r in rows])
     tokens: list[tuple[ChainHead, TimestampToken]] = []
     timestamped = 0
     reason = ""
