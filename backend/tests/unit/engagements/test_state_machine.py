@@ -446,3 +446,18 @@ def test_the_errors_carry_their_status() -> None:
     assert (sm.Forbidden("a", "b").status, sm.Conflict("a", "b").status, sm.Invalid("a", "b").status) == (403, 409, 422)
     assert sm.other(DEV) is ORG
     assert sm.other(ORG) is DEV
+
+
+def test_after_a_reopen_either_party_proposes_new_terms() -> None:
+    """Review P5 (MINOR): reopening leaves the latest version final, so nobody can mark it final: the next step is
+    a new version, by either party (the pending list and the caller's actions agree)."""
+    reopened = sm.Facts(draft_by=DEV, draft_status=AgreementStatus.FINAL)
+    assert [(p.command, p.party) for p in sm.pending(S.NEGOTIATION, reopened)] == [
+        (C.PROPOSE_TERMS, DEV),
+        (C.PROPOSE_TERMS, ORG),
+    ]
+    assert sm.whose_turn(S.NEGOTIATION, reopened) == (DEV, ORG)
+    owner = sm.Actor(ORG, frozenset({R.OWNER}))
+    assert sm.available(owner, S.NEGOTIATION, reopened) == (C.PROPOSE_TERMS,)
+    drafted = sm.Facts(draft_by=DEV, draft_status=AgreementStatus.DRAFT)
+    assert [(p.command, p.party) for p in sm.pending(S.NEGOTIATION, drafted)] == [(C.MARK_FINAL, ORG)]
