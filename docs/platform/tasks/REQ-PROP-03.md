@@ -107,3 +107,28 @@ written from the developer's request today (see "Schema needs").
   line and digest (REQ-NOT-03, EM7).
 - Invitations for E0 organisations (REQ-DIR-04) and delisting's notice to the developer.
 - The cooldown length and the batch size (20) as `policy.yaml` values.
+
+## Review (2026-09-29): reviewer PASS at `18b813c`, 5 MINOR
+
+Test gaps closed now (each red against a mutation of the code it guards, then restored and green; command in
+`backend/`: `TEST_DATABASE_ADMIN_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:55432/postgres .venv/bin/python
+-m pytest -q -p no:cacheprovider <test>`):
+
+| Proof | Mutation | Test (red → restored green) |
+|---|---|---|
+| M1 | no per-developer advisory lock in `tags.pitch` | `integration/billing/test_caps.py::test_concurrent_pitches_cannot_pass_the_cap` (three sessions, one proposal, three E0 organisations; a pause after the cap read makes the race deterministic: 3 of 3 runs red without the lock) |
+| M2 | `DECLINE_COOLDOWN` 28 days | `integration/proposals/test_tags.py::test_a_decline_holds_the_organisation_back_for_30_days` (now also refused at +29 days on the shared clock, allowed at +31) |
+| M3 | Browse repo SQL without the status and moderation filters | `integration/proposals/test_search.py::test_every_full_page_is_full_and_no_cursor_names_a_hidden_teaser` (every page with a cursor holds `limit` items and no decoded cursor names a draft, held or hidden proposal; searched by the owners too, whom RLS lets read their own held and hidden rows) |
+
+Follow-ups (MINOR, not built):
+
+- The organisation's verification is read (`ORGS`) without a lock before the tag insert. If the organisation changes
+  level in between (an E2 approval or a suspension), the tags INSERT policy or revision 0003's engagement policy
+  refuses with `InsufficientPrivilege`, which surfaces as a 500 (not a 409); and an E1 tag inserted just before an E2
+  approval can be left held at an organisation that is now E2 (`app_decide_claim` delivers only the held tags it sees).
+  Fix: read the organisation `FOR SHARE` through a SECURITY DEFINER helper (bridge_app has no UPDATE on
+  `organizations.verification`, so it cannot lock the row itself) or map `InsufficientPrivilege` at the insert to 409
+  `tag_conflict`, plus a sweep that delivers held tags of E2 organisations (db-migrations for the helper).
+- The `_USED` branch that counts a closed `delivered` or `expired` tag (and a tag with an engagement) is not tested:
+  add a cap test with a declined (closed, delivered) tag and an expired one once P5 writes those states.
+- Commit sizes: several P4 commits exceed the ~300-line guidance (test files, one service module).
