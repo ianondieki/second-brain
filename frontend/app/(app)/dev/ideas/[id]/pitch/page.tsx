@@ -11,12 +11,12 @@ import { ClockIcon, SendIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BackLink } from "@/components/ui/BackLink";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Badge } from "@/components/ui/Badge";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { splitNicheLabel } from "../../../companies/filters";
 import { VerificationBadge } from "../../../companies/VerificationBadge";
 import { myIdeas } from "../../data";
 import { BASE_PATH, ideaHref } from "../../ideas";
@@ -65,7 +65,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   if (!idea) {
     return shell(
       <Header>
-        <EmptyState className="mt-6" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />
+        <EmptyState className="mt-8" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />
       </Header>,
     );
   }
@@ -78,20 +78,20 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
       </Header>,
     );
   if (status !== "published") {
-    return header(<EmptyState className="mt-6" sentence={t(`blocked.${status}`)} action={t("back")} href={back} />);
+    return header(<EmptyState className="mt-8" sentence={t(`blocked.${status}`)} action={t("back")} href={back} />);
   }
 
   const [page, niches] = await Promise.all([pickerPage(idea.id, query), nicheTree()]);
-  if (page.kind === "notFound") return header(<EmptyState className="mt-6" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />);
+  if (page.kind === "notFound") return header(<EmptyState className="mt-8" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />);
   if (page.kind === "staleCursor") {
     const first = pitchHref(idea.id, { ...query, cursor: undefined });
-    return header(<EmptyState className="mt-6" sentence={t("staleCursor")} action={t("firstPage")} href={first} />);
+    return header(<EmptyState className="mt-8" sentence={t("staleCursor")} action={t("firstPage")} href={first} />);
   }
   const { picker } = page;
   // Published but not public to the API: moderation changed after the list was read.
-  if (!picker.proposal_public) return header(<EmptyState className="mt-6" sentence={t("blocked.held")} action={t("back")} href={back} />);
+  if (!picker.proposal_public) return header(<EmptyState className="mt-8" sentence={t("blocked.held")} action={t("back")} href={back} />);
   if (pitchesLeft(picker.cap) === 0) {
-    return header(<EmptyState className="mt-6" sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
+    return header(<EmptyState className="mt-8" sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
   }
   const groups = await pickerGroups(picker);
   // Choices made on another page or search, resolved by id so each is shown by name with its outcome (else dropped).
@@ -103,13 +103,13 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
     return header(
       narrowed ? (
         <EmptyState
-          className="mt-6"
+          className="mt-8"
           sentence={t("emptyFiltered")}
           action={t("clear")}
           href={pitchHref(idea.id, { selected: query.selected })}
         />
       ) : (
-        <EmptyState className="mt-6" sentence={t("emptyAll")} action={t("back")} href={back} />
+        <EmptyState className="mt-8" sentence={t("emptyAll")} action={t("back")} href={back} />
       ),
     );
   }
@@ -141,13 +141,11 @@ async function Header({ back, title, children }: { back?: string; title?: string
   const ideas = await getTranslations("ideas");
   return (
     <>
-      <BackLink href={back ?? BASE_PATH}>{back ? t("back") : t("allIdeas")}</BackLink>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      {back ? (
-        <p className="mt-1 [overflow-wrap:anywhere] text-ink-soft">
-          {t("forIdea", { title: title?.trim() || ideas("untitled") })}
-        </p>
-      ) : null}
+      <PageHeader
+        back={{ href: back ?? BASE_PATH, label: back ? t("back") : t("allIdeas") }}
+        title={t("title")}
+        lead={back ? t("forIdea", { title: title?.trim() || ideas("untitled") }) : undefined}
+      />
       {children}
     </>
   );
@@ -208,11 +206,9 @@ async function pickerGroups(picker: PitchPicker): Promise<PickerGroup[]> {
     picker.groups
       .filter((group) => group.orgs.length > 0)
       .map(async (group, index) => {
-        const label = group.niche ? splitNicheLabel(group.niche.label) : null;
         return {
           key: `${group.niche?.id ?? "none"}-${index}`,
-          parent: label?.parent,
-          name: label ? label.name : t("noNiche"),
+          name: group.niche ? group.niche.label : t("noNiche"),
           rows: await Promise.all(group.orgs.map(pickerRow)),
         };
       }),
@@ -249,14 +245,16 @@ async function Outcome({ option }: { option: PitchOption }) {
           {t(`reason.${option.reason}`, { name: card.name })}
         </p>
       ) : option.outcome === "delivered" ? (
-        <p data-outcome="sent" className="flex items-center gap-1.5 text-sm font-medium text-ok">
-          <SendIcon className="size-4 shrink-0" />
-          {t("outcomeSent")}
+        <p>
+          <Badge data-outcome="sent" tone="ok" icon={<SendIcon />}>
+            {t("outcomeSent")}
+          </Badge>
         </p>
       ) : (
-        <p data-outcome="saved" className="flex items-center gap-1.5 text-sm font-medium text-ink-soft">
-          <ClockIcon className="size-4 shrink-0" />
-          {t("outcomeSaved")}
+        <p>
+          <Badge data-outcome="saved" tone="neutral" icon={<ClockIcon />}>
+            {t("outcomeSaved")}
+          </Badge>
         </p>
       )}
     </>

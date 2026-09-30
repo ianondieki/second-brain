@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, typ
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { ClockIcon, SendIcon } from "@/components/ui/status-icons";
 import { upgradeHref } from "@/lib/billing/upgrade";
@@ -39,7 +40,7 @@ export interface PickerRow {
 
 export interface PickerGroup {
   key: string;
-  parent?: string;
+  /** The niche's two-level name ("ICT › Networks & Telecommunications"), one line: no label above the heading. */
   name: string;
   rows: PickerRow[];
 }
@@ -236,11 +237,8 @@ export function PitchForm({
           ) : null}
           {groups.map((group, index) => (
             <section key={group.key} className="mt-10 first:mt-0" aria-labelledby={`pitch-group-${index}`}>
-              <h2 id={`pitch-group-${index}`} className="flex flex-col text-lg text-ink">
-                {group.parent ? (
-                  <span className="text-sm font-medium tracking-normal text-ink-soft">{group.parent}</span>
-                ) : null}
-                <span>{group.name}</span>
+              <h2 id={`pitch-group-${index}`} className="text-lg text-ink">
+                {group.name}
               </h2>
               <ul className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
                 {group.rows.map((row) => (
@@ -436,13 +434,13 @@ function PitchDone({
       </p>
       {sent.length > 0 ? (
         <div className="mt-6">
-          <h3 className="flex items-center gap-2 text-lg text-ok">
-            <SendIcon className="size-5 shrink-0" />
+          <h3 className="flex items-center gap-2 text-lg text-ink">
+            <SendIcon className="size-5 shrink-0 text-ok" />
             {t("sentTitle", { count: result.sent_count })}
           </h3>
-          <ul className="mt-2 border-t border-line">
+          <ul className="mt-2">
             {sent.map((tag) => (
-              <li key={tag.id} className="border-b border-line py-3 font-semibold [overflow-wrap:anywhere] text-ink">
+              <li key={tag.id} className="border-t border-line py-3 font-semibold [overflow-wrap:anywhere] text-ink">
                 {tag.org?.name ?? t("orgUnlisted")}
               </li>
             ))}
@@ -452,15 +450,15 @@ function PitchDone({
       ) : null}
       {saved.length > 0 ? (
         <div className="mt-8">
-          <h3 className="flex items-center gap-2 text-lg text-jacaranda">
-            <ClockIcon className="size-5 shrink-0" />
+          <h3 className="flex items-center gap-2 text-lg text-ink">
+            <ClockIcon className="size-5 shrink-0 text-ink-soft" />
             {t("savedTitle", { count: result.saved_count })}
           </h3>
-          <ul className="mt-2 border-t border-line">
+          <ul className="mt-2">
             {saved.map((tag) => {
               const name = tag.org?.name ?? t("orgUnlisted");
               return (
-                <li key={tag.id} className="flex flex-col gap-1 border-b border-line py-3">
+                <li key={tag.id} className="flex flex-col gap-1 border-t border-line py-3">
                   <span className="font-semibold [overflow-wrap:anywhere] text-ink">{name}</span>
                   <span className="text-sm text-ink-soft">{t(heldKey(tag.status)!, { name })}</span>
                 </li>
@@ -470,9 +468,9 @@ function PitchDone({
         </div>
       ) : null}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-        <Link href={ideaHref} className={buttonClass("primary")} data-primary="">
+        <ButtonLink href={ideaHref} variant="primary">
           {t("back")}
-        </Link>
+        </ButtonLink>
         <a href={againHref} className={standaloneLinkClass}>
           {t("pitchMore")}
         </a>
