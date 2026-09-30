@@ -17,6 +17,7 @@ export function summary(overrides: Partial<Summary> = {}): Summary {
     org_name: "Telco A (fixture)",
     developer_id: DEV_ID,
     developer_name: "Achieng Otieno",
+    developer_named: true,
     origin: "tagged",
     state: "SUBMITTED",
     stage_label: "Proposal submitted",

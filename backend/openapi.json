@@ -76,6 +76,15 @@
         "title": "AdminNicheOut",
         "type": "object"
       },
+      "AgentRunStatus": {
+        "enum": [
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "AgentRunStatus",
+        "type": "string"
+      },
       "AgreementOut": {
         "properties": {
           "created_at": {
@@ -571,6 +580,24 @@
           "next_cursor"
         ],
         "title": "BrowsePage",
+        "type": "object"
+      },
+      "BudgetBandOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "BudgetBandOut",
         "type": "object"
       },
       "CaseList": {
@@ -1841,13 +1868,27 @@
             ]
           },
           "developer_id": {
-            "format": "uuid",
-            "title": "Developer Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
           },
           "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
             "title": "Developer Name",
             "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
           },
           "documents": {
             "items": {
@@ -2012,6 +2053,7 @@
           "org_name",
           "developer_id",
           "developer_name",
+          "developer_named",
           "origin",
           "state",
           "stage_label",
@@ -2122,13 +2164,27 @@
       "EngagementSummary": {
         "properties": {
           "developer_id": {
-            "format": "uuid",
-            "title": "Developer Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
           },
           "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
             "title": "Developer Name",
             "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
           },
           "due": {
             "anyOf": [
@@ -2254,6 +2310,7 @@
           "org_name",
           "developer_id",
           "developer_name",
+          "developer_named",
           "origin",
           "state",
           "stage_label",
@@ -2359,6 +2416,38 @@
         "title": "EvaluationNdaOut",
         "type": "object"
       },
+      "FeedbackIn": {
+        "additionalProperties": false,
+        "properties": {
+          "feedback": {
+            "$ref": "#/components/schemas/MatchFeedback"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "wrong_niche",
+                  "wrong_county",
+                  "too_early",
+                  "not_a_priority",
+                  "already_solved",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "feedback"
+        ],
+        "title": "FeedbackIn",
+        "type": "object"
+      },
       "FilterOptions": {
         "properties": {
           "counties": {
@@ -2382,6 +2471,16 @@
         ],
         "title": "FilterOptions",
         "type": "object"
+      },
+      "GrantSource": {
+        "enum": [
+          "auto_tagged",
+          "manual",
+          "niche_e2",
+          "org_interest"
+        ],
+        "title": "GrantSource",
+        "type": "string"
       },
       "HistoryEventOut": {
         "properties": {
@@ -2662,6 +2761,86 @@
         "title": "InboxPage",
         "type": "object"
       },
+      "InterestBody": {
+        "additionalProperties": false,
+        "description": "Express interest (docs/spec/06 6.9 stage 0; REQ-ENG-04): the proposal, where the organisation found it (a\nscout match, which ``match_id`` names, or the Browse repo) and the contact it names with a channel and a\ncontact-by date.",
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/ContactChannel"
+          },
+          "contact_by": {
+            "format": "date",
+            "title": "Contact By",
+            "type": "string"
+          },
+          "contact_user_id": {
+            "format": "uuid",
+            "title": "Contact User Id",
+            "type": "string"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scout match (required for org_agent_match only).",
+            "title": "Match Id"
+          },
+          "origin": {
+            "enum": [
+              "org_agent_match",
+              "org_browse"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "origin",
+          "contact_user_id",
+          "channel",
+          "contact_by"
+        ],
+        "title": "InterestBody",
+        "type": "object"
+      },
+      "InterestState": {
+        "description": "Whether the caller may express interest now, and why not (a stable code) when they may not.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "allowed",
+          "reason"
+        ],
+        "title": "InterestState",
+        "type": "object"
+      },
       "IpTerms": {
         "description": "docs/spec/06 6.9 stage 8. The internal e-signature refuses ``assignment`` and ``exclusive_licence``.",
         "enum": [
@@ -2712,6 +2891,344 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MatchDetail": {
+        "properties": {
+          "available": {
+            "description": "False once the proposal is no longer published and clear.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "digest_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest Sent At"
+          },
+          "engagement_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engagement Id"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Reason"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "injection_suspected": {
+            "title": "Injection Suspected",
+            "type": "boolean"
+          },
+          "interest": {
+            "$ref": "#/components/schemas/InterestState"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Handle"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "rule_breakdown": {
+            "additionalProperties": true,
+            "title": "Rule Breakdown",
+            "type": "object"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "scout_id": {
+            "format": "uuid",
+            "title": "Scout Id",
+            "type": "string"
+          },
+          "teaser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeaserOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          },
+          "why_source": {
+            "enum": [
+              "model",
+              "code"
+            ],
+            "title": "Why Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scout_id",
+          "proposal_id",
+          "available",
+          "owner_handle",
+          "teaser",
+          "niche",
+          "score",
+          "why",
+          "why_source",
+          "injection_suspected",
+          "created_at",
+          "digest_sent_at",
+          "feedback",
+          "feedback_reason",
+          "rule_breakdown",
+          "engagement_id",
+          "interest"
+        ],
+        "title": "MatchDetail",
+        "type": "object"
+      },
+      "MatchFeedback": {
+        "description": "A reviewer's verdict on a scout match (docs/spec/06 6.8 feedback loop).",
+        "enum": [
+          "relevant",
+          "not_relevant"
+        ],
+        "title": "MatchFeedback",
+        "type": "string"
+      },
+      "MatchList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MatchOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "MatchList",
+        "type": "object"
+      },
+      "MatchOut": {
+        "properties": {
+          "available": {
+            "description": "False once the proposal is no longer published and clear.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "digest_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest Sent At"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Reason"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "injection_suspected": {
+            "title": "Injection Suspected",
+            "type": "boolean"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Handle"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "scout_id": {
+            "format": "uuid",
+            "title": "Scout Id",
+            "type": "string"
+          },
+          "teaser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeaserOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          },
+          "why_source": {
+            "enum": [
+              "model",
+              "code"
+            ],
+            "title": "Why Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scout_id",
+          "proposal_id",
+          "available",
+          "owner_handle",
+          "teaser",
+          "niche",
+          "score",
+          "why",
+          "why_source",
+          "injection_suspected",
+          "created_at",
+          "digest_sent_at",
+          "feedback",
+          "feedback_reason"
+        ],
+        "title": "MatchOut",
         "type": "object"
       },
       "MeResponse": {
@@ -4481,6 +4998,107 @@
         "title": "PlansOut",
         "type": "object"
       },
+      "PreviewItem": {
+        "properties": {
+          "keywords_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords Found",
+            "type": "array"
+          },
+          "owner_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Handle"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "score": {
+            "description": "The rules' score, 0 to 100 (Preview asks no model).",
+            "title": "Score",
+            "type": "integer"
+          },
+          "teaser": {
+            "$ref": "#/components/schemas/TeaserOut"
+          },
+          "why": {
+            "description": "The rules that fired (\"Matched on ...\").",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "owner_handle",
+          "published_at",
+          "teaser",
+          "score",
+          "why",
+          "keywords_found"
+        ],
+        "title": "PreviewItem",
+        "type": "object"
+      },
+      "PreviewOut": {
+        "description": "The first digest this form would send: the last ``window_days`` days, rules only, nothing saved. An ``on_new``\nscout never runs over that window (it sends each new proposal as it is published), so ``note`` says so.",
+        "properties": {
+          "digest_size": {
+            "title": "Digest Size",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown above the items when they are not what the scout will send (on_new).",
+            "title": "Note"
+          },
+          "total": {
+            "description": "Matching proposals in the window; the digest lists the first digest_size.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "window_days",
+          "digest_size"
+        ],
+        "title": "PreviewOut",
+        "type": "object"
+      },
       "ProblemCard": {
         "properties": {
           "id": {
@@ -5056,6 +5674,537 @@
           "roles"
         ],
         "title": "RolesUpdate",
+        "type": "object"
+      },
+      "RunOut": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "matched_count": {
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "scanned_count": {
+            "title": "Scanned Count",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentRunStatus"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ScoutFrequency"
+          }
+        },
+        "required": [
+          "id",
+          "trigger",
+          "status",
+          "started_at",
+          "finished_at",
+          "scanned_count",
+          "matched_count"
+        ],
+        "title": "RunOut",
+        "type": "object"
+      },
+      "ScoutForm": {
+        "additionalProperties": false,
+        "description": "A scout's settings: the body of create and of Preview.",
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A code from GET /api/orgs/{org_id}/scouts.",
+            "title": "Budget Band"
+          },
+          "counties": {
+            "items": {
+              "maxLength": 8,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 47,
+            "title": "Counties",
+            "type": "array"
+          },
+          "exclude_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Exclude Keywords",
+            "type": "array"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/ScoutFrequency",
+            "default": "weekly"
+          },
+          "include_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Include Keywords",
+            "type": "array"
+          },
+          "language": {
+            "default": "en",
+            "enum": [
+              "en",
+              "sw"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "maturity": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalMaturity"
+            },
+            "maxItems": 4,
+            "title": "Maturity",
+            "type": "array"
+          },
+          "min_fit": {
+            "default": 60,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Fit",
+            "type": "integer"
+          },
+          "niches": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Niches",
+            "type": "array"
+          },
+          "recipients": {
+            "description": "Reviewer seats of the organisation.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "niches"
+        ],
+        "title": "ScoutForm",
+        "type": "object"
+      },
+      "ScoutFrequency": {
+        "description": "How often a scout scans (docs/spec/06 6.8; allowed per plan in ``plans.yaml``). Also an agent run's trigger.",
+        "enum": [
+          "daily",
+          "weekly",
+          "on_new"
+        ],
+        "title": "ScoutFrequency",
+        "type": "string"
+      },
+      "ScoutList": {
+        "properties": {
+          "budget_bands": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetBandOut"
+            },
+            "title": "Budget Bands",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScoutOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/ScoutPlanOut"
+          }
+        },
+        "required": [
+          "items",
+          "plan",
+          "budget_bands"
+        ],
+        "title": "ScoutList",
+        "type": "object"
+      },
+      "ScoutOut": {
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Band"
+          },
+          "counties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Counties",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "title": "Created By",
+            "type": "string"
+          },
+          "exclude_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude Keywords",
+            "type": "array"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/ScoutFrequency"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "include_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include Keywords",
+            "type": "array"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maturity": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalMaturity"
+            },
+            "title": "Maturity",
+            "type": "array"
+          },
+          "min_fit": {
+            "title": "Min Fit",
+            "type": "integer"
+          },
+          "niches": {
+            "items": {
+              "$ref": "#/components/schemas/NicheOut"
+            },
+            "title": "Niches",
+            "type": "array"
+          },
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "paused_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused At"
+          },
+          "recipients": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "org_id",
+          "niches",
+          "counties",
+          "include_keywords",
+          "exclude_keywords",
+          "maturity",
+          "budget_band",
+          "min_fit",
+          "frequency",
+          "language",
+          "recipients",
+          "paused",
+          "paused_at",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "last_run"
+        ],
+        "title": "ScoutOut",
+        "type": "object"
+      },
+      "ScoutPatch": {
+        "additionalProperties": false,
+        "description": "A partial update: a field left out stays as it is. ``paused`` pauses or resumes the scout.",
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Band"
+          },
+          "counties": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 8,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 47,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counties"
+          },
+          "exclude_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclude Keywords"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScoutFrequency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Keywords"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "sw"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProposalMaturity"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity"
+          },
+          "min_fit": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Fit"
+          },
+          "niches": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 5,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niches"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused"
+          },
+          "recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipients"
+          }
+        },
+        "title": "ScoutPatch",
+        "type": "object"
+      },
+      "ScoutPlanOut": {
+        "description": "What the organisation's plan allows (``entitlement_tier`` from the subscription, not editable).",
+        "properties": {
+          "digest_size": {
+            "title": "Digest Size",
+            "type": "integer"
+          },
+          "frequencies": {
+            "items": {
+              "$ref": "#/components/schemas/ScoutFrequency"
+            },
+            "title": "Frequencies",
+            "type": "array"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "scout_agents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many scouts the plan allows; null: no limit.",
+            "title": "Scout Agents"
+          }
+        },
+        "required": [
+          "plan",
+          "scout_agents",
+          "frequencies",
+          "digest_size"
+        ],
+        "title": "ScoutPlanOut",
         "type": "object"
       },
       "SessionResponse": {
@@ -5833,6 +6982,69 @@
           "milestones"
         ],
         "title": "TermsBody",
+        "type": "object"
+      },
+      "Tier2ShareOut": {
+        "description": "Whether the developer shared the full proposal (Tier 2) with the engagement's organisation: a live grant.",
+        "properties": {
+          "counts_as_unlock": {
+            "description": "True for a proposal not tagged to the organisation (REQ-BIL-03).",
+            "title": "Counts As Unlock",
+            "type": "boolean"
+          },
+          "engagement_id": {
+            "format": "uuid",
+            "title": "Engagement Id",
+            "type": "string"
+          },
+          "grant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Id"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "shared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "engagement_id",
+          "shared",
+          "grant_id",
+          "source",
+          "shared_at",
+          "counts_as_unlock"
+        ],
+        "title": "Tier2ShareOut",
         "type": "object"
       },
       "TokenRequest": {
@@ -12775,6 +13987,232 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/share-tier2": {
+      "get": {
+        "description": "Whether the developer shared the full proposal with the organisation (both parties).",
+        "operationId": "get_tier2_share_api_engagements__engagement_id__share_tier2_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tier2ShareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Tier2 Share",
+        "tags": [
+          "engagements"
+        ]
+      },
+      "post": {
+        "description": "The developer shares the full proposal (Tier 2) with the organisation that expressed interest.",
+        "operationId": "post_tier2_share_api_engagements__engagement_id__share_tier2_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tier2ShareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Post Tier2 Share",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/sign-agreement": {
       "post": {
         "description": "Run 'sign_agreement' (docs/spec/06 6.9; the state machine's table).",
@@ -17432,6 +18870,521 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/interest": {
+      "post": {
+        "description": "Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer.",
+        "operationId": "post_interest_api_orgs__org_id__interest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Post Interest",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/matches": {
+      "get": {
+        "description": "The organisation's scout matches, newest first.",
+        "operationId": "list_matches_api_orgs__org_id__matches_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this scout's matches.",
+            "in": "query",
+            "name": "scout_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this scout's matches.",
+              "title": "Scout Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Matches",
+        "tags": [
+          "scouts"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/matches/{match_id}": {
+      "get": {
+        "description": "One match: its teaser, niche label, score, why, rules and the Express interest state (read only).",
+        "operationId": "get_match_api_orgs__org_id__matches__match_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Match",
+        "tags": [
+          "scouts"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/matches/{match_id}/feedback": {
+      "post": {
+        "description": "Relevant, or not relevant with a reason code (docs/spec/06 6.8 feedback), recorded as the caller.",
+        "operationId": "match_feedback_api_orgs__org_id__matches__match_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Match Feedback",
+        "tags": [
+          "scouts"
+        ]
+      }
+    },
     "/api/orgs/{org_id}/members": {
       "get": {
         "operationId": "list_members_api_orgs__org_id__members_get",
@@ -18103,6 +20056,736 @@
         "tags": [
           "proposals",
           "tier2"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/scouts": {
+      "get": {
+        "description": "The organisation's scouts, what its plan allows and the budget band codes.",
+        "operationId": "list_scouts_api_orgs__org_id__scouts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoutList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Scouts",
+        "tags": [
+          "scouts"
+        ]
+      },
+      "post": {
+        "description": "A new scout (402 beyond the plan's scouts or for a frequency it lacks; 422 for an invalid form).",
+        "operationId": "create_scout_api_orgs__org_id__scouts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoutForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Scout",
+        "tags": [
+          "scouts"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/scouts/preview": {
+      "post": {
+        "description": "The first digest this form would send: the last 30 days, the rules only (no model, nothing saved).",
+        "operationId": "preview_api_orgs__org_id__scouts_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoutForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "scouts"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/scouts/{scout_id}": {
+      "delete": {
+        "description": "Delete the scout with its runs and matches.",
+        "operationId": "delete_scout_api_orgs__org_id__scouts__scout_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scout_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scout Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Delete Scout",
+        "tags": [
+          "scouts"
+        ]
+      },
+      "get": {
+        "operationId": "get_scout_api_orgs__org_id__scouts__scout_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scout_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scout Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Scout",
+        "tags": [
+          "scouts"
+        ]
+      },
+      "patch": {
+        "description": "Change the form, or pause or resume the scout (``paused``).",
+        "operationId": "update_scout_api_orgs__org_id__scouts__scout_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scout_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scout Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoutPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Update Scout",
+        "tags": [
+          "scouts"
         ]
       }
     },

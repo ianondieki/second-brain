@@ -10,7 +10,10 @@ What is read per engagement: its state, stage entry and deadline; the tracker's 
 milestones through P5's service (``bridge.engagements.service.load``), and whose turn it is from the state machine
 (``bridge.engagements.state_machine.pending``: docs/spec/06 6.9, the only definition); each milestone's review due date
 (``bridge.engagements.history.review_due_dates``) and its rework loops (the tracker's ``request_changes`` events);
-and the developer's latest action (an event, a non-automatic endorsement or a signature).
+and the developer's latest action (an event, a non-automatic endorsement or a signature). The developer's name is
+their pseudonymous handle (the registered version's ``owner_handle``) until the engagement's chain has reached
+``INTEREST_CONFIRMED`` or later (docs/spec/06 6.1; ``bridge.engagements.history.developer_revealed``), so an
+organisation's digest never names a developer the tracker does not.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from bridge.models.enums import (
     EngagementParty,
     ProposalStatus,
 )
+from bridge.proposals.access import REVEALED_STATES
 from bridge.proposals.models import Proposal, ProposalVersion
 from bridge.reminders.health import EngagementFact, MilestoneFact
 from bridge.reminders.nudge import DeveloperFacts
@@ -69,7 +73,13 @@ async def engagement_facts(
     """The active engagements matching ``condition`` that the bound recipient may read, oldest first."""
     rows = (
         await db.execute(
-            select(Engagement, Organization.legal_name, ProposalVersion.title, User.display_name)
+            select(
+                Engagement,
+                Organization.legal_name,
+                ProposalVersion.title,
+                User.display_name,
+                ProposalVersion.owner_handle,
+            )
             .outerjoin(Organization, Organization.id == Engagement.org_id)
             .outerjoin(ProposalVersion, ProposalVersion.id == Engagement.version_id)
             .outerjoin(User, User.id == Engagement.developer_id)
@@ -82,8 +92,20 @@ async def engagement_facts(
     engagements = {row[0].id: row[0] for row in rows}
     loops = await _rework_loops(db, list(engagements))
     last_update = await _last_developer_update(db, engagements)
+    revealed = set(
+        (
+            await db.scalars(
+                select(EngagementEvent.engagement_id)
+                .where(
+                    EngagementEvent.engagement_id.in_(list(engagements)), EngagementEvent.to_state.in_(REVEALED_STATES)
+                )
+                .distinct()
+            )
+        ).all()
+    )
     facts = []
-    for engagement, org_name, title, developer_name in rows:
+    for engagement, org_name, title, display_name, handle in rows:
+        developer_name = display_name if engagement.id in revealed else handle
         tracker = await load_tracker(db, engagement, deals_enabled=deals_enabled)
         review_due = await review_due_dates(db, engagement.id, tracker.milestones)
         facts.append(

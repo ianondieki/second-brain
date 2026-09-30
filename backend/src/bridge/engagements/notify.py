@@ -7,6 +7,9 @@ RLS), with a ledger row per recipient and event (``notification_deliveries``, de
 so a retried job never notifies twice. Entering ``INTEREST_CONFIRMED`` also sends EM2 to the developer, exactly once
 per engagement (dedupe key ``em2:<engagement>``, AC-MAIL-1), through the configured email provider (Mailpit in dev).
 
+An organisation's interest (stage 0, REQ-ENG-04) is told by its engagement's genesis event: the developer gets N17
+in-app and by email (``bridge.notifications.n17``: mutable, default on, once per engagement).
+
 Recipients: when the organisation acts, the developer; when the developer acts, the organisation's people on this
 engagement (its named contact and the members who acted on it, each still an active member). The developer cannot
 read the organisation's roster, so an engagement nobody at the organisation has touched yet notifies nobody there;
@@ -30,6 +33,7 @@ from bridge.auth.models import User
 from bridge.config import Settings
 from bridge.db import bind_tenant
 from bridge.engagements import state_machine as sm
+from bridge.engagements.calendar import NAIROBI
 from bridge.engagements.models import Engagement, EngagementEvent
 from bridge.ids import uuid7
 from bridge.jobs.outbox import defer
@@ -43,16 +47,19 @@ from bridge.models.enums import (
     GrantStatus,
     NotificationChannel,
 )
-from bridge.notifications import em2
+from bridge.notifications import em2, n17
 from bridge.notifications.deliveries import send_email
 from bridge.notifications.email import EmailMessage, EmailProvider
 from bridge.notifications.models import InAppNotification, NotificationDelivery
+from bridge.notifications.preferences import channel_enabled
 from bridge.proposals.models import DisclosureGrant, DocumentView, ProposalVersion
 from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
 QUEUE: Final = "notifications"
 TASK: Final = "engagements.notify"
+GENESIS: Final = "create"  # the database's first event of every engagement (revision 0003)
+N17_KIND: Final = "engagement.n17"
 C = sm.Command
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 DECLINE_LABELS: Final = {  # docs/spec/06 6.9 Codes. [[COPY-REVIEW]]
@@ -99,6 +106,22 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.RECORD_PAYMENT, ORG): '{org} recorded the final payment for "{title}". Confirm the amount you received.',
     (C.CONFIRM_PAYMENT, DEV): 'The developer confirmed the final payment for "{title}". The project is closed.',
 }
+# [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
+INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
+ORG_ROLES: Final = frozenset(
+    {
+        EngagementActorRole.OWNER,
+        EngagementActorRole.ADMIN,
+        EngagementActorRole.SIGNATORY,
+        EngagementActorRole.REVIEWER,
+        EngagementActorRole.FINANCE,
+    }
+)
+
+
+def is_interest(event: EngagementEvent) -> bool:
+    """The genesis of an engagement an organisation member opened at ORG_INTEREST (stage 0)."""
+    return event.command == GENESIS and event.to_state is EngagementState.ORG_INTEREST and event.actor_role in ORG_ROLES
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +150,10 @@ def compose(
     event: EngagementEvent, company: str, title: str, *, reason_text: str | None = None
 ) -> tuple[EngagementParty, Notice] | None:
     """The party to tell and what to tell them, or None for an event the table does not notify."""
+    if is_interest(event):
+        body = INTEREST_SENTENCE.format(org=em2.one_line(company), title=em2.one_line(title))
+        label = sm.STAGE_LABELS[EngagementState.ORG_INTEREST]
+        return DEV, Notice(N17_KIND, label, body, f"/engagements/{event.engagement_id}")
     try:
         command = sm.Command(event.command)
     except ValueError:  # the genesis ("create") and anything outside the table
@@ -184,7 +211,7 @@ async def _in_app(db: AsyncSession, user_id: UUID, org_id: UUID | None, notice: 
     return True
 
 
-async def _org_people(db: AsyncSession, engagement: Engagement) -> list[UUID]:
+async def org_people(db: AsyncSession, engagement: Engagement) -> list[UUID]:
     """The organisation's people on this engagement: its named contact and every member who acted on it."""
     actors = await db.execute(
         select(EngagementEvent.actor_user_id)
@@ -267,6 +294,38 @@ async def _send_em2(db: AsyncSession, provider: EmailProvider, settings: Setting
     return delivery.status is not DeliveryStatus.QUEUED
 
 
+async def _send_n17(
+    db: AsyncSession, provider: EmailProvider, settings: Settings, engagement: Engagement, company: str, title: str
+) -> bool:
+    """N17 by email to the developer, once per engagement, when their preference allows it; False while the send is
+    still queued after transient errors."""
+    developer = await db.get(User, engagement.developer_id)
+    if developer is None or developer.email_verified_at is None:
+        get_logger(__name__).warning("n17.skipped", engagement_id=str(engagement.id))
+        return True
+    if not await channel_enabled(db, developer.id, n17.KIND, NotificationChannel.EMAIL):
+        return True
+    deadline = engagement.stage_deadline_at
+    rendered = n17.render(
+        n17.N17Facts(
+            engagement_id=engagement.id,
+            company_name=company,
+            title=title,
+            origin=engagement.origin,
+            respond_by=deadline.astimezone(NAIROBI).date() if deadline else None,
+            base_url=settings.public_base_url,
+            product=settings.product_name,
+        )
+    )
+    message = EmailMessage(
+        to=developer.email, subject=rendered.subject, text=rendered.text, html=rendered.html, tag=n17.KIND
+    )
+    delivery = await send_email(
+        db, provider, message=message, kind=n17.KIND, user_id=developer.id, dedupe_key=n17.dedupe_key(engagement.id)
+    )
+    return delivery.status is not DeliveryStatus.QUEUED
+
+
 async def deliver(
     factory: async_sessionmaker[AsyncSession],
     provider: EmailProvider,
@@ -299,9 +358,11 @@ async def deliver(
         if composed is not None:
             party, notice = composed
             if party is ORG:
-                people = await _org_people(db, engagement)
+                people = await org_people(db, engagement)
             else:
                 await _in_app(db, developer_id, None, notice, event.id)
+            if is_interest(event):
+                done = await _send_n17(db, provider, settings, engagement, company, title)
         if event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state:
             # EM2 goes to the developer whoever moved the engagement there (the signatory's approval, or the
             # developer's own acceptance of an organisation's interest at stage 0).

@@ -71,12 +71,11 @@ async def test_whose_turn_is_read_from_the_stage_evidence(
         fact = await as_developer(w)
         assert (fact.state.value, fact.awaiting) == (until, frozenset(awaiting))
         assert fact == await as_member(w, w.p.signatory)  # the same facts for both recipients
-        assert (fact.title, fact.org_name, fact.developer_name, fact.tagged) == (
-            "RLS proposal",
-            "Tracker Ltd",
-            "Developer",
-            True,
-        )
+        # The developer is their pseudonymous handle until INTEREST_CONFIRMED (docs/spec/06 6.1), then named.
+        named = until != "SUBMITTED"
+        assert (fact.title, fact.org_name, fact.tagged) == ("RLS proposal", "Tracker Ltd", True)
+        assert (fact.developer_name == "Developer") is named
+        assert fact.developer_name.startswith("dev-") is not named
 
 
 async def test_the_parties_evidence_moves_the_turn(owner_engine: AsyncEngine) -> None:

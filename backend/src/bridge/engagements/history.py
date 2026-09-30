@@ -2,7 +2,13 @@
 
 Everything is read under the caller's RLS as a party. The History (``history``) is built only from rows both parties
 read alike (events, endorsements, user display names), so its JSON is the same for the developer and the organisation
-(AC-TRACK-3); the detail view adds the caller's own party, roles and action buttons. Reveal of the developer's contact
+(AC-TRACK-3) once the developer is named; the detail view adds the caller's own party, roles and action buttons.
+
+The developer is a pseudonymous handle to the organisation until the engagement's chain has reached
+``INTEREST_CONFIRMED`` or a later main-path state (docs/spec/06 6.1; ``proposals.access.REVEALED_STATES``, the render's
+``owner_named`` rule): until then the organisation's summary, detail and History carry the registered version's
+``owner_handle`` in place of the developer's display name and no developer user id (the History's developer events and
+endorsements name no user). The developer's own view is unchanged. Reveal of the developer's contact
 details (``contact_reveal``) is for the organisation's named contact only, from ``INTEREST_CONFIRMED`` on, and is
 audit-logged.
 """
@@ -61,6 +67,7 @@ from bridge.models.enums import (
     MilestoneState,
     SignatureDocumentKind,
 )
+from bridge.proposals.access import REVEALED_STATES
 from bridge.proposals.models import ProposalVersion
 from bridge.tenancy.models import Organization
 
@@ -73,12 +80,43 @@ async def _names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str
     return {row.id: row.display_name for row in rows}
 
 
+HANDLE_FALLBACK = "Developer"  # a version without a handle (never registered): the organisation sees this
+
+
+async def developer_revealed(db: AsyncSession, engagement_id: UUID) -> bool:
+    """Whether the organisation may know who the developer is: the chain has reached a ``REVEALED_STATES`` state."""
+    found = await db.scalar(
+        select(EngagementEvent.id)
+        .where(EngagementEvent.engagement_id == engagement_id, EngagementEvent.to_state.in_(REVEALED_STATES))
+        .limit(1)
+    )
+    return found is not None
+
+
+async def developer_identity(
+    db: AsyncSession, engagement: Engagement, *, developer_caller: bool
+) -> tuple[UUID | None, str, bool]:
+    """(user id, name, named) of the developer as the caller may see them: the developer and, once revealed, the
+    organisation get the id and the display name; before that the organisation gets the version's handle only."""
+    if developer_caller or await developer_revealed(db, engagement.id):
+        name = await db.scalar(select(User.display_name).where(User.id == engagement.developer_id))
+        return engagement.developer_id, name or HANDLE_FALLBACK, True
+    handle = await db.scalar(select(ProposalVersion.owner_handle).where(ProposalVersion.id == engagement.version_id))
+    return None, handle or HANDLE_FALLBACK, False
+
+
 async def summary(
-    db: AsyncSession, engagement: Engagement, loaded: Loaded, now: datetime, holidays: frozenset[date]
+    db: AsyncSession,
+    engagement: Engagement,
+    loaded: Loaded,
+    now: datetime,
+    holidays: frozenset[date],
+    *,
+    developer_caller: bool,
 ) -> EngagementSummary:
     org = await db.get(Organization, engagement.org_id)
     version = await db.get(ProposalVersion, engagement.version_id)
-    developer = await db.scalar(select(User.display_name).where(User.id == engagement.developer_id))
+    developer_id, developer, named = await developer_identity(db, engagement, developer_caller=developer_caller)
     due = None
     if engagement.stage_deadline_at is not None and engagement.ended_at is None:
         d = sm.due(engagement.stage_deadline_at, now, holidays)
@@ -90,8 +128,9 @@ async def summary(
         proposal_title=(version.title if version is not None else None) or "Proposal",
         org_id=engagement.org_id,
         org_name=org.legal_name if org is not None else "Organisation",
-        developer_id=engagement.developer_id,
-        developer_name=developer or "Developer",
+        developer_id=developer_id,
+        developer_name=developer,
+        developer_named=named,
         origin=engagement.origin,
         state=engagement.state,
         stage_label=sm.STAGE_LABELS.get(engagement.state, engagement.state.value),
@@ -115,18 +154,19 @@ async def summaries(
     items = []
     for engagement in engagements:
         loaded = await load(db, engagement, deals_enabled=deals_enabled, developer_caller=developer_caller)
-        items.append(await summary(db, engagement, loaded, now, holidays))
+        items.append(await summary(db, engagement, loaded, now, holidays, developer_caller=developer_caller))
     return items
 
 
-def _endorsement(row: EngagementEndorsement, names: dict[UUID, str]) -> EndorsementOut:
+def _endorsement(row: EngagementEndorsement, names: dict[UUID, str], hidden: UUID | None = None) -> EndorsementOut:
+    """``hidden``: the developer's user id while the caller may not see it (the name is then the handle)."""
     return EndorsementOut(
         id=row.id,
         stage=row.stage,
         stage_round=row.stage_round,
         milestone_id=row.milestone_id,
         party=row.party,
-        user_id=row.user_id,
+        user_id=None if row.user_id is not None and row.user_id == hidden else row.user_id,
         name=names.get(row.user_id) if row.user_id else None,
         role=row.role,
         method=row.method,
@@ -149,7 +189,8 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         raise not_found()
     loaded = await load(db, engagement, deals_enabled=deals_enabled, developer_caller=party.is_developer)
     now = await app_now(db)
-    base = await summary(db, engagement, loaded, now, await load_holidays(db, local_date(now)))
+    holidays = await load_holidays(db, local_date(now))
+    base = await summary(db, engagement, loaded, now, holidays, developer_caller=party.is_developer)
     agreements = list(
         (
             await db.execute(
@@ -188,6 +229,9 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         db,
         [engagement.contact_user_id, *(s.signer_user_id for s in signatures), *(e.user_id for e in endorsements)],
     )
+    hidden = None if base.developer_named else engagement.developer_id
+    if hidden is not None:
+        names[hidden] = base.developer_name
     contact = None
     if engagement.contact_user_id is not None and engagement.contact_channel and engagement.contact_by:
         role = await db.scalar(
@@ -215,7 +259,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         actions=list(sm.available(party.actor, engagement.state, loaded.facts)),
         awaiting=[PendingOut(command=p.command, party=p.party) for p in sm.pending(engagement.state, loaded.facts)],
         contact=contact,
-        endorsements=[_endorsement(e, names) for e in endorsements],
+        endorsements=[_endorsement(e, names, hidden) for e in endorsements],
         agreements=[
             AgreementOut(
                 id=a.id,
@@ -240,7 +284,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
                 document_ref=s.document_ref,
                 document_sha256=s.document_sha256.hex(),
                 party=s.party,
-                signer_user_id=s.signer_user_id,
+                signer_user_id=s.signer_user_id,  # signatures come after INTEREST_CONFIRMED: always named
                 signer_name=names.get(s.signer_user_id),
                 step_up_method=s.step_up_method,
                 signed_at=s.signed_at,
@@ -303,19 +347,27 @@ async def review_due_dates(db: AsyncSession, engagement_id: UUID, milestones: Se
     }
 
 
-async def history(db: AsyncSession, engagement_id: UUID) -> HistoryOut:
+async def history(db: AsyncSession, engagement_id: UUID, *, developer_caller: bool) -> HistoryOut:
     """The History tab: the chain as the database stores it (payload read back as its jsonb text, as the verifier
-    hashes it) and every endorsement, with the actors' display names."""
+    hashes it) and every endorsement, with the actors' display names; the developer's events and endorsements name
+    their handle and no user for the organisation until the developer is named."""
+    engagement = await db.get(Engagement, engagement_id)
+    if engagement is None:
+        raise not_found()
     connection = await db.connection()
     rows = await chain.load_chain(connection, engagement_id)
     endorsements = await _endorsements(db, engagement_id)
     names = await _names(db, [*(r.actor_user_id for r in rows), *(e.user_id for e in endorsements)])
+    _, handle, named = await developer_identity(db, engagement, developer_caller=developer_caller)
+    hidden = None if named else engagement.developer_id
+    if hidden is not None:
+        names[hidden] = handle
     events = [
         HistoryEventOut(
             id=r.id,
             seq=r.seq,
             created_at=r.created_at,
-            actor_user_id=r.actor_user_id,
+            actor_user_id=None if r.actor_user_id is not None and r.actor_user_id == hidden else r.actor_user_id,
             actor_name=names.get(r.actor_user_id) if r.actor_user_id else None,
             actor_role=EngagementActorRole(r.actor_role),
             command=r.command,
@@ -333,7 +385,7 @@ async def history(db: AsyncSession, engagement_id: UUID) -> HistoryOut:
         engagement_id=engagement_id,
         chain_verified=bool(rows) and not chain.verify_rows(rows),
         events=events,
-        endorsements=[_endorsement(e, names) for e in endorsements],
+        endorsements=[_endorsement(e, names, hidden) for e in endorsements],
     )
 
 

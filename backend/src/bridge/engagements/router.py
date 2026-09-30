@@ -101,7 +101,7 @@ async def get_engagement(party: PartyDep, db: Db, settings: SettingsDep) -> Enga
 
 @router.get(f"{PREFIX}/history")
 async def get_history(party: PartyDep, db: Db) -> HistoryOut:
-    return await history.history(db, party.engagement_id)
+    return await history.history(db, party.engagement_id, developer_caller=party.is_developer)
 
 
 @router.get(f"{PREFIX}/documents/{{kind}}")

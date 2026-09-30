@@ -1041,6 +1041,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/share-tier2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tier2 Share
+         * @description Whether the developer shared the full proposal with the organisation (both parties).
+         */
+        get: operations["get_tier2_share_api_engagements__engagement_id__share_tier2_get"];
+        put?: never;
+        /**
+         * Post Tier2 Share
+         * @description The developer shares the full proposal (Tier 2) with the organisation that expressed interest.
+         */
+        post: operations["post_tier2_share_api_engagements__engagement_id__share_tier2_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/sign-agreement": {
         parameters: {
             query?: never;
@@ -1616,6 +1640,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/interest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Interest
+         * @description Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer.
+         */
+        post: operations["post_interest_api_orgs__org_id__interest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Matches
+         * @description The organisation's scout matches, newest first.
+         */
+        get: operations["list_matches_api_orgs__org_id__matches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/matches/{match_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Match
+         * @description One match: its teaser, niche label, score, why, rules and the Express interest state (read only).
+         */
+        get: operations["get_match_api_orgs__org_id__matches__match_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/matches/{match_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match Feedback
+         * @description Relevant, or not relevant with a reason code (docs/spec/06 6.8 feedback), recorded as the caller.
+         */
+        post: operations["match_feedback_api_orgs__org_id__matches__match_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/members": {
         parameters: {
             query?: never;
@@ -1695,6 +1799,75 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/scouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Scouts
+         * @description The organisation's scouts, what its plan allows and the budget band codes.
+         */
+        get: operations["list_scouts_api_orgs__org_id__scouts_get"];
+        put?: never;
+        /**
+         * Create Scout
+         * @description A new scout (402 beyond the plan's scouts or for a frequency it lacks; 422 for an invalid form).
+         */
+        post: operations["create_scout_api_orgs__org_id__scouts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/scouts/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description The first digest this form would send: the last 30 days, the rules only (no model, nothing saved).
+         */
+        post: operations["preview_api_orgs__org_id__scouts_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/scouts/{scout_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scout */
+        get: operations["get_scout_api_orgs__org_id__scouts__scout_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Scout
+         * @description Delete the scout with its runs and matches.
+         */
+        delete: operations["delete_scout_api_orgs__org_id__scouts__scout_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Scout
+         * @description Change the form, or pause or resume the scout (``paused``).
+         */
+        patch: operations["update_scout_api_orgs__org_id__scouts__scout_id__patch"];
         trace?: never;
     };
     "/api/plans": {
@@ -1983,6 +2156,11 @@ export interface components {
             /** Sort Order */
             sort_order: number;
         };
+        /**
+         * AgentRunStatus
+         * @enum {string}
+         */
+        AgentRunStatus: "running" | "completed" | "failed";
         /** AgreementOut */
         AgreementOut: {
             /**
@@ -2199,6 +2377,13 @@ export interface components {
              * @description Pass as ?cursor= for the next page; null on the last page
              */
             next_cursor: string | null;
+        };
+        /** BudgetBandOut */
+        BudgetBandOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
         };
         /** CaseList */
         CaseList: {
@@ -2647,11 +2832,19 @@ export interface components {
             contact: components["schemas"]["ContactOut"] | null;
             /**
              * Developer Id
-             * Format: uuid
+             * @description The developer's user id; null for the organisation until the developer is named
              */
-            developer_id: string;
-            /** Developer Name */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
             developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
             /** Documents */
             documents: components["schemas"]["DocumentRefOut"][];
             due: components["schemas"]["DueOut"] | null;
@@ -2749,11 +2942,19 @@ export interface components {
         EngagementSummary: {
             /**
              * Developer Id
-             * Format: uuid
+             * @description The developer's user id; null for the organisation until the developer is named
              */
-            developer_id: string;
-            /** Developer Name */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
             developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
             due: components["schemas"]["DueOut"] | null;
             end_reason: components["schemas"]["EngagementEndReason"] | null;
             /** Ended At */
@@ -2842,6 +3043,12 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** FeedbackIn */
+        FeedbackIn: {
+            feedback: components["schemas"]["MatchFeedback"];
+            /** Reason */
+            reason?: ("wrong_niche" | "wrong_county" | "too_early" | "not_a_priority" | "already_solved" | "other") | null;
+        };
         /** FilterOptions */
         FilterOptions: {
             /** Counties */
@@ -2849,6 +3056,11 @@ export interface components {
             /** Org Types */
             org_types: components["schemas"]["OrgTypeOption"][];
         };
+        /**
+         * GrantSource
+         * @enum {string}
+         */
+        GrantSource: "auto_tagged" | "manual" | "niche_e2" | "org_interest";
         /** HistoryEventOut */
         HistoryEventOut: {
             /** Actor Name */
@@ -2957,6 +3169,50 @@ export interface components {
             verification: components["schemas"]["OrgVerification"];
         };
         /**
+         * InterestBody
+         * @description Express interest (docs/spec/06 6.9 stage 0; REQ-ENG-04): the proposal, where the organisation found it (a
+         *     scout match, which ``match_id`` names, or the Browse repo) and the contact it names with a channel and a
+         *     contact-by date.
+         */
+        InterestBody: {
+            channel: components["schemas"]["ContactChannel"];
+            /**
+             * Contact By
+             * Format: date
+             */
+            contact_by: string;
+            /**
+             * Contact User Id
+             * Format: uuid
+             */
+            contact_user_id: string;
+            /**
+             * Match Id
+             * @description The scout match (required for org_agent_match only).
+             */
+            match_id?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "org_agent_match" | "org_browse";
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+        };
+        /**
+         * InterestState
+         * @description Whether the caller may express interest now, and why not (a stable code) when they may not.
+         */
+        InterestState: {
+            /** Allowed */
+            allowed: boolean;
+            /** Reason */
+            reason: string | null;
+        };
+        /**
          * IpTerms
          * @description docs/spec/06 6.9 stage 8. The internal e-signature refuses ``assignment`` and ``exclusive_licence``.
          * @enum {string}
@@ -2978,6 +3234,132 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** MatchDetail */
+        MatchDetail: {
+            /**
+             * Available
+             * @description False once the proposal is no longer published and clear.
+             */
+            available: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /** Digest Sent At */
+            digest_sent_at: string | null;
+            /** Engagement Id */
+            engagement_id: string | null;
+            feedback: components["schemas"]["MatchFeedback"] | null;
+            /** Feedback Reason */
+            feedback_reason: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Injection Suspected */
+            injection_suspected: boolean;
+            interest: components["schemas"]["InterestState"];
+            niche: components["schemas"]["NicheOut"] | null;
+            /** Owner Handle */
+            owner_handle: string | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Rule Breakdown */
+            rule_breakdown: {
+                [key: string]: unknown;
+            };
+            /** Score */
+            score: number;
+            /**
+             * Scout Id
+             * Format: uuid
+             */
+            scout_id: string;
+            teaser: components["schemas"]["TeaserOut"] | null;
+            /** Why */
+            why: string | null;
+            /**
+             * Why Source
+             * @enum {string}
+             */
+            why_source: "model" | "code";
+        };
+        /**
+         * MatchFeedback
+         * @description A reviewer's verdict on a scout match (docs/spec/06 6.8 feedback loop).
+         * @enum {string}
+         */
+        MatchFeedback: "relevant" | "not_relevant";
+        /** MatchList */
+        MatchList: {
+            /** Items */
+            items: components["schemas"]["MatchOut"][];
+        };
+        /** MatchOut */
+        MatchOut: {
+            /**
+             * Available
+             * @description False once the proposal is no longer published and clear.
+             */
+            available: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /** Digest Sent At */
+            digest_sent_at: string | null;
+            feedback: components["schemas"]["MatchFeedback"] | null;
+            /** Feedback Reason */
+            feedback_reason: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Injection Suspected */
+            injection_suspected: boolean;
+            niche: components["schemas"]["NicheOut"] | null;
+            /** Owner Handle */
+            owner_handle: string | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Score */
+            score: number;
+            /**
+             * Scout Id
+             * Format: uuid
+             */
+            scout_id: string;
+            teaser: components["schemas"]["TeaserOut"] | null;
+            /** Why */
+            why: string | null;
+            /**
+             * Why Source
+             * @enum {string}
+             */
+            why_source: "model" | "code";
         };
         /** MeResponse */
         MeResponse: {
@@ -3649,6 +4031,57 @@ export interface components {
             /** Simulated Checkout */
             simulated_checkout: boolean;
         };
+        /** PreviewItem */
+        PreviewItem: {
+            /** Keywords Found */
+            keywords_found: string[];
+            /** Owner Handle */
+            owner_handle: string | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            /**
+             * Score
+             * @description The rules' score, 0 to 100 (Preview asks no model).
+             */
+            score: number;
+            teaser: components["schemas"]["TeaserOut"];
+            /**
+             * Why
+             * @description The rules that fired ("Matched on ...").
+             */
+            why: string;
+        };
+        /**
+         * PreviewOut
+         * @description The first digest this form would send: the last ``window_days`` days, rules only, nothing saved. An ``on_new``
+         *     scout never runs over that window (it sends each new proposal as it is published), so ``note`` says so.
+         */
+        PreviewOut: {
+            /** Digest Size */
+            digest_size: number;
+            /** Items */
+            items: components["schemas"]["PreviewItem"][];
+            /**
+             * Note
+             * @description Shown above the items when they are not what the scout will send (on_new).
+             */
+            note?: string | null;
+            /**
+             * Total
+             * @description Matching proposals in the window; the digest lists the first digest_size.
+             */
+            total: number;
+            /** Window Days */
+            window_days: number;
+        };
         /** ProblemCard */
         ProblemCard: {
             /**
@@ -3875,6 +4308,176 @@ export interface components {
         RolesUpdate: {
             /** Roles */
             roles: components["schemas"]["OrgRole"][];
+        };
+        /** RunOut */
+        RunOut: {
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Matched Count */
+            matched_count: number;
+            /** Scanned Count */
+            scanned_count: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            status: components["schemas"]["AgentRunStatus"];
+            trigger: components["schemas"]["ScoutFrequency"];
+        };
+        /**
+         * ScoutForm
+         * @description A scout's settings: the body of create and of Preview.
+         */
+        ScoutForm: {
+            /**
+             * Budget Band
+             * @description A code from GET /api/orgs/{org_id}/scouts.
+             */
+            budget_band?: string | null;
+            /** Counties */
+            counties?: string[];
+            /** Exclude Keywords */
+            exclude_keywords?: string[];
+            /** @default weekly */
+            frequency: components["schemas"]["ScoutFrequency"];
+            /** Include Keywords */
+            include_keywords?: string[];
+            /**
+             * Language
+             * @default en
+             * @enum {string}
+             */
+            language: "en" | "sw";
+            /** Maturity */
+            maturity?: components["schemas"]["ProposalMaturity"][];
+            /**
+             * Min Fit
+             * @default 60
+             */
+            min_fit: number;
+            /** Niches */
+            niches: string[];
+            /**
+             * Recipients
+             * @description Reviewer seats of the organisation.
+             */
+            recipients?: string[];
+        };
+        /**
+         * ScoutFrequency
+         * @description How often a scout scans (docs/spec/06 6.8; allowed per plan in ``plans.yaml``). Also an agent run's trigger.
+         * @enum {string}
+         */
+        ScoutFrequency: "daily" | "weekly" | "on_new";
+        /** ScoutList */
+        ScoutList: {
+            /** Budget Bands */
+            budget_bands: components["schemas"]["BudgetBandOut"][];
+            /** Items */
+            items: components["schemas"]["ScoutOut"][];
+            plan: components["schemas"]["ScoutPlanOut"];
+        };
+        /** ScoutOut */
+        ScoutOut: {
+            /** Budget Band */
+            budget_band: string | null;
+            /** Counties */
+            counties: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Exclude Keywords */
+            exclude_keywords: string[];
+            frequency: components["schemas"]["ScoutFrequency"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Include Keywords */
+            include_keywords: string[];
+            /** Language */
+            language: string;
+            last_run: components["schemas"]["RunOut"] | null;
+            /** Maturity */
+            maturity: components["schemas"]["ProposalMaturity"][];
+            /** Min Fit */
+            min_fit: number;
+            /** Niches */
+            niches: components["schemas"]["NicheOut"][];
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Paused */
+            paused: boolean;
+            /** Paused At */
+            paused_at: string | null;
+            /** Recipients */
+            recipients: string[];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ScoutPatch
+         * @description A partial update: a field left out stays as it is. ``paused`` pauses or resumes the scout.
+         */
+        ScoutPatch: {
+            /** Budget Band */
+            budget_band?: string | null;
+            /** Counties */
+            counties?: string[] | null;
+            /** Exclude Keywords */
+            exclude_keywords?: string[] | null;
+            frequency?: components["schemas"]["ScoutFrequency"] | null;
+            /** Include Keywords */
+            include_keywords?: string[] | null;
+            /** Language */
+            language?: ("en" | "sw") | null;
+            /** Maturity */
+            maturity?: components["schemas"]["ProposalMaturity"][] | null;
+            /** Min Fit */
+            min_fit?: number | null;
+            /** Niches */
+            niches?: string[] | null;
+            /** Paused */
+            paused?: boolean | null;
+            /** Recipients */
+            recipients?: string[] | null;
+        };
+        /**
+         * ScoutPlanOut
+         * @description What the organisation's plan allows (``entitlement_tier`` from the subscription, not editable).
+         */
+        ScoutPlanOut: {
+            /** Digest Size */
+            digest_size: number;
+            /** Frequencies */
+            frequencies: components["schemas"]["ScoutFrequency"][];
+            /** Plan */
+            plan: string;
+            /**
+             * Scout Agents
+             * @description How many scouts the plan allows; null: no limit.
+             */
+            scout_agents: number | null;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -4161,6 +4764,29 @@ export interface components {
             lock_version: number;
             /** Milestones */
             milestones: components["schemas"]["MilestoneBody"][];
+        };
+        /**
+         * Tier2ShareOut
+         * @description Whether the developer shared the full proposal (Tier 2) with the engagement's organisation: a live grant.
+         */
+        Tier2ShareOut: {
+            /**
+             * Counts As Unlock
+             * @description True for a proposal not tagged to the organisation (REQ-BIL-03).
+             */
+            counts_as_unlock: boolean;
+            /**
+             * Engagement Id
+             * Format: uuid
+             */
+            engagement_id: string;
+            /** Grant Id */
+            grant_id: string | null;
+            /** Shared */
+            shared: boolean;
+            /** Shared At */
+            shared_at: string | null;
+            source: components["schemas"]["GrantSource"] | null;
         };
         /** TokenRequest */
         TokenRequest: {
@@ -9610,6 +10236,194 @@ export interface operations {
             };
         };
     };
+    get_tier2_share_api_engagements__engagement_id__share_tier2_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tier2ShareOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    post_tier2_share_api_engagements__engagement_id__share_tier2_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tier2ShareOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     engagement_sign_agreement_api_engagements__engagement_id__sign_agreement_post: {
         parameters: {
             query?: never;
@@ -13337,6 +14151,395 @@ export interface operations {
             };
         };
     };
+    post_interest_api_orgs__org_id__interest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_matches_api_orgs__org_id__matches_get: {
+        parameters: {
+            query?: {
+                /** @description Only this scout's matches. */
+                scout_id?: string | null;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_match_api_orgs__org_id__matches__match_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    match_feedback_api_orgs__org_id__matches__match_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     list_members_api_orgs__org_id__members_get: {
         parameters: {
             query?: never;
@@ -13851,6 +15054,583 @@ export interface operations {
                 };
                 content: {
                     "text/html": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_scouts_api_orgs__org_id__scouts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoutList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    create_scout_api_orgs__org_id__scouts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScoutForm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoutOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    preview_api_orgs__org_id__scouts_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScoutForm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_scout_api_orgs__org_id__scouts__scout_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scout_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoutOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    delete_scout_api_orgs__org_id__scouts__scout_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scout_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    update_scout_api_orgs__org_id__scouts__scout_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scout_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScoutPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoutOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
         };
