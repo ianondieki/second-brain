@@ -33,13 +33,10 @@ NOT_PAGES = {
     "/assistant": "a request path's segment that proposals/access.py tests",
     "/{}": "a tracker command the demo seed posts to the API (seed/demo/engagements.py)",
 }
-# Links to pages this branch's web app does not have: each is a known gap, reported, never a new one.
-PAGES_NOT_BUILT = {
-    "/settings/notifications": "notification preferences, every email footer's 'Manage notifications': not built",
-    "/help": "help, every email footer's 'Help': not built",
-    "/billing/upgrade": "the plan upgrade (billing/entitlements.py): on integration since P14-F, not on this base",
-    "/org/inbox/matches/{}": "a scout match (EM3's items): P10-F, feat/REQ-SCOUT-02-fe",
-}
+# Links to pages this branch's web app does not have: each is a known gap, reported, never a new one. Empty since P16
+# built /settings/notifications and /help (every email footer); /billing/upgrade (P14-F) and /org/inbox/matches/{id}
+# (P10-F) were pages already. An entry that has become a page fails the test, so the list never goes stale.
+PAGES_NOT_BUILT: dict[str, str] = {}
 
 
 def routes() -> list[re.Pattern[str]]:
@@ -128,6 +125,21 @@ def test_every_page_the_backend_links_to_is_a_page_of_the_web_app() -> None:
     assert broken == {}
     assert set(NOT_PAGES) <= set(found)  # every exception is still written somewhere
     assert set(PAGES_NOT_BUILT) <= set(found)
+
+
+def test_no_page_is_listed_as_not_built() -> None:
+    """A listed gap that the web app now has a page for is a stale entry: drop it from ``PAGES_NOT_BUILT``."""
+    table = routes()
+    assert [path for path in PAGES_NOT_BUILT if is_page(path, table)] == []
+
+
+def test_the_email_footers_and_the_upgrade_link_are_pages() -> None:
+    """Every email footer's "Manage notifications" and "Help", and the 402's upgrade link (P16, P14-F)."""
+    table = routes()
+    found = backend_paths()
+    for path in ("/settings/notifications", "/help", "/billing/upgrade", "/org/inbox/matches/{}"):
+        assert path in found, path
+        assert is_page(path, table), path
 
 
 def test_each_party_opens_an_engagement_in_its_own_portal() -> None:
