@@ -25142,9 +25142,9 @@
             }
           },
           {
-            "description": "A linked Problem",
+            "description": "A linked Problem's id",
             "in": "query",
-            "name": "problem",
+            "name": "problem_id",
             "required": false,
             "schema": {
               "anyOf": [
@@ -25156,8 +25156,8 @@
                   "type": "null"
                 }
               ],
-              "description": "A linked Problem",
-              "title": "Problem"
+              "description": "A linked Problem's id",
+              "title": "Problem Id"
             }
           },
           {

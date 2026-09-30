@@ -191,7 +191,7 @@ async def test_filters_niche_county_maturity_ask_and_problem(
     assert ids(await walk(member, q=q, maturity="mvp")) == [catalogue.in_summary]
     assert ids(await walk(member, q=q, ask="licence")) == [catalogue.other_niche]
     assert set(ids(await walk(member, q=q, ask=["pilot", "sale"]))) == solar
-    assert set(ids(await walk(member, q=q, problem=str(proposal_world.problem_id)))) == solar
+    assert set(ids(await walk(member, q=q, problem_id=str(proposal_world.problem_id)))) == solar
     assert ids(await walk(member, q=q, maturity="live")) == []
     # Filters without keywords: every published teaser of the niche, this test's among them.
     assert ids(await walk(member, niche=catalogue.health_slug)) == [catalogue.other_niche]

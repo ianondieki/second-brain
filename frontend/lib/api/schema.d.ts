@@ -18349,8 +18349,8 @@ export interface operations {
                 county?: string[] | null;
                 maturity?: components["schemas"]["ProposalMaturity"][] | null;
                 ask?: components["schemas"]["ProposalAsk"][] | null;
-                /** @description A linked Problem */
-                problem?: string | null;
+                /** @description A linked Problem's id */
+                problem_id?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
