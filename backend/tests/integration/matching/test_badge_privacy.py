@@ -59,12 +59,13 @@ async def test_trending_badges_never_name_the_tagged_organisations(
 
 
 async def test_no_tier2_text_reaches_discover_or_recommendations(
-    developers: Developers, proposal_world: ProposalWorld
+    owner_engine: AsyncEngine, developers: Developers, proposal_world: ProposalWorld
 ) -> None:
+    world = await build(owner_engine)  # a niche of its own: Discover lists at most 20 new proposals per niche
     owner = await developers()
-    body = await published(owner, proposal_world, title="Cooler alerts for Tier-1 readers")
+    body = await published(owner, proposal_world, title="Cooler alerts for Tier-1 readers", niche_id=str(world.niche))
     reader = await developers()
-    texts = [(await reader.get(path, params={"niche": proposal_world.parent_slug})).text for path in PATHS]
+    texts = [(await reader.get(path, params={"niche": world.slug("parent")})).text for path in PATHS]
     texts.append((await reader.get("/api/me/recommendations")).text)
     texts.append((await owner.get("/api/me/recommendations")).text)
     assert body["proposal_id"] in texts[0]  # the positive control: the new teaser is on Discover
