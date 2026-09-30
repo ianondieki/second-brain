@@ -12,7 +12,7 @@ import {
   signUpScoutOrg,
   upgradeOrg,
 } from "./support/scout-scene";
-import { checkScreen, expectEmptyState } from "./support/screen";
+import { checkScreen, expectEmptyState, settled } from "./support/screen";
 import { tag } from "./support/tracker-scene";
 
 // REQ-SCOUT-02 frontend (P10-F), the M2 walkthrough's step 1 (docs/platform/prototype-m2-plan.md §3), with
@@ -265,6 +265,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
 
     // 10. The organisation now sees the developer's name, and opens the full proposal under the NDA.
     await orgPage.goto(`/org/engagements/${engagementId}`);
+    await settled(orgPage); // the loading state gives way to the page (one <main> again)
     await expect(orgPage.locator("main")).toContainText(`From ${dev.name}`);
     const shared = orgPage.locator("[data-tier2-share='shared']");
     await expect(shared).toContainText(`The developer shared the full proposal with ${org.orgName}`);
