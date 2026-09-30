@@ -6,6 +6,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { InfoIcon } from "@/components/ui/status-icons";
 import { requireMe } from "@/lib/api/server";
+import { started } from "@/lib/api/started";
 import { homeFor } from "@/lib/auth/routing";
 import { billingHref, isOrgId, isPlanCode, safeNext } from "@/lib/billing/upgrade";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -79,15 +80,18 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   }
 
   const code = one(search.plan);
+  const checkoutId = one(search.checkout);
+  const resuming = isOrgId(checkoutId); // the same UUID pattern
+  // The catalogue and, unless a checkout is resuming, the live plan are read together (both reads of the subject the
+  // person pays for); the plan asked for is still checked first.
+  const currentRead = isPlanCode(code) && !resuming ? started(getCurrentPlan(subject)) : null;
   const catalogue = isPlanCode(code) ? await getPlans(sideOf(subject)) : null;
   const plan = catalogue?.plans.find((p) => p.code === code);
   if (!catalogue || !plan) return empty(t("refused.unknownPlan"), t("action.allPlans"), back);
 
-  const checkoutId = one(search.checkout);
-  const resuming = isOrgId(checkoutId); // the same UUID pattern
-  if (!resuming) {
+  if (currentRead) {
     // Already on it: nothing to buy (a checkout in the address still shows its outcome, which activated it).
-    const current = await getCurrentPlan(subject);
+    const current = await currentRead;
     if (current.kind === "refused") {
       const org = subject.kind === "org" ? subject.membership.org_name : "";
       return current.refusal === "mfaSetup"
