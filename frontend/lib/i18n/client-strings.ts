@@ -32,6 +32,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "shell",
   "errorPage",
   "checkout",
+  "notificationSettings",
   "ideaEditor",
   "ideaFields",
   "ideaAssistant",

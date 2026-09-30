@@ -54,7 +54,7 @@ describe("an idea in the list", () => {
     );
     expect(screen.getByText("Agriculture › Dairy")).toBeTruthy();
     expect(screen.getByText("Published")).toBeTruthy();
-    expect(screen.getByText("Changed 29 Sept 2026")).toBeTruthy();
+    expect(screen.getByText("Changed 29 Sep 2026")).toBeTruthy();
   });
 
   it("carries at most two chips: the status and unpublished changes", () => {

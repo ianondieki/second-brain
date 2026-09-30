@@ -642,7 +642,7 @@ describe("who has seen this", () => {
     ).toBeTruthy();
     const rows = within(screen.getByRole("list", { name: "Views of the full details, newest first" })).getAllByRole("listitem");
     expect(rows[0].textContent).toContain("Rita Wanjiru, Safcell");
-    expect(rows[0].textContent).toContain("29 September 2026 at 14:06 Nairobi time");
+    expect(rows[0].textContent).toContain("29 Sep 2026, 14:06 Nairobi time");
     expect(rows[0].textContent).toContain("Version 2");
     expect(rows[0].textContent).toContain("NDA 1.0");
     expect(rows[1].textContent).toContain("Otieno, a company no longer listed");

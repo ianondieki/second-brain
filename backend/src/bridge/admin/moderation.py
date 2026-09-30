@@ -47,7 +47,7 @@ from bridge.proposals.service import signal
 
 UNRESOLVED: Final = ("open", "held", "escalated")
 Decision = Literal["approve", "reject"]
-# Why a case cannot be decided (the decision route's refusal code; subject_gone: the subject no longer exists).
+# Why a case cannot be decided: the decision route's refusal code (subject_gone: the subject no longer exists).
 Blocked = Literal[
     "already_decided", "unsupported_subject", "subject_gone", "own_content", "cannot_approve_vulnerability"
 ]
@@ -227,17 +227,9 @@ _CURRENT_TEXT = {
 }
 
 
-async def _shows_a_vulnerability(db: AsyncSession, subject_type: str, subject_id: UUID) -> bool:
-    """Whether the subject's current Tier-1 text screens as a security vulnerability (screened again now)."""
-    row = (await db.execute(_CURRENT_TEXT[subject_type], {"id": subject_id})).one_or_none()
-    if row is None:
-        return False
-    return await screens_as_vulnerability({name: value for name, value in row._asdict().items() if value})
-
-
 def _refusal(exc: DBAPIError) -> ApiError | None:
     sqlstate = getattr(exc.orig, "sqlstate", None)
-    if sqlstate == "P0002":  # no_data_found: gone, or the moderator's own content
+    if sqlstate == "P0002":  # no_data_found: the moderator's own content (or a subject removed while deciding)
         return ApiError(403, "own_content", "You cannot moderate your own content or content that no longer exists.")
     if sqlstate == "42501":  # the database's staff check
         return not_found()
@@ -263,15 +255,16 @@ async def decide(
         raise not_found("No such case.")
     if case.status not in UNRESOLVED:
         raise ApiError(409, "already_decided", "This case was already decided.")
+    if case.subject_type not in _CURRENT_TEXT:
+        raise ApiError(409, "unsupported_subject", "Decide this case from its own queue.")
+    current = (await db.execute(_CURRENT_TEXT[case.subject_type], {"id": case.subject_id})).one_or_none()
+    if current is None:
+        raise ApiError(409, "subject_gone", "The proposal or problem of this case no longer exists.")
     if await _subject_version(db, case.subject_type, case.subject_id) != subject_version_id:
         raise _case_changed()
     approve = decision == "approve"
-    vulnerable = (
-        approve
-        and case.subject_type in _CURRENT_TEXT
-        and await _shows_a_vulnerability(db, case.subject_type, case.subject_id)
-    )
-    if vulnerable:
+    # Screened again now: the current Tier-1 text, not the one the case was filed about.
+    if approve and await screens_as_vulnerability({name: value for name, value in current._asdict().items() if value}):
         raise ApiError(
             409,
             "cannot_approve_vulnerability",
@@ -284,11 +277,9 @@ async def decide(
         if case.subject_type == "proposal":
             proposal = (await db.execute(_PROPOSAL, {"id": case.subject_id})).one_or_none()
             await db.execute(_MODERATE_PROPOSAL, {"id": case.subject_id, "state": state.value})
-        elif case.subject_type == "problem":
+        else:
             status = "published" if approve else "rejected"
             await db.execute(_MODERATE_PROBLEM, {"id": case.subject_id, "state": state.value, "status": status})
-        else:
-            raise ApiError(409, "unsupported_subject", "Decide this case from its own queue.")
     except DBAPIError as exc:
         refusal = _refusal(exc)
         if refusal is None:

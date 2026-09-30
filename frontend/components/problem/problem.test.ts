@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatConfidence,
   formatDate,
-  formatLongDay,
+  formatMoment,
   problemHref,
   problemLabel,
   safeHttpsUrl,
@@ -16,14 +16,14 @@ describe("problemLabel (REQ-RES-02, docs/spec/06 6.5)", () => {
   it("labels a published research card AI-drafted with its Nairobi publication day", () => {
     expect(problemLabel({ source: "research_agent", seeded_example: false, published_at: published }, "en")).toEqual({
       key: "aiDrafted",
-      date: "30 September 2026",
+      date: "30 Sep 2026",
     });
   });
 
   it("never labels a demo seed card AI-drafted", () => {
     expect(problemLabel({ source: "research_agent", seeded_example: true, published_at: published }, "en")).toEqual({
       key: "seeded",
-      date: "30 September 2026",
+      date: "30 Sep 2026",
     });
   });
 
@@ -38,13 +38,17 @@ describe("problemLabel (REQ-RES-02, docs/spec/06 6.5)", () => {
 
 describe("dates and numbers", () => {
   it("writes a calendar date without shifting it a day", () => {
-    expect(formatDate("en", "2026-09-28")).toBe("28 Sept 2026");
+    expect(formatDate("en", "2026-09-28")).toBe("28 Sep 2026");
     expect(formatDate("en", "2026-01-01")).toBe("1 Jan 2026");
     expect(formatDate("en", "not a date")).toBe("not a date");
   });
 
-  it("writes a moment as its Nairobi day", () => {
-    expect(formatLongDay("en", "2026-09-30T21:30:00Z")).toBe("1 October 2026");
+  it("writes a moment in Nairobi time, the next day after 21:00 UTC", () => {
+    expect(problemLabel({ source: "research_agent", seeded_example: false, published_at: "2026-09-30T21:30:00Z" }, "en")).toEqual({
+      key: "aiDrafted",
+      date: "1 Oct 2026",
+    });
+    expect(formatMoment("en", "2026-09-30T11:06:00Z")).toBe("30 Sep 2026, 14:06");
   });
 
   it("shows confidence to two places", () => {
