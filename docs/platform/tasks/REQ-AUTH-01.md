@@ -302,8 +302,17 @@ registered versions keep the old one: THREAT_MODEL §5 residual). Downgrade: non
 the prototype all such rows are demo or test data, and `make demo-reset` reseeds through `create_account`, so a reset
 gives random handles without a migration.
 
-**Share notice link (P10-F open item 2).** `engagements/interest.py` `tell_organisation` linked the organisation's
-in-app notice to `/engagements/{id}`, not a web route; it is now `/org/engagements/{id}` (`SHARED_LINK`).
+**Links to pages (P10-F open item 2 and its follow-up).** No page of the web app is `/engagements/{id}` or
+`/engagements`; each party has its own portal. `bridge/web_paths.py` names them: `engagement_path(party, id)` gives the
+developer `/dev/engagements/{id}` and the organisation `/org/engagements/{id}` (that page reads the organisation from
+the engagement, so no `?org=`); `org_engagements_path(org)` is `/org/engagements?org={org}` (the list shows the
+organisation named, else the member's first). Now used by: every tracker in-app notice (`engagements/notify.py`
+`compose`, the party it tells, N17 included), the tracker link of EM2 and N17 (the developer), the Tier-2 share
+notice (`engagements/interest.py`, the organisation), the developer's daily nudge (`/dev/engagements`, CTA and in-app)
+and the organisation's reminder digest (`/org/engagements?org=`, CTA and in-app). `reminders/render.py`
+`TRACKER_PATH` is gone. `tests/unit/test_web_paths.py` reads the route table from `frontend/app` and every site path
+the backend's source writes (strings, f-strings, a base URL then a path; `/api` and router decorators left out) and
+fails on a link to no page, with two listed exceptions: site paths that are not web links, and pages not built here.
 
 **EM3 own-member rule (REQ-SCOUT-02).** `matching/digest.py` `_UNDIGESTED` now leaves out a match whose developer is
 an active member of the scout's organisation (the rule of `matches._MATCHES` and the interest route on the scout
@@ -318,7 +327,7 @@ collision, in capitals too; fail closed after 5 draws; another integrity error r
 Otieno": the teaser, Browse, the scout match, EM3, the Express interest answer, the stage-0 detail, the org's list and
 History carry the handle and no piece of her name; her own view names her);
 `tests/integration/engagements/test_share_tier2.py::test_the_share_notice_opens_the_organisations_tracker`;
-`tests/integration/matching/test_digest_own_member.py`. `frontend/e2e/tracker.spec.ts`: the org row shows `From dev-`
+`tests/integration/matching/test_digest_own_member.py`; `tests/unit/test_web_paths.py` (the route table, the scan, every link a page, each party's portal); the pinned links in `test_notify.py`, `test_em2.py`, `test_n17.py`, `test_em2_contact.py`, `test_tracker_branches.py`, `test_tracker_edges.py`, `test_org_digest.py`, `test_nudge.py`, `reminders/test_dispatch.py` and `test_org_dispatch.py` now expect each recipient's portal. `frontend/e2e/tracker.spec.ts`: the org row shows `From dev-`
 plus 8 characters and neither "achieng" nor "otieno" in any case (not run here: no compose stack; eslint and tsc pass).
 
 **Mutation proofs** (each on committed code, the file restored with `git checkout` and checked clean):
@@ -330,11 +339,15 @@ plus 8 characters and neither "achieng" nor "otieno" in any case (not run here: 
 | H3 | every integrity error taken for a clash | `test_another_integrity_error_is_not_taken_for_a_clash` |
 | S1 | the share notice back to `/engagements/{id}` | `test_the_share_notice_opens_the_organisations_tracker`, `test_the_share_notice_skips_former_members_and_never_raises` |
 | D1 | `_UNDIGESTED` without the own-member clause | `test_digest_own_member.py` |
+| L1 | `notify.compose` back to `/engagements/{id}` | `test_web_paths.py` (a link to no page), `unit/engagements/test_notify.py` (5) |
+| L2 | EM2's tracker back to `{base}/engagements/{id}` | `test_web_paths.py`, `unit/notifications/test_em2.py` |
+| L3 | `engagement_path` ignores the party (always the organisation's) | `test_web_paths.py`, `test_notify.py` (4), `test_em2.py`, `test_n17.py`, `integration/engagements/test_tracker_branches.py` (2) |
+| L4 | the org digest's in-app link without its organisation | `integration/reminders/test_org_dispatch.py` |
 
-**Open.** (1) The other in-app tracker notices and two emails link to `/engagements/{id}` too: `engagements/notify.py`
-`compose` (N17 and every tracker notice, both parties), `notifications/em2.py` and `n17.py` (`tracker_url`, both to
-the developer, so `/dev/engagements/{id}`). Not changed here (outside the share notice); the unit tests pin them.
-(2) `feat/REQ-SCOUT-02-fe` `e2e/scout.spec.ts` checks `not.toContainText(dev.name)` (case-sensitive "Achieng Otieno",
+**Open.** (1) Pages the backend links to that do not exist on this branch (the exceptions of `test_web_paths.py`):
+`/settings/notifications` and `/help` in every email footer (EM1, EM2, EM3, N17, the nudge and the org digest) are not
+built anywhere; `/billing/upgrade` is on integration since P14-F; `/org/inbox/matches/{id}` (EM3's items) is P10-F.
+Drop the last two from `PAGES_NOT_BUILT` after those merges (the test does not fail on a stale entry). (2) `feat/REQ-SCOUT-02-fe` `e2e/scout.spec.ts` checks `not.toContainText(dev.name)` (case-sensitive "Achieng Otieno",
 lines 129, 154, 171, and `em3.text` at 138), which the old handle passed; add `/achieng|otieno/i` there, and drop the
 `_handle_from` comment in `e2e/support/scout-scene.ts:76`. (3) `frontend/app/(app)/org/org-screens.test.tsx:171` uses
 an old-shape handle as fixture data (asserts nothing on it). (4) The data migration above, if pre-fix profiles must
