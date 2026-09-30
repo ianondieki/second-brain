@@ -5,11 +5,11 @@ import { useTranslations } from "next-intl";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Callout } from "@/components/ui/Callout";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Field } from "@/components/ui/Field";
 import { Form, SubmitButton } from "@/components/ui/Form";
-import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
 import type { UploadCheck } from "./certificate";
 import { Fingerprint } from "./Fingerprint";
@@ -110,18 +110,14 @@ function Result({ result, certId }: { result: UploadCheck; certId?: string }) {
       ? t("noMatchThis")
       : t("noMatch");
   return (
-    <div className={cn("border-l-4 pl-4 sm:pl-6", matched ? "border-ok" : "border-error")}>
-      <p className={cn("flex items-start gap-2 font-semibold", matched ? "text-ok" : "text-error")}>
-        {matched ? <CheckIcon className="mt-0.5 size-5 shrink-0" /> : <AlertIcon className="mt-0.5 size-5 shrink-0" />}
-        <span data-testid="file-result">{message}</span>
-      </p>
-      <p className="mt-4 text-sm font-medium text-ink-soft">{t("yourHash")}</p>
-      <Fingerprint hex={result.content_hash} className="mt-1" />
+    <Callout tone={matched ? "ok" : "error"} title={<span data-testid="file-result">{message}</span>}>
+      <p className="mt-2 text-sm font-medium text-ink-soft">{t("yourHash")}</p>
+      <Fingerprint hex={result.content_hash} />
       {matched && found && !certId ? (
-        <Link href={`/verify/${encodeURIComponent(found)}`} className={cn(standaloneLinkClass, "mt-2")}>
+        <Link href={`/verify/${encodeURIComponent(found)}`} className={standaloneLinkClass}>
           {t("view", { certId: found })}
         </Link>
       ) : null}
-    </div>
+    </Callout>
   );
 }

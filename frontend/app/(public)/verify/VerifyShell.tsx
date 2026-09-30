@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { TopBar } from "@/components/TopBar";
+import { Panel } from "@/components/ui/Panel";
 
 /**
  * The public verification pages: top bar, one content column, and a panel that says in plain words what a check
@@ -21,7 +22,7 @@ export async function VerifyShell({ children }: { children: ReactNode }) {
         <main id="main" tabIndex={-1} className="w-full min-w-0 max-w-2xl focus:outline-none">
           {children}
         </main>
-        <aside aria-labelledby="what-a-check-shows" className="self-start rounded-panel bg-jacaranda-wash p-6 lg:p-8">
+        <Panel as="aside" variant="wash" aria-labelledby="what-a-check-shows" className="self-start">
           <h2 id="what-a-check-shows" className="text-lg text-ink">
             {t("panelTitle")}
           </h2>
@@ -30,7 +31,7 @@ export async function VerifyShell({ children }: { children: ReactNode }) {
             <li className="pl-1">{t("panelTime")}</li>
             <li className="pl-1">{t("panelNot")}</li>
           </ul>
-        </aside>
+        </Panel>
       </div>
     </>
   );

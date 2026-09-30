@@ -121,7 +121,7 @@ export function LoginForm({ next }: { next?: string }) {
         </Button>
       </div>
 
-      <p className="border-t border-line pt-6 text-ink">
+      <p className="pt-4 text-ink">
         {t.rich("login.noAccount", {
           signup: (chunks) => (
             <Link href="/signup" className={textLinkClass}>

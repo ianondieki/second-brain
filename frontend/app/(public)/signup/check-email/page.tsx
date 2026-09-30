@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
 import { IntlScope } from "@/components/IntlScope";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import { CheckEmail } from "./CheckEmail";
 
@@ -17,7 +18,7 @@ export default async function CheckEmailPage({ searchParams }: PageProps<"/signu
   const kind = (await searchParams).for === "login" ? "login" : "signup";
   return (
     <AuthShell>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+      <PageHeader title={t("title")} />
       <IntlScope namespaces={["checkEmail", "errors"]}>
         <CheckEmail kind={kind} />
       </IntlScope>
