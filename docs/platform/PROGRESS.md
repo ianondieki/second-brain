@@ -380,12 +380,14 @@ loaded Sign out, made to save 0.6 KB on `/settings/security`, crashed the page w
 no code split may fail into a route's error boundary). **Stage B is done**: every screen of the four portals is built
 from one design system (`docs/platform/design/p16-design-system.md`), with zero axe violations of any impact on every
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
-gzipped. **Next:** Stage C (clean `make demo-reset`, `make demo-stats` peak, the recorded Playwright walkthrough with
-screenshots in `docs/demo/`, README "Run the demo", the M2 report draft), then D, E, F in order. **Stage E backlog**:
+gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Next:**
+Stage D (vercel-react-best-practices over the frontend; Lighthouse mobile on each portal's main pages, all three
+scores ≥90), then E and F in order. The demo is in a used state after the reviewer's walkthrough run: `make
+demo-reset` before recording or showing it. **Stage E backlog**:
 the moderation case page finds a case only in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test
 G5 (REQ-TREND-01 re-review MINOR 1); `requirePendingMfa` return path for a signed-out person (P16-C1).
 
-**Open branches** (2026-09-30, session 3): none. Integration head: the P16-C1 merge record (after `106f01f`).
+**Open branches** (2026-09-30, session 3): none. Integration head: the Stage C merges (after `c6873e8`).
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
@@ -540,8 +542,18 @@ read-only claims queues (P15), the auth follow-ups (P17), and P16's packaging, d
   one pass. Lighthouse mobile after the change: `/dev` LCP about 1.6 s, perf 96–100, accessibility 100.
 - **Test races fixed at the cause**, found by CI: axe measuring a button mid colour transition (`settled()` now waits
   for finite animations), a scout digest shared by parallel workers, and a 409 focus race in the notification settings.
-- **Demo packaging (Stage C)**: in progress: the recorded walkthrough (`feat/P16-walkthrough`), README "Run the demo"
-  for M2 (`docs/P16-readme-demo`), the memory peak of a clean `make demo-reset` (being sampled).
+- **Demo packaging (Stage C).** From a clean `make demo-reset` (84 s with cached layers) the demo's highest total
+  memory at any sampled moment, across two resets and two recorded walkthroughs, was **662 MB** (about 600 MB at rest;
+  the seed step 210 MB and then exits; 1.04 GB even if every container peaked at once), well inside Docker Desktop's
+  4 GB. The recorded walkthrough (`make demo-walkthrough`; merge `14e19c7`) walks both portals and the staff console,
+  the clock and the emails in 2 min 17 s, passed three times from a reset, and writes 17 screenshots to
+  `docs/demo/screenshots/` (committed, 1.3 MB) and a video to `docs/demo/video/` (out of git); `docs/demo/README.md`
+  is the 3-minute script. README "Run the demo" (merge `c6873e8`) now covers the M2 logins (staff admin, moderator),
+  the free-plan cap Amina and Brian are at, random handles, the measured memory, a Mermaid diagram of `make demo`, the
+  LLM and payment variable names and the real / simulated / planned table (Discover's trend counts simulated by the
+  seed; the M-Pesa checkout simulated; research drafts nothing without a provider). Found while writing it: the plans
+  page lists "Recommendations with the reasons behind them" under Pro but nothing gates it (pricing copy; the owner's
+  call, see D-44).
 
 **Decisions made by the orchestrator this session** (recorded on the cards): no route skeletons (above); no code split
 may fail into a route's error boundary (a lazily loaded Sign out was reverted); the static not-found page reads no
