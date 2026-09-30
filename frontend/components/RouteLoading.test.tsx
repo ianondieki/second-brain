@@ -19,7 +19,9 @@ vi.mock("next-intl/server", () => ({
 }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({}) }));
 // The top bar is an async server component, which React's client renderer cannot run: a stand-in keeps its slot.
-vi.mock("./TopBar", () => ({ TopBar: ({ children }: { children?: React.ReactNode }) => <header>{children}</header> }));
+vi.mock("./TopBarBase", () => ({
+  TopBarBase: ({ children }: { children?: React.ReactNode }) => <header>{children}</header>,
+}));
 
 afterEach(cleanup);
 
@@ -34,8 +36,10 @@ describe("route loading states", () => {
     expect(within(nav).getByRole("link", { name: "My ideas" }).getAttribute("aria-current")).toBe("page");
     expect(within(screen.getByRole("main")).getByRole("status").textContent).toBe("Loading this page…");
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
-    // No client component: the account menu waits for the page (a prefetched loading state would pull its chunk).
+    // No client reference: the account menu waits for the page, and links are plain (a prefetched loading state would
+    // pull the linked route's chunk that carries them).
     expect(document.querySelector("[data-account-menu]")).toBeNull();
+    for (const a of document.querySelectorAll("a")) expect(a.getAttribute("href")).toMatch(/^[/#]/);
   });
 
   it("keep the organisation section current", async () => {

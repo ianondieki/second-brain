@@ -2,6 +2,16 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
+ * The page has finished streaming: a route's loading state (loading.tsx, `[data-skeleton]`) is shown first and React
+ * reveals the page in its place a moment after it arrived (it holds finished content hidden for up to about 300 ms so
+ * that reveals do not flicker). Until then the document holds both, the hidden page included, so a check that reads
+ * the page waits for this first.
+ */
+export async function settled(page: Page) {
+  await expect(page.locator("[data-skeleton]")).toHaveCount(0);
+}
+
+/**
  * The page-level rules every screen keeps (same as e2e/auth.spec.ts): axe finds nothing serious or critical
  * (AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, at 360 px in mobile-360).
  * `exclude`: selectors axe leaves out, for frames that run no script (axe cannot run inside them and would wait for
@@ -9,6 +19,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * its title).
  */
 export async function checkScreen(page: Page, { exclude = [] }: { exclude?: string[] } = {}) {
+  await settled(page);
   let axe = new AxeBuilder({ page }).withTags([
     "wcag2a",
     "wcag2aa",
@@ -49,6 +60,7 @@ export async function expectEmptyState(page: Page, sentence: string, action: str
  * 44 px tall and no two boxes overlap.
  */
 export async function expectSeparateTargets(targets: Locator) {
+  await settled(targets.page());
   const boxes = [];
   for (const target of await targets.all()) {
     const box = await target.boundingBox();

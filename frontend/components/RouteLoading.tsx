@@ -1,17 +1,22 @@
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
+
 import { AdminNavPlaceholder } from "./AdminNavPlaceholder";
-import { DevNav, type DevSection } from "./DevNav";
-import { OrgNav, type OrgSection } from "./OrgNav";
-import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
+import { DEV_SECTIONS, ORG_SECTIONS, type DevSection, type OrgSection } from "./nav-sections";
+import { PortalNavBase } from "./PortalNavBase";
+import { ShellFrame } from "./ShellFrame";
+import { TopBarBase } from "./TopBarBase";
 import { PageSkeleton } from "./ui/PageSkeleton";
 
-// The loading states of the signed-in route segments (their loading.tsx files): the shell the page will render, with
-// the section's navigation, around a PageSkeleton. Server components with no data and no client component: Next.js
-// prefetches them for every link in view, and a client component here (the account menu) would make it download each
-// linked route's chunk that carries it; the top bar holds a still placeholder instead. A tap on a link shows the next
-// screen's frame at once while its data loads (docs/platform/design/p16-design-system.md, Loading). The signed-in
-// group has no layout of its own, so nothing above these reads cookies and holds the fallback back; the staff
-// console's layout reads the session once, when the console is entered, and its sections' loading states show as
-// staff move between them.
+// The loading states of the signed-in route segments (their loading.tsx files): the frame the page will render, with
+// the section's navigation, around a PageSkeleton, so a tap on a link shows the next screen's frame at once while its
+// data loads (docs/platform/design/p16-design-system.md, Loading). Next.js prefetches these for every link in view,
+// so their module graph holds no client component and no next/link: either would become chunks the router downloads
+// with each prefetch (Turbopack even merges next/link into a route's own chunk, the idea page's dialogs included),
+// over the 150 KB budget (docs/spec/07 item 5). Hence the link-free bases, plain <a> links (a tap during loading is
+// a full page load) and a still avatar in place of the account menu. The signed-in group has no layout of its own,
+// so nothing above these reads cookies and holds the fallback back; the staff console's layout reads the session
+// once, when the console is entered, and its sections' loading states show as staff move between them.
 
 /** The account menu's room in the top bar while a page loads: the avatar, still (the menu itself comes with the page). */
 function AccountPlaceholder() {
@@ -22,20 +27,32 @@ function AccountPlaceholder() {
   );
 }
 
-function LoadingShell({ children, ...shell }: Omit<SignedInShellProps, "account">) {
+function LoadingFrame({ homeHref, nav, wide = true }: { homeHref: string; nav?: ReactNode; wide?: boolean }) {
   return (
-    <SignedInShell {...shell} account={<AccountPlaceholder />}>
-      {children}
-    </SignedInShell>
+    <ShellFrame
+      topBar={
+        <TopBarBase homeHref={homeHref} Anchor="a">
+          <AccountPlaceholder />
+        </TopBarBase>
+      }
+      nav={nav}
+      wide={wide}
+    >
+      <PageSkeleton />
+    </ShellFrame>
   );
 }
 
 /** A developer portal segment, with its section current in the navigation. */
 export function DevLoading({ current, wide = true }: { current: DevSection; wide?: boolean }) {
+  const t = useTranslations("nav");
+  const items = DEV_SECTIONS.map(({ key, href, Icon }) => ({ key, href, Icon, label: t(key) }));
   return (
-    <LoadingShell homeHref="/dev" nav={<DevNav current={current} />} wide={wide}>
-      <PageSkeleton />
-    </LoadingShell>
+    <LoadingFrame
+      homeHref="/dev"
+      wide={wide}
+      nav={<PortalNavBase label={t("developer")} current={current} items={items} Anchor="a" />}
+    />
   );
 }
 
@@ -44,20 +61,20 @@ export function DevLoading({ current, wide = true }: { current: DevSection; wide
  * (it has no search params); the page that replaces it links with it again.
  */
 export function OrgLoading({ current, wide = true }: { current: OrgSection; wide?: boolean }) {
+  const t = useTranslations("nav");
+  const items = ORG_SECTIONS.map(({ key, href, Icon }) => ({ key, href, Icon, label: t(key) }));
   return (
-    <LoadingShell homeHref="/org" nav={<OrgNav current={current} />} wide={wide}>
-      <PageSkeleton />
-    </LoadingShell>
+    <LoadingFrame
+      homeHref="/org"
+      wide={wide}
+      nav={<PortalNavBase label={t("organisation")} current={current} items={items} Anchor="a" />}
+    />
   );
 }
 
 /** Screens either side opens (plan and billing, settings, a problem), which have no portal navigation. */
 export function AccountLoading() {
-  return (
-    <LoadingShell homeHref="/">
-      <PageSkeleton />
-    </LoadingShell>
-  );
+  return <LoadingFrame homeHref="/" wide={false} />;
 }
 
 /**
@@ -65,9 +82,5 @@ export function AccountLoading() {
  * from 1024 px so nothing moves when the page arrives.
  */
 export function AdminLoading({ wide = true }: { wide?: boolean }) {
-  return (
-    <LoadingShell homeHref="/admin" nav={<AdminNavPlaceholder />} wide={wide}>
-      <PageSkeleton />
-    </LoadingShell>
-  );
+  return <LoadingFrame homeHref="/admin" nav={<AdminNavPlaceholder />} wide={wide} />;
 }
