@@ -11,7 +11,7 @@ DEMO_PY ?= $(LEGACY_PY)
 DEMO = $(DEMO_PY) infra/demo/demo.py
 
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
-        check-legacy check-copy check-e2e test-integration e2e budget \
+        check-backend-coverage check-legacy check-copy check-e2e test-integration e2e budget \
         demo demo-down demo-reset demo-totp demo-logins demo-logs demo-stats demo-clock \
         demo-reminders demo-scouts demo-walkthrough
 
@@ -21,6 +21,7 @@ help:
 	@echo "down            stop the stack (data volumes kept)"
 	@echo "check           everything CI runs: backend, frontend, legacy suite, Playwright smoke"
 	@echo "check-backend   ruff, ruff format, mypy --strict, OpenAPI drift, pytest (unit + integration)"
+	@echo "check-backend-coverage  check-backend with coverage measured, then the coverage gate (CI's backend job)"
 	@echo "check-frontend  eslint, tsc, vitest, API types drift"
 	@echo "check-legacy    the unchanged local-companion suite (scripts/run_legacy_tests.py)"
 	@echo "check-copy      banned-claims copy-lint (copy/banned_claims.txt, AC-IP-4)"
@@ -62,7 +63,14 @@ check: check-copy check-backend check-frontend check-legacy check-e2e
 check-backend:
 	cd backend && $(UV) run ruff check . && $(UV) run ruff format --check . && $(UV) run mypy
 	cd backend && $(UV) run python -m bridge.openapi --check
-	cd backend && $(UV) run pytest
+	cd backend && $(UV) run pytest $(PYTEST_ARGS)
+
+# CI's backend job (pr.yml; REQ-FND-01, docs/spec/08 "Testing & CI"): check-backend with the same tests measured, then
+# infra/ci/coverage_gate.py: at least 85 % overall and 95 % in auth, tenancy, billing, provenance and engagements,
+# statements and branches combined. The report is backend/coverage.json (untracked).
+check-backend-coverage: PYTEST_ARGS = --cov --cov-report=json:coverage.json
+check-backend-coverage: check-backend
+	cd backend && $(UV) run python ../infra/ci/coverage_gate.py coverage.json
 
 check-frontend:
 	cd frontend && npm run lint && npm run typecheck && npm run test && npm run api:check
