@@ -10,25 +10,61 @@ from typing import Any
 
 import structlog
 
-# Keys that must never reach a log line, whatever the caller passes.
-REDACTED_KEYS = frozenset({"password", "token", "secret", "email", "code", "cookie", "authorization", "totp"})
+# Parts of a key whose value never reaches a log line, whatever the caller passes: secrets (passwords, tokens, keys,
+# codes, sessions) and personal data (emails, phones, names, addresses, free text, URLs that may carry a token).
+# P16-E1 added the personal-data parts; tests/unit/test_log_fields.py keeps every structlog call's fields reviewed.
+REDACTED_KEYS = frozenset(
+    {
+        "password",
+        "token",
+        "secret",
+        "email",
+        "code",
+        "cookie",
+        "authorization",
+        "totp",
+        "otp",
+        "recovery",
+        "pepper",
+        "session",
+        "csrf",
+        "credential",
+        "api_key",
+        "private_key",
+        "phone",
+        "msisdn",
+        "name",
+        "address",
+        "text",
+        "body",
+        "url",
+        "link",
+    }
+)
 
 # Paths whose query string never reaches the access log: the OAuth callback's carries the authorization code, the
 # state and the provider's error text (REQ-AUTH-02). Structlog does not log requests; uvicorn's access log does.
 QUERYLESS_PATHS = ("/api/auth/oauth/",)
+# Query parameters that carry what people type (search words, which can be a name or an address): their values are
+# redacted on every path (P16-E1).
+FREE_TEXT_PARAMETERS = ("q",)
+_FREE_TEXT_VALUE = re.compile(r"(^|&)(" + "|".join(FREE_TEXT_PARAMETERS) + r")=[^&]*")
 
 
 class DropQueryStrings(logging.Filter):
-    """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``. uvicorn logs
-    ``'%s - "%s %s HTTP/%s" %d'`` with (client, method, path?query, HTTP version, status); records of any other
-    shape pass unchanged."""
+    """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``, and the values of
+    ``FREE_TEXT_PARAMETERS`` from every other. uvicorn logs ``'%s - "%s %s HTTP/%s" %d'`` with (client, method,
+    path?query, HTTP version, status); records of any other shape pass unchanged."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
         if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
-            path, separator, _query = args[2].partition("?")
+            path, separator, query = args[2].partition("?")
             if separator and path.startswith(QUERYLESS_PATHS):
                 record.args = (args[0], args[1], path, args[3], args[4])
+            elif separator:
+                redacted = _FREE_TEXT_VALUE.sub(lambda match: f"{match.group(1)}{match.group(2)}={_REDACTED}", query)
+                record.args = (args[0], args[1], f"{path}?{redacted}", args[3], args[4])
         return True
 
 

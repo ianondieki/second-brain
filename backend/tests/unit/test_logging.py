@@ -99,3 +99,23 @@ async def test_a_real_uvicorn_server_logs_oauth_paths_without_their_query(access
     line = access_log.getvalue()
     assert '"GET /api/auth/oauth/github/callback HTTP/1.1" 404' in line
     assert not [secret for secret in SECRETS if secret in line]
+
+
+@pytest.mark.parametrize(
+    ("path", "logged"),
+    [
+        ("/api/directory/orgs?q=Wanjiku+Kamau&limit=20", "/api/directory/orgs?q=[redacted]&limit=20"),
+        ("/api/proposals?niche=solar&q=jane%40example.com", "/api/proposals?niche=solar&q=[redacted]"),
+        ("/api/problems?q=", "/api/problems?q=[redacted]"),
+        ("/api/problems?faq=kept&q=x&aq=kept", "/api/problems?faq=kept&q=[redacted]&aq=kept"),
+    ],
+)
+def test_search_words_never_reach_the_access_log(access_log: io.StringIO, path: str, logged: str) -> None:
+    """P16-E1 item 6 (REQ-SEC-04): what people type in a search box can be a name or an address; the value of ``q``
+    is redacted on every path, other parameters stay."""
+    configure_logging()
+    log_request(path)
+    line = access_log.getvalue()
+    assert f'"GET {logged} HTTP/1.1" 302' in line
+    assert "Wanjiku" not in line
+    assert "example.com" not in line
