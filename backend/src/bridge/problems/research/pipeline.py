@@ -9,7 +9,8 @@ a second running run of the same niche and country. The admin API then queues ``
 ``app_create_research_candidate`` accepts only their own running run). In order:
 
 1. The run, read ``FOR UPDATE`` (another worker's copy of the job waits and then finds it finished); a run that is not
-   running is left alone (the job is idempotent).
+   running is left alone (the job is idempotent); a run older than ``stale_run_minutes`` is stopped (``stale``), since
+   a newer run of its niche may exist by then (``start_run`` no longer counts it).
 2. The niche's saved excerpts that are not archived on the shared clock's Nairobi date, freshest first, at most
    ``max_excerpts``; fewer than ``min_excerpts`` stops the run (``not_enough_excerpts``).
 3. The caps (AC-RES-3; ``policy.yaml``): no search and no fetch ever happens here, so both stay 0 (the
@@ -66,6 +67,8 @@ NAIROBI: Final = ZoneInfo("Africa/Nairobi")
 EXAMPLE_REF_PREFIX: Final = "example:"
 SEED_ENVS: Final = frozenset({"dev", "test"})
 _CLOCK: Final = text("SELECT app_clock_now()")
+_DB_NOW: Final = text("SELECT now()")  # created_at's own clock (the run's start), for the stale-run rule
+_RUN_LOCK: Final = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _CREATE: Final = text(
     "SELECT app_create_research_candidate(:run, :title, :statement, :group, NULL, CAST(:confidence AS numeric),"
     " CAST(:named AS text[]), CAST(:sources AS jsonb))"
@@ -127,6 +130,8 @@ async def start_run(
     niche_id = await db.scalar(select(Niche.id).where(Niche.slug == niche_slug))
     if niche_id is None:
         raise RunRefused("unknown_niche")
+    # Two admins starting the same niche at once: the second waits here and then counts the first's committed run.
+    await db.execute(_RUN_LOCK, {"key": f"research-run:{niche_id}:{country}"})
     running = await db.scalar(
         select(func.count())
         .select_from(ResearchRun)
@@ -221,6 +226,10 @@ async def execute_run(
     run = await db.get(ResearchRun, run_id, with_for_update=True, populate_existing=True)
     if run is None or run.status is not ResearchRunStatus.RUNNING or run.started_by != tenant_of(db)[0]:
         return None  # not visible, finished, or another staff admin's (only the starter's session runs it)
+    started: datetime = (await db.execute(_DB_NOW)).scalar_one()
+    if run.created_at < started - timedelta(minutes=policy.stale_run_minutes):
+        # Its job ran too late (a stopped worker): a newer run may already exist, so this one never runs.
+        return await _finish(db, run, ResearchRunStatus.STOPPED, stop_reason="stale")
     niche = await db.scalar(select(Niche.slug).where(Niche.id == run.niche_id))
     allowlist = catalogue.allowlists.get(run.country)
     if niche is None or allowlist is None:

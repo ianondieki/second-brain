@@ -9,6 +9,7 @@ counts, tokens and cost. A demo fallback, a suspected injection, a failed call o
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 from decimal import Decimal
@@ -434,3 +435,55 @@ async def test_seeded_example_cards_exist_only_in_dev_and_test(
     refs = [s.excerpt_ref for s in await sources_of(owner_engine, card.id)]
     assert refs == ["example:ke-tel-001", "example:ke-tel-002", "example:ke-tel-004"]
     assert json.dumps(refs)
+
+
+async def test_a_run_whose_job_comes_too_late_is_stopped_as_stale(
+    research_world: ResearchWorld, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    """P11 review minor (c): once a run is older than stale_run_minutes a newer run of its niche may exist, so its
+    late job stops it (``stale``) instead of calling the model."""
+    runtime = llm_runtime(answer(TELECOM_DRAFT))
+    run_id = await start(app_engine, research_world, TELECOM)
+    policy = dataclasses.replace(get_research_policy(), stale_run_minutes=0)
+    outcome = await execute(app_engine, research_world, run_id, runtime, policy=policy)
+    assert outcome is not None
+    assert (outcome.status, outcome.stop_reason, outcome.candidates) == (ResearchRunStatus.STOPPED, "stale", ())
+    assert adapter_of(runtime).requests == []
+    assert (await run_row(owner_engine, run_id)).stop_reason == "stale"
+
+
+async def test_two_admins_starting_one_niche_at_once_get_one_run(
+    research_world: ResearchWorld, app_engine: AsyncEngine
+) -> None:
+    """P11 review minor (c): the niche's advisory lock makes the second start wait for the first to commit, then
+    count its run (409 run_in_progress), instead of both passing the count."""
+    factory = create_session_factory(app_engine)
+    niche = research_world.slugs["health"]
+
+    async def begin(user: UUID) -> Any:
+        db = factory()
+        await bind_tenant(db, user_id=user)
+        return db
+
+    first, second = await begin(research_world.admin), await begin(research_world.other_admin)
+    try:
+        await start_run(
+            db=first, user_id=research_world.admin, niche_slug=niche, country="KE", catalogue=research_world.catalogue
+        )
+        waiting = asyncio.create_task(
+            start_run(
+                second,
+                user_id=research_world.other_admin,
+                niche_slug=niche,
+                country="KE",
+                catalogue=research_world.catalogue,
+            )
+        )
+        await asyncio.sleep(0.5)
+        assert not waiting.done()  # held by the first transaction's lock
+        await first.commit()
+        with pytest.raises(RunRefused, match="run_in_progress"):
+            await waiting
+    finally:
+        await second.close()
+        await first.close()
