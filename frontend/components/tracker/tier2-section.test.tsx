@@ -111,10 +111,10 @@ describe("the tracker's line under the title", () => {
   }
 
   it("says the organisation sees a handle while the developer is not named", async () => {
-    await screenFor(orgInterest({ my_party: "org", state: "ORG_INTEREST", developer_name: "achieng-otieno-2b2356", developer_named: false }));
+    await screenFor(orgInterest({ my_party: "org", state: "ORG_INTEREST", developer_name: "dev-7k2m9qxp", developer_named: false }));
     const line = document.querySelector("[data-counterpart]")!;
     expect(line.getAttribute("data-counterpart")).toBe("fromHandle");
-    expect(line.textContent).toBe(en.tracker.fromHandle.replace("{name}", "achieng-otieno-2b2356"));
+    expect(line.textContent).toBe(en.tracker.fromHandle.replace("{name}", "dev-7k2m9qxp"));
   });
 
   it("names the developer once they are named", async () => {
