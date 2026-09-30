@@ -2,6 +2,7 @@
   "_meta": {
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
+    "reviewP14": "[[COPY-REVIEW]] P14 (REQ-BIL-08): shell.account, shell.billing, billing.*, checkout.*, ideaEditor.problem.planLimitUpgrade, pitch.problem.planLimitUpgrade; billing.samplePrices is the D-44 recommended-default label and checkout.simulatedTag the D-36 label (DECISIONS-NEEDED D-44 open); plan names and prices come from the API (backend/config/plans.yaml, placeholders until G3) [[SW-REVIEW]] draft Swahili",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
@@ -19,7 +20,9 @@
     "signOut": "Toka",
     "signingOut": "Unatoka…",
     "signOutFailed": "Kutoka hakukukamilika, kwa hivyo huenda bado umeingia.",
-    "signOutRetry": "Jaribu kutoka tena"
+    "signOutRetry": "Jaribu kutoka tena",
+    "account": "Akaunti",
+    "billing": "Mpango na malipo"
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
@@ -616,6 +619,7 @@
       "d1Required": "Kuwasilisha kunahitaji nambari ya simu iliyothibitishwa kwenye akaunti yako, ambayo bado huwezi kuongeza kwenye programu, kwa hivyo hakuna kilichotumwa.",
       "planLimit": "Mpango wako umebakiza mawasilisho {count} kati ya {limit} kwa wazo hili, kwa hivyo hakuna kilichotumwa: chagua makampuni machache.",
       "planLimitUnknown": "Mpango wako hauruhusu mawasilisho zaidi kwa wazo hili, kwa hivyo hakuna kilichotumwa.",
+      "planLimitUpgrade": "Pandisha mpango wako",
       "conflict": "Hakuna kilichotumwa: makampuni {count} uliyochagua hayawezi kuwasilishiwa sasa, kwa hivyo yameondolewa alama pamoja na sababu kando ya kila moja.",
       "changed": "Kitu kilibadilika ulipokuwa ukichagua, kwa hivyo hakuna kilichotumwa: pakia orodha upya na ujaribu tena."
     },
@@ -764,6 +768,7 @@
       "d1Required": "Ili kuchapisha, akaunti yako inahitaji nambari ya simu iliyothibitishwa. Bado huwezi kuithibitisha ndani ya programu, kwa hivyo wazo hili litabaki rasimu iliyohifadhiwa kwa sasa.",
       "planLimit": "Mawazo yaliyochapishwa ambayo mpango wako unaruhusu: {limit}. Ficha moja ili uchapishe hili.",
       "planLimitUnknown": "Mpango wako hauruhusu mawazo zaidi yaliyochapishwa. Ficha moja ili uchapishe hili.",
+      "planLimitUpgrade": "Pandisha mpango wako",
       "attestationsRequired": "Thibitisha kauli zote tatu ili uchapishe.",
       "attestationsChanged": "Kauli zimebadilika. Zisome tena, kisha uthibitishe.",
       "nothingToPublish": "Hakuna mabadiliko ya kuchapisha.",
@@ -1220,6 +1225,118 @@
       "name": "Jina",
       "email": "Barua pepe",
       "noEmail": "Msanidi programu bado hana barua pepe iliyothibitishwa."
+    }
+  },
+  "billing": {
+    "pageTitle": "Mpango na malipo",
+    "forOrg": "Kwa {org}",
+    "current": "Uko kwenye mpango wa {plan}.",
+    "plansTitle": "Mipango",
+    "samplePrices": "Bei za mfano, si za mwisho",
+    "free": "Bure",
+    "perMonth": "KES {amount} kwa mwezi",
+    "perYear": "KES {amount} kwa mwaka",
+    "once": "KES {amount}",
+    "notSold": "Bado haiwezi kununuliwa hapa",
+    "yourPlan": "Mpango wako",
+    "upgradeTo": "Pandisha hadi {plan}",
+    "choose": "Chagua {plan}",
+    "line": {
+      "activeProposals": "Mawazo yaliyochapishwa hadi {count} kwa wakati mmoja",
+      "activeProposalsUnlimited": "Mawazo yaliyochapishwa bila kikomo",
+      "tagsPerProposal": "Wasilisha kila wazo kwa kampuni hadi {count}",
+      "followedNiches": "Fuatilia fani hadi {count} kwa arifa za mienendo",
+      "recommendations": "Mapendekezo pamoja na sababu zake",
+      "viewerAnalytics": "Takwimu za wanaotazama mawazo yako",
+      "seats": "Nafasi za timu: {count}",
+      "seatsUnlimited": "Nafasi kwa timu nzima",
+      "scoutAgents": "Scout Agents: {count}",
+      "unlocks": "Fungua mapendekezo kamili hadi {count} kwa mwezi yasiyowasilishwa kwenu",
+      "unlocksUnlimited": "Fungua pendekezo lolote kamili, liwe limewasilishwa kwenu au la",
+      "briefs": "Problem Briefs: {count}",
+      "briefsUnlimited": "Problem Briefs bila kikomo",
+      "csvExport": "Kuhamisha data kwa CSV"
+    },
+    "refused": {
+      "notPayer": "Ni mmiliki, msimamizi au mwanachama wa fedha pekee anayeweza kusimamia mpango wa {org}.",
+      "notMember": "Shirika hili si mojawapo ya yako.",
+      "noOrg": "Bado wewe si mwanachama wa shirika lolote.",
+      "mfaRequired": "Weka msimbo kutoka kwa programu yako ya uthibitishaji ili kusimamia mpango wa {org}.",
+      "mfaSetup": "Washa kuingia kwa hatua mbili ili kusimamia mpango wa {org}.",
+      "unknownPlan": "Mpango huu haupo kwenye orodha.",
+      "notSold": "{plan} bado hauwezi kununuliwa hapa.",
+      "alreadyOn": "Tayari uko kwenye {plan}."
+    },
+    "action": {
+      "home": "Nenda nyumbani",
+      "billing": "Fungua Mpango na malipo",
+      "allPlans": "Tazama mipango yote",
+      "enterCode": "Weka msimbo wako",
+      "turnOnMfa": "Washa kuingia kwa hatua mbili"
+    }
+  },
+  "checkout": {
+    "pageTitle": "Pandisha hadi {plan}",
+    "back": "Rudi kwenye Mpango na malipo",
+    "simulatedTag": "M-Pesa ya kuigiza",
+    "stepsLabel": "Hatua za malipo",
+    "step": {
+      "confirm": "Thibitisha",
+      "phone": "Angalia simu yako",
+      "done": "Imekamilika"
+    },
+    "youPay": "Unalipa",
+    "whatYouGet": "Unachopata",
+    "simulatedNote": "Hakuna pesa inayohamishwa na hakuna nambari ya simu inayoombwa: malipo haya ni ya kuigiza.",
+    "outcomeLegend": "Katika uigizaji huu, simu",
+    "outcome": {
+      "succeed": "Inathibitisha malipo",
+      "fail": "Haina pesa za kutosha",
+      "cancel": "Inaghairi malipo"
+    },
+    "pay": "Lipa kwa M-Pesa",
+    "paySimulated": "Anza malipo ya kuigiza",
+    "starting": "Inaanza…",
+    "phoneTitle": "Angalia simu yako",
+    "phoneLead": "Weka PIN yako ya M-Pesa kwenye ujumbe ulio kwenye simu yako ili kulipa {price}.",
+    "phoneLeadSimulated": "Huu ni uigizaji, kwa hivyo hakuna ujumbe utakaofika: jibu linakuja lenyewe baada ya sekunde chache.",
+    "waiting": "Inasubiri malipo yathibitishwe…",
+    "checking": "Inakagua malipo…",
+    "stalled": "Bado hakuna jibu. Mpango wako hubadilika tu malipo yakishathibitishwa.",
+    "checkAgain": "Kagua tena",
+    "succeededTitle": "Malipo yamethibitishwa",
+    "succeeded": "Sasa uko kwenye {plan}.",
+    "succeededNotActive": "Malipo yamethibitishwa. Mpango wako utabadilika baada ya muda mfupi: pakia ukurasa huu upya kuuona.",
+    "continue": "Endelea ulipoachia",
+    "backToBilling": "Rudi kwenye Mpango na malipo",
+    "failedTitle": "Malipo hayakukamilika",
+    "failed": {
+      "insufficientFunds": "Akaunti ya M-Pesa haikuwa na pesa za kutosha, kwa hivyo mpango wako haujabadilika.",
+      "other": "Malipo hayakufanikiwa, kwa hivyo mpango wako haujabadilika."
+    },
+    "cancelledTitle": "Malipo yameghairiwa",
+    "cancelled": "Malipo yameghairiwa kwenye simu, kwa hivyo mpango wako haujabadilika.",
+    "tryAgain": "Jaribu tena",
+    "problem": {
+      "alreadyOnPlan": "Tayari uko kwenye mpango huu.",
+      "notAvailable": "Mpango huu hauwezi kununuliwa hapa.",
+      "notDeveloper": "Mipango ya wasanidi ni ya akaunti za wasanidi.",
+      "forbidden": "Ni mmiliki, msimamizi au mwanachama wa fedha pekee anayeweza kulipia mpango wa shirika hili.",
+      "notFound": "Shirika hili si mojawapo ya yako.",
+      "notConfigured": "Malipo hayapatikani kwa sasa. Jaribu tena baadaye.",
+      "providerError": "Malipo hayakuweza kuanzishwa. Jaribu tena baada ya dakika chache.",
+      "mfaRequired": "Kwanza weka msimbo kutoka kwa programu yako ya uthibitishaji, kisha urudi kulipa.",
+      "mfaSetup": "Kwanza washa kuingia kwa hatua mbili, kisha urudi kulipa.",
+      "signedOut": "Umetoka. Ingia tena, kisha urudi kulipa.",
+      "rateLimited": "Majaribio mengi mno kwa muda mfupi. Subiri dakika moja, kisha ujaribu tena.",
+      "network": "Huduma ya malipo haikuweza kufikiwa. Kagua muunganisho wako, kisha ujaribu tena.",
+      "failed": "Hitilafu imetokea, kwa hivyo malipo hayakuanzishwa. Jaribu tena.",
+      "checkoutNotFound": "Malipo haya si yako."
+    },
+    "action": {
+      "logIn": "Ingia",
+      "enterCode": "Weka msimbo wako",
+      "turnOnMfa": "Washa kuingia kwa hatua mbili"
     }
   }
 }

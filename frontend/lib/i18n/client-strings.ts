@@ -18,6 +18,8 @@ export const PLACEHOLDER_NAMES = [
   "name",
   "number",
   "org",
+  "plan",
+  "price",
   "step",
   "title",
   "total",
@@ -29,6 +31,7 @@ export const PLACEHOLDER_NAMES = [
 export const CLIENT_STRING_NAMESPACES = [
   "shell",
   "errorPage",
+  "checkout",
   "ideaEditor",
   "ideaFields",
   "ideaDelete",
