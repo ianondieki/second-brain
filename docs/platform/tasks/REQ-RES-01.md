@@ -312,3 +312,74 @@ and a mypy error, fixed in `047b5e5` and `1de8ff5`.
    combining mark ("Safa̶ricom") gets `non_latin_text`.
 4. **Slash and comma before a scale** (`checks.py:310`): "Sh2,000/mn", "Sh2,000/million" and "Sh2,000, million" read as
    bare numbers. Fix: treat `/` like a dash in `_DASHED`, or record it with the other residuals.
+
+## P11-F: research screens and the problem card (frontend)
+
+Branch `feat/REQ-RES-01-fe` from integration `84e0af0`; frontend only, against the frozen `backend/openapi.json`.
+
+| Area | Files |
+|---|---|
+| Staff console shell | `frontend/app/(admin)/{error.tsx, admin/layout.tsx, admin/staff.ts, admin/AdminShell.tsx, admin/page.tsx}`, `frontend/components/{AdminNav.tsx, AdminNav.test.tsx, admin-icons.tsx}` |
+| Research | `frontend/app/(admin)/admin/research/{page.tsx, Sections.tsx, StartRun.tsx, Decision.tsx, StepUp.tsx, PageStepUp.tsx, data.ts, calls.ts, research.ts, research.test.ts, research-screens.test.tsx}`, `…/research/candidates/[id]/page.tsx` |
+| Problem card | `frontend/components/problem/{ProblemCard.tsx, Citations.tsx, data.ts, problem.ts, problem.test.ts}`, `frontend/app/(app)/problems/[id]/page.tsx` |
+| Shared (one line or namespaced) | `frontend/lib/auth/routing.ts` (+ its test), `frontend/lib/i18n/client-strings.ts` (`adminResearch`), `frontend/locales/{en,sw}.json` (`admin.*`, `adminResearch.*`, `problem.*`, `_meta.reviewP11f`, appended at the end) |
+| E2E | `frontend/e2e/research.spec.ts`, `frontend/e2e/support/research-scene.ts` |
+
+**What it does.** Staff land on `/admin` (`homeFor("staff")`), which opens the first section their role may use
+(Research for staff admins); `AdminNav` lists sections by role, so P15 adds Moderation and Claims as rows. The layout's
+gate answers everyone who is not a signed-in staff member with a verified second factor (signed-out visitors
+included) with the same not-found page as an unknown address. Staff without two-step sign-in are asked to turn it on;
+other roles are told Research is for staff admins. A stale second factor (403 `step_up_required`) shows a code form
+in place of the page or of the action, which then repeats. `/admin/research`: "Start run" (the one primary action;
+niches with saved Kenyan excerpts, country fixed to Kenya) posts the run and follows `GET …/runs/{id}` every 1.5 s
+(40 polls at most, then "refresh later"), then refreshes the page; the cards waiting for review (AI-drafted or seeded
+example, "Names an organisation": at most two tags); the five latest runs with a fixed outcome sentence per status and
+stop reason (a failed run's error code is never shown); the saved excerpts folded by niche with their freshness.
+`/admin/research/candidates/{id}`: the card as it would be published, every source through the shared `Citations`
+(publisher, type, date, verbatim quote, https-only link), the D-45 names and the API's checklist text verbatim with
+a confirm checkbox (checked on the page before the call), "Approve and publish" and "Reject" (asked twice). Every
+refusal is a fixed sentence under `adminResearch.refusal.*` / `adminResearch.publish.*`; `refusalKey` is typed
+against the locale keys. `/problems/{id}` (any signed-in side) renders `ProblemCard`: label in the page's language
+(computed from `source`, `seeded_example`, `published_at`; never "AI-drafted" for a seeded card), statement, who is
+affected, niche, region, confidence, named organisations and citations; a candidate, a rejected card and an unknown id
+read "This problem is not available." (AC-RES-2). P12-F links to it with `problemHref(id)`.
+
+**Tests.** Vitest: `problem.test.ts` (9: labels, dates, confidence, https-only links), `research.test.ts` (10: niche
+options, run outcomes, publish reasons read only from the exact API sentence, refusal mapping, 404 never confirms),
+`research-screens.test.tsx` (10: polling to refresh, resuming a running run, the 40-poll limit, refusals, step-up,
+approve, checklist required, publish-check sentence, reject confirmation), `AdminNav.test.tsx` (2); routing test
+updated for the staff home. Playwright `research.spec.ts` (both projects): the console is not found for signed-out
+and non-staff visitors (same text and 404 as an unknown address); walkthrough step 3 (a staff admin signs in through
+the login and MFA screens and lands on Research, starts a run that ends in the demo fallback and says so, a drafted
+card naming SASRA is not visible to a developer, then is reviewed with its citations and checklist, approved, and read
+by a developer with its sources; its review page then reads as gone); a stale second factor asks for a code; a
+tampered source is refused with the `source_not_saved` sentence and never the API's words; rejecting keeps the card
+private. `checkScreen` (axe, one `[data-primary]`, no horizontal scroll) on every screen. JS: `/admin/research` 143.7
+KB, the review page 143.7 KB, `/problems/{id}` 140.1 KB gzipped (budget 150 KB).
+
+**Open items (P11-F).**
+
+1. **Publish-check reason (backend follow-up).** The API names the reason of a 409 `publish_check_failed` only inside
+   its message ("This card cannot be published: <reason>."). The screen reads it from exactly that sentence and
+   matches the known reasons (`research.ts` `publishReason`); any other wording falls back to the general sentence.
+   Suggest `ApiError(409, "publish_check_failed", …, reason=violation)` in `review.decide` and `_refusal` so the web
+   reads a key instead (no screen change beyond `publishReason`).
+2. **No single-candidate route.** The review page finds its card in `GET /candidates` (at most 200). A
+   `GET /candidates/{id}` would remove the list read.
+3. **Runs on the dev stack make no card.** The fake LLM gives the demo fallback (D-37), so the E2E writes the drafted
+   card as the database owner, as `app_create_research_candidate` would (research_agent, candidate, sources exactly
+   as saved with their excerpt ids); approval goes through the real publish checks. The dev stack's seed has no staff
+   account (the demo seed's `admin@staff.example` exists only after `python -m bridge.seed --demo`), so the E2E makes
+   its own staff admin (owner sets `staff_role` and `demo_account`; TOTP through the API).
+4. **Staff home changed.** `homeFor("staff")` is `/admin` (was the developer placeholder `/dev`): staff opening
+   `/dev` pages are redirected to the console. The routing unit test states the new home.
+5. **Signed-out `/admin` is 404, not a login redirect**, so the console is not discoverable (the API's rule); staff
+   sign in at `/login` and land on it.
+6. **Problem page has no portal navigation** yet: `DevNav` has no Discover row to mark until P12-F; the page carries
+   a "Back to home" link. County is shown as its code (no regions lookup on this page).
+7. **Copy.** All new strings are `[[COPY-REVIEW]]` (`_meta.reviewP11f`); Swahili is a draft (`[[SW-REVIEW]]`). The
+   D-45 checklist text is the API's placeholder until the G2 legal pack. `problem.label.*` mirrors the backend labels.
+8. **Mobile tab bar with one item** until P15 adds sections. The `impeccable` skill is not installed here; the polish
+   pass was done by hand against docs/spec/07 with screenshots at 375 and 1440 px.
+9. **Commit sizes** over about 300 lines: `c6f0573` (+334, both locale files), `56aa389` (+320, with tests),
+   `35f8379` (+511, StartRun, Decision and their tests), `996eb6e` (+414, E2E spec and scene).
