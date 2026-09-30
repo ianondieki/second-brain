@@ -130,6 +130,40 @@ the free organisation plan (Claimed: one weekly scout).
 `make demo-totp` prints the current code of every login; `make demo-totp EMAIL=reviewer@telco-a.example` prints one.
 A code is accepted once: if the sign-in was refused, wait for the next code (30 seconds).
 
+**The 3-minute demo.** Start from a fresh `make demo-reset` if you have used the demo before (the script changes demo
+data). Every sign-in asks for a TOTP code (`make demo-totp`). The story, with the screens behind each step, is written
+out in [`docs/demo/README.md`](docs/demo/README.md).
+
+1. **Developer (Amina).** Sign in as `amina@developers.example`. Home: what needs her and Recommended for you, each with
+   the reasons. Discover: trending problems with their sources, the Projects view and the opportunity gap. My ideas,
+   then "Repayment nudges for SACCO members": its certificate and "Who has seen this". Open the certificate's public
+   `/verify` page in a signed-out window. Start a new proposal and open the submission assistant (without a provider
+   its answer is the labelled demo fallback; do not publish). Engagements, then the SACCO B tracker: whose turn it is,
+   the stages, the agreement and milestones, the History. Plan & billing: she is at the cap; "Upgrade" opens the
+   simulated M-Pesa checkout, through to its confirmation.
+2. **Organisation (Telco A).** Sign in as `reviewer@telco-a.example`. Inbox, then Brian's "Cashless market-fee
+   collection for counties": accept the Evaluation NDA and read the full proposal. Sign in as `owner@telco-a.example`:
+   Inbox, Scout matches (the seeded match and why it matched), the scout's settings and Preview (do not save), then
+   Engagements and the tracker with Brian: take the step that is Telco A's to take.
+3. **Staff.** Sign in as `admin@staff.example`: Research (the approved problem cards; start a run) and Claims
+   (read-only). Sign in as `moderator@staff.example`: Moderation, open the oldest case and decide it.
+4. **Time and email.** `make demo-clock DAYS=1`, then `make demo-reminders`, then open Mailpit
+   (http://localhost:8025): the developer's daily nudge and the organisation's progress digest.
+
+To record this walk with Playwright (from a fresh `make demo-reset`; `python infra/demo/demo.py e2e-env` writes the
+variables it reads): `make demo-walkthrough`, or without make `cd frontend && npx playwright test -c
+demo/walkthrough.config.ts`. The video stays on your machine; the screenshots are kept in
+[`docs/demo/screenshots/`](docs/demo/screenshots/).
+
+**Screenshots** (1440 px wide unless noted; all of them are listed in [`docs/demo/README.md`](docs/demo/README.md)).
+
+![Amina's home: what needs her and the recommended problems with the reasons](docs/demo/screenshots/01-dev-home-1440.jpg)
+![Discover: trending problems with their sources and why each one trends](docs/demo/screenshots/02-discover-trending-1440.jpg)
+![The developer's tracker for an engagement with SACCO B](docs/demo/screenshots/06-dev-tracker-1440.jpg)
+![Telco A's reviewer reading a full proposal after accepting the Evaluation NDA](docs/demo/screenshots/09-org-full-proposal-1440.jpg)
+![The staff console's moderation queue](docs/demo/screenshots/13-admin-moderation-1440.jpg)
+![Amina's home on a phone, 375 px wide](docs/demo/screenshots/15-dev-home-375.jpg)
+
 **What is seeded.** Six proposals, each with its public teaser, confidential part and certificate: Amina's "Repayment
 nudges for SACCO members" (in negotiation with SACCO B, whose reviewer has opened it) and "Fuel-level alerts for
 off-grid tower sites" (closed with Telco A: NDA, agreement, two milestones, sign-off and a recorded payment); Brian's
