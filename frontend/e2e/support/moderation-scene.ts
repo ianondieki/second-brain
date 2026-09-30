@@ -109,7 +109,9 @@ export function demoItemId(item: DemoItem): string {
 export function reopenDemoItem(item: DemoItem): void {
   const title = DEMO_TITLE[item];
   const id = demoItemId(item);
-  // One statement: the item (only while it is still a demo account's row) and its case.
+  // One statement, so one transaction: the item (only while it is still a demo account's row) and its case. The count
+  // check runs inside it: anything but exactly one item and one case raises (a text that is not a number cast to int),
+  // and the statement's changes roll back, so a mismatch leaves the demo rows as they were.
   const subject =
     item === "proposal"
       ? "UPDATE proposals SET moderation_state = 'held' WHERE id = CAST(:'id' AS uuid)" +
@@ -119,8 +121,10 @@ export function reopenDemoItem(item: DemoItem): void {
   const changed = ownerSql(
     `WITH subject AS (${subject} RETURNING id),` +
       " reopened AS (UPDATE moderation_cases SET status = 'open', decided_by = NULL, decided_at = NULL," +
-      " updated_at = now() WHERE subject_type = :'type' AND subject_id IN (SELECT id FROM subject) RETURNING id)" +
-      " SELECT (SELECT count(*) FROM subject) || ',' || (SELECT count(*) FROM reopened);",
+      " updated_at = now() WHERE subject_type = :'type' AND subject_id IN (SELECT id FROM subject) RETURNING id)," +
+      " counts AS (SELECT (SELECT count(*) FROM subject) AS s, (SELECT count(*) FROM reopened) AS r)" +
+      " SELECT CASE WHEN s = 1 AND r = 1 THEN '1,1'" +
+      " ELSE CAST('reset refused: ' || s || ',' || r AS int)::text END FROM counts;",
     { id, type: item },
   );
   expect(changed, `the demo ${item} "${title}" and its one case, reset`).toBe("1,1");
