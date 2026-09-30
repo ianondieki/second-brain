@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.billing.providers.fake import FakePaymentProvider
 from bridge.ids import uuid7
+from tests.integration.api import make_client, sign_in_as
 from tests.integration.billing.checkout_helpers import (
     audit_actions,
     buy,
@@ -162,3 +163,21 @@ async def test_parallel_starts_of_one_plan_make_one_payment(developers: Develope
     assert sorted(r.status_code for r in started) == [200, 200, 200, 201]
     assert len({r.json()["id"] for r in started}) == 1
     assert len(await payments_of(owner_engine, user=user_of(client))) == 1
+
+
+async def test_an_organisations_owner_needs_the_second_factor_to_pay_or_poll(
+    app_engine: AsyncEngine, member_client: Members, owner_engine: AsyncEngine
+) -> None:
+    """The organisation's rules apply to its checkouts: an owner (TOTP required) whose session has not done the
+    second factor can neither start nor read one, though RLS would show them the row."""
+    org, members = await _org_with(owner_engine, "owner", "finance")
+    finance = await member_client(members["finance"])
+    slow(finance)
+    checkout_id = (await buy(finance, "org_starter", org_id=str(org.id))).json()["id"]
+    async with make_client(app_engine) as owner:
+        await sign_in_as(owner, app_engine, members["owner"], mfa_verified=False)
+        instant(owner)
+        for response in (await buy(owner, "org_growth", org_id=str(org.id)), await status_of(owner, checkout_id)):
+            assert response.status_code == 401
+            assert response.json()["detail"]["code"] == "mfa_required"
+    assert (await payment_row(owner_engine, checkout_id)).status == "pending"
