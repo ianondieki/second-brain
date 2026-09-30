@@ -58,7 +58,7 @@ describe("routing helpers", () => {
   it("sends each side to its home", () => {
     expect(homeFor("developer")).toBe("/dev");
     expect(homeFor("org")).toBe("/org");
-    expect(homeFor("staff")).toBe("/dev");
+    expect(homeFor("staff")).toBe("/admin"); // the staff console (REQ-RES-01 P11-F), no longer the developer placeholder
   });
 
   it("knows when the second factor is still owed", () => {
@@ -73,7 +73,7 @@ describe("routing helpers", () => {
     expect(isPending({ side: "pending", mfa: owed })).toBe(true);
     expect(destinationFor({ side: "pending", mfa: owed })).toBe("/auth/mfa");
     expect(destinationFor({ side: "org", mfa: done })).toBe("/org");
-    expect(destinationFor({ side: "staff", mfa: done })).toBe("/dev");
+    expect(destinationFor({ side: "staff", mfa: done })).toBe("/admin");
     expect(destinationFor({ side: "developer", mfa: { required: false, enrolled: false, verified: false } })).toBe("/dev");
   });
 
