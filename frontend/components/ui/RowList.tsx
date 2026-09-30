@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Children, Fragment, isValidElement, type HTMLAttributes, type ReactNode } from "react";
 
+import { titleLinkClass } from "./Button";
 import { cn } from "./cn";
 import { LinkPending } from "./LinkPending";
 
@@ -84,7 +85,7 @@ export function Row({
             <Link
               href={href}
               className={cn(
-                "underline decoration-line decoration-1 underline-offset-4 hover:decoration-jacaranda",
+                titleLinkClass,
                 // Stretched, the row is the target; alone, the title keeps a 44 px band (docs/spec/07 item 6).
                 stretch ? "after:absolute after:inset-0" : "-my-2.5 inline-flex min-h-11 items-center",
               )}

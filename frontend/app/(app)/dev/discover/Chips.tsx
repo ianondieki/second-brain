@@ -1,40 +1,42 @@
 import type { ReactNode } from "react";
 
 import { TrendIcon, WhyIcon } from "@/components/discover-icons";
-import { cn } from "@/components/ui/cn";
+import { Badge } from "@/components/ui/Badge";
 import { ChevronDownIcon } from "@/components/ui/icons";
+import type { RowBadges } from "@/components/ui/RowList";
 
 /**
- * A card's chips (docs/spec/07 item 2: at most two; the caller picks them). Each is a mark and words, never colour
- * alone; `data-chip` lets tests count them. The words come from the API ([[COPY-REVIEW]] in bridge/matching).
+ * A card's Why chip: a Badge (a mark and words, never colour alone; `data-chip` lets tests count them). A card shows at
+ * most two badges (docs/spec/07 item 2; Row's type refuses a third). The words come from the API ([[COPY-REVIEW]] in
+ * bridge/matching).
  */
-export function Chips({ items, children, className }: { items: readonly string[]; children?: ReactNode; className?: string }) {
-  if (items.length === 0 && !children) return null;
+export function WhyChip({ children }: { children: ReactNode }) {
   return (
-    <ul data-chips="" className={cn("flex flex-wrap gap-x-4 gap-y-1", className)}>
+    <Badge data-chip="why" tone="neutral" icon={<WhyIcon />} className="items-start [&>svg]:mt-0.5">
       {children}
-      {items.map((chip) => (
-        <li key={chip} data-chip="why" className="inline-flex items-start gap-1.5 text-sm font-medium text-ink">
-          <WhyIcon className="mt-0.5 size-4 shrink-0 text-jacaranda" />
-          <span className="min-w-0">{chip}</span>
-        </li>
-      ))}
-    </ul>
+    </Badge>
   );
 }
 
 /**
- * The self-explaining trend badge ("Trending in ICT › Networks · Kenya: 4 companies scouting"), a sentence rather than
- * a chip, shown only when the API sends one (cold start hides it, docs/spec/06 6.6).
+ * The self-explaining trend badge ("Trending in ICT › Networks · Kenya: 4 companies scouting"), shown only when the
+ * API sends one (cold start hides it, docs/spec/06 6.6). Neutral like every status on Discover: the accent is kept for
+ * "act here" (docs/platform/design/p16-design-system.md, principle 3).
  */
 export function TrendBadge({ badge }: { badge: string | null }) {
   if (!badge) return null;
   return (
-    <p data-badge="" className="flex items-start gap-1.5 text-sm font-semibold text-jacaranda">
-      <TrendIcon className="mt-0.5 size-4 shrink-0" />
-      <span className="min-w-0 [overflow-wrap:anywhere]">{badge}</span>
-    </p>
+    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="items-start [overflow-wrap:anywhere] [&>svg]:mt-0.5">
+      {badge}
+    </Badge>
   );
+}
+
+/** A row's badges (at most two, docs/spec/07 item 2): the trend badge first, then the Why chips the caller picked. */
+export function cardBadges(nodes: readonly ReactNode[]): RowBadges | undefined {
+  const [first, second] = nodes.filter((node) => node !== null && node !== undefined && node !== false);
+  if (first === undefined) return undefined;
+  return second === undefined ? [first] : [first, second];
 }
 
 /** A list of the chips not shown on the card, under its "More about …" disclosure. */

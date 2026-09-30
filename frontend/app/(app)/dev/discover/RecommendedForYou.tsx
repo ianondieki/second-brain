@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ConsiderIcon, NotNowIcon, PursueIcon } from "@/components/discover-icons";
 import { problemHref } from "@/components/problem/problem";
+import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Row, RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
 
-import { ChipList, Chips, MoreSummary } from "./Chips";
+import { cardBadges, ChipList, MoreSummary, WhyChip } from "./Chips";
 import { DISCOVER_PATH, NICHES_PATH, PROFILING_HREF, startProposalHref } from "./discover";
-import { titleLinkClass } from "./ProblemRow";
 import {
   DECISION_KEY,
   FIT_KEY,
@@ -19,10 +21,12 @@ import {
   type RecommendationsState,
 } from "./recommendations";
 
-const DECISION_TONE: Record<Decision, string> = {
-  pursue: "text-ok",
-  consider: "text-jacaranda",
-  not_now: "text-ink-soft",
+// Status as icon + words + tone (docs/platform/design/p16-design-system.md, Status): "Pursue" in the success tone, the
+// others neutral; the accent stays for "act here".
+const DECISION_TONE: Record<Decision, BadgeTone> = {
+  pursue: "ok",
+  consider: "neutral",
+  not_now: "neutral",
 };
 const DECISION_ICON = { pursue: PursueIcon, consider: ConsiderIcon, not_now: NotNowIcon } as const;
 
@@ -35,13 +39,13 @@ const DECISION_ICON = { pursue: PursueIcon, consider: ConsiderIcon, not_now: Not
 export function RecommendedForYou({ state }: { state: RecommendationsState }) {
   const t = useTranslations("recommendations");
   return (
-    <section aria-labelledby="home-recommended" data-home="recommended">
-      <h2 id="home-recommended" className="text-lg text-ink">
-        {t("title")}
-      </h2>
-      {state.kind === "list" ? (
-        <>
-          <p data-personalised={state.personalised ? "on" : "off"} className="mt-1 max-w-[62ch] text-sm text-ink-soft">
+    <Section
+      title={t("title")}
+      headingId="home-recommended"
+      data-home="recommended"
+      description={
+        state.kind === "list" ? (
+          <span data-personalised={state.personalised ? "on" : "off"}>
             {t.rich(state.personalised ? "personalisedOn" : "personalisedOff", {
               link: (chunks) => (
                 <Link href={PROFILING_HREF} className={textLinkClass}>
@@ -49,36 +53,35 @@ export function RecommendedForYou({ state }: { state: RecommendationsState }) {
                 </Link>
               ),
             })}
-          </p>
-          <ol className="mt-2 border-b border-line">
+          </span>
+        ) : undefined
+      }
+    >
+      {state.kind === "list" ? (
+        <>
+          <RowList ordered>
             {state.items.map((item) => (
-              <li key={item.problem.id}>
-                <RecommendationRow item={item} />
-              </li>
+              <RecommendationRow key={item.problem.id} item={item} />
             ))}
-          </ol>
-          <Link href={DISCOVER_PATH} className={cn(standaloneLinkClass, "mt-2")}>
+          </RowList>
+          <Link href={DISCOVER_PATH} className={standaloneLinkClass}>
             {t("more")}
           </Link>
         </>
+      ) : state.kind === "noNiches" ? (
+        <EmptyState sentence={t("noNiches")} action={t("noNichesAction")} href={NICHES_PATH} />
       ) : (
-        <div className="mt-2">
-          {state.kind === "noNiches" ? (
-            <EmptyState sentence={t("noNiches")} action={t("noNichesAction")} href={NICHES_PATH} />
-          ) : (
-            <EmptyState
-              sentence={state.kind === "empty" ? t("empty") : t("unavailable")}
-              action={t("emptyAction")}
-              href={DISCOVER_PATH}
-            />
-          )}
-        </div>
+        <EmptyState
+          sentence={state.kind === "empty" ? t("empty") : t("unavailable")}
+          action={t("emptyAction")}
+          href={DISCOVER_PATH}
+        />
       )}
-    </section>
+    </Section>
   );
 }
 
-/** One recommendation: the problem (a link to its card), two chips, and the explanation on demand. */
+/** One recommendation, a Row: the problem (a link to its card), two badges, and the explanation on demand. */
 export function RecommendationRow({ item }: { item: Recommendation }) {
   const t = useTranslations("recommendations");
   const { decision } = item.pursuit;
@@ -88,31 +91,33 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
   const titleId = `recommended-${item.problem.id}`;
 
   return (
-    <article
+    <Row
       aria-labelledby={titleId}
       data-recommendation={item.problem.id}
       data-decision={decision}
-      className="flex min-w-0 flex-col gap-2 border-t border-line py-4"
+      title={item.problem.title}
+      titleId={titleId}
+      href={problemHref(item.problem.id)}
+      stretch={false}
+      meta={
+        item.problem.niche || item.problem.label ? (
+          <span className="flex flex-wrap gap-x-4">
+            {item.problem.niche ? <span>{item.problem.niche.label}</span> : null}
+            <ProblemLabelText problem={item.problem} />
+          </span>
+        ) : undefined
+      }
+      badges={cardBadges([
+        <Badge key="pursuit" data-chip="pursuit" tone={DECISION_TONE[decision]} icon={<DecisionIcon />}>
+          {t("chip", { pursuit, fit: t(`fit.${FIT_KEY[item.label]}`) })}
+        </Badge>,
+        why ? <WhyChip key="why">{why}</WhyChip> : null,
+      ])}
     >
-      <h3 id={titleId} className="text-base leading-snug">
-        <Link href={problemHref(item.problem.id)} className={titleLinkClass}>
-          {item.problem.title}
-        </Link>
-      </h3>
-      <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
-        {item.problem.niche ? <span>{item.problem.niche.label}</span> : null}
-        {item.problem.label ? <span data-label="">{item.problem.label}</span> : null}
-      </p>
-      <Chips items={why ? [why] : []}>
-        <li data-chip="pursuit" className={cn("inline-flex items-start gap-1.5 text-sm font-semibold", DECISION_TONE[decision])}>
-          <DecisionIcon className="mt-0.5 size-4 shrink-0" />
-          <span>{t("chip", { pursuit, fit: t(`fit.${FIT_KEY[item.label]}`) })}</span>
-        </li>
-      </Chips>
       {item.exploring ? <p className="text-sm text-ink-soft">{t("exploring")}</p> : null}
       <details className="group">
         <MoreSummary>{t("details")}</MoreSummary>
-        <div className="mt-2 flex max-w-[65ch] flex-col gap-4 border-l-2 border-jacaranda-wash pl-4">
+        <div className="mt-1 mb-2 flex max-w-[65ch] flex-col gap-4">
           {reasons.length > 0 ? (
             <section>
               <h4 className="text-sm font-semibold text-ink">{t("reasonsTitle", { pursuit })}</h4>
@@ -142,6 +147,6 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
           </p>
         </div>
       </details>
-    </article>
+    </Row>
   );
 }

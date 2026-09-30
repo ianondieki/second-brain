@@ -50,7 +50,8 @@ describe("the shared date format", () => {
   });
 
   it("uses the same shape in Swahili", () => {
-    expect(formatDay("sw", "2026-09-30T08:00:00Z")).toMatch(/^30 \S+ 2026$/);
-    expect(formatMoment("sw", "2026-09-30T11:06:00Z")).toMatch(/^30 \S+ 2026, 14:06$/);
+    expect(formatDay("sw", "2026-09-30T08:00:00Z")).toBe("30 Sep 2026");
+    expect(formatDay("sw", "2026-10-10T08:00:00Z")).toBe("10 Okt 2026");
+    expect(formatMoment("sw", "2026-10-10T11:06:00Z")).toBe("10 Okt 2026, 14:06");
   });
 });

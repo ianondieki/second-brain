@@ -28,6 +28,27 @@ export function problemLabel(
   return { key: problem.seeded_example ? "seeded" : "aiDrafted", date: formatDay(locale, problem.published_at) };
 }
 
+/** A problem as Discover and Home receive it: the English `label`, and (from P16-C1) what the label is made of. */
+export type ListedProblem = Pick<ProblemDetail, "source" | "label"> & {
+  seeded_example?: boolean;
+  published_at?: string | null;
+};
+
+/**
+ * Discover's and Home's label (REQ-TREND-02, REQ-PERS-01): the problem page's own label in the page's language and
+ * date format (problemLabel), so one problem reads the same on every screen. An API older than P16-C1 sends no
+ * `seeded_example`; then its English words are shown as they are rather than guessing whether the card is a seeded
+ * example.
+ */
+export function listedProblemLabel(problem: ListedProblem, locale: string): ProblemLabel | { key: "api"; text: string } {
+  if (problem.source === "developer") return { key: "developer" };
+  if (typeof problem.seeded_example === "boolean" && problem.published_at !== undefined) {
+    const label = problemLabel({ ...problem, seeded_example: problem.seeded_example, published_at: problem.published_at }, locale);
+    if (label) return label;
+  }
+  return problem.label ? { key: "api", text: problem.label } : null;
+}
+
 /** A moment in Nairobi ("30 Sep 2026, 14:06"), the web app's one date format (lib/format.ts). */
 export { formatMoment };
 

@@ -44,7 +44,7 @@ describe("RowList and Row", () => {
     render(
       <RowList>
         <Row title="Tower sites go down" href="/problems/1" stretch={false} titleId="p1-title">
-          <a href="/dev/ideas/new?problem=1">Start a proposal</a>
+          <button type="button">Start a proposal</button>
         </Row>
       </RowList>,
     );
@@ -52,7 +52,7 @@ describe("RowList and Row", () => {
     expect(link.className).not.toContain("after:absolute");
     expect(link.className).toContain("min-h-11");
     expect(screen.getByRole("heading", { level: 3 }).id).toBe("p1-title");
-    expect(screen.getByRole("link", { name: "Start a proposal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start a proposal" })).toBeTruthy();
   });
 
   it("puts the pending hint on the row's top hairline, where it takes no room from the title", () => {
