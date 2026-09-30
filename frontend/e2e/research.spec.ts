@@ -151,7 +151,7 @@ test.describe("a staff admin", () => {
     const devPage = await developer.newPage();
     await newDeveloper(devPage.request);
     await devPage.goto(`/problems/${problemId}`);
-    await expectEmptyState(devPage, "This problem is not available.", "Back to home");
+    await expectEmptyState(devPage, "This problem is not available.", "Back to Discover"); // a developer goes back to Discover (P16-C1)
 
     // The card waits for review, with its tags (at most two) and the way in.
     await page.reload();
