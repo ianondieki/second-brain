@@ -84,7 +84,7 @@ test.describe("a developer on the Free plan", () => {
     await expect(page.locator("[data-primary]")).toHaveText("Upgrade to Pro (monthly)");
     await expect(page.locator("[data-primary]")).toHaveAttribute("href", "/billing/upgrade?plan=dev_pro_monthly");
     await expect(page.getByRole("link", { name: "Choose Pro (yearly)" })).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   });
 
   test("hits the limit on the 4th publish, upgrades through the simulated M-Pesa checkout, then publishes", async ({
@@ -112,17 +112,17 @@ test.describe("a developer on the Free plan", () => {
       "Confirm",
     );
     await expect(page.getByRole("radio", { name: "The payment is confirmed" })).toBeChecked();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.getByRole("button", { name: "Start the simulated payment" }).click();
 
     // Waiting (a simulated checkout says so instead of "Check your phone"), then the fake provider's answer.
     await expect(page.getByRole("heading", { name: "Waiting for the simulated payment" })).toBeVisible(SERVER_STEP);
     await expect(page.getByRole("status").filter({ hasText: "Waiting for the payment to be confirmed" })).toBeVisible();
     await expect(page).toHaveURL(/checkout=[0-9a-f-]{36}/);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible(PAYMENT_STEP);
     await expect(page.getByText("You are now on Pro (monthly).")).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Back where the refusal was: the 4th idea publishes on Pro.
     await page.getByRole("link", { name: "Continue where you left off" }).click();
@@ -159,13 +159,13 @@ test.describe("a developer on the Free plan", () => {
     );
     await expect(page.locator("[data-primary]")).toHaveText("Try again");
     await expect(page.getByRole("link", { name: "Back to Plan & billing" })).toHaveAttribute("href", "/billing");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.getByRole("button", { name: "Try again" }).click();
     await page.getByRole("radio", { name: "The payment is cancelled" }).check();
     await page.getByRole("button", { name: "Start the simulated payment" }).click();
     await expect(page.getByRole("heading", { name: "Payment cancelled" })).toBeVisible(PAYMENT_STEP);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.goto("/billing");
     await expect(page.getByText("You are on the Free plan.")).toBeVisible();
@@ -188,7 +188,7 @@ test.describe("a developer on the Free plan", () => {
       await expect(page.locator("[data-page-back]"), path).toHaveCount(0);
       await expect(page.locator("main a"), path).toHaveCount(1);
     }
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   });
 });
 
@@ -234,7 +234,7 @@ test("an organisation's owner upgrades its plan to Starter", async ({ browser, b
     await expect(page.locator("[data-plan='org_starter']")).toContainText("KES 15,000 a month");
     await expect(page.locator("[data-plan='org_growth']")).toContainText("5 Scout Agents");
     await expect(page.locator("[data-plan='org_enterprise']")).toContainText("Not available to buy here yet");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.locator("[data-primary]").click();
     await expect(page).toHaveURL(new RegExp(`/billing/upgrade\\?plan=org_starter&org=${owner.orgId}$`), SERVER_STEP);
     await page.getByRole("button", { name: "Start the simulated payment" }).click();

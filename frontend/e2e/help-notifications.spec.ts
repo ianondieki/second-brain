@@ -47,7 +47,7 @@ test("a visitor can read help, and the notification settings ask them to log in"
   await expectHelp(page);
   await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
   await expect(page.getByRole("button", { name: "Account" })).toHaveCount(0);
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 
   await page.locator("[data-help-section='reminders']").getByRole("link", { name: "Notifications" }).click();
   await expect(page).toHaveURL(loginReturningTo("/settings/notifications"), SERVER_STEP);
@@ -88,13 +88,13 @@ test.describe("a signed-in developer", () => {
     await expect(whatsapp).toBeDisabled();
     await expect(page.getByText("WhatsApp messages are not available yet, so this cannot be turned on.")).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("Save choices");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Turn email reminders on: the API records it, and a reload shows it.
     await page.getByRole("checkbox", { name: REMINDERS }).check();
     await page.locator("[data-primary]").click();
     await expect(page.getByRole("status").filter({ hasText: "Your choices are saved." })).toBeVisible(SERVER_STEP);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     const recorded = (await (await page.request.get("/api/me/consents")).json()) as Array<{
       purpose: string;
       granted: boolean;
@@ -109,7 +109,7 @@ test.describe("a signed-in developer", () => {
     await expect(page).toHaveURL(/\/help$/, SERVER_STEP);
     await expectHelp(page);
     await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("button", { name: "Sign out" }).click();
@@ -141,7 +141,7 @@ test.describe("a signed-in developer", () => {
     );
     await expect(alert.getByRole("link")).toHaveCount(1);
     await expect(page.getByText("The consent wording has changed")).toHaveCount(0); // never the API's own message
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.unroute("**/api/me/consents");
     await alert.getByRole("link", { name: "Reload the page" }).click();
@@ -175,12 +175,12 @@ test.describe("from an email", () => {
       await page.goto(pathOf(settings!));
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications", SERVER_STEP);
       await choicesReady(page);
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       await page.goto(pathOf(help!));
       await expectHelp(page);
       await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
     } finally {
       await buyer.close();
     }

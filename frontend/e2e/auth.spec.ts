@@ -1,10 +1,10 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { pathOf, waitForSignInLink } from "./support/mailpit";
 import { totp } from "./support/totp";
 import { signUpDeveloper } from "./support/accounts";
 import { loginReturningTo } from "./support/login";
+import { checkScreen as checkScreenStrict } from "./support/screen";
 
 // X1-1 (REQ-AUTH-01): signup, email link, password login and TOTP against the compose stack (`make dev`), in the
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
@@ -22,21 +22,12 @@ function uniqueEmail(label: string) {
 }
 
 /**
- * The page-level rules every auth screen keeps: axe finds nothing serious or critical (AC-UX-4), at most one
- * primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, checked at 360 px in the mobile project).
+ * The page-level rules every auth screen keeps: axe finds no violation of any impact (P16-C1 tightened this from
+ * serious/critical, AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, checked at
+ * 360 px in the mobile project). The shared helper, strict.
  */
 async function checkScreen(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"])
-    .analyze();
-  const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-  expect(serious, JSON.stringify(serious.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })), null, 2))
-    .toEqual([]);
-  expect(await page.locator("[data-primary]").count()).toBeLessThanOrEqual(1);
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow, "horizontal scroll").toBeLessThanOrEqual(0);
+  await checkScreenStrict(page, { strict: true });
 }
 
 /** Forms stay inert until React hydrates (components/ui/Form.tsx); wait for that before typing and submitting. */

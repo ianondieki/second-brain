@@ -28,7 +28,7 @@ test("the lookup page meets the page rules and names nobody", async ({ page }) =
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Check an authorship certificate");
   await expect(page.locator("[data-primary]")).toHaveText("Check certificate");
   await expect(page.getByRole("complementary")).toContainText("Not the owner’s name, the title or the content.");
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 });
 
 test("a malformed id stays on the page with the reason; a typed id is tidied and looked up", async ({ page }) => {
@@ -37,7 +37,7 @@ test("a malformed id stays on the page with the reason; a typed id is tidied and
   await page.getByRole("button", { name: "Check certificate" }).click();
   await expect(page.getByText("Enter the certificate ID as printed: 8 to 24 letters and numbers.")).toBeVisible();
   await expect(page.getByLabel("Certificate ID")).toHaveAttribute("aria-invalid", "true");
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 
   // Lower case, spaces and hyphens are what people type from a printed certificate.
   await page.getByLabel("Certificate ID").fill("zzzz-zzzz zzzz zzzz");
@@ -49,7 +49,7 @@ test("an unknown certificate is one sentence and one action", async ({ page }) =
   await page.goto(`/verify/${UNKNOWN_ID}`);
   await expect(page.getByTestId("verify-message")).toHaveText("No certificate has this ID.");
   await expect(page.getByRole("main").getByRole("link")).toHaveText(["Check another certificate"]);
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
   await page.getByRole("link", { name: "Check another certificate" }).click();
   await expect(page).toHaveURL(/\/verify$/);
 });
@@ -66,7 +66,7 @@ test("a file that matches nothing says so and shows its fingerprint", async ({ p
   );
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   await expect(page.locator(`[data-fingerprint="${sha256}"]`)).toBeVisible();
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 });
 
 test("checking with no file chosen points at the field", async ({ page }) => {
@@ -107,7 +107,7 @@ test("a matching file links to its certificate", async ({ page }) => {
     "href",
     "/verify/TXEMFBJ89RRTQS87",
   );
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 });
 
 test("a registered certificate shows its evidence, and no name or title", async ({ page }) => {
@@ -125,7 +125,7 @@ test("a registered certificate shows its evidence, and no name or title", async 
   await expect(page.locator("[data-primary]")).toHaveText("Check file");
   // The token and keys links are stacked: each has its own 44 px band (ux-review MAJOR, P8 part 1).
   await expectSeparateTargets(page.getByTestId("record-links").getByRole("link"));
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
 
   // The published keys and the timestamp token come from the API through the web origin.
   const keys = await page.request.get("/.well-known/provenance-keys.json");

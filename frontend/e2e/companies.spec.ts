@@ -44,7 +44,7 @@ test.describe("a signed-in developer", () => {
       await expect(row.locator("[data-badge]")).toHaveCount(1);
       await expect(row.locator("img")).toHaveCount(0);
     }
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   });
 
   test("searches by name, filters by county, pages, and clears", async ({ page }) => {
@@ -68,7 +68,7 @@ test.describe("a signed-in developer", () => {
     await expect(page.getByText("Filters (1 chosen)")).toBeVisible();
     expect(await rows(page).count()).toBeGreaterThan(0);
     for (const row of await rows(page).all()) await expect(row.locator("p").first()).toContainText("Nairobi");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.getByRole("link", { name: "Clear filters" }).click();
     await expect(page).toHaveURL(/\/dev\/companies$/, SERVER_STEP);
@@ -83,7 +83,7 @@ test.describe("a signed-in developer", () => {
   test("an empty result is one sentence and one action", async ({ page }) => {
     await page.goto("/dev/companies?q=no%20organisation%20has%20this%20name");
     await expectEmptyState(page, "No organisations match these filters.", "Clear filters");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.getByRole("link", { name: "Clear filters" }).click();
     await expect(rows(page).first()).toBeVisible(SERVER_STEP);
 
@@ -102,7 +102,7 @@ test.describe("a signed-in developer", () => {
     await expect(page).toHaveURL(/\/dev\/companies\/[0-9a-f-]{36}\?county=KE-30$/);
     await expect(page.locator("[data-badge]")).toHaveCount(1);
     await expect(page.getByRole("term")).toContainText(["Organisation type", "County", "Niches"]);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.getByRole("link", { name: "All companies" }).click();
     await expect(page).toHaveURL(/\/dev\/companies\?county=KE-30$/, SERVER_STEP);
 

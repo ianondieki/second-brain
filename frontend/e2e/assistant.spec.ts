@@ -59,13 +59,13 @@ function auditPayloads(email: string, action: string): Array<Record<string, unkn
 
 /** axe and the page rules at the project's width, then at 375 px on mobile, with a screenshot when asked. */
 async function checkAndShoot(page: Page, info: TestInfo, name: string) {
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
   const mobile = info.project.name.startsWith("mobile");
   const size = page.viewportSize()!;
   const width = mobile ? 375 : 1440;
   if (size.width !== width) {
     await page.setViewportSize({ width, height: size.height });
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   }
   const dir = process.env.E2E_SHOTS_DIR;
   if (dir) {
