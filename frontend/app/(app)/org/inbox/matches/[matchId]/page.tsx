@@ -7,7 +7,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { buttonClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { requireMe } from "@/lib/api/server";
+import type { Me } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getTeaser, orgContext } from "../../../data";
@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { OrgRefusal } from "../../../OrgRefusal";
 import { engagementsHref, type Membership } from "../../../membership";
 import { interestReasonOf, matchesHref, type MatchDetail } from "../../../scout";
-import { getMatch, getMembers } from "../../../scout-data";
+import { getMatch, getMembers, type Member } from "../../../scout-data";
 import { TeaserDetails } from "../../[proposalId]/TeaserDetails";
 import { FitMeter, Why } from "../MatchParts";
 import { ExpressInterest } from "./ExpressInterest";
@@ -34,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function MatchScreen({ params, searchParams }: PageProps<"/org/inbox/matches/[matchId]">) {
   const [{ matchId }, query] = await Promise.all([params, searchParams]);
-  const { memberships, org, missing, query: orgParam } = await orgContext(query.org);
+  const { me, memberships, org, missing, query: orgParam } = await orgContext(query.org);
   const t = await getTranslations("scoutMatch");
   const ti = await getTranslations("inbox");
   const tm = await getTranslations("scoutMatches");
@@ -69,7 +69,13 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
 
   const match = found.value;
   const teaser = match.teaser!;
-  const card = await getTeaser(match.proposal_id);
+  // The match is the organisation's (read above): its teaser and, when Express interest is offered, the reviewer
+  // seats it can name are read together.
+  const offered = interestReasonOf(match.interest) === null;
+  const [card, members] = await Promise.all([
+    getTeaser(match.proposal_id),
+    offered ? getMembers(org.org_id) : Promise.resolve(null),
+  ]);
   // The handle shows once: in the teaser's details when they load, else here under the title.
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
@@ -100,7 +106,7 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
         </div>
         <Why match={match} heading />
         {card ? <TeaserDetails card={card} /> : null}
-        <Interest match={match} memberships={memberships} org={org} query={orgParam} />
+        <Interest match={match} memberships={memberships} org={org} query={orgParam} me={me} members={members} />
       </article>
     </SignedInShell>
   );
@@ -112,23 +118,26 @@ async function Interest({
   memberships,
   org,
   query,
+  me,
+  members,
 }: {
   match: MatchDetail;
   memberships: Membership[];
   org: Membership;
   /** "?org=<id>" for members of several organisations, kept on the tracker link. */
   query: string;
+  me: Me;
+  /** The organisation's members when Express interest is offered (null: not offered, or they could not be read). */
+  members: Member[] | null;
 }) {
   const t = await getTranslations("scoutMatch");
   const tx = await getTranslations("expressInterest");
   const reason = interestReasonOf(match.interest);
   const tracker = match.engagement_id ? engagementsHref(memberships, org.org_id, match.engagement_id) : null;
-  const me = reason === null ? await requireMe() : null;
-  const members = reason === null ? await getMembers(org.org_id) : null;
   return (
     <Section title={t("interestTitle")} headingId="interest-heading" description={t("interestLead")} data-interest="">
       <div>
-        {reason === null && me ? (
+        {reason === null ? (
           <ClientStrings strings={await clientStrings(["expressInterest", "trackerActions"])}>
             <ExpressInterest
               orgId={org.org_id}

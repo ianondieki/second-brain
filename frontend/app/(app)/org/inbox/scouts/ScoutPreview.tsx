@@ -7,7 +7,7 @@ import { Alert } from "@/components/ui/Alert";
 // RowBase, not Row: these rows have no page, and RowBase's module leaves next/link out of the scout form's bundle.
 import { RowBase, RowList } from "@/components/ui/RowBase";
 
-import type { Preview } from "../../scout";
+import type { Preview } from "../../scout-draft";
 import { FitBar } from "../matches/FitBar";
 
 /**

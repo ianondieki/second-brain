@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -26,7 +26,7 @@ function download(codes: string[]) {
  * cleared synchronously in `pagehide`, before the page is frozen, and again on a `pageshow` from the cache.
  */
 export function RecoveryCodeList({ codes }: { codes: string[] }) {
-  const t = useTranslations("security");
+  const t = useStrings("security");
   const [notice, setNotice] = useState<"codesCopied" | "copyFailed" | null>(null);
   const [cleared, setCleared] = useState(false);
 

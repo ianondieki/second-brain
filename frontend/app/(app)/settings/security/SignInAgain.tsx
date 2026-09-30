@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
@@ -16,8 +16,8 @@ import { rememberEmail } from "@/lib/auth/session";
  * emailed link (the API then allows credential changes for 15 minutes).
  */
 export function SignInAgain({ email }: { email: string }) {
-  const t = useTranslations("security");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const te = useStrings("errors");
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);

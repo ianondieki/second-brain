@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { encode } from "uqr";
 
@@ -80,9 +80,9 @@ export function EnrolmentSteps({
   onCancel,
   onEnrolled,
 }: EnrolmentStepsProps) {
-  const t = useTranslations("security");
-  const tv = useTranslations("validation");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const tv = useStrings("validation");
+  const te = useStrings("errors");
   const router = useRouter();
   const heading = useRef<HTMLHeadingElement>(null);
   // The notices show above the steps, far above the buttons that lead to them (at 360 px, over 400 px up).

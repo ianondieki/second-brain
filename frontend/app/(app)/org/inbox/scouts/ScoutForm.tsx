@@ -34,7 +34,7 @@ import {
   type ScoutDraft,
   type ScoutPlan,
   type ScoutRefusal,
-} from "../../scout";
+} from "../../scout-draft";
 import { scoutCalls, type Refused, type ScoutCalls } from "./calls";
 import { ChoiceList, CountyChoice, NicheChoice, type NicheOption, type Option } from "./ScoutFields";
 import { ScoutPreview } from "./ScoutPreview";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { useRef, useState, type FormEvent } from "react";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
@@ -21,10 +21,10 @@ import { usePasswordState } from "./PasswordState";
  * without one needs a sign-in in the last 15 minutes.
  */
 export function PasswordSettings({ email }: { email: string }) {
-  const t = useTranslations("password");
-  const tv = useTranslations("validation");
-  const ts = useTranslations("signup");
-  const te = useTranslations("errors");
+  const t = useStrings("password");
+  const tv = useStrings("validation");
+  const ts = useStrings("signup");
+  const te = useStrings("errors");
   const summaryRef = useRef<HTMLDivElement>(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");

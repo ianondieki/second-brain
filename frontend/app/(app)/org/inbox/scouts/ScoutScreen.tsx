@@ -6,7 +6,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Callout } from "@/components/ui/Callout";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { clientStrings } from "@/lib/i18n/client-strings";
+import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
 
 import { orgContext } from "../../data";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -123,7 +123,13 @@ export async function ScoutScreen({
         </Callout>
       ) : null}
       <div className="mt-8">
-        <ClientStrings strings={await clientStrings(["scoutForm", "ideaFields"])}>
+        {/* Of ideaFields, the form needs the maturity labels only. */}
+        <ClientStrings
+          strings={{
+            ...(await clientStrings(["scoutForm"])),
+            ...(await pickedStrings("ideaFields", ["maturityValue"])),
+          }}
+        >
           <ScoutForm
             userId={me.user.id}
             restore={first(restore) === "1"}

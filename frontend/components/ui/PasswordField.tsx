@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "../ClientStrings";
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "./cn";
@@ -16,10 +16,11 @@ export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputEl
 
 /**
  * Password input with a show/hide toggle (a real button, 44 px target, name contains its visible text). The toggle's
- * words come from the `fields` messages, which every page with a password field provides.
+ * words are the `fields` messages as server-formatted strings (components/ClientStrings), which every page with a
+ * password field provides: no next-intl client runtime for them (the /settings/security JS budget, P16-D).
  */
 export function PasswordField({ id, label, hint, error, className, ...rest }: PasswordFieldProps) {
-  const t = useTranslations("fields");
+  const t = useStrings("fields");
   const [visible, setVisible] = useState(false);
   return (
     <Field id={id} label={label} hint={hint} error={error}>
