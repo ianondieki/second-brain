@@ -25,10 +25,33 @@ class PlanSpec:
     upgrade_to: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def purchasable(self) -> bool:
+        """Whether a checkout may buy it (P14): a paid plan sold self-serve. Never the side's default (free) plan, a
+        free plan (Student), custom pricing (Enterprise / Government) or a plan that needs admin approval (Social
+        Impact)."""
+        return (
+            not self.default
+            and self.price_kes_minor > 0
+            and self.interval is not BillingInterval.NONE
+            and not any(self.extra.get(key) for key in _NOT_SELF_SERVE)
+        )
+
+
+# Plans a checkout never sells, whatever their price: a person decides (an invoice, an approval, eligibility).
+_NOT_SELF_SERVE = ("custom_pricing", "requires_admin_approval", "eligibility", "discount_of")
+
 
 @dataclass(frozen=True, slots=True)
 class Catalog:
     plans: dict[str, PlanSpec]
+    # plans.yaml `status`: "placeholder-until-G3" until the human sets the G3 prices (D-44: shown as sample prices).
+    status: str = ""
+
+    @property
+    def sample_prices(self) -> bool:
+        """Whether the prices are placeholders (D-44): anything but ``final`` is."""
+        return self.status != "final"
 
     def default_for(self, side: PlanSide) -> PlanSpec:
         for plan in self.plans.values():
@@ -80,7 +103,7 @@ def parse(data: dict[str, Any]) -> Catalog:
                 raise ValueError(f"upgrade loop through {target}")
             seen.add(target)
             target = plans[target].upgrade_to
-    return Catalog(plans)
+    return Catalog(plans, status=str(data.get("status") or ""))
 
 
 @lru_cache(maxsize=4)

@@ -67,6 +67,7 @@ from bridge.seed.demo.runtime import (
     in_process_app,
     totp_code,
 )
+from bridge.seed.demo.subscriptions import seed_demo_subscriptions
 
 __all__ = [
     "DemoKeysChanged",
@@ -121,7 +122,14 @@ async def seed_demo(
         await step("Tier-2 view", record_view(owner_engine, actors, settings, report))
         for plan in ENGAGEMENTS:
             await step(f"{plan.proposal} with {plan.org}", drive(owner_engine, actors, settings, plan, report))
+        await step("free plans", _free_plans(owner_engine, settings))
     return report
+
+
+async def _free_plans(owner_engine: AsyncEngine, settings: Settings) -> None:
+    """P14: every demo subject without a live subscription gets its side's free plan (bought plans are kept)."""
+    async with owner_engine.begin() as conn:
+        await seed_demo_subscriptions(conn, settings)
 
 
 async def _seeded_before(owner_engine: AsyncEngine) -> bool:

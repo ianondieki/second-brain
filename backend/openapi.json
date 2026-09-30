@@ -535,6 +535,15 @@
         "title": "Badge",
         "type": "object"
       },
+      "BillingInterval": {
+        "enum": [
+          "none",
+          "month",
+          "year"
+        ],
+        "title": "BillingInterval",
+        "type": "string"
+      },
       "BrowsePage": {
         "properties": {
           "items": {
@@ -768,6 +777,153 @@
           "signature"
         ],
         "title": "CertificateCheck",
+        "type": "object"
+      },
+      "CheckoutIn": {
+        "additionalProperties": false,
+        "description": "Only these fields: a checkout never takes an id or a reference from the client.",
+        "properties": {
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "plan_code": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "simulate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimulatedOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plan_code"
+        ],
+        "title": "CheckoutIn",
+        "type": "object"
+      },
+      "CheckoutOut": {
+        "properties": {
+          "amount_kes_minor": {
+            "title": "Amount Kes Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "plan_active": {
+            "title": "Plan Active",
+            "type": "boolean"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "poll_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After Seconds"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "side": {
+            "$ref": "#/components/schemas/PlanSide"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          }
+        },
+        "required": [
+          "id",
+          "plan_code",
+          "plan_name",
+          "side",
+          "org_id",
+          "amount_kes_minor",
+          "currency",
+          "status",
+          "failure_code",
+          "simulated",
+          "plan_active",
+          "created_at",
+          "settled_at",
+          "poll_after_seconds"
+        ],
+        "title": "CheckoutOut",
         "type": "object"
       },
       "CodeRequest": {
@@ -3943,6 +4099,17 @@
         "title": "PaymentOut",
         "type": "object"
       },
+      "PaymentStatus": {
+        "description": "A checkout (docs/spec/05). Settled once, pending -> succeeded | failed | cancelled, only through\n``app_settle_payment`` (revision 0005).",
+        "enum": [
+          "pending",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "PaymentStatus",
+        "type": "string"
+      },
       "PendingOut": {
         "properties": {
           "command": {
@@ -4216,6 +4383,65 @@
         "title": "PlacementHintOut",
         "type": "object"
       },
+      "PlanOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "limits": {
+            "additionalProperties": true,
+            "title": "Limits",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price_kes_minor": {
+            "title": "Price Kes Minor",
+            "type": "integer"
+          },
+          "purchasable": {
+            "title": "Purchasable",
+            "type": "boolean"
+          },
+          "side": {
+            "$ref": "#/components/schemas/PlanSide"
+          },
+          "upgrade_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upgrade To"
+          }
+        },
+        "required": [
+          "code",
+          "side",
+          "name",
+          "price_kes_minor",
+          "interval",
+          "limits",
+          "is_default",
+          "purchasable",
+          "upgrade_to"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
       "PlanSide": {
         "enum": [
           "developer",
@@ -4223,6 +4449,37 @@
         ],
         "title": "PlanSide",
         "type": "string"
+      },
+      "PlansOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOut"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "sample_prices": {
+            "title": "Sample Prices",
+            "type": "boolean"
+          },
+          "simulated_checkout": {
+            "title": "Simulated Checkout",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currency",
+          "sample_prices",
+          "simulated_checkout",
+          "plans"
+        ],
+        "title": "PlansOut",
+        "type": "object"
       },
       "ProblemCard": {
         "properties": {
@@ -4999,6 +5256,16 @@
         ],
         "title": "SignupRequest",
         "type": "object"
+      },
+      "SimulatedOutcome": {
+        "description": "What a simulated checkout does (``FakePaymentProvider`` only): the demo and the tests pick it; a real provider\nrefuses any.",
+        "enum": [
+          "succeed",
+          "fail",
+          "cancel"
+        ],
+        "title": "SimulatedOutcome",
+        "type": "string"
       },
       "StaffMeOut": {
         "properties": {
@@ -8877,6 +9144,262 @@
         "summary": "Resend Verification",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/billing/checkouts": {
+      "post": {
+        "description": "Start a checkout of a paid plan: 422 ``plan_not_available`` (unknown, default, free, custom or approval\nplans), 422 ``plan_wrong_side``, 403 ``not_a_developer``, 409 ``already_on_plan``, 409 ``checkout_pending`` (with\n``checkout_id``: another plan's checkout is in progress), 502 ``payment_provider_error``, 503 ``not_configured``.",
+        "operationId": "start_checkout_api_billing_checkouts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutOut"
+                }
+              }
+            },
+            "description": "The checkout of that plan already in progress"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Checkout",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/billing/checkouts/{checkout_id}": {
+      "get": {
+        "description": "A checkout of the caller's (404 otherwise). Settles it when the provider has a final answer and activates a\nsuccess; without a provider on this server it is shown as it stands.",
+        "operationId": "get_checkout_api_billing_checkouts__checkout_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkout_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Checkout Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Checkout",
+        "tags": [
+          "billing"
         ]
       }
     },
@@ -17580,6 +18103,126 @@
         "tags": [
           "proposals",
           "tier2"
+        ]
+      }
+    },
+    "/api/plans": {
+      "get": {
+        "description": "The plan catalogue (one side, or both), in ``plans.yaml`` order.",
+        "operationId": "list_plans_api_plans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "side",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlanSide"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Side"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Plans",
+        "tags": [
+          "billing"
         ]
       }
     },
