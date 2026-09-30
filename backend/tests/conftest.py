@@ -10,12 +10,16 @@ from collections.abc import Callable
 
 import pytest
 
+from bridge.config import Settings
 from tests import egress
 
 egress.install()
 egress.disable_proxies()
 
-# Unit tests never read a developer's backend/.env: settings come from here or from the test itself.
+# Tests never read a developer's backend/.env (``make demo`` writes one, with PAYMENT_PROVIDER=fake and the demo's
+# URLs): settings come from here, from the environment or from the test itself (REQ-FND-01, P16-E1 item 7). A
+# subprocess a test starts gets its environment from the test.
+Settings.model_config["env_file"] = None
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://bridge_app:bridge_app@localhost:5432/bridge_test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789")
