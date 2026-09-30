@@ -7,9 +7,11 @@ import { Suspense, useRef, useState, type FormEvent } from "react";
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { PasswordField } from "@/components/ui/PasswordField";
+import { Section } from "@/components/ui/Section";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
@@ -199,11 +201,12 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
 
   if (phase.name === "on") {
     return (
-      <div className="mt-8 flex flex-col items-start gap-6">
+      <div className="flex flex-col items-start gap-6">
         {errorBlock}
-        <p className="inline-flex items-start gap-2 font-semibold text-ok">
-          <CheckIcon className="mt-0.5 size-5 shrink-0" />
-          {t("on")}
+        <p>
+          <Badge tone="ok" icon={<CheckIcon />}>
+            {t("on")}
+          </Badge>
         </p>
         {notice?.key === "codesNotShown" ? (
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
@@ -219,36 +222,32 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             {busy ? t("turningOff") : t("turnOff")}
           </Button>
         )}
-        <section
-          aria-labelledby="recovery-heading"
-          className="flex w-full flex-col items-start gap-4 border-t border-line pt-6"
-        >
-          <h3 id="recovery-heading" className="text-base text-ink">
-            {t("recoveryTitle")}
-          </h3>
-          {renewing ? (
-            <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
-              <NewRecoveryCodes
-                email={email}
-                onClose={closeRenewal}
-                onReplaced={() => setNotice(null)}
-                onTwoStepOff={() => backToStart("totp_not_enabled", null)}
-              />
-            </Suspense>
-          ) : (
-            <>
-              <p className="text-ink-soft">{t("recoveryLead")}</p>
-              <Button
-                id="new-codes"
-                // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
-                variant={notice?.key === "codesNotShown" ? "primary" : "secondary"}
-                onClick={openRenewal}
-              >
-                {t("newCodes")}
-              </Button>
-            </>
-          )}
-        </section>
+        <Section title={t("recoveryTitle")} headingId="recovery-heading" headingLevel={3} className="mt-6 w-full">
+          <div className="flex flex-col items-start gap-4">
+            {renewing ? (
+              <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
+                <NewRecoveryCodes
+                  email={email}
+                  onClose={closeRenewal}
+                  onReplaced={() => setNotice(null)}
+                  onTwoStepOff={() => backToStart("totp_not_enabled", null)}
+                />
+              </Suspense>
+            ) : (
+              <>
+                <p className="text-ink-soft">{t("recoveryLead")}</p>
+                <Button
+                  id="new-codes"
+                  // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
+                  variant={notice?.key === "codesNotShown" ? "primary" : "secondary"}
+                  onClick={openRenewal}
+                >
+                  {t("newCodes")}
+                </Button>
+              </>
+            )}
+          </div>
+        </Section>
         <Link href={homeHref} className={textLinkClass}>
           {t("back")}
         </Link>
@@ -259,7 +258,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   if (phase.name === "setup") {
     const entryName = issuerOf(phase.otpauthUri) ?? productName;
     return (
-      <div className="mt-8">
+      <div>
         <Suspense fallback={<p role="status" className="text-ink-soft">{t("starting")}</p>}>
           <EnrolmentSteps
             secret={phase.secret}
@@ -276,7 +275,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   }
 
   return (
-    <div className="mt-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {notice?.key === "off" ? (
         <Alert ref={noticeRef} tone="info">
           {t("off")}

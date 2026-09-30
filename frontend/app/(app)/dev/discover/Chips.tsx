@@ -12,7 +12,7 @@ import type { RowBadges } from "@/components/ui/RowList";
  */
 export function WhyChip({ children }: { children: ReactNode }) {
   return (
-    <Badge data-chip="why" tone="neutral" icon={<WhyIcon />} className="items-start [&>svg]:mt-0.5">
+    <Badge data-chip="why" tone="neutral" icon={<WhyIcon />}>
       {children}
     </Badge>
   );
@@ -26,7 +26,7 @@ export function WhyChip({ children }: { children: ReactNode }) {
 export function TrendBadge({ badge }: { badge: string | null }) {
   if (!badge) return null;
   return (
-    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="items-start [overflow-wrap:anywhere] [&>svg]:mt-0.5">
+    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]">
       {badge}
     </Badge>
   );

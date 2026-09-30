@@ -6,7 +6,7 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { CheckIcon } from "@/components/ui/status-icons";
+import { Callout } from "@/components/ui/Callout";
 
 import { saveChoices } from "./calls";
 import {
@@ -52,9 +52,12 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
   const [saved, setSaved] = useState(false);
   const [refusal, setRefusal] = useState<SaveRefusal | null>(null);
   const alert = useRef<HTMLDivElement>(null);
+  // The ticks as they are now (the state above as of the last render), read when a save comes back.
+  const latest = useRef<Ticked>(ticked);
 
   function tick(purpose: NotificationPurpose, value: boolean) {
-    setTicked((was) => ({ ...was, [purpose]: value }));
+    latest.current = { ...latest.current, [purpose]: value };
+    setTicked(latest.current);
     setSaved(false);
     setRefusal(null);
   }
@@ -70,13 +73,26 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
       return;
     }
     setBusy(true);
+    const sent = ticked;
     const outcome = await saveImpl(decisions);
     setBusy(false);
     if (outcome.ok) {
       const now = notificationChoices(outcome.items);
       setShown(now);
-      setTicked(tickedOf(now));
-      setSaved(true);
+      // The boxes are disabled while the save runs; should one still have changed meanwhile, it is kept, not
+      // overwritten by the saved state (P16-A review MINOR 4), and the page does not claim it is saved.
+      const current = latest.current;
+      const next = tickedOf(now);
+      let changedMeanwhile = false;
+      for (const purpose of Object.keys(current) as NotificationPurpose[]) {
+        if (current[purpose] !== sent[purpose]) {
+          next[purpose] = current[purpose];
+          changedMeanwhile = true;
+        }
+      }
+      latest.current = next;
+      setTicked(next);
+      setSaved(!changedMeanwhile);
     } else {
       setRefusal(outcome.refusal);
       requestAnimationFrame(() => alert.current?.focus());
@@ -94,7 +110,8 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-8" data-notification-choices="">
       {channels.map(({ channel, choices }) => (
-        <fieldset key={channel} data-channel={channel}>
+        // Disabled while a save is in flight, so what is sent is what the page shows (P16-A review MINOR 4).
+        <fieldset key={channel} data-channel={channel} disabled={busy}>
           <legend className="text-lg font-semibold text-ink">{t(`channel.${channel}`)}</legend>
           <div className="mt-1 flex flex-col">
             {choices.map((choice) => {
@@ -134,19 +151,14 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
         </Alert>
       ) : null}
 
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex flex-col items-start gap-4">
         <Button type="submit" variant="primary" busy={busy}>
           {busy ? t("saving") : t("save")}
         </Button>
-        {/* Always in the page, so the confirmation is announced when it appears. */}
-        <p role="status" className="flex min-h-6 items-center gap-2 font-medium text-ok" data-saved={saved ? "" : undefined}>
-          {saved ? (
-            <>
-              <CheckIcon className="size-5 shrink-0" />
-              <span>{t("saved")}</span>
-            </>
-          ) : null}
-        </p>
+        {/* Always in the page, so the confirmation is announced when it appears; the notice is the system's ok tone. */}
+        <div role="status" className="w-full empty:hidden" data-saved={saved ? "" : undefined}>
+          {saved ? <Callout tone="ok">{t("saved")}</Callout> : null}
+        </div>
       </div>
     </form>
   );

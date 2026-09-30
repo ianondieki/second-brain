@@ -9,6 +9,9 @@ import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+
+import { SettingsTabs } from "../SettingsTabs";
 import { notificationChoices, type ConsentItem } from "./choices";
 import { NotificationChoices } from "./NotificationChoices";
 
@@ -40,9 +43,9 @@ export default async function NotificationSettingsPage() {
   const choices = notificationChoices(await myConsents());
   return (
     <SignedInShell homeHref={home}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-      <p className="mt-3 max-w-[60ch] text-ink-soft">{t("lead")}</p>
-      <div className="mt-8">
+      <SettingsTabs current="notifications" />
+      <PageHeader title={t("pageTitle")} lead={t("lead")} />
+      <div className="mt-10">
         {choices.length === 0 ? (
           <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
         ) : (

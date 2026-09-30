@@ -2233,5 +2233,10 @@
     "title": "Ukurasa haupatikani",
     "body": "Hakuna ukurasa kwenye anwani hii.",
     "home": "Nenda kwenye ukurasa wa mwanzo"
+  },
+  "settingsNav": {
+    "label": "Mipangilio",
+    "security": "Usalama",
+    "notifications": "Arifa"
   }
 }

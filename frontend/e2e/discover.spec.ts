@@ -21,6 +21,19 @@ async function expectAtMostTwoChips(cards: Locator) {
   for (const card of await cards.all()) expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
 }
 
+/**
+ * Every problem says where it comes from: a non-empty provenance label, in the problem page's words (developer-reported,
+ * AI-drafted and human-reviewed on a day, or a seeded example), never the API's English date ("30 September 2026").
+ */
+async function expectLabelled(cards: Locator) {
+  for (const card of await cards.all()) {
+    const label = card.locator("[data-label]");
+    await expect(label).toHaveCount(1);
+    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Seeded example for the demo)/);
+    await expect(label).not.toHaveText(/(January|February|March|April|June|July|August|September|October|November|December)/);
+  }
+}
+
 test("signed-out visits to Discover and the niches page go to the login page", async ({ page }) => {
   for (const path of ["/dev/discover", "/dev/discover?view=gap", "/dev/discover/niches"]) {
     await page.goto(path);
@@ -80,6 +93,7 @@ test.describe("a new developer", () => {
     expect(await problems.count()).toBeGreaterThan(0);
     expect(await problems.count()).toBeLessThanOrEqual(20);
     await expectAtMostTwoChips(problems);
+    await expectLabelled(problems); // provenance on every card (P12-F re-review MINOR 7)
 
     // The demo's trending problem: its self-explaining badge, a Why chip, its sources and the project beside it.
     const card = page.locator(`article[data-problem="${trend.problemId}"]`);
@@ -104,6 +118,7 @@ test.describe("a new developer", () => {
       await expect(project).not.toContainText(/\d+ (companies|organisations)/);
     }
     await expectAtMostTwoChips(projects);
+    await expectLabelled(projects.locator("[data-solves]"));
     await expect(page.locator(`[data-solves="${trend.problemId}"]`).first()).toBeVisible();
     await checkWidths(page, info);
     await shot(page, info, "p12f-projects");
@@ -139,6 +154,7 @@ test.describe("a new developer", () => {
     const rows = section.locator("article[data-recommendation]");
     expect(await rows.count()).toBeGreaterThan(0);
     expect(await rows.count()).toBeLessThanOrEqual(3);
+    await expectLabelled(rows);
     for (const row of await rows.all()) {
       await expect(row.locator("[data-chip=pursuit]")).toHaveText(PURSUIT_CHIP);
       await expect(row.locator("[data-chip=why]")).toHaveCount(1);

@@ -2233,5 +2233,10 @@
     "title": "Page not found",
     "body": "There is no page at this address.",
     "home": "Go to the home page"
+  },
+  "settingsNav": {
+    "label": "Settings",
+    "security": "Security",
+    "notifications": "Notifications"
   }
 }

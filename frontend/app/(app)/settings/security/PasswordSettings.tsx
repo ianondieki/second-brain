@@ -6,6 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
+import { Section } from "@/components/ui/Section";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -82,17 +83,15 @@ export function PasswordSettings({ email }: { email: string }) {
   }
 
   return (
-    <section
+    <Section
       id="password"
-      aria-labelledby="password-heading"
+      title={t("title")}
+      headingId="password-heading"
+      description={t("lead")}
       hidden={enrolling}
-      className="mt-12 scroll-mt-8 border-t border-line pt-8"
+      className="mt-12 scroll-mt-8"
     >
-      <h2 id="password-heading" className="text-lg text-ink">
-        {t("title")}
-      </h2>
-      <p className="mt-2 text-ink-soft">{t("lead")}</p>
-      <Form onSubmit={save} className="mt-6 flex flex-col gap-5">
+      <Form onSubmit={save} className="flex flex-col gap-5">
         <AccountUsername email={email} />
         {saved ? <Alert tone="ok">{t("saved")}</Alert> : null}
         <ErrorNotice error={error} email={email} alertRef={summaryRef} />
@@ -130,6 +129,6 @@ export function PasswordSettings({ email }: { email: string }) {
           </SubmitButton>
         </div>
       </Form>
-    </section>
+    </Section>
   );
 }
