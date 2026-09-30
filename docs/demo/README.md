@@ -38,7 +38,7 @@ is decided, the clock moves a day), so start from a fresh demo each time:
 | [11-org-tracker-step-1440.jpg](screenshots/11-org-tracker-step-1440.jpg) | Telco A takes its first step on Brian's tracker: the review starts |
 | [12-admin-research-1440.jpg](screenshots/12-admin-research-1440.jpg) | The staff console's Research: a run and its result |
 | [13-admin-moderation-1440.jpg](screenshots/13-admin-moderation-1440.jpg) | The oldest moderation case, ready to decide |
-| [14-mailpit-reminders-1440.jpg](screenshots/14-mailpit-reminders-1440.jpg) | Mailpit a day later: the developer's nudge and the organisation's digest |
+| [14-mailpit-reminders-1440.jpg](screenshots/14-mailpit-reminders-1440.jpg) | Mailpit a day later: the developer's new daily nudge, beside the weekly organisation digest sent on the demo's first day |
 | [15-dev-home-375.jpg](screenshots/15-dev-home-375.jpg) | Amina's Home on a phone |
 | [16-dev-tracker-375.jpg](screenshots/16-dev-tracker-375.jpg) | The SACCO B tracker on a phone |
 | [17-org-inbox-375.jpg](screenshots/17-org-inbox-375.jpg) | Telco A's Inbox on a phone |
@@ -55,8 +55,9 @@ Every login uses the password `bridge-demo-2026` and a code from `make demo-totp
    NDA) and the idea's certificate.
 4. Signed out, anyone can check that certificate on `/verify`: the fingerprint and the independent timestamp, never
    the title or the owner.
-5. "New proposal": the first step of the editor. The writing assistant answers with a labelled suggestion (in the demo,
-   without an AI provider, a labelled "demo fallback"); nothing changes unless she uses it. It is not published.
+5. "New proposal": the first step of the editor. With an AI provider set, the writing assistant offers a suggestion
+   she may use; without one (the default) it says there is no suggestion, labelled "Demo fallback". Nothing changes
+   unless she uses a suggestion. The idea is not published.
 6. Engagements → SACCO B: whose turn it is and what is due, the five stages, the draft agreement and its milestones,
    the signatures, and the History both parties share.
 7. Plan & billing: the Free plan allows three published ideas and Amina has three; "Upgrade to Pro (monthly)" opens
@@ -71,6 +72,7 @@ Every login uses the password `bridge-demo-2026` and a code from `make demo-totp
     card and says so; the seeded example cards are already reviewed). Claims: County Government of C's claim, read
     only.
 12. **Staff moderator** (`moderator@staff.example`). Moderation → the oldest case → approve it.
-13. A day later (`make demo-clock DAYS=1`, then `make demo-reminders`): Mailpit shows Amina's daily nudge and Telco A's
-    progress digest.
+13. A day later (`make demo-clock DAYS=1`, then `make demo-reminders`): Mailpit shows Amina's new daily nudge. The
+    organisation digest is weekly: Telco A's was sent on the demo's first day, and the command reports it as already
+    sent.
 14. The same screens on a phone: Amina's Home, the SACCO B tracker and Telco A's Inbox.
