@@ -8,6 +8,7 @@ AC-DIR-5/b).
   or admin). Resuming a scout, or changing its frequency, checks the plan again.
 - ``POST /api/orgs/{org_id}/scouts/preview``: the owner or admin; the form's matches over the last
   ``limits.first_run_days`` days by the rules alone: no model, no write, nothing queued (pending organisations too).
+  For an ``on_new`` scout, which sends new proposals only, ``note`` says what the items are.
 
 A non-member gets 404 (the organisation's existence is not confirmed), a member without the role 403, another
 organisation's scout 404. Niches (active ones, so an admin-added niche works without a deploy), counties and the budget
@@ -293,7 +294,18 @@ async def preview(body: ScoutForm, org: OrgAdmin, db: Db, settings: SettingsDep)
                 keywords_found=list(s.keywords_found),
             )
         )
-    return PreviewOut(items=items, total=len(chosen), window_days=weights.first_run_days, digest_size=size)
+    return PreviewOut(
+        items=items,
+        total=len(chosen),
+        window_days=weights.first_run_days,
+        digest_size=size,
+        note=on_new_note(weights.first_run_days) if body.frequency is ScoutFrequency.ON_NEW else None,
+    )
+
+
+def on_new_note(days: int) -> str:
+    """Preview's note for an ``on_new`` scout: it never runs over the window Preview shows. [[COPY-REVIEW]]"""
+    return f"Shows what the last {days} days would have matched; this scout sends new proposals only."
 
 
 @router.get(f"{PREFIX}/{{scout_id}}")

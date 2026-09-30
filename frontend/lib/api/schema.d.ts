@@ -3733,13 +3733,19 @@ export interface components {
         };
         /**
          * PreviewOut
-         * @description The first digest this form would send: the last ``window_days`` days, rules only, nothing saved.
+         * @description The first digest this form would send: the last ``window_days`` days, rules only, nothing saved. An ``on_new``
+         *     scout never runs over that window (it sends each new proposal as it is published), so ``note`` says so.
          */
         PreviewOut: {
             /** Digest Size */
             digest_size: number;
             /** Items */
             items: components["schemas"]["PreviewItem"][];
+            /**
+             * Note
+             * @description Shown above the items when they are not what the scout will send (on_new).
+             */
+            note?: string | null;
             /**
              * Total
              * @description Matching proposals in the window; the digest lists the first digest_size.

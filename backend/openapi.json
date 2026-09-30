@@ -4639,7 +4639,7 @@
         "type": "object"
       },
       "PreviewOut": {
-        "description": "The first digest this form would send: the last ``window_days`` days, rules only, nothing saved.",
+        "description": "The first digest this form would send: the last ``window_days`` days, rules only, nothing saved. An ``on_new``\nscout never runs over that window (it sends each new proposal as it is published), so ``note`` says so.",
         "properties": {
           "digest_size": {
             "title": "Digest Size",
@@ -4651,6 +4651,18 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown above the items when they are not what the scout will send (on_new).",
+            "title": "Note"
           },
           "total": {
             "description": "Matching proposals in the window; the digest lists the first digest_size.",

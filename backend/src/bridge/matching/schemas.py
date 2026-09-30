@@ -146,12 +146,16 @@ class PreviewItem(BaseModel):
 
 
 class PreviewOut(BaseModel):
-    """The first digest this form would send: the last ``window_days`` days, rules only, nothing saved."""
+    """The first digest this form would send: the last ``window_days`` days, rules only, nothing saved. An ``on_new``
+    scout never runs over that window (it sends each new proposal as it is published), so ``note`` says so."""
 
     items: list[PreviewItem]
     total: int = Field(description="Matching proposals in the window; the digest lists the first digest_size.")
     window_days: int
     digest_size: int
+    note: str | None = Field(
+        default=None, description="Shown above the items when they are not what the scout will send (on_new)."
+    )
 
 
 class InterestState(BaseModel):

@@ -81,6 +81,7 @@ async def test_filters_and_preview(owner_engine: AsyncEngine, app_engine: AsyncE
         shown = preview.json()
         assert [i["proposal_id"] for i in shown["items"]] == [str(best), str(good)]
         assert (shown["total"], shown["window_days"], shown["digest_size"]) == (2, 30, 10)
+        assert shown["note"] is None  # a weekly scout: the Preview is its first digest
         first = shown["items"][0]
         assert first["score"] == 90  # no tag: 50 keywords + 30 niche + 10 evidence
         assert first["keywords_found"] == ["ussd", "savings"]
@@ -335,3 +336,19 @@ async def test_the_owner_adds_and_removes_digest_recipients(owner_engine: AsyncE
     [message] = email.outbox
     [address] = await rows(owner_engine, "SELECT CAST(email AS text) AS email FROM users WHERE id = :u", u=second)
     assert message.to == address.email
+
+
+async def test_an_on_new_preview_says_the_scout_sends_new_proposals_only(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """P10 security review MINOR i: an on_new scout never runs over the last 30 days, so its Preview says so."""
+    world = await build(owner_engine)
+    await subscribe(owner_engine, world.org.id, "org_growth")
+    await publish(owner_engine, world, "one")
+    async with clients(app_engine, SETTINGS, world.org.owner) as (owner,):
+        preview = await owner.post(path(world.org.id, "/preview"), json=form(world.niche, frequency="on_new"))
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["total"] == 1
+    assert preview.json()["note"] == (
+        "Shows what the last 30 days would have matched; this scout sends new proposals only."
+    )
