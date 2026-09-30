@@ -31,6 +31,7 @@ from tests.integration.matching.scout_world import (
     build,
     deps,
     matches,
+    outbox_of,
     publish,
     rows,
     runs,
@@ -245,8 +246,7 @@ async def test_the_digest_goes_to_verified_reviewer_seats_only(
     outcome = mine(await run_periodic(scan_deps, now=now, force=True), scout)
     assert outcome.digest is not None
     assert outcome.digest.recipients == {org.reviewer: DeliveryStatus.SENT}
-    [message] = email.outbox
-    assert message.to.endswith(f"@{org.domain}")
+    [message] = outbox_of(email, org)
     assert message.subject.startswith("Scout digest: 1 new matching proposal")
     [match] = await matches(owner_engine, scout)
     assert match.digest_sent_at is not None
@@ -264,7 +264,7 @@ async def test_the_digest_goes_to_verified_reviewer_seats_only(
     assert later.matched == 1
     assert later.digest is not None
     assert later.digest.recipients == {}
-    assert email.outbox == []
+    assert outbox_of(email, org) == []
 
 
 async def test_an_email_preference_off_leaves_the_in_app_digest(
@@ -285,7 +285,7 @@ async def test_an_email_preference_off_leaves_the_in_app_digest(
     outcome = mine(await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True), scout)
     assert outcome.digest is not None
     assert outcome.digest.recipients == {world.org.reviewer: None}
-    assert email.outbox == []
+    assert outbox_of(email, world.org) == []
 
 
 async def test_the_free_plan_digest_lists_three_and_marks_all(
@@ -299,7 +299,7 @@ async def test_the_free_plan_digest_lists_three_and_marks_all(
     outcome = mine(await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True), scout)
     assert outcome.digest is not None
     assert (len(outcome.digest.listed), len(outcome.digest.marked)) == (3, 5)
-    [message] = email.outbox
+    [message] = outbox_of(email, world.org)
     assert "2 more matches in your inbox." in message.text
     assert all(m.digest_sent_at is not None for m in await matches(owner_engine, scout))
 
@@ -476,7 +476,7 @@ async def test_a_reviewer_whose_address_is_unverified_gets_no_digest(
     assert outcome.matched == 1
     assert outcome.digest is not None
     assert outcome.digest.recipients == {}
-    assert email.outbox == []
+    assert outbox_of(email, world.org) == []
     [match] = await matches(owner_engine, scout)
     assert match.digest_sent_at is None
 
@@ -495,5 +495,4 @@ async def test_an_e1_organisations_digest_reaches_its_verified_domain_reviewers(
     assert (outcome.status, outcome.matched) == ("completed", 1)
     assert outcome.digest is not None
     assert outcome.digest.recipients == {org.reviewer: DeliveryStatus.SENT}
-    [message] = email.outbox
-    assert message.to.endswith(f"@{org.domain}")
+    assert len(outbox_of(email, org)) == 1

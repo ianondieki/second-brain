@@ -26,6 +26,7 @@ from tests.integration.matching.scout_world import (
     add_person,
     build,
     deps,
+    outbox_of,
     publish,
     rows,
     subscribe,
@@ -94,7 +95,7 @@ async def test_filters_and_preview(owner_engine: AsyncEngine, app_engine: AsyncE
         assert created.json()["exclude_keywords"] == ["crypto"]
     scan_deps, email = deps(app_engine)
     await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True)
-    [digest] = email.outbox
+    [digest] = outbox_of(email, world.org)
     listed = [line for line in digest.text.splitlines() if "/org/inbox/matches/" in line]
     scout = UUID(created.json()["id"])
     ids = {
@@ -268,7 +269,7 @@ async def test_the_model_never_changes_which_proposals_the_digest_lists(
     replies = [ScoutFit(injection_suspected=False, fit=fit, rationale="A fit.") for fit in (0, 100, 100, 100)]
     scan_deps, email = deps(app_engine, llm=FakeLLMClient(replies))
     await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True)
-    [digest] = email.outbox
+    [digest] = outbox_of(email, world.org)
     match_ids = re.findall(r"/org/inbox/matches/([0-9a-f-]{36})\?", digest.text)
     proposal_of = {
         str(m.id): m.proposal_id
@@ -333,7 +334,7 @@ async def test_the_owner_adds_and_removes_digest_recipients(owner_engine: AsyncE
     [later] = [o for o in await run_periodic(scan_deps, now=now + WEEK, force=True) if o.scout_id == scout]
     assert later.digest is not None
     assert later.digest.recipients == {second: DeliveryStatus.SENT}
-    [message] = email.outbox
+    [message] = outbox_of(email, org)
     [address] = await rows(owner_engine, "SELECT CAST(email AS text) AS email FROM users WHERE id = :u", u=second)
     assert message.to == address.email
 

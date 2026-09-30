@@ -25,7 +25,7 @@ from bridge.ids import uuid7
 from bridge.llm.client import LLMClient
 from bridge.matching.config import Weights, get_weights
 from bridge.matching.scan import ScanDeps
-from bridge.notifications.email import FakeEmailProvider
+from bridge.notifications.email import EmailMessage, FakeEmailProvider
 from bridge.seed.reference import load_reference, seed_regions
 from tests.integration import world as w
 
@@ -342,6 +342,12 @@ def deps(
         ),
         email,
     )
+
+
+def outbox_of(email: FakeEmailProvider, org: Org) -> list[EmailMessage]:
+    """The messages to ``org``'s verified domain. ``run_periodic`` runs every due scout in the database, other tests'
+    scouts included (a later week makes them due again), so a test reads only its own organisation's mail."""
+    return [m for m in email.outbox if m.to.endswith(f"@{org.domain}")]
 
 
 async def rows(engine: AsyncEngine, sql: str, **params: object) -> list[Any]:

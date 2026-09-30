@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.matching.scan import clock_now, run_periodic
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import Tracker, clients, db_today, deals_on, run_notifications
-from tests.integration.matching.scout_world import add_scout, build, deps, publish, rows
+from tests.integration.matching.scout_world import add_scout, build, deps, outbox_of, publish, rows
 
 SETTINGS = deals_on()
 
@@ -25,8 +25,7 @@ async def test_stage_0_from_a_real_digest(owner_engine: AsyncEngine, app_engine:
     await add_scout(owner_engine, world.org, [world.niche], recipients=[world.org.reviewer])
     scan_deps, email = deps(app_engine)
     await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True)
-    [digest] = email.outbox
-    assert digest.to.endswith(f"@{world.org.domain}")
+    [digest] = outbox_of(email, world.org)
     [link] = re.findall(r"/org/inbox/matches/([0-9a-f-]{36})\?org=" + str(world.org.id), digest.text)
     match = UUID(link)
     today = await db_today(owner_engine)
