@@ -17,8 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** The second factor; `?next=` (from /login) is the page to return to afterwards (lib/return-path.ts). */
 export default async function MfaPage({ searchParams }: PageProps<"/auth/mfa">) {
-  await requirePendingMfa();
   const next = returnPathParam((await searchParams).next);
+  await requirePendingMfa(next);
   const t = await getTranslations("mfa");
   return (
     // No phone and no recovery codes: "Sign out" is the way out of a half-finished sign-in.

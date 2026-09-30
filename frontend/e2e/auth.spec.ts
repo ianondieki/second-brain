@@ -357,6 +357,7 @@ test("the landing and login pages send a signed-in person home, or to a safe ret
   };
   expect(await target("/")).toBe("/dev");
   expect(await target("/login")).toBe("/dev");
+  expect(await target("/signup")).toBe("/dev");
   expect(await target("/login?next=%2Fsettings%2Fnotifications")).toBe("/settings/notifications");
   expect(await target("/login?next=%2Fdev%2Fdiscover%3Fview%3Dgap")).toBe("/dev/discover?view=gap");
   for (const attempt of [

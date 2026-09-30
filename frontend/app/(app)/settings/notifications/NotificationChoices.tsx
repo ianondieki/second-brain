@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -95,9 +95,14 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
       setSaved(!changedMeanwhile);
     } else {
       setRefusal(outcome.refusal);
-      requestAnimationFrame(() => alert.current?.focus());
     }
   }
+
+  // The refusal takes focus once it is in the page: after React has rendered it, not on the next frame (which could
+  // come before the render, leaving focus on the button; reviewer MINOR 5, P16-C1 fix round 1).
+  useEffect(() => {
+    if (refusal) alert.current?.focus();
+  }, [refusal]);
 
   const channels = (Object.keys(CHANNELS) as Channel[])
     .map((channel) => ({
