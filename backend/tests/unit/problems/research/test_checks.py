@@ -183,6 +183,7 @@ def test_p11_major_1_a_number_carries_its_scale(statement: str, excerpt_id: str)
         ("Satellite providers pay a licence of at least Sh15m.", "ke-tel-003"),  # the quote says Sh15 million
         ("Satellite providers pay up to 0.4 per cent of turnover.", "ke-tel-003"),  # quote: 0.4 percent
         ("Fraud cost Sh11bn.", "ke-hlt-001"),
+        ("Fraud cost Sh11 billions.", "ke-hlt-001"),  # a plural is the same scale
         ("Share slimmed to 89% from 91pc.", "ke-tel-001"),
     ],
 )
@@ -212,6 +213,7 @@ AGRI = Draft(
         "Farmers lost Sh90 [bn].",
         "Farmers lost Sh90 \u2014 million.",
         "Fertiliser costs Sh2,000 crore.",  # the quote's 2,000 is followed by "per": bare
+        "Fertiliser costs Sh2,000crore.",  # an unknown glued suffix, where the quote's number is bare
         "Harvests fell 50 per-cent.",  # the quote's 50 is "50 kilogram"
         "Farmers lost Sh50 billions.",
         "Imports reach 25 billions.",  # the quote's 25 is 25 million
@@ -377,7 +379,11 @@ def test_d45_a_hidden_name_is_still_found(hidden: str) -> None:
     assert verdict.reason == ("control_character" if invisible else "named_org_without_official")
 
 
-@pytest.mark.parametrize("bidi", ["\u202e", "\u202d", "\u2066", "\u2067", "\u2068", "\u2069", "\u200e", "\ufeff"])
+@pytest.mark.parametrize(
+    "bidi",
+    # bidi controls, the BOM, and format characters that are not default-ignorable (U+0600, U+FFF9)
+    ["\u202e", "\u202d", "\u2066", "\u2067", "\u2068", "\u2069", "\u200e", "\ufeff", "\u0600", "\ufff9"],
+)
 def test_a_bidi_or_format_character_in_any_field_is_refused(bidi: str) -> None:
     """A right-to-left override in a title would be stored and served reordered: refused, never repaired."""
     for field in ("title", "statement", "affected_group"):
