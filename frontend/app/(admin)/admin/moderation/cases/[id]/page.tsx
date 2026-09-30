@@ -108,8 +108,13 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           {caseTitle(item) ?? t(`untitled.${kind}`)}
         </h1>
         <ul className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
-          {seen ? (
-            <li>
+          {/* Once decided, the outcome: "Public while checked" or "Hidden until decided" would no longer be true. */}
+          {result ? (
+            <li data-header-tag="outcome">
+              <Chip kind={result === "approved" ? "completed" : "ended"}>{t(`outcome.${result}`)}</Chip>
+            </li>
+          ) : seen ? (
+            <li data-header-tag="visibility">
               <Chip kind={VISIBILITY_CHIP[seen]}>{t(`visibility.${seen}`)}</Chip>
             </li>
           ) : null}

@@ -148,6 +148,12 @@ describe("the case page", () => {
     expect(container.querySelector('[data-decided="approved"]')!.textContent).toContain(
       "Approved by Staff Moderator (demo) on",
     );
+    // The header says what is true now: the outcome, not the tag of a case still being checked.
+    const header = container.querySelector("header")!;
+    expect(header.querySelector('[data-header-tag="outcome"]')!.textContent).toBe("Approved");
+    expect(header.querySelector('[data-header-tag="visibility"]')).toBeNull();
+    expect(header.textContent).not.toContain("Public while checked");
+    expect(header.textContent).not.toContain("Hidden until decided");
     expect(screen.queryByRole("button")).toBeNull();
   });
 

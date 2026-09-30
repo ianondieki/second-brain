@@ -124,6 +124,9 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     const status = page.getByRole("status").filter({ hasText: done });
     await expect(status).toBeVisible(SERVER_STEP);
     await expect(status).toBeFocused();
+    // The refreshed header says what is true now.
+    await expect(page.locator('[data-header-tag="outcome"]')).toHaveText("Approved", SERVER_STEP);
+    await expect(page.locator('[data-header-tag="visibility"]')).toHaveCount(0);
     await checkScreen(page);
 
     if (desktop) expect(await teaserStatus(developer.request, p6)).toBe(200); // published
