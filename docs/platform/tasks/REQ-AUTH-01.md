@@ -266,3 +266,76 @@ Screenshots (`E2E_SHOTS_DIR`, 375 and 1440 px): `p17f-cancelled`, `p17f-codes-no
    by unseen ones. Add an idempotency key or a generation precondition; meanwhile a residual in THREAT_MODEL §1 row C.
 4. Copy: `security.statusUnknown` still says "to log in".
 5. Optional THREAT_MODEL precision (row C and the I row) as worded in the review.
+
+## Random developer handle (2026-09-30, `fix/REQ-AUTH-01-random-handle`, from integration `84e0af0`)
+
+Agent: impl-backend. Reviews: reviewer, security-reviewer (`auth/`, `engagements/`). Source: the P10-F open items 1
+and 2 (`tasks/REQ-SCOUT-02.md` on `feat/REQ-SCOUT-02-fe`) and the orchestrator's EM3 own-member note.
+
+**The problem.** `auth/service.py` `_handle_from` slugged the display name ("Achieng Otieno" →
+`achieng-otieno-2b2356`), and `proposal_versions_guard` copies `developer_profiles.handle` into every registered
+version's `owner_handle`. Every surface where the developer is a pseudonym until INTEREST_CONFIRMED (docs/spec/06 6.1)
+therefore named them: teasers and Browse, scout matches and EM3, the stage-0 tracker and History, the org digest, the
+Tier-2 owner attribution. Present since M1.
+
+**The fix.** `auth/handles.py` `new_handle()` (no argument, so nothing personal can reach it): `dev-` and eight
+lowercase Crockford base32 characters (no i, l, o, u; about 40 bits) from `secrets.SystemRandom`. `create_account`
+(signup, OAuth and the demo seed all go through it) adds the profile in a savepoint and draws again when
+`uq_developer_profiles_handle` (citext, so case-insensitive) refuses it, at most `HANDLE_ATTEMPTS` (5) times, then
+raises `HandleUnavailable` (the signup fails closed; nothing is committed). Any other integrity error is re-raised.
+The schema has no CHECK on the handle's format (citext, NOT NULL, UNIQUE only); the new format fits it.
+
+**Choose or edit?** No. docs/spec/03 does not define the handle; docs/spec/06 6.1 only says it is shown until
+INTEREST_CONFIRMED. No route takes a handle and `bridge_app` holds no UPDATE on `developer_profiles.handle` (revision
+0001), so there is no chosen-handle path to validate. THREAT_MODEL §3's "a developer still chooses their own handle
+once" was inaccurate and is corrected.
+
+**Existing data (no revision written; db-migrations only).** Registered `proposal_versions.owner_handle` values are
+signed and append-only and stay as they are. To give pre-fix profiles a random handle so their future versions use it,
+a data migration would need, for every `developer_profiles` row whose handle does not match
+`^dev-[0-9abcdefghjkmnpqrstvwxyz]{8}$`: `UPDATE developer_profiles SET handle = <fresh random handle>, updated_at =
+now()`, run as the owner role (bridge_app has no UPDATE on `handle`; the column grant stays as it is), unique per row
+(generate in a loop or with `ON CONFLICT` retry; the random value must come from `gen_random_bytes` (pgcrypto) or
+the migration's Python, never from the name). No trigger on `developer_profiles` guards `handle`
+(`proposal_versions_guard` only reads it at registration, so drafts registered after the UPDATE get the new handle;
+registered versions keep the old one: THREAT_MODEL §5 residual). Downgrade: none (the old handles are not kept). In
+the prototype all such rows are demo or test data, and `make demo-reset` reseeds through `create_account`, so a reset
+gives random handles without a migration.
+
+**Share notice link (P10-F open item 2).** `engagements/interest.py` `tell_organisation` linked the organisation's
+in-app notice to `/engagements/{id}`, not a web route; it is now `/org/engagements/{id}` (`SHARED_LINK`).
+
+**EM3 own-member rule (REQ-SCOUT-02).** `matching/digest.py` `_UNDIGESTED` now leaves out a match whose developer is
+an active member of the scout's organisation (the rule of `matches._MATCHES` and the interest route on the scout
+follow-up branch); the match stays undigested and is listed once the author leaves.
+
+**Tests.** `tests/unit/auth/test_handles.py` (format, alphabet, randomness, no input, the CSPRNG default, the seeded
+replay, the token helper `tests/name_tokens.py`); `tests/integration/test_auth_handles.py` (42 names: 12 as written,
+one-word, accents, Gĩkũyũ tildes, Greek and Chinese, and 30 drawn from syllables; no piece of the name or the email's
+local part; the handles are exactly the seeded source's sequence; the API signup with the real source; a forced
+collision, in capitals too; fail closed after 5 draws; another integrity error raised);
+`tests/integration/engagements/test_handle_pseudonym.py` (a developer created through `create_account` as "Achieng
+Otieno": the teaser, Browse, the scout match, EM3, the Express interest answer, the stage-0 detail, the org's list and
+History carry the handle and no piece of her name; her own view names her);
+`tests/integration/engagements/test_share_tier2.py::test_the_share_notice_opens_the_organisations_tracker`;
+`tests/integration/matching/test_digest_own_member.py`. `frontend/e2e/tracker.spec.ts`: the org row shows `From dev-`
+plus 8 characters and neither "achieng" nor "otieno" in any case (not run here: no compose stack; eslint and tsc pass).
+
+**Mutation proofs** (each on committed code, the file restored with `git checkout` and checked clean):
+
+| Proof | Guard broken | Tests (red) |
+|---|---|---|
+| H1 | the old `_handle_from(display_name)` back in `create_account` | `test_auth_handles.py` 4 of 5 (all but the primary-key one), `test_handle_pseudonym.py` |
+| H2 | one draw only (no retry) | `test_a_taken_handle_is_drawn_again`, `test_signup_fails_closed_when_every_handle_drawn_is_taken` |
+| H3 | every integrity error taken for a clash | `test_another_integrity_error_is_not_taken_for_a_clash` |
+| S1 | the share notice back to `/engagements/{id}` | `test_the_share_notice_opens_the_organisations_tracker`, `test_the_share_notice_skips_former_members_and_never_raises` |
+| D1 | `_UNDIGESTED` without the own-member clause | `test_digest_own_member.py` |
+
+**Open.** (1) The other in-app tracker notices and two emails link to `/engagements/{id}` too: `engagements/notify.py`
+`compose` (N17 and every tracker notice, both parties), `notifications/em2.py` and `n17.py` (`tracker_url`, both to
+the developer, so `/dev/engagements/{id}`). Not changed here (outside the share notice); the unit tests pin them.
+(2) `feat/REQ-SCOUT-02-fe` `e2e/scout.spec.ts` checks `not.toContainText(dev.name)` (case-sensitive "Achieng Otieno",
+lines 129, 154, 171, and `em3.text` at 138), which the old handle passed; add `/achieng|otieno/i` there, and drop the
+`_handle_from` comment in `e2e/support/scout-scene.ts:76`. (3) `frontend/app/(app)/org/org-screens.test.tsx:171` uses
+an old-shape handle as fixture data (asserts nothing on it). (4) The data migration above, if pre-fix profiles must
+keep working with a real user.
