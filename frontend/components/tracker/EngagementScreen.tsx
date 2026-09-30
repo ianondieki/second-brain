@@ -30,6 +30,7 @@ import {
   withQuery,
 } from "./model";
 import { Stepper } from "./Stepper";
+import { Tier2Section } from "./Tier2Section";
 import { DueText } from "./When";
 import { WhoseTurn } from "./WhoseTurn";
 
@@ -89,7 +90,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]">
         {detail.my_party === "developer"
           ? t("withOrg", { org: detail.org_name })
-          : t("fromDeveloper", { name: detail.developer_name })}
+          : // Until INTEREST_CONFIRMED the organisation sees the pseudonymous handle, never a name (docs/spec/06 6.1).
+            t(detail.developer_named ? "fromDeveloper" : "fromHandle", { name: detail.developer_name })}
       </p>
 
       <div className="mt-6 max-w-3xl">
@@ -121,6 +123,15 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             myUserId={me.user.id}
             recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
           />
+      </div>
+
+      <div className="mt-8 max-w-3xl empty:hidden">
+        <Tier2Section
+          detail={detail}
+          enrolled={me.mfa.enrolled}
+          primary={!items.some((item) => item.primary)}
+          query={query}
+        />
       </div>
 
       <nav aria-label={t("tabs.label")} className="mt-10 max-w-3xl border-b border-line">
