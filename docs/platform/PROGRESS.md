@@ -370,13 +370,21 @@ stub, Playwright shim at `/home/user/pw-shim`, `npm ci`); the compose CA overrid
 `gen_ccr.py`) must escape `$` as `$$` in `dockerfile_inline`, or compose interpolates `$WITH_DEV_TOOLS` to empty and the
 demo seed is left out of the image. CodeQL on `37c89c6` (run 36682487514): exactly the eight D-42 findings, nothing
 new. Stage B1 done: `docs/demo/ui-inventory.md` (42 routes, 10 email kinds, every one-off pattern) and the design
-plan `docs/platform/design/p16-design-system.md` (`83646d8`). **In flight:** B2 design-system pass
-(`feat/P16-design-system`, card `tasks/P16-B.md`, impl-frontend). **Next:** B2 reviews and merge, then B3 as two
-cards run in parallel (C1 developer/public/settings on port 3101, C2 organisation/tracker/admin on port 3102; drafts in
-the scratchpad `cards/`, carried MINORs from `P16.md`, `REQ-ADM-01.md`, `REQ-TREND-01.md` assigned there), then stages
-C–F in order.
+plan `docs/platform/design/p16-design-system.md` (`83646d8`). **Merged in session 3:** B2 design system `238b884` (reviewer PASS round 3, ux-reviewer PASS round 2; route skeletons
+were built, measured (+0.35 s LCP from React's reveal hold) and replaced by a navigation pending hint, `LinkPending`);
+C2 organisation portal, tracker and staff console `02a1953` (reviewer and ux-reviewer PASS round 2). CI on B2 found two
+test races, fixed at the cause (`settled()` waits for running transitions before axe; the scout test reads its own
+digest item). The demo was reset at `beec285` (the long-lived demo database had 431 open moderation cases, over the
+API's 200-row list, so two moderation e2e tests failed there only). **In flight:** C1 (developer portal, public pages,
+billing, settings; `feat/P16-polish-dev`, card `tasks/P16-C1.md`) in fix round 1: it merges integration (conflicts in
+`components/ui/RowList.tsx` and `components/AccountMenu.tsx`, mapped on the C2 card's review), fixes an unpublished
+problem's `published_at` in `_ref()`, the three C2 specs expecting a bare `/login` (now `/login?next=`), pending hints
+on buttons/section/empty-state links, org-titled engagement rows, one date format on `/verify`. **Next:** C1 round-2
+reviews and merge; then Stage C (demo reset, `make demo-stats` peak, the recorded walkthrough, README "Run the demo",
+the M2 report draft), D, E, F in order. **Stage E backlog** (found so far): the moderation case page finds a case only
+in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test G5 (REQ-TREND-01 re-review MINOR 1).
 
-**Open branches** (2026-09-30, session 3): `feat/P16-design-system`. Integration head `83646d8`.
+**Open branches** (2026-09-30, session 3): `feat/P16-polish-dev`. Integration head `beec285`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
