@@ -1,6 +1,9 @@
 import { getMessages, getTranslations } from "next-intl/server";
 
 import type { StringTree } from "@/components/ClientStrings";
+import type en from "@/locales/en.json";
+
+type Messages = typeof en;
 
 // Messages for client components on the signed-in pages, formatted on the server (REQ-UX-05, docs/spec/07 item 5).
 // next-intl's client runtime is about 7 KB of gzipped JS on every route that uses it; these pages take plain strings
@@ -20,6 +23,7 @@ export const PLACEHOLDER_NAMES = [
   "org",
   "plan",
   "price",
+  "product",
   "step",
   "title",
   "total",
@@ -47,6 +51,11 @@ export const CLIENT_STRING_NAMESPACES = [
   "tier2Share",
   "adminResearch",
   "likedNiches",
+  "security",
+  "password",
+  "fields",
+  "validation",
+  "errors",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 
@@ -73,4 +82,17 @@ export async function clientStrings(namespaces: readonly ClientNamespace[]): Pro
     out[namespace] = walk(messages[namespace], "");
   }
   return out;
+}
+
+/**
+ * Chosen messages of a namespace that is not sent whole (its other messages carry rich-text tags, which are formatted
+ * only where they are shown): `pickedStrings("signup", ["passwordHint"])` for the security page's password form.
+ * Plain messages without arguments only.
+ */
+export async function pickedStrings<N extends keyof Messages & string>(
+  namespace: N,
+  keys: readonly (keyof Messages[N] & string)[],
+): Promise<Record<N, StringTree>> {
+  const t = (await getTranslations(namespace as never)) as unknown as Translate;
+  return { [namespace]: Object.fromEntries(keys.map((key) => [key, t(key)])) } as Record<N, StringTree>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
@@ -44,8 +44,8 @@ export interface NewRecoveryCodesProps {
  * again with the password already typed. The ten codes are shown once, as at setup.
  */
 export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: NewRecoveryCodesProps) {
-  const t = useTranslations("security");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const te = useStrings("errors");
   const { hasPassword, markPasswordSet } = usePasswordState();
 
   const [stage, setStage] = useState<Stage>({ name: "confirm" });

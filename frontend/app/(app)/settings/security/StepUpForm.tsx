@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -36,9 +36,9 @@ export function StepUpForm({
   variant = "secondary",
   describedBy,
 }: StepUpFormProps) {
-  const t = useTranslations("security");
-  const tv = useTranslations("validation");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const tv = useStrings("validation");
+  const te = useStrings("errors");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | undefined>();
   const [error, setError] = useState<ErrorKey | null>(null);

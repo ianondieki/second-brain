@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { Suspense, useRef, useState, type FormEvent } from "react";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
@@ -55,8 +55,8 @@ export interface SecuritySettingsProps {
 }
 
 export function SecuritySettings({ enrolled, required, homeHref, email, productName }: SecuritySettingsProps) {
-  const t = useTranslations("security");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const te = useStrings("errors");
 
   const [phase, setPhase] = useState<Phase>(enrolled ? { name: "on" } : { name: "intro" });
   const [notice, setNotice] = useState<Notice>(null);

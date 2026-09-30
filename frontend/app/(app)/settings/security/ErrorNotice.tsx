@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useStrings } from "@/components/ClientStrings";
 import { Suspense, type Ref } from "react";
 
 import { Alert } from "@/components/ui/Alert";
@@ -23,8 +23,8 @@ export function ErrorNotice({
   email?: string;
   alertRef?: Ref<HTMLDivElement>;
 }) {
-  const t = useTranslations("security");
-  const te = useTranslations("errors");
+  const t = useStrings("security");
+  const te = useStrings("errors");
   if (!error) return null;
   return (
     <>

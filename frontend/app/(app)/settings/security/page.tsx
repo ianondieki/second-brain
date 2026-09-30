@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
-import { IntlScope } from "@/components/IntlScope";
+import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
+import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
 
 import { SettingsTabs } from "../SettingsTabs";
 import { PasswordSettings } from "./PasswordSettings";
@@ -19,9 +20,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Sign-in security: two-step sign-in first (the page's one primary action), then the password. The page is within a
- * few hundred bytes of the 150 KB JS budget (docs/spec/07 item 5): its client parts write out the Section and Badge
- * markup instead of importing them (as ErrorScreen does for its button); the server parts compose the system.
+ * Sign-in security: two-step sign-in first (the page's one primary action), then the password. The page is close to
+ * the 150 KB JS budget (docs/spec/07 item 5; 146,820 bytes in P16-D): its client parts read server-formatted strings
+ * instead of next-intl's client runtime, and write out the Section and Badge markup instead of importing them (as
+ * ErrorScreen does for its button); the server parts compose the system.
  */
 export default async function SecurityPage() {
   const me = await requireMe();
@@ -32,7 +34,13 @@ export default async function SecurityPage() {
     <SignedInShell homeHref={home}>
       <SettingsTabs current="security" />
       <PageHeader title={t("pageTitle")} />
-      <IntlScope namespaces={["security", "password", "signup", "fields", "validation", "errors"]}>
+      {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
+      <ClientStrings
+        strings={{
+          ...(await clientStrings(["security", "password", "fields", "validation", "errors"])),
+          ...(await pickedStrings("signup", ["passwordHint"])),
+        }}
+      >
         <PasswordStateProvider initial={me.user.password_set}>
           <Section title={t("title")} headingId="two-step-heading" description={t("lead")} className="mt-10">
             <SecuritySettings
@@ -45,7 +53,7 @@ export default async function SecurityPage() {
           </Section>
           <PasswordSettings email={me.user.email} />
         </PasswordStateProvider>
-      </IntlScope>
+      </ClientStrings>
     </SignedInShell>
   );
 }
