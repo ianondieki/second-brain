@@ -14,6 +14,7 @@ import {
 } from "./support/scout-scene";
 import { checkScreen, expectEmptyState, settled } from "./support/screen";
 import { tag } from "./support/tracker-scene";
+import { loginReturningTo } from "./support/login";
 
 // REQ-SCOUT-02 frontend (P10-F), the M2 walkthrough's step 1 (docs/platform/prototype-m2-plan.md §3), with
 // REQ-ENG-04's stage 0: an organisation sets up its Scout Agent (a 402 for a schedule its plan lacks links to the
@@ -48,7 +49,7 @@ test("signed-out visits to the scout screens go to the login page", async ({ pag
   const id = "0199b000-0000-7000-8000-00000000e001";
   for (const path of ["/org/inbox?tab=matches", `/org/inbox/matches/${id}`, "/org/inbox/scouts/new", `/org/inbox/scouts/${id}`]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path)); // back there after signing in (P16-C1)
   }
 });
 

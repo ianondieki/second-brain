@@ -5,6 +5,7 @@ import { expect, test, type Browser, type Page, type TestInfo } from "@playwrigh
 
 import { checkScreen } from "./support/screen";
 import { OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import { loginReturningTo } from "./support/login";
 
 // REQ-ENG-03 (AC-TRACK-3, AC-TRACK-4 prototype part), REQ-UX-01: the engagement tracker walked by both parties in
 // their own browsers against the compose stack, SUBMITTED → CLOSED, plus a decline and a withdrawal; the same
@@ -81,7 +82,7 @@ async function scene(page: Page, browser: Browser, info: TestInfo): Promise<Scen
 test("signed-out visits to the tracker screens go to the login page", async ({ page }) => {
   for (const path of ["/dev/engagements", "/org/engagements", "/dev/engagements/0199b000-0000-7000-8000-00000000e001"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path)); // back there after signing in (P16-C1)
   }
 });
 

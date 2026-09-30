@@ -10,6 +10,7 @@ import {
   verifyOrg,
   type OrgMember,
 } from "./support/org-scene";
+import { loginReturningTo } from "./support/login";
 
 // REQ-PROP-03 (Inbox), REQ-REPO-01, REQ-PROV-03 and REQ-SEC-01 (the Evaluation NDA and the marked Tier-2 page) against
 // the compose stack, in both projects (360 px and desktop). The API must run with FEATURE_TIER2_ENABLED=true.
@@ -19,7 +20,7 @@ const SERVER_STEP = { timeout: 20_000 };
 test("signed-out visits to the organisation screens go to the login page", async ({ page }) => {
   for (const path of ["/org/inbox", "/org/inbox/01a0ee62-f783-733e-9321-9f34ec389ac2"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path)); // back there after signing in (P16-C1)
   }
 });
 
