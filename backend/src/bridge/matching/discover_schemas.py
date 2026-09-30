@@ -77,13 +77,29 @@ class FeatureOut(BaseModel):
     applies: bool
 
 
+class FeaturesOut(BaseModel):
+    """The feature vector f1-f10 behind a score (docs/spec/06 6.7)."""
+
+    semantic_fit: FeatureOut = Field(description="f1: keywords shared with your profile and proposals (consent only)")
+    niche_match: FeatureOut = Field(description="f2: liked 1, adjacent 0.5")
+    region_match: FeatureOut = Field(description="f3: your county 1, nationwide 0.5")
+    skill_coverage: FeatureOut = Field(description="f4: no data in the prototype; never applies")
+    trend: FeatureOut = Field(description="f5: raw is the card's trend z-score")
+    evidence_confidence: FeatureOut = Field(description="f6: raw is the card's confidence (1.0 for a Brief)")
+    market_pull: FeatureOut = Field(description="f7: raw is scouting organisations + Briefs")
+    crowding: FeatureOut = Field(description="f8: raw is the published proposals; negative weight")
+    track_record: FeatureOut = Field(description="f9: (done + 1) / (started + 2) in the niche (consent only)")
+    freshness: FeatureOut = Field(description="f10: raw is the age in days")
+
+
 PursuitDecision = Literal["pursue", "consider", "not_now"]
+PursuitLabel = Literal["Pursue", "Consider", "Not now"]
 FitLabel = Literal["Strong fit", "Good fit", "Stretch"]
 
 
 class PursuitOut(BaseModel):
     decision: PursuitDecision
-    label: str
+    label: PursuitLabel
     reasons: list[str] = Field(min_length=1)
 
 
@@ -97,7 +113,7 @@ class Recommendation(BaseModel):
     why: list[str] = Field(min_length=1)
     why_not: str | None
     trend: TrendOut
-    features: dict[str, FeatureOut] = Field(description="The feature vector f1-f10 behind the score")
+    features: FeaturesOut
 
 
 class RecommendationsOut(BaseModel):

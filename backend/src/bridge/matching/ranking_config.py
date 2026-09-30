@@ -192,8 +192,8 @@ def _num(value: Any, where: str, low: float, high: float) -> float:
 def _decay(data: Any, where: str, kinds: frozenset[str]) -> Decay:
     section = _section(data, where, {"half_life_days", "weights"})
     weights = section["weights"]
-    if not isinstance(weights, Mapping) or not weights or not set(weights) <= kinds:
-        raise RankingConfigError(f"ranking weights: {where}.weights must name only {sorted(kinds)}")
+    if not isinstance(weights, Mapping) or set(weights) != kinds:
+        raise RankingConfigError(f"ranking weights: {where}.weights must name exactly {sorted(kinds)}")
     return Decay(
         half_life_days=_num(section["half_life_days"], f"{where}.half_life_days", 1, 365),
         weights={str(k): _num(v, f"{where}.weights.{k}", 0, 100) for k, v in weights.items()},
@@ -216,6 +216,8 @@ def _trending(data: Any) -> TrendConfig:
     values: dict[str, Any] = {k: _int(t[k], f"trending.{k}", *bounds) for k, bounds in ints.items()}
     if values["baseline_days"] > values["window_days"]:
         raise RankingConfigError("ranking weights: trending.baseline_days must fit inside window_days")
+    if values["baseline_step_days"] > values["baseline_days"]:
+        raise RankingConfigError("ranking weights: trending.baseline_step_days must not exceed baseline_days")
     return TrendConfig(
         sd_floor=_num(t["sd_floor"], "trending.sd_floor", 0.01, 100),
         z_trending=_num(t["z_trending"], "trending.z_trending", 0, 10),
@@ -292,7 +294,7 @@ def _ranker(data: Any) -> RankerConfig:
 
 
 def parse_ranking(data: Any) -> RankingConfig:
-    if not isinstance(data, Mapping) or data.get("version") != 1:
+    if not isinstance(data, Mapping) or type(data.get("version")) is not int or data.get("version") != 1:
         raise RankingConfigError("ranking weights: version 1 expected")
     top = _section(data, "the file", {"version", "trending", "discover", "ranker", "liked_niches"})
     liked = _section(top["liked_niches"], "liked_niches", {"min", "max"})

@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.errors import not_found
 from bridge.matching.discover import niches, problem_out, trend_out
-from bridge.matching.discover_schemas import FeatureOut, PursuitOut, Recommendation, RecommendationsOut
+from bridge.matching.discover_schemas import FeatureOut, FeaturesOut, PursuitOut, Recommendation, RecommendationsOut
 from bridge.matching.ranker import DECISION_LABELS, RECOMMENDABLE, Card, Developer, keywords, rank
 from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import board, load
@@ -58,13 +58,15 @@ async def developer(db: AsyncSession, user_id: UUID, cfg: RankingConfig) -> Deve
         return base
     r = cfg.ranker
     texts = [profile.headline or "", profile.bio or ""]
+    proposal_texts = []
     for row in (await db.execute(_RECENT, {"user": user_id, "n": r.recent_proposals})).all():
-        texts += [row.title or "", row.problem_statement or "", row.summary or ""]
+        proposal_texts += [row.title or "", row.problem_statement or "", row.summary or ""]
     started = {row.niche_id: int(row.n) for row in (await db.execute(_STARTED, {"user": user_id})).all()}
     done = {row.niche_id: int(row.n) for row in (await db.execute(_DONE, {"user": user_id})).all()}
     track = {niche: (count, min(done.get(niche, 0), count)) for niche, count in started.items()}
-    words = frozenset(keywords(" ".join(texts), r.min_keyword_length))
-    return Developer(liked_ids, parents, profile.county_code, True, words, track)
+    from_proposals = frozenset(keywords(" ".join(proposal_texts), r.min_keyword_length))
+    words = frozenset(keywords(" ".join(texts), r.min_keyword_length)) | from_proposals
+    return Developer(liked_ids, parents, profile.county_code, True, words, track, from_proposals)
 
 
 async def recommendations(db: AsyncSession, cfg: RankingConfig, user_id: UUID) -> RecommendationsOut:
@@ -88,10 +90,12 @@ async def recommendations(db: AsyncSession, cfg: RankingConfig, user_id: UUID) -
             why=list(r.why),
             why_not=r.why_not,
             trend=trend_out(r.card.fact, r.card.signals, r.card.trend, tree),
-            features={
-                name: FeatureOut(raw=f.raw, value=f.value, weight=f.weight, applies=f.applies)
-                for name, f in r.features.items()
-            },
+            features=FeaturesOut(
+                **{
+                    name: FeatureOut(raw=f.raw, value=f.value, weight=f.weight, applies=f.applies)
+                    for name, f in r.features.items()
+                }
+            ),
         )
         for position, r in enumerate(rows, start=1)
     ]

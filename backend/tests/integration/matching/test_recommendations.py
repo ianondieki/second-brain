@@ -16,8 +16,12 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
+from bridge.db import bind_tenant, create_session_factory
+from bridge.matching.ranker import Developer
+from bridge.matching.ranking_config import get_ranking
+from bridge.matching.recommendations import developer as developer_context
 from tests.integration.engagements.api_world import clients
-from tests.integration.matching.trend_world import TrendWorld, brief, build, developer_problem, research_card
+from tests.integration.matching.trend_world import TrendWorld, brief, build, developer_problem, proposal, research_card
 from tests.integration.proposals.helpers import Developers, rows, user_of
 
 FEATURES = {
@@ -139,3 +143,33 @@ async def test_recommendations_need_a_developer_profile(app_engine: AsyncEngine,
     async with clients(app_engine, get_settings(), world.author) as (user,):
         assert (await user.get("/api/me/recommendations")).status_code == 404
         assert (await user.get("/api/me/niches")).status_code == 404
+
+
+async def test_without_the_consent_no_history_is_read(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers
+) -> None:
+    """AC-PERS-3: the developer context holds no keywords and no track record unless the consent is on (the history
+    is not read at all, not merely left unused by the ranker)."""
+    world = await build(owner_engine)
+    developer = await developers()
+    me = user_of(developer)
+    await onboard(developer, world)
+    assert (await developer.patch("/api/me/profile", json={"headline": "Grain drought tools"})).status_code == 200
+    problem = await developer_problem(owner_engine, world.author, world.niche)
+    await proposal(owner_engine, world.niche, problem, owner=me, age_days=2, title="Drought planning for grain")
+    factory = create_session_factory(app_engine)
+
+    async def context() -> Developer:
+        async with factory() as db:
+            await bind_tenant(db, user_id=me)
+            return await developer_context(db, me, get_ranking())
+
+    off = await context()
+    assert (off.personalised, off.keywords, dict(off.track)) == (False, frozenset(), {})
+    version = (await developer.get("/api/consents")).json()["version"]
+    decision = {"profiling": {"granted": True, "version": version}}
+    assert (await developer.put("/api/me/consents", json=decision)).status_code == 200
+    on = await context()
+    assert on.personalised
+    assert {"grain", "drought", "planning"} <= on.keywords
+    assert dict(on.track) == {world.niche: (1, 0)}

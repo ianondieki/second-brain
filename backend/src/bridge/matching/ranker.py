@@ -55,6 +55,7 @@ class Developer:
     personalised: bool  # the profiling consent
     keywords: frozenset[str] = frozenset()  # profile and recent proposals (profiling only)
     track: Mapping[UUID, tuple[int, int]] = field(default_factory=dict)  # niche -> (started, done) (profiling only)
+    proposal_keywords: frozenset[str] = frozenset()  # the part of ``keywords`` from their proposals (the chip's word)
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,13 +197,18 @@ def pursuit(card: Card, feats: Mapping[str, Feature], value: int, cfg: RankerCon
     return "consider", reasons or ["Worth a closer look"]
 
 
-def why_chips(card: Card, feats: Mapping[str, Feature], cfg: RankerConfig, trend: TrendConfig) -> list[str]:
-    """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips)."""
+def why_chips(
+    card: Card, feats: Mapping[str, Feature], cfg: RankerConfig, trend: TrendConfig, dev: Developer
+) -> list[str]:
+    """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips). f1's chip names its
+    source: the developer's past proposals when a shared keyword comes from one, else their profile."""
+    card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
+    fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
     v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
     orgs = card.signals.orgs_scouting
     brief = card.signals.brief
     candidates = {
-        "semantic_fit": ("Close to your past proposals", v["semantic_fit"] > 0),
+        "semantic_fit": (fit, v["semantic_fit"] > 0),
         "niche_match": (
             "In a niche you like" if v["niche_match"] >= cfg.niche_liked else "Next to a niche you like",
             v["niche_match"] > 0,
@@ -289,7 +295,7 @@ def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendC
                 features=feats,
                 decision=decision,
                 reasons=tuple(reasons),
-                why=tuple(why_chips(card, feats, cfg, trend)),
+                why=tuple(why_chips(card, feats, cfg, trend, dev)),
                 why_not=why_not(card, feats, dev, cfg),
             )
         )

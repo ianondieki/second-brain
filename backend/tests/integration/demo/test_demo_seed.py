@@ -520,6 +520,51 @@ async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
     assert [v[0] for v in views] == [reviewer.email]
 
 
+# ---------------------------------------------------------------------------------------------------- trending
+
+
+async def test_discover_and_recommendations_have_something_to_show(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P12: liked niches for both developers and Amina's profiling consent through the app, simulated signals from
+    pseudonyms of no account; P2's problem trends with its project beside it, and both developers get explained
+    recommendations (Amina's personalised, Brian's not)."""
+    report = seeded[0]
+    liked = await rows(
+        owner,
+        "SELECT u.email, count(*) AS n FROM developer_niches d JOIN users u ON u.id = d.user_id"
+        " WHERE d.kind = 'liked' GROUP BY u.email",
+    )
+    assert {r.email: r.n for r in liked} == {AMINA.email: 3, BRIAN.email: 3}
+    consents = await rows(
+        owner,
+        "SELECT u.email, c.granted, c.source FROM consents c JOIN users u ON u.id = c.user_id"
+        " WHERE c.purpose = 'profiling'",
+    )
+    assert [(c.email, c.granted, c.source) for c in consents] == [(AMINA.email, True, "settings")]
+    hashes = await rows(owner, "SELECT count(*) FROM signal_events WHERE kind IN ('scout_match', 'org_interest')")
+    assert hashes[0][0] > 100
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, AMINA.email) as amina,
+        signed_in(demo_app, owner, BRIAN.email) as brian,
+    ):
+        trending = (await amina.call("GET", "/api/discover/trending")).json()
+        mine = (await amina.call("GET", "/api/me/recommendations")).json()
+        his = (await brian.call("GET", "/api/me/recommendations")).json()
+    p2 = str(report.proposals[P2.key])
+    [project] = [p for p in trending["projects"] if p["proposal"]["id"] == p2]
+    assert project["trend"]["trending"] is True
+    [problem] = [p for p in trending["problems"] if p["problem"]["id"] == project["problem"]["id"]]
+    assert problem["trend"]["trending"] is True
+    assert "4 companies scouting" in problem["trend"]["badge"]
+    assert p2 in problem["project_ids"]
+    assert (mine["personalised"], his["personalised"]) == (True, False)
+    assert mine["items"]
+    assert his["items"]
+    assert all(i["why"] and i["pursuit"]["reasons"] for i in [*mine["items"], *his["items"]])
+
+
 # ---------------------------------------------------------------------------------------------------- research
 
 
@@ -570,51 +615,6 @@ async def test_the_staff_admin_approved_one_seeded_research_card_per_niche(
     assert shown["label"].startswith("Seeded example for the demo (not a live AI result), human-reviewed on ")
     assert "AI-drafted" not in shown["label"]
     assert len(shown["citations"]) == 3
-
-
-# ---------------------------------------------------------------------------------------------------- trending
-
-
-async def test_discover_and_recommendations_have_something_to_show(
-    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
-) -> None:
-    """P12: liked niches for both developers and Amina's profiling consent through the app, simulated signals from
-    pseudonyms of no account; P2's problem trends with its project beside it, and both developers get explained
-    recommendations (Amina's personalised, Brian's not)."""
-    report = seeded[0]
-    liked = await rows(
-        owner,
-        "SELECT u.email, count(*) AS n FROM developer_niches d JOIN users u ON u.id = d.user_id"
-        " WHERE d.kind = 'liked' GROUP BY u.email",
-    )
-    assert {r.email: r.n for r in liked} == {AMINA.email: 3, BRIAN.email: 3}
-    consents = await rows(
-        owner,
-        "SELECT u.email, c.granted, c.source FROM consents c JOIN users u ON u.id = c.user_id"
-        " WHERE c.purpose = 'profiling'",
-    )
-    assert [(c.email, c.granted, c.source) for c in consents] == [(AMINA.email, True, "settings")]
-    hashes = await rows(owner, "SELECT count(*) FROM signal_events WHERE kind IN ('scout_match', 'org_interest')")
-    assert hashes[0][0] > 100
-    async with (
-        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
-        signed_in(demo_app, owner, AMINA.email) as amina,
-        signed_in(demo_app, owner, BRIAN.email) as brian,
-    ):
-        trending = (await amina.call("GET", "/api/discover/trending")).json()
-        mine = (await amina.call("GET", "/api/me/recommendations")).json()
-        his = (await brian.call("GET", "/api/me/recommendations")).json()
-    p2 = str(report.proposals[P2.key])
-    [project] = [p for p in trending["projects"] if p["proposal"]["id"] == p2]
-    assert project["trend"]["trending"] is True
-    [problem] = [p for p in trending["problems"] if p["problem"]["id"] == project["problem"]["id"]]
-    assert problem["trend"]["trending"] is True
-    assert "4 companies scouting" in problem["trend"]["badge"]
-    assert p2 in problem["project_ids"]
-    assert (mine["personalised"], his["personalised"]) == (True, False)
-    assert mine["items"]
-    assert his["items"]
-    assert all(i["why"] and i["pursuit"]["reasons"] for i in [*mine["items"], *his["items"]])
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

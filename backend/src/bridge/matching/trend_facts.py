@@ -8,6 +8,12 @@ Two sources only, both as ``bridge_app`` under the caller's Row-Level Security:
 - cross-organisation signals only through ``app_trend_aggregates`` (revision 0005, D-46): counts per item, kind and
   day, with no hash and no organisation id; items below 3 distinct actors never come back.
 
+Distinct actors (the ``min_actors`` floor before an item is Trending) are only the people and organisations behind
+recent activity: developers who published a proposal against the problem in the badge window (30 days), publishers of
+sources dated in that window, the Brief's organisation, and the organisations whose scouts matched a linked proposal
+(counted by the definer over the whole window, from 3). An old source is evidence for the score, never a crowd, so a
+card with three year-old publishers and one new proposal has one actor, not four.
+
 ``board`` turns them into trend subjects with the anti-gaming rules of ``bridge.matching.trending`` applied, and
 scores them. Owner and creator ids are read only to drop self-boosts and count distinct actors; nothing returned by
 the routes carries them.
@@ -209,8 +215,8 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
         events[s.problem_id].append(
             Event("official_source" if s.official else "independent_source", s.published_date, 1)
         )
-        actors[s.problem_id].add(("publisher", s.publisher_key))
-        if s.published_date >= recent:
+        if s.published_date >= recent:  # only fresh coverage is an actor (an old source is evidence, not a crowd)
+            actors[s.problem_id].add(("publisher", s.publisher_key))
             signals[s.problem_id].new_sources += 1
             signals[s.problem_id].new_official_sources += int(s.official)
 
@@ -222,7 +228,8 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
             signals[problem_id].new_proposals += int(day >= recent)
             if day >= oldest and proposal.owner_id != facts.problems[problem_id].created_by:  # no self-boost
                 submitted.append((proposal.owner_id, problem_id, day))
-                actors[problem_id].add(("owner", proposal.owner_id))
+                if day >= recent:
+                    actors[problem_id].add(("owner", proposal.owner_id))
     for (problem_id, day), count in once_per_actor_and_day(submitted).items():
         events[problem_id].append(Event("proposal_submitted", day, count))
 

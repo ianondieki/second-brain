@@ -191,7 +191,7 @@ def test_profiling_consent_gates_f1_and_f9() -> None:
     assert on["semantic_fit"].raw == 3
     assert on["track_record"].raw == pytest.approx(0.75)
     [row] = rank([card()], dev(personalised=True, **history), R, T, NOW)
-    assert "Your past projects" in row.why or "Close to your past proposals" in row.why
+    assert "Your past projects" in row.why or "Close to your profile" in row.why  # keywords of the profile only
 
 
 def test_the_ranking_is_deterministic() -> None:
@@ -205,3 +205,15 @@ def test_a_brand_new_developer_gets_an_explained_list() -> None:
     rows = rank([card(age_days=2), card(niche=SIBLING), card(niche=ELSEWHERE)], dev(), R, T, NOW)
     assert rows
     assert all(r.why and r.reasons for r in rows)
+
+
+def test_the_fit_chip_names_where_the_shared_words_come_from() -> None:
+    """f1's chip says "past proposals" only when a shared keyword comes from one ([[COPY-REVIEW]])."""
+    words = frozenset({"farmers", "drought", "harvests"})
+    profile_only = dev(personalised=True, keywords=words)
+    from_proposals = dev(personalised=True, keywords=words, proposal_keywords=frozenset({"drought"}))
+    [row] = rank([card(niche=ELSEWHERE, county=None)], profile_only, R, T, NOW)
+    assert "Close to your profile" in row.why
+    assert "Close to your past proposals" not in row.why
+    [row] = rank([card(niche=ELSEWHERE, county=None)], from_proposals, R, T, NOW)
+    assert "Close to your past proposals" in row.why

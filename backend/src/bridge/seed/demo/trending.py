@@ -14,10 +14,11 @@ so Discover and Home show something on ``make demo``.
   README lists Discover's numbers as simulated.
 
 Idempotent and safe on a used demo (P9's rules): liked niches are set only for a developer who has none, and the
-consent only for one who never decided it (a choice made in the app is kept). Signal ids are derived from the
-Africa/Nairobi ISO week, the proposal, the kind, the organisation and the day, so a second run in the same week
-inserts nothing; a run in a later week adds that week's activity, which keeps the demo's trends alive (the same
-pseudonyms, so the aggregates' once-per-actor-and-day rule collapses any overlap).
+consent only for one who never decided it (a choice made in the app is kept). A signal's id is derived from its
+Africa/Nairobi date, the proposal, the kind and the organisation, and its time from that date (00:05 plus a few
+minutes, never after the run): a second run on the same day inserts nothing, and a run days or weeks later adds only
+the dates the earlier runs did not cover (at most one signal per proposal, kind, organisation and date, however
+often ``make demo`` starts), which keeps the demo's trends alive without piling up.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Final
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -74,7 +75,9 @@ def pseudonym(*parts: object) -> bytes:
 
 
 def signal_rows(report: DemoReport, now: datetime) -> list[dict[str, object]]:
-    year, week, _ = now.astimezone(NAIROBI).isocalendar()
+    """The demo's signals as of ``now``: each keyed and timed by its Africa/Nairobi date, so a run on any later day
+    finds the dates it shares with an earlier run already there."""
+    today = now.astimezone(NAIROBI).date()
     rows = []
     for plan in SIGNALS:
         item = report.proposals.get(plan.proposal)
@@ -85,7 +88,9 @@ def signal_rows(report: DemoReport, now: datetime) -> list[dict[str, object]]:
             for n in range(plan.orgs):
                 org = pseudonym("org", n)
                 actor = org if plan.kind == "scout_match" else pseudonym("person", n)  # a scout acts as its org
-                key = f"{year}-W{week}:{plan.proposal}:{plan.kind}:{n}:{day}"
+                target = today - timedelta(days=day)
+                key = f"{target.isoformat()}:{plan.proposal}:{plan.kind}:{n}"
+                at = datetime.combine(target, time(0, 5), tzinfo=NAIROBI) + timedelta(minutes=7 * n)
                 rows.append(
                     {
                         "id": uuid.uuid5(SIGNAL_NAMESPACE, key),
@@ -93,7 +98,7 @@ def signal_rows(report: DemoReport, now: datetime) -> list[dict[str, object]]:
                         "kind": plan.kind,
                         "actor": actor,
                         "org": org,
-                        "ts": now - timedelta(days=day, minutes=10 + 7 * n),
+                        "ts": min(at, now - timedelta(minutes=1 + n)),  # today's never in the future
                     }
                 )
     return rows

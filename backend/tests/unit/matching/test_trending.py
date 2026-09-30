@@ -150,3 +150,9 @@ def test_dated_evidence_before_publication_starts_the_baseline() -> None:
     out = trends([card], PROBLEMS, CFG, NOW)
     assert out[card.id].z is not None
     assert out[card.id].new_this_week
+
+
+def test_new_this_week_ends_after_seven_nairobi_days() -> None:
+    six, seven = subject([], age_days=6), subject([], age_days=7)
+    out = trends([six, seven], PROBLEMS, CFG, NOW)
+    assert (out[six.id].new_this_week, out[seven.id].new_this_week) == (True, False)

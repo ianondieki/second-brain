@@ -8,8 +8,10 @@ beside the problems they solve, and the Opportunity Gap. Computed on read from `
 - Trending Projects: published, clear proposals that are Trending (verified organisations' interest) or New this week,
   each with the visible problem it solves (a proposal with none is not listed, AC-TREND-2); their badges and chips
   never count or name an organisation, and their scores are not returned (a score would count the organisations).
-- Opportunity Gap: the top decile of problems by trend z-score (niches with a baseline) that have fewer than 3
-  published proposals (AC-TREND-2).
+- Opportunity Gap: the top decile, by trend z-score, of the problems in the filter's scope that have a z-score
+  (niches with a baseline) and a positive score; of those, the ones whose z-score reaches the Trending floor (1.0)
+  and that have fewer than 3 published proposals (AC-TREND-2). The decile is the scope's (a niche's top tenth when
+  filtered), and the z floor keeps a quiet scope's top tenth, which is no trend, out.
 
 Filters: a niche slug (a parent includes its children) and a county code; the baselines are the whole platform's.
 Chips and badges are code-written copy ([[COPY-REVIEW]]).
@@ -257,5 +259,10 @@ async def opportunity_gap(
     ]
     ranked.sort(key=lambda pid: (-(b.problems[pid].z or 0.0), -b.problems[pid].score, str(pid)))
     top = ranked[: math.ceil(len(ranked) * cfg.discover.gap_decile)]
-    gap = [pid for pid in top if b.signals[pid].proposals < cfg.discover.gap_fewer_than][: cfg.discover.items]
+    gap = [
+        pid
+        for pid in top
+        if (b.problems[pid].z or 0.0) >= cfg.trending.z_trending  # the floor: a quiet scope's "top" is not a trend
+        and b.signals[pid].proposals < cfg.discover.gap_fewer_than
+    ][: cfg.discover.items]
     return OpportunityGapOut(generated_at=b.facts.now, items=await _problem_items(db, b, tree, cfg, gap, {}))

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from tests.integration.engagements.api_world import clients
+from tests.integration.matching.scout_world import add_person, run
 from tests.integration.matching.trend_world import (
     TrendWorld,
     build,
@@ -148,3 +149,78 @@ async def test_one_organisations_seats_count_for_nothing(owner_engine: AsyncEngi
     assert "companies scouting" not in " ".join(item["why"])
     [shown] = [p for p in body["projects"] if p["proposal"]["id"] == str(project)]
     assert "Verified organisations expressed interest" not in shown["why"]
+
+
+async def test_old_sources_are_evidence_not_actors(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Review MAJOR: a card with three sources dated inside the 180-day window (35 to 37 days old, outside the 30-day
+    badge window) and one developer's single proposal today rises well above its quiet niche (z > 1), but it has one
+    actor, not four: no badge. Three fresh publishers make the same kind of card Trending."""
+    world = await build(owner_engine)
+    for _ in range(10):  # a quiet niche: problems a long time old with no activity
+        await developer_problem(owner_engine, world.author, world.niche, age_days=120)
+    card = await research_card(owner_engine, world.niche, source_days=(35.0, 36.0, 37.0), age_days=100)
+    await proposal(owner_engine, world.niche, card, age_days=0.1)
+    fresh = await research_card(owner_engine, world.niche, source_days=(0.2, 1.0, 2.0), age_days=100)
+    body = await trending(app_engine, world, niche=world.slug("niche"))
+    by_id = {p["problem"]["id"]: p for p in body["problems"]}
+    assert str(card) not in by_id  # neither Trending nor new (with the old publishers as actors it had a badge)
+    assert by_id[str(fresh)]["trend"]["trending"] is True
+
+
+async def test_one_developer_counts_once_a_day_and_scouts_once_across_linked_proposals(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """At the board: three proposals by one developer against a problem on one day score as one; the same three
+    organisations' scouts matching both of a problem's proposals on one day count once (the day's maximum)."""
+    world = await build(owner_engine)
+    once = await developer_problem(owner_engine, world.author, world.niche, age_days=3)
+    thrice = await developer_problem(owner_engine, world.author, world.niche, age_days=3)
+    await proposal(owner_engine, world.niche, once, age_days=1)
+    async with owner_engine.begin() as conn:
+        busy = await add_person(conn, "busy", "dev.example.test")
+    for _ in range(3):
+        await proposal(owner_engine, world.niche, thrice, owner=busy, age_days=1)
+    both = await developer_problem(owner_engine, world.author, world.sibling, age_days=3)
+    one = await developer_problem(owner_engine, world.author, world.sibling, age_days=3)
+    for problem, scouted in ((both, 2), (one, 1)):
+        for n in range(2):
+            project = await proposal(owner_engine, world.sibling, problem, age_days=1)
+            if n < scouted:
+                await signals(owner_engine, project, "scout_match", days_ago=[0.5], actors=3, label=f"{world.tag}-x")
+    body = await trending(app_engine, world, niche=world.slug("parent"))
+    scores = {p["problem"]["id"]: p["trend"]["score"] for p in body["problems"]}
+    assert scores[str(thrice)] == scores[str(once)]
+    assert scores[str(both)] == scores[str(one)]
+    assert scores[str(both)] > scores[str(once)]
+
+
+async def test_a_proposal_linking_a_held_problem_is_left_out_quietly(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    world = await build(owner_engine)
+    held = await developer_problem(owner_engine, world.author, world.niche, age_days=3)
+    shown = await developer_problem(owner_engine, world.author, world.niche, age_days=3)
+    only_held = await proposal(owner_engine, world.niche, held, age_days=1)
+    both = await proposal(owner_engine, world.niche, shown, age_days=1)
+    async with owner_engine.begin() as conn:
+        version = await run(conn, "SELECT current_version_id FROM proposals WHERE id = :p", p=both)
+        await run(
+            conn, "INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:v, :p)", v=version, p=held
+        )
+        await run(conn, "UPDATE problems SET moderation_state = 'held' WHERE id = :p", p=held)
+    body = await trending(app_engine, world, niche=world.slug("niche"))  # 200, not a 500 on the hidden link
+    projects = {p["proposal"]["id"]: p for p in body["projects"]}
+    assert str(only_held) not in projects
+    assert projects[str(both)]["problem"]["id"] == str(shown)
+    assert str(held) not in str(body)
+
+
+async def test_the_county_filter_narrows_projects_too(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    world = await build(owner_engine)
+    problem = await developer_problem(owner_engine, world.author, world.niche, age_days=3)
+    nairobi = await proposal(owner_engine, world.niche, problem, age_days=1, county="KE-30")
+    nakuru = await proposal(owner_engine, world.niche, problem, age_days=1, county="KE-32")
+    everywhere = await trending(app_engine, world, niche=world.slug("niche"))
+    assert {str(nairobi), str(nakuru)} <= {p["proposal"]["id"] for p in everywhere["projects"]}
+    narrowed = await trending(app_engine, world, niche=world.slug("niche"), county="KE-32")
+    assert [p["proposal"]["id"] for p in narrowed["projects"]] == [str(nakuru)]
