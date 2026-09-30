@@ -14,7 +14,7 @@ import { upgradeHref } from "@/lib/billing/upgrade";
 import { EmptyState } from "../org/EmptyState";
 import { getCurrentPlan, getPlans } from "./data";
 import { SamplePrices } from "./SamplePrices";
-import { billingSubject, priceKind, rowAction, sideOf, type Plan, type RowAction } from "./plans";
+import { billingSubject, priceKind, rowAction, sameLinesAs, sideOf, type Plan, type RowAction } from "./plans";
 import { lineTexts, priceText } from "./text";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -79,6 +79,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   }
 
   const plans = catalogue.plans;
+  const sameAs = sameLinesAs(plans);
   const currentName = plans.find((p) => p.code === current.code)?.name ?? current.code;
   return shell(
     <>
@@ -101,6 +102,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
             plan={plan}
             action={rowAction(plans, current.code, plan)}
             last={index === plans.length - 1}
+            sameAs={sameAs[index]}
             href={upgradeHref(plan.code, { org: orgId })}
           />
         ))}
@@ -113,9 +115,24 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
  * One rung of the ladder: a mark on the rail (filled for the current plan), the name and price, what the plan allows,
  * and its action. Only the upgrade the API's 402 would point to is the primary button.
  */
-async function PlanRow({ plan, action, last, href }: { plan: Plan; action: RowAction; last: boolean; href: string }) {
+async function PlanRow({
+  plan,
+  action,
+  last,
+  href,
+  sameAs,
+}: {
+  plan: Plan;
+  action: RowAction;
+  last: boolean;
+  href: string;
+  /** An earlier plan that allows the same: said once instead of repeating its list. */
+  sameAs: string | null;
+}) {
   const t = await getTranslations("billing");
-  const [price, lines] = await Promise.all([priceText(plan), lineTexts(plan)]);
+  const [price, listed] = await Promise.all([priceText(plan), lineTexts(plan)]);
+  const lines = sameAs ? [t("sameAs", { plan: sameAs })] : listed;
+  const kind = priceKind(plan);
   const current = action === "current";
   const reachable = action === "upgrade" || action === "choose";
   return (
@@ -143,9 +160,10 @@ async function PlanRow({ plan, action, last, href }: { plan: Plan; action: RowAc
           <h3 className="text-lg leading-7 [overflow-wrap:anywhere] text-ink">
             {plan.name}
           </h3>
-          <p className={cn("tabular-nums", priceKind(plan) === "notSold" ? "text-sm text-ink-soft" : "text-ink")}>
-            {price}
-          </p>
+          {/* A free plan's name already says so ("Free", "Claimed (Free)"). */}
+          {kind === "free" ? null : (
+            <p className={cn("tabular-nums", kind === "notSold" ? "text-sm text-ink-soft" : "text-ink")}>{price}</p>
+          )}
         </div>
         {current ? (
           <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-jacaranda" data-your-plan="">

@@ -1241,6 +1241,7 @@
     "yourPlan": "Your plan",
     "upgradeTo": "Upgrade to {plan}",
     "choose": "Choose {plan}",
+    "sameAs": "Everything in {plan}",
     "line": {
       "activeProposals": "{count, plural, one {# published idea} other {# published ideas}} at a time",
       "activeProposalsUnlimited": "Unlimited published ideas",

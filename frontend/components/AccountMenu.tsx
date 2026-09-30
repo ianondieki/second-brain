@@ -75,7 +75,8 @@ export function AccountMenu() {
         <span className="flex size-8 items-center justify-center rounded-full bg-jacaranda-wash text-jacaranda">
           <PersonIcon className="size-5" />
         </span>
-        {t("account")}
+        {/* Under 640 px the avatar carries the name alone, so the working name keeps one line. */}
+        <span className="sr-only sm:not-sr-only">{t("account")}</span>
         <ChevronIcon className={cn("size-4 text-ink-soft transition-transform motion-reduce:transition-none", open && "rotate-180")} />
       </button>
       <div
@@ -90,7 +91,14 @@ export function AccountMenu() {
             </a>
           </li>
         </ul>
-        <div className="mt-1 flex border-t border-line px-3 pt-1 [&>div]:items-start">
+        {/* Sign out reads as a menu item like the links above it; its failure notice stays under it. */}
+        <div
+          className={
+            "mt-1 flex border-t border-line pt-1 [&>div]:w-full [&>div]:items-stretch [&>div>p]:px-3 [&>div>p]:text-left " +
+            "[&_button]:w-full [&_button]:justify-start [&_button]:rounded-control [&_button]:px-3 [&_button]:text-ink " +
+            "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-jacaranda-wash [&_button:hover]:text-ink"
+          }
+        >
           <SignOutButton />
         </div>
       </div>

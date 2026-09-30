@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { billingSubject, formatKes, planLines, priceKind, rowAction, type Plan } from "./plans";
+import { billingSubject, formatKes, planLines, priceKind, rowAction, sameLinesAs, type Plan } from "./plans";
 
 const ORG_A = "0192a7c4-5b1e-7c3d-8e9f-00000000000a";
 const ORG_B = "0192a7c4-5b1e-7c3d-8e9f-00000000000b";
@@ -137,6 +137,18 @@ describe("planLines", () => {
 
   it("skips values it cannot read", () => {
     expect(planLines(plan({ code: "x", limits: { active_proposals: "many", tags_per_proposal: -1 } }))).toEqual([]);
+  });
+});
+
+describe("sameLinesAs", () => {
+  it("points a plan that allows the same as an earlier one to the first of them", () => {
+    const pro = DEV[1].limits;
+    const ladder = [DEV[0], DEV[1], { ...DEV[2], limits: pro }, { ...DEV[3], limits: pro }];
+    expect(sameLinesAs(ladder)).toEqual([null, null, "dev_pro_monthly", "dev_pro_monthly"]);
+  });
+
+  it("never points plans without lines at each other", () => {
+    expect(sameLinesAs([plan({ code: "a" }), plan({ code: "b" })])).toEqual([null, null]);
   });
 });
 

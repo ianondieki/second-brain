@@ -1241,6 +1241,7 @@
     "yourPlan": "Mpango wako",
     "upgradeTo": "Pandisha hadi {plan}",
     "choose": "Chagua {plan}",
+    "sameAs": "Kila kitu kilicho kwenye {plan}",
     "line": {
       "activeProposals": "Mawazo yaliyochapishwa hadi {count} kwa wakati mmoja",
       "activeProposalsUnlimited": "Mawazo yaliyochapishwa bila kikomo",

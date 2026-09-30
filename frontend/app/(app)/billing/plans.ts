@@ -134,6 +134,19 @@ export function planLines(plan: Pick<Plan, "side" | "limits">): Line[] {
 }
 
 /**
+ * For each plan, the name of the first plan before it that allows exactly the same (non-empty) lines, else null: the
+ * ladder then says "Everything in Pro (monthly)" once instead of repeating the list (Pro yearly, Student).
+ */
+export function sameLinesAs(plans: readonly Plan[]): (string | null)[] {
+  const keys = plans.map((plan) => JSON.stringify(planLines(plan)));
+  return plans.map((plan, index) => {
+    if (keys[index] === "[]") return null;
+    const first = keys.indexOf(keys[index]);
+    return first < index ? plans[first].name : null;
+  });
+}
+
+/**
  * The action a plan's row offers: the primary "Upgrade to" on the plan a 402 would point to (the current plan's
  * `upgrade_to`, when it can be bought here), "Choose" on other plans further up the ladder that can be bought, and
  * nothing on the current plan, plans below it (a downgrade rule is REQ-BIL-06's) or plans not sold here.
