@@ -60,9 +60,14 @@ export const DEMO_CLAIM_ORG = "County Government of C (fixture)";
 /** The demo items a walkthrough run decides: P6 itself (desktop) or the new problem P6 describes (360 px). */
 export type DemoItem = "proposal" | "problem";
 
+// Each demo item by title, and only among rows of demo accounts (`users.demo_account`, set by the demo seed and never by
+// the application): the reset below can never touch a real person's proposal or problem that shares a title.
 const DEMO_SUBJECT: Record<DemoItem, string> = {
-  proposal: "SELECT id FROM proposals WHERE title = :'title'",
-  problem: "SELECT id FROM problems WHERE title = :'title' AND source = 'developer'",
+  proposal:
+    "SELECT p.id FROM proposals p JOIN users u ON u.id = p.owner_id AND u.demo_account WHERE p.title = :'title'",
+  problem:
+    "SELECT pr.id FROM problems pr JOIN users u ON u.id = pr.created_by AND u.demo_account" +
+    " WHERE pr.title = :'title' AND pr.source = 'developer'",
 };
 const DEMO_TITLE: Record<DemoItem, string> = { proposal: P6_TITLE, problem: P6_PROBLEM_TITLE };
 
@@ -87,6 +92,14 @@ export function expectDemoQueues(item?: DemoItem): void {
   expect(open, `one unresolved case of "${DEMO_TITLE[item]}": run python -m bridge.seed --demo`).toBe("1");
 }
 
+/** The id of a demo item: exactly one demo account's row with its title, or the test fails here. */
+export function demoItemId(item: DemoItem): string {
+  const title = DEMO_TITLE[item];
+  const ids = ownerSql(`${DEMO_SUBJECT[item]};`, { title }).split("\n").filter(Boolean);
+  expect(ids, `exactly one demo ${item} titled "${title}" (run python -m bridge.seed --demo)`).toHaveLength(1);
+  return ids[0];
+}
+
 /**
  * Puts one demo item back as the seed left it, so the walkthrough can run again (a second project's run, a CI retry,
  * a local rerun): P6 held, or P6's new problem published and clear, and its case open with no decision. Each project
@@ -95,18 +108,22 @@ export function expectDemoQueues(item?: DemoItem): void {
  */
 export function reopenDemoItem(item: DemoItem): void {
   const title = DEMO_TITLE[item];
+  const id = demoItemId(item);
+  // One statement: the item (only while it is still a demo account's row) and its case.
   const subject =
     item === "proposal"
-      ? "UPDATE proposals SET moderation_state = 'held' WHERE title = :'title';"
-      : "UPDATE problems SET moderation_state = 'clear', status = 'published'" +
-        " WHERE title = :'title' AND source = 'developer';";
-  ownerSql(
-    "BEGIN; " +
-      subject +
-      " UPDATE moderation_cases SET status = 'open', decided_by = NULL, decided_at = NULL, updated_at = now()" +
-      ` WHERE subject_type = :'type' AND subject_id IN (${DEMO_SUBJECT[item]}); COMMIT;`,
-    { title, type: item },
+      ? "UPDATE proposals SET moderation_state = 'held' WHERE id = CAST(:'id' AS uuid)" +
+        " AND owner_id IN (SELECT id FROM users WHERE demo_account)"
+      : "UPDATE problems SET moderation_state = 'clear', status = 'published', moderator_id = NULL" +
+        " WHERE id = CAST(:'id' AS uuid) AND created_by IN (SELECT id FROM users WHERE demo_account)";
+  const changed = ownerSql(
+    `WITH subject AS (${subject} RETURNING id),` +
+      " reopened AS (UPDATE moderation_cases SET status = 'open', decided_by = NULL, decided_at = NULL," +
+      " updated_at = now() WHERE subject_type = :'type' AND subject_id IN (SELECT id FROM subject) RETURNING id)" +
+      " SELECT (SELECT count(*) FROM subject) || ',' || (SELECT count(*) FROM reopened);",
+    { id, type: item },
   );
+  expect(changed, `the demo ${item} "${title}" and its one case, reset`).toBe("1,1");
 }
 
 /** A proposal's moderation case id (the owner reads it), to open the case page directly. */

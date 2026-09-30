@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   caseOfProposal,
+  demoItemId,
   type DemoItem,
   DEMO_ADMIN,
   DEMO_CLAIM_ORG,
@@ -20,7 +21,7 @@ import {
 } from "./support/moderation-scene";
 import { newDeveloper, newStaffAdmin, OWNER_DATABASE_URL } from "./support/research-scene";
 import { checkScreen, expectSeparateTargets } from "./support/screen";
-import { ownerSql, PASSWORD } from "./support/tracker-scene";
+import { PASSWORD } from "./support/tracker-scene";
 
 // REQ-MOD-01, REQ-ADM-01 and the REQ-DIR-03 claims queue (M2 walkthrough step 6, P15): staff open the moderation
 // queue, read a held proposal's public summary with its flagged field marked, and decide it; staff admins read the
@@ -51,13 +52,8 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
 
   // Each demo login signs in from one project only (the API refuses a TOTP code used twice), and each project decides
   // its own demo item: the desktop run is the demo moderator approving P6, the 360 px run the demo admin approving the
-  // new problem P6 describes. Before each run the item is put back as the seed left it (a retry, the other project's
-  // timing and a local rerun all start from the same state).
+  // new problem P6 describes. Each run first puts its item back as the seed left it.
   const itemOf = (project: string): DemoItem => (project === "desktop" ? "proposal" : "problem");
-  test.beforeEach(({}, info) => {
-    reopenDemoItem(itemOf(info.project.name));
-    expectDemoQueues(itemOf(info.project.name));
-  });
 
   test("staff approve the demo's held proposal from the moderation queue, and it publishes", async ({
     page,
@@ -65,9 +61,12 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     baseURL,
   }, info) => {
     const desktop = info.project.name === "desktop";
+    // This run's demo item as the seed left it (a retry, the other project's timing and a rerun start the same way).
+    reopenDemoItem(itemOf(info.project.name));
+    expectDemoQueues(itemOf(info.project.name));
     const developer = await browser.newContext({ baseURL });
     await newDeveloper(developer.request);
-    const p6 = ownerSql("SELECT id FROM proposals WHERE title = :'title';", { title: P6_TITLE });
+    const p6 = demoItemId("proposal");
 
     if (desktop) {
       // The moderator signs in and lands on Moderation, their one section.
