@@ -52,9 +52,12 @@ async function logIn(page: Page, email: string, password: string = PASSWORD) {
 
 async function signOut(page: Page) {
   // Signed-in screens keep Sign out in the account menu (REQ-BIL-08); the second-factor page shows it directly.
+  // Wait until either is on screen before choosing, so a page still rendering never takes the wrong path.
   const menu = page.getByRole("button", { name: "Account" });
+  const direct = page.getByRole("button", { name: "Sign out" });
+  await expect(menu.or(direct).first()).toBeVisible(SERVER_STEP);
   if (await menu.isVisible()) await menu.click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await direct.click();
   await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
 }
 
