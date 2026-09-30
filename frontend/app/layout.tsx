@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { RouteFocus } from "@/components/RouteFocus";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import "./globals.css";
@@ -27,6 +28,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col bg-paper text-ink">
         {/* Sign out and the error screen read server-formatted strings: no next-intl runtime in the browser. */}
         <ClientStrings strings={await clientStrings(["shell", "errorPage"])}>{children}</ClientStrings>
+        {/* After an in-app navigation, focus moves to the new page's title (P16-C1). */}
+        <RouteFocus />
       </body>
     </html>
   );
