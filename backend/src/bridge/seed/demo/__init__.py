@@ -17,7 +17,9 @@ opened by the Pitch are then driven through the tracker API to a few stages (``b
 party signed in with the demo password and its TOTP code. Every account holds the reminders consent (P6). A demo
 staff admin (P11) starts one research run per saved-excerpt niche and approves its card
 (``bridge.seed.demo.research``): the cards come from a fixed answer written in code through the real checks and
-approval, and are labelled seeded examples, never live AI results.
+approval, and are labelled seeded examples, never live AI results. Then every demo subject gets its side's free
+plan (P14, ``bridge.seed.demo.subscriptions``), and Telco A gets a scout whose first scan matches Brian's untagged
+fifth proposal (P10, ``bridge.seed.demo.scouts``).
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -73,6 +75,7 @@ from bridge.seed.demo.runtime import (
     in_process_app,
     totp_code,
 )
+from bridge.seed.demo.scouts import SCOUTED, ensure_scout
 from bridge.seed.demo.subscriptions import seed_demo_subscriptions
 
 __all__ = [
@@ -135,6 +138,10 @@ async def seed_demo(
                 card = seed_research_card(owner_engine, factory, actors, settings, STAFF_ADMIN, niche, report)
                 await step(f"research card {niche}", card)
         await step("free plans", _free_plans(owner_engine, settings))
+        if SCOUTED.owner in report.users:
+            await step(SCOUTED.key, ensure_proposal(owner_engine, actors, SCOUTED, niches, report))
+        mail = runtime.email_provider
+        await step("Telco A scout", ensure_scout(owner_engine, actors, factory, settings, mail, niches, report))
     return report
 
 

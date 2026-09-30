@@ -196,3 +196,24 @@ async def test_the_seed_step_exits_0_and_changes_nothing_people_did_in_the_app(
     assert verify_password(amina_row[0].password_hash, NEW_PASSWORD)
     brian_row = await rows(owner, "SELECT totp_enabled_at, totp_secret_enc FROM users WHERE email = :e", e=BRIAN.email)
     assert tuple(brian_row[0]) == (None, None)  # left off
+
+
+async def test_a_scout_people_deleted_is_not_made_again(
+    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P10's demo scout (``bridge.seed.demo.scouts``) keeps P9's rule: the seed makes Telco A's scout only while Telco
+    A never had one, so a scout its owner deleted in the app stays deleted and nothing is scanned at start-up."""
+    report = seeded[1]
+    org, owner_seat = report.orgs[TELCO_A.legal_name], TELCO_A.owner
+    assert owner_seat is not None
+    [scout] = await rows(owner, "SELECT id FROM scout_agents WHERE org_id = :o", o=org)
+    async with (
+        in_process_app(flags(True), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, owner_seat.email) as grace,
+    ):
+        await grace.call("DELETE", f"/api/orgs/{org}/scouts/{scout.id}", expect=(204,))
+    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert again.created == []
+    assert await rows(owner, "SELECT id FROM scout_agents WHERE org_id = :o", o=org) == []
+    created = await rows(owner, "SELECT id FROM audit_events WHERE org_id = :o AND action = 'scout.created'", o=org)
+    assert len(created) == 1  # the first seed's, made through the API by the owner

@@ -73,6 +73,7 @@ from bridge.seed.demo.data import (
 )
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.demo.runtime import in_process_app, signed_in
+from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
@@ -341,9 +342,10 @@ async def test_the_proposals_are_published_with_certificates_and_problems(
     seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     report = seeded[0]
-    assert set(report.cert_ids) == {p.key for p in PROPOSALS}
-    assert len(set(report.cert_ids.values())) == len(PROPOSALS)
-    for proposal in PROPOSALS:
+    published = (*PROPOSALS, SCOUTED)  # P10's scout step publishes one more (bridge.seed.demo.scouts)
+    assert set(report.cert_ids) == {p.key for p in published}
+    assert len(set(report.cert_ids.values())) == len(published)
+    for proposal in published:
         found = (
             await rows(
                 owner,
@@ -367,7 +369,7 @@ async def test_the_proposals_are_published_with_certificates_and_problems(
         assert found.problems == [source.new_problem.title]
     assert P4.links_problem_of == P1.key
     queued = await rows(owner, "SELECT count(*) FROM procrastinate_jobs WHERE task_name = :t", t=provenance.TASK_HASH)
-    assert queued[0][0] == len(PROPOSALS)  # publishing queued each registration once, however often the seed ran
+    assert queued[0][0] == len(published)  # publishing queued each registration once, however often the seed ran
 
 
 async def test_the_exported_certificate_registers_through_the_real_pipeline(
@@ -568,6 +570,60 @@ async def test_the_staff_admin_approved_one_seeded_research_card_per_niche(
     assert shown["label"].startswith("Seeded example for the demo (not a live AI result), human-reviewed on ")
     assert "AI-drafted" not in shown["label"]
     assert len(shown["citations"]) == 3
+
+
+# ------------------------------------------------------------------------------------------------------ scouts
+
+
+async def test_telco_a_has_a_scout_whose_first_scan_matched_the_untagged_proposal(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """M2 walkthrough step 1 (P10): Telco A's weekly scout, made through the API by its owner, matched Brian's
+    untagged fifth proposal (and nothing else) in one in-process scan, rules only; its reviewer got the EM3 digest
+    once however often the seed ran, and the signatory may express interest from the match at once."""
+    report = seeded[0]
+    org, reviewer = report.orgs[TELCO_A.legal_name], TELCO_A.seats[1].email
+    assert TELCO_A.owner is not None
+    [scout] = await rows(
+        owner,
+        "SELECT id, created_by, frequency::text AS frequency, niches, include_keywords, recipients, paused_at"
+        " FROM scout_agents WHERE org_id = :o",
+        o=org,
+    )
+    niche = (await rows(owner, "SELECT id FROM niches WHERE slug = :s", s=SCOUT_NICHE))[0].id
+    assert (scout.created_by, scout.frequency, scout.niches, scout.paused_at) == (
+        report.users[TELCO_A.owner.email],
+        "weekly",
+        [niche],
+        None,
+    )
+    assert (scout.include_keywords, scout.recipients) == (list(SCOUT_KEYWORDS), [report.users[reviewer]])
+    scout_runs = await rows(
+        owner, "SELECT trigger::text, status::text, matched_count FROM agent_runs WHERE scout_id = :s", s=scout.id
+    )
+    assert [tuple(r) for r in scout_runs] == [("weekly", "completed", 1)]  # the first scan only
+    [match] = await rows(
+        owner,
+        "SELECT id, proposal_id, score, rule_breakdown, rationale_demo_fallback, digest_sent_at FROM agent_matches"
+        " WHERE scout_id = :s",
+        s=scout.id,
+    )
+    assert (match.proposal_id, match.score, match.rationale_demo_fallback) == (report.proposals[SCOUTED.key], 90, False)
+    assert (match.rule_breakdown["why_source"], match.rule_breakdown["why_reason"]) == ("code", "not_eligible")
+    assert match.digest_sent_at is not None
+    assert SCOUTED.pitch_to == ()
+    assert await rows(owner, "SELECT id FROM tags WHERE proposal_id = :p", p=match.proposal_id) == []
+    assert isinstance(runtime.email_provider, FakeEmailProvider)
+    digests = [m for m in runtime.email_provider.outbox if m.tag == "em3"]
+    assert [m.to for m in digests] == [reviewer]
+    assert SCOUTED.title in digests[0].text
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, TELCO_A.seats[0].email) as signatory,
+    ):
+        page = (await signatory.call("GET", f"/api/orgs/{org}/matches/{match.id}")).json()
+    assert (page["available"], page["engagement_id"]) == (True, None)
+    assert page["interest"] == {"allowed": True, "reason": None}
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

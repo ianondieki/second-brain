@@ -326,3 +326,25 @@ def test_the_helpers_run_inside_the_stack(monkeypatch: pytest.MonkeyPatch) -> No
         ["exec", "-T", "api", "python", "-m", "bridge.demo", "clock", "--days", "3", "--hours", "0"],
         ["exec", "-T", "worker", "python", "-m", "bridge.reminders", "run", "--now"],
     ]
+
+
+def test_demo_scouts_runs_one_scout_pass_in_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P10 (REQ-SCOUT-02; ``make demo-scouts``): the scouts run now on the demo's clock, in the running worker, through
+    the backend's own dev and test command (python -m bridge.matching refuses production); the Makefile names it."""
+    demo = launcher()
+    ran: list[list[str]] = []
+
+    def record(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        ran.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(demo, "run", record)
+    monkeypatch.setattr(demo, "volume_exists", lambda _name: True)
+    assert demo.main(["scouts"]) == 0
+    [command] = ran
+    assert command[command.index("-p") + 1] == "bridge-demo"
+    worker_command = ["exec", "-T", "worker", "python", "-m", "bridge.matching", "run", "--now"]
+    assert command[command.index("exec") :] == worker_command
+    makefile = (REPO / "Makefile").read_text(encoding="utf-8")
+    assert "demo-scouts:\n\t$(DEMO) scouts\n" in makefile
+    assert '@echo "demo-scouts ' in makefile

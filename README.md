@@ -95,7 +95,7 @@ targets). On macOS and Linux, where `python` may be missing, use `make demo DEMO
 | `make demo` / `make demo-down` / `make demo-reset` | `python infra/demo/demo.py up` / `down` / `reset --yes` |
 | `make demo-totp EMAIL=<address>` | `python infra/demo/demo.py totp <address>` (all logins without an address) |
 | `make demo-logins` / `make demo-stats` / `make demo-logs` | `python infra/demo/demo.py logins` / `stats` / `logs` |
-| `make demo-clock DAYS=3` / `make demo-reminders` | `python infra/demo/demo.py clock --days 3` / `reminders` |
+| `make demo-clock DAYS=3` / `make demo-reminders` / `make demo-scouts` | `python infra/demo/demo.py clock --days 3` / `reminders` / `scouts` |
 
 | What | Where |
 |---|---|
@@ -133,6 +133,8 @@ than 12 hours.
 follow it; it never moves back until `make demo-reset`). `make demo-reminders` sends the day's developer nudges and the
 weekly organisation digests at once (it runs `python -m bridge.reminders run --now` in the worker, which refuses
 production); they appear in Mailpit. The worker also sends them on its own after 07:30 and 08:30 Nairobi time.
+`make demo-scouts` runs the due scouts now; the seed ran Telco A's weekly scout once (its match is in the Inbox and
+Mailpit), so it is due again after `make demo-clock DAYS=7`.
 
 **LLM providers (optional).** Without any, every AI feature answers with a fixed fake reply labelled "demo fallback".
 To use a free OpenAI-compatible provider or Anthropic, set these in `backend/.env` (names only here; never commit

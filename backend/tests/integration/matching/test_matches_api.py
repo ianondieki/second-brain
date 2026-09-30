@@ -4,15 +4,16 @@ organisation's matches are never visible (404); feedback is recorded as the call
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from bridge.matching.scan import clock_now, run_periodic
-from tests.integration.engagements.api_world import clients
+from tests.integration.engagements.api_world import clients, db_today
 from tests.integration.matching.scout_world import (
     ScoutWorld,
     add_scout,
@@ -148,6 +149,47 @@ async def test_a_match_whose_proposal_is_held_shows_no_teaser(
     assert (body["why"], body["why_source"], body["rule_breakdown"]) == (None, "code", {})  # nothing of the teaser
     assert body["niche"]["label"].endswith(f"Microfinance {world.tag}")
     assert body["interest"] == {"allowed": False, "reason": "proposal_unavailable"}
+
+
+async def test_a_match_whose_author_joined_the_organisation_is_unavailable(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Round-2 review MINOR 2: a match found before its author joined the organisation showed the teaser and allowed
+    Express interest, which then answered 404. While the author is an active member the match is unavailable (no
+    teaser, why or rules; ``proposal_unavailable``) in the list and on its page, like the interest route's 404; a
+    removed membership makes it available again."""
+    world = await build(owner_engine)
+    _, match = await scanned(owner_engine, app_engine, world)
+    membership = uuid4()
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{viewer}')"),
+            {"id": membership, "o": world.org.id, "u": world.developer},
+        )
+    today = await db_today(owner_engine)
+    body = {
+        "proposal_id": str(world.proposal("one")),
+        "origin": "org_agent_match",
+        "match_id": str(match),
+        "contact_user_id": str(world.org.owner),
+        "channel": "video_call",
+        "contact_by": str(today + timedelta(days=1)),
+    }
+    async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
+        detail = (await signatory.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
+        listed = (await signatory.get(f"/api/orgs/{world.org.id}/matches")).json()["items"]
+        interest = await signatory.post(f"/api/orgs/{world.org.id}/interest", json=body)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text("UPDATE memberships SET status = 'removed' WHERE id = :id"), {"id": membership})
+        again = (await signatory.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
+    assert (detail["available"], detail["teaser"], detail["owner_handle"]) == (False, None, None)
+    assert (detail["why"], detail["why_source"], detail["rule_breakdown"]) == (None, "code", {})
+    assert detail["interest"] == {"allowed": False, "reason": "proposal_unavailable"}
+    [item] = [i for i in listed if i["id"] == str(match)]
+    assert (item["available"], item["teaser"], item["why"]) == (False, None, None)
+    assert interest.status_code == 404  # what the page now says
+    assert (again["available"], again["interest"]) == (True, {"allowed": True, "reason": None})
+    assert again["teaser"]["title"] == "Mobile money savings for SACCO members"
 
 
 async def test_an_e1_organisation_cannot_express_interest_yet(

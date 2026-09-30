@@ -6,6 +6,7 @@ can_view_tier2 opens for a reviewer who meets every other condition."""
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -183,6 +184,55 @@ async def test_an_organisations_request_is_activated_and_keeps_its_source(
     assert grant.counts_as_unlock is True  # the same flags as a new grant (P10 security review MINOR b)
     assert grant.billing_month is not None
     assert grant.billing_month.day == 1
+
+
+async def test_a_share_is_granted_at_the_shared_clocks_time(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Round-2 review MINOR 5 (F17): ``granted_at`` is ``app_clock_now()`` on a new grant and on an activated request
+    (P10 review MINOR k), so a moved dev/test clock moves it. The clock runs three days ahead for this test only and
+    is then put back exactly as it was (the owner may; the app only moves it forward)."""
+    new_world, asked_world = await build(owner_engine), await build(owner_engine)
+    new_proposal, new_engagement = await interested(owner_engine, app_engine, new_world)
+    asked_proposal, asked_engagement = await interested(owner_engine, app_engine, asked_world)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source, requested_by)"
+                " VALUES (:id, :p, :o, :d, 2, 'requested', 'manual', :r)"
+            ),
+            {
+                "id": uuid7(),
+                "p": asked_proposal,
+                "o": asked_world.org.id,
+                "d": asked_world.developer,
+                "r": asked_world.org.reviewer,
+            },
+        )
+        enabled, offset = (await conn.execute(text("SELECT enabled, clock_offset FROM test_clock"))).one()
+        await conn.execute(
+            text("UPDATE test_clock SET enabled = true, clock_offset = :o"), {"o": offset + timedelta(days=3)}
+        )
+    try:
+        async with clients(app_engine, SETTINGS, new_world.developer, asked_world.developer) as (new_dev, asked_dev):
+            assert (await new_dev.post(f"/api/engagements/{new_engagement}/share-tier2")).status_code == 200
+            assert (await asked_dev.post(f"/api/engagements/{asked_engagement}/share-tier2")).status_code == 200
+        ahead = await rows(
+            owner_engine,
+            "SELECT proposal_id, status::text AS status, granted_at - app_clock_now() AS behind,"
+            " granted_at - now() > interval '71 hours' AS ahead FROM disclosure_grants"
+            " WHERE proposal_id IN (:n, :a) ORDER BY proposal_id = :a",
+            n=new_proposal,
+            a=asked_proposal,
+        )
+    finally:
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE test_clock SET enabled = :e, clock_offset = :o"), {"e": enabled, "o": offset}
+            )
+    assert [(g.proposal_id, g.status, g.ahead) for g in ahead] == [
+        (new_proposal, "active", True),  # inserted
+        (asked_proposal, "active", True),  # activated
+    ]
+    assert all(timedelta(minutes=-5) < g.behind <= timedelta(0) for g in ahead)
 
 
 async def test_a_proposal_no_longer_clear_is_not_shared(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
