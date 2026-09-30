@@ -351,3 +351,26 @@ merge about 148,296, 148,105 and 147,812: under budget with under 2 KB to spare.
 
 P10-F open items 1 (by `fix/REQ-AUTH-01-random-handle`), 4 (the picker keeps the tab) and 5 (the tracker route
 measured) are addressed; items 2, 3 and 6 stand.
+
+### P10-F fix round 2 (ux-reviewer PASS; reviewer CHANGES_REQUIRED on `3765021`)
+
+- **MAJOR, recipients wiped when the members read fails:** `ScoutScreen` now passes `reviewers: null` when
+  `GET …/members` fails (not `[]`); `pruneDraft` leaves recipients untouched when they are unknown; the form says
+  "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved." and a save sends the
+  saved recipients unchanged. Tests: `scout-form.test.tsx` (a failed read with a saved recipient: no dropped note, the
+  PATCH keeps it) and `scout.test.ts`.
+- **Kept draft:** the key is `bridge.scoutDraft:{user}:{org}:{scout or new}`, so another account on the tab never
+  sees it; the draft comes back only on `?restore=1`, which the checkout's `next` carries (`scoutHref(…, {restore})`),
+  and is discarded otherwise, so an earlier unsaved edit never silently replaces the saved settings. Tests for a
+  restored draft with stale ids (pruned and noted), the discard, and per-person keys.
+- **`tier2Share.confirm`** ends "Views already made cannot be undone." ([[COPY-REVIEW]]; withdrawing before an
+  agreement revokes Tier-2 access, so "You cannot take this back" overstated it).
+- **`OrgRefusal`**: render tests for its three branches (`org/org-refusal.test.tsx`).
+- **e2e:** the inline upgrade link's `next` is `/org/inbox/scouts/new?restore=1`; `scout.spec.ts` 4 passed (360 and
+  1440 px) against the `fix/REQ-AUTH-01-random-handle` backend (scratch worktree, no merge); `tracker.spec.ts` and
+  `org-inbox.spec.ts` 16 passed.
+- **JS budget (gzipped, 150,000 B):** measured on this branch `/org/inbox/scouts/new` 147,124 (+71 this round),
+  `/org/inbox?tab=matches` 140,096; from round 1, a signatory's match page 146,862 and the tracker with the share
+  section 146,569. With integration's AccountMenu (+1,243 B per signed-in route, measured) about 148,367, 141,339,
+  148,105 and 147,812: the scout form keeps about 1.6 KB of headroom, the tightest route of the four. Any further
+  client code on these routes should be split (lazy) or measured first.
