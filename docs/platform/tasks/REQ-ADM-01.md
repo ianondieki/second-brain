@@ -195,7 +195,9 @@ Integration merged first (`a9c7cd9`: P15-B `a5386ad`, P16-A `b5c344f`; the card'
   `decided_by`/`decided_at` cleared) in `beforeEach`, then `expectDemoQueues(item)` checks that case is unresolved; the
   360 run asserts only on its own problem case. A rerun also exposed that a retry in a new worker reused a demo TOTP
   window the API had accepted: demo staff codes now start after `users.totp_last_counter` (owner read). Both projects
-  pass in either order and twice in a row (`--repeat-each 2`).
+  pass in either order and twice in a row (`--repeat-each 2`) with `--workers=1` only: two repeats of one project in
+  parallel workers would share its demo item and demo login (a CI retry runs after the failed attempt, so it is not
+  affected).
 - **UX MAJOR, the decided header** (`0be13f2`). A decided case's header shows the outcome (Approved/Rejected, mark and
   word) instead of the visibility tag of a case being checked; vitest (and a mutant) and the E2E check the refreshed
   header.
@@ -209,3 +211,23 @@ Checks: eslint, typecheck, vitest (74 files, 962 tests), `api:check`, copy lint,
 Left open: the demo reset writes the proposal's `moderation_state` and the cases as the database owner (test data
 only); a re-approval of P6 writes another `proposal_published` signal and queues another `scouts.on_new` run, harmless
 on a test stack.
+
+### P15-F fix round 2 (reviewer CHANGES_REQUIRED on 67d8249: one MAJOR, three MINORs)
+
+Integration merged first (`449764c`: P12-B `ac032f3`, P12-F `3c5c710`; no conflict).
+
+- **MAJOR, the demo reset's scope.** `DEMO_SUBJECT` finds P6 and its problem by title only among rows whose
+  `proposals.owner_id` / `problems.created_by` is a `users.demo_account` (set by the demo seed, never by the
+  application), so a real person's proposal or problem with the same title is never read or changed. `demoItemId`
+  fails unless exactly one such row exists; `reopenDemoItem` updates that id (again only while its owner is a demo
+  account) and its case in one statement and fails unless exactly one subject and one case changed (`"1,1"`). The
+  walkthrough reads P6's id the same way.
+- **MINOR 1.** The reset and `expectDemoQueues(item)` run at the start of the walkthrough test only; the claims test no
+  longer depends on them (its `beforeAll` checks the demo staff and County C's claim).
+- **MINOR 2.** The problem's reset also clears `problems.moderator_id`.
+- **MINOR 3.** The `--repeat-each 2` claim above is scoped to `--workers=1`.
+
+Checks: eslint, typecheck, vitest (79 files, 1018 tests), `api:check`, copy lint, traceability; Playwright
+`moderation.spec.ts` and `research.spec.ts` (16 tests, both projects) on a fresh isolated demo stack, removed
+afterwards; the walkthrough twice with `--workers=1`; with P6's owner's `demo_account` turned off the walkthrough fails
+at "exactly one demo proposal" and changes nothing.
