@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
+import type { confirmStepUp } from "@/components/tracker/calls";
 import { nairobiToday } from "@/components/tracker/model";
 import { StepUp } from "@/components/tracker/StepUp";
 import { Alert } from "@/components/ui/Alert";
@@ -38,6 +39,7 @@ export interface ExpressInterestProps {
   /** "?org=<id>" kept on the tracker link for members of several organisations. */
   query: string;
   post?: (body: Body) => Promise<{ ok: true; engagementId: string } | { ok: false; refusal: InterestRefusal }>;
+  confirmImpl?: typeof confirmStepUp;
 }
 
 /** POST /api/orgs/{org_id}/interest from a scout match (origin org_agent_match): the engagement's id, or a refusal. */
@@ -153,6 +155,7 @@ export function ExpressInterest(props: ExpressInterestProps) {
           setBusy(false);
         }}
         onConfirmed={() => send(true)}
+        confirmImpl={props.confirmImpl}
       />
     );
   }
