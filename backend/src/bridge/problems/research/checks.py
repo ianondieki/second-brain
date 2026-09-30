@@ -37,6 +37,7 @@ approval decides on what the card says now, not on what the run once saw.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -45,7 +46,7 @@ from typing import Final
 
 from bridge.problems.research.policy import ResearchPolicy
 from bridge.problems.research.sources import Allowlist, Excerpt, freshness_score
-from bridge.problems.research.text import collapse, has_control, word_count
+from bridge.problems.research.text import collapse, has_control, normalise, word_count
 
 MAX_TITLE_CHARS: Final = 90
 MAX_STATEMENT_WORDS: Final = 120
@@ -191,15 +192,22 @@ def unsupported_numbers(fields: Iterable[str], quotes: Iterable[str]) -> list[st
 # ------------------------------------------------------------------------------------------------- organisations
 
 
+# Any dash or hyphen (U+002D, U+2010-U+2015, U+2212 minus), a space, or nothing between an alias's hyphenated parts:
+# "M-Pesa", "M\u2011Pesa" (NFKC turns U+2011 into U+2010), "M Pesa" and "MPesa" are one name.
+_HYPHEN: Final = r"[\-\u2010-\u2015\u2212\s]?"
+
+
 def _alias_pattern(alias: str) -> re.Pattern[str]:
-    forms = sorted({alias, alias.upper()}, key=len, reverse=True)
-    return re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(f) for f in forms) + r")(?![A-Za-z0-9])")
+    parts = [re.escape(word) for word in re.split(r"[\-\u2010-\u2015\u2212]", normalise(alias))]
+    body = _HYPHEN.join(parts).replace(r"\ ", r"\s+")
+    return re.compile(r"(?<![^\W_])" + body + r"(?![^\W_])", re.IGNORECASE)
 
 
 def named_organisations(fields: Iterable[str], declared: Iterable[str], allowlist: Allowlist) -> tuple[str, ...]:
-    """The organisations a card names: the allowlist's found in its text (whole words, as capitalised) and the ones
-    the model declared, each once (case-insensitively), in that order."""
-    text = "\n".join(fields)
+    """The organisations a card names: the allowlist's found in its NFKC text (whole words, any case, any dash) and
+    the ones the model declared, each once (case-insensitively), in that order. Matching is deliberately broad: a
+    false match discards a draft or asks for the checklist, a missed one would publish a name unchecked (D-45)."""
+    text = "".join(c for c in normalise("\n".join(fields)) if unicodedata.category(c) != "Cf")  # no hiding
     found = [org.name for org in allowlist.named() if any(_alias_pattern(a).search(text) for a in org.aliases)]
     names: dict[str, str] = {}
     for name in (*found, *declared):

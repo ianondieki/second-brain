@@ -8,9 +8,11 @@
 # whatever the excerpt says about itself. Prototype list from the researcher (research-excerpts-2026-09.md); the
 # spec's longer list (KNBS, CBK, tenders.go.ke, Hansard, ...) is added with the excerpts that use it.
 #
-# organisations: names the code looks for in a drafted card (whole words; an all-capital alias of up to five letters
-# is matched in capitals only). A card naming any of them, or naming anything in its named_orgs, needs an official
-# source (docs/spec/06 6.5; D-45 default (a)). Every publisher above counts as an organisation too.
+# organisations: names the code looks for in a drafted card (whole words after NFKC, in any case, a hyphen matching
+# any dash, a space or nothing; format characters ignored). A card naming any of them, or naming anything in its
+# named_orgs, needs an official source (docs/spec/06 6.5; D-45 default (a)). Every publisher above counts as an
+# organisation too. Matching is broad on purpose (a false match only discards a draft); an alias that is a common
+# lower-case word (e.g. "Treasury" alone) is left out.
 version: 1
 country: KE
 domains:
@@ -36,4 +38,4 @@ organisations:
   - {name: Central Bank of Kenya, aliases: [Central Bank of Kenya, CBK]}
   - {name: Kenya National Bureau of Statistics, aliases: [Kenya National Bureau of Statistics, KNBS]}
   - {name: Kenya Revenue Authority, aliases: [Kenya Revenue Authority, KRA]}
-  - {name: National Treasury, aliases: [National Treasury, Treasury]}
+  - {name: National Treasury, aliases: [National Treasury]}

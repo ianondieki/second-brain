@@ -15,6 +15,7 @@ from bridge.problems.research import checks
 from bridge.problems.research.checks import Accepted, Citation, Discarded, Draft
 from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.sources import Excerpt, load_allowlist, load_catalogue
+from bridge.problems.research.text import collapse, has_control
 
 AS_OF = date(2026, 9, 29)
 CATALOGUE = load_catalogue()
@@ -202,11 +203,56 @@ def test_d45_a_card_naming_an_organisation_needs_an_official_source(statement: s
     assert check(draft, "health") == Discarded("named_org_without_official")
 
 
-def test_d45_detection_is_whole_word_and_case_sensitive() -> None:
-    fields = ("Clinics shall share data; a CAse study; the treasury bills; M-PESA agents and Airtel Money users",)
+def test_d45_detection_is_whole_word_any_case_and_any_dash() -> None:
+    fields = ("Clinics shall share data; a CAse study; the treasury bills; M-PESA agents and airtel money users",)
     assert checks.named_organisations(fields, (), ALLOWLIST) == ("Safaricom", "Airtel")
     assert checks.named_organisations(("Business Daily reported it",), (), ALLOWLIST) == ("Business Daily",)
     assert checks.named_organisations(("no names here",), ("  Acme  Ltd ",), ALLOWLIST) == ("  Acme  Ltd ",)
+
+
+@pytest.mark.parametrize(
+    "hidden",
+    [
+        "M\u2011Pesa",  # non-breaking hyphen (NFKC: U+2010)
+        "M\u2010Pesa",
+        "M\u2014Pesa",  # em dash
+        "M\u2212Pesa",  # minus sign
+        "M Pesa",
+        "MPESA",
+        "safaricom",  # lower case
+        "SAFARICOM",
+        "\uff33\uff41\uff46\uff41\uff52\uff49\uff43\uff4f\uff4d",  # full-width letters (NFKC: ASCII)
+        "Safari\u200bcom",  # zero-width space
+        "Safari\u00adcom",  # soft hyphen
+        "Safari\u200dcom",  # zero-width joiner
+    ],
+)
+def test_d45_a_hidden_name_is_still_found(hidden: str) -> None:
+    """P11 review MAJOR 2: none of these spellings may slip a company past D-45 with ``named_orgs=()``."""
+    assert checks.named_organisations((f"{hidden} agents keep most customers",), (), ALLOWLIST) == ("Safaricom",)
+    draft = dataclasses.replace(TELECOM, statement=f"{hidden} agents keep most customers.", named_orgs=())
+    verdict = check(draft)
+    assert isinstance(verdict, Discarded), verdict  # never accepted with the name unchecked
+    invisible = any(ord(c) in (0x200B, 0x00AD, 0x200D) for c in hidden)
+    assert verdict.reason == ("control_character" if invisible else "named_org_without_official")
+
+
+@pytest.mark.parametrize("bidi", ["\u202e", "\u202d", "\u2066", "\u2067", "\u2068", "\u2069", "\u200e", "\ufeff"])
+def test_a_bidi_or_format_character_in_any_field_is_refused(bidi: str) -> None:
+    """A right-to-left override in a title would be stored and served reordered: refused, never repaired."""
+    for field in ("title", "statement", "affected_group"):
+        value = f"Operators{bidi} struggle"
+        changes: dict[str, Any] = {field: value}
+        assert check(dataclasses.replace(TELECOM, **changes)) == Discarded("control_character"), field
+    assert check(dataclasses.replace(TELECOM, named_orgs=(f"Acme{bidi}",))) == Discarded("control_character")
+
+
+def test_collapse_normalises_nfkc_and_keeps_curly_quotes() -> None:
+    assert collapse("M\u2011Pesa\u00a0agents\u3000now") == "M\u2010Pesa agents now"
+    assert collapse("M-Pesa\u2019s share \u2013 slimmed") == "M-Pesa\u2019s share \u2013 slimmed"
+    for hidden in ("a\u00adb", "a\u202eb", "a\x9bb", "a\x00b"):
+        assert has_control(hidden), repr(hidden)
+    assert not has_control("M-Pesa\u2019s share \u2013 Sh0.41")
 
 
 SACCO = Draft(

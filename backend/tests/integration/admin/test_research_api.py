@@ -277,6 +277,36 @@ async def test_a_tampered_source_fails_the_publish_checks(
     assert "source_not_saved" in refused.json()["detail"]["message"]
 
 
+@pytest.mark.parametrize(
+    ("column", "value", "reason"),
+    [
+        ("title", "Operators\u202e struggle", "control_character"),  # a bidi override, stored and served reordered
+        ("statement", "Smaller operators say safaricom keeps most mobile money.", "named_org_without_official"),
+        ("statement", "Smaller operators say Safari\u200bcom keeps most mobile money.", "control_character"),
+        ("statement", "Smaller operators say M\u2011Pesa keeps most mobile money.", "named_org_without_official"),
+    ],
+)
+async def test_approval_re_reads_the_text_for_hidden_names_and_format_characters(
+    world: ResearchWorld,
+    as_user: Client,
+    app_engine: AsyncEngine,
+    owner_engine: AsyncEngine,
+    column: str,
+    value: str,
+    reason: str,
+) -> None:
+    """P11 review MAJOR 2 at the publish gate: the definer stores format characters (it refuses only C0 and DEL),
+    so approval re-reads the stored text with NFKC, the format-character rule and the any-case, any-dash names."""
+    run_id = await _candidates(app_engine, world, "networks-telecommunications", TELECOM_DRAFT)
+    admin = await as_user(world.admin)
+    card = await _card_of(admin, run_id)
+    async with owner_engine.begin() as conn:
+        await conn.execute(text(f"UPDATE problems SET {column} = :v WHERE id = :id"), {"v": value, "id": card["id"]})
+    refused = await admin.post(f"{BASE}/candidates/{card['id']}/decision", json={"decision": "approve"})
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "publish_check_failed")
+    assert reason in refused.json()["detail"]["message"]
+
+
 async def _one_source_candidate(app_engine: AsyncEngine, world: ResearchWorld) -> UUID:
     """A card with one news source, made through the definer (which accepts it: the source rule is the publish
     gate's)."""

@@ -212,3 +212,13 @@ def test_freshness_is_one_until_12_months_and_zero_from_18() -> None:
     assert freshness(excerpt, date(2027, 10, 3), policy) is Freshness.ARCHIVED
     assert freshness_score(excerpt, date(2027, 10, 3), policy) == 0
     assert add_months(date(2026, 8, 31), 6) == date(2027, 2, 28)
+
+
+def test_nfkc_leaves_every_saved_excerpt_as_it_is() -> None:
+    """``collapse`` normalises NFKC (P11 review MAJOR 2); the saved quotes must not change under it, so they are still
+    compared exactly as saved."""
+    import unicodedata
+
+    for excerpt in load_catalogue().excerpts:
+        for value in (excerpt.quote, excerpt.publisher, excerpt.url):
+            assert unicodedata.normalize("NFKC", value) == value, excerpt.id
