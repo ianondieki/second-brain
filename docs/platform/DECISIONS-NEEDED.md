@@ -202,6 +202,15 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype (the demo's staff accounts are staff only).
 - Decision:
 
+### D-49 · The support contact shown on `/help` and in emails (P16; spec 07 help)
+- Why: every email footer links to `/help`, whose "Contact support" section needs a real channel. The prototype shows
+  "Support contact to be set." (`[[COPY-REVIEW]]`); no address, phone or form exists.
+- Options: (a) a support email address on the product domain; (b) a form that files a support case (needs a small API);
+  (c) both, with the form preferred when signed in.
+- Recommended default: (a) for launch, once the domain and mailbox exist (G2); the placeholder stays until then.
+- Blocks: launch (R1); nothing in the prototype.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
