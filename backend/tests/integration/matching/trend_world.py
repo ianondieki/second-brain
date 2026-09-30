@@ -134,7 +134,8 @@ async def brief(owner_engine: AsyncEngine, niche: UUID, *, age_days: float = 1, 
         )
         await run(
             conn,
-            "INSERT INTO problem_briefs (problem_id, org_id, visibility, status) VALUES (:p, :org, 'public', 'published')",
+            "INSERT INTO problem_briefs (problem_id, org_id, visibility, status)"
+            " VALUES (:p, :org, 'public', 'published')",
             p=problem,
             org=org.id,
         )
