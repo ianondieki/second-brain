@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from uuid import UUID
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -21,9 +22,12 @@ from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import add_person, run
 from tests.integration.matching.trend_world import (
     TrendWorld,
+    board_as,
+    brief,
     build,
     developer_problem,
     proposal,
+    quiet_niche,
     research_card,
     signals,
 )
@@ -224,3 +228,47 @@ async def test_the_county_filter_narrows_projects_too(owner_engine: AsyncEngine,
     assert {str(nairobi), str(nakuru)} <= {p["proposal"]["id"] for p in everywhere["projects"]}
     narrowed = await trending(app_engine, world, niche=world.slug("niche"), county="KE-32")
     assert [p["proposal"]["id"] for p in narrowed["projects"]] == [str(nakuru)]
+
+
+async def rising_but_not_trending(app_engine: AsyncEngine, world: TrendWorld, problem: UUID) -> None:
+    """The problem rises well above its quiet niche (z and score over the floors), yet has no badge: too few recent
+    actors. Discover leaves it out (neither Trending nor new)."""
+    trend = (await board_as(app_engine, world.author)).problems[problem]
+    assert trend.z is not None
+    assert trend.z >= 1.0
+    assert trend.score >= 1.0
+    assert not trend.trending
+    body = await trending(app_engine, world, niche=world.slug("niche"))
+    assert str(problem) not in {p["problem"]["id"] for p in body["problems"]}
+
+
+async def test_last_seasons_scouts_are_not_actors(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Round-2 MAJOR 1: three organisations scouting 150 to 160 days ago and one fresh proposal: no badge."""
+    world = await build(owner_engine)
+    await quiet_niche(owner_engine, world, world.niche)
+    problem = await developer_problem(owner_engine, world.author, world.niche, age_days=200)
+    old = await proposal(owner_engine, world.niche, problem, age_days=170)
+    await signals(owner_engine, old, "scout_match", days_ago=[150.0, 155.0, 160.0], actors=3)
+    await proposal(owner_engine, world.niche, problem, age_days=0.1)
+    await rising_but_not_trending(app_engine, world, problem)
+
+
+async def test_an_old_briefs_organisation_is_not_an_actor(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Round-2 MAJOR 1: a Brief posted 170 days ago and two fresh proposals: no badge."""
+    world = await build(owner_engine)
+    await quiet_niche(owner_engine, world, world.niche)
+    posted = await brief(owner_engine, world.niche, age_days=170)
+    for _ in range(2):
+        await proposal(owner_engine, world.niche, posted, age_days=0.1)
+    await rising_but_not_trending(app_engine, world, posted)
+
+
+async def test_old_proposal_owners_are_not_actors(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Round-2 MINOR: three developers' proposals of 150 days ago and one fresh proposal: no badge."""
+    world = await build(owner_engine)
+    await quiet_niche(owner_engine, world, world.niche)
+    problem = await developer_problem(owner_engine, world.author, world.niche, age_days=200)
+    for _ in range(3):
+        await proposal(owner_engine, world.niche, problem, age_days=150)
+    await proposal(owner_engine, world.niche, problem, age_days=0.1)
+    await rising_but_not_trending(app_engine, world, problem)

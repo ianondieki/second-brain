@@ -9,10 +9,12 @@ Two sources only, both as ``bridge_app`` under the caller's Row-Level Security:
   day, with no hash and no organisation id; items below 3 distinct actors never come back.
 
 Distinct actors (the ``min_actors`` floor before an item is Trending) are only the people and organisations behind
-recent activity: developers who published a proposal against the problem in the badge window (30 days), publishers of
-sources dated in that window, the Brief's organisation, and the organisations whose scouts matched a linked proposal
-(counted by the definer over the whole window, from 3). An old source is evidence for the score, never a crowd, so a
-card with three year-old publishers and one new proposal has one actor, not four.
+recent activity, all in the 30-day badge window: developers who published a proposal against the problem, publishers
+of sources dated in it, the Brief's organisation when the Brief was posted in it, and the organisations whose scouts
+matched a linked proposal in it (a second ``app_trend_aggregates`` call from the window's first Nairobi day; the
+definer still counts organisations only from 3). A project's actors are likewise the organisations that expressed
+interest in the window. The scores use the whole 180-day window. An old source, an old Brief or last season's scouts
+are evidence for the score, never a crowd: a card with three year-old publishers and one new proposal has one actor.
 
 ``board`` turns them into trend subjects with the anti-gaming rules of ``bridge.matching.trending`` applied, and
 scores them. Owner and creator ids are read only to drop self-boosts and count distinct actors; nothing returned by
@@ -118,7 +120,8 @@ class Facts:
     problems: dict[UUID, ProblemFact]
     sources: list[SourceFact]
     proposals: dict[UUID, ProposalFact]
-    aggregates: list[Aggregate]
+    aggregates: list[Aggregate]  # over the whole window: the scores
+    recent_aggregates: list[Aggregate] = field(default_factory=list)  # over the badge window: the actors and counts
 
 
 @dataclass(slots=True)
@@ -154,13 +157,18 @@ def _publisher_key(publisher: str | None, url: str) -> str:
     return (urlsplit(url).hostname or url).lower()
 
 
-async def load(db: AsyncSession, cfg: RankingConfig) -> Facts:
-    now: datetime = (await db.execute(_NOW)).scalar_one()
-    params = {"since": _window(now, cfg.trending.window_days), "now": now, "kinds": [SCOUT_MATCH, ORG_INTEREST]}
-    aggregates = [
+async def _aggregates(db: AsyncSession, since: datetime, now: datetime) -> list[Aggregate]:
+    params = {"since": since, "now": now, "kinds": [SCOUT_MATCH, ORG_INTEREST]}
+    return [
         Aggregate(row.item_id, row.kind, row.day, float(row.events), int(row.actors), row.orgs)
         for row in (await db.execute(_AGGREGATES, params)).all()
     ]
+
+
+async def load(db: AsyncSession, cfg: RankingConfig) -> Facts:
+    now: datetime = (await db.execute(_NOW)).scalar_one()
+    aggregates = await _aggregates(db, _window(now, cfg.trending.window_days), now)
+    recent_aggregates = await _aggregates(db, _window(now, cfg.trending.badge_days), now)
     problem_rows = (await db.execute(_PROBLEMS)).all()
     source_rows = (await db.execute(_SOURCES, {"ids": [r.id for r in problem_rows]})).all()
     refs: dict[UUID, list[str | None]] = defaultdict(list)
@@ -184,11 +192,12 @@ async def load(db: AsyncSession, cfg: RankingConfig) -> Facts:
             linked[row.id].append(row.problem_id)
         first[row.id] = (row.owner_id, row.niche_id, row.parent_id, row.county_code, row.published_at)
     proposals = {pid: ProposalFact(pid, *first[pid], tuple(sorted(problem_ids))) for pid, problem_ids in linked.items()}
-    return Facts(now, problems, sources, proposals, aggregates)
+    return Facts(now, problems, sources, proposals, aggregates, recent_aggregates)
 
 
-def _org_rows(facts: Facts, cfg: RankingConfig, kind: str) -> dict[UUID, list[Aggregate]]:
-    rows = [a for a in facts.aggregates if a.kind == kind and a.item_id in facts.proposals]
+def _org_rows(facts: Facts, cfg: RankingConfig, kind: str, *, recent: bool = False) -> dict[UUID, list[Aggregate]]:
+    source = facts.recent_aggregates if recent else facts.aggregates
+    rows = [a for a in source if a.kind == kind and a.item_id in facts.proposals]
     by_item: dict[UUID, list[Aggregate]] = defaultdict(list)
     for row in organisation_side(without_bursts(rows, cfg.trending.young_share), cfg.trending.min_orgs):
         by_item[row.item_id].append(row)
@@ -208,7 +217,8 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
     for p in facts.problems.values():
         if p.source == "org_brief" and p.published_at is not None and nairobi_day(p.published_at) >= oldest:
             events[p.id].append(Event("verified_org_brief", nairobi_day(p.published_at), 1))
-            actors[p.id].add(("brief", p.id))
+            if nairobi_day(p.published_at) >= recent:  # the Brief's organisation acts when it posts
+                actors[p.id].add(("brief", p.id))
     for s in {(s.problem_id, s.publisher_key, s.published_date): s for s in facts.sources}.values():
         if s.published_date is None or s.published_date < oldest:
             continue
@@ -233,7 +243,7 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
     for (problem_id, day), count in once_per_actor_and_day(submitted).items():
         events[problem_id].append(Event("proposal_submitted", day, count))
 
-    scouts = _org_rows(facts, cfg, SCOUT_MATCH)
+    scouts, recent_scouts = _org_rows(facts, cfg, SCOUT_MATCH), _org_rows(facts, cfg, SCOUT_MATCH, recent=True)
     solving: dict[UUID, list[UUID]] = defaultdict(list)
     for proposal in facts.proposals.values():
         for problem_id in proposal.problem_ids:
@@ -244,6 +254,7 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
         for proposal_id in proposal_ids:
             for row in scouts.get(proposal_id, ()):
                 per_day[row.day] = max(per_day.get(row.day, 0.0), row.events)  # once per organisation and day
+            for row in recent_scouts.get(proposal_id, ()):  # organisations scouting in the badge window (from 3)
                 orgs = max(orgs, row.actors)
         events[problem_id].extend(Event(SCOUT_MATCH, day, count) for day, count in per_day.items())
         if orgs:
@@ -254,14 +265,14 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
         Subject(p.id, p.niche_id, p.published_at, tuple(events[p.id]), len(actors[p.id]))
         for p in facts.problems.values()
     ]
-    interest = _org_rows(facts, cfg, ORG_INTEREST)
+    interest, recent_interest = _org_rows(facts, cfg, ORG_INTEREST), _org_rows(facts, cfg, ORG_INTEREST, recent=True)
     project_subjects = [
         Subject(
             prop.id,
             prop.niche_id,
             prop.published_at,
             tuple(Event(ORG_INTEREST, row.day, row.events) for row in interest.get(prop.id, ())),
-            max((row.actors for row in interest.get(prop.id, ())), default=0),
+            max((row.actors for row in recent_interest.get(prop.id, ())), default=0),
         )
         for prop in facts.proposals.values()
     ]

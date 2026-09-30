@@ -15,7 +15,10 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.db import bind_tenant, create_session_factory
 from bridge.ids import uuid7
+from bridge.matching.ranking_config import get_ranking
+from bridge.matching.trend_facts import Board, board, load
 from bridge.seed.reference import load_reference, seed_regions
 from tests.integration.matching.scout_world import Teaser, add_org, add_person, add_teaser, run
 
@@ -208,3 +211,17 @@ async def signals(
                     org=f"{tag}-org-{n % orgs}".encode().ljust(32, b"\0"),
                     secs=days * 86400,
                 )
+
+
+async def board_as(app_engine: AsyncEngine, user: UUID) -> Board:
+    """The trend board as ``user`` reads it (under their Row-Level Security): every trend, shown or not."""
+    async with create_session_factory(app_engine)() as db:
+        await bind_tenant(db, user_id=user)
+        cfg = get_ranking()
+        return board(await load(db, cfg), cfg)
+
+
+async def quiet_niche(owner_engine: AsyncEngine, world: TrendWorld, niche: UUID, count: int = 10) -> None:
+    """Problems of long ago with no activity: the niche's baseline is near zero, so any fresh event has a high z."""
+    for _ in range(count):
+        await developer_problem(owner_engine, world.author, niche, age_days=200)
