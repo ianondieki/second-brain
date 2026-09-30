@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 
 import { revealContact, type Contact, type Refusal } from "./calls";
 
@@ -36,14 +37,12 @@ export function ContactReveal({
 
   if (contact) {
     return (
-      <dl data-contact-revealed="" className="grid gap-x-8 gap-y-2 sm:grid-cols-[minmax(10rem,auto)_1fr]">
-        <dt className="text-sm font-medium text-ink-soft">{t("contact.name")}</dt>
-        <dd className="text-ink [overflow-wrap:anywhere]">{contact.developer_name}</dd>
-        <dt className="text-sm font-medium text-ink-soft">{t("contact.email")}</dt>
-        <dd className="text-ink [overflow-wrap:anywhere]">
+      <DescriptionList data-contact-revealed="">
+        <Description label={t("contact.name")}>{contact.developer_name}</Description>
+        <Description label={t("contact.email")}>
           {contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : t("contact.noEmail")}
-        </dd>
-      </dl>
+        </Description>
+      </DescriptionList>
     );
   }
 

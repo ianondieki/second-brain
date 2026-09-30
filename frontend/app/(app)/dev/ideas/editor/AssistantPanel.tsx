@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { ConfirmDialog, openConfirm } from "@/components/ui/ConfirmDialog";
 
 import * as assistantCalls from "../assistant";
 import {
@@ -71,8 +72,6 @@ export function AssistantPanel({
   const started = useRef(false);
   const busy = useRef(false); // one request at a time, whatever the renders in between
   const focusTo = useRef<"heading" | "notice" | "problem">(undefined); // read after the render that shows it
-  const titleId = useId();
-  const bodyId = useId();
 
   /** A refusal: its sentence, with focus on it (the button pressed may be gone). */
   function fail(why: typeof problem) {
@@ -193,10 +192,7 @@ export function AssistantPanel({
   // "Not now", the choice that sends nothing (React never renders the autofocus attribute on the client).
   useEffect(() => {
     const node = dialog.current!;
-    if (dialogOpen && !node.open) {
-      node.showModal();
-      node.querySelector<HTMLElement>("[data-dialog-cancel]")?.focus();
-    }
+    if (dialogOpen) openConfirm(node);
     if (!dialogOpen && node.open) node.close();
   }, [dialogOpen]);
 
@@ -313,41 +309,27 @@ export function AssistantPanel({
         </div>
       )}
 
-      <dialog
+      {/* While the assistant is being turned on the dialog stays open: Escape and "Not now" wait for the answer. */}
+      <ConfirmDialog
         ref={dialog}
-        aria-labelledby={titleId}
-        aria-describedby={bodyId}
-        // While the assistant is being turned on the dialog stays open: Escape and "Not now" wait for the answer.
-        onCancel={(event) => granting && event.preventDefault()}
+        size="lg"
+        title={t("dialog.title")}
+        confirmLabel={t("dialog.confirm")}
+        busyLabel={t("dialog.busy")}
+        cancelLabel={t("dialog.cancel")}
+        busy={granting}
+        confirmDisabled={!consent}
+        onConfirm={() => void grant()}
         onClose={() => {
           setDialogOpen(false);
           if (!accepted.current) onClose(); // "Not now" or Escape: nothing was sent, and the panel closes
         }}
-        className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel border border-line bg-paper p-6 text-ink backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]"
+        problem={dialogProblem && <Alert>{t(`problem.${dialogProblem}`)}</Alert>}
+        // The consent wording is the API's, shown as it is: its version is what "Turn on" sends back.
+        bodyProps={{ "data-consent-version": consent?.version, className: "whitespace-pre-line" }}
       >
-        <h2 id={titleId} className="text-lg">
-          {t("dialog.title")}
-        </h2>
-        {/* The consent wording is the API's, shown as it is: its version is what "Turn on" sends back. */}
-        <p id={bodyId} data-consent-version={consent?.version} className="my-4 whitespace-pre-line">
-          {consent?.text}
-        </p>
-        {dialogProblem && <Alert>{t(`problem.${dialogProblem}`)}</Alert>}
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button busy={granting} onClick={() => dialog.current?.close()} data-dialog-cancel="">
-            {t("dialog.cancel")}
-          </Button>
-          {/* Styled as the dialog's main button but not the screen's primary action (data-primary stays on the page's). */}
-          <button
-            type="button"
-            onClick={() => void grant()}
-            aria-disabled={granting || !consent || undefined}
-            className={buttonClass("primary")}
-          >
-            {t(granting ? "dialog.busy" : "dialog.confirm")}
-          </button>
-        </div>
-      </dialog>
+        {consent?.text}
+      </ConfirmDialog>
     </div>
   );
 }

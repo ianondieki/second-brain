@@ -5,7 +5,7 @@ import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
 import type { InboxItem } from "./data";
-import { EmptyState } from "./EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { InboxRow } from "./inbox/InboxRow";
 import { NdaAccept } from "./inbox/[proposalId]/NdaAccept";
 import { StepUp } from "./inbox/[proposalId]/StepUp";

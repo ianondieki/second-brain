@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ConsiderIcon, NotNowIcon, PursueIcon } from "@/components/discover-icons";
 import { problemHref } from "@/components/problem/problem";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";

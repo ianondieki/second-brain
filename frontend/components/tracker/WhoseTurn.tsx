@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 
 import { ChipMark } from "./Chip";
@@ -33,20 +34,18 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
               : t("turn.ended");
 
   const yours = turn.kind === "you" || turn.kind === "both";
+  // A Callout with a title (docs/platform/design/p16-design-system.md, Notices): the accent tone when it is the
+  // viewer's turn, neutral otherwise; the drawn mark says current, completed or ended with the words.
   return (
-    <section
+    <Callout
+      as="section"
       aria-labelledby="whose-turn"
       data-whose-turn={turn.kind}
-      className={cn(
-        "border-l-4 py-3 pr-4 pl-4",
-        yours
-          ? "border-jacaranda bg-jacaranda-wash"
-          : turn.kind === "ended"
-            ? "border-line bg-transparent"
-            : "border-ink-soft bg-transparent",
-      )}
-    >
-      <p id="whose-turn" className="flex items-start gap-2 text-lg font-semibold text-ink">
+      tone={yours ? "info" : "neutral"}
+      title={headline}
+      titleId="whose-turn"
+      titleSize="lg"
+      icon={
         <ChipMark
           kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : "current"}
           className={cn(
@@ -54,30 +53,30 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
             turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-jacaranda",
           )}
         />
-        <span>{headline}</span>
-      </p>
+      }
+    >
       {turn.kind === "ended" && detail.end_reason ? (
-        <p className="mt-1 text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
+        <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
       ) : null}
       {yours
         ? mine.map((command) => (
-            <p key={command} className="mt-1 text-ink">
+            <p key={command} className="text-ink">
               {t("nextYou", { step: steps(`command.${command}`) })}
             </p>
           ))
         : null}
       {turn.kind === "other" || turn.kind === "both"
         ? theirs.map((command) => (
-            <p key={command} className="mt-1 text-ink-soft">
+            <p key={command} className="text-ink-soft">
               {t("nextThem", { name: other, step: steps(`command.${command}`) })}
             </p>
           ))
         : null}
       {detail.due && turn.kind !== "ended" ? (
-        <p className="mt-1 text-sm">
+        <p className="text-sm">
           <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
         </p>
       ) : null}
-    </section>
+    </Callout>
   );
 }

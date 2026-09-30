@@ -99,7 +99,7 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
 | Tabs | `TabNav` | links with `aria-current="page"`, 44 px targets, 2 px jacaranda underline on the current tab, scrolls sideways inside itself at 360 px. |
 | Portal nav | `PortalNav` | one implementation behind `DevNav`, `OrgNav`, `AdminNav`. |
 | Empty states | `EmptyState` | `data-empty-state`, exactly one sentence and one action link (AC-UX-5). |
-| Loading | `loading.tsx` per route group + `PageSkeleton` | server component, no client JS; static wash blocks (no shimmer), `role="status"` with a visually hidden "Loading" sentence. |
+| Loading | no route-level `loading.tsx`; `LinkPending` in navigation links; the in-page `<Suspense>` status sentences | Pages render in one server pass. A route skeleton was built and measured in P16 part B, then removed: React holds a revealed Suspense fallback for at least ~300 ms and the API answers well inside that, so Lighthouse mobile LCP went from 1.6–1.7 s to 2.4 s on `/dev`, 1.7 to 2.4 s on `/dev/discover` and 1.6 to 2.3 s on the tracker, and the MFA-pending redirect became a 200. In-app navigation shows `LinkPending` (a fixed-size accent bar whose opacity follows `useLinkStatus`, after 100 ms, pulse only without reduced motion, `aria-hidden`) on the tapped nav item, tab, row title or back link. A route-level skeleton comes back only for a page measured to wait well over ~300 ms on its data. |
 | Errors | route-group `error.tsx` (`ErrorScreen`) + inline `Alert` for refused actions | errors say what happened and what to do; no apologies. |
 | Success / "toasts" | inline `Alert tone="ok"` in a live region next to the action that caused it | no floating toasts (low bandwidth, screen readers, focus). |
 | Confirmations | `ConfirmDialog` (native `<dialog>`, `--shadow-overlay`, `--scrim`) | only for destructive or irreversible actions (withdraw, decline, cancel plan, reject); names the action on its button ("Withdraw pitch", not "OK"); Escape and the second button cancel; focus returns to the trigger. |
@@ -115,7 +115,7 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
    callout, focus. Never decoration.
 4. **The one memorable thing stays where it is**: the bridge line on the landing page and the tracker stepper with its
    whose-turn callout. Everything else is quiet.
-5. **Every screen has four states**: loading (route skeleton), empty (one sentence, one action), error (what happened,
+5. **Every screen has four states**: loading (the tapped link's pending hint; no route skeleton, see Loading), empty (one sentence, one action), error (what happened,
    what to do), success (inline confirmation). A screen without one of them is unfinished.
 
 ## Review against the brief (second pass)
@@ -129,3 +129,31 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
 - *Elevation.* Kept to one level, for things that float over the page; the page itself stays flat.
 - *Motion.* No new motion. The bridge line drawing once stays the only authored moment; state changes (menu open,
   tab change) are instant or ≤150 ms colour transitions; reduced motion is respected globally.
+
+## How to use (built in P16 part B)
+
+Import from `frontend/components/ui/` (or `frontend/components/` for the navigation and route states). Compose these;
+do not re-create their classes on a screen. Tokens are Tailwind utilities (`bg-accent-strong`, `hover:bg-wash-soft`,
+`bg-error-wash`, `bg-ok-wash`, `border-error-line`, `border-ok-line`, `border-accent-line`, `backdrop:bg-scrim`,
+`shadow-overlay`); never write their `color-mix` inline (`app/globals.test.ts` fails the build if one reappears).
+
+| Component | Import | Use it for |
+|---|---|---|
+| `Button`, `ButtonLink` (variants `primary`, `secondary`, `danger`, `link`) | `@/components/ui/Button`, `@/components/ui/ButtonLink` | actions; `danger` for delete, withdraw, decline (outlined, never filled, never `data-primary`) |
+| `PageHeader`, `BackLink` | `@/components/ui/PageHeader`, `@/components/ui/BackLink` | a page's back link, h1, one-sentence lead and the primary action's slot |
+| `Section` | `@/components/ui/Section` | a titled part of a page: h2, optional description, optional secondary `link` |
+| `RowList`, `Row` | `@/components/ui/RowList` | lists of things; `Row` takes `title`, `href` (stretched link), `meta`, `badges` (a tuple of at most two: `tsc` refuses a third), `figure` |
+| `DescriptionList`, `Description` | `@/components/ui/DescriptionList` | label/value facts; `figures` for amounts and dates, `dense` inside a row |
+| `Badge` | `@/components/ui/Badge` | a status: `tone` (`accent`, `ok`, `error`, `neutral`), `icon`, words; `solid` only for the one "Your turn"/"Needs you" marker; `data-chip`/`data-badge` pass through |
+| `Callout` | `@/components/ui/Callout` | a static notice (no live role): `tone` (`info`, `ok`, `error`, `neutral`), optional `title`; replaces every coloured left rule |
+| `Alert` | `@/components/ui/Alert` | a notice that appears because something happened (announced); same tones as `Callout` |
+| `TabNav` | `@/components/ui/TabNav` | views of one page as link tabs (`label` required, `items`, `current`) |
+| `PortalNav` (behind `DevNav`, `OrgNav`, `AdminNav`) | `@/components/PortalNav` | a portal's sections; use the three wrappers on screens |
+| `EmptyState` (`EmptyStateFrame` for a button action in a client form step) | `@/components/ui/EmptyState`, `@/components/ui/EmptyStateFrame` | empty and closed states: one sentence, one action (`primary` when it is the screen's one action; `rule={false}` under a tab strip) |
+| `LinkPending` | `@/components/ui/LinkPending` | inside a `next/link` whose destination may take a moment (already in `PortalNav`, `TabNav`, `Row` titles and `BackLink`); no `loading.tsx` |
+| `NotFoundScreen` | `@/components/NotFoundScreen` | the one root `app/not-found.tsx`: static (no session read, no client component, plain links), since Next.js embeds it in every page's payload |
+| `ConfirmDialog`, `openConfirm` | `@/components/ui/ConfirmDialog` | destructive or irreversible steps only; the confirm button names the action; open with `openConfirm(ref.current)` |
+| `Panel` | `@/components/ui/Panel` | the one `rounded-panel` box of a screen (`variant="field"` or `"wash"`) |
+
+`DataTable` is not built: no screen has a `<table>` yet (rows that compare columns: billing invoices, milestones);
+add it with its first use.

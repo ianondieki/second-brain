@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
-import { EmptyState } from "./EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ACTION_HREF, type Refusal } from "./refusals";
 
 /**

@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { getOrgCard } from "../directory";
-import { Empty } from "../DirectoryResults";
 import { filtersHref, parseFilters } from "../filters";
 import { VerificationBadge } from "../VerificationBadge";
 
@@ -39,11 +38,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />}>
       {org ? (
         <>
-          <p className="-mt-2 mb-4">
-            <Link href={back} className={standaloneLinkClass}>
-              {t("detailBack")}
-            </Link>
-          </p>
+          <BackLink href={back}>{t("detailBack")}</BackLink>
           <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{org.name}</h1>
           <VerificationBadge badge={org.badge} className="mt-3 text-base" />
           <dl className="mt-8 grid gap-x-8 gap-y-4 border-t border-line pt-6 sm:grid-cols-[minmax(9rem,auto)_1fr]">
@@ -67,7 +62,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
         <>
           <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
           <div className="mt-6">
-            <Empty sentence={t("notFound")} action={t("detailBack")} href={back} />
+            <EmptyState sentence={t("notFound")} action={t("detailBack")} href={back} />
           </div>
         </>
       )}

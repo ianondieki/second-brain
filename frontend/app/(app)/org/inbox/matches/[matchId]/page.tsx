@@ -10,7 +10,7 @@ import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getTeaser, orgContext } from "../../../data";
-import { EmptyState } from "../../../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { OrgRefusal } from "../../../OrgRefusal";
 import { engagementsHref, type Membership } from "../../../membership";
 import { interestReasonOf, matchesHref, type MatchDetail } from "../../../scout";

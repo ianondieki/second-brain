@@ -3,12 +3,13 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { isUuid } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { formatDate, formatMoment } from "@/components/problem/problem";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { InfoIcon } from "@/components/ui/icons";
+import { BackLink } from "@/components/ui/BackLink";
 
 import { AdminShell } from "../../AdminShell";
 import { caseHref } from "../../moderation/moderation";
@@ -36,11 +37,7 @@ export default async function ClaimPage({ params }: PageProps<"/admin/claims/[id
   const t = await getTranslations("adminClaims");
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current="claims">
-      <p className="-mt-2 mb-4">
-        <Link href={CLAIMS_PATH} className={standaloneLinkClass}>
-          {t("detail.back")}
-        </Link>
-      </p>
+      <BackLink href={CLAIMS_PATH}>{t("detail.back")}</BackLink>
       {children}
     </AdminShell>
   );

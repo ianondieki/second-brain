@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 
-import { cn } from "@/components/ui/cn";
+import { Badge } from "@/components/ui/Badge";
+import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
 import type { Command, History } from "./model";
@@ -43,25 +44,20 @@ export function HistoryList({ history }: { history: History }) {
   const t = useTranslations("tracker");
   const events = [...history.events].sort((a, b) => b.seq - a.seq);
   return (
-    <section aria-labelledby="history-heading">
-      <h2 id="history-heading" className="text-lg text-ink">
-        {t("history.title")}
-      </h2>
-      <p
-        data-chain={history.chain_verified ? "verified" : "unverified"}
-        className={cn(
-          "mt-1 flex items-start gap-1.5 text-sm font-medium",
-          history.chain_verified ? "text-ok" : "text-error",
-        )}
-      >
-        {history.chain_verified ? (
-          <CheckIcon className="mt-0.5 size-4 shrink-0" />
-        ) : (
-          <AlertIcon className="mt-0.5 size-4 shrink-0" />
-        )}
-        <span>{history.chain_verified ? t("history.chainOk") : t("history.chainBroken")}</span>
-      </p>
-      <ol className="mt-4 flex flex-col">
+    <Section
+      title={t("history.title")}
+      headingId="history-heading"
+      description={
+        <Badge
+          data-chain={history.chain_verified ? "verified" : "unverified"}
+          tone={history.chain_verified ? "ok" : "error"}
+          icon={history.chain_verified ? <CheckIcon /> : <AlertIcon />}
+        >
+          {history.chain_verified ? t("history.chainOk") : t("history.chainBroken")}
+        </Badge>
+      }
+    >
+      <ol className="flex flex-col">
         {events.map((event) => (
           <li key={event.id} data-event={event.command} className="border-t border-line py-3">
             <p className="font-semibold text-ink">
@@ -79,6 +75,6 @@ export function HistoryList({ history }: { history: History }) {
           </li>
         ))}
       </ol>
-    </section>
+    </Section>
   );
 }

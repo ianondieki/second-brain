@@ -2,6 +2,22 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
+ * The page has settled: after an in-app navigation the new page's <title> arrives with its streamed metadata, a moment
+ * after its content, so a check that reads the whole document (axe's document-title) waits for it.
+ */
+export async function settled(page: Page) {
+  await expect(page).toHaveTitle(/\S/);
+  // A colour transition still running (a button that just changed variant, 150 ms) would let axe measure a colour
+  // halfway between two states; wait for every finite animation and transition to finish first. Infinite ones (a
+  // pending hint's pulse) never finish and are left out.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+  );
+}
+
+/**
  * The page-level rules every screen keeps (same as e2e/auth.spec.ts): axe finds nothing serious or critical
  * (AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, at 360 px in mobile-360).
  * `exclude`: selectors axe leaves out, for frames that run no script (axe cannot run inside them and would wait for
@@ -9,6 +25,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * its title).
  */
 export async function checkScreen(page: Page, { exclude = [] }: { exclude?: string[] } = {}) {
+  await settled(page);
   let axe = new AxeBuilder({ page }).withTags([
     "wcag2a",
     "wcag2aa",
@@ -49,6 +66,7 @@ export async function expectEmptyState(page: Page, sentence: string, action: str
  * 44 px tall and no two boxes overlap.
  */
 export async function expectSeparateTargets(targets: Locator) {
+  await settled(targets.page());
   const boxes = [];
   for (const target of await targets.all()) {
     const box = await target.boundingBox();

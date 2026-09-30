@@ -8,7 +8,7 @@ import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { EmptyState } from "../../org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { notificationChoices, type ConsentItem } from "./choices";
 import { NotificationChoices } from "./NotificationChoices";
 

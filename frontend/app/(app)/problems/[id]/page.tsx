@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 
@@ -30,11 +29,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
     <SignedInShell homeHref={home}>
       {problem ? (
         <>
-          <p className="-mt-2 mb-4">
-            <Link href={home} className={standaloneLinkClass}>
-              {t("back")}
-            </Link>
-          </p>
+          <BackLink href={home}>{t("back")}</BackLink>
           <ProblemCard problem={problem} />
         </>
       ) : (

@@ -10,7 +10,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { needsMfaSetup } from "@/lib/auth/routing";
 
 import { getInbox, orgContext } from "./data";
-import { EmptyState } from "./EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDay } from "./format";
 import { inboxHref, type Membership } from "./membership";
 

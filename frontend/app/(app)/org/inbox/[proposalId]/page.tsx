@@ -9,7 +9,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getNda, getTeaser, orgContext } from "../../data";
-import { EmptyState } from "../../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { first, inboxHref, proposalHref } from "../../membership";
 import { FullProposal } from "./FullProposal";
 import { TeaserDetails } from "./TeaserDetails";

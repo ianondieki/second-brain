@@ -12,7 +12,7 @@ import {
   signUpScoutOrg,
   upgradeOrg,
 } from "./support/scout-scene";
-import { checkScreen, expectEmptyState } from "./support/screen";
+import { checkScreen, expectEmptyState, settled } from "./support/screen";
 import { tag } from "./support/tracker-scene";
 
 // REQ-SCOUT-02 frontend (P10-F), the M2 walkthrough's step 1 (docs/platform/prototype-m2-plan.md §3), with
@@ -178,8 +178,10 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await shot(orgPage, info, "scout-matches");
 
     // 6. EM3 reaches the reviewer seat; its item link opens the match page.
-    const em3 = await waitForMessage(orgPage.request, org.person.email, /^Scout digest/);
-    const link = /https?:\/\/[^\s"<>]+\/org\/inbox\/matches\/[0-9a-f-]{36}\?org=[0-9a-f-]{36}/.exec(em3.text)?.[0];
+    const em3 = await waitForMessage(orgPage.request, org.person.email, /^Scout digest/, 60_000, dev.title);
+    // The item of this proposal (numbered "1. …", "2. …"; another test's proposal may share the digest).
+    const item = em3.text.split(/\n(?=\d+\. )/).find((block) => block.includes(dev.title)) ?? "";
+    const link = /https?:\/\/[^\s"<>]+\/org\/inbox\/matches\/[0-9a-f-]{36}\?org=[0-9a-f-]{36}/.exec(item)?.[0];
     expect(link, "EM3 links to the match page").toBeTruthy();
     expect(em3.text).toContain(dev.title);
     expect(em3.text).not.toMatch(NAME);
@@ -265,6 +267,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
 
     // 10. The organisation now sees the developer's name, and opens the full proposal under the NDA.
     await orgPage.goto(`/org/engagements/${engagementId}`);
+    await settled(orgPage);
     await expect(orgPage.locator("main")).toContainText(`From ${dev.name}`);
     const shared = orgPage.locator("[data-tier2-share='shared']");
     await expect(shared).toContainText(`The developer shared the full proposal with ${org.orgName}`);

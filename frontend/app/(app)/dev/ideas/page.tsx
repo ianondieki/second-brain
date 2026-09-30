@@ -6,6 +6,7 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Alert } from "@/components/ui/Alert";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -61,12 +62,7 @@ export default async function MyIdeasPage({ searchParams }: PageProps<"/dev/idea
             ))}
           </ul>
         ) : (
-          <div data-empty-state="" className="flex flex-col items-start gap-5 border-t border-line pt-6">
-            <p className="max-w-[52ch] text-ink">{t("empty")}</p>
-            <ButtonLink href={NEW_PATH} variant="primary">
-              {t("newIdea")}
-            </ButtonLink>
-          </div>
+          <EmptyState sentence={t("empty")} action={t("newIdea")} href={NEW_PATH} primary />
         )}
       </div>
     </SignedInShell>

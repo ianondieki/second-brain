@@ -6,6 +6,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { ClockIcon, ClosedIcon, SendIcon } from "@/components/ui/icons";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { formatDay } from "../dates";
@@ -73,12 +74,7 @@ export async function Pitches({ ideaId, status, tags }: PitchesProps) {
       {status !== "published" ? <p className="mt-3 text-ink">{t(`blocked.${status}`)}</p> : null}
       {tags.items.length === 0 ? (
         pitchable ? (
-          <div data-empty-state="" className="mt-4 border-t border-line pt-4">
-            <p className="text-ink">{t("empty")}</p>
-            <Link href={pitchHref(ideaId)} className={standaloneLinkClass}>
-              {t("pitch")}
-            </Link>
-          </div>
+          <EmptyState className="mt-4" sentence={t("empty")} action={t("pitch")} href={pitchHref(ideaId)} />
         ) : null
       ) : withdrawable ? (
         <ClientStrings strings={await clientStrings(["tagWithdraw"])}>{list}</ClientStrings>

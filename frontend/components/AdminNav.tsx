@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ComponentType, SVGProps } from "react";
 
 import type { components } from "@/lib/api/schema";
 
 import { ClaimsIcon, ModerationIcon, ResearchIcon } from "./admin-icons";
-import { cn } from "./ui/cn";
+import { PortalNav } from "./PortalNav";
 
 export type StaffRole = components["schemas"]["StaffRole"];
 
@@ -34,57 +33,18 @@ export function adminSections(role: StaffRole) {
 }
 
 /**
- * Bottom tabs under 1024 px, a left rail from 1024 px (one <nav>, restyled like DevNav and OrgNav). The current
- * section carries aria-current="page" and is marked by colour, weight and a bar, not colour alone. With a single
- * section there is no tab bar below 1024 px (the console home opens that section).
+ * The staff console's navigation (PortalNav, as DevNav and OrgNav), with the console's name above the rail and only
+ * the sections the role may open. With a single section there is no tab bar below 1024 px (the console home opens
+ * that section).
  */
 export function AdminNav({ current, role }: { current?: AdminSection; role: StaffRole }) {
   const t = useTranslations("admin");
-  const sections = adminSections(role);
-  if (sections.length === 0) return null;
-  // A bottom tab bar with one tab only takes room on a phone: below 1024 px the bar appears from two sections on.
-  const tabs = sections.length > 1;
   return (
-    <nav
-      aria-label={t("navLabel")}
-      data-tab-bar={tabs ? "" : undefined}
-      className={cn(
-        tabs
-          ? "fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:pb-0"
-          : "hidden lg:block",
-        "lg:w-52 lg:shrink-0 lg:pt-16",
-      )}
-    >
-      <p className="hidden px-3 pb-3 text-sm font-medium text-ink-soft lg:block">{t("navLabel")}</p>
-      <ul className="mx-auto flex max-w-md lg:max-w-none lg:flex-col lg:gap-1">
-        {sections.map(({ key, href, Icon }) => {
-          const active = key === current;
-          return (
-            <li key={key} className="flex-1 lg:flex-none">
-              <Link
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-2 text-sm whitespace-nowrap no-underline",
-                  "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-base",
-                  active
-                    ? "font-semibold text-jacaranda lg:bg-jacaranda-wash"
-                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-[color-mix(in_oklab,var(--jacaranda-wash)_55%,var(--paper))]",
-                )}
-              >
-                {active ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-6 top-0 h-0.5 rounded-b bg-jacaranda lg:inset-x-auto lg:inset-y-2 lg:left-0 lg:h-auto lg:w-0.5 lg:rounded-none lg:rounded-r"
-                  />
-                ) : null}
-                <Icon className="size-5 shrink-0" />
-                <span>{t(`nav.${key}`)}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <PortalNav
+      label={t("navLabel")}
+      heading={t("navLabel")}
+      current={current}
+      items={adminSections(role).map(({ key, href, Icon }) => ({ key, href, Icon, label: t(`nav.${key}`) }))}
+    />
   );
 }

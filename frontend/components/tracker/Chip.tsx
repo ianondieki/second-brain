@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { badgeBase } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 
 import type { ChipKind } from "./model";
@@ -67,13 +68,13 @@ export function ChipMark({ kind, className }: { kind: ChipKind; className?: stri
   );
 }
 
-/** A mark and its words in the chip's colour (`data-chip` lets tests count a card's chips). */
+/**
+ * A mark and its words in the chip's colour (`data-chip` lets tests count a card's chips): the Badge's shape
+ * (components/ui/Badge.tsx) with the tracker's six marks and tones, "On hold" in ink among them.
+ */
 export function Chip({ kind, children, className }: { kind: ChipKind; children: ReactNode; className?: string }) {
   return (
-    <span
-      data-chip={kind}
-      className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", CHIP_TONE[kind], className)}
-    >
+    <span data-chip={kind} className={cn(badgeBase, CHIP_TONE[kind], className)}>
       <ChipMark kind={kind} className="size-4" />
       <span className="min-w-0">{children}</span>
     </span>

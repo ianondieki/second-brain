@@ -1,5 +1,8 @@
 import { getTranslations } from "next-intl/server";
 
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
+
 import { EngagementRow } from "./EngagementRow";
 import { awaitsMe, type Party, type Summary } from "./model";
 
@@ -29,18 +32,18 @@ export async function EngagementList({
   return (
     <div className="flex flex-col gap-10">
       {groups.map((group) => (
-        <section key={group.key} aria-labelledby={`engagements-${group.key}`} data-group={group.key}>
-          <h2 id={`engagements-${group.key}`} className="text-lg text-ink">
-            {group.title}
-          </h2>
-          <ul className="mt-2 border-b border-line">
+        <Section key={group.key} title={group.title} headingId={`engagements-${group.key}`} data-group={group.key}>
+          <RowList>
             {group.items.map((item) => (
-              <li key={item.id}>
-                <EngagementRow item={item} mine={mine} href={`${basePath}/${encodeURIComponent(item.id)}${query}`} />
-              </li>
+              <EngagementRow
+                key={item.id}
+                item={item}
+                mine={mine}
+                href={`${basePath}/${encodeURIComponent(item.id)}${query}`}
+              />
             ))}
-          </ul>
-        </section>
+          </RowList>
+        </Section>
       ))}
     </div>
   );

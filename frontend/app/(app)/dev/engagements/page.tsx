@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -7,7 +6,7 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementList } from "@/components/tracker/EngagementList";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -36,12 +35,7 @@ export default async function DeveloperEngagementsPage() {
           {items.length > 0 ? (
             <EngagementList items={items} mine="developer" basePath="/dev/engagements" />
           ) : (
-            <div data-empty-state="" className="flex flex-col items-start gap-3 border-t border-line pt-6">
-              <p className="max-w-[52ch] text-ink">{t("emptyDev")}</p>
-              <Link href="/dev/ideas" className={standaloneLinkClass}>
-                {t("emptyDevAction")}
-              </Link>
-            </div>
+            <EmptyState sentence={t("emptyDev")} action={t("emptyDevAction")} href="/dev/ideas" />
           )}
         </div>
       </div>

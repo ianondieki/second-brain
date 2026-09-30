@@ -12,6 +12,8 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
@@ -64,12 +66,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
     return (
       <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
         <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-        <div data-empty-state="" className="mt-6 border-t border-line pt-6">
-          <p className="text-ink">{t("notFound")}</p>
-          <Link href={BASE_PATH} className={standaloneLinkClass}>
-            {t("back")}
-          </Link>
-        </div>
+        <EmptyState className="mt-6" sentence={t("notFound")} action={t("back")} href={BASE_PATH} />
       </SignedInShell>
     );
   }
@@ -85,11 +82,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-      <p className="-mt-2 mb-4">
-        <Link href={BASE_PATH} className={standaloneLinkClass}>
-          {t("back")}
-        </Link>
-      </p>
+      <BackLink href={BASE_PATH}>{t("back")}</BackLink>
       <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
         {version?.teaser.title?.trim() || t("untitled")}
       </h1>

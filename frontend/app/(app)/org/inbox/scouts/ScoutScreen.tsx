@@ -9,7 +9,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { orgContext } from "../../data";
-import { EmptyState } from "../../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { first } from "../../membership";
 import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, FREQUENCIES, matchesHref, planFor, scoutHref, type Frequency, type ScoutPlan } from "../../scout";

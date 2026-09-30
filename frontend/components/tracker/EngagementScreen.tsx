@@ -4,7 +4,11 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
+import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import type { Me } from "@/lib/auth/routing";
 
@@ -83,15 +87,12 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
 
   return (
     <ClientStrings strings={await clientStrings(["trackerActions"])}>
-      <p className="-mt-2 mb-4">
-        <Link href={withQuery(basePath, query)} className={standaloneLinkClass}>
-          {t("back")}
-        </Link>
-      </p>
-      <h1 className="max-w-3xl text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{detail.proposal_title}</h1>
-      <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]" data-counterpart={line.key}>
-        {t(line.key, line.values)}
-      </p>
+      <PageHeader
+        className="max-w-3xl"
+        back={{ href: withQuery(basePath, query), label: t("back") }}
+        title={detail.proposal_title}
+        lead={<span data-counterpart={line.key}>{t(line.key, line.values)}</span>}
+      />
 
       <div className="mt-6 max-w-3xl">
         <WhoseTurn detail={detail} />
@@ -128,24 +129,16 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         <Tier2Section detail={detail} enrolled={me.mfa.enrolled} query={query} />
       </div>
 
-      <nav aria-label={t("tabs.label")} className="mt-10 max-w-3xl border-b border-line">
-        <ul className="flex gap-1 overflow-x-auto">
-          {TABS.map((name) => (
-            <li key={name}>
-              <Link
-                href={withQuery(href, query, name === "tracker" ? {} : { tab: name })}
-                aria-current={name === tab ? "page" : undefined}
-                className={cn(
-                  "-mb-px inline-flex min-h-11 items-center border-b-2 px-3 font-semibold no-underline",
-                  name === tab ? "border-jacaranda text-jacaranda" : "border-transparent text-ink-soft hover:text-ink",
-                )}
-              >
-                {t(`tabs.${name}`)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <TabNav
+        label={t("tabs.label")}
+        current={tab}
+        className="mt-10 max-w-3xl"
+        items={TABS.map((name) => ({
+          key: name,
+          label: t(`tabs.${name}`),
+          href: withQuery(href, query, name === "tracker" ? {} : { tab: name }),
+        }))}
+      />
 
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
@@ -194,23 +187,19 @@ async function DocumentsTab({
   const kinds = documentKinds(detail);
   if (kinds.length === 0) {
     return (
-      <div data-empty-state="" className="flex flex-col items-start gap-3">
-        <p className="text-ink">{t("documents.empty")}</p>
-        <Link href={withQuery(href, query)} className={standaloneLinkClass}>
-          {t("documents.emptyAction")}
-        </Link>
-      </div>
+      <EmptyState
+        rule={false}
+        sentence={t("documents.empty")}
+        action={t("documents.emptyAction")}
+        href={withQuery(href, query)}
+      />
     );
   }
   const shown = doc && kinds.includes(doc) ? doc : kinds[0];
   const text = await engagementDocument(detail.id, shown);
   return (
-    <section aria-labelledby="documents-heading">
-      <h2 id="documents-heading" className="text-lg text-ink">
-        {t("documents.title")}
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">{t("documents.lead")}</p>
-      <ul className="mt-3 flex flex-wrap gap-x-5">
+    <Section title={t("documents.title")} headingId="documents-heading" description={t("documents.lead")}>
+      <ul className="flex flex-wrap gap-x-5">
         {kinds.map((kind) => (
           <li key={kind}>
             <Link
@@ -250,6 +239,6 @@ async function DocumentsTab({
       ) : (
         <p className="mt-4 text-ink-soft">{t("documents.missing")}</p>
       )}
-    </section>
+    </Section>
   );
 }

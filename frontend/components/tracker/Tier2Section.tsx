@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { Section } from "@/components/ui/Section";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { tier2ShareState } from "./data";
@@ -37,33 +38,29 @@ export async function Tier2Section({
   if (detail.my_party === "org") {
     if (!share.shared) return null;
     return (
-      <section aria-labelledby="share-heading" data-tier2-share="shared" className="flex flex-col items-start gap-2">
-        <h2 id="share-heading" className="text-lg text-ink">
-          {t("title")}
-        </h2>
-        <p className="max-w-[60ch] text-ink">{t("orgShared", { org: detail.org_name, date: when })}</p>
-        <Link
-          href={`/org/inbox/${encodeURIComponent(detail.proposal_id)}${query}`}
-          className={standaloneLinkClass}
-          data-open-full=""
-        >
-          {t("open")}
-        </Link>
-      </section>
+      <Section title={t("title")} headingId="share-heading" data-tier2-share="shared">
+        <div className="flex flex-col items-start gap-2">
+          <p className="max-w-[60ch] text-ink">{t("orgShared", { org: detail.org_name, date: when })}</p>
+          <Link
+            href={`/org/inbox/${encodeURIComponent(detail.proposal_id)}${query}`}
+            className={standaloneLinkClass}
+            data-open-full=""
+          >
+            {t("open")}
+          </Link>
+        </div>
+      </Section>
     );
   }
 
   if (share.shared) {
     return (
-      <section aria-labelledby="share-heading" data-tier2-share="shared" className="flex flex-col items-start gap-2">
-        <h2 id="share-heading" className="text-lg text-ink">
-          {t("title")}
-        </h2>
+      <Section title={t("title")} headingId="share-heading" data-tier2-share="shared">
         {/* ShareTier2 moves focus here once the refreshed page shows the share (a stable id). */}
         <p id="share-status" tabIndex={-1} className="max-w-[60ch] text-ink focus:outline-none">
           {t("shared", { org: detail.org_name, date: when })}
         </p>
-      </section>
+      </Section>
     );
   }
   if (isFinished(detail.state)) return null;

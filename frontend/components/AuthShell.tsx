@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { BridgeLine } from "./BridgeLine";
 import { TopBar } from "./TopBar";
 import { cn } from "./ui/cn";
+import { Panel } from "./ui/Panel";
 
 export interface AuthShellProps {
   children: ReactNode;
@@ -31,9 +32,11 @@ export async function AuthShell({ children, landing = false, topBarAction }: Aut
         <main id="main" tabIndex={-1} className={cn("w-full focus:outline-none", landing ? "max-w-xl" : "max-w-md")}>
           {children}
         </main>
-        <aside
+        <Panel
+          as="aside"
+          variant="wash"
           aria-labelledby="how-it-works"
-          className={cn("self-start rounded-panel bg-jacaranda-wash p-6 lg:p-8", !landing && "hidden lg:block")}
+          className={cn("self-start", !landing && "hidden lg:block")}
         >
           <BridgeLine
             developerLabel={t("developer")}
@@ -48,7 +51,7 @@ export async function AuthShell({ children, landing = false, topBarAction }: Aut
             <li className="pl-1">{t("review")}</li>
             <li className="pl-1">{t("track")}</li>
           </ol>
-        </aside>
+        </Panel>
       </div>
     </>
   );

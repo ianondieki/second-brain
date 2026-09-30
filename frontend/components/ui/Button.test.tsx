@@ -93,3 +93,31 @@ describe("Button busy", () => {
     expect(contrast(token("ink-soft"), token("field"))).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+// P16 design system: destructive and ending steps (delete, withdraw, decline) are one Button variant.
+describe("Button danger", () => {
+  it("is outlined in the error colour, never filled, and never the screen's primary action", async () => {
+    render(<Button variant="danger">Withdraw</Button>);
+    const button = screen.getByRole("button", { name: "Withdraw" });
+    expect(button.hasAttribute("data-primary")).toBe(false);
+    const css = await cssFor(buttonClass("danger"));
+    expect(declarationsEndingWith(css, ".text-error")).toContain("color: var(--error)");
+    expect(declarationsEndingWith(css, ".border-error")).toContain("border-color: var(--error)");
+    expect(declarationsEndingWith(css, ".bg-transparent")).toContain("background-color: transparent");
+    expect(declarationsEndingWith(css, ".hover\\:bg-error-wash:hover")).toContain("background-color: var(--error-wash)");
+    expect(buttonClass("danger")).not.toMatch(/(^|\s)bg-error(\s|$)/);
+  });
+
+  it("stays focusable and ignores presses while busy", () => {
+    const onClick = vi.fn();
+    render(
+      <Button variant="danger" busy onClick={onClick}>
+        Withdraw
+      </Button>,
+    );
+    const button = screen.getByRole("button", { name: "Withdraw" });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});

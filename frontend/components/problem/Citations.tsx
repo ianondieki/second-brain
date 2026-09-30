@@ -35,7 +35,7 @@ export async function Citations({ sources, labelledBy }: { sources: readonly Cit
             {source.quote ? (
               <blockquote
                 cite={href ?? undefined}
-                className="max-w-[62ch] border-l-2 border-jacaranda pl-4 text-ink [overflow-wrap:anywhere]"
+                className="max-w-[62ch] border-l-2 border-line pl-4 text-ink [overflow-wrap:anywhere]"
               >
                 <p>{source.quote}</p>
               </blockquote>
