@@ -355,6 +355,8 @@ describe("turning it off", () => {
     expect(fake.withdrawConsent).toHaveBeenCalledWith(PROPOSAL_ID);
     expect(document.activeElement?.textContent).toBe("The writing assistant is off for this sign-in.");
     expect(screen.queryByRole("button", { name: "Turn off the assistant for this sign-in" })).toBeNull();
+    expect(document.querySelector("[data-teaser]")).toBeNull(); // its last answer goes with it
+    expect(document.querySelectorAll("#assistant-panel [data-chip]")).toHaveLength(0);
 
     await press("Ask again");
     expect(fake.consentState).toHaveBeenCalledTimes(2);

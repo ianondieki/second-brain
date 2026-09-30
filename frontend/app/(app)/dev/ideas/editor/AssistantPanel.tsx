@@ -201,6 +201,7 @@ export function AssistantPanel({
       return;
     }
     setConsent(result.value);
+    setAnswer(null); // the assistant is off: its last answer goes with it
     setNotice("off");
     focusTo.current = "notice";
   }
