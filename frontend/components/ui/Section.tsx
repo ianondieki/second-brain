@@ -46,7 +46,7 @@ export function Section({
         "text-ink",
         headingLevel === 3 ? "text-base" : "text-lg",
         focusable && "focus:outline-none",
-        description && link && "sm:col-start-1 sm:row-start-1",
+        description && link ? "sm:col-start-1 sm:row-start-1" : undefined,
       )}
     >
       {title}
@@ -55,14 +55,14 @@ export function Section({
   const secondary = link ? (
     <Link
       href={link.href}
-      className={cn(standaloneLinkClass, "relative", description && "justify-self-start sm:col-start-2 sm:row-start-1")}
+      className={cn(standaloneLinkClass, "relative", description ? "justify-self-start sm:col-start-2 sm:row-start-1" : undefined)}
     >
       {link.label}
       <LinkPending className="absolute bottom-0.5 left-0" />
     </Link>
   ) : null;
   const lead = description ? (
-    <p className={cn("mt-1 max-w-[62ch] text-sm text-ink-soft", link && "sm:col-start-1 sm:row-start-2")}>
+    <p className={cn("mt-1 max-w-[62ch] text-sm text-ink-soft", link ? "sm:col-start-1 sm:row-start-2" : undefined)}>
       {description}
     </p>
   ) : null;
