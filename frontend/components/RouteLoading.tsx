@@ -1,22 +1,41 @@
 import { AdminNavPlaceholder } from "./AdminNavPlaceholder";
 import { DevNav, type DevSection } from "./DevNav";
 import { OrgNav, type OrgSection } from "./OrgNav";
-import { SignedInShell } from "./SignedInShell";
+import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
 import { PageSkeleton } from "./ui/PageSkeleton";
 
 // The loading states of the signed-in route segments (their loading.tsx files): the shell the page will render, with
-// the section's navigation, around a PageSkeleton. Server components with no data: Next.js prefetches them, so a tap
-// on a link shows the next screen's frame at once while its data loads (docs/platform/design/p16-design-system.md,
-// Loading). The signed-in group has no layout of its own, so nothing above these reads cookies and holds the fallback
-// back; the staff console's layout reads the session once, when the console is entered, and its sections' loading
-// states show as staff move between them.
+// the section's navigation, around a PageSkeleton. Server components with no data and no client component: Next.js
+// prefetches them for every link in view, and a client component here (the account menu) would make it download each
+// linked route's chunk that carries it; the top bar holds a still placeholder instead. A tap on a link shows the next
+// screen's frame at once while its data loads (docs/platform/design/p16-design-system.md, Loading). The signed-in
+// group has no layout of its own, so nothing above these reads cookies and holds the fallback back; the staff
+// console's layout reads the session once, when the console is entered, and its sections' loading states show as
+// staff move between them.
+
+/** The account menu's room in the top bar while a page loads: the avatar, still (the menu itself comes with the page). */
+function AccountPlaceholder() {
+  return (
+    <span aria-hidden="true" className="-mr-2 inline-flex min-h-11 items-center px-2">
+      <span className="size-8 rounded-full bg-jacaranda-wash" />
+    </span>
+  );
+}
+
+function LoadingShell({ children, ...shell }: Omit<SignedInShellProps, "account">) {
+  return (
+    <SignedInShell {...shell} account={<AccountPlaceholder />}>
+      {children}
+    </SignedInShell>
+  );
+}
 
 /** A developer portal segment, with its section current in the navigation. */
 export function DevLoading({ current, wide = true }: { current: DevSection; wide?: boolean }) {
   return (
-    <SignedInShell homeHref="/dev" nav={<DevNav current={current} />} wide={wide}>
+    <LoadingShell homeHref="/dev" nav={<DevNav current={current} />} wide={wide}>
       <PageSkeleton />
-    </SignedInShell>
+    </LoadingShell>
   );
 }
 
@@ -26,18 +45,18 @@ export function DevLoading({ current, wide = true }: { current: DevSection; wide
  */
 export function OrgLoading({ current, wide = true }: { current: OrgSection; wide?: boolean }) {
   return (
-    <SignedInShell homeHref="/org" nav={<OrgNav current={current} />} wide={wide}>
+    <LoadingShell homeHref="/org" nav={<OrgNav current={current} />} wide={wide}>
       <PageSkeleton />
-    </SignedInShell>
+    </LoadingShell>
   );
 }
 
 /** Screens either side opens (plan and billing, settings, a problem), which have no portal navigation. */
 export function AccountLoading() {
   return (
-    <SignedInShell homeHref="/">
+    <LoadingShell homeHref="/">
       <PageSkeleton />
-    </SignedInShell>
+    </LoadingShell>
   );
 }
 
@@ -47,8 +66,8 @@ export function AccountLoading() {
  */
 export function AdminLoading({ wide = true }: { wide?: boolean }) {
   return (
-    <SignedInShell homeHref="/admin" nav={<AdminNavPlaceholder />} wide={wide}>
+    <LoadingShell homeHref="/admin" nav={<AdminNavPlaceholder />} wide={wide}>
       <PageSkeleton />
-    </SignedInShell>
+    </LoadingShell>
   );
 }

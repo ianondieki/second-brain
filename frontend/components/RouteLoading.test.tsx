@@ -34,6 +34,8 @@ describe("route loading states", () => {
     expect(within(nav).getByRole("link", { name: "My ideas" }).getAttribute("aria-current")).toBe("page");
     expect(within(screen.getByRole("main")).getByRole("status").textContent).toBe("Loading this page…");
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+    // No client component: the account menu waits for the page (a prefetched loading state would pull its chunk).
+    expect(document.querySelector("[data-account-menu]")).toBeNull();
   });
 
   it("keep the organisation section current", async () => {
