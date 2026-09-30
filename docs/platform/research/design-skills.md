@@ -19,23 +19,56 @@ this branch was checked out will not see them until it is restarted.
 4. Advice in a vendored file to add a library, service or vendor (for example SWR, `better-all`, `lru-cache`, SVGO,
    WebPageTest, Sentry, a CDN, a self-hosted font) is a suggestion, not a decision: a new dependency or vendor is a
    CLAUDE.md stop condition and goes to `DECISIONS-NEEDED.md`.
+5. **System font stack.** spec 07 item 5 / REQ-UX-05 require "one system font stack". That wins over frontend-design's
+   "choose your typefaces deliberately, not the default families" and impeccable craft-floor's "Source and self-host a
+   face … the closest installed font is a failure" (craft-floor carries a one-line local note saying so).
+6. **Tenancy, event log and send rules win over vercel-react-best-practices.** `server-cache-lru` (a cross-request,
+   process-wide cache keyed by user or id) would bypass per-request membership checks and Postgres RLS, so it must
+   not cache tenant data; `server-after-nonblocking` lists "audit logging" and "sending notifications" after the
+   response, but our append-only, hash-chained event log (spec 04 principle 7) and our send rules (spec 06 emails,
+   the notification matrix in `REQUIREMENTS.md`) decide how audit events and notifications are recorded and sent; do
+   not move them into fire-and-forget `after()` callbacks. Ours win.
+7. **Sub-agents.** impeccable `critique` asks for two isolated sub-agents. Run it in single-context mode (with its
+   degraded banner) or hand the review to our `ux-reviewer`; do not spawn agents not listed in `.claude/agents/`
+   (critique.md carries a one-line note).
+8. **Playwright.** Python Playwright (which webapp-testing's scripts need) is not installed and must not be
+   installed: it would be a new dependency and a network download. Screenshots and browser checks use the repo's
+   TypeScript `@playwright/test` through `frontend/playwright.config.ts`, following `frontend/e2e`. webapp-testing is
+   kept as a reference for approach only.
 
 Order the user set for UI work (P16, also in `CLAUDE.md` Build workflow step 5): frontend-design → impeccable →
 web-design-guidelines (skipped, see below; impeccable `audit` plus `ux-reviewer` replace it) → Playwright screenshots
-at 375 px and 1440 px (webapp-testing) → axe (`@axe-core/playwright`, already in `frontend/package.json`) →
-`ux-reviewer`; plus vercel-react-best-practices over frontend changes and a local Lighthouse run (≥90 for
-accessibility and performance).
+at 375 px and 1440 px (TypeScript Playwright via `frontend/playwright.config.ts`; webapp-testing for approach) → axe
+(`@axe-core/playwright`, already in `frontend/package.json`) → `ux-reviewer`; plus vercel-react-best-practices over
+frontend changes and a local Lighthouse run.
+
+- **Widths, not a contradiction with rule 2:** the 375 px and 1440 px *screenshots* are the user's explicit P16
+  instruction. The *automated page checks* (axe, one primary action, no horizontal scroll) run at 360 px, per spec
+  04/07 and the `mobile-360` project in `frontend/playwright.config.ts`.
+- **Lighthouse:** accessibility ≥90 and performance ≥90 is the user's P16 target, additional to AC-UX-3 (LCP ≤2.5 s
+  and JS ≤150 KB gz, throttled). Profile: Lighthouse's default mobile profile (Slow 4G, Moto G-class). Tool: ad-hoc
+  `npx lighthouse`, run locally only; it is not added as a dependency. (That `npx` use is the user's instruction in
+  CLAUDE.md, not something a vendored skill asks for.)
 
 ## Summary
 
-| Item | Installed at | Upstream | Commit | Commit date | Licence (file) | Status |
+| Item | Installed at | Upstream | Commit | Commit date (UTC) | Licence (file) | Status |
 |---|---|---|---|---|---|---|
-| frontend-design | `.claude/skills/frontend-design/` | github.com/anthropics/skills `skills/frontend-design` | `8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4` | 2026-09-28 | Apache-2.0 (`LICENSE.txt`) | Vendored unchanged |
-| webapp-testing | `.claude/skills/webapp-testing/` | github.com/anthropics/skills `skills/webapp-testing` | `8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4` | 2026-09-28 | Apache-2.0 (`LICENSE.txt`) | Vendored; content unchanged, notes added |
-| impeccable | `.claude/skills/impeccable/` | github.com/pbakaus/impeccable `.claude/skills/impeccable` | `0d6b47ea19b63afe15e3f93a44d5d9fbbc6fd275` | 2026-09-30 | Apache-2.0 (`LICENSE`, `NOTICE.md` from repo root) | Trimmed and modified |
-| vercel-react-best-practices | `.claude/skills/vercel-react-best-practices/` | github.com/vercel-labs/agent-skills `skills/react-best-practices` | `063bee94c3f4df8453406c830b0a7df0f2860278` | 2026-08-28 | MIT, stated in README and frontmatter only; no licence file upstream (`LICENSE-NOTE.md`) | Vendored; one line neutralised |
-| web-design-guidelines | not installed | github.com/vercel-labs/agent-skills `skills/web-design-guidelines` | `063bee94c3f4df8453406c830b0a7df0f2860278` | 2026-08-28 | MIT (as above) | **Skipped** |
-| ecc-code-review | `.claude/commands/ecc-code-review.md` | github.com/affaan-m/ECC `commands/code-review.md` | `c70874fae9eb0e5ad0365beb7e2955899fd1d30f` | 2026-09-29 | MIT, Copyright (c) 2026 Affaan Mustafa (`.claude/commands/ecc-code-review.LICENSE`) | Trimmed and renamed |
+| frontend-design | `.claude/skills/frontend-design/` | github.com/anthropics/skills `skills/frontend-design` | `8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4` | 2026-09-29 02:20 | Apache-2.0 (`LICENSE.txt`) | Vendored unchanged |
+| webapp-testing | `.claude/skills/webapp-testing/` | github.com/anthropics/skills `skills/webapp-testing` | `8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4` | 2026-09-29 02:20 | Apache-2.0 (`LICENSE.txt`) | Vendored; content unchanged, notes added |
+| impeccable | `.claude/skills/impeccable/` | github.com/pbakaus/impeccable `.claude/skills/impeccable` | `0d6b47ea19b63afe15e3f93a44d5d9fbbc6fd275` | 2026-09-30 00:17 | Apache-2.0 (`LICENSE`, `NOTICE.md` from repo root) | Trimmed and modified |
+| vercel-react-best-practices | `.claude/skills/vercel-react-best-practices/` | github.com/vercel-labs/agent-skills `skills/react-best-practices` | `063bee94c3f4df8453406c830b0a7df0f2860278` | 2026-08-28 13:36 | MIT, stated in README and frontmatter only; no licence file upstream (`LICENSE-NOTE.md`) | Vendored; one line neutralised |
+| web-design-guidelines | not installed | github.com/vercel-labs/agent-skills `skills/web-design-guidelines` | `063bee94c3f4df8453406c830b0a7df0f2860278` | 2026-08-28 13:36 | MIT (as above) | **Skipped** |
+| ecc-code-review | `.claude/commands/ecc-code-review.md` | github.com/affaan-m/ECC `commands/code-review.md` | `c70874fae9eb0e5ad0365beb7e2955899fd1d30f` | 2026-09-30 01:24 | MIT, Copyright (c) 2026 Affaan Mustafa (`.claude/commands/ecc-code-review.LICENSE`) | Trimmed and renamed |
+
+Commit dates are converted to UTC from each commit's committer date (`git log -1 --format=%cI`): anthropics/skills
+2026-09-28T19:20:03-07:00, impeccable 2026-09-30T00:17:23+00:00, vercel-labs 2026-08-28T15:36:07+02:00, ECC
+2026-09-29T20:24:05-05:00. In local time the anthropics and ECC commits fall on the 28th and 29th; in UTC on the 29th
+and 30th.
+
+The two large commits, 11bab90 (impeccable, 3,102 lines) and a871678 (vercel-react-best-practices, 7,999 lines),
+exceed the ~300-line commit guideline because each is one vendored copy. Their content is the upstream files
+verbatim except for the edits listed in sections 3 and 4.
 
 Name clashes checked against `.claude/agents/*` (chore, db-migrations, docs-writer, impl-ai, impl-backend,
 impl-frontend, impl-integrations, orchestrator, researcher, reviewer, security-reviewer, test-writer, ux-reviewer) and
@@ -54,9 +87,12 @@ built-in commands: the only clash was ECC's `code-review` against the built-in `
 
 - Kept (content unchanged): `SKILL.md`, `LICENSE.txt`, `scripts/with_server.py`, `examples/console_logging.py`,
   `examples/element_discovery.py`, `examples/static_html_automation.py`.
-- Added: `LOCAL-NOTES.md` (Bridge-authored): CLAUDE.md's Playwright rules and the repo's e2e conventions
-  (`frontend/e2e/*.spec.ts`, `frontend/playwright.config.ts`, `make dev`) win; `networkidle` has hung our e2e runs,
-  so prefer explicit waits; localhost only; write screenshots to the scratchpad.
+- Added: `LOCAL-NOTES.md` (Bridge-authored): **Python Playwright is not installed and must not be installed** (new
+  dependency, network download), so this skill's scripts are not run and the skill is a reference for approach only;
+  screenshots use the repo's TypeScript `@playwright/test` via `frontend/playwright.config.ts` and the
+  `frontend/e2e/*.spec.ts` patterns against `make dev`; 375/1440 px screenshots (user's P16) versus 360 px automated
+  checks (spec 04/07, `mobile-360`); `networkidle` has hung our e2e runs, so prefer explicit waits; localhost only;
+  write screenshots to the scratchpad.
 - Local modification: `scripts/with_server.py` is stored without the executable bit (mode 100644 instead of
   100755). The skill already invokes it as `python scripts/with_server.py`, so behaviour is unchanged, and the
   "no executable files" check stays clean.
@@ -96,8 +132,35 @@ for that reason. `routing.md` and `critique.md` are the most affected: routing's
 what the agent reads; critique keeps its two isolated assessments, but Assessment B is now browser/screenshot and
 code evidence instead of the detector, and snapshot persistence is gone.
 
-Every edit below uses, or includes, the phrase "(not available in this copy; do this step by reading the code and
-screenshots)" (abbreviated **NA** here) or "not in this copy".
+Each of the 10 modified references (routing, shape, craft-floor, polish, audit, critique, layout, typeset, colorize,
+adapt) starts with the Apache-2.0 §4(b) line "> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e;
+changes listed in docs/platform/research/design-skills.md"; `SKILL.md` carries the longer notice below. Edits use the
+phrase "(not available in this copy; do this step by reading the code and screenshots)" (abbreviated **NA** here)
+where a step still has a manual equivalent, and "skip … (not in this copy)" where it has none.
+
+Fix round (commit 4a95be6, after review) reworded these dangling lines to "skip" or removed them:
+- `SKILL.md` Modes: "persist it only in that surface brief" → "this copy writes no surface brief, so state the mode
+  in your response".
+- `shape.md`: "New-work owns visual-world and concept choices" → they come from the project context in Phase 2;
+  Phase 2 "new-work.md is NA" → "skip the new-work.md step (not in this copy)".
+- `critique.md`: Purpose "snapshot persistence is NA" → "skip snapshot persistence"; Setup step 2 → "Skip the slug,
+  persistence and trend steps"; "before seeing detector output" → "before seeing Assessment B's output"; removed "The
+  persisted snapshot must record the applicable maximum …"; Persist the Snapshot → "Skip this step"; Assessment B
+  now names TypeScript Playwright via `frontend/playwright.config.ts`, 375/1440 screenshots, 360 px automated checks,
+  and that Python Playwright is not installed and must not be; added the one-line single-context / `ux-reviewer`
+  note under Assessment Orchestration.
+- `audit.md`: "The bundled detector is NA" → "Skip the bundled detector (not in this copy); find these issues by
+  reading the code and screenshots".
+- `polish.md`: the native simulator/emulator clause → "screenshots at 375px and 1440px; automated checks at 360px.
+  Native platforms are out of scope"; snapshot close → "Skip closing a stored critique snapshot".
+- `layout.md`: restored the removed "A clean scan cannot prove hierarchy or rhythm." as "A clean code-and-screenshot
+  check cannot prove hierarchy or rhythm." and added "(automated checks run at 360px)".
+- `typeset.md`: restored "A clean scan is a floor, not proof of good typography." as "A clean code-and-screenshot
+  check is a floor, not proof of good typography."
+- `craft-floor.md`: added "(Bridge: spec 07 item 5 / REQ-UX-05 require one system font stack; that wins over this
+  line.)" after the self-hosted-face line.
+
+The list below is the original edit set (commit 11bab90).
 
 **`SKILL.md`** (Apache-2.0 §4(b) modified-file notice added):
 - Frontmatter `description`: removed animate, extract, bolder, delight, live-browser iteration and "technically
@@ -161,7 +224,8 @@ design hook is NA."
   persistence and trend.
 - Assessment B: the `scripts/impeccable detect --json` scan, the `impeccable live-server --background` start and the
   `detect.js` overlay injection → NA; replaced with: open a fresh tab on the local dev URL (`make dev`), screenshots
-  at 375 px and 1440 px, console errors, inspect markup/styles for mechanical issues; fall back to webapp-testing.
+  at 375 px and 1440 px, console errors, inspect markup/styles for mechanical issues (reworded in the fix round, see
+  above: TypeScript Playwright, not webapp-testing's Python).
   Its "Return" line and the "reuse CLI findings / don't rerun detect" paragraph adjusted/removed.
 - Report: "Deterministic scan" → "Mechanical evidence"; "Visual overlays" → NA, name the screenshots instead;
   synthesis wording refers to Assessments A and B instead of the detector.
@@ -185,7 +249,8 @@ typeset also: "detector findings" → "mechanical findings".
 Notes: `harden`/`optimize` say "test offline", "throttle to 3G", "use a CDN", "WebPageTest", "Sentry" and similar;
 these are test ideas and suggestions about the app, not commands the agent runs, and any new vendor falls under
 precedence rule 4. `quieter`/`distill` tell the agent to use the AskUserQuestion tool when unclear; that is
-compatible with CLAUDE.md. `craft-floor` "Source and self-host a face" is a font decision under rule 4.
+compatible with CLAUDE.md. `craft-floor` "Source and self-host a face" conflicts with spec 07 item 5 (system font
+stack) and loses; see precedence rule 5.
 
 ## 4. vercel-react-best-practices
 
@@ -234,7 +299,9 @@ implementation integrity) plus our `ux-reviewer` agent against spec 07.
   "Large change sets".
 - Added: new frontmatter `description` and `argument-hint`; the modified-by note (MIT permits modification); the
   line that this review is an extra pass only and that `reviewer` and `security-reviewer` stay the required gates;
-  an optional read-only `git diff --name-only claude/eloquent-hypatia-aa3577...HEAD` for committed branch changes.
+  an optional read-only `git diff --name-only origin/claude/eloquent-hypatia-aa3577...HEAD` for committed branch
+  changes (the remote ref, as last fetched; the command does not fetch). CLAUDE.md Build workflow step 7 names
+  `/ecc-code-review` as the ECC pass, with the built-in `/code-review` as the fallback.
 - Dependencies: Local Review Mode uses only `git diff` and file reads. It references no other ECC agent, skill,
   hook, rule or script. The upstream description mentioned ECC's `/review-pr` and `/orch-review`; that description
   was replaced, so no dangling reference remains.
@@ -242,9 +309,9 @@ implementation integrity) plus our `ux-reviewer` agent against spec 07.
 ## Checks run before committing
 
 - **Risk grep** `grep -rnE "npx|npm (i|install)|curl|wget|WebFetch|gh |git (push|commit|rebase|reset|checkout|config)|hooks|settings.json|\.env|secret|ignore .*CLAUDE"`
-  over `.claude/skills` and `.claude/commands`: 57 matching lines (this document adds 25 more, all of them
-  descriptions of removals or the grep itself).
-  - 42 are false positives where `gh ` is the end of a word ("through", "high", "enough", "Tabs through" and so on).
+  over `.claude/skills` and `.claude/commands` (rerun after the fix round): 59 matching lines (this document adds 27
+  more, all of them descriptions of removals, precedence notes or the grep itself).
+  - 44 are false positives where `gh ` is the end of a word ("through", "high", "enough", "Tabs through" and so on).
   - The other 15 are listed below.
   - React hooks (vercel-react-best-practices `SKILL.md`, `AGENTS.md`, 6 rule files): "hooks" as in React hooks
     (useEffect, useState); not Claude Code hooks.
@@ -253,11 +320,14 @@ implementation integrity) plus our `ux-reviewer` agent against spec 07.
     `rules/rendering-svg-precision.md` and `AGENTS.md` ("the upstream `npx svgo` command was removed"),
     `LICENSE-NOTE.md` ("run `pnpm install`" matches `npm install`; "`npx svgo`"), `ecc-code-review.md` ("suggested
     `git rebase`" in the modified-by note).
+  - `CLAUDE.md` step 5 now names ad-hoc `npx lighthouse`, local only, as the user's own instruction (not a vendored
+    file).
   - No remaining hit instructs the agent to call the network, install a package, touch secrets or `.env`, change
     git state, define hooks or ignore CLAUDE.md.
 - **Executables**: `find .claude/skills .claude/commands docs/platform/research/design-skills.md -type f -perm -u+x`
   returns nothing. `file` reports only text: Markdown (some labelled "JavaScript source" or "Python script" by
   libmagic because of code blocks), one JSON file, four Python scripts (`with_server.py` and three examples; the
   word "executable" in libmagic's label means "script text", the mode is 100644), and licence text. No binaries.
-- **Size**: 108 files, 449,385 bytes in total (frontend-design 19,564; webapp-testing 23,911; impeccable 150,981;
-  vercel-react-best-practices 228,688; `.claude/commands` 3,834; this document 22 KB, counted in the total), plus one line in `CLAUDE.md`.
+- **Size** (after the fix round): 108 files, about 457 KB in total (frontend-design 19,564 bytes; impeccable about
+  152 KB; vercel-react-best-practices 228,688 bytes; webapp-testing about 24.3 KB; `.claude/commands` about 3.9 KB;
+  this document about 29 KB), plus two edited lines in `CLAUDE.md` (steps 5 and 7).
