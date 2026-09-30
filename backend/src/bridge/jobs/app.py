@@ -25,6 +25,7 @@ IMPORT_PATHS = [
     "bridge.jobs.notifications",
     "bridge.jobs.reminders",
     "bridge.jobs.scouts",
+    "bridge.jobs.research",
 ]
 
 app = App(connector=PsycopgConnector(conninfo=conninfo()), import_paths=IMPORT_PATHS)

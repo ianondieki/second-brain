@@ -182,6 +182,34 @@
         "title": "AgreementStatus",
         "type": "string"
       },
+      "AllowedDomainOut": {
+        "properties": {
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "official": {
+            "title": "Official",
+            "type": "boolean"
+          },
+          "publisher": {
+            "title": "Publisher",
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "domain",
+          "publisher",
+          "official"
+        ],
+        "title": "AllowedDomainOut",
+        "type": "object"
+      },
       "ApiErrorBody": {
         "properties": {
           "detail": {
@@ -600,6 +628,142 @@
         "title": "BudgetBandOut",
         "type": "object"
       },
+      "CandidateList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CandidateList",
+        "type": "object"
+      },
+      "CandidateOut": {
+        "properties": {
+          "affected_group": {
+            "title": "Affected Group",
+            "type": "string"
+          },
+          "checklist": {
+            "description": "D-45 checklist placeholder, shown when the card names organisations",
+            "items": {
+              "type": "string"
+            },
+            "title": "Checklist",
+            "type": "array"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "named_orgs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Named Orgs",
+            "type": "array"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche"
+          },
+          "research_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Run Id"
+          },
+          "seeded_example": {
+            "title": "Seeded Example",
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "statement",
+          "affected_group",
+          "niche",
+          "country",
+          "county_code",
+          "confidence",
+          "research_run_id",
+          "created_at",
+          "seeded_example",
+          "named_orgs",
+          "checklist",
+          "sources"
+        ],
+        "title": "CandidateOut",
+        "type": "object"
+      },
       "CaseList": {
         "properties": {
           "items": {
@@ -951,6 +1115,74 @@
           "poll_after_seconds"
         ],
         "title": "CheckoutOut",
+        "type": "object"
+      },
+      "CitationOut": {
+        "properties": {
+          "published_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "publisher",
+          "source_type",
+          "published_date",
+          "retrieved_at",
+          "quote"
+        ],
+        "title": "CitationOut",
         "type": "object"
       },
       "CodeRequest": {
@@ -1406,60 +1638,6 @@
           "csrf_token"
         ],
         "title": "CsrfResponse",
-        "type": "object"
-      },
-      "DecisionIn": {
-        "additionalProperties": false,
-        "properties": {
-          "decision": {
-            "enum": [
-              "approve",
-              "reject"
-            ],
-            "title": "Decision",
-            "type": "string"
-          },
-          "subject_version_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The case's subject_version_id as reviewed (required)",
-            "title": "Subject Version Id"
-          }
-        },
-        "required": [
-          "decision",
-          "subject_version_id"
-        ],
-        "title": "DecisionIn",
-        "type": "object"
-      },
-      "DecisionOut": {
-        "properties": {
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ModerationCaseStatus"
-          },
-          "subject_state": {
-            "$ref": "#/components/schemas/ModerationState"
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "subject_state"
-        ],
-        "title": "DecisionOut",
         "type": "object"
       },
       "DeclineBody": {
@@ -2416,6 +2594,77 @@
         "title": "EvaluationNdaOut",
         "type": "object"
       },
+      "ExcerptOut": {
+        "properties": {
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/Freshness",
+            "description": "Archived excerpts are never sent or counted"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "niche": {
+            "title": "Niche",
+            "type": "string"
+          },
+          "official": {
+            "description": "An allowlisted government or regulator domain",
+            "title": "Official",
+            "type": "boolean"
+          },
+          "published_date": {
+            "format": "date",
+            "title": "Published Date",
+            "type": "string"
+          },
+          "publisher": {
+            "title": "Publisher",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "niche",
+          "country",
+          "url",
+          "publisher",
+          "source_type",
+          "official",
+          "published_date",
+          "retrieved_at",
+          "quote",
+          "topic",
+          "freshness"
+        ],
+        "title": "ExcerptOut",
+        "type": "object"
+      },
       "FeedbackIn": {
         "additionalProperties": false,
         "properties": {
@@ -2471,6 +2720,15 @@
         ],
         "title": "FilterOptions",
         "type": "object"
+      },
+      "Freshness": {
+        "enum": [
+          "fresh",
+          "stale",
+          "archived"
+        ],
+        "title": "Freshness",
+        "type": "string"
       },
       "GrantSource": {
         "enum": [
@@ -5115,7 +5373,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
             "title": "Label"
           },
           "niche": {
@@ -5164,6 +5422,141 @@
         "title": "ProblemCard",
         "type": "object"
       },
+      "ProblemDetail": {
+        "properties": {
+          "affected_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Group"
+          },
+          "ai_generated": {
+            "description": "A model drafted the card (false for a demo seed card, written in code)",
+            "title": "Ai Generated",
+            "type": "boolean"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/CitationOut"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "title": "Label"
+          },
+          "named_orgs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Named Orgs",
+            "type": "array"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "seeded_example": {
+            "description": "A demo seed card made from a fixed answer, never a live AI result",
+            "title": "Seeded Example",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProblemSource"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "source",
+          "label",
+          "niche",
+          "statement",
+          "published_at",
+          "affected_group",
+          "country",
+          "county_code",
+          "ai_generated",
+          "seeded_example",
+          "confidence",
+          "named_orgs",
+          "citations"
+        ],
+        "title": "ProblemDetail",
+        "type": "object"
+      },
       "ProblemPage": {
         "properties": {
           "items": {
@@ -5196,7 +5589,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
             "title": "Label"
           },
           "niche": {
@@ -5234,6 +5627,17 @@
           "developer"
         ],
         "title": "ProblemSource",
+        "type": "string"
+      },
+      "ProblemStatus": {
+        "enum": [
+          "candidate",
+          "pending_review",
+          "published",
+          "rejected",
+          "archived"
+        ],
+        "title": "ProblemStatus",
         "type": "string"
       },
       "ProfileOut": {
@@ -5635,6 +6039,16 @@
         "title": "RenderKind",
         "type": "string"
       },
+      "ResearchRunStatus": {
+        "enum": [
+          "running",
+          "completed",
+          "stopped",
+          "failed"
+        ],
+        "title": "ResearchRunStatus",
+        "type": "string"
+      },
       "Responsiveness": {
         "description": "E2 only, once there are at least 10 eligible tags and 60 days have passed since E2 verification.",
         "properties": {
@@ -5676,55 +6090,42 @@
         "title": "RolesUpdate",
         "type": "object"
       },
-      "RunOut": {
+      "RunIn": {
+        "additionalProperties": false,
         "properties": {
-          "finished_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
+          "country": {
+            "const": "KE",
+            "default": "KE",
+            "title": "Country",
             "type": "string"
           },
-          "matched_count": {
-            "title": "Matched Count",
-            "type": "integer"
-          },
-          "scanned_count": {
-            "title": "Scanned Count",
-            "type": "integer"
-          },
-          "started_at": {
-            "format": "date-time",
-            "title": "Started At",
+          "niche": {
+            "maxLength": 80,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "title": "Niche",
             "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AgentRunStatus"
-          },
-          "trigger": {
-            "$ref": "#/components/schemas/ScoutFrequency"
           }
         },
         "required": [
-          "id",
-          "trigger",
-          "status",
-          "started_at",
-          "finished_at",
-          "scanned_count",
-          "matched_count"
+          "niche"
         ],
-        "title": "RunOut",
+        "title": "RunIn",
+        "type": "object"
+      },
+      "RunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/bridge__admin__research__RunOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RunList",
         "type": "object"
       },
       "ScoutForm": {
@@ -5921,7 +6322,7 @@
           "last_run": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RunOut"
+                "$ref": "#/components/schemas/bridge__matching__schemas__RunOut"
               },
               {
                 "type": "null"
@@ -6415,6 +6816,116 @@
         ],
         "title": "SimulatedOutcome",
         "type": "string"
+      },
+      "SourceOut": {
+        "properties": {
+          "excerpt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt Ref"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "publisher",
+          "source_type",
+          "published_date",
+          "retrieved_at",
+          "quote",
+          "excerpt_ref"
+        ],
+        "title": "SourceOut",
+        "type": "object"
+      },
+      "SourcesOut": {
+        "properties": {
+          "allowlist": {
+            "items": {
+              "$ref": "#/components/schemas/AllowedDomainOut"
+            },
+            "title": "Allowlist",
+            "type": "array"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "excerpts": {
+            "items": {
+              "$ref": "#/components/schemas/ExcerptOut"
+            },
+            "title": "Excerpts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "allowlist",
+          "excerpts"
+        ],
+        "title": "SourcesOut",
+        "type": "object"
       },
       "StaffMeOut": {
         "properties": {
@@ -7467,6 +7978,277 @@
         ],
         "title": "ViewOut",
         "type": "object"
+      },
+      "bridge__admin__moderation__DecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "subject_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case's subject_version_id as reviewed (required)",
+            "title": "Subject Version Id"
+          }
+        },
+        "required": [
+          "decision",
+          "subject_version_id"
+        ],
+        "title": "DecisionIn",
+        "type": "object"
+      },
+      "bridge__admin__moderation__DecisionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModerationCaseStatus"
+          },
+          "subject_state": {
+            "$ref": "#/components/schemas/ModerationState"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "subject_state"
+        ],
+        "title": "DecisionOut",
+        "type": "object"
+      },
+      "bridge__admin__research__DecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "checklist_confirmed": {
+            "default": false,
+            "description": "Required to approve a card naming organisations",
+            "title": "Checklist Confirmed",
+            "type": "boolean"
+          },
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecisionIn",
+        "type": "object"
+      },
+      "bridge__admin__research__DecisionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "moderation_state": {
+            "$ref": "#/components/schemas/ModerationState"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProblemStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "moderation_state"
+        ],
+        "title": "DecisionOut",
+        "type": "object"
+      },
+      "bridge__admin__research__RunOut": {
+        "properties": {
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd",
+            "type": "string"
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "demo_fallback": {
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "discarded": {
+            "title": "Discarded",
+            "type": "integer"
+          },
+          "fetches": {
+            "title": "Fetches",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche"
+          },
+          "searches": {
+            "title": "Searches",
+            "type": "integer"
+          },
+          "started_by": {
+            "format": "uuid",
+            "title": "Started By",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResearchRunStatus"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          }
+        },
+        "required": [
+          "id",
+          "niche",
+          "country",
+          "county_code",
+          "status",
+          "started_by",
+          "created_at",
+          "finished_at",
+          "searches",
+          "fetches",
+          "input_tokens",
+          "candidates",
+          "discarded",
+          "cost_usd",
+          "stop_reason",
+          "demo_fallback"
+        ],
+        "title": "RunOut",
+        "type": "object"
+      },
+      "bridge__matching__schemas__RunOut": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "matched_count": {
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "scanned_count": {
+            "title": "Scanned Count",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentRunStatus"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ScoutFrequency"
+          }
+        },
+        "required": [
+          "id",
+          "trigger",
+          "status",
+          "started_at",
+          "finished_at",
+          "scanned_count",
+          "matched_count"
+        ],
+        "title": "RunOut",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -7825,7 +8607,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DecisionIn"
+                "$ref": "#/components/schemas/bridge__admin__moderation__DecisionIn"
               }
             }
           },
@@ -7836,7 +8618,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DecisionOut"
+                  "$ref": "#/components/schemas/bridge__admin__moderation__DecisionOut"
                 }
               }
             },
@@ -8138,6 +8920,668 @@
           }
         },
         "summary": "Admin Add Niche",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/research/candidates": {
+      "get": {
+        "operationId": "research_candidates_api_admin_research_candidates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Research Candidates",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/research/candidates/{problem_id}/decision": {
+      "post": {
+        "operationId": "decide_research_candidate_api_admin_research_candidates__problem_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/bridge__admin__research__DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bridge__admin__research__DecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Decide Research Candidate",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/research/runs": {
+      "get": {
+        "operationId": "list_research_runs_api_admin_research_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Research Runs",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "start_research_run_api_admin_research_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bridge__admin__research__RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Start Research Run",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/research/runs/{run_id}": {
+      "get": {
+        "operationId": "get_research_run_api_admin_research_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bridge__admin__research__RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Research Run",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/research/sources": {
+      "get": {
+        "operationId": "research_sources_api_admin_research_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Research Sources",
         "tags": [
           "admin"
         ]
@@ -20933,6 +22377,40 @@
           },
           {
             "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}-[A-Z0-9]{1,5}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "County"
+            }
+          },
+          {
+            "in": "query",
             "name": "q",
             "required": false,
             "schema": {
@@ -21068,6 +22546,119 @@
           }
         },
         "summary": "List Problems",
+        "tags": [
+          "problems"
+        ]
+      }
+    },
+    "/api/problems/{problem_id}": {
+      "get": {
+        "operationId": "get_problem_api_problems__problem_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Problem",
         "tags": [
           "problems"
         ]

@@ -76,3 +76,33 @@ assistant:
   tier2_overlap_words: 8             # a suggested title or summary sharing this many consecutive words with a
                                      # confidential field that was sent is not shown (rejected:tier2_overlap)
   max_reason_chars: 300              # a placement hint's reason is cut to this many characters
+
+research:
+  # The research agent's numbers (REQ-RES-01, REQ-RES-02; docs/spec/06 6.5; PLAN §8 P11). Read by
+  # bridge/problems/research/policy.py. The prototype drafts from excerpts saved in backend/seed/research_excerpts.yaml
+  # (no search, no fetch at runtime); the caps still apply and the research_runs CHECK is the backstop (AC-RES-3).
+  max_searches: 25                   # per run (AC-RES-3); the prototype makes none
+  max_fetches: 40                    # per run (AC-RES-3); the prototype makes none
+  max_input_tokens: 400000           # per run (docs/spec/06 6.5); estimated before the call
+  min_excerpts: 3                    # "3-5 short public source excerpts" per niche (PLAN §8 P11)
+  max_excerpts: 5                    # the freshest ones are sent
+  max_cards_per_run: 3               # drafts beyond this are discarded
+  max_quote_words: 60                # a saved excerpt's quote (fair-use excerpts only, research note)
+  min_support_words: 4               # a citation's supporting text: at least this many words, verbatim from the quote
+  stale_after_months: 12             # "Stale badge at 12 months"
+  archive_after_months: 18           # "auto-archive at 18": such an excerpt is never sent and never counts
+  discard_below: "0.40"              # a card below this confidence is discarded
+  corroboration_publishers: 3        # distinct publishers for full corroboration (fewer: a share of it)
+  stale_run_minutes: 60              # a running run older than this no longer blocks a new run of its niche
+  weights:                           # confidence = sum(weight * term); the four weights add up to 1
+    source_quality: "0.35"
+    corroboration: "0.25"
+    freshness: "0.20"
+    extraction_agreement: "0.20"
+  source_quality:                    # docs/spec/06 6.5 quality tiers
+    official: "1.0"
+    filing: "0.9"
+    news: "0.8"
+    ngo: "0.8"
+    blog: "0.4"
+    social: "0.3"

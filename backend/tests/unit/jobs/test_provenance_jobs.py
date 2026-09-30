@@ -22,6 +22,7 @@ from bridge.jobs import provenance as jobs
 from bridge.jobs import reminders as reminder_jobs
 from bridge.jobs.app import IMPORT_PATHS, app
 from bridge.matching.tasks import SCAN_TASK as SCOUT_SCAN_TASK
+from bridge.problems.research.tasks import RUN_TASK as RESEARCH_RUN_TASK
 from bridge.provenance import service
 from bridge.provenance.service import RegistrationError, RegistrationPendingError
 from bridge.provenance.signing import LocalSigner
@@ -58,6 +59,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         "bridge.jobs.notifications",
         "bridge.jobs.reminders",
         "bridge.jobs.scouts",
+        "bridge.jobs.research",  # P11: one research.run job per research run (REQ-RES-01)
     ]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
@@ -67,6 +69,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         jobs.ANCHOR_TASK,
         audit_jobs.VERIFY_TASK,
         notify.TASK,  # REQ-NOT-04: the tracker's notifications (P5)
+        RESEARCH_RUN_TASK,  # REQ-RES-01 (P11)
     ):
         assert name in app.tasks
     assert app.tasks[service.TASK_HASH].queue == service.QUEUE

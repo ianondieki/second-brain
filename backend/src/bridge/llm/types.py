@@ -59,7 +59,7 @@ class InputField:
     tier: Tier = Tier.TIER1
     owner_id: UUID | None = None
     max_chars: int | None = None
-    public: bool = False
+    public: bool = field(default=False, kw_only=True)  # keyword only: every public field is visible as such
 
     def __post_init__(self) -> None:
         if not FIELD_NAME.fullmatch(self.name):

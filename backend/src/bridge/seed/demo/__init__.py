@@ -14,7 +14,10 @@ drafts, publishing (which queues the T2.4 registration), pitching and the Evalua
 no application path yet and is written as the owner role, as staff would: ``users.demo_account`` (D-37), D2, the
 organisations' E1/E2 verification with their domain, niches and county, and the E0 fixture itself. The engagements
 opened by the Pitch are then driven through the tracker API to a few stages (``bridge.seed.demo.engagements``), each
-party signed in with the demo password and its TOTP code. Every account holds the reminders consent (P6).
+party signed in with the demo password and its TOTP code. Every account holds the reminders consent (P6). A demo
+staff admin (P11) starts one research run per saved-excerpt niche and approves its card
+(``bridge.seed.demo.research``): the cards come from a fixed answer written in code through the real checks and
+approval, and are labelled seeded examples, never live AI results.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -47,11 +50,14 @@ from bridge.seed.demo.data import (
     EXPORTED_PROPOSAL,
     ORGS,
     PROPOSALS,
+    STAFF,
+    STAFF_ADMIN,
     DemoDeveloper,
     all_accounts,
 )
 from bridge.seed.demo.engagements import drive
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
+from bridge.seed.demo.research import ensure_staff, seed_research_card, seeded_niches
 from bridge.seed.demo.runtime import (
     Actors,
     DemoKeysChanged,
@@ -92,7 +98,7 @@ async def seed_demo(
     runtime = runtime or DemoRuntime.from_settings(settings)
     report = DemoReport()
     niches = await _niche_ids(owner_engine)
-    missing = sorted(({o.niche for o in ORGS} | {p.niche for p in PROPOSALS}) - set(niches))
+    missing = sorted(({o.niche for o in ORGS} | {p.niche for p in PROPOSALS} | set(seeded_niches())) - set(niches))
     if missing:
         raise DemoSeedError(f"niches {missing} are missing: run the reference seed (python -m bridge.seed) first")
     strict = not await _seeded_before(owner_engine)  # a new database: every refusal is an error
@@ -105,6 +111,8 @@ async def seed_demo(
             await step(dev.email, ensure_developer(owner_engine, factory, settings, dev, report))
         for org in ORGS:
             await step(org.legal_name, ensure_org(owner_engine, factory, settings, org, report))
+        for staff in STAFF:
+            await step(staff.email, ensure_staff(owner_engine, factory, settings, staff, report))
         await step("owner-role facts", owner_facts(owner_engine, niches, report))
         for email in list(report.users):
             await step(f"TOTP of {email}", enrol_totp(app, owner_engine, factory, settings, email, report))
@@ -122,6 +130,10 @@ async def seed_demo(
         await step("Tier-2 view", record_view(owner_engine, actors, settings, report))
         for plan in ENGAGEMENTS:
             await step(f"{plan.proposal} with {plan.org}", drive(owner_engine, actors, settings, plan, report))
+        if STAFF_ADMIN.email in report.users:
+            for niche in seeded_niches():
+                card = seed_research_card(owner_engine, factory, actors, settings, STAFF_ADMIN, niche, report)
+                await step(f"research card {niche}", card)
         await step("free plans", _free_plans(owner_engine, settings))
     return report
 

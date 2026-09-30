@@ -114,7 +114,10 @@ class ProblemRef(BaseModel):
     id: UUID
     title: str
     source: ProblemSource
-    label: str | None = Field(description="'Developer-reported' for problems developers described")
+    label: str | None = Field(
+        description="'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>'"
+        " for a published research card (a demo seed card says it is a seeded example)"
+    )
     niche: NicheOut | None
 
 

@@ -29,6 +29,7 @@ SPEC_09_ALLOCATION = {
     "submission_assistant": {SONNET},  # submission assistant
     "reminder_nudge": {HAIKU},  # reminder & progress-reporter wording (REQ-REM-01)
     "scout_fit_rationale": {SONNET},  # scout fit scoring & rationale (REQ-SCOUT-02)
+    "research_synthesis": {SONNET},  # research card synthesis (REQ-RES-01; the prototype sends no tools)
 }
 
 
