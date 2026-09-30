@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 Layout turns product priority into reading order, grouping, rhythm, and usable space. Diagnose the structural problem before moving boxes.
 
 ---
@@ -22,7 +24,7 @@ When a sub-agent tool is available and permitted, run these independently; other
    - **Density:** Does the amount of information per region fit use frequency, decision complexity, and visitor mode?
    - **Adaptation:** At narrow, intermediate, wide, zoomed, and localized states, what reorders, collapses, wraps, scrolls, or remains fixed? Does DOM and focus order still agree with the visual order?
    - **Extremes:** Do long content, empty states, overlays, sticky elements, safe areas, and small touch targets expose structural failures?
-2. **Mechanical scan:** the `impeccable detect --scope layout` scan is (not available in this copy; do this step by reading the code and screenshots). Inspect arbitrary spacing, overflow, stacking, and container behavior in the source and the 375px / 1440px screenshots. Keep this mechanical evidence out of the first assessment, then synthesize both passes before editing.
+2. **Mechanical scan:** the `impeccable detect --scope layout` scan is (not available in this copy; do this step by reading the code and screenshots). Inspect arbitrary spacing, overflow, stacking, and container behavior in the source and the 375px / 1440px screenshots (automated checks run at 360px). Keep this mechanical evidence out of the first assessment, then synthesize both passes before editing. A clean code-and-screenshot check cannot prove hierarchy or rhythm.
 
 ## Set the spatial thesis
 

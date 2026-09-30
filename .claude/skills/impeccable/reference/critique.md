@@ -1,6 +1,8 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 ### Purpose
 
-Resolve one stable target, run two independent assessments, synthesize a design critique, and ask the user what to improve next. The chat response is the deliverable (snapshot persistence is (not available in this copy; do this step by reading the code and screenshots)).
+Resolve one stable target, run two independent assessments, synthesize a design critique, and ask the user what to improve next. The chat response is the deliverable; skip snapshot persistence (not in this copy).
 
 ### Hard Invariants
 
@@ -21,9 +23,11 @@ Resolve one stable target, run two independent assessments, synthesize a design 
    - "the homepage" -> `site/pages/index.astro` or `index.html`
    - "the settings modal" -> the primary component file
    - "this page" -> the current URL or source file
-2. The `impeccable critique-storage slug` helper and `.impeccable/critique/` storage are (not available in this copy; do this step by reading the code and screenshots). Skip persistence and trend for every run.
+2. Skip the slug, persistence and trend steps: the `impeccable critique-storage` helper and `.impeccable/critique/` storage are not in this copy.
 
 ### Assessment Orchestration
+
+> Bridge: run this critique in single-context mode (Assessment A, then B, with the degraded banner), or hand the review to our `ux-reviewer` agent. Do not spawn agents that are not listed in `.claude/agents/`.
 
 Delegate Assessment A and Assessment B to separate sub-agents. They must not see each other's output. Do not show findings to the user until synthesis.
 
@@ -40,7 +44,7 @@ If browser automation is available, each assessment creates its own new tab. Nev
 Read relevant source files and visually inspect the live page when browser automation is available. Think like a design director.
 
 Evaluate:
-- **Design specificity**: Is the composition, interaction, and visual language grounded in this product, or could an unrelated product use it unchanged? Make this judgment before seeing detector output.
+- **Design specificity**: Is the composition, interaction, and visual language grounded in this product, or could an unrelated product use it unchanged? Make this judgment before seeing Assessment B's output.
 - **Holistic design**: hierarchy, IA, emotional fit, discoverability, composition, typography, color, accessibility, states, copy, and edge cases.
 - **Cognitive load**: consult the [Cognitive Load Assessment](#cognitive-load-assessment) section below; report checklist failures and decision points with >4 visible options.
 - **Emotional journey**: peak-end rule, emotional valleys, reassurance at high-stakes moments.
@@ -52,7 +56,7 @@ Return: design-specificity verdict, heuristic scores, cognitive load, emotional 
 
 The bundled detector CLI scan, the `impeccable live-server` and the detect.js overlay are (not available in this copy; do this step by reading the code and screenshots). Assessment B is mandatory and must remain isolated from Assessment A until both are complete.
 
-For a viewable target, when browser automation is available, open a fresh tab on the local dev URL (for Bridge, the `make dev` stack) and take screenshots at 375px and 1440px; record console errors. Inspect the markup and styles for the mechanical issues a detector would flag (contrast, touch targets, overflow, heading order, missing labels). Prefer the harness's native browser tool; fall back to the webapp-testing skill's Playwright pattern. For multi-view targets, cover 3-5 representative pages.
+For a viewable target, run against the local dev stack (`make dev`) with the repo's TypeScript `@playwright/test` through `frontend/playwright.config.ts`, following the patterns in `frontend/e2e`: screenshots at 375px and 1440px (the user's P16 instruction), and the automated page checks (axe and the rest) at 360px in the `mobile-360` project (spec 04/07). Record console errors. Python Playwright is not installed and must not be installed (a new dependency and a network download); the webapp-testing skill is a reference for approach only. Inspect the markup and styles for the mechanical issues a detector would flag (contrast, touch targets, overflow, heading order, missing labels). For multi-view targets, cover 3-5 representative pages.
 
 Return: mechanical findings with counts and file locations, browser console findings if applicable, false positives, and skipped/failed browser steps with concrete reasons.
 
@@ -93,7 +97,7 @@ The applicable maximum is 4 times the number of heuristics you actually scored: 
 
 Be honest with scores. A 4 means genuinely excellent. Most real interfaces score 20-32 out of 40.
 
-**Mode applicability**: heuristics 7 (Flexibility and Efficiency) and 10 (Help and Documentation) may be scored `n/a` on Persuade and Experience surfaces (landing pages, campaigns, portfolios, bodies of work), as may any other heuristic that genuinely cannot apply to the surface under review. Write `n/a` in the Score cell with a one-line reason, and renormalize the total to the applicable maximum (e.g. **24/32** when two heuristics are n/a) so the rating band stays proportional. The persisted snapshot must record the applicable maximum and which heuristics were scored n/a.
+**Mode applicability**: heuristics 7 (Flexibility and Efficiency) and 10 (Help and Documentation) may be scored `n/a` on Persuade and Experience surfaces (landing pages, campaigns, portfolios, bodies of work), as may any other heuristic that genuinely cannot apply to the surface under review. Write `n/a` in the Score cell with a one-line reason, and renormalize the total to the applicable maximum (e.g. **24/32** when two heuristics are n/a) so the rating band stays proportional.
 
 #### Design Specificity Verdict
 
@@ -158,7 +162,7 @@ After the report, the response continues with the close (Ask the User).
 
 ### Persist the Snapshot
 
-Snapshot persistence and trend (`impeccable critique-storage write` / `trend`, `.impeccable/critique/`) are (not available in this copy; do this step by reading the code and screenshots). Do not write critique files. Go straight to Ask the User.
+Skip this step: snapshot persistence and trend (`impeccable critique-storage write` / `trend`, `.impeccable/critique/`) are not in this copy. Do not write critique files. Go straight to Ask the User.
 
 ### Ask the User
 

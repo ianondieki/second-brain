@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 > **Additional context needed**: existing brand colors.
 
 Introduce color as hierarchy, meaning, and atmosphere. Preserve confirmed brand and semantic conventions; do not replace a visual world under the guise of colorizing it.

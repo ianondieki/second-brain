@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 > **Additional context needed**: quality bar and shipping constraints.
 
 Polish is refinement, never concealed redesign. Preserve the incumbent visual world, content, behavior, and everything outside scope. If the concept itself is wrong, say so and recommend redesign instead of smuggling in a replacement.
@@ -19,7 +21,7 @@ Fix the cause at the narrowest correct level. Ask when a binding system principl
 
 ## 2. Gather the evidence
 
-Use the feature yourself at the surface's representative sizes: desktop and mobile on the web; on a native platform (`ios` / `android` / `adaptive`), the shipped device classes on the simulator, emulator, or hardware, captured per the platform reference's Verifying the build section. Determine:
+Use the feature yourself at the surface's representative sizes: desktop and mobile on the web (screenshots at 375px and 1440px; automated checks at 360px). Native platforms are out of scope for this copy. Determine:
 
 - whether the path is functionally complete;
 - the intended quality bar and time available;
@@ -90,4 +92,4 @@ The `impeccable context` quality guidance, hooks and detector scan are (not avai
 
 Finish with a source diff: remove accidental churn, orphaned code, redundant values, and temporary artifacts. Ship only when the feature is functionally complete and consistently finished across the path.
 
-Closing a stored critique snapshot (`impeccable critique-storage close`) is (not available in this copy; do this step by reading the code and screenshots).
+Skip closing a stored critique snapshot (`impeccable critique-storage close` is not in this copy).

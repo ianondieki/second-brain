@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 # Command guidance
 
 ## Workflow questions

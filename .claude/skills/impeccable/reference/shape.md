@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 # Shape
 
 Discover what should be made and how it should work, then return a confirmed design brief without code.
@@ -32,11 +34,11 @@ Run only for material unresolved decisions:
 - What must remain untouched? What would make the result feel wrong even if it looked polished?
 - Which platform, framework, performance, accessibility, localization, or delivery constraints are binding?
 
-Never ask for CSS values or canned aesthetic lanes. New-work owns visual-world and concept choices.
+Never ask for CSS values or canned aesthetic lanes. Visual-world and concept choices come from the project context in Phase 2, not from the interview.
 
 ## Phase 2: Resolve the design direction
 
-For new surfaces, brand expansion, or replacement, new-work.md is (not available in this copy; do this step by reading the code and screenshots); resolve visual authority and concept choice from `CLAUDE.md`, spec 07 and spec 04 §4.6 plus the discovery answers, then return before any implementation. Inside an established world, use its concept process only when composition or interaction remains materially open.
+For new surfaces, brand expansion, or replacement, skip the new-work.md step (not in this copy); resolve visual authority and concept choice from `CLAUDE.md`, spec 07 and spec 04 §4.6 plus the discovery answers, then return before any implementation. Inside an established world, use its concept process only when composition or interaction remains materially open.
 
 ## Phase 3: Write the brief
 

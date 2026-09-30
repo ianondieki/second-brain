@@ -41,7 +41,7 @@ The mode names what the visitor's success looks like on this surface.
 - **Read:** the visitor understands something. Docs, articles, guides, help, changelogs. Structure for comprehension, then make the reading experience worth staying in.
 - **Experience:** the visitor is inside the work itself. Portfolios, galleries, showcases. Let the artifact lead from the first viewport; the interface recedes.
 
-Choose the mode from the requested surface, not the product, and persist it only in that surface brief. A tool's landing page is still Persuade; a fashion house's documentation is still Read; a docs index is Read, not Persuade. See [operate.md](reference/operate.md) for deeper Operate/Read guidance. Bridge's product surfaces are Operate or Read; spec 07 governs them.
+Choose the mode from the requested surface, not the product; this copy writes no surface brief, so state the mode in your response. A tool's landing page is still Persuade; a fashion house's documentation is still Read; a docs index is Read, not Persuade. See [operate.md](reference/operate.md) for deeper Operate/Read guidance. Bridge's product surfaces are Operate or Read; spec 07 governs them.
 
 ## Commands
 

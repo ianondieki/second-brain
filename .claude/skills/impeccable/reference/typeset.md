@@ -1,3 +1,5 @@
+> Modified by Bridge (2026-09-30) from pbakaus/impeccable@0d6b47e; changes listed in docs/platform/research/design-skills.md
+
 Typography carries information, hierarchy, and voice. Improve it inside the established visual world; do not replace the identity unless the user asked to.
 
 ---
@@ -21,7 +23,7 @@ When a sub-agent tool is available and permitted, run these independently; other
    - **Reading:** Does body copy stay within a comfortable 45–75 character measure? Are line height, paragraph rhythm, contrast, and tracking tuned to the actual face, width, language, and surface?
    - **Stress:** What happens with long headings, localization expansion, zoom, narrow containers, missing weights, and font fallback?
    - **Delivery:** Are only used assets loaded? Do fallback metrics, loading strategy, and variable-font settings avoid invisible text and disruptive reflow?
-2. **Mechanical scan:** the `impeccable detect --scope type` scan is (not available in this copy; do this step by reading the code and screenshots). Inspect dynamic or arbitrary font values in the source and computed styles. Synthesize both assessments before editing, noting what each caught alone.
+2. **Mechanical scan:** the `impeccable detect --scope type` scan is (not available in this copy; do this step by reading the code and screenshots). Inspect dynamic or arbitrary font values in the source and computed styles. Synthesize both assessments before editing, noting what each caught alone. A clean code-and-screenshot check is a floor, not proof of good typography.
 
 ## Set the system
 
