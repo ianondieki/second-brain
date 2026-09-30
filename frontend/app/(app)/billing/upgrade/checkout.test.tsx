@@ -146,7 +146,7 @@ describe("the simulated checkout", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "The M-Pesa account had too little money, so your plan has not changed.",
     );
-    expect(screen.getByRole("link", { name: "Back to Plan & billing" }).getAttribute("href")).toBe("/billing");
+    expect(primaries()).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(phase()).toBe("confirm");
     expect(window.location.search).not.toContain("checkout=");
@@ -193,8 +193,10 @@ describe("the simulated checkout", () => {
     expect(phase()).toBe("pending");
     await advance(3000);
     expect(phase()).toBe("succeeded");
-    // Without a page to go back to, the way back is Plan & billing.
-    expect(screen.getByRole("link", { name: "Back to Plan & billing" }).hasAttribute("data-primary")).toBe(true);
+    // Without a page to go back to, the way on is the plan itself.
+    const link = screen.getByRole("link", { name: "See your plan" });
+    expect(link.getAttribute("href")).toBe("/billing");
+    expect(link.hasAttribute("data-primary")).toBe(true);
   });
 
   it("stops when the checkout is not the person's", async () => {

@@ -306,13 +306,9 @@ function Result({
 }) {
   const t = useStrings("checkout");
   const checkout: CheckoutOut = phase.checkout;
-  const back = (
-    <Link href={props.billingHref} className={standaloneLinkClass}>
-      {t("backToBilling")}
-    </Link>
-  );
+  // The page's back link (above the title) stays the way to Plan & billing; each outcome has one action of its own.
   if (phase.kind === "succeeded") {
-    const next = checkout.plan_active && props.nextHref;
+    const next = checkout.plan_active ? props.nextHref : undefined;
     return (
       <section aria-labelledby="checkout-step" className="flex flex-col gap-4" data-phase="succeeded">
         <h2 id="checkout-step" {...headingProps}>
@@ -321,15 +317,10 @@ function Result({
         <Alert tone="ok">
           {checkout.plan_active ? t("succeeded", { plan: checkout.plan_name }) : t("succeededNotActive")}
         </Alert>
-        <div className="flex flex-col items-start gap-2">
-          <Link
-            href={next || props.billingHref}
-            data-primary=""
-            className={buttonClass("primary", "no-underline")}
-          >
-            {next ? t("continue") : t("backToBilling")}
+        <div>
+          <Link href={next ?? props.billingHref} data-primary="" className={buttonClass("primary", "no-underline")}>
+            {next ? t("continue") : t("seeYourPlan")}
           </Link>
-          {next ? back : null}
         </div>
       </section>
     );
@@ -342,11 +333,10 @@ function Result({
         {phase.kind === "cancelled" ? t("cancelledTitle") : t("failedTitle")}
       </h2>
       <Alert>{sentence}</Alert>
-      <div className="flex flex-col items-start gap-2">
+      <div>
         <Button variant="primary" onClick={onRestart}>
           {t("tryAgain")}
         </Button>
-        {back}
       </div>
     </section>
   );

@@ -1308,6 +1308,7 @@
     "succeeded": "Sasa uko kwenye {plan}.",
     "succeededNotActive": "Malipo yamethibitishwa. Mpango wako utabadilika baada ya muda mfupi: pakia ukurasa huu upya kuuona.",
     "continue": "Endelea ulipoachia",
+    "seeYourPlan": "Tazama mpango wako",
     "backToBilling": "Rudi kwenye Mpango na malipo",
     "failedTitle": "Malipo hayakukamilika",
     "failed": {

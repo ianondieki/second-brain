@@ -1308,6 +1308,7 @@
     "succeeded": "You are now on {plan}.",
     "succeededNotActive": "The payment is confirmed. Your plan changes in a moment: reload this page to see it.",
     "continue": "Continue where you left off",
+    "seeYourPlan": "See your plan",
     "backToBilling": "Back to Plan & billing",
     "failedTitle": "Payment not completed",
     "failed": {
