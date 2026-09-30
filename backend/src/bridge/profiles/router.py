@@ -135,10 +135,6 @@ async def update_profile(body: ProfileUpdate, live: CurrentSession, db: Db) -> P
     return _profile_out(profile)
 
 
-# [[COPY-REVIEW]]
-SESSION_ONLY_MESSAGE = "Turn the writing assistant on from the proposal editor: it lasts for one sign-in at a time."
-
-
 @router.get("/consents")
 async def get_consents(live: CurrentSession, db: Db, settings: SettingsDep) -> list[ConsentItem]:
     """Your decision on each purpose the settings page offers. The writing assistant's opt-in
@@ -158,7 +154,7 @@ async def set_consents(
     """Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose
     decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``."""
     if any(p in consents.SESSION_ONLY for p in body):
-        raise ApiError(422, "consent_session_only", SESSION_ONLY_MESSAGE)
+        raise ApiError(422, "consent_session_only", consents.SESSION_ONLY_MESSAGE)
     if body:
         current = consents.consents_version(settings)
         if any(d.version != current for d in body.values()):

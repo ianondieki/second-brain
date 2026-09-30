@@ -4693,6 +4693,26 @@
         "title": "PublishOut",
         "type": "object"
       },
+      "RecoveryCodesRequest": {
+        "additionalProperties": false,
+        "description": "New recovery codes: the current password when the account has one (with a second factor within 12 hours).",
+        "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          }
+        },
+        "title": "RecoveryCodesRequest",
+        "type": "object"
+      },
       "RecoveryCodesResponse": {
         "properties": {
           "recovery_codes": {
@@ -7616,7 +7636,7 @@
     },
     "/api/auth/oauth/{provider}/callback": {
       "get": {
-        "description": "The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is\nspent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another\nstate (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also\nspends its state server-side, so a replay gets oauth_state.\nError codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,\noauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,\nconsents_version_required, too_many_attempts (10 callbacks a minute from one IP that would reach the provider).\nSuccess: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.",
+        "description": "The provider sends the browser here. Always redirects to a fixed page on PUBLIC_BASE_URL. The flow cookie is\nspent when the callback presents its state, or when it is missing, unreadable or expired; a callback with another\nstate (or none) leaves it, so a forged one cannot end a flow in progress. The first callback carrying a code also\nspends its state server-side, so a replay gets oauth_state.\nError codes: oauth_state, oauth_cancelled, oauth_failed, oauth_no_email, oauth_email_unverified,\noauth_no_account, oauth_session, identity_in_use, provider_already_linked, consent_text_changed,\nconsents_version_required, consent_session_only, too_many_attempts (10 callbacks a minute from one IP that would\nreach the provider).\nSuccess: the return path (or /auth/mfa), /signup/check-email, or /settings/security?linked=PROVIDER.",
         "operationId": "oauth_callback_api_auth_oauth__provider__callback_get",
         "parameters": [
           {
@@ -7770,7 +7790,7 @@
     },
     "/api/auth/oauth/{provider}/start": {
       "post": {
-        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within\n15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms. 429 too_many_attempts\nafter 10 starts a minute from one IP.",
+        "description": "Begin a sign-in, signup or link with ``provider`` (github or google; 404 when not configured). Sets the\nshort-lived flow cookie; the browser then navigates to ``authorize_url``. ``link`` needs a signed-in session with\na fresh second factor (TOTP accounts) and ``current_password`` (accounts with a password), or a sign-in within\n15 minutes (password-less accounts without TOTP); ``signup`` needs the accepted terms and no purpose decided per\nsign-in (422 consent_session_only). 429 too_many_attempts after 10 starts a minute from one IP.",
         "operationId": "oauth_start_api_auth_oauth__provider__start_post",
         "parameters": [
           {
@@ -7998,6 +8018,7 @@
     },
     "/api/auth/signup": {
       "post": {
+        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.",
         "operationId": "signup_api_auth_signup_post",
         "requestBody": {
           "content": {
@@ -8220,6 +8241,7 @@
     },
     "/api/auth/totp/confirm": {
       "post": {
+        "description": "Turn two-step sign-in on with a code from the pending secret; returns the recovery codes, shown once. 409\nno_pending_enrolment when nothing is pending or setup began over 15 minutes ago (the expired secret is cleared);\n429 too_many_attempts after 5 codes a minute, counted with the second step and step-up codes.",
         "operationId": "totp_confirm_api_auth_totp_confirm_post",
         "requestBody": {
           "content": {
@@ -8424,6 +8446,99 @@
       }
     },
     "/api/auth/totp/enrol": {
+      "delete": {
+        "description": "Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409\ntotp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery\ncodes, may have been lost); 409 no_pending_enrolment when nothing is pending.",
+        "operationId": "totp_enrol_cancel_api_auth_totp_enrol_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Totp Enrol Cancel",
+        "tags": [
+          "auth"
+        ]
+      },
       "post": {
         "operationId": "totp_enrol_api_auth_totp_enrol_post",
         "requestBody": {
@@ -8529,6 +8644,125 @@
           }
         },
         "summary": "Totp Enrol",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/totp/recovery-codes": {
+      "post": {
+        "description": "Ten new recovery codes replace the old ones, which stop working; shown once. Needs two-step sign-in on (409\ntotp_not_enabled), a second factor within 12 hours (403 step_up_required) and, when the account has a password,\n``current_password`` (403 current_password_required), as for linking a sign-in method; 429 too_many_attempts\nafter 5 a minute for the account. The account gets a security notice.",
+        "operationId": "totp_recovery_codes_api_auth_totp_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RecoveryCodesRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Totp Recovery Codes",
         "tags": [
           "auth"
         ]

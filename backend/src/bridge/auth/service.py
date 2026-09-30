@@ -16,10 +16,11 @@ import re
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ from bridge.models.enums import (
     UserStatus,
 )
 from bridge.notifications.email import is_mailbox
+from bridge.profiles import consents as consent_rules
 from bridge.profiles.consents import consents_version, record_decisions, terms_version
 from bridge.profiles.models import DeveloperProfile
 from bridge.tenancy.models import Membership
@@ -61,6 +63,9 @@ EMAIL_DAILY_LIMIT = 20  # emails to one address a day, whatever the source
 EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minute from one client IP, any account
+PENDING_TOTP_TTL = timedelta(minutes=15)  # the magic-link lifetime: a setup left open longer must start again
+# Associated data of the pending envelope: its kind, then the user id (the active envelope binds the user id only).
+PENDING_LABEL = b"totp-pending|"
 
 
 class AuthError(Exception):
@@ -159,6 +164,14 @@ def _slug_from(name: str) -> str:
     return f"{base}-{secrets.token_hex(3)}"
 
 
+def refuse_session_only(decisions: Mapping[ConsentPurpose, bool]) -> None:
+    """Signup records lasting decisions only. A purpose decided for one sign-in (``tier2_llm_assistant``,
+    REQ-PROP-05) is refused whatever its value, as the settings API refuses it, so signup never writes a row of it.
+    The email form and both steps of an OAuth signup (start and callback) call this."""
+    if any(purpose in consent_rules.SESSION_ONLY for purpose in decisions):
+        raise AuthError("consent_session_only", 422)
+
+
 def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None:
     if not is_mailbox(email):
         # Only plain ASCII mailboxes can be emailed safely (no encoded words, quoted or Unicode local parts).
@@ -167,6 +180,7 @@ def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None
         raise AuthError("terms_not_accepted", 422)
     if req.side == "org" and req.org is None:
         raise AuthError("org_details_required", 422)
+    refuse_session_only(req.consents)
     if req.consents and req.consents_version is None:
         raise AuthError("consents_version_required", 422)
     if req.consents_version is not None and req.consents_version != consents_version(settings):
@@ -494,9 +508,25 @@ async def require_reauth(
         raise AuthError("recent_sign_in_required", 403)
 
 
-def notice_email(settings: Settings, user: User, what: str) -> PendingEmail:
+async def ensure_fresh_proof(
+    db: AsyncSession, settings: Settings, user: User, live: sessions.LiveSession, password: str | None, *, ip: str
+) -> None:
+    """Adding or removing a sign-in method, or replacing the recovery codes: a second factor within
+    STEP_UP_MAX_AGE_HOURS when TOTP is on (the ADR-002 step-up rule), and the current password when the account has
+    one (``require_reauth``, throttled like a login; the caller commits even on failure). A password-less account
+    without TOTP needs a sign-in within the last 15 minutes instead; a password-less account with TOTP needs only the
+    fresh second factor."""
+    if user.totp_enabled_at is not None:
+        if not sessions.mfa_fresh(live.row, timedelta(hours=settings.step_up_max_age_hours)):
+            raise AuthError("step_up_required", 403)
+        if user.password_hash is None:
+            return
+    await require_reauth(db, settings, user, live, password, ip=ip)
+
+
+def notice_email(settings: Settings, user: User, what: str, dedupe_key: str | None = None) -> PendingEmail:
     return PendingEmail(
-        user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice"
+        user.id, user.email, emails.security_notice(settings.product_name, what), "auth.security_notice", dedupe_key
     )
 
 
@@ -523,32 +553,118 @@ async def begin_totp_enrolment(
         raise AuthError("totp_already_enabled", 409)
     await require_reauth(db, settings, user, live, password, ip=ip)
     secret = totp.new_secret()
-    user.totp_pending_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
+    seal_pending_secret(settings, user, secret)
     return secret, totp.provisioning_uri(secret, user.email, settings.product_name)
 
 
-async def confirm_totp_enrolment(
-    db: AsyncSession, settings: Settings, live: sessions.LiveSession, code: str
-) -> tuple[list[str], list[PendingEmail]]:
+def seal_pending_secret(settings: Settings, user: User, secret: str) -> None:
+    """Store ``secret`` as the pending TOTP secret with the time setup began, sealed together in one AES-GCM envelope
+    bound to ``PENDING_LABEL`` and the user id, so the time cannot be altered or detached and the envelope never opens
+    as the active secret (or the active one as it); ``_pending_secret`` refuses it after ``PENDING_TOTP_TTL``. The one
+    place that writes the envelope (setup, and the demo seed's fixed secrets); the caller holds ``lock_user``."""
+    began = int(clock.utcnow().timestamp())
+    user.totp_pending_enc = encrypt(_key(settings), f"{secret}|{began}".encode("ascii"), PENDING_LABEL + user.id.bytes)
+
+
+def _pending_secret(settings: Settings, user: User) -> str | None:
+    """The pending secret while its setup is fresh. One begun over ``PENDING_TOTP_TTL`` ago (a closed tab), stored
+    without its start time, or one that does not open (sealed before ``PENDING_LABEL``, under another key, or altered)
+    is cleared instead, the same answer as expired. The caller holds ``lock_user``."""
+    if user.totp_pending_enc is None:
+        return None
+    try:
+        opened = decrypt(_key(settings), user.totp_pending_enc, PENDING_LABEL + user.id.bytes).decode("ascii")
+    except (InvalidTag, ValueError):  # ValueError: a blob too short to hold a nonce
+        opened = ""
+    secret, _, began = opened.partition("|")
+    if began.isdigit() and clock.utcnow() - datetime.fromtimestamp(int(began), UTC) <= PENDING_TOTP_TTL:
+        return secret
+    user.totp_pending_enc = None
+    return None
+
+
+async def cancel_totp_enrolment(db: AsyncSession, live: sessions.LiveSession) -> None:
+    """Cancel setup: clear the pending secret (follow-up 7). It takes ``lock_user`` like the confirmation, so the two
+    serialise: behind a confirmation that committed first it answers 409 totp_already_enabled (two-step sign-in is on
+    and that answer may have been lost, codes unseen); a confirmation behind it finds nothing pending."""
     user = await lock_user(db, live.user.id)
+    if user.totp_enabled_at is not None:
+        raise AuthError("totp_already_enabled", 409)
     if user.totp_pending_enc is None:
         raise AuthError("no_pending_enrolment", 409)
-    check = totp.verify(_secret(settings, user, user.totp_pending_enc), code, last_counter=None)
+    user.totp_pending_enc = None
+
+
+async def confirm_totp_enrolment(
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, code: str, *, ip: str
+) -> tuple[list[str], list[PendingEmail]]:
+    """Turn two-step sign-in on with a code from the pending secret. Throttled in the second factor's budget (the
+    "mfa" keys of ``complete_mfa``: 5 codes a minute for the account from one client IP), so a stolen session cannot
+    guess codes against a setup the owner has begun (security review MAJOR); the throttled case is logged."""
+    keys = throttle.keys(settings.secret_key.get_secret_value(), "mfa", str(live.user.id), ip)
+    if await throttle.blocked(db, keys, pair_limit=settings.login_attempts_per_minute):
+        # Looked up per call: the module logger is cached on first use (structlog), which hides it from capture_logs.
+        get_logger(__name__).warning("auth.totp_confirm_throttled", user_id=str(live.user.id))
+        raise AuthError("too_many_attempts", 429)
+    user = await lock_user(db, live.user.id)
+    secret = _pending_secret(settings, user)
+    if secret is None:
+        raise AuthError("no_pending_enrolment", 409)  # the router commits, so an expired secret stays cleared
+    check = totp.verify(secret, code, last_counter=None)
+    throttle.record(db, keys, succeeded=check.ok)  # the router commits on a refusal, so a wrong code stays counted
     if not check.ok:
         raise AuthError("invalid_code", 401)
-    codes = totp.new_recovery_codes()
-    key = settings.recovery_code_pepper.get_secret_value()
     now = clock.utcnow()
-    user.totp_secret_enc, user.totp_pending_enc = user.totp_pending_enc, None
+    # Seal the secret alone (a fresh nonce): the pending envelope also carries its start time, which is not a secret
+    # sign-in can decode.
+    user.totp_secret_enc = encrypt(_key(settings), secret.encode("ascii"), user.id.bytes)
+    user.totp_pending_enc = None
     user.totp_enabled_at = now
     user.totp_last_counter = check.counter
-    user.totp_recovery_hashes = [totp.recovery_hash(c, key) for c in codes]
+    codes = _issue_recovery_codes(settings, user)
     live.row.mfa_pending = False
     live.row.mfa_verified_at = now
     # Other sessions were created without the second factor: end them.
     await sessions.revoke_all(db, user.id, except_id=live.row.id)
     await audit(db, "auth.totp_enabled", actor_user_id=user.id, subject_type="user", subject_id=user.id)
     return codes, [notice_email(settings, user, "Two-step sign-in was turned on.")]
+
+
+def _issue_recovery_codes(settings: Settings, user: User) -> list[str]:
+    """Ten new codes whose hashes replace every stored one; the codes themselves are never stored. The caller holds
+    ``lock_user``."""
+    codes = totp.new_recovery_codes()
+    key = settings.recovery_code_pepper.get_secret_value()
+    user.totp_recovery_hashes = [totp.recovery_hash(c, key) for c in codes]
+    return codes
+
+
+async def replace_recovery_codes(
+    db: AsyncSession, settings: Settings, live: sessions.LiveSession, password: str | None, *, ip: str
+) -> tuple[list[str], list[PendingEmail]]:
+    """Ten new recovery codes replace the old ones in one step (follow-up 8): the way back to codes after the
+    confirmation's answer was lost, for roles that cannot turn two-step sign-in off and on again. The proof is
+    ``ensure_fresh_proof``'s, as for linking and unlinking a sign-in method: a second factor within 12 h and the
+    current password when the account has one, since a recovery code spent at step-up also makes the factor fresh
+    (security review). Throttled like the re-auth checks (5 a minute for the account, from any IP;
+    ``REAUTH_IP_LIMIT`` a minute from one client IP). Under ``lock_user``: a step-up spending an old code either
+    commits first (its remaining hashes are then replaced here) or waits and re-reads only the new hashes, so it can
+    never write the old ones back."""
+    limit = settings.login_attempts_per_minute
+    keys = throttle.keys(settings.secret_key.get_secret_value(), "recovery_codes", str(live.user.id), ip)
+    if await throttle.blocked(db, keys, pair_limit=limit, account_limit=limit, ip_limit=REAUTH_IP_LIMIT):
+        raise AuthError("too_many_attempts", 429)
+    throttle.record(db, keys, succeeded=True)
+    user = await lock_user(db, live.user.id)
+    if user.totp_enabled_at is None:
+        raise AuthError("totp_not_enabled", 409)
+    await ensure_fresh_proof(db, settings, user, live, password, ip=ip)
+    codes = _issue_recovery_codes(settings, user)
+    await audit(db, "auth.recovery_codes_replaced", actor_user_id=user.id, subject_type="user", subject_id=user.id)
+    # One notice per account and Nairobi day, however many replacements (security review; every one is audited).
+    dedupe = f"auth.recovery_codes_replaced:{user.id}:{local_date(clock.utcnow()).isoformat()}"
+    # [[COPY-REVIEW]] plain transactional copy
+    return codes, [notice_email(settings, user, "New recovery codes were created.", dedupe)]
 
 
 async def mfa_required_for(db: AsyncSession, user: User) -> bool:

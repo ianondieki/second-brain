@@ -126,6 +126,14 @@ class TotpEnrolRequest(BaseModel):
     password: str | None = Field(default=None, max_length=256)
 
 
+class RecoveryCodesRequest(BaseModel):
+    """New recovery codes: the current password when the account has one (with a second factor within 12 hours)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str | None = Field(default=None, max_length=256)
+
+
 class OAuthSignup(BaseModel):
     """The signup form's choices for an OAuth signup (the address comes from the provider): replayed at the callback
     only if no account exists yet. Sealed in the flow cookie meanwhile."""

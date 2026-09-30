@@ -34,6 +34,7 @@ from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings, get_settings
 from bridge.db import create_session_factory
 from bridge.models.enums import AuthProvider
+from bridge.profiles import consents as profile_consents
 from bridge.profiles.consents import consents_version
 from bridge.seed.reference import seed_all
 from tests.integration.api import make_client, outbox, refresh_csrf
@@ -336,6 +337,29 @@ async def test_signup_needs_the_terms_and_current_consents(client: httpx.AsyncCl
     unversioned = signup_body()
     del unversioned["signup"]["consents_version"]
     assert await refused(unversioned) == (422, "consents_version_required")
+    for granted in (True, False):  # the writing assistant's opt-in lasts one sign-in (REQ-PROP-05), whatever its value
+        session_only = signup_body()
+        session_only["signup"]["consents"]["tier2_llm_assistant"] = granted
+        assert await refused(session_only) == (422, "consent_session_only")
+
+
+@pytest.mark.parametrize("verified", [True, False])
+async def test_a_flow_carrying_a_session_only_consent_creates_nothing(
+    client: httpx.AsyncClient, owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, verified: bool
+) -> None:
+    """A flow sealed before signup refused session-only purposes (within its 10 minutes) is refused at the callback."""
+    body = signup_body()
+    body["signup"]["consents"]["tier2_llm_assistant"] = True
+    monkeypatch.setattr(profile_consents, "SESSION_ONLY", frozenset())
+    params = await start(client, "github", "signup", **body)
+    monkeypatch.undo()
+    who = person(verified=verified)
+    with respx.mock(assert_all_called=False) as router:
+        fake_github(router, who)
+        response = await client.get("/api/auth/oauth/github/callback", params={"code": "c", "state": params["state"]})
+    assert landing(response) == ("/signup", {"oauth_error": "consent_session_only", "provider": "github"})
+    async with owner_engine.connect() as conn:
+        assert await conn.scalar(text("SELECT count(*) FROM users WHERE email = :e"), {"e": who.email}) == 0
 
 
 async def test_a_linked_account_signs_in_again(client: httpx.AsyncClient, owner_engine: AsyncEngine) -> None:
