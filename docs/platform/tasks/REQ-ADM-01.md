@@ -159,7 +159,7 @@ KB with response headers, D-28).
    `cannot_approve_vulnerability` with `actions: ["reject"]` (REQ-PROP-02: vulnerability content is rejected, never
    approved), so that case shows its fixed sentence and Reject only. Every other `blocked` shows the sentence and no
    buttons.
-2. **Demo cases are single-use.** Each demo case can be decided once and each demo login can sign in from one project
+2. **Demo cases are single-use** (superseded in the fix round below: each run now puts its item back). Each demo case can be decided once and each demo login can sign in from one project
    at a time (the API refuses a reused TOTP code), so the walkthrough approves P6 on desktop (demo moderator) and P6's
    new problem at 360 px (demo admin); the claims test uses its own staff admin. A rerun, or a CI retry after the
    approval, needs a freshly seeded demo; `expectDemoQueues` (beforeAll) says so when the seed is missing.
@@ -177,3 +177,35 @@ KB with response headers, D-28).
    over about 300 lines.
 8. **`impeccable`** is not installed here; the polish pass was by hand against docs/spec/07 with screenshots at 375 and
    1440 px.
+
+### P15-F fix round 1 (reviewer: 3 MAJORs, 2 MINORs; ux-reviewer: 1 MAJOR)
+
+Integration merged first (`a9c7cd9`: P15-B `a5386ad`, P16-A `b5c344f`; the card's conflict kept both sections).
+
+- **MAJOR 1, `subject_gone`** (`e25db0d`). The decision route's 409 `subject_gone` is a refusal of its own
+  (`adminModeration.refusal.subject_gone`, en and sw, `[[COPY-REVIEW]]`): only "Back to Moderation" remains and the page
+  is fetched again (`REFRESH_AFTER`: `already_decided`, `subject_gone`, `cannot_approve_vulnerability`).
+  `refusal.own_content` no longer says "or it no longer exists". Tests: `refusalOf`/`refusalNext` cases, the screen's
+  back-only table with the refresh asserted.
+- **MAJOR 2, the repeated decision** (`a4a4c1a`). A stale second factor on Reject repeats Reject
+  (`toHaveBeenNthCalledWith(1|2, CASE_ID, "reject", VERSION)`); the Approve test pins its second call. The mutant
+  `onConfirmed={() => run("approve")}` is killed.
+- **MAJOR 3, the walkthrough's order and retries** (`48f3eb0`). Each project puts back only the demo item it decides
+  (`reopenDemoItem`, owner SQL: desktop P6 held, 360 px P6's problem clear and published; its case open with
+  `decided_by`/`decided_at` cleared) in `beforeEach`, then `expectDemoQueues(item)` checks that case is unresolved; the
+  360 run asserts only on its own problem case. A rerun also exposed that a retry in a new worker reused a demo TOTP
+  window the API had accepted: demo staff codes now start after `users.totp_last_counter` (owner read). Both projects
+  pass in either order and twice in a row (`--repeat-each 2`).
+- **UX MAJOR, the decided header** (`0be13f2`). A decided case's header shows the outcome (Approved/Rejected, mark and
+  word) instead of the visibility tag of a case being checked; vitest (and a mutant) and the E2E check the refreshed
+  header.
+- **MINORs** (`3409800`). `calls.test.ts` (path, CSRF, body `{decision, subject_version_id}`, null version, refusal by
+  code, thrown fetch → generic); `data.test.ts` (no next case when the only other open case has `actions: []`, the
+  oldest decidable other case, decided and unknown cases).
+
+Checks: eslint, typecheck, vitest (74 files, 962 tests), `api:check`, copy lint, traceability; Playwright
+`moderation.spec.ts` and `research.spec.ts` (16 tests, both projects) on an isolated stack, removed afterwards.
+
+Left open: the demo reset writes the proposal's `moderation_state` and the cases as the database owner (test data
+only); a re-approval of P6 writes another `proposal_published` signal and queues another `scouts.on_new` run, harmless
+on a test stack.
