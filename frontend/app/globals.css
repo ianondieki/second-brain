@@ -16,6 +16,18 @@
   --field: #ffffff; /* text inputs, so fields read as fields on paper */
   --on-accent: #ffffff; /* text and icons on --jacaranda (8.2:1) */
   --on-ok: #ffffff; /* text and icons on --ok (6.6:1) */
+  /*
+   * Mixes of the colours above, named once (docs/platform/design/p16-design-system.md, token table). Each was
+   * repeated inline before; a component reads the token, never the mix.
+   */
+  --accent-strong: color-mix(in oklab, var(--jacaranda) 84%, var(--ink)); /* hover and pressed accent */
+  --wash-soft: color-mix(in oklab, var(--jacaranda-wash) 55%, var(--paper)); /* nav hover, selected rows */
+  --error-wash: color-mix(in oklab, var(--error) 7%, var(--field)); /* error notice background, danger hover */
+  --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field)); /* success notice background */
+  --error-line: color-mix(in oklab, var(--error) 45%, var(--paper)); /* error notice border */
+  --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper)); /* success notice border */
+  --accent-line: color-mix(in oklab, var(--jacaranda) 35%, var(--paper)); /* info notice border */
+  --scrim: color-mix(in oklab, var(--ink) 45%, transparent); /* the one dialog backdrop */
   --focus-ring: 2px solid var(--jacaranda);
   --focus-offset: 2px;
   color-scheme: light;
@@ -33,6 +45,14 @@
   --color-field: var(--field);
   --color-on-accent: var(--on-accent);
   --color-on-ok: var(--on-ok);
+  --color-accent-strong: var(--accent-strong);
+  --color-wash-soft: var(--wash-soft);
+  --color-error-wash: var(--error-wash);
+  --color-ok-wash: var(--ok-wash);
+  --color-error-line: var(--error-line);
+  --color-ok-line: var(--ok-line);
+  --color-accent-line: var(--accent-line);
+  --color-scrim: var(--scrim);
 }
 
 @theme {
@@ -42,6 +62,12 @@
   /* Radii: controls and the one side panel; nothing else is rounded. */
   --radius-control: 10px;
   --radius-panel: 16px;
+
+  /*
+   * The only elevation: things that float over the page (the account menu, the confirm dialog). Offset plus a soft
+   * blur, tinted from --ink (#16232f). Nothing on the page itself casts a shadow.
+   */
+  --shadow-overlay: 0 12px 28px -12px rgb(22 35 47 / 0.28), 0 2px 6px -2px rgb(22 35 47 / 0.12);
 
   /* Type scale: 1.25 ratio on a 16 px base (14 / 16 / 20 / 25 / 31 / 39). */
   --text-sm: 0.875rem;

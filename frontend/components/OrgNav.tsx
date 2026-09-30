@@ -50,7 +50,7 @@ export function OrgNav({ current, query = "" }: { current: OrgSection; query?: s
                   "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-base",
                   active
                     ? "font-semibold text-jacaranda lg:bg-jacaranda-wash"
-                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-[color-mix(in_oklab,var(--jacaranda-wash)_55%,var(--paper))]",
+                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-wash-soft",
                 )}
               >
                 {active ? (

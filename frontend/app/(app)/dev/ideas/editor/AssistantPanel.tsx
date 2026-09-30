@@ -323,7 +323,7 @@ export function AssistantPanel({
           setDialogOpen(false);
           if (!accepted.current) onClose(); // "Not now" or Escape: nothing was sent, and the panel closes
         }}
-        className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel border border-line bg-paper p-6 text-ink backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]"
+        className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel border border-line bg-paper p-6 text-ink backdrop:bg-scrim"
       >
         <h2 id={titleId} className="text-lg">
           {t("dialog.title")}

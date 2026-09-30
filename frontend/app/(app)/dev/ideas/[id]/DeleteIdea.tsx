@@ -66,7 +66,7 @@ export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteId
         onClose={() => setProblem(null)}
         className={cn(
           "m-auto w-[calc(100%-2rem)] max-w-md rounded-panel border border-line bg-paper p-6 text-ink",
-          "backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]",
+          "backdrop:bg-scrim",
         )}
       >
         <h2 id={titleId} className="text-lg text-ink">

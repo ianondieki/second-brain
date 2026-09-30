@@ -6,9 +6,9 @@ import { AlertIcon, CheckIcon, InfoIcon } from "./status-icons";
 export type AlertTone = "error" | "info" | "ok";
 
 const tones: Record<AlertTone, string> = {
-  error: "border-[color-mix(in_oklab,var(--error)_45%,var(--paper))] bg-[color-mix(in_oklab,var(--error)_7%,var(--field))]",
-  info: "border-[color-mix(in_oklab,var(--jacaranda)_35%,var(--paper))] bg-jacaranda-wash",
-  ok: "border-[color-mix(in_oklab,var(--ok)_45%,var(--paper))] bg-[color-mix(in_oklab,var(--ok)_7%,var(--field))]",
+  error: "border-error-line bg-error-wash",
+  info: "border-accent-line bg-jacaranda-wash",
+  ok: "border-ok-line bg-ok-wash",
 };
 
 const iconTone: Record<AlertTone, string> = { error: "text-error", info: "text-jacaranda", ok: "text-ok" };

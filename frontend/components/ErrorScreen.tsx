@@ -6,7 +6,7 @@ import { useStrings } from "./ClientStrings";
 // button's look (components/ui/Button.tsx) instead of importing the Button module and next/link with it.
 const PRIMARY =
   "inline-flex min-h-12 w-full items-center justify-center rounded-control bg-jacaranda px-6 text-base " +
-  "font-semibold text-on-accent sm:w-auto hover:bg-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))]";
+  "font-semibold text-on-accent sm:w-auto hover:bg-accent-strong";
 
 /**
  * A page that failed to render (error.tsx of a route group): a neutral sentence, since the cause is not known here

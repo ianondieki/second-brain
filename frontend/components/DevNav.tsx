@@ -53,7 +53,7 @@ export function DevNav({ current }: { current: DevSection }) {
                   "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-left lg:text-base",
                   active
                     ? "font-semibold text-jacaranda lg:bg-jacaranda-wash"
-                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-[color-mix(in_oklab,var(--jacaranda-wash)_55%,var(--paper))]",
+                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-wash-soft",
                 )}
               >
                 {active ? (

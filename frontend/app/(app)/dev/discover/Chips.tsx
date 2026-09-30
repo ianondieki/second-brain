@@ -60,7 +60,7 @@ export function MoreSummary({ children }: { children: ReactNode }) {
     <summary
       className={
         "inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-jacaranda " +
-        "hover:text-[color-mix(in_oklab,var(--jacaranda)_84%,var(--ink))] [&::-webkit-details-marker]:hidden"
+        "hover:text-accent-strong [&::-webkit-details-marker]:hidden"
       }
     >
       {children}
