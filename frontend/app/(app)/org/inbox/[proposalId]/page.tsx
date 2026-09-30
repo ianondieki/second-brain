@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getNda, getTeaser, orgContext } from "../../data";
@@ -35,17 +34,12 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
   const nav = <OrgNav current="inbox" query={orgParam} />;
   const inbox = org ? inboxHref(memberships, org.org_id) : "/org/inbox";
 
-  const back = (
-    <Link href={inbox} className={standaloneLinkClass}>
-      {t("back")}
-    </Link>
-  );
+  const back = { href: inbox, label: t("back") };
 
   if (!org || !card) {
     return (
       <SignedInShell homeHref={`/org${orgParam}`} nav={nav}>
-        {back}
-        <h1 className="mt-4 text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
+        <PageHeader back={back} title={t("pageTitle")} />
         <div className="mt-6">
           {org ? (
             <EmptyState
@@ -67,16 +61,11 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
   const title = card.teaser.title ?? ti("untitled");
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
-      <article className="max-w-4xl">
-        {back}
-        <header className="mt-4 max-w-3xl">
-          <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{title}</h1>
-          {card.teaser.niche ? <p className="mt-2 text-ink-soft">{card.teaser.niche.label}</p> : null}
+      <article className="flex max-w-3xl flex-col gap-10">
+        <PageHeader back={back} title={title} lead={card.teaser.niche?.label}>
           <p className="mt-4 max-w-[62ch] text-sm text-ink-soft">{t("teaserNote")}</p>
-        </header>
-        <div className="max-w-3xl">
-          <TeaserDetails card={card} />
-        </div>
+        </PageHeader>
+        <TeaserDetails card={card} />
         <ClientStrings strings={await clientStrings(["orgProposal"])}>
           <FullProposal
             orgId={org.org_id}
