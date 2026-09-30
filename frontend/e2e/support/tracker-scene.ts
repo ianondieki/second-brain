@@ -62,10 +62,15 @@ export class Person {
     readonly secret: string,
   ) {}
 
-  /** A code the API accepts now: in the window before, at or after the current one, later than the last used. */
+  /**
+   * A code the API accepts now: in the current window or the next, later than the last used. Never the window
+   * before: the API accepts that one only until the current window ends, so a code computed just before a boundary
+   * and checked just after it was refused (a walkthrough CI run, P16-E3). The current window stays accepted for the
+   * whole next one, as the demo seed chooses (`bridge/seed/demo/runtime.py` `next_totp_code`).
+   */
   async code(): Promise<string> {
     const now = Math.floor(Date.now() / 30_000);
-    const counter = Math.max(this.lastCounter + 1, now - 1);
+    const counter = Math.max(this.lastCounter + 1, now);
     if (counter > now + 1) await new Promise((r) => setTimeout(r, (counter - now - 1) * 30_000 + 1_000));
     this.lastCounter = counter;
     return totp(this.secret, { time: counter * 30_000 });

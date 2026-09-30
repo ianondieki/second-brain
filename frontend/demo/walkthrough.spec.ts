@@ -21,6 +21,15 @@
  * otherwise it logs a note and Mailpit shows the reminders the seed day sent. WALKTHROUGH_PAUSE_MS sets the pause
  * between steps (default 1200). WALKTHROUGH_DEMO_REPO names the checkout that started the demo (its infra/demo/.env), when
  * it is not this one (a second worktree). Output: docs/demo/video/ (gitignored) and docs/demo/screenshots/ (committed).
+ *
+ * As a CI check (P16-E3, pr.yml's demo-story job, on the dev compose stack with the demo seed, not `make demo`):
+ * walkthrough.config.ts turns the video off and sends the screenshots to test-results/walkthrough/screenshots/
+ * (WALKTHROUGH_SHOTS_DIR). The job sets WALKTHROUGH_RUN_DEMO_CMDS=1 and WALKTHROUGH_COMPOSE to the docker compose
+ * arguments of its stack (`--env-file infra/.env -f infra/docker-compose.dev.yml`, from the repository folder): the
+ * time step then runs the two commands demo.py runs, in the same containers of that stack (`docker compose <args>
+ * exec -T api python -m bridge.demo clock --days 1`, `… exec -T worker python -m bridge.reminders run --now`).
+ * Every assertion is the same in CI; under the egress lock the certificate reads "Timestamp pending", which the
+ * /verify step accepts in either mode (as e2e/verify.spec.ts does).
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -33,11 +42,14 @@ import { demoTotpSecret } from "../e2e/support/totp";
 import { ownerSql } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
-const SHOTS = join(REPO, "docs", "demo", "screenshots");
+// The config sets it: docs/demo/screenshots/ (committed) locally, test-results/walkthrough/screenshots/ in CI.
+const SHOTS = process.env.WALKTHROUGH_SHOTS_DIR ?? join(REPO, "docs", "demo", "screenshots");
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const MAILPIT = (process.env.E2E_MAILPIT_URL ?? "http://localhost:8025").replace(/\/$/, "");
 const PAUSE_MS = Number(process.env.WALKTHROUGH_PAUSE_MS ?? 1200);
 const RUN_DEMO_CMDS = process.env.WALKTHROUGH_RUN_DEMO_CMDS === "1";
+/** docker compose arguments naming the stack when it is not `make demo`'s (CI's dev stack); empty: demo.py. */
+const COMPOSE_ARGS = (process.env.WALKTHROUGH_COMPOSE ?? "").split(/\s+/).filter(Boolean);
 const SLOW = { timeout: 60_000 };
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -64,7 +76,7 @@ async function pause(page: Page, times = 1) {
   await page.waitForTimeout(PAUSE_MS * times);
 }
 
-/** A viewport-only JPEG into docs/demo/screenshots/ (the README links these names). */
+/** A viewport-only JPEG into docs/demo/screenshots/ (the README links these names; in CI a scratch folder). */
 async function shot(page: Page, name: string) {
   mkdirSync(SHOTS, { recursive: true });
   await expect(page).toHaveTitle(/\S/);
@@ -117,12 +129,29 @@ function nav(page: Page, name: string): Locator {
   return page.getByRole("navigation", { name });
 }
 
-/** One of the demo launcher's commands (the same as make demo-clock / make demo-reminders), from the repository. */
+/** The in-container command demo.py runs for each of its time commands (infra/demo/demo.py cmd_clock, cmd_reminders). */
+const IN_CONTAINER: Record<string, (args: string[]) => string[]> = {
+  clock: (args) => ["api", "python", "-m", "bridge.demo", "clock", ...args],
+  reminders: () => ["worker", "python", "-m", "bridge.reminders", "run", "--now"],
+};
+
+/**
+ * One of the demo launcher's commands (the same as make demo-clock / make demo-reminders), from the repository; with
+ * WALKTHROUGH_COMPOSE, the same command in the same container of that compose stack (CI's dev stack).
+ */
 function demoCommand(args: string[]): void {
+  const checkout = process.env.WALKTHROUGH_DEMO_REPO ?? REPO;
+  const options = { cwd: checkout, stdio: "inherit", timeout: 180_000 } as const;
+  if (COMPOSE_ARGS.length) {
+    const [name, ...rest] = args;
+    const command = ["compose", ...COMPOSE_ARGS, "exec", "-T", ...IN_CONTAINER[name](rest)];
+    console.log(`walkthrough: docker ${command.join(" ")}`);
+    execFileSync("docker", command, options);
+    return;
+  }
   const python = process.env.DEMO_PY ?? (process.platform === "win32" ? "python" : "python3");
   console.log(`walkthrough: ${python} infra/demo/demo.py ${args.join(" ")}`);
-  const checkout = process.env.WALKTHROUGH_DEMO_REPO ?? REPO;
-  execFileSync(python, ["infra/demo/demo.py", ...args], { cwd: checkout, stdio: "inherit", timeout: 180_000 });
+  execFileSync(python, ["infra/demo/demo.py", ...args], options);
 }
 
 /** How many developer nudges have reached `to` (Mailpit's API). */

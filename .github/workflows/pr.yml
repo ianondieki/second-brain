@@ -208,6 +208,62 @@ jobs:
           path: frontend/playwright-report
           retention-days: 7
 
+  demo-story:
+    # P16-E3 (REQ-FND-02, REQ-UX-01..04): the recorded demo walkthrough (frontend/demo/walkthrough.spec.ts) as a check,
+    # on its own fresh stack in parallel with e2e (whose seeded data it would change). The set-up is the e2e job's,
+    # copied step for step up to the demo seed. In CI the walkthrough config records no video and writes its
+    # screenshots under frontend/test-results/walkthrough/, never over docs/demo/screenshots/; the clock and
+    # reminders step runs demo.py's two in-container commands against this stack (WALKTHROUGH_COMPOSE).
+    name: demo story walkthrough against the compose stack (REQ-FND-02)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: CI-only environment files (throwaway random values)
+        run: bash infra/ci/make-env.sh
+      - name: Install frontend dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Build and start the stack
+        run: docker compose --env-file infra/.env -f infra/docker-compose.dev.yml up -d --build --wait
+      - name: Egress lock (host and containers)
+        run: bash infra/ci/egress-lock.sh
+      - name: Demo seed; export E2E_VERIFY_CERT_ID and E2E_DATABASE_OWNER_URL (REQ-FND-02)
+        # After the lock: the seed and the worker reach nothing outside (the TSA stays unreachable, so the
+        # certificate reads "Timestamp pending"). cert-id waits until the worker has hashed and signed it.
+        run: |
+          compose="docker compose --env-file infra/.env -f infra/docker-compose.dev.yml"
+          $compose run --rm -T migrate python -m bridge.seed --demo
+          cert_id="$($compose run --rm -T migrate python -m bridge.demo cert-id --wait 180)"
+          owner_password="$(sed -n 's/^BRIDGE_OWNER_PASSWORD=//p' infra/.env)"
+          echo "::add-mask::$owner_password"
+          echo "E2E_VERIFY_CERT_ID=$cert_id" >> "$GITHUB_ENV"
+          echo "E2E_DATABASE_OWNER_URL=postgresql://bridge_owner:${owner_password}@127.0.0.1:5432/bridge" >> "$GITHUB_ENV"
+      - name: The demo story, end to end (walkthrough without video; clock and reminders on this stack)
+        working-directory: frontend
+        env:
+          WALKTHROUGH_RUN_DEMO_CMDS: "1"
+          WALKTHROUGH_COMPOSE: --env-file infra/.env -f infra/docker-compose.dev.yml
+        run: ../infra/ci/sandboxed.sh npx playwright test -c demo/walkthrough.config.ts
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose --env-file infra/.env -f infra/docker-compose.dev.yml logs --tail=200
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: demo-story-report
+          path: |
+            frontend/playwright-report/walkthrough
+            frontend/test-results/walkthrough
+          retention-days: 7
+
   scanners:
     name: scanners (gitleaks, pip-audit, npm audit, osv-scanner, Trivy)
     runs-on: ubuntu-latest
