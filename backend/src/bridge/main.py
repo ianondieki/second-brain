@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from bridge import __version__
+from bridge.admin.claims import router as claims_admin_router
 from bridge.admin.research import router as research_admin_router
 from bridge.admin.router import router as admin_router
 from bridge.api import health
@@ -127,6 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(directory_router)
     app.include_router(admin_router)
     app.include_router(research_admin_router)
+    app.include_router(claims_admin_router)
     app.include_router(provenance_router)
     app.include_router(pitch_router)
     app.include_router(proposals_router)

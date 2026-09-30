@@ -106,3 +106,9 @@ research:
     ngo: "0.8"
     blog: "0.4"
     social: "0.3"
+
+claims:
+  # The staff admin's claims queue (REQ-DIR-03, REQ-ADM-01; docs/spec/06 6.2 "manual ops review (SLA 2 BD)", 6.12
+  # "claim queue (2 BD SLA)"). Read by bridge/admin/claims.py. A claim awaiting review is due by the end of the Nth
+  # business day after the Nairobi day it was submitted (org_claims.created_at); disputes follow their moderation case.
+  review_sla_bd: 2
