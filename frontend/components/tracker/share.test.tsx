@@ -72,7 +72,7 @@ describe("Share the full proposal", () => {
     const question = document.querySelector("[data-share-confirm]")!;
     expect(question.textContent).toContain("every view is logged and watermarked to the viewer");
     expect(question.textContent).toContain("Maziwa Buyers");
-    expect(question.textContent).toContain("You cannot take this back.");
+    expect(question.textContent).toContain("Views already made cannot be undone.");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" })));
     expect(shareImpl).toHaveBeenCalledWith("e1");
     expect(screen.getByRole("status").textContent).toBe(

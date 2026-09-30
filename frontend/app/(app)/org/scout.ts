@@ -37,10 +37,15 @@ export function matchHref(memberships: readonly Membership[], orgId: string, mat
   return `${INBOX_PATH}/matches/${encodeURIComponent(matchId)}${orgQuery(memberships, orgId)}`;
 }
 
-/** The configure-scout screen: a new scout, or one to change. */
-export function scoutHref(memberships: readonly Membership[], orgId: string, scoutId?: string): string {
+/** The configure-scout screen: a new scout, or one to change; `restore` brings a kept draft back (after checkout). */
+export function scoutHref(
+  memberships: readonly Membership[],
+  orgId: string,
+  scoutId?: string,
+  { restore = false }: { restore?: boolean } = {},
+): string {
   const path = scoutId ? `${INBOX_PATH}/scouts/${encodeURIComponent(scoutId)}` : `${INBOX_PATH}/scouts/new`;
-  return `${path}${orgQuery(memberships, orgId)}`;
+  return `${path}${orgQuery(memberships, orgId, { restore: restore ? "1" : undefined })}`;
 }
 
 /** Owners and admins configure scouts (the API answers 403 to anyone else). */
@@ -250,11 +255,15 @@ export function interestRefusalOf(status: number, error: unknown): InterestRefus
 
 // ------------------------------------------------------------------------------------------------ an edited scout
 
-/** What the form can offer now: active niches (parents and children), the counties, the organisation's reviewers. */
+/**
+ * What the form can offer now: active niches (parents and children), the counties, the organisation's reviewers.
+ * `recipients` is null when the reviewers could not be read: then nothing is known to be gone, and the saved
+ * recipients are kept as they are (never emptied because a read failed).
+ */
 export interface Offered {
   niches: ReadonlySet<string>;
   counties: ReadonlySet<string>;
-  recipients: ReadonlySet<string>;
+  recipients: ReadonlySet<string> | null;
 }
 
 /**
@@ -264,7 +273,8 @@ export interface Offered {
 export function pruneDraft(draft: ScoutDraft, offered: Offered): { draft: ScoutDraft; dropped: boolean } {
   const niches = draft.niches.filter((id) => offered.niches.has(id));
   const counties = draft.counties.filter((code) => offered.counties.has(code));
-  const recipients = draft.recipients.filter((id) => offered.recipients.has(id));
+  const known = offered.recipients;
+  const recipients = known === null ? draft.recipients : draft.recipients.filter((id) => known.has(id));
   const dropped =
     niches.length !== draft.niches.length ||
     counties.length !== draft.counties.length ||
@@ -303,9 +313,12 @@ export function planFor(plans: readonly PlanOption[], current: string, frequency
 
 // ------------------------------------------------------------------------------------------------ a kept draft
 
-/** Where an unsaved draft waits during the checkout round trip (this tab only), per organisation and scout. */
-export function draftKey(orgId: string, scoutId?: string): string {
-  return `bridge.scoutDraft:${orgId}:${scoutId ?? "new"}`;
+/**
+ * Where an unsaved draft waits during the checkout round trip (this tab only), per person, organisation and scout:
+ * another account signed in on the same tab never sees it.
+ */
+export function draftKey(userId: string, orgId: string, scoutId?: string): string {
+  return `bridge.scoutDraft:${userId}:${orgId}:${scoutId ?? "new"}`;
 }
 
 const TEXT = (v: unknown): v is string => typeof v === "string" && v.length <= 2000;

@@ -10,5 +10,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** Organisation › Inbox › Set up a Scout Agent (REQ-SCOUT-01). */
 export default async function NewScoutPage({ searchParams }: PageProps<"/org/inbox/scouts/new">) {
-  return <ScoutScreen org={(await searchParams).org} />;
+  const query = await searchParams;
+  return <ScoutScreen org={query.org} restore={query.restore} />;
 }

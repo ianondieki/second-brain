@@ -65,20 +65,29 @@ function calls(overrides: Partial<ScoutCalls> = {}): ScoutCalls {
   };
 }
 
-const KEY = `bridge.scoutDraft:${ORG}:new`;
+const USER = "0192a7c4-0000-7000-8000-0000000000c1";
+const KEY = `bridge.scoutDraft:${USER}:${ORG}:new`;
+const HERE = "/org/inbox/scouts/new?restore=1";
+const NEXT = "%2Forg%2Finbox%2Fscouts%2Fnew%3Frestore%3D1";
 
-function renderForm(scoutCalls: ScoutCalls, scout?: Scout) {
+function renderForm(
+  scoutCalls: ScoutCalls,
+  scout?: Scout,
+  { restore = false, reviewers = [{ id: REVIEWER, label: "Rita Wanjiru" }] }: { restore?: boolean; reviewers?: { id: string; label: string }[] | null } = {},
+) {
   return renderWithIntl(
     <ScoutForm
+      userId={USER}
+      restore={restore}
       orgId={ORG}
       orgName="Maziwa Buyers"
       scout={scout}
       plan={PLAN}
       niches={[{ id: PARENT, name: "Financial services", children: [{ id: CHILD, name: "Microfinance & SACCOs" }] }]}
       counties={[{ id: "KE-47", label: "Nairobi" }]}
-      reviewers={[{ id: REVIEWER, label: "Rita Wanjiru" }]}
+      reviewers={reviewers}
       doneHref="/org/inbox?tab=matches"
-      hereHref="/org/inbox/scouts/new"
+      hereHref={HERE}
       upgradeFor={{ daily: "org_growth", on_new: "org_growth" }}
       calls={scoutCalls}
     />,
@@ -138,7 +147,7 @@ describe("the scout form", () => {
     expect(within(alert).getByText(en.scoutForm.refusal.planLimit)).toBeTruthy();
     const link = within(alert).getByRole("link", { name: en.scoutForm.upgrade });
     expect(link.getAttribute("href")).toBe(
-      `/billing/upgrade?plan=org_growth&org=${ORG}&next=%2Forg%2Finbox%2Fscouts%2Fnew`,
+      `/billing/upgrade?plan=org_growth&org=${ORG}&next=${NEXT}`,
     );
     expect(push).not.toHaveBeenCalled();
   });
@@ -165,7 +174,7 @@ describe("the scout form", () => {
     const note = document.querySelector("[data-plan-note]")!;
     expect(note.textContent).toContain(en.scoutForm.planNote);
     expect(within(note as HTMLElement).getByRole("link", { name: en.scoutForm.upgrade }).getAttribute("href")).toBe(
-      `/billing/upgrade?plan=org_growth&org=${ORG}&next=%2Forg%2Finbox%2Fscouts%2Fnew`,
+      `/billing/upgrade?plan=org_growth&org=${ORG}&next=${NEXT}`,
     );
     fireEvent.click(screen.getByLabelText(/Every week/));
     expect(document.querySelector("[data-plan-note]")).toBeNull();
@@ -179,7 +188,7 @@ describe("the scout form", () => {
     first.unmount();
 
     const api = calls();
-    renderForm(api); // back from the checkout
+    renderForm(api, undefined, { restore: true }); // back from the checkout (?restore=1)
     expect(screen.getByText(en.scoutForm.restored)).toBeTruthy();
     expect((screen.getByLabelText("Microfinance & SACCOs") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText(/As soon as a proposal is published/) as HTMLInputElement).checked).toBe(true);
@@ -190,7 +199,7 @@ describe("the scout form", () => {
 
   it("ignores a kept draft that is not a draft", () => {
     window.sessionStorage.setItem(KEY, JSON.stringify({ niches: "x", frequency: "hourly" }));
-    renderForm(calls());
+    renderForm(calls(), undefined, { restore: true });
     expect(screen.queryByText(en.scoutForm.restored)).toBeNull();
     expect((screen.getByLabelText(/Every week/) as HTMLInputElement).checked).toBe(true);
   });
@@ -263,5 +272,70 @@ describe("the scout form", () => {
     await act(async () => fireEvent.click(pause));
     expect(api.update).toHaveBeenCalledWith(ORG, "s1", { paused: true });
     expect(refresh).toHaveBeenCalled();
+  });
+});
+
+describe("the scout form's edge cases", () => {
+  const SAVED = {
+    id: "s1",
+    niches: [{ id: CHILD, slug: "x", label: "x" }],
+    counties: [],
+    include_keywords: [],
+    exclude_keywords: [],
+    maturity: [],
+    min_fit: 60,
+    frequency: "weekly",
+    language: "en",
+    recipients: [REVIEWER],
+    paused: false,
+  } as unknown as Scout;
+  const EDIT_KEY = `bridge.scoutDraft:${USER}:${ORG}:s1`;
+
+  it("keeps the saved recipients when the reviewers could not be read, and says so", async () => {
+    const api = calls();
+    renderForm(api, SAVED, { reviewers: null });
+    expect(screen.queryByText(en.scoutForm.dropped)).toBeNull();
+    expect(document.querySelector("[data-reviewers-unknown]")!.textContent).toContain(
+      en.scoutForm.reviewersUnknown.replace("{org}", "Maziwa Buyers"),
+    );
+    await submit();
+    expect(api.update).toHaveBeenCalledWith(ORG, "s1", expect.objectContaining({ recipients: [REVIEWER] }));
+  });
+
+  it("prunes a restored draft's stale choices and says so", () => {
+    const kept = {
+      niches: [CHILD, "0192a7c4-0000-7000-8000-0000000000dd"],
+      counties: [],
+      include: "",
+      exclude: "",
+      maturity: [],
+      minFit: "70",
+      frequency: "weekly",
+      language: "en",
+      recipients: [REVIEWER, "0192a7c4-0000-7000-8000-0000000000c9"],
+    };
+    window.sessionStorage.setItem(EDIT_KEY, JSON.stringify(kept));
+    renderForm(calls(), SAVED, { restore: true });
+    expect(screen.getByText(en.scoutForm.restored)).toBeTruthy();
+    expect(screen.getByText(en.scoutForm.dropped)).toBeTruthy();
+    expect((screen.getByLabelText(en.scoutForm.minFit) as HTMLInputElement).value).toBe("70");
+  });
+
+  it("discards a kept draft unless the page is reached back from the checkout", () => {
+    window.sessionStorage.setItem(
+      EDIT_KEY,
+      JSON.stringify({ niches: [CHILD], counties: [], include: "", exclude: "", maturity: [], minFit: "90", frequency: "weekly", language: "en", recipients: [] }),
+    );
+    renderForm(calls(), SAVED);
+    expect(screen.queryByText(en.scoutForm.restored)).toBeNull();
+    expect((screen.getByLabelText(en.scoutForm.minFit) as HTMLInputElement).value).toBe("60");
+    expect(window.sessionStorage.getItem(EDIT_KEY)).toBeNull();
+  });
+
+  it("keeps each person's draft apart", () => {
+    renderForm(calls());
+    fireEvent.click(screen.getByLabelText("Microfinance & SACCOs"));
+    expect(window.sessionStorage.getItem(KEY)).not.toBeNull();
+    expect(window.sessionStorage.getItem(`bridge.scoutDraft:someone-else:${ORG}:new`)).toBeNull();
   });
 });

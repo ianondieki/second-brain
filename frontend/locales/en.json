@@ -531,13 +531,14 @@
     "planNote": "Your plan does not include this schedule.",
     "statusLabel": "Status",
     "statusActive": "Active",
-    "statusPaused": "Paused"
+    "statusPaused": "Paused",
+    "reviewersUnknown": "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved."
   },
   "tier2Share": {
     "title": "Full proposal",
     "notShared": "{org} sees only the public teaser. Share the full proposal when you want them to evaluate it.",
     "share": "Share the full proposal",
-    "confirm": "Share the full proposal with {org}? Verified people at {org} can open it after accepting the Evaluation NDA, and every view is logged and watermarked to the viewer. You cannot take this back.",
+    "confirm": "Share the full proposal with {org}? Verified people at {org} can open it after accepting the Evaluation NDA, and every view is logged and watermarked to the viewer. Views already made cannot be undone.",
     "sharing": "Sharing…",
     "cancel": "Cancel",
     "shared": "You shared the full proposal with {org} on {date}.",

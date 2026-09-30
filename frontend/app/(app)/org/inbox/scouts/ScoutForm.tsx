@@ -47,6 +47,8 @@ const MATURITY_LABEL = {
 } as const;
 
 export interface ScoutFormProps {
+  /** The signed-in person: kept drafts are theirs only. */
+  userId: string;
   orgId: string;
   orgName: string;
   /** The scout being changed; a new one when absent. */
@@ -54,12 +56,15 @@ export interface ScoutFormProps {
   plan: ScoutPlan;
   niches: NicheOption[];
   counties: Option[];
-  /** Reviewer seats of the organisation (the only possible digest recipients). */
-  reviewers: Option[];
+  /** Reviewer seats of the organisation (the only possible digest recipients); null when they could not be read. */
+  reviewers: Option[] | null;
   /** Where a saved scout goes: the Inbox's Scout matches. */
   doneHref: string;
-  /** This screen, for the checkout's way back after an upgrade. */
+  /** This screen with restore=1, for the checkout's way back after an upgrade. */
   hereHref: string;
+  /** Reached through the checkout's way back: the kept draft comes back. Otherwise a kept draft is discarded, so an
+   * earlier unsaved edit never silently replaces the saved settings. */
+  restore?: boolean;
   /** The plan to buy for each schedule the current plan lacks (null: none sells it). */
   upgradeFor: Partial<Record<Frequency, string | null>>;
   calls?: ScoutCalls;
@@ -78,14 +83,14 @@ export function ScoutForm(props: ScoutFormProps) {
   const tf = useStrings("ideaFields");
   const router = useRouter();
   const calls = props.calls ?? scoutCalls;
-  const key = draftKey(props.orgId, props.scout?.id);
+  const key = draftKey(props.userId, props.orgId, props.scout?.id);
   // What the form offers now: a saved scout's niche, county or reviewer that is gone is dropped from the draft, so a
   // save never sends it back to a 422 (P10-F review MAJOR 1).
   const offered = useMemo<Offered>(
     () => ({
       niches: new Set(props.niches.flatMap((n) => [n.id, ...n.children.map((c) => c.id)])),
       counties: new Set(props.counties.map((c) => c.id)),
-      recipients: new Set(props.reviewers.map((r) => r.id)),
+      recipients: props.reviewers === null ? null : new Set(props.reviewers.map((r) => r.id)),
     }),
     [props.niches, props.counties, props.reviewers],
   );
@@ -105,6 +110,10 @@ export function ScoutForm(props: ScoutFormProps) {
   }, [refused]);
   // An unsaved draft comes back after the checkout round trip (this tab's sessionStorage; read after hydration).
   useEffect(() => {
+    if (!props.restore) {
+      forget(key);
+      return;
+    }
     const kept = readKept(key);
     if (!kept) return;
     const pruned = pruneDraft(kept, offered);
@@ -112,7 +121,7 @@ export function ScoutForm(props: ScoutFormProps) {
     setDraft(pruned.draft);
     setDropped((current) => current || pruned.dropped);
     setRestored(true);
-  }, [key, offered]);
+  }, [key, offered, props.restore]);
   useEffect(() => {
     if (preview) previewHeading.current?.focus();
   }, [preview]);
@@ -300,7 +309,13 @@ export function ScoutForm(props: ScoutFormProps) {
         <option value="sw">{t("languages.sw")}</option>
       </SelectField>
 
-      {props.reviewers.length > 0 ? (
+      {props.reviewers === null ? (
+        // Unknown, not none: the saved recipients are sent back unchanged.
+        <div className="flex flex-col gap-1" data-reviewers-unknown="">
+          <p className="font-medium text-ink">{t("recipients")}</p>
+          <p className="text-sm text-ink-soft">{t("reviewersUnknown", { org: props.orgName })}</p>
+        </div>
+      ) : props.reviewers.length > 0 ? (
         <ChoiceList
           id="scout-recipients"
           legend={t("recipients")}

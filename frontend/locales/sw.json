@@ -531,13 +531,14 @@
     "planNote": "Mpango wako haujumuishi ratiba hii.",
     "statusLabel": "Hali",
     "statusActive": "Anafanya kazi",
-    "statusPaused": "Amesitishwa"
+    "statusPaused": "Amesitishwa",
+    "reviewersUnknown": "Wakaguzi wa {org} hawakuweza kupakiwa, kwa hiyo wapokeaji wa muhtasari wanabaki kama walivyohifadhiwa."
   },
   "tier2Share": {
     "title": "Pendekezo kamili",
     "notShared": "{org} inaona muhtasari wa umma pekee. Shiriki pendekezo kamili unapotaka walitathmini.",
     "share": "Shiriki pendekezo kamili",
-    "confirm": "Shiriki pendekezo kamili na {org}? Watu waliothibitishwa katika {org} wanaweza kulifungua baada ya kukubali NDA ya Tathmini, na kila mtazamo unarekodiwa na kuwekewa alama ya mtazamaji. Huwezi kulirudisha.",
+    "confirm": "Shiriki pendekezo kamili na {org}? Watu waliothibitishwa katika {org} wanaweza kulifungua baada ya kukubali NDA ya Tathmini, na kila mtazamo unarekodiwa na kuwekewa alama ya mtazamaji. Mitazamo iliyokwisha kufanyika haiwezi kufutwa.",
     "sharing": "Inashiriki…",
     "cancel": "Ghairi",
     "shared": "Ulishiriki pendekezo kamili na {org} tarehe {date}.",

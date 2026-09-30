@@ -38,6 +38,10 @@ describe("links to the scout screens (the EM3 digest links open these, docs/spec
     expect(matchHref([A, B], A.org_id, MATCH)).toBe(`/org/inbox/matches/${MATCH}?org=${A.org_id}`);
     expect(scoutHref([A], A.org_id)).toBe("/org/inbox/scouts/new");
     expect(scoutHref([A, B], A.org_id, NICHE)).toBe(`/org/inbox/scouts/${NICHE}?org=${A.org_id}`);
+    expect(scoutHref([A], A.org_id, undefined, { restore: true })).toBe("/org/inbox/scouts/new?restore=1");
+    expect(scoutHref([A, B], A.org_id, NICHE, { restore: true })).toBe(
+      `/org/inbox/scouts/${NICHE}?org=${A.org_id}&restore=1`,
+    );
   });
 
   it("encode ids so a path segment can never be escaped", () => {
@@ -237,6 +241,15 @@ describe("an edited scout's stale choices", () => {
 
   it("leave a current draft as it is", () => {
     expect(pruneDraft(base, offered)).toEqual({ draft: base, dropped: false });
+  });
+
+  it("keep the saved recipients when the reviewers are unknown (a failed read is not \"no reviewers\")", () => {
+    const stale = { ...base, niches: [NICHE, "gone"], recipients: [REVIEWER, "someone"] };
+    expect(pruneDraft(stale, { ...offered, recipients: null })).toEqual({
+      draft: { ...base, recipients: [REVIEWER, "someone"] },
+      dropped: true,
+    });
+    expect(pruneDraft(base, { ...offered, recipients: null })).toEqual({ draft: base, dropped: false });
   });
 });
 

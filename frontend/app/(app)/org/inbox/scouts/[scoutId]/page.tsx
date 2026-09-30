@@ -11,5 +11,5 @@ export async function generateMetadata(): Promise<Metadata> {
 /** Organisation › Inbox › Change a Scout Agent: its form, Preview, and pause or resume (REQ-SCOUT-01). */
 export default async function EditScoutPage({ params, searchParams }: PageProps<"/org/inbox/scouts/[scoutId]">) {
   const [{ scoutId }, query] = await Promise.all([params, searchParams]);
-  return <ScoutScreen scoutId={scoutId} org={query.org} />;
+  return <ScoutScreen scoutId={scoutId} org={query.org} restore={query.restore} />;
 }

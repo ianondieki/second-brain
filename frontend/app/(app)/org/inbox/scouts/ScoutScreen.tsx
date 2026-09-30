@@ -10,6 +10,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { orgContext } from "../../data";
 import { EmptyState } from "../../EmptyState";
+import { first } from "../../membership";
 import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, FREQUENCIES, matchesHref, planFor, scoutHref, type Frequency, type ScoutPlan } from "../../scout";
 import {
@@ -28,8 +29,17 @@ import { ScoutForm } from "./ScoutForm";
  * for the organisation's owners and admins: what the plan includes, a note while the organisation is not yet verified
  * (AC-SCOUT-8: it previews, digests start once verified), then the form. `scoutId` absent: a new scout.
  */
-export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: string; org: string | string[] | undefined }) {
-  const { memberships, org, missing, query } = await orgContext(requested);
+export async function ScoutScreen({
+  scoutId,
+  org: requested,
+  restore,
+}: {
+  scoutId?: string;
+  org: string | string[] | undefined;
+  /** ?restore=1: back from the checkout, so the kept draft comes back. */
+  restore?: string | string[] | undefined;
+}) {
+  const { me, memberships, org, missing, query } = await orgContext(requested);
   const t = await getTranslations("scoutPage");
   const ti = await getTranslations("inbox");
   const nav = <OrgNav current="inbox" query={query} />;
@@ -97,9 +107,11 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
   const upgradeFor: Partial<Record<Frequency, string | null>> = Object.fromEntries(
     FREQUENCIES.filter((f) => !plan.frequencies.includes(f)).map((f) => [f, planFor(plans, plan.plan, f)]),
   );
-  const reviewers = (members ?? [])
-    .filter((m) => m.roles.includes("reviewer"))
-    .map((m) => ({ id: m.user_id, label: m.display_name }));
+  // null: the members could not be read (never taken as "no reviewers", which would empty the saved recipients).
+  const reviewers =
+    members === null
+      ? null
+      : members.filter((m) => m.roles.includes("reviewer")).map((m) => ({ id: m.user_id, label: m.display_name }));
   const pending = verification !== null && verification !== "e1" && verification !== "e2";
   return frame(
     title,
@@ -116,6 +128,8 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
       <div className="mt-8">
         <ClientStrings strings={await clientStrings(["scoutForm", "ideaFields"])}>
           <ScoutForm
+            userId={me.user.id}
+            restore={first(restore) === "1"}
             orgId={org.org_id}
             orgName={org.org_name}
             scout={scout?.value}
@@ -128,7 +142,7 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
             counties={counties.map((c) => ({ id: c.code, label: c.name }))}
             reviewers={reviewers}
             doneHref={back}
-            hereHref={scoutHref(memberships, org.org_id, scoutId)}
+            hereHref={scoutHref(memberships, org.org_id, scoutId, { restore: true })}
             upgradeFor={upgradeFor}
           />
         </ClientStrings>
