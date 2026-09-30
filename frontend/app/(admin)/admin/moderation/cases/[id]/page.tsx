@@ -10,6 +10,9 @@ import { Chip } from "@/components/tracker/Chip";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 import { BackLink } from "@/components/ui/BackLink";
+import { Badge } from "@/components/ui/Badge";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 
 import { AdminShell } from "../../../AdminShell";
 import { PageStepUp } from "../../../research/PageStepUp";
@@ -58,9 +61,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   const plain = (children: ReactNode) =>
     shell(
       <>
-        <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-          {t("case.pageTitle")}
-        </h1>
+        <PageHeader title={t("case.pageTitle")} focusable />
         <div className="mt-6">{children}</div>
       </>,
     );
@@ -91,19 +92,17 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   const flagged = new Set(item.flagged_fields);
   const actionable = !result && item.actions.length > 0;
 
+  // Once the subject is gone there is no text to review; once decided, the text is no longer "under review".
+  const subjectGone = seen === "gone";
   return shell(
-    <article aria-labelledby="case-title" className="flex flex-col gap-10">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm font-semibold text-jacaranda">{t(`kind.${kind}`)}</p>
-        <h1
-          id="case-title"
-          tabIndex={-1}
-          className="text-xl [overflow-wrap:anywhere] text-ink focus:outline-none lg:text-2xl"
-        >
-          {caseTitle(item) ?? t(`untitled.${kind}`)}
-        </h1>
-        <ul className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
-          {/* Once decided, the outcome: "Public while checked" or "Hidden until decided" would no longer be true. */}
+    <article aria-labelledby="case-title" className="flex flex-col gap-12">
+      <PageHeader titleId="case-title" focusable title={caseTitle(item) ?? t(`untitled.${kind}`)}>
+        {/* What the case is about, then whether the subject can be seen now (or, once decided, the outcome: "Public
+            while checked" or "Hidden until decided" would no longer be true), as the meta line. */}
+        <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
+          <li data-header-tag="kind">
+            <Badge tone="neutral">{t(`kind.${kind}`)}</Badge>
+          </li>
           {result ? (
             <li data-header-tag="outcome">
               <Chip kind={result === "approved" ? "completed" : "ended"}>{t(`outcome.${result}`)}</Chip>
@@ -116,12 +115,9 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           <li>{t("filed", { date: formatMoment(locale, item.created_at) })}</li>
           <li>{t(`source.${item.source}`)}</li>
         </ul>
-      </header>
+      </PageHeader>
 
-      <section aria-labelledby="reasons" className="flex flex-col gap-3">
-        <h2 id="reasons" className="text-lg text-ink">
-          {t("case.reasonsHeading")}
-        </h2>
+      <Section title={t("case.reasonsHeading")} headingId="reasons">
         <ul className="flex flex-col gap-2" data-reasons="">
           {caseReasons(item.reasons).map((reason) => (
             <li key={reason} className="flex items-start gap-2 text-ink">
@@ -134,29 +130,20 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
             </li>
           ))}
         </ul>
-      </section>
+      </Section>
 
-      <section aria-labelledby="text" className="flex flex-col gap-4">
-        <div>
-          <h2 id="text" className="text-lg text-ink">
-            {t("case.textHeading")}
-          </h2>
-          <p className="mt-1 max-w-[60ch] text-ink-soft">{t("case.textLead")}</p>
-        </div>
-        <CaseText item={item} flagged={flagged} label={t("case.flagged")} empty={t("case.noText")} />
-      </section>
+      {subjectGone ? null : (
+        <Section
+          title={result ? t("case.textHeadingDecided") : t("case.textHeading")}
+          headingId="text"
+          description={t("case.textLead")}
+          data-case-text=""
+        >
+          <CaseText item={item} flagged={flagged} label={t("case.flagged")} empty={t("case.noText")} />
+        </Section>
+      )}
 
-      <section aria-labelledby="decision" className="flex flex-col gap-4 border-t border-line pt-6">
-        <div>
-          <h2 id="decision" className="text-lg text-ink">
-            {t("case.decisionHeading")}
-          </h2>
-          {actionable ? (
-            <p className="mt-1 max-w-[60ch] text-ink-soft">
-              {seen === "public" ? t("case.leadPublic") : t("case.leadHidden")}
-            </p>
-          ) : null}
-        </div>
+      <Section title={t("case.decisionHeading")} headingId="decision">
         {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. */}
         <ClientStrings key="decision" strings={await caseStrings()}>
           <CaseDecision
@@ -167,16 +154,18 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
             blocked={item.blocked}
             decided={result && line ? { outcome: result, line } : null}
             nextHref={nextId ? caseHref(nextId) : null}
+            lead={actionable ? (seen === "public" ? t("case.leadPublic") : t("case.leadHidden")) : null}
           />
         </ClientStrings>
-      </section>
+      </Section>
     </article>,
   );
 }
 
 /**
- * The subject's Tier-1 text as it reads now, field by field. A flagged field carries a margin rule, a mark and the
- * word "Flagged" beside its name, so the flag is never colour alone.
+ * The subject's Tier-1 text as it reads now, field by field. A flagged field sits in the error notice's frame (1 px
+ * error border, error wash) and carries a mark and the word "Flagged" beside its name, so the flag is never colour
+ * alone; the other fields keep the same inset, so every field's text starts on one line.
  */
 async function CaseText({
   item,
@@ -192,7 +181,7 @@ async function CaseText({
   const t = await getTranslations("adminModeration");
   if (item.fields.length === 0) return <p className="text-ink">{empty}</p>;
   return (
-    <dl className="flex flex-col gap-5 rounded-panel border border-line bg-field px-3 py-4 sm:px-6 sm:py-5">
+    <dl className="flex flex-col gap-3">
       {item.fields.map((field) => {
         const marked = flagged.has(field.name);
         return (
@@ -200,15 +189,14 @@ async function CaseText({
             key={field.name}
             data-field={field.name}
             data-flagged={marked ? "" : undefined}
-            className={cn("border-l-[3px] pl-3 sm:pl-4", marked ? "border-error" : "border-transparent")}
+            className={cn("rounded-control border px-4 py-3", marked ? "border-error-line bg-error-wash" : "border-transparent")}
           >
             <dt className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-ink-soft">
               <span>{t(`field.${fieldKey(field.name)}`)}</span>
               {marked ? (
-                <span className="inline-flex items-center gap-1 font-semibold text-error">
-                  <AlertIcon className="size-4 shrink-0" />
+                <Badge tone="error" icon={<AlertIcon />}>
                   {label}
-                </span>
+                </Badge>
               ) : null}
             </dt>
             <dd className="mt-1 max-w-[65ch] whitespace-pre-line [overflow-wrap:anywhere] text-ink">{field.text}</dd>

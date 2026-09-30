@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
-import { Chip } from "@/components/tracker/Chip";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
@@ -40,6 +39,9 @@ export interface CaseDecisionProps {
   decided: { outcome: "approved" | "rejected"; line: string } | null;
   /** The next case to review after this one, if any. */
   nextHref: string | null;
+  /** What Approve and Reject do to this subject (formatted on the server): shown with the choices, and hidden as soon
+   * as a refusal or a decision makes it no longer true. */
+  lead?: string | null;
   decideImpl?: typeof decideCase;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -52,6 +54,7 @@ const QUESTION_ID = "case-reject-question";
 /** Refusals after which the case itself is different from the page: it is fetched again. */
 const REFRESH_AFTER: ReadonlySet<RefusalCode> = new Set([
   "already_decided",
+  "not_found",
   "subject_gone",
   "cannot_approve_vulnerability",
 ]);
@@ -83,6 +86,7 @@ export function CaseDecision({
   blocked,
   decided,
   nextHref,
+  lead = null,
   decideImpl = decideCase,
   confirmImpl,
 }: CaseDecisionProps) {
@@ -154,14 +158,17 @@ export function CaseDecision({
     </div>
   );
 
+  // Always inside an items-start column, so the primary one keeps its own width instead of stretching.
   const back = (primary: boolean) => (
-    <Link
-      href={MODERATION_PATH}
-      data-primary={primary ? "" : undefined}
-      className={primary ? buttonClass("primary", "no-underline") : standaloneLinkClass}
-    >
-      {t("decision.back")}
-    </Link>
+    <div className="flex flex-col items-start">
+      <Link
+        href={MODERATION_PATH}
+        data-primary={primary ? "" : undefined}
+        className={primary ? buttonClass("primary", "no-underline") : standaloneLinkClass}
+      >
+        {t("decision.back")}
+      </Link>
+    </div>
   );
 
   let body;
@@ -179,9 +186,9 @@ export function CaseDecision({
   } else if (decided) {
     body = (
       <div className="flex flex-col items-start gap-3">
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink" data-decided={decided.outcome}>
-          <Chip kind={decided.outcome === "approved" ? "completed" : "ended"}>{t(`outcome.${decided.outcome}`)}</Chip>
-          <span>{decided.line}</span>
+        {/* The outcome is the header's tag; here only who decided it and when (it says "Approved" once). */}
+        <p className="text-ink" data-decided={decided.outcome}>
+          {decided.line}
         </p>
         {back(false)}
       </div>
@@ -268,8 +275,15 @@ export function CaseDecision({
 
   // The status line is a plain block, empty and without height when there is nothing to say: never display:none or
   // display:contents, which can drop a live region from the accessibility tree.
+  // The server's lead says what Approve and Reject would do: not true any more once a refusal or a decision shows.
+  const showLead = lead && !done && notice?.tone !== "error" && after === null;
   return (
     <div className="flex flex-col" data-hydrated={hydrated ? "true" : "false"}>
+      {showLead ? (
+        <p className="mb-4 max-w-[60ch] text-ink-soft" data-lead="">
+          {lead}
+        </p>
+      ) : null}
       {region}
       {body}
     </div>
