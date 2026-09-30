@@ -39,6 +39,7 @@ graphify-out/
 .pytest_cache/
 .coverage
 coverage.xml
+coverage.json
 .hypothesis/
 
 # The recorded walkthrough's videos (make demo-walkthrough; the screenshots in docs/demo/screenshots/ are committed)

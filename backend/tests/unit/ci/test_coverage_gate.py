@@ -1,4 +1,4 @@
-"""REQ-FND-01, docs/spec/08 "Testing & CI": the coverage gate (infra/ci/coverage_gate.py).
+"""REQ-FND-01, docs/spec/08 "Testing & CI": the coverage gate (infra/ci/coverage_gate.py) and its place in pr.yml.
 
 Coverage is at least 85 % overall and 95 % in ``auth``, ``tenancy``, ``billing``, ``provenance`` and ``engagements``,
 statements and branches combined (coverage's ``percent_covered``). The gate runs as the sarif gate does, as a script
@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 REPO = Path(__file__).resolve().parents[4]
 GATE = REPO / "infra" / "ci" / "coverage_gate.py"
@@ -229,3 +230,22 @@ def test_a_report_written_by_coverage_itself_is_read(tmp_path: Path) -> None:
     assert failing.returncode == 1
     assert figures(failing.stdout)["tenancy"] == "66.66 % BELOW"
     assert "      src/bridge/tenancy/rules.py  66.66 %" in failing.stdout
+
+
+# ------------------------------------------------------------------------------------------------ pr.yml
+
+
+def test_the_backend_job_measures_coverage_and_gates_it_inside_the_sandbox() -> None:
+    """pr.yml's backend job runs make check-backend-coverage in the egress sandbox: check-backend (the same lint,
+    drift check and tests) with pytest measuring coverage, then the gate on its report."""
+    raw: dict[Any, Any] = yaml.safe_load((REPO / ".github" / "workflows" / "pr.yml").read_text(encoding="utf-8"))
+    runs = [str(step.get("run", "")) for step in raw["jobs"]["backend"]["steps"]]
+    [check] = [run for run in runs if "make check-backend" in run]
+    assert check.startswith("infra/ci/sandboxed.sh ")
+    assert check.endswith(" make check-backend-coverage")
+    makefile = (REPO / "Makefile").read_text(encoding="utf-8")
+    assert re.search(r"^\tcd backend && \$\(UV\) run pytest \$\(PYTEST_ARGS\)$", makefile, re.M)
+    assert re.search(r"^check-backend-coverage: PYTEST_ARGS = --cov --cov-report=json:coverage\.json$", makefile, re.M)
+    rule = re.search(r"^check-backend-coverage: check-backend\n((?:\t.*\n?)+)", makefile, re.M)
+    assert rule is not None
+    assert rule.group(1).strip() == "cd backend && $(UV) run python ../infra/ci/coverage_gate.py coverage.json"
