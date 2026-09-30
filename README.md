@@ -238,7 +238,17 @@ writes no free text there); each answers with a fixed, labelled or rules-based r
 | Identity (D2) and organisation verification (E1, E2) | set by the seed; the review flows come later |
 | Attachment scanning | the demo scanner: the EICAR test file is "infected", everything else clean |
 | Payments | recorded and confirmed by the parties; no money moves |
-| AI features | the fake unless you add a provider (above) |
+| AI features | the fake unless you add a provider (above); the rows below say what each one does without one |
+| Scout (Telco A's weekly scout, Scout matches, Express interest) | real: the matching rules over the niche, keywords and fit score, run by the worker; embeddings are the fake embedder. The "why this matches" sentence comes from an LLM when one is set; otherwise the match shows the rules' "Matched on" line, or the labelled "demo fallback" text |
+| Research cards (Staff console → Research) | the cards you see were written by hand in the seed from saved public excerpts and pushed through the real checks and staff approval; they are labelled "Seeded example for the demo (not a live AI result)". A run you start reads only the saved excerpts (nothing is fetched); with a provider an LLM drafts cards that staff must approve, without one the run ends flagged "demo fallback" with no card |
+| Discover's trending numbers | **simulated**: the seed writes the activity the counts are computed from, namely "scout matched" and "organisation interested" events from simulated organisations (no account) for four of the seeded proposals, steady for ten weeks and a burst this week for two of them, because a trend needs at least 3 distinct organisations and the demo has two verified ones. The trend arithmetic, the "why" chips and the sources are real. Real scout matches and interest add to the counts |
+| Recommended for you | real ranking over the seeded data, from the liked niches and county the seed set for each developer (and, for Amina only, her activity, because the seed records her consent) |
+| Submission assistant | an LLM suggests a clearer teaser when a provider is set, after your consent for that sign-in session; without one it answers "no suggestion", labelled "demo fallback". Only demo accounts' text goes to a free provider |
+| Plans and Plan & billing | the plans and limits are read from `backend/config/plans.yaml`; the prices are placeholders shown as "Sample prices, not final" and are not a price list |
+| M-Pesa checkout ("Upgrade") | **simulated** by a fake payment provider (`PAYMENT_PROVIDER=fake`; the answer comes after `FAKE_PAYMENT_DELAY_SECONDS`, 4 by default): no phone prompt, no money moves, and the screen says so |
+| Moderation (Staff console) | real queue and decisions. The automatic pre-screen is a set of text rules, not a model: it holds a teaser that names a listed organisation negatively or describes a security vulnerability, and a person decides |
+| Claims (Staff console) | a read-only queue: County Government of C's request for E2 is listed, and nobody can decide it yet |
+| **Planned**, not in the demo | real payments (Daraja, Paystack) and tax invoices; WhatsApp reminders; the full claims and verification flows; invitations to organisations; Problem Briefs; live research over the web; a model-written pre-screen; Swahili (the app is English only; the Swahili drafts in the repository stay off until a native speaker has reviewed them) |
 
 **Stop, reset, check.** `make demo-down` stops the demo and keeps its data; `make demo-reset` wipes only the demo's
 data (its own `bridge-demo` project and volumes, whatever `COMPOSE_PROJECT_NAME` says; the dev stack is untouched) and
