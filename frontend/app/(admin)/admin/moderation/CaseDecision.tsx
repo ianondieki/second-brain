@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
@@ -223,19 +224,21 @@ export function CaseDecision({
           <NoticeLine tone="info" text={t("blocked.cannot_approve_vulnerability")} data-blocked={blocked} />
         ) : null}
         {phase.kind === "confirmReject" ? (
-          <div
+          // The question in the error notice's frame (no coloured left rule): rejecting cannot be undone here.
+          <Callout
+            tone="error"
             id={CONFIRM_ID}
             role="group"
             tabIndex={-1}
             aria-labelledby={QUESTION_ID}
             data-confirm="reject"
-            className="flex flex-col items-start gap-3 border-l-2 border-error pl-4 focus:outline-none"
+            className="focus:outline-none"
           >
             <p id={QUESTION_ID} className="max-w-[60ch] text-ink">
               {kind === "problem" ? t("decision.rejectConfirmProblem") : t("decision.rejectConfirmProposal")}
             </p>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <Button variant={canApprove ? "secondary" : "primary"} onClick={() => void run("reject")}>
+            <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <Button variant={canApprove ? "danger" : "primary"} onClick={() => void run("reject")}>
                 {t("decision.rejectYes")}
               </Button>
               <Button
@@ -248,7 +251,7 @@ export function CaseDecision({
                 {t("decision.cancel")}
               </Button>
             </div>
-          </div>
+          </Callout>
         ) : (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {canApprove ? (

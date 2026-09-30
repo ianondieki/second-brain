@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import { Checkbox } from "@/components/ui/Checkbox";
 
 import { decide, type Decision as Choice } from "./calls";
@@ -173,19 +174,21 @@ export function Decision({
         />
       ) : null}
       {phase.kind === "confirmReject" ? (
-        <div
+        // The question in the error notice's frame (no coloured left rule): a rejected card is never published.
+        <Callout
+          tone="error"
           id={CONFIRM_ID}
           role="group"
           tabIndex={-1}
           aria-labelledby={QUESTION_ID}
           data-confirm="reject"
-          className="flex flex-col items-start gap-3 border-l-2 border-error pl-4 focus:outline-none"
+          className="focus:outline-none"
         >
           <p id={QUESTION_ID} className="max-w-[60ch] text-ink">
             {t("review.rejectConfirm")}
           </p>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Button variant={final ? "primary" : "secondary"} onClick={() => void run("reject")}>
+          <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Button variant={final ? "primary" : "danger"} onClick={() => void run("reject")}>
               {t("review.rejectYes")}
             </Button>
             <Button
@@ -198,7 +201,7 @@ export function Decision({
               {t("review.cancel")}
             </Button>
           </div>
-        </div>
+        </Callout>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
