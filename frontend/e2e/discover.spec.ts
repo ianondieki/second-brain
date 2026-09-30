@@ -176,6 +176,10 @@ test.describe("a new developer", () => {
     const problemId = new URL(page.url()).pathname.split("/").pop()!;
     expect(await publishedProblemTitle(page.request, problemId)).toBe(title);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title, SERVER_STEP);
+    // Its one action is Discover's "Start a proposal from this problem"; the way back leads to Discover (P16-C1).
+    await expect(page.locator("[data-primary]")).toHaveText("Start a proposal from this problem");
+    await expect(page.locator("[data-primary]")).toHaveAttribute("href", `/dev/ideas/new?problem=${problemId}`);
+    await expect(page.getByRole("link", { name: "Back to Discover" })).toHaveAttribute("href", "/dev/discover");
     await checkWidths(page, info);
   });
 

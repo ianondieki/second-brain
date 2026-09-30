@@ -1123,6 +1123,7 @@
     "pageTitle": "Problem",
     "notFound": "This problem is not available.",
     "back": "Back to home",
+    "backToDiscover": "Back to Discover",
     "label": {
       "aiDrafted": "AI-drafted, human-reviewed on {date}",
       "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",

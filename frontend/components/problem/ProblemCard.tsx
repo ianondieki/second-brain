@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { InfoIcon, PencilIcon } from "@/components/ui/icons";
@@ -13,7 +14,7 @@ import { formatConfidence, problemLabel, type ProblemDetail } from "./problem";
  * the organisations it names, and every cited source with its verbatim quote. The page supplies the heading level's
  * context: the title is the page's h1. P12-F's Discover links here (components/problem/problem.ts problemHref).
  */
-export async function ProblemCard({ problem }: { problem: ProblemDetail }) {
+export async function ProblemCard({ problem, action }: { problem: ProblemDetail; action?: ReactNode }) {
   const t = await getTranslations("problem");
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
@@ -37,6 +38,8 @@ export async function ProblemCard({ problem }: { problem: ProblemDetail }) {
           </p>
         ) : null}
         <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
+        {/* The page's one action, when the reader can take it (a developer: start a proposal from it). */}
+        {action ? <div className="mt-2">{action}</div> : null}
         <DescriptionList className="mt-3 border-t border-line pt-5">
           {problem.affected_group ? <Description label={t("affected")}>{problem.affected_group}</Description> : null}
           {problem.niche ? <Description label={t("niche")}>{problem.niche.label}</Description> : null}

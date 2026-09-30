@@ -1123,6 +1123,7 @@
     "pageTitle": "Tatizo",
     "notFound": "Tatizo hili halipatikani.",
     "back": "Rudi nyumbani",
+    "backToDiscover": "Rudi kwenye Gundua",
     "label": {
       "aiDrafted": "Imeandaliwa na AI, imekaguliwa na mtu tarehe {date}",
       "seeded": "Mfano wa maonyesho (si matokeo halisi ya AI), umekaguliwa na mtu tarehe {date}",
