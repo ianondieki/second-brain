@@ -2385,6 +2385,156 @@
         "title": "DirectoryPage",
         "type": "object"
       },
+      "DiscoverProblem": {
+        "properties": {
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "title": "Label"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProblemSource"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "source",
+          "label",
+          "niche",
+          "statement",
+          "country",
+          "county_code",
+          "published_at"
+        ],
+        "title": "DiscoverProblem",
+        "type": "object"
+      },
+      "DiscoverSource": {
+        "properties": {
+          "published_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "publisher",
+          "source_type",
+          "published_date",
+          "retrieved_at",
+          "quote"
+        ],
+        "title": "DiscoverSource",
+        "type": "object"
+      },
       "DocumentOut": {
         "properties": {
           "intact": {
@@ -3294,6 +3444,109 @@
         "title": "ExcerptOut",
         "type": "object"
       },
+      "FeatureOut": {
+        "properties": {
+          "applies": {
+            "title": "Applies",
+            "type": "boolean"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The fact behind the feature (f5: the trend z-score; f6: the confidence)",
+            "title": "Raw"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised to 0-1; null when the feature does not apply",
+            "title": "Value"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "raw",
+          "value",
+          "weight",
+          "applies"
+        ],
+        "title": "FeatureOut",
+        "type": "object"
+      },
+      "FeaturesOut": {
+        "description": "The feature vector f1-f10 behind a score (docs/spec/06 6.7).",
+        "properties": {
+          "crowding": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f8: raw is the published proposals; negative weight"
+          },
+          "evidence_confidence": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f6: raw is the card's confidence (1.0 for a Brief)"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f10: raw is the age in days"
+          },
+          "market_pull": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f7: raw is scouting organisations + Briefs"
+          },
+          "niche_match": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f2: liked 1, adjacent 0.5"
+          },
+          "region_match": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f3: your county 1, nationwide 0.5"
+          },
+          "semantic_fit": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f1: keywords shared with your profile and proposals (consent only)"
+          },
+          "skill_coverage": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f4: no data in the prototype; never applies"
+          },
+          "track_record": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f9: (done + 1) / (started + 2) in the niche (consent only)"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f5: raw is the card's trend z-score"
+          }
+        },
+        "required": [
+          "semantic_fit",
+          "niche_match",
+          "region_match",
+          "skill_coverage",
+          "trend",
+          "evidence_confidence",
+          "market_pull",
+          "crowding",
+          "track_record",
+          "freshness"
+        ],
+        "title": "FeaturesOut",
+        "type": "object"
+      },
       "FeedbackIn": {
         "additionalProperties": false,
         "properties": {
@@ -3739,6 +3992,52 @@
         ],
         "title": "IpTerms",
         "type": "string"
+      },
+      "LikedNichesIn": {
+        "additionalProperties": false,
+        "properties": {
+          "liked": {
+            "description": "The niche ids you like (3 to 5)",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Liked",
+            "type": "array"
+          }
+        },
+        "required": [
+          "liked"
+        ],
+        "title": "LikedNichesIn",
+        "type": "object"
+      },
+      "LikedNichesOut": {
+        "properties": {
+          "liked": {
+            "items": {
+              "$ref": "#/components/schemas/NicheOut"
+            },
+            "title": "Liked",
+            "type": "array"
+          },
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          },
+          "min": {
+            "title": "Min",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "liked",
+          "min",
+          "max"
+        ],
+        "title": "LikedNichesOut",
+        "type": "object"
       },
       "LoggingNotice": {
         "properties": {
@@ -5102,6 +5401,29 @@
         "title": "OAuthStartResponse",
         "type": "object"
       },
+      "OpportunityGapOut": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "description": "Top-decile trending problems with fewer than 3 proposals",
+            "items": {
+              "$ref": "#/components/schemas/TrendingProblem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "items"
+        ],
+        "title": "OpportunityGapOut",
+        "type": "object"
+      },
       "OrgCard": {
         "properties": {
           "badge": {
@@ -6420,6 +6742,37 @@
         "title": "ProfileUpdate",
         "type": "object"
       },
+      "ProjectTrendOut": {
+        "properties": {
+          "badge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown only when trending; never an organisation count or name",
+            "title": "Badge"
+          },
+          "new_this_week": {
+            "title": "New This Week",
+            "type": "boolean"
+          },
+          "trending": {
+            "title": "Trending",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trending",
+          "new_this_week",
+          "badge"
+        ],
+        "title": "ProjectTrendOut",
+        "type": "object"
+      },
       "ProposalAsk": {
         "enum": [
           "sale",
@@ -6655,6 +7008,157 @@
           "new_problem_id"
         ],
         "title": "PublishOut",
+        "type": "object"
+      },
+      "PursuitOut": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "pursue",
+              "consider",
+              "not_now"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "label": {
+            "enum": [
+              "Pursue",
+              "Consider",
+              "Not now"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decision",
+          "label",
+          "reasons"
+        ],
+        "title": "PursuitOut",
+        "type": "object"
+      },
+      "Recommendation": {
+        "properties": {
+          "exploring": {
+            "description": "The exploration slot: a card outside your liked niches",
+            "title": "Exploring",
+            "type": "boolean"
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeaturesOut"
+          },
+          "label": {
+            "enum": [
+              "Strong fit",
+              "Good fit",
+              "Stretch"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/DiscoverProblem"
+          },
+          "pursuit": {
+            "$ref": "#/components/schemas/PursuitOut"
+          },
+          "score": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/TrendOut"
+          },
+          "why": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Why",
+            "type": "array"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          }
+        },
+        "required": [
+          "problem",
+          "position",
+          "score",
+          "label",
+          "exploring",
+          "pursuit",
+          "why",
+          "why_not",
+          "trend",
+          "features"
+        ],
+        "title": "Recommendation",
+        "type": "object"
+      },
+      "RecommendationsOut": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "liked_niches": {
+            "items": {
+              "$ref": "#/components/schemas/NicheOut"
+            },
+            "title": "Liked Niches",
+            "type": "array"
+          },
+          "personalised": {
+            "description": "False without the profiling consent: liked niches and public facts only",
+            "title": "Personalised",
+            "type": "boolean"
+          },
+          "ranker_version": {
+            "title": "Ranker Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generated_at",
+          "ranker_version",
+          "personalised",
+          "liked_niches",
+          "items"
+        ],
+        "title": "RecommendationsOut",
         "type": "object"
       },
       "RecoveryCodesRequest": {
@@ -8372,6 +8876,165 @@
           "snapshot_at"
         ],
         "title": "TransparencyRoot",
+        "type": "object"
+      },
+      "TrendOut": {
+        "properties": {
+          "badge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown only when trending, e.g. 'Trending in ICT › Fintech · Kenya: ...'",
+            "title": "Badge"
+          },
+          "new_this_week": {
+            "title": "New This Week",
+            "type": "boolean"
+          },
+          "score": {
+            "description": "The decayed trend score behind the z-score",
+            "title": "Score",
+            "type": "number"
+          },
+          "trending": {
+            "title": "Trending",
+            "type": "boolean"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "z-score against the niche's 90-day baseline; null while the niche has none",
+            "title": "Z"
+          }
+        },
+        "required": [
+          "trending",
+          "new_this_week",
+          "z",
+          "score",
+          "badge"
+        ],
+        "title": "TrendOut",
+        "type": "object"
+      },
+      "TrendingOut": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/TrendingProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/TrendingProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "problems",
+          "projects"
+        ],
+        "title": "TrendingOut",
+        "type": "object"
+      },
+      "TrendingProblem": {
+        "properties": {
+          "problem": {
+            "$ref": "#/components/schemas/DiscoverProblem"
+          },
+          "project_ids": {
+            "description": "Trending projects (in `projects`) that solve this problem",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Project Ids",
+            "type": "array"
+          },
+          "proposal_count": {
+            "description": "Published proposals that link this problem",
+            "title": "Proposal Count",
+            "type": "integer"
+          },
+          "sources": {
+            "description": "The newest cited sources",
+            "items": {
+              "$ref": "#/components/schemas/DiscoverSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/TrendOut"
+          },
+          "why": {
+            "description": "Why chips written in code, at most 3",
+            "items": {
+              "type": "string"
+            },
+            "title": "Why",
+            "type": "array"
+          }
+        },
+        "required": [
+          "problem",
+          "trend",
+          "why",
+          "sources",
+          "proposal_count",
+          "project_ids"
+        ],
+        "title": "TrendingProblem",
+        "type": "object"
+      },
+      "TrendingProject": {
+        "properties": {
+          "problem": {
+            "$ref": "#/components/schemas/ProblemRef",
+            "description": "The problem it solves (always present)"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/TeaserItem"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/ProjectTrendOut"
+          },
+          "why": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Why",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposal",
+          "problem",
+          "trend",
+          "why"
+        ],
+        "title": "TrendingProject",
         "type": "object"
       },
       "UnlinkRequest": {
@@ -13636,6 +14299,292 @@
         ]
       }
     },
+    "/api/discover/opportunity-gap": {
+      "get": {
+        "description": "Problems in the top trend decile with fewer than 3 proposals.",
+        "operationId": "discover_opportunity_gap_api_discover_opportunity_gap_get",
+        "parameters": [
+          {
+            "description": "Niche slug (a parent includes children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "ISO 3166-2 county code",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}-[A-Z0-9]{1,5}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2 county code",
+              "title": "County"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityGapOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Discover Opportunity Gap",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/trending": {
+      "get": {
+        "description": "Trending Problems and Trending Projects (with the problem each solves), Trending first, then New this week.",
+        "operationId": "discover_trending_api_discover_trending_get",
+        "parameters": [
+          {
+            "description": "Niche slug (a parent includes children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "ISO 3166-2 county code",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}-[A-Z0-9]{1,5}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2 county code",
+              "title": "County"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Discover Trending",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}": {
       "get": {
         "operationId": "get_engagement_api_engagements__engagement_id__get",
@@ -17750,6 +18699,218 @@
         ]
       }
     },
+    "/api/me/niches": {
+      "get": {
+        "description": "Your liked niches (they rank \"Recommended for you\"; any plan).",
+        "operationId": "my_niches_api_me_niches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikedNichesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Niches",
+        "tags": [
+          "discover"
+        ]
+      },
+      "put": {
+        "description": "Set your liked niches: 3 to 5 niche ids from ``GET /api/directory/niches``.",
+        "operationId": "set_my_niches_api_me_niches_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LikedNichesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikedNichesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Set My Niches",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
     "/api/me/profile": {
       "get": {
         "operationId": "get_profile_api_me_profile_get",
@@ -20293,6 +21454,108 @@
         "summary": "Who Has Seen",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/recommendations": {
+      "get": {
+        "description": "Research cards and verified organisations' Briefs ranked for you, each explained.",
+        "operationId": "my_recommendations_api_me_recommendations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Recommendations",
+        "tags": [
+          "discover"
         ]
       }
     },

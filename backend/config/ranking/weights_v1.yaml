@@ -1,0 +1,92 @@
+# Trending and the "what to pursue" ranker, version 1 (REQ-TREND-01, REQ-TREND-02, REQ-PERS-01; docs/spec/06 6.6,
+# 6.7). Loaded and validated by bridge/matching/ranking_config.py: a missing or unknown key, or a value out of range,
+# fails closed (the Discover and recommendation routes answer 500 rather than rank on a silent default).
+#
+# Prototype (prototype-m2-plan.md §6): computed on read in plain Python, no embeddings, no stored scores. The
+# spec's trends.recompute (02:00) and recommendations.recompute (03:00) jobs are not built; the spec's f1 (bge-m3
+# cosine) is a keyword overlap here, f4 (skill coverage) has no data yet and is left out of every score.
+version: 1
+
+trending:
+  window_days: 180            # signals read per request (app_trend_aggregates allows at most 400)
+  baseline_days: 90           # the per-niche baseline: scores at weekly points over the last 90 days
+  baseline_step_days: 7
+  min_baseline_samples: 3     # non-zero baseline scores a niche needs before a z-score means anything (cold start)
+  sd_floor: 0.5               # the baseline's spread never counts as smaller than this (one event is not a trend)
+  z_trending: 1.0             # z-score from which an item is "Trending"
+  min_score: 1.0              # ... and at least this decayed score
+  min_actors: 3               # ... and at least this many distinct actors (docs/spec/06 6.6)
+  min_orgs: 3                 # an organisation-side signal counts only when it comes from this many organisations
+  young_share: 0.5            # burst detector: more than this share of events from young accounts ...
+  young_days: 7               # ... (accounts younger than this) are ignored (needs 0006 data, see the task card)
+  new_days: 7                 # "New this week"
+  badge_days: 30              # the counts a badge and its chips quote ("2 new sources this month")
+  problems:
+    half_life_days: 14
+    weights:                  # docs/spec/06 6.6 problem weights (tenders and developer saves have no data yet)
+      verified_org_brief: 6
+      official_source: 5
+      independent_source: 3
+      proposal_submitted: 2
+      scout_match: 2
+  projects:
+    half_life_days: 7
+    weights:                  # verified-organisation actions only (shortlist and verified views have no signal yet)
+      org_interest: 12
+
+discover:
+  items: 20                   # problems (and projects) per Discover list
+  sources_per_problem: 3      # cited sources shown on a trending problem card
+  projects_per_problem: 3     # trending projects listed beside a problem
+  opportunity_gap:
+    decile: 0.1               # the top tenth of problems by trend z-score ...
+    fewer_than: 3             # ... that have fewer than 3 proposals
+
+ranker:
+  version: hybrid-v1
+  weights:                    # docs/spec/06 6.7; score = 100·Σw·f / Σ|w| over the features that apply
+    semantic_fit: 0.25        # f1, with the profiling consent only (keyword overlap in the prototype)
+    niche_match: 0.15         # f2
+    region_match: 0.08        # f3
+    skill_coverage: 0.12      # f4, no data yet: never applies
+    trend: 0.10               # f5, the card's z-score clipped to ±3
+    evidence_confidence: 0.08 # f6
+    market_pull: 0.10         # f7, log(1 + scouts + tenders + briefs)
+    crowding: -0.07           # f8, log(1 + proposals)
+    track_record: 0.07        # f9, with the profiling consent only
+    freshness: 0.05           # f10, 2^(-age/30)
+  niche:
+    liked: 1.0
+    adjacent: 0.5             # a sibling, parent or child of a liked niche
+  region:
+    same_county: 1.0
+    national: 0.5             # a card for the whole country
+  z_clip: 3
+  market_pull_cap: 10
+  crowding_cap: 20
+  freshness_half_life_days: 30
+  new_card_days: 7
+  new_card_boost: 0.05        # +5 points for a card published in the last 7 days
+  brief_confidence: 1.0       # a verified organisation's own Brief has no research confidence
+  semantic_saturation: 5      # shared keywords for a full f1
+  min_keyword_length: 4
+  recent_proposals: 5         # f1 reads the developer's last 5 published proposals (Tier 1)
+  top_n: 10
+  per_niche_cap: 3            # at most 3 cards of one niche in the top 10
+  mmr_lambda: 0.7
+  exploration_slots: 1        # one card outside the liked niches, labelled "Exploring"
+  why_chips: 3
+  labels:
+    strong: 80                # Strong fit from 80, Good fit from 60, Stretch below
+    good: 60
+  pursuit:
+    crowded_proposals: 10     # this many proposals and no market pull is never "Pursue" (AC-PERS-2)
+    pursue_min_score: 60
+    pursue_min_confidence: 0.6
+    pursue_trend_z: 1.0
+    not_now_below_score: 40
+    not_now_below_confidence: 0.5
+
+liked_niches:                 # REQ-PERS-03: 3 to 5 liked niches, on every plan
+  min: 3
+  max: 5

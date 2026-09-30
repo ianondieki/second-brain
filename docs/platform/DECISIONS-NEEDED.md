@@ -211,6 +211,15 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: launch (R1); nothing in the prototype.
 - Decision:
 
+### D-50 · Which organisations count toward `scout_match` trend actors and the "companies scouting" badge (P12; REQ-TREND-01)
+
+Context: E1 is self-service (email OTP plus a DNS TXT record) and the free claimed plan includes one weekly scout, so
+three self-signup E1 organisations run by one person can make their own problem show "Trending …: 3 companies
+scouting" (THREAT_MODEL §5 residual, P12-B review). The spec asks for "unique verified accounts", which E1 meets.
+Options: (a) keep E1 and E2 (spec as written; the 0006 burst detector is the defence); (b) count only E2
+organisations for `scout_match`; (c) count E1 organisations only once they are older than N days (e.g. 30).
+Default applied: (a), unchanged code. Recommended: (c) with N = 30, together with the 0006 burst detector.
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
