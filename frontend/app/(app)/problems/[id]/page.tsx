@@ -6,6 +6,7 @@ import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 
@@ -34,10 +35,8 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
         </>
       ) : (
         <>
-          <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-          <div className="mt-6">
-            <EmptyState sentence={t("notFound")} action={t("back")} href={home} />
-          </div>
+          <PageHeader title={t("pageTitle")} />
+          <EmptyState sentence={t("notFound")} action={t("back")} href={home} className="mt-8" />
         </>
       )}
     </SignedInShell>

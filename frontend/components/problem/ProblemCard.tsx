@@ -27,10 +27,11 @@ export async function ProblemCard({ problem }: { problem: ProblemDetail }) {
         <h1 id="problem-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
           {problem.title}
         </h1>
-        {/* The card's label (docs/spec/09 AI labels) under the title as a Badge: no eyebrow above a heading. */}
+        {/* The card's label (docs/spec/09 AI labels) under the title as a Badge: no eyebrow above a heading. Neutral:
+            the accent is kept for "act here or you are here" (p16-design-system.md, principle 3). */}
         {label ? (
           <p>
-            <Badge data-label={label.key} tone="accent" icon={<LabelIcon />}>
+            <Badge data-label={label.key} tone="neutral" icon={<LabelIcon />}>
               {label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date })}
             </Badge>
           </p>
