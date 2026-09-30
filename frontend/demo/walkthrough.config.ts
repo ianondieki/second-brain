@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -37,15 +37,22 @@ const CI_REPORT = join(__dirname, "..", "playwright-report", "walkthrough");
 
 // The spec writes its screenshots where this names (workers inherit the runner's environment).
 process.env.WALKTHROUGH_SHOTS_DIR ??= CI ? join(CI_RESULTS, "screenshots") : COMMITTED_SHOTS;
-if (CI && resolve(process.env.WALKTHROUGH_SHOTS_DIR) === resolve(COMMITTED_SHOTS)) {
-  throw new Error("in CI the walkthrough never writes docs/demo/screenshots/ (unset WALKTHROUGH_SHOTS_DIR)");
+/** True when `dir` is the committed screenshot folder or anywhere inside it. */
+export function insideCommittedShots(dir: string): boolean {
+  const rel = relative(resolve(COMMITTED_SHOTS), resolve(dir));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+if (CI && insideCommittedShots(process.env.WALKTHROUGH_SHOTS_DIR)) {
+  throw new Error("in CI the walkthrough never writes under docs/demo/screenshots/ (unset WALKTHROUGH_SHOTS_DIR)");
 }
 
 export default defineConfig({
   testDir: ".",
   testMatch: "walkthrough.spec.ts",
   outputDir: CI ? CI_RESULTS : VIDEO,
-  timeout: 20 * 60_000,
+  // In CI well inside the demo-story job's 30 minutes (a cold stack takes about 5), so a stalled story fails the
+  // test and the job still uploads its report; the story itself takes about 3 minutes.
+  timeout: (CI ? 12 : 20) * 60_000,
   expect: { timeout: 20_000 },
   retries: 0,
   workers: 1,
