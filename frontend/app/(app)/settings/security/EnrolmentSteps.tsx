@@ -18,13 +18,14 @@ import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
 import { cancelStatus, type TwoStepStatus } from "./outcomes";
+import { RecoveryCodeList } from "./RecoveryCodeList";
 import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
 // Loaded only after POST /api/auth/totp/enrol succeeds (React.lazy, see lazy.ts), with the QR encoder, so none of
 // this is in the page's first download (docs/spec/07 item 5: 150 KB, i.e. 150,000 bytes, of gzipped JS per route).
 
-type Notice = "keyCopied" | "codesCopied" | "copyFailed" | null;
+type Notice = "keyCopied" | "copyFailed" | null;
 
 /** How long "Cancel setup" waits for the server to say whether two-step sign-in is on before saying it cannot tell. */
 const STATUS_CHECK_MS = 10_000;
@@ -50,15 +51,6 @@ function qrMatrix(uri: string): boolean[][] | null {
   } catch {
     return null; // the key below still works without the picture
   }
-}
-
-function download(codes: string[]) {
-  const url = URL.createObjectURL(new Blob([`${codes.join("\n")}\n`], { type: "text/plain" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "recovery-codes.txt";
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 export interface EnrolmentStepsProps {
@@ -123,10 +115,10 @@ export function EnrolmentSteps({
     heading.current?.focus();
   }, [codes]);
 
-  async function copy(text: string, done: Exclude<Notice, "copyFailed" | null>) {
+  async function copyKey() {
     try {
-      await navigator.clipboard.writeText(text);
-      setNotice(done);
+      await navigator.clipboard.writeText(secret);
+      setNotice("keyCopied");
     } catch {
       setNotice("copyFailed");
     }
@@ -233,7 +225,7 @@ export function EnrolmentSteps({
         </dd>
       </dl>
       <div className="flex flex-col items-start gap-1">
-        <Button variant="secondary" onClick={() => copy(secret, "keyCopied")}>
+        <Button variant="secondary" onClick={copyKey}>
           {t("copyKey")}
         </Button>
         {noticeLine}
@@ -264,34 +256,7 @@ export function EnrolmentSteps({
   const codesBody = codes ? (
     <div className="flex flex-col items-start gap-5">
       <p className="text-ink-soft">{t("codesLead")}</p>
-      <div className="w-full">
-        <h4 id="codes-label" className="text-base font-medium">
-          {t("codesLabel")}
-        </h4>
-        <ul
-          aria-labelledby="codes-label"
-          data-testid="recovery-codes"
-          className={
-            "code-figures mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 " + // ten codes: five even rows
-            "border border-line bg-field px-4 py-3 text-base font-semibold text-ink sm:text-lg"
-          }
-        >
-          {codes.map((recovery) => (
-            <li key={recovery} className="whitespace-nowrap">
-              {recovery}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={() => copy(codes.join("\n"), "codesCopied")}>
-          {t("copyCodes")}
-        </Button>
-        <Button variant="secondary" onClick={() => download(codes)}>
-          {t("download")}
-        </Button>
-      </div>
-      {noticeLine}
+      <RecoveryCodeList codes={codes} />
       <Button variant="primary" onClick={() => router.push(homeHref)}>
         {t("done")}
       </Button>
