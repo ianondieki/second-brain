@@ -190,7 +190,7 @@ describe("InboxRow (Tier 1 only)", () => {
     const { container } = renderWithIntl(<InboxRow item={item} href={`/org/inbox/${PROPOSAL}`} />);
     expect(screen.getByRole("link", { name: "Maziwa baridi" }).getAttribute("href")).toBe(`/org/inbox/${PROPOSAL}`);
     screen.getByText("Agriculture › Dairy");
-    screen.getByText(/^Sent 29 Sept? 2026$/);
+    screen.getByText(/^Sent 29 Sep 2026$/);
     screen.getByText("Prototype");
     screen.getByText("Wants to run a pilot");
     expect(container.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2); // docs/spec/07 item 2

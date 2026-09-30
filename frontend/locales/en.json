@@ -4,6 +4,7 @@
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead",
     "review": "[[COPY-REVIEW]] G2/G5",
+    "reviewP16a": "[[COPY-REVIEW]] P16-A (REQ-CON-01, REQ-NOT-03, REQ-UX-01): shell.notifications, shell.help, notificationSettings.*, help.*; help.confidential.tier2 uses the docs/spec/04 4.2 approved access and logging phrasing and help.confidential.record the approved evidence phrasing; help.support.body is a placeholder until a support contact is set (no address or phone); the consent wording on the notification settings comes from the API verbatim (backend/config/consents.yaml)",
     "reviewP14": "[[COPY-REVIEW]] P14 (REQ-BIL-08): shell.account, shell.billing, billing.*, checkout.*, ideaEditor.problem.planLimitUpgrade, pitch.problem.planLimitUpgrade (fix round: checkout.simulatedTitle, checkout.canLeave, checkout.stepDone, billing.refused.freePlan, checkout.outcomeLegend and checkout.outcome.* reworded); billing.samplePrices is the D-44 recommended-default label and checkout.simulatedTag the D-36 label (DECISIONS-NEEDED D-44 open); plan names and prices come from the API (backend/config/plans.yaml, placeholders until G3)",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
@@ -26,6 +27,8 @@
     "signOutFailed": "Sign-out did not finish, so you may still be signed in.",
     "signOutRetry": "Try signing out again",
     "account": "Account",
+    "notifications": "Notifications",
+    "help": "Help",
     "billing": "Plan & billing"
   },
   "panel": {
@@ -227,6 +230,58 @@
   "legal": {
     "termsTitle": "Terms of service",
     "termsBody": "[[LEGAL-PLACEHOLDER:tos]]"
+  },
+  "notificationSettings": {
+    "pageTitle": "Notifications",
+    "lead": "Emails about a step in your proposals and engagements, such as an approval or a signature, are always sent. Choose which other messages you get.",
+    "channel": {
+      "email": "Email",
+      "whatsapp": "WhatsApp"
+    },
+    "notYet": "WhatsApp messages are not available yet, so this cannot be turned on.",
+    "save": "Save choices",
+    "saving": "Saving…",
+    "saved": "Your choices are saved.",
+    "empty": "There are no notification choices to make yet.",
+    "refused": {
+      "changed": "The wording of these choices changed after you opened this page, so nothing was saved.",
+      "signedOut": "You are signed out, so nothing was saved.",
+      "rateLimited": "Nothing was saved because of too many saves in a short time; wait a minute and save again.",
+      "network": "Nothing was saved because the connection failed; check it and save again.",
+      "failed": "Nothing was saved; try again in a moment."
+    },
+    "action": {
+      "reload": "Reload the page",
+      "logIn": "Log in",
+      "home": "Go to your home page"
+    }
+  },
+  "help": {
+    "pageTitle": "Help",
+    "lead": "Short answers about pitching, what stays confidential, reminders and support.",
+    "logIn": "Log in",
+    "pitching": {
+      "title": "How pitching works",
+      "parts": "You write an idea in two parts: a public teaser and the full details, which stay confidential.",
+      "pitch": "Once it is published, you pitch it to companies from the directory. A verified company gets it straight away; a company that is not verified yet gets it only if it joins and verifies.",
+      "interest": "Companies can also find your teaser through their scout. A company that wants to go further expresses interest, and once you accept, you both follow the same tracker."
+    },
+    "confidential": {
+      "title": "What stays confidential",
+      "tier1": "Tier 1 is the public teaser: its title, problem and summary. Everyone signed in can see it, so it cannot carry contact details or links.",
+      "tier2": "Tier 2 is the full details: shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass, and every view is logged and watermarked to the viewer.",
+      "record": "Publishing gives you timestamped evidence of what you submitted and when, and your idea's page shows who opened the full details."
+    },
+    "reminders": {
+      "title": "Reminders",
+      "daily": "With email reminders on, you get at most one email a day about your engagements: what needs you, what you are waiting for and anything overdue. Organisation members get a progress summary of their engagements.",
+      "always": "Emails about a step in an engagement, such as an approval or a signature, are always sent.",
+      "manage": "Choose your emails in <link>Notifications</link>."
+    },
+    "support": {
+      "title": "Contact support",
+      "body": "Support contact to be set."
+    }
   },
   "errors": {
     "invalid_email": "Enter an email address like name@example.com.",

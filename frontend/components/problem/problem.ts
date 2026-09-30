@@ -1,4 +1,5 @@
 import type { components } from "@/lib/api/schema";
+import { formatCalendarDate, formatDay, formatMoment } from "@/lib/format";
 
 // The problem card's pure parts (REQ-RES-02; docs/spec/06 6.5): its label, dates, confidence and the one kind of
 // link it may carry. Shared by the signed-in problem page and the staff review screen (REQ-RES-01).
@@ -16,7 +17,7 @@ export type ProblemLabel = { key: "aiDrafted" | "seeded"; date: string } | { key
  * The card's label, in the page's language (the API also sends it in English as `label`): a published research
  * card is "AI-drafted, human-reviewed on <date>", or a seeded example when the demo seed made it (never presented as
  * a live AI result); a developer's problem is "Developer-reported"; anything else has none. `date` is the Nairobi
- * day it was published, as the API computes it.
+ * day it was published ("30 Sep 2026"), as the API computes it.
  */
 export function problemLabel(
   problem: Pick<ProblemDetail, "source" | "seeded_example" | "published_at">,
@@ -24,33 +25,15 @@ export function problemLabel(
 ): ProblemLabel {
   if (problem.source === "developer") return { key: "developer" };
   if (problem.source !== "research_agent" || !problem.published_at) return null;
-  return { key: problem.seeded_example ? "seeded" : "aiDrafted", date: formatLongDay(locale, problem.published_at) };
+  return { key: problem.seeded_example ? "seeded" : "aiDrafted", date: formatDay(locale, problem.published_at) };
 }
 
-/** A moment as its Nairobi day, written out ("30 September 2026"). */
-export function formatLongDay(locale: string, iso: string): string {
-  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "long", timeZone: "Africa/Nairobi" }).format(
-    new Date(iso),
-  );
-}
+/** A moment in Nairobi ("30 Sep 2026, 14:06"), the web app's one date format (lib/format.ts). */
+export { formatMoment };
 
-/** A moment in Nairobi, short ("30 Sept 2026, 14:06"). */
-export function formatMoment(locale: string, iso: string): string {
-  return new Intl.DateTimeFormat(`${locale}-KE`, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Africa/Nairobi",
-  }).format(new Date(iso));
-}
-
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A calendar date ("2026-09-28", no time or zone) as written for the page's language; never shifted a day. */
+/** A calendar date ("2026-09-28", no time or zone) as "28 Sep 2026"; never shifted a day; anything else as it is. */
 export function formatDate(locale: string, value: string): string {
-  if (!DATE_ONLY.test(value)) return value;
-  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "medium", timeZone: "UTC" }).format(
-    new Date(`${value}T00:00:00Z`),
-  );
+  return formatCalendarDate(locale, value);
 }
 
 /** The API's decimal confidence ("0.720") to two places ("0.72"), or null when there is none or it is not a number. */

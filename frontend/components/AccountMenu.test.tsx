@@ -5,7 +5,8 @@ import { renderWithIntl } from "@/test/intl";
 
 import { AccountMenu } from "./AccountMenu";
 
-// REQ-BIL-08: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing and Sign out, as a disclosure.
+// REQ-BIL-08, REQ-UX-01: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing, Notifications, Help and
+// Sign out, as a disclosure.
 
 const search = vi.hoisted(() => ({ value: "" }));
 vi.mock("next/navigation", () => ({
@@ -29,7 +30,7 @@ function renderMenu() {
 }
 
 describe("AccountMenu", () => {
-  it("opens to Plan & billing and Sign out", () => {
+  it("opens to Plan & billing, Notifications, Help and Sign out", () => {
     const toggle = renderMenu();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull(); // hidden while closed
@@ -38,6 +39,15 @@ describe("AccountMenu", () => {
     const panel = document.getElementById(toggle.getAttribute("aria-controls")!);
     expect(panel?.hidden).toBe(false);
     expect(screen.getByRole("link", { name: "Plan & billing" }).getAttribute("href")).toBe("/billing");
+    expect(screen.getByRole("link", { name: "Notifications" }).getAttribute("href")).toBe("/settings/notifications");
+    expect(screen.getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
+    expect(panel?.querySelectorAll("a, button").length).toBe(4);
+    expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
+      "Plan & billing",
+      "Notifications",
+      "Help",
+      "Sign out",
+    ]);
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
