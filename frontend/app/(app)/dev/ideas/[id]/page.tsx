@@ -166,7 +166,16 @@ const TEASER_HINT = {
   hidden: "teaserHintHidden",
 } as const satisfies Record<IdeaStatus, string>;
 
-async function Teaser({ version, status, county }: { version: Version; status: IdeaStatus; county: string | null }) {
+async function Teaser({
+  version,
+  status,
+  county,
+}: {
+  version: Version;
+  status: IdeaStatus;
+  /** The county's name, read with the page's other reads (null when the teaser names none). */
+  county: string | null;
+}) {
   const f = await getTranslations("ideaFields");
   const { teaser } = version;
   const empty = <span className="text-ink-soft">{f("notGiven")}</span>;

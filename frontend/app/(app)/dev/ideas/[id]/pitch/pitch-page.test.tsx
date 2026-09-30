@@ -25,7 +25,9 @@ vi.mock("next/navigation", () => ({
     throw new Error(`redirect:${to}`);
   },
 }));
-vi.mock("@/components/SignedInShell", () => ({ SignedInShell: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
+vi.mock("@/components/SignedInShell", () => ({
+  SignedInShell: ({ children }: { children: ReactNode }) => <main>{children}</main>,
+}));
 
 const reads = vi.hoisted(() => ({
   order: [] as string[],
@@ -66,7 +68,12 @@ vi.mock("./data", () => ({
     if (reads.fail) throw new Error("GET /api/me/proposals/{proposal_id}/pitch/orgs answered 500");
     return {
       kind: "page",
-      picker: { groups: [], cap: { limit: 5, used: 0, remaining: 5, period_end: null }, proposal_public: true, next_cursor: null },
+      picker: {
+        groups: [],
+        cap: { limit: 5, used: 0, remaining: 5, period_end: null },
+        proposal_public: true,
+        next_cursor: null,
+      },
     };
   },
   nicheTree: async () => {

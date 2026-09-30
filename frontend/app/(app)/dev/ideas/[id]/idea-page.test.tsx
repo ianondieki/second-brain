@@ -26,7 +26,9 @@ vi.mock("next/navigation", () => ({
     throw new Error(`redirect:${to}`);
   },
 }));
-vi.mock("@/components/SignedInShell", () => ({ SignedInShell: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
+vi.mock("@/components/SignedInShell", () => ({
+  SignedInShell: ({ children }: { children: ReactNode }) => <main>{children}</main>,
+}));
 
 const reads = vi.hoisted(() => ({
   order: [] as string[],

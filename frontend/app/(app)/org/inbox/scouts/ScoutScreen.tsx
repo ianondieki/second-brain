@@ -125,7 +125,10 @@ export async function ScoutScreen({
       <div className="mt-8">
         {/* Of ideaFields, the form needs the maturity labels only. */}
         <ClientStrings
-          strings={{ ...(await clientStrings(["scoutForm"])), ...(await pickedStrings("ideaFields", ["maturityValue"])) }}
+          strings={{
+            ...(await clientStrings(["scoutForm"])),
+            ...(await pickedStrings("ideaFields", ["maturityValue"])),
+          }}
         >
           <ScoutForm
             userId={me.user.id}
