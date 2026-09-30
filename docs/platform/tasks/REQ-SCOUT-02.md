@@ -258,3 +258,67 @@ keywords (`pipeline.excluded`, behind the SQL filter of P1) and the feedback aut
    F05, unreachable today).
 6. **The History hash confirms a candidate developer id** (`history.py:379`). It adds nothing beyond the stable handle
    today. Record it in THREAT_MODEL next to handle linkability.
+
+## P10-F: the screens (frontend half; branch `feat/REQ-SCOUT-02-fe`, from integration `a5043eb`)
+
+Agent: impl-frontend. Reviews: reviewer, ux-reviewer. The backend (`openapi.json`, `schema.d.ts`) is unchanged.
+
+**Organisation.** Inbox gets two tabs, Sent to you and Scout matches (`/org/inbox?tab=matches`, the EM3 "N more"
+link): the Scout Agent in a few words (niches, schedule, Active or Paused, Change the scout for owners and admins),
+then the matches newest first, each with its fit, the developer's `owner_handle`, niche and why with who wrote it (the
+EM3 labels, the demo-fallback one included); an unavailable match shows "No longer available" with no teaser, why or
+handle. Without a scout the tab is its empty state, Set up Scout Agent (members who are not owners or admins get one
+sentence and a link to Sent to you). `/org/inbox/scouts/new` and `/org/inbox/scouts/{id}`: the plan's scout cap, the
+not-yet-verified note (AC-SCOUT-8), then the form (niches by parent, keywords to look for and to leave out, counties,
+how far along, lowest fit, schedule with "Needs a higher plan" on the plan's missing frequencies, digest language,
+reviewer seats as recipients); Save is the one primary action, Preview (with the on_new note, worded from locales when
+the API's `note` is set) and Pause/Resume are secondary; a 402 says the plan does not include it and links through
+`upgradeHref(plan, {org, next})`. `/org/inbox/matches/{id}?org=` (the EM3 item link, checked in the e2e): fit, title,
+handle, niche, why, the public teaser, then Express interest (contact person, channel, contact-by date; a stale second
+factor asks for a fresh code inline with the tracker's `StepUp`, then the POST runs once more; the tracker opens), or a
+disabled button with the reason as a fixed sentence (`org_not_e2`, `org_unavailable`, `role_required`,
+`proposal_unavailable`; `engagement_exists` links to the tracker).
+
+**Developer.** Accept and decline interest were already on the tracker (P5/P8: `accept_interest` with step-up,
+`decline_interest` with a confirmation); nothing was added there. New: on an org-origin engagement a Full proposal
+section (`components/tracker/Tier2Section.tsx`, `ShareTier2.tsx`): Share the full proposal, a confirmation in the
+approved logging phrasing, the tracker's `StepUp` when the API asks (it gained a `primary` prop so a second primary
+button never appears), then "You shared the full proposal with {org} on {date}". The organisation's tracker then shows
+Open the full proposal, which opens the proposal page with the Evaluation NDA.
+
+**Pseudonymity.** Match shapes carry no developer id or name; the screens render `owner_handle` only. The org
+tracker labels `developer_name` as a pseudonym while `developer_named` is false (`tracker.fromHandle`) and never reads
+`developer_id`. The e2e checks the developer's display name is absent from the matches, the match page, EM3 and the
+stage-0 tracker, and present from INTEREST_CONFIRMED.
+
+**Files.** `app/(app)/org/{scout,scout-data}.ts`, `org/inbox/InboxTabs.tsx`, `org/inbox/matches/*`,
+`org/inbox/scouts/*`, `components/tracker/{share.ts,ShareTier2.tsx,Tier2Section.tsx}`; small edits to
+`org/inbox/page.tsx` (tabs), `EngagementScreen.tsx` (the section, the handle label), `StepUp.tsx` (`primary`),
+`tracker/data.ts` (the share read), `lib/i18n/client-strings.ts` (three namespaces at the end), the locales (new
+namespaces after `orgProposal`, `tracker.fromHandle`, `_meta.reviewP10f`; [[COPY-REVIEW]], draft Swahili
+[[SW-REVIEW]]). `lib/billing/upgrade.ts` and its test are a byte-for-byte copy of P14-F's (`3fd9615`), so the two
+adds merge cleanly; if P14-F changes the file before merging, take P14-F's.
+
+**Tests.** vitest: `org/scout.test.ts` (links, keywords, draft, checks, body, refusal wording), `scouts/scout-form.test.tsx`,
+`matches/[matchId]/express-interest.test.tsx`, `matches/match-row.test.tsx`, `components/tracker/share.test.tsx`
+(595 frontend tests pass). Playwright `e2e/scout.spec.ts` (with `support/scout-scene.ts`; owner-DB access asserted in
+`beforeAll`): the walkthrough above end to end, on_new scout via the simulated checkout upgrade, the match from the
+worker's `scouts.on_new`, EM3, a reviewer's disabled button, interest with step-up, N17, accept with step-up, EM2 (its
+"not shared yet" sentence), share with step-up, the org opens the full proposal under the NDA; axe, one primary and
+no horizontal scroll on every screen at 360 and 1440 px. `e2e/tracker.spec.ts` now expects the handle, not the name,
+on the org list at SUBMITTED (it failed on integration since the P10 MAJOR 1 fix). JS: `/org/inbox?tab=matches`
+140,096 B, `/org/inbox/scouts/new` 145,979 B, a signatory's match page 146,435 B (budget 150,000).
+
+### P10-F open items
+
+1. **The handle gives the name away (backend).** `auth/service.py` `_handle_from` builds `owner_handle` from the
+   display name ("Achieng Otieno" → `achieng-otieno-2b2356`), so the organisation effectively sees the developer's
+   name before INTEREST_CONFIRMED on every Tier-1 surface (matches, EM3, the tracker). No screen can hide it. Fix in
+   the backend: a random handle (words + digits) at signup and a migration for existing handles. Security-relevant.
+2. The in-app notice of a share links to `/engagements/{id}` (`interest.py` `tell_organisation`), which is not a route:
+   `/org/engagements/{id}` is. No bell renders in-app notices yet.
+3. Not built: match feedback (👍/👎, the API exists), deleting a scout, the budget band field (deviation 2: proposals
+   carry no budget; a saved band is left as it is), Browse repo (origin `org_browse`).
+4. The org picker on the Scout matches tab submits to Sent to you (a GET form carries only `org`).
+5. The tracker route's JS with the share section was not measured (it loads only on org-origin engagements).
+6. The impeccable skill is not installed in this environment; polish was done by hand from the 375/1440 screenshots.
