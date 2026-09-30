@@ -19,7 +19,6 @@ import copy
 import json
 import os
 import subprocess
-import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +36,7 @@ from bridge.directory.responsiveness import FixtureResponsiveness, Responsivenes
 from bridge.ids import uuid7
 from bridge.seed.directory import DirectorySeedRefused, load_directory, seed_directory
 from bridge.seed.reference import seed_all
+from tests.hermetic import python_module
 from tests.integration import world as w
 from tests.integration.api import make_client, sign_in_as
 
@@ -343,7 +343,7 @@ def _seed_command(database_url: URL, app_env: str) -> subprocess.CompletedProces
         "DATABASE_OWNER_URL": database_url.render_as_string(hide_password=False),
     }
     return subprocess.run(
-        [sys.executable, "-m", "bridge.seed"], cwd=BACKEND, env=env, capture_output=True, text=True, check=False
+        python_module("bridge.seed"), cwd=BACKEND, env=env, capture_output=True, text=True, check=False
     )
 
 
