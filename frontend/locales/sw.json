@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
+    "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead [[SW-REVIEW]] draft Swahili",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
@@ -676,7 +677,9 @@
     "title": "Dashibodi ya wafanyakazi",
     "navLabel": "Dashibodi ya wafanyakazi",
     "nav": {
-      "research": "Utafiti"
+      "research": "Utafiti",
+      "moderation": "Udhibiti",
+      "claims": "Madai"
     },
     "noSection": "Jukumu lako la wafanyakazi bado halina sehemu kwenye dashibodi.",
     "noSectionAction": "Nenda kwenye ukurasa wako wa nyumbani"
@@ -807,6 +810,249 @@
       "openPublic": "Fungua kadi ya umma",
       "rejected": "Imekataliwa. Kadi inabaki ya faragha.",
       "backToResearch": "Rudi kwenye Utafiti"
+    }
+  },
+  "adminModeration": {
+    "pageTitle": "Udhibiti wa maudhui",
+    "title": "Udhibiti wa maudhui",
+    "lead": "Mapendekezo na matatizo ambayo ukaguzi wa kiotomatiki umezuia au kupanga ili mtu ayasome. Anza na ya zamani zaidi.",
+    "notAllowed": "Udhibiti wa maudhui ni wa wasimamizi na wadhibiti wa wafanyakazi.",
+    "notAllowedAction": "Rudi kwenye dashibodi",
+    "tabsLabel": "Kesi",
+    "tabs": {
+      "open": "Zilizo wazi",
+      "decided": "Zilizoamuliwa"
+    },
+    "reviewOldest": "Kagua kesi ya zamani zaidi",
+    "listOpen": "Kesi zilizo wazi, za zamani kwanza",
+    "listDecided": "Kesi zilizoamuliwa, za karibuni kwanza",
+    "emptyOpen": "Hakuna kesi zinazosubiri uamuzi.",
+    "emptyOpenAction": "Angalia kesi zilizoamuliwa",
+    "emptyDecided": "Bado hakuna kesi iliyoamuliwa.",
+    "emptyDecidedAction": "Angalia kesi zilizo wazi",
+    "kind": {
+      "proposal": "Pendekezo",
+      "problem": "Tatizo",
+      "org_claim": "Mzozo wa dai",
+      "other": "Kesi nyingine"
+    },
+    "untitled": {
+      "proposal": "Pendekezo lisilo na kichwa",
+      "problem": "Tatizo lisilo na kichwa",
+      "org_claim": "Madai yanayoshindana kuhusu shirika",
+      "other": "Kesi isiyo na kichwa"
+    },
+    "filed": "Iliwasilishwa {date}",
+    "source": {
+      "prescreen": "Iliwasilishwa na ukaguzi wa kiotomatiki",
+      "regex": "Iliwasilishwa na ukaguzi wa kiotomatiki",
+      "report": "Iliwasilishwa kutoka kwa ripoti",
+      "claim_dispute": "Iliwasilishwa dai la pili lilipofika",
+      "tier2_similarity": "Iliwasilishwa na ukaguzi wa kufanana"
+    },
+    "visibility": {
+      "hidden": "Imefichwa hadi iamuliwe",
+      "public": "Ni ya umma inapokaguliwa",
+      "rejected": "Imefichwa: imekataliwa",
+      "gone": "Haipo tena"
+    },
+    "outcome": {
+      "approved": "Imeidhinishwa",
+      "rejected": "Imekataliwa"
+    },
+    "decidedBy": {
+      "approved": "Iliidhinishwa na {name} tarehe {date}.",
+      "rejected": "Ilikataliwa na {name} tarehe {date}."
+    },
+    "decidedOn": {
+      "approved": "Iliidhinishwa tarehe {date}.",
+      "rejected": "Ilikataliwa tarehe {date}."
+    },
+    "reason": {
+      "names_real_org_negative": "Inazungumza vibaya kuhusu shirika lililotajwa",
+      "security_vulnerability": "Inaeleza udhaifu wa usalama",
+      "new_developer_problem": "Tatizo jipya kutoka kwa msanidi",
+      "new_version_of_moderated_proposal": "Toleo jipya la pendekezo lililokaguliwa",
+      "spam": "Inaonekana kuwa taka",
+      "defamation": "Huenda ni ya kukashifu",
+      "false_affiliation": "Inadai uhusiano ambao huenda haipo",
+      "third_party_personal_data": "Ina data binafsi ya mtu mwingine",
+      "malicious_links": "Ina kiungo cha kutiliwa shaka",
+      "other": "Sababu nyingine kutoka kwa ukaguzi"
+    },
+    "field": {
+      "title": "Kichwa",
+      "problem_statement": "Maelezo ya tatizo",
+      "impact_claims": "Madai ya matokeo",
+      "summary": "Muhtasari",
+      "statement": "Maelezo",
+      "other": "Sehemu nyingine"
+    },
+    "case": {
+      "pageTitle": "Kesi ya udhibiti",
+      "back": "Rudi kwenye Udhibiti wa maudhui",
+      "gone": "Kesi hii haiko kwenye foleni.",
+      "goneAction": "Rudi kwenye Udhibiti wa maudhui",
+      "reasonsHeading": "Kwa nini iko hapa",
+      "textHeading": "Maandishi yanayokaguliwa",
+      "textLead": "Muhtasari wa umma kama unavyosomeka sasa, sehemu kwa sehemu. Maelezo ya siri hayaonyeshwi hapa kamwe.",
+      "flagged": "Imealamishwa",
+      "noText": "Hakuna maandishi ya kuonyesha kwa kesi hii.",
+      "decisionHeading": "Uamuzi",
+      "leadHidden": "Idhinisha ili iwe ya umma, au ikatae ili ibaki imefichwa.",
+      "leadPublic": "Idhinisha ili ibaki ya umma, au ikatae ili iondolewe."
+    },
+    "decision": {
+      "approve": "Idhinisha",
+      "approving": "Inaidhinisha…",
+      "reject": "Kataa",
+      "rejecting": "Inakataa…",
+      "rejectConfirmProposal": "Ukatae pendekezo hili? Litabaki limefichwa. Toleo jipya kutoka kwa mwandishi wake litakaguliwa tena.",
+      "rejectConfirmProblem": "Ukatae tatizo hili? Litafichwa kwa kila mtu na halitachapishwa.",
+      "rejectYes": "Ndiyo, kataa",
+      "cancel": "Ghairi",
+      "approvedProposal": "Limeidhinishwa. Pendekezo sasa ni la umma.",
+      "approvedProblem": "Limeidhinishwa. Tatizo limechapishwa.",
+      "rejected": "Imekataliwa. Sasa imefichwa.",
+      "changed": "Mwandishi alichapisha toleo jipya ulipokuwa ukilikagua. Maandishi yaliyo juu ni toleo jipya: yasome tena, kisha uamue.",
+      "next": "Kagua kesi inayofuata",
+      "back": "Rudi kwenye Udhibiti wa maudhui"
+    },
+    "blocked": {
+      "already_decided": "Kesi hii tayari imeamuliwa.",
+      "unsupported_subject": "Kesi za aina hii huamuliwa kutoka kwenye foleni yake, si hapa.",
+      "subject_gone": "Kinachohusu kesi hii hakipo tena, kwa hivyo hakuna cha kuamua.",
+      "own_content": "Uliandika hiki, kwa hivyo mdhibiti mwingine anapaswa kukiamua.",
+      "cannot_approve_vulnerability": "Maandishi haya yanaeleza udhaifu wa usalama, kwa hivyo hayawezi kamwe kuwekwa wazi kwa umma. Yakatae: mwandishi wake anaweza kuchapisha toleo lililorekebishwa, ambalo hukaguliwa tena."
+    },
+    "refusal": {
+      "already_decided": "Mtu mwingine ameamua kesi hii sasa hivi. Uamuzi wake umeonyeshwa hapa chini.",
+      "not_found": "Kesi hii haiko tena kwenye foleni.",
+      "own_content": "Haya ni maudhui yako mwenyewe, au hayapo tena, kwa hivyo huwezi kuyaamua.",
+      "cannot_approve_vulnerability": "Maandishi haya yanaeleza udhaifu wa usalama, kwa hivyo hayawezi kuidhinishwa. Yakatae badala yake.",
+      "unsupported_subject": "Kesi za aina hii huamuliwa kutoka kwenye foleni yake, si hapa.",
+      "forbidden": "Jukumu lako la wafanyakazi haliwezi kuamua kesi za udhibiti.",
+      "generic": "Hilo halikufanikiwa. Angalia muunganisho wako kisha ujaribu tena."
+    }
+  },
+  "adminClaims": {
+    "pageTitle": "Madai",
+    "title": "Madai",
+    "lead": "Watu wanaoomba kusimamia ukurasa wa shirika. Wafanyakazi hukagua dai ndani ya siku {days, plural, one {# ya kazi} other {# za kazi}}.",
+    "notAdmin": "Madai ni ya wasimamizi wa wafanyakazi.",
+    "notAdminAction": "Rudi kwenye dashibodi",
+    "tabsLabel": "Mionekano ya madai",
+    "tabs": {
+      "review": "Ukaguzi",
+      "in_progress": "Yanaendelea",
+      "closed": "Yaliyofungwa"
+    },
+    "list": {
+      "review": "Madai yanayosubiri ukaguzi, ya zamani kwanza",
+      "in_progress": "Madai yanayomsubiri mdai, ya karibuni kwanza",
+      "closed": "Madai yaliyofungwa, ya karibuni kwanza"
+    },
+    "empty": {
+      "review": "Hakuna madai yanayosubiri ukaguzi.",
+      "in_progress": "Hakuna madai yanayomsubiri mdai.",
+      "closed": "Bado hakuna dai lililofungwa."
+    },
+    "emptyAction": {
+      "review": "Angalia madai yanayoendelea",
+      "in_progress": "Angalia madai yanayosubiri ukaguzi",
+      "closed": "Angalia madai yanayosubiri ukaguzi"
+    },
+    "unnamed": "Shirika {id}",
+    "unnamedNote": "Wafanyakazi hawawezi kuona jina la shirika hili kwa sababu halijaorodheshwa kwenye saraka.",
+    "level": {
+      "e1": "Linaomba E1 (kikoa kimethibitishwa)",
+      "e2": "Linaomba E2 (hati za usajili)"
+    },
+    "status": {
+      "otp_sent": "Linasubiri msimbo wa barua pepe",
+      "dns_pending": "Linasubiri rekodi ya DNS",
+      "pending_review": "Linasubiri ukaguzi",
+      "disputed": "Lina mzozo: dai linaloshindana",
+      "approved": "Limeidhinishwa",
+      "rejected": "Limekataliwa",
+      "withdrawn": "Limeondolewa"
+    },
+    "sla": {
+      "due": "Linadaiwa ndani ya siku {days, plural, one {# ya kazi} other {# za kazi}}",
+      "today": "Linadaiwa leo",
+      "overdue": "Limechelewa",
+      "dueBy": "Linadaiwa kufikia mwisho wa {date}."
+    },
+    "by": "Na {name}",
+    "filed": "Liliwasilishwa {date}",
+    "detail": {
+      "pageTitle": "Dai",
+      "back": "Rudi kwenye Madai",
+      "gone": "Hakuna dai kama hilo.",
+      "goneAction": "Rudi kwenye Madai",
+      "readOnly": "Kuamua madai si sehemu ya mfano huu, kwa hivyo ukurasa huu ni wa kusoma tu.",
+      "claimHeading": "Dai",
+      "level": "Linaomba",
+      "status": "Hali",
+      "filed": "Liliwasilishwa",
+      "updated": "Badiliko la mwisho",
+      "closed": "Lilifungwa",
+      "reviewTime": "Muda wa ukaguzi",
+      "claimantHeading": "Mdai",
+      "name": "Jina",
+      "email": "Anwani ambayo msimbo ulitumwa",
+      "domain": "Kikoa kinachodaiwa",
+      "domainOfficial": "Kikoa rasmi cha shirika",
+      "yes": "Ndiyo",
+      "no": "Hapana",
+      "checksHeading": "Ukaguzi",
+      "emailCode": "Msimbo wa barua pepe",
+      "confirmedOn": "Ulithibitishwa tarehe {date}",
+      "notConfirmed": "Haujathibitishwa",
+      "codeUse": "Majaribio yasiyo sahihi: {attempts}. Misimbo iliyotumwa tena: {reissues}.",
+      "dns": "Rekodi ya DNS",
+      "foundOn": "Ilipatikana tarehe {date}",
+      "notFound": "Bado haijapatikana",
+      "evidenceHeading": "Ushahidi wa E2",
+      "evidenceLead": "Maelezo binafsi na ya usajili: yanaonyeshwa kwenye ukurasa huu pekee.",
+      "registrationNo": "Nambari ya usajili",
+      "cr12Date": "CR12 ya tarehe",
+      "kraPin": "PIN ya KRA",
+      "sectorRegister": "Rejista ya sekta",
+      "publicEntity": "Taasisi ya umma",
+      "requested": "Imeombwa",
+      "notRequested": "Haijaombwa",
+      "documents": "Hati",
+      "noDocuments": "Hakuna iliyopakiwa",
+      "documentCount": "{count, plural, one {# imepakiwa} other {# zimepakiwa}}",
+      "documentsNote": "Hati haziwezi kufunguliwa katika mfano huu.",
+      "notGiven": "Haijatolewa",
+      "orgHeading": "Shirika",
+      "kind": "Aina",
+      "verification": "Uthibitishaji",
+      "officialDomains": "Vikoa rasmi",
+      "verifiedDomain": "Kikoa kilichothibitishwa",
+      "none": "Hakuna",
+      "othersHeading": "Madai mengine yaliyo wazi kuhusu shirika hili",
+      "casesHeading": "Kesi za udhibiti kuhusu dai hili",
+      "caseLine": "Iliwasilishwa {date}",
+      "decisionHeading": "Uamuzi",
+      "reviewedBy": "Lilikaguliwa na",
+      "reason": "Sababu iliyotolewa"
+    },
+    "verification": {
+      "unclaimed": "Halijadaiwa (E0)",
+      "pending": "Linasubiri",
+      "e1": "Kikoa kimethibitishwa (E1)",
+      "e2": "Hati za usajili zimethibitishwa (E2)",
+      "rejected": "Limekataliwa"
+    },
+    "caseStatus": {
+      "open": "Iko wazi",
+      "held": "Imezuiwa",
+      "approved": "Imeidhinishwa",
+      "rejected": "Imekataliwa",
+      "escalated": "Imepelekwa juu"
     }
   },
   "problem": {
