@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
+import { Callout } from "@/components/ui/Callout";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { upgradeHref } from "@/lib/billing/upgrade";
@@ -145,7 +146,7 @@ export function Review(props: ReviewProps) {
           {f("teaserTitle")}
         </h3>
         <p className="mt-1 text-sm text-ink-soft">{f("teaserHint")}</p>
-        <div className="mt-3 border-t border-line pt-4">
+        <div className="mt-3">
           <p className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">
             {state.title.trim() || <span className="text-ink-soft">{f("notGiven")}</span>}
           </p>
@@ -168,8 +169,9 @@ export function Review(props: ReviewProps) {
       </section>
 
       {blocking.length > 0 ? (
-        <section aria-labelledby={`${id}-missing`} className="border-l-4 border-error pl-4">
-          <h3 id={`${id}-missing`} className="font-semibold text-error">
+        // What is missing, as the error notice (tone border, wash, icon; no coloured left rule), its heading kept.
+        <Callout as="section" tone="error" aria-labelledby={`${id}-missing`}>
+          <h3 id={`${id}-missing`} className="font-semibold text-ink">
             {t("missingTitle")}
           </h3>
           <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-ink marker:text-ink-soft">
@@ -187,7 +189,7 @@ export function Review(props: ReviewProps) {
               </li>
             ))}
           </ul>
-        </section>
+        </Callout>
       ) : null}
 
       <fieldset className="flex flex-col gap-1">
@@ -226,7 +228,7 @@ export function Review(props: ReviewProps) {
         </Alert>
       ) : null}
 
-      <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <Button variant="secondary" busy={busy} onClick={() => props.onGoTo(2)}>
           {t("back")}
         </Button>

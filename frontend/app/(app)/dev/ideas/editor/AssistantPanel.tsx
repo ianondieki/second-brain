@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { ConfirmDialog, openConfirm } from "@/components/ui/ConfirmDialog";
+import { InfoIcon, PencilIcon } from "@/components/ui/icons";
+import { Panel } from "@/components/ui/Panel";
 
 import * as assistantCalls from "../assistant";
 import {
@@ -224,21 +227,15 @@ export function AssistantPanel({
       </dl>
     </div>
   );
-  // The labels docs/spec/09 requires on AI output: at most two (docs/spec/07 item 2).
+  // The labels docs/spec/09 requires on AI output, as Badges: at most two (docs/spec/07 item 2).
   const chip = (text: string, quiet?: boolean) => (
-    <span
-      data-chip=""
-      className={cn(
-        "rounded-control border px-2 py-0.5 text-sm font-semibold",
-        quiet ? "border-ink-soft text-ink-soft" : "border-jacaranda text-jacaranda",
-      )}
-    >
+    <Badge data-chip="" tone="neutral" icon={quiet ? <InfoIcon /> : <PencilIcon />}>
       {text}
-    </span>
+    </Badge>
   );
 
   return (
-    <div id="assistant-panel" className="flex flex-col gap-5 rounded-panel border border-line bg-field p-4 text-ink sm:p-6">
+    <Panel id="assistant-panel" className="flex flex-col gap-5 text-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h4 ref={heading} tabIndex={-1} className="font-semibold focus:outline-none">
           {t(teaser ? "heading" : "headingAnswer")}
@@ -288,7 +285,7 @@ export function AssistantPanel({
           <h5 className="font-semibold">{t("placementTitle")}</h5>
           <ul className="mt-3 flex flex-col gap-3">
             {answer.placement.map((hint) => (
-              <li key={hint.field} className="border-l-2 border-line pl-3 [overflow-wrap:anywhere]">
+              <li key={hint.field} className="border-l border-line pl-3 [overflow-wrap:anywhere]">
                 {t(hint.move === "to_tier2" ? "toTier2" : "toTier1", { name: t(`field.${hint.field}`) })}
                 <p className="mt-0.5 text-sm text-ink-soft">{hint.reason}</p>
               </li>
@@ -298,7 +295,7 @@ export function AssistantPanel({
       )}
 
       {!working && (answer || problem || notice) && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
           {/* Turned off: asking again means turning it on (the dialog shows the wording first). */}
           <Button onClick={() => void ask()}>{t(consent?.granted === false ? "dialog.confirm" : "askAgain")}</Button>
           {consent?.granted && (
@@ -330,6 +327,6 @@ export function AssistantPanel({
       >
         {consent?.text}
       </ConfirmDialog>
-    </div>
+    </Panel>
   );
 }
