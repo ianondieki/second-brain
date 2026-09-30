@@ -139,3 +139,14 @@ def test_the_result_is_deterministic() -> None:
 def test_a_custom_decay_uses_its_own_weights() -> None:
     decay = Decay(half_life_days=1, weights={"scout_match": 1})
     assert decayed([Event("scout_match", TODAY - timedelta(days=2), 4)], decay, TODAY) == pytest.approx(1.0)
+
+
+def test_dated_evidence_before_publication_starts_the_baseline() -> None:
+    """A research card published today whose sources are weeks old has a history: its baseline starts at its first
+    dated event, not at its publication (which would leave it in cold start however much evidence it has)."""
+    niche = uuid4()
+    history = [Event("official_source", TODAY - timedelta(days=d), 1) for d in range(14, 90, 14)]
+    card = subject([*history, Event("official_source", TODAY, 3)], niche=niche, age_days=0)
+    out = trends([card], PROBLEMS, CFG, NOW)
+    assert out[card.id].z is not None
+    assert out[card.id].new_this_week

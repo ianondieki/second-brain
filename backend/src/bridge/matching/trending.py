@@ -4,8 +4,8 @@ scores, no ``trends.recompute`` job).
 For each item (a problem or a project) the decayed score is ``T(t) = Σ w_e · 2^(-(t - t_e)/h)`` over its events, by
 Africa/Nairobi day (h = 14 days for problems, 7 for projects; the weights are ``config/ranking/weights_v1.yaml``'s).
 It is shown as a z-score against the item's niche: the baseline is every item of the niche scored at weekly points
-over the last 90 days (an item counts only from the week it was published), so a small niche can trend against its
-own history. A niche with too few non-zero baseline scores has no z-score (cold start): its items can be "New this
+over the last 90 days (an item counts from its publication or its first dated event, whichever is earlier: a research
+card's sources may predate the card), so a small niche can trend against its own history. A niche with too few non-zero baseline scores has no z-score (cold start): its items can be "New this
 week" but never "Trending". An item is Trending when its z-score, its score and its distinct actors all reach the
 configured floors.
 
@@ -172,7 +172,10 @@ def trends(subjects: Iterable[Subject], decay: Decay, cfg: TrendConfig, now: dat
     samples: dict[UUID | None, list[float]] = defaultdict(list)
     for subject in listed:
         scores[subject.id] = decayed(subject.events, decay, today)
-        since = None if subject.published_at is None else nairobi_day(subject.published_at)
+        starts = [e.day for e in subject.events]
+        if subject.published_at is not None:
+            starts.append(nairobi_day(subject.published_at))
+        since = min(starts, default=None)
         samples[subject.niche_id].extend(
             decayed(subject.events, decay, at) for at in steps if since is None or since <= at
         )
