@@ -129,6 +129,8 @@ tasks:
     confidential: true           # version (a proposal is matched once per scout), at most limits.model_top_n per run
     purpose: tier1_only
     fallback_model: null         # D-29; a failed call keeps the deterministic score and the code's "Matched on" line
+    fallback_effort: null
+    free_slots: [1, 2, 3]
   research_synthesis:           # P11: drafts problem cards from saved public excerpts, one call per niche (REQ-RES-01)
     model: claude-sonnet-5      # docs/spec/09 "card synthesis"; the prototype sends no tools: nothing is fetched
     effort: medium
