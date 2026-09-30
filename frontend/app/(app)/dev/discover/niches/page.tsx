@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { directoryOptions } from "@/app/(app)/dev/companies/directory";
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";

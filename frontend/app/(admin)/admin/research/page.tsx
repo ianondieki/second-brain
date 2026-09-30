@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ClientStrings } from "@/components/ClientStrings";
 import { clientStrings } from "@/lib/i18n/client-strings";
 

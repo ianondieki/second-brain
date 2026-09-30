@@ -12,7 +12,7 @@ import { homeFor } from "@/lib/auth/routing";
 import { billingHref, isOrgId, isPlanCode, safeNext } from "@/lib/billing/upgrade";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { EmptyState } from "../../org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentPlan, getPlans, planName } from "../data";
 import { billingSubject, sideOf } from "../plans";
 import { SamplePrices } from "../SamplePrices";

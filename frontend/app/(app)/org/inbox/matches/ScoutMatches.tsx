@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
 
-import { EmptyState } from "../../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { inboxHref, type Membership } from "../../membership";
 import { OrgPicker } from "../../OrgPicker";
 import { OrgRefusal } from "../../OrgRefusal";

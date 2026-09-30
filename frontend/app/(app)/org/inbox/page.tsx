@@ -7,7 +7,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
 
 import { getInbox, orgContext, type InboxPage, type OrgVerification } from "../data";
-import { EmptyState } from "../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { engagementsHref, first, inboxHref, proposalHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";

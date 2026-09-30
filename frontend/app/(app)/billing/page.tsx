@@ -11,7 +11,7 @@ import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
-import { EmptyState } from "../org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentPlan, getPlans } from "./data";
 import { SamplePrices } from "./SamplePrices";
 import { billingSubject, priceKind, rowAction, sameLinesAs, sideOf, type Plan, type RowAction } from "./plans";

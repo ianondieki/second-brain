@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { isUuid } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { formatMoment } from "@/components/problem/problem";

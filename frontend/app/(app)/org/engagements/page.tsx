@@ -7,7 +7,7 @@ import { orgEngagements } from "@/components/tracker/data";
 import { EngagementList } from "@/components/tracker/EngagementList";
 
 import { orgContext } from "../data";
-import { EmptyState } from "../EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 

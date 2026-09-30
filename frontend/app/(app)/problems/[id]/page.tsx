@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { EmptyState } from "@/app/(app)/org/EmptyState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
 import { SignedInShell } from "@/components/SignedInShell";
