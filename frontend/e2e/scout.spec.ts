@@ -103,14 +103,14 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     const inlineUpgrade = planNote.getByRole("link", { name: "Upgrade your plan" });
     await expect(inlineUpgrade).toHaveAttribute(
       "href",
-      new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew$`),
+      new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew%3Frestore%3D1$`),
     );
     await checkScreen(orgPage);
     await shot(orgPage, info, "scout-form");
-    // The unsaved draft survives the checkout round trip (kept in this tab).
+    // The unsaved draft survives the checkout round trip (kept in this tab); the way back carries restore=1.
     await inlineUpgrade.click();
     await expect(orgPage).toHaveURL(/\/billing\/upgrade\?/, SERVER_STEP);
-    await orgPage.goto("/org/inbox/scouts/new");
+    await orgPage.goto("/org/inbox/scouts/new?restore=1");
     await expect(orgPage.getByText("Your unsaved settings are back.")).toBeVisible();
     await expect(orgPage.locator(`[id="scout-niches-${niche.id}"]`)).toBeChecked();
     await expect(orgPage.getByLabel("Keywords to look for")).toHaveValue(`${keyword}, chillers`);
@@ -121,7 +121,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(refused).toContainText("Your plan does not include this", SERVER_STEP);
     await expect(refused.getByRole("link", { name: "Upgrade your plan" })).toHaveAttribute(
       "href",
-      new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew$`),
+      new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew%3Frestore%3D1$`),
     );
     await checkScreen(orgPage);
 
