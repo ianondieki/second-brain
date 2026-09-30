@@ -30,7 +30,7 @@ from uuid import UUID
 
 from bridge.matching.ranking_config import RankerConfig, TrendConfig
 from bridge.matching.trend_facts import ProblemFact, ProblemSignals
-from bridge.matching.trending import Trend
+from bridge.matching.trending import Trend, nairobi_day
 
 RECOMMENDABLE: Final = frozenset({"research_agent", "org_brief"})
 Decision = Literal["pursue", "consider", "not_now"]
@@ -110,8 +110,9 @@ def market_pull(card: Card) -> int:
 
 
 def age_days(card: Card, now: datetime) -> float:
+    """Whole Africa/Nairobi days since publication: the same answer all day (the trends are per day too)."""
     published = card.fact.published_at or now
-    return max(0.0, (now - published).total_seconds() / 86400)
+    return float(max(0, (nairobi_day(now) - nairobi_day(published)).days))
 
 
 def features(card: Card, dev: Developer, cfg: RankerConfig, now: datetime) -> dict[str, Feature]:
@@ -150,7 +151,7 @@ def features(card: Card, dev: Developer, cfg: RankerConfig, now: datetime) -> di
             f("market_pull", market_pull(card), _log_share(market_pull(card), cfg.market_pull_cap)),
             f("crowding", card.signals.proposals, _log_share(card.signals.proposals, cfg.crowding_cap)),
             f("track_record", record, record, dev.personalised),
-            f("freshness", round(age, 3), 2.0 ** (-age / cfg.freshness_half_life_days)),
+            f("freshness", age, 2.0 ** (-age / cfg.freshness_half_life_days)),
         )
     )
 
