@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { AccountMenuScope } from "@/components/AccountMenu";
+import { AccountMenuScope } from "@/components/AccountMenuScope";
 import { AdminNav, type AdminSection, type StaffRole } from "@/components/AdminNav";
 import { SignedInShell } from "@/components/SignedInShell";
 

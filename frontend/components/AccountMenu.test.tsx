@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
-import { AccountMenu, AccountMenuScope } from "./AccountMenu";
+import { AccountMenu } from "./AccountMenu";
+import { AccountMenuScope } from "./AccountMenuScope";
 
 // REQ-BIL-08, REQ-UX-01: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing, Notifications, Help and
 // Sign out, as a disclosure.

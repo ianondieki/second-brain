@@ -1,10 +1,11 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { createContext, use, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { use, useEffect, useId, useRef, useState } from "react";
 
 import { billingHref } from "@/lib/billing/upgrade";
 
+import { MenuOptions } from "./AccountMenuScope";
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "./ui/cn";
@@ -29,18 +30,6 @@ function ChevronIcon(props: IconProps) {
 
 const NOTIFICATIONS_HREF = "/settings/notifications";
 const HELP_HREF = "/help";
-
-/** What the menu offers on the screens inside an AccountMenuScope (everything, outside one). */
-const MenuOptions = createContext<{ billing: boolean }>({ billing: true });
-
-/**
- * Tells the account menu of the screens inside it what the account has: a staff-only account (no developer or
- * organisation side of its own) has no plan, so its menu leaves out Plan & billing (P15-F MINOR 7). Used by the staff
- * console's shell; every other screen keeps the full menu.
- */
-export function AccountMenuScope({ billing, children }: { billing: boolean; children: ReactNode }) {
-  return <MenuOptions value={{ billing }}>{children}</MenuOptions>;
-}
 
 const itemClass =
   "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-jacaranda-wash";
