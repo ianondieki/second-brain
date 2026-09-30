@@ -327,6 +327,21 @@ def test_d45_detection_is_whole_word_any_case_and_any_dash() -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("the treasury bills fell", ()),  # lower case: a common word, not the organisation
+        ("the Treasury said", ("National Treasury",)),
+        ("THE TREASURY SAID", ("National Treasury",)),
+        ("the Tre\u200basury said", ("National Treasury",)),  # nothing invisible hides it
+        ("the national treasury said", ("National Treasury",)),  # the full name matches in any case
+    ],
+)
+def test_a_case_sensitive_alias_matches_only_as_written_or_in_capitals(text: str, found: tuple[str, ...]) -> None:
+    """P11 re-review MINOR 2: "Treasury" is back as a capitalised-only alias."""
+    assert checks.named_organisations((text,), (), ALLOWLIST) == found
+
+
+@pytest.mark.parametrize(
     "hidden",
     [
         "M\u2011Pesa",  # non-breaking hyphen (NFKC: U+2010)

@@ -74,9 +74,18 @@ class Domain:
 
 
 @dataclass(frozen=True, slots=True)
+class Alias:
+    """One spelling of an organisation. ``case_sensitive``: matched only as written or in capitals (a common word
+    such as "Treasury", which lower case must not trigger); otherwise in any case."""
+
+    text: str
+    case_sensitive: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Organisation:
     name: str
-    aliases: tuple[str, ...]
+    aliases: tuple[Alias, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +102,7 @@ class Allowlist:
     def named(self) -> tuple[Organisation, ...]:
         """The organisations a card may name: the listed ones and every publisher."""
         publishers = sorted({d.publisher for d in self.domains})
-        return (*self.organisations, *(Organisation(p, (p,)) for p in publishers))
+        return (*self.organisations, *(Organisation(p, (Alias(p),)) for p in publishers))
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,10 +204,21 @@ def parse_allowlist(data: Any, *, where: str = "allowlist") -> Allowlist:
         name, aliases = raw["name"], raw["aliases"]
         if not isinstance(name, str) or not collapse(name) or not isinstance(aliases, list) or not aliases:
             raise SourceError(f"{where}: an organisation needs a name and at least one alias")
-        if not all(isinstance(a, str) and collapse(a) == a and a for a in aliases):
-            raise SourceError(f"{where}: {name}'s aliases must be trimmed, non-empty text")
-        organisations.append(Organisation(collapse(name), tuple(aliases)))
+        organisations.append(Organisation(collapse(name), tuple(_alias(a, f"{where}: {name}") for a in aliases)))
     return Allowlist(country, tuple(domains), tuple(organisations))
+
+
+def _alias(raw: Any, where: str) -> Alias:
+    """An alias is text, or ``{text: ..., case_sensitive: true}``."""
+    if isinstance(raw, Mapping):
+        if set(raw) != {"text", "case_sensitive"} or not isinstance(raw["case_sensitive"], bool):
+            raise SourceError(f"{where}: an alias mapping has exactly text and case_sensitive (true or false)")
+        text, case_sensitive = raw["text"], raw["case_sensitive"]
+    else:
+        text, case_sensitive = raw, False
+    if not isinstance(text, str) or not text or collapse(text) != text:
+        raise SourceError(f"{where}'s aliases must be trimmed, non-empty text")
+    return Alias(text, case_sensitive)
 
 
 def load_allowlist(country: str, directory: Path = SOURCES_DIR) -> Allowlist:

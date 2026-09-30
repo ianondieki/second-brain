@@ -169,6 +169,9 @@ def test_whitespace_in_a_quote_is_collapsed_not_folded() -> None:
         ({"country": "Kenya"}, "alpha-2"),
         ({"organisations": [{"name": "X", "aliases": []}]}, "at least one alias"),
         ({"organisations": [{"name": "X", "aliases": [" X "]}]}, "trimmed"),
+        ({"organisations": [{"name": "X", "aliases": [{"text": "X"}]}]}, "exactly text and case_sensitive"),
+        ({"organisations": [{"name": "X", "aliases": [{"text": "X", "case_sensitive": "yes"}]}]}, "true or false"),
+        ({"organisations": [{"name": "X", "aliases": [{"text": "", "case_sensitive": True}]}]}, "trimmed"),
         ({"version": 2}, "version 1"),
     ],
 )
@@ -225,3 +228,8 @@ def test_nfkc_leaves_every_saved_excerpt_as_it_is() -> None:
     for excerpt in load_catalogue().excerpts:
         for value in (excerpt.quote, excerpt.publisher, excerpt.url):
             assert unicodedata.normalize("NFKC", value) == value, excerpt.id
+
+
+def test_the_treasury_alias_is_case_sensitive() -> None:
+    [treasury] = [o for o in load_allowlist("KE").organisations if o.name == "National Treasury"]
+    assert [(a.text, a.case_sensitive) for a in treasury.aliases] == [("National Treasury", False), ("Treasury", True)]

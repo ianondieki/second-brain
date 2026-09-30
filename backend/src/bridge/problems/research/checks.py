@@ -47,7 +47,7 @@ from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from typing import Final
 
 from bridge.problems.research.policy import ResearchPolicy
-from bridge.problems.research.sources import Allowlist, Excerpt, freshness_score
+from bridge.problems.research.sources import Alias, Allowlist, Excerpt, freshness_score
 from bridge.problems.research.text import collapse, has_control, invisible, non_latin, normalise, word_count
 
 MAX_TITLE_CHARS: Final = 90
@@ -357,10 +357,17 @@ def unsupported_numbers(fields: Iterable[str], quotes: Iterable[str]) -> list[st
 _HYPHEN: Final = r"[\-\u2010-\u2015\u2212\s]?"
 
 
-def _alias_pattern(alias: str) -> re.Pattern[str]:
-    parts = [re.escape(word) for word in re.split(r"[\-\u2010-\u2015\u2212]", normalise(alias))]
-    body = _HYPHEN.join(parts).replace(r"\ ", r"\s+")
-    return re.compile(r"(?<![^\W_])" + body + r"(?![^\W_])", re.IGNORECASE)
+def _form(text: str) -> str:
+    parts = [re.escape(word) for word in re.split(r"[\-\u2010-\u2015\u2212]", normalise(text))]
+    return _HYPHEN.join(parts).replace(r"\ ", r"\s+")
+
+
+def _alias_pattern(alias: Alias) -> re.Pattern[str]:
+    """Whole words, any dash; any case, or for a case-sensitive alias as written or in capitals."""
+    if alias.case_sensitive:
+        body = "|".join(sorted({_form(alias.text), _form(alias.text.upper())}))
+        return re.compile(r"(?<![^\W_])(?:" + body + r")(?![^\W_])")
+    return re.compile(r"(?<![^\W_])" + _form(alias.text) + r"(?![^\W_])", re.IGNORECASE)
 
 
 def named_organisations(fields: Iterable[str], declared: Iterable[str], allowlist: Allowlist) -> tuple[str, ...]:

@@ -11,8 +11,8 @@
 # organisations: names the code looks for in a drafted card (whole words after NFKC, in any case, a hyphen matching
 # any dash, a space or nothing; format characters ignored). A card naming any of them, or naming anything in its
 # named_orgs, needs an official source (docs/spec/06 6.5; D-45 default (a)). Every publisher above counts as an
-# organisation too. Matching is broad on purpose (a false match only discards a draft); an alias that is a common
-# lower-case word (e.g. "Treasury" alone) is left out.
+# organisation too. Matching is broad on purpose (a false match only discards a draft); an alias that is also a
+# common lower-case word is written {text: Treasury, case_sensitive: true}: matched only as written or in capitals.
 version: 1
 country: KE
 domains:
@@ -38,4 +38,4 @@ organisations:
   - {name: Central Bank of Kenya, aliases: [Central Bank of Kenya, CBK]}
   - {name: Kenya National Bureau of Statistics, aliases: [Kenya National Bureau of Statistics, KNBS]}
   - {name: Kenya Revenue Authority, aliases: [Kenya Revenue Authority, KRA]}
-  - {name: National Treasury, aliases: [National Treasury]}
+  - {name: National Treasury, aliases: [National Treasury, {text: Treasury, case_sensitive: true}]}
