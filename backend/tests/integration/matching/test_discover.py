@@ -148,3 +148,19 @@ async def test_one_organisations_seats_count_for_nothing(owner_engine: AsyncEngi
     assert "companies scouting" not in " ".join(item["why"])
     [shown] = [p for p in body["projects"] if p["proposal"]["id"] == str(project)]
     assert "Verified organisations expressed interest" not in shown["why"]
+
+
+async def test_old_sources_are_evidence_not_actors(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Review MAJOR: a card with three sources dated inside the 180-day window (35 to 37 days old, outside the 30-day
+    badge window) and one developer's single proposal today rises well above its quiet niche (z > 1), but it has one
+    actor, not four: no badge. Three fresh publishers make the same kind of card Trending."""
+    world = await build(owner_engine)
+    for _ in range(10):  # a quiet niche: problems a long time old with no activity
+        await developer_problem(owner_engine, world.author, world.niche, age_days=120)
+    card = await research_card(owner_engine, world.niche, source_days=(35.0, 36.0, 37.0), age_days=100)
+    await proposal(owner_engine, world.niche, card, age_days=0.1)
+    fresh = await research_card(owner_engine, world.niche, source_days=(0.2, 1.0, 2.0), age_days=100)
+    body = await trending(app_engine, world, niche=world.slug("niche"))
+    by_id = {p["problem"]["id"]: p for p in body["problems"]}
+    assert str(card) not in by_id  # neither Trending nor new (with the old publishers as actors it had a badge)
+    assert by_id[str(fresh)]["trend"]["trending"] is True
