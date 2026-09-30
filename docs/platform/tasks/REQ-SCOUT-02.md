@@ -322,3 +322,32 @@ on the org list at SUBMITTED (it failed on integration since the P10 MAJOR 1 fix
 4. The org picker on the Scout matches tab submits to Sent to you (a GET form carries only `org`).
 5. The tracker route's JS with the share section was not measured (it loads only on org-origin engagements).
 6. The impeccable skill is not installed in this environment; polish was done by hand from the 375/1440 screenshots.
+
+### P10-F fix round (reviewer and ux-reviewer CHANGES_REQUIRED on `22c96f8`)
+
+| Item | Change |
+|---|---|
+| Merge prep | `e2e/tracker.spec.ts` now reads exactly as integration's `e63a182` (`"From "` plus no "Achieng Otieno"); `_meta.reviewP10f` kept |
+| MAJOR 1 stale ids | `pruneDraft`: an edited scout's niches, counties and reviewers the form no longer offers are dropped from the draft, with a one-line note (`scoutForm.dropped`); tests in `scout.test.ts` and `scout-form.test.tsx` |
+| MAJOR 2 handle label | `tracker.fromHandle`: "From {name}, the developer's handle. You see their name once contact is agreed." `counterpartLine` (model.ts) picks the line; `tier2-section.test.tsx` renders EngagementScreen for both `developer_named` values |
+| MAJOR 3 share is final | `tier2Share.confirm` ends "You cannot take this back."; Share the full proposal is always secondary (its step-up too) |
+| MAJOR 4 two-step empty states | `org/OrgRefusal.tsx` (the Inbox's Turn on two-step sign-in / Enter your code, primary) on the Matches tab, the scout screen and the match page |
+| MAJOR 5 plan and draft | Choosing a schedule the plan lacks shows `scoutForm.planNote` and the checkout link of the next plan up that sells it (`planFor` over `GET /api/plans?side=org`) at once; the unsaved draft is kept in `sessionStorage` (`bridge.scoutDraft:{org}:{scout or new}`, try/catch, shape-checked on read, pruned) across the round trip and cleared after a save |
+| MINORs | Org picker keeps `tab=matches`; the disabled Express interest is `aria-disabled`, focusable, described by the reason, E2 in plain words; focus goes to a refusal after a step-up and back to the button on Cancel; after a share, focus moves to the refreshed `#share-status` line; StepUp's code id from `useId`, its not-enrolled sentence neutral; dates as the tracker writes them (`formatDay` → `eatParts`); plain demo-fallback label; `scoutPage.cap` an ICU plural; each Change the scout link named by its niches; the handle once on the match page; the scout's status beside Pause/Resume |
+| Tests | Tier2Section (org not shared, org shared, developer shared, ended, pitched), StepUp inside the share with zero `[data-primary]`, the unavailable match fixture carrying a handle and a why, the kept draft, the plan note, the picker, the focus moves (via `test/server-tree.ts`, which awaits async server components for jsdom) |
+| e2e | `scout.spec.ts`: no piece of the developer's name, any case, on the org's matches, match page, EM3 or stage-0 tracker; no handle format asserted; new steps: member-only empty state, inline plan note, kept draft across the checkout link, pause and resume, `checkScreen` on each step-up state and the share done (focus checked); fixture handles are `dev-7k2m9qxp` |
+
+**The name checks fail on this branch's own backend, as they should.** With `a5043eb`'s slug handles the spec stops
+at `scout.spec.ts:176` (`By achieng-otieno-efb2fe` on the Matches tab). Run against `fix/REQ-AUTH-01-random-handle`'s
+backend (a detached scratch worktree, no merge) the whole spec passes on both projects (4 passed) and the full suite
+has 88 passed, 2 failed (`verify.spec.ts`, which needs the demo seed's `E2E_VERIFY_CERT_ID`).
+
+**JS (gzipped, budget 150,000 B)** on this branch: `/org/inbox?tab=matches` 140,096; `/org/inbox/scouts/new` 147,053;
+a signatory's match page 146,862; the tracker with the share section (`/dev/engagements/{id}` and
+`/org/engagements/{id}` on an org-interest engagement) 146,569. Integration's AccountMenu adds 1,243 B per signed-in
+route (integration's `/org/inbox` 141,339 against this branch's 140,096, both built here without merging), so after
+merge about 148,296, 148,105 and 147,812: under budget with under 2 KB to spare. Screenshots of the round:
+`scratchpad/p10f/shots2/` (375 and 1440 px).
+
+Open items 1 and 5 above are addressed (the handle by `fix/REQ-AUTH-01-random-handle`; the tracker route measured).
+Items 2, 3, 4 (now fixed: the picker keeps the tab) and 6 stand except 4.
