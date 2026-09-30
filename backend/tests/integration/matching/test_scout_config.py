@@ -5,6 +5,7 @@ pause and resume, delete, and Preview: rules only, the last 30 days, nothing wri
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -16,19 +17,23 @@ from bridge.ids import uuid7
 from bridge.llm.fakes import FakeLLMClient
 from bridge.matching.rationale import ScoutFit
 from bridge.matching.scan import clock_now, run_periodic
+from bridge.models.enums import DeliveryStatus
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
     MOMBASA_CODE,
     NAIROBI_CODE,
     Teaser,
+    add_person,
     build,
     deps,
     publish,
     rows,
     subscribe,
 )
+from tests.integration.matching.scout_world import run as execute
 
 SETTINGS = get_settings()
+WEEK = timedelta(days=7)
 
 
 def form(niche: UUID, **overrides: Any) -> dict[str, Any]:
@@ -269,3 +274,64 @@ async def test_the_model_never_changes_which_proposals_the_digest_lists(
         for m in await rows(owner_engine, "SELECT id, proposal_id FROM agent_matches WHERE org_id = :o", o=world.org.id)
     }
     assert [proposal_of[m] for m in match_ids] == published[:3]  # the Preview equals the first digest
+
+
+async def test_a_paused_scout_resumes_only_at_a_frequency_the_plan_has(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """P10 security review MINOR g: resuming re-checks the scout's frequency against the current plan (402)."""
+    world = await build(owner_engine)
+    org = world.org
+    await subscribe(owner_engine, org.id, "org_growth")
+    async with clients(app_engine, SETTINGS, org.owner) as (owner,):
+        made = await owner.post(path(org.id), json=form(world.niche, frequency="daily"))
+        assert made.status_code == 201, made.text
+        scout = path(org.id, f"/{made.json()['id']}")
+        assert (await owner.patch(scout, json={"paused": True})).status_code == 200
+        async with owner_engine.begin() as conn:  # a downgrade to the free plan: weekly scouts only
+            await conn.execute(text("UPDATE subscriptions SET status = 'cancelled' WHERE org_id = :o"), {"o": org.id})
+        resume = await owner.patch(scout, json={"paused": False})
+        assert resume.status_code == 402
+        assert resume.json()["detail"]["limit_key"] == "scout_frequencies"
+        weekly = await owner.patch(scout, json={"paused": False, "frequency": "weekly"})
+        assert weekly.status_code == 200, weekly.text
+        assert (weekly.json()["paused"], weekly.json()["frequency"]) == (False, "weekly")
+
+
+async def test_the_owner_adds_and_removes_digest_recipients(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """AC-SCOUT-7: the owner adds and removes reviewer recipients with PATCH; a removed reviewer gets no further
+    digest, the remaining one does."""
+    world = await build(owner_engine)
+    org = world.org
+    async with owner_engine.begin() as conn:
+        second = await add_person(conn, "reviewer-two", org.domain)
+        await execute(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{reviewer}')",
+            id=uuid7(),
+            o=org.id,
+            u=second,
+        )
+    await publish(owner_engine, world, "one")
+    async with clients(app_engine, SETTINGS, org.owner) as (owner,):
+        made = await owner.post(path(org.id), json=form(world.niche, recipients=[str(org.reviewer)]))
+        assert made.status_code == 201, made.text
+        scout = UUID(made.json()["id"])
+        added = await owner.patch(path(org.id, f"/{scout}"), json={"recipients": [str(org.reviewer), str(second)]})
+        assert sorted(added.json()["recipients"]) == sorted([str(org.reviewer), str(second)])
+    scan_deps, email = deps(app_engine)
+    now = await clock_now(scan_deps.factory)
+    [first] = [o for o in await run_periodic(scan_deps, now=now, force=True) if o.scout_id == scout]
+    assert first.digest is not None
+    assert first.digest.recipients == {org.reviewer: DeliveryStatus.SENT, second: DeliveryStatus.SENT}
+    async with clients(app_engine, SETTINGS, org.owner) as (owner,):
+        removed = await owner.patch(path(org.id, f"/{scout}"), json={"recipients": [str(second)]})
+        assert removed.json()["recipients"] == [str(second)]
+    await publish(owner_engine, world, "two")
+    scan_deps, email = deps(app_engine)
+    [later] = [o for o in await run_periodic(scan_deps, now=now + WEEK, force=True) if o.scout_id == scout]
+    assert later.digest is not None
+    assert later.digest.recipients == {second: DeliveryStatus.SENT}
+    [message] = email.outbox
+    [address] = await rows(owner_engine, "SELECT CAST(email AS text) AS email FROM users WHERE id = :u", u=second)
+    assert message.to == address.email

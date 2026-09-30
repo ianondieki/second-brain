@@ -25,6 +25,7 @@ from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
     MOMBASA_CODE,
     NAIROBI_CODE,
+    Org,
     Teaser,
     add_scout,
     build,
@@ -427,3 +428,54 @@ async def test_failed_runs_are_retried_at_most_three_times_a_day(
     seen = [(o.status, o.reason) for o in [mine(await weekly(app_engine), scout) for _ in range(4)]]
     assert seen == [("failed", "scan_failed")] * 3 + [("skipped", "retry_cap")]
     assert [r.status for r in await runs(owner_engine, scout)] == ["failed"] * 3
+
+
+async def test_the_organisations_own_members_proposals_never_match(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """docs/spec/06 6.8 hard filter (P10 security review MINOR g): an active member's proposal never reaches their own
+    organisation's scouts or Preview; another organisation's scouts, or the same ones once the member is removed, find
+    it."""
+    world = await build(owner_engine)
+    proposal = (await publish(owner_engine, world, "one"))[0]
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{viewer}')"),
+            {"id": uuid4(), "o": world.org.id, "u": world.developer},
+        )
+
+    async def found(org: Org) -> list[UUID]:
+        async with create_session_factory(app_engine)() as db:
+            await bind_tenant(db, user_id=org.owner, org_id=org.id)
+            until = (await db.execute(text("SELECT now()"))).scalar_one()
+            window = Window(until=until, since=until - timedelta(days=1))
+            page = await candidates(db, Filters(org_id=org.id, niches=(world.niche,)), window, limit=10)
+        return [c.proposal_id for c in page.items]
+
+    assert await found(world.org) == []
+    assert await found(world.other) == [proposal]
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u"),
+            {"o": world.org.id, "u": world.developer},
+        )
+    assert await found(world.org) == [proposal]
+
+
+async def test_a_reviewer_whose_address_is_unverified_gets_no_digest(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """AC-SCOUT-1 (P10 security review MINOR g): the recipients' re-check at send time needs a verified address."""
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, world.org, [world.niche])
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE users SET email_verified_at = NULL WHERE id = :u"), {"u": world.org.reviewer})
+    scan_deps, email = deps(app_engine)
+    outcome = mine(await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True), scout)
+    assert outcome.matched == 1
+    assert outcome.digest is not None
+    assert outcome.digest.recipients == {}
+    assert email.outbox == []
+    [match] = await matches(owner_engine, scout)
+    assert match.digest_sent_at is None
