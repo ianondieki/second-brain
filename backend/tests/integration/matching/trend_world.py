@@ -23,6 +23,8 @@ from bridge.seed.reference import load_reference, seed_regions
 from tests.integration.matching.scout_world import Teaser, add_org, add_person, add_teaser, run
 
 NOW = "app_clock_now()"
+# The start of the current Nairobi day (the product counts signals per Nairobi day: bridge.matching.trending).
+TODAY_START = "(date_trunc('day', app_clock_now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi')"
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +196,12 @@ async def signals(
     label: str = "",
 ) -> None:
     """``actors`` distinct actors (spread over ``orgs`` organisations, one each by default) signal ``item`` once on
-    each of the given days. ``label`` keeps two groups of actors apart."""
+    each of the given days. ``label`` keeps two groups of actors apart.
+
+    An age under a day is today's at any hour: never before the start of today's Nairobi day. Without that floor,
+    ``0.1`` (2.4 hours) written in the first hours after Nairobi midnight fell on yesterday, next to the ``1.0``
+    signal, and a trending project was not trending (CI run 36776457072 at 00:15 Nairobi time; P16 flake check).
+    Whole days keep the time of day, so ``k`` days ago is always the Nairobi day ``k`` days back."""
     orgs = orgs or actors
     tag = label or uuid4().hex[:8]
     async with owner_engine.begin() as conn:
@@ -203,7 +210,8 @@ async def signals(
                 await run(
                     conn,
                     "INSERT INTO signal_events (id, item_id, kind, actor_hash, org_hash, ts) VALUES (:id, :item, :kind,"
-                    f" :actor, :org, {NOW} - make_interval(secs => :secs))",
+                    f" :actor, :org, GREATEST({NOW} - make_interval(secs => :secs),"
+                    f" CASE WHEN :secs < 86400 THEN {TODAY_START} END))",
                     id=uuid7(),
                     item=item,
                     kind=kind,
