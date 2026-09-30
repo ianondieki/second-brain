@@ -239,3 +239,22 @@ keywords (`pipeline.excluded`, behind the SQL filter of P1) and the feedback aut
 3. Held-then-approved proposals for periodic scouts (deviation 3): restore before Phase 4. Budget band (deviation 2):
    after prototype (`REQUIREMENTS.md` §7).
 4. on_new scouts' sweep (deviation 6) and widening the model's ±5 bound after REQ-SCOUT-06 (deviation 7).
+
+## Round-2 review MINORs (2026-09-30; reviewer PASS, security-reviewer PASS on b1f6551) — scout follow-up branch
+
+1. **Own-member oracle, timing and volume** (`interest.py:134-136, 192-206`; `interest_router.py:28-34`). The
+   own-member 404 is about 3 ms slower than the other 404s (membership read, audit INSERT, COMMIT), and the route has no
+   throttle. Fix: `auth/throttle.py` per account and IP on `POST /api/orgs/{org}/interest`; make both 404 branches do the
+   same work, or write the audit off the request path. Reword the THREAT_MODEL §5 residual: "no oracle" is an overclaim.
+2. **Match page before the author joined** (`matching/matches.py:105-121`). A match found before the author joined the
+   organisation shows `available: true` and `interest.allowed: true`, then the interest POST answers 404. Fix: answer
+   such a match as unavailable in `_detail`.
+3. **Preview and scans still leave out own members' proposals** (`pipeline.py:70`), so Browse compared with Preview
+   tells an admin the author is a member. Record as a prototype residual in THREAT_MODEL §5.
+4. **The own-member audit payload** (`interest.py:203`) names neither the organisation nor the caller. Add `org_id` and
+   the caller's id (the global chain is staff-only).
+5. **Tests to add:** the `floor=scout.min_fit` argument (`scan.py:258`, F09 survived); `granted_at = app_clock_now()`
+   on insert and on activation (`interest.py:88, 92`, F17); the endorsement-hiding code (`history.py:169, 234`, F04 and
+   F05, unreachable today).
+6. **The History hash confirms a candidate developer id** (`history.py:379`). It adds nothing beyond the stable handle
+   today. Record it in THREAT_MODEL next to handle linkability.
