@@ -75,8 +75,14 @@ def test_the_review_sla_counts_business_days_from_the_nairobi_submission_date(
     assert review_sla(TUESDAY_MORNING, now, holidays, 2) == expected
 
 
-def test_a_claim_filed_late_on_friday_night_in_nairobi_counts_from_friday() -> None:
-    friday_night = datetime(2026, 3, 6, 20, 30, tzinfo=UTC)  # 23:30 Friday in Nairobi (still Friday there)
-    assert review_sla(friday_night, friday_night, frozenset(), 2) == sla(date(2026, 3, 10), 2, False)
-    saturday = datetime(2026, 3, 6, 21, 30, tzinfo=UTC)  # 00:30 Saturday in Nairobi
-    assert review_sla(saturday, saturday, frozenset(), 2).due_on == date(2026, 3, 10)  # Monday, Tuesday
+def test_the_submission_day_is_the_nairobi_date_not_the_utc_date() -> None:
+    """Nairobi is UTC+3: between 21:00 and midnight UTC a claim is already filed on the next day there."""
+    # 00:30 on Thursday in Nairobi is 21:30 on Wednesday in UTC: Thursday + 2 BD is Monday (Wednesday + 2 is Friday).
+    after_midnight = datetime(2026, 3, 4, 21, 30, tzinfo=UTC)
+    assert review_sla(after_midnight, after_midnight, frozenset(), 2) == sla(date(2026, 3, 9), 2, False)
+    # 23:30 on Wednesday in Nairobi (20:30 UTC) is Wednesday either way: due Friday.
+    before_midnight = datetime(2026, 3, 4, 20, 30, tzinfo=UTC)
+    assert review_sla(before_midnight, before_midnight, frozenset(), 2) == sla(date(2026, 3, 6), 2, False)
+    # "Today" is Nairobi's too: at 00:30 on Friday there (Thursday in UTC) the claim is due today (0 left, not 1).
+    friday = datetime(2026, 3, 5, 21, 30, tzinfo=UTC)
+    assert review_sla(before_midnight, friday, frozenset(), 2) == sla(date(2026, 3, 6), 0, False)
