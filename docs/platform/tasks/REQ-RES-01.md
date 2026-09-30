@@ -325,11 +325,11 @@ Branch `feat/REQ-RES-01-fe` from integration `84e0af0`; frontend only, against t
 | Shared (one line or namespaced) | `frontend/lib/auth/routing.ts` (+ its test), `frontend/lib/i18n/client-strings.ts` (`adminResearch`), `frontend/locales/{en,sw}.json` (`admin.*`, `adminResearch.*`, `problem.*`, `_meta.reviewP11f`, appended at the end) |
 | E2E | `frontend/e2e/research.spec.ts`, `frontend/e2e/support/research-scene.ts` |
 
-**What it does.** Staff land on `/admin` (`homeFor("staff")`), which opens the first section their role may use
-(Research for staff admins); `AdminNav` lists sections by role, so P15 adds Moderation and Claims as rows. The layout's
-gate answers everyone who is not a signed-in staff member with a verified second factor (signed-out visitors
-included) with the same not-found page as an unknown address. Staff without two-step sign-in are asked to turn it on;
-other roles are told Research is for staff admins. A stale second factor (403 `step_up_required`) shows a code form
+**What it does.** Staff land on `/admin` (see fix round 1 for who), which opens the first section their role may use
+(Research for staff admins); `AdminNav` lists sections by role, so P15 adds Moderation and Claims as rows. Before fix
+round 1 the layout's gate rendered Next's not-found page for non-staff, which matched an unknown address only once
+rendered (the raw response could differ before scripts ran); fix round 1 answers them with the unknown-address
+response itself. Other staff roles are told Research is for staff admins. A stale second factor (403 `step_up_required`) shows a code form
 in place of the page or of the action, which then repeats. `/admin/research`: "Start run" (the one primary action;
 niches with saved Kenyan excerpts, country fixed to Kenya) posts the run and follows `GET …/runs/{id}` every 1.5 s
 (40 polls at most, then "refresh later"), then refreshes the page; the cards waiting for review (AI-drafted or seeded
@@ -371,8 +371,8 @@ KB, the review page 143.7 KB, `/problems/{id}` 140.1 KB gzipped (budget 150 KB).
    as saved with their excerpt ids); approval goes through the real publish checks. The dev stack's seed has no staff
    account (the demo seed's `admin@staff.example` exists only after `python -m bridge.seed --demo`), so the E2E makes
    its own staff admin (owner sets `staff_role` and `demo_account`; TOTP through the API).
-4. **Staff home changed.** `homeFor("staff")` is `/admin` (was the developer placeholder `/dev`): staff opening
-   `/dev` pages are redirected to the console. The routing unit test states the new home.
+4. **Staff home** (superseded by fix round 1): `homeFor` is the side's portal again; `homeOf` sends only staff with a
+   console section and TOTP to `/admin`.
 5. **Signed-out `/admin` is 404, not a login redirect**, so the console is not discoverable (the API's rule); staff
    sign in at `/login` and land on it.
 6. **Problem page has no portal navigation** yet: `DevNav` has no Discover row to mark until P12-F; the page carries
@@ -383,3 +383,45 @@ KB, the review page 143.7 KB, `/problems/{id}` 140.1 KB gzipped (budget 150 KB).
    pass was done by hand against docs/spec/07 with screenshots at 375 and 1440 px.
 9. **Commit sizes** over about 300 lines: `c6f0573` (+334, both locale files), `56aa389` (+320, with tests),
    `35f8379` (+511, StartRun, Decision and their tests), `996eb6e` (+414, E2E spec and scene).
+
+### P11-F fix round 1 (reviewer PASS with 7 MINORs; ux-reviewer CHANGES_REQUIRED, 2 MAJORs and 8 MINORs)
+
+- **UX MAJOR 1, the Reject flow's focus** (`7cf0411`). Reject opens a question that takes focus (a `role="group"`
+  labelled by the question, `tabIndex=-1`); Cancel returns focus to Reject. Vitest checks both with the focused
+  element; the E2E checks `toBeFocused` and runs `checkScreen` in the confirm state.
+- **UX MAJOR 2, the run status region** (`e4bc2c5`). The `role="status"` line stays in the tree while empty (no
+  `display:none`) and outside the part a step-up replaces, so it is the same node before and after (tested).
+- **UX MINORs** (`e4bc2c5`, `7cf0411`, `baec7fb`). After a step-up, focus goes to Start run (inline) or the page's h1 (whole page; `PageStepUp` focuses it
+  when the refreshed page replaces the form). The step-up reason is the `OtpInput` hint (`aria-describedby`). After a
+  failed publish check (any reason: the card's text and sources cannot change) Reject is the one primary action and
+  Approve is `aria-disabled` and secondary; after `already_decided` or `not_found` only "Back to Research" remains, as
+  the primary. Candidate title links are 44 px targets (`expectSeparateTargets` in the E2E). With one section there is
+  no bottom tab bar on phones (the rail from 1024 px). Excerpt freshness has an icon; the saved-excerpts `<summary>`
+  holds an h2. `adminResearch.runs.demoFallback` is "No card: this run used the demo fallback (no live model answer)."
+  and `admin.noSection` links to the person's portal home [[COPY-REVIEW]].
+- **Reviewer MINOR 1, not-found before scripts run** (`d56bd77`). `frontend/proxy.ts` (Next 16 Proxy, matcher `/admin`, `/admin/:path*`) asks `GET /api/admin/me`
+  with the session cookie only: 200 or 403 `step_up_required` go on; anything else (signed out, not staff, staff
+  without TOTP, a slow or failed answer: fail closed) is rewritten to an unmatched path, so the response is the
+  unknown-address 404 itself. The E2E compares the raw responses (status, `<html lang>`, `<title>`) and the rendered
+  text for signed-out visitors, a developer and staff without TOTP. Cost: one API call per `/admin` request. No
+  THREAT_MODEL residual is needed.
+- **MINOR 2.** A 409 `checklist_required` (the API found a name the card does not list) shows the checklist text (when
+  the API sent one) and the checkbox; the next approval sends `checklist_confirmed: true`.
+- **MINOR 3.** Render tests `components/problem/problem-render.test.tsx`: `Citations` and `SavedExcerpts` draw no
+  `<a>` for `javascript:`, `data:` or http URLs; `ProblemCard` with `seeded_example: true` shows the seeded sentence
+  and never "AI-drafted"; freshness marks carry an icon.
+- **MINOR 4, staff who are also developers or members** (`c33b89e`). `homeFor(side)` is the side's portal again (staff: `/dev`, as
+  before P11-F; nothing redirects staff away from the portals). `homeOf(me)` / `destinationFor` send a staff member to
+  `/admin` only when the role has a console section (`CONSOLE_ROLES`, kept equal to `ADMIN_SECTIONS`' roles by a test)
+  and TOTP is on. The API still reports `side: "staff"` for any staff account, so a staff member who is also an
+  organisation member cannot use `/org` (unchanged from before P11-F). Suggested DECISIONS-NEEDED entry: whether staff
+  accounts must be separate from developer and organisation accounts (docs/spec/03 roles), since the `side` rule
+  hides a staff member's organisation portal.
+- **MINOR 5.** The gate (`staff.ts`) uses `GET /api/admin/me`: staff without TOTP get the not-found answer like the
+  API; the "turn on two-step sign-in" prompts inside the console are gone (unreachable). Such staff land on `/dev`.
+- **MINOR 6.** `frontend/.env.example` names `e2e/support/research-scene.ts` for `E2E_DATABASE_OWNER_URL`.
+- **MINOR 7.** The "What it does" paragraph above no longer claims the pre-fix gate matched an unknown address.
+- **Merge prep.** The `admin`, `adminResearch` and `problem` namespaces now sit right after `verifyFile`, and
+  `_meta.reviewP11f` first in `_meta`: against `84e0af0` both locale files change by pure insertions, away from the end
+  where P14-F appends its billing block.
+- Commit `baec7fb` is larger than about 300 lines because it moves the locale block (both files).
