@@ -303,6 +303,7 @@ describe("refusals", () => {
     await open(http.calls);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(sentence);
+    expect(document.activeElement).toBe(alert); // focus stays in the panel: the button pressed is gone
     expect(document.body.textContent).not.toContain(SERVER_MESSAGE);
     expect(screen.getByRole("button", { name: "Ask again" })).toBeTruthy();
   });
@@ -371,3 +372,43 @@ describe("turning it off", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: OPEN }));
   });
 });
+
+describe("focus and the last answer while asking again", () => {
+  it("waits on the heading while the request runs, then moves to the refusal; the old suggestion never comes back", async () => {
+    let release: (value: Awaited<ReturnType<typeof fake.suggest>>) => void = () => {};
+    const fake = assistantCalls({
+      consentState: vi.fn(async () => ({ ok: true as const, value: CONSENT_ON })),
+      suggest: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, value: SUGGESTED })
+        .mockImplementationOnce(() => new Promise((resolve) => (release = resolve))),
+    });
+    await open(fake);
+    expect(screen.getByText(SUGGESTED.teaser!.title)).toBeTruthy();
+
+    screen.getByRole("button", { name: "Ask again" }).focus(); // as a real press does
+    await press("Ask again");
+    const panel = document.getElementById("assistant-panel")!;
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 4 }));
+    expect(panel.contains(document.activeElement)).toBe(true);
+    expect(document.querySelector("[data-teaser]")).toBeNull(); // cleared as the new ask starts
+
+    await act(async () => release({ ok: false, problem: "assistant_busy" }));
+    const alert = screen.getByRole("alert");
+    expect(document.activeElement).toBe(alert);
+    expect(document.querySelector("[data-teaser]")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use this" })).toBeNull();
+  });
+
+  it("keeps focus in the panel when the first ask is refused", async () => {
+    await open(
+      assistantCalls({
+        consentState: vi.fn(async () => ({ ok: true as const, value: CONSENT_ON })),
+        suggest: vi.fn(async () => ({ ok: false as const, problem: "assistant_paused" as const })),
+      }),
+    );
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    expect(document.getElementById("assistant-panel")!.contains(document.activeElement)).toBe(true);
+  });
+});
+

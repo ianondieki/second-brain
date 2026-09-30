@@ -65,12 +65,19 @@ export function AssistantPanel({
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
+  const problemRef = useRef<HTMLDivElement>(null);
   const accepted = useRef(false); // the dialog closed because the owner turned the assistant on
   const started = useRef(false);
   const busy = useRef(false); // one request at a time, whatever the renders in between
-  const focusTo = useRef<HTMLElement | null | undefined>(undefined); // read after the render that shows it
+  const focusTo = useRef<"heading" | "notice" | "problem">(undefined); // read after the render that shows it
   const titleId = useId();
   const bodyId = useId();
+
+  /** A refusal: its sentence, with focus on it (the button pressed may be gone). */
+  function fail(why: typeof problem) {
+    setProblem(why);
+    focusTo.current = "problem";
+  }
 
   function openDialog(why: AssistantProblem | null) {
     accepted.current = false;
@@ -85,14 +92,14 @@ export function AssistantPanel({
     setWorking(false);
     if (result.ok) {
       setAnswer(result.value);
-      focusTo.current = heading.current;
+      focusTo.current = "heading";
     } else if (result.problem === "consent_required") {
       // The opt-in ended since it was read (signed out elsewhere, or turned off in another tab): ask again.
       const read = await calls.consentState(id);
-      if (!read.ok) return setProblem(read.problem);
+      if (!read.ok) return fail(read.problem);
       setConsent(read.value);
       openDialog("consent_required");
-    } else setProblem(result.problem);
+    } else fail(result.problem);
   }
 
   async function ask() {
@@ -100,20 +107,23 @@ export function AssistantPanel({
     busy.current = true;
     setProblem(null);
     setNotice(null);
+    setAnswer(null); // a new ask: the last answer goes, so a refusal never shows it again
+    // "Ask again" hides while the request runs (and the editor's button is gone): focus waits on the heading.
+    heading.current?.focus();
     try {
-      if (!state.title.trim() && !state.summary.trim()) return setProblem("noText");
+      if (!state.title.trim() && !state.summary.trim()) return fail("noText");
       setWorking(true);
       // The assistant reads the saved draft: what is on the screen is saved first, or nothing is asked.
       const saved = await saveAll();
       const id = getId();
       if (saved || !id) {
         setWorking(false);
-        return setProblem(saved ? "notSaved" : "failed");
+        return fail(saved ? "notSaved" : "failed");
       }
       if (!consent?.granted) {
         const read = await calls.consentState(id);
         setWorking(false);
-        if (!read.ok) return setProblem(read.problem);
+        if (!read.ok) return fail(read.problem);
         setConsent(read.value);
         if (!read.value.granted) return openDialog(null);
       }
@@ -142,7 +152,7 @@ export function AssistantPanel({
     setConsent(result.value);
     accepted.current = true;
     setDialogOpen(false);
-    focusTo.current = heading.current;
+    focusTo.current = "heading";
     busy.current = true;
     try {
       await request(id);
@@ -158,11 +168,11 @@ export function AssistantPanel({
     setProblem(null);
     const result = await calls.withdrawConsent(id);
     setTurningOff(false);
-    if (!result.ok) return setProblem(result.problem);
+    if (!result.ok) return fail(result.problem);
     setConsent(result.value);
     setAnswer(null); // the assistant is off: its last answer goes with it
     setNotice("offNotice");
-    focusTo.current = null; // the notice, once it is shown
+    focusTo.current = "notice";
   }
 
   // Opening the panel is the request: ask once (a ref, so a development double effect does not ask twice).
@@ -185,11 +195,11 @@ export function AssistantPanel({
     if (!dialogOpen && node.open) node.close();
   }, [dialogOpen]);
 
-  // After the render that shows it: the answer's heading, or (null) the notice that replaced the button just pressed.
+  // After the render that shows it: the answer's heading, a refusal, or the notice that replaced the button pressed.
   useEffect(() => {
-    if (focusTo.current === undefined) return;
-    (focusTo.current ?? noticeRef.current)?.focus();
+    const to = focusTo.current;
     focusTo.current = undefined;
+    ({ heading, notice: noticeRef, problem: problemRef })[to!]?.current?.focus();
   });
 
   const teaser = !working && answer?.teaser;
@@ -242,7 +252,7 @@ export function AssistantPanel({
       <p role="status" className={working ? "text-ink-soft" : "sr-only"}>
         {working && t("working")}
       </p>
-      {problem && <Alert>{t(`problem.${problem}`)}</Alert>}
+      {problem && <Alert ref={problemRef}>{t(`problem.${problem}`)}</Alert>}
       {notice && (
         <Alert tone="ok" ref={noticeRef}>
           {t(notice)}
@@ -262,7 +272,7 @@ export function AssistantPanel({
               onClick={() => {
                 onUse(teaser);
                 setNotice("applied");
-                focusTo.current = null;
+                focusTo.current = "notice";
               }}
             >
               {t("use")}
