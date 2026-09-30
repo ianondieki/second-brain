@@ -149,6 +149,7 @@ describe("Decision (REQ-RES-01, D-45)", () => {
     problemId: "01a0f015-0feb-76bd-8eec-21b72f9f10e8",
     publicHref: "/problems/01a0f015-0feb-76bd-8eec-21b72f9f10e8",
     researchHref: "/admin/research",
+    checklist: [] as string[],
   };
 
   it("approves a card and links to its public page", async () => {
@@ -188,18 +189,72 @@ describe("Decision (REQ-RES-01, D-45)", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
   });
 
-  it("asks once more before rejecting, then keeps the card private", async () => {
+  it("asks once more before rejecting, with focus on the question, and Cancel returns focus to Reject", async () => {
     const decideImpl = vi.fn<typeof decide>(async () => ({ ok: true, data: { status: "rejected" } }));
     renderWithIntl(<Decision {...props} needsChecklist={false} decideImpl={decideImpl} />);
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    expect(screen.getByText("Reject this card? It stays private and cannot be published later.")).toBeTruthy();
+    const question = screen.getByRole("group", {
+      name: "Reject this card? It stays private and cannot be published later.",
+    });
+    await waitFor(() => expect(document.activeElement).toBe(question));
     expect(decideImpl).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reject" })));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     fireEvent.click(screen.getByRole("button", { name: "Reject card" }));
     await screen.findByText("Rejected. The card stays private.");
     expect(decideImpl).toHaveBeenCalledWith(props.problemId, "reject", false);
     expect(screen.queryByRole("link", { name: "Open the public card" })).toBeNull();
+  });
+
+  it("makes Reject the one primary action after a failed publish check, and Approve inert", async () => {
+    const decideImpl = vi.fn<typeof decide>(async () => ({
+      ok: false,
+      refusal: { kind: "publish", reason: "source_not_saved" },
+    }));
+    const { container } = renderWithIntl(<Decision {...props} needsChecklist={false} decideImpl={decideImpl} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+    await screen.findByRole("alert");
+    const approve = screen.getByRole("button", { name: "Approve and publish" });
+    expect(approve.getAttribute("aria-disabled")).toBe("true");
+    expect(approve.hasAttribute("data-primary")).toBe(false);
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Reject" }).hasAttribute("data-primary")).toBe(true);
+    fireEvent.click(approve);
+    expect(decideImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves only the way back when the card was already decided", async () => {
+    const decideImpl = vi.fn<typeof decide>(async () => ({
+      ok: false,
+      refusal: { kind: "refusal", code: "already_decided" },
+    }));
+    renderWithIntl(<Decision {...props} needsChecklist={false} decideImpl={decideImpl} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Someone already decided this card. Go back to Research to see what is left.",
+    );
+    expect(screen.queryByRole("button", { name: "Approve and publish" })).toBeNull();
+    const back = screen.getByRole("link", { name: "Back to Research" });
+    expect(back.hasAttribute("data-primary")).toBe(true);
+  });
+
+  it("shows the checklist when the API finds a name the card does not list", async () => {
+    const outcomes = [
+      { ok: false as const, refusal: { kind: "refusal" as const, code: "checklist_required" as const } },
+      { ok: true as const, data: { status: "published" } },
+    ];
+    const decideImpl = vi.fn<typeof decide>(async () => outcomes.shift()!);
+    renderWithIntl(
+      <Decision {...props} checklist={["Check the named organisation."]} needsChecklist={false} decideImpl={decideImpl} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+    await screen.findByText("This card names an organisation: tick the checklist, then approve it again.");
+    expect(screen.getByText("Check the named organisation.")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("I have worked through the checklist above for this card."));
+    fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+    await screen.findByText("Published. Signed-in people can now see this card and its sources.");
+    expect(decideImpl).toHaveBeenLastCalledWith(props.problemId, "approve", true);
   });
 
   it("asks for a fresh code when the second factor is stale", async () => {

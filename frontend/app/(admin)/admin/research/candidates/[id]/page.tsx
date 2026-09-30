@@ -155,6 +155,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
           <Decision
             problemId={candidate.id}
             needsChecklist={named}
+            checklist={candidate.checklist}
             publicHref={problemHref(candidate.id)}
             researchHref={RESEARCH_PATH}
           />

@@ -143,6 +143,16 @@ export function refusalKey(
   return refusal.kind === "publish" ? `publish.${refusal.reason}` : `refusal.${refusal.code}`;
 }
 
+/**
+ * What a refusal leaves the admin to do. A failed publish check is final (the card's text and sources cannot be
+ * edited, and time only ages sources), so Reject becomes the one primary action and Approve stays but is inert; a card
+ * already decided or gone leaves only the way back. Anything else (a lost connection, the checklist) can be retried.
+ */
+export function refusalNext(refusal: Exclude<Refusal, { kind: "stepUp" }>): "reject" | "back" | null {
+  if (refusal.kind === "publish") return "reject";
+  return refusal.code === "already_decided" || refusal.code === "not_found" ? "back" : null;
+}
+
 /** Saved excerpts by niche, in the order of `options` (the runnable niches), newest first within each. */
 export function excerptsByNiche(excerpts: readonly Excerpt[], options: readonly NicheOption[]) {
   return options
