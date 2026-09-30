@@ -123,7 +123,7 @@ describe("the consent dialog", () => {
     const fake = assistantCalls({
       grantConsent: vi
         .fn()
-        .mockResolvedValueOnce({ ok: false, problem: "consentTextChanged" })
+        .mockResolvedValueOnce({ ok: false, problem: "consent_text_changed" })
         .mockResolvedValueOnce({ ok: true, value: { ...CONSENT_ON, version: "v2" } }),
       consentState: vi
         .fn()

@@ -14,29 +14,12 @@ import {
   type AssistantConsent,
   type AssistantProblem,
   type AssistantSuggestion,
-  type PlacementHint,
   type SuggestedTeaser,
 } from "../assistant";
 import type { EditorState } from "../ideas";
 import type { SaveProblem } from "../outcomes";
 
-/** Problems the panel finds before any call, apart from the API's. */
-type PanelProblem = AssistantProblem | "noText" | "notSaved";
-
-/** Where focus goes after a render: the answer's heading, or the notice that replaced the button just pressed. */
-type FocusTarget = "heading" | "notice" | null;
-
-/** Message keys under ideaFields.* for the fields a placement hint can name. */
-const FIELD_KEY = {
-  title: "title",
-  problem_statement: "problemStatement",
-  impact_claims: "impactClaims",
-  summary: "summary",
-  approach: "approach",
-  architecture: "architecture",
-  pricing: "pricing",
-  notes: "notes",
-} as const satisfies Record<PlacementHint["field"], string>;
+// Kept lean on purpose: this chunk loads on top of an editor close to its 150 KB budget (docs/spec/07 item 5).
 
 export interface AssistantPanelProps {
   /** What the title and summary hold now (the "Now" column). */
@@ -69,15 +52,14 @@ export function AssistantPanel({
   calls = assistantCalls,
 }: AssistantPanelProps) {
   const t = useStrings("ideaAssistant");
-  const f = useStrings("ideaFields");
   const [consent, setConsent] = useState<AssistantConsent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogProblem, setDialogProblem] = useState<AssistantProblem | null>(null);
   const [granting, setGranting] = useState(false);
   const [working, setWorking] = useState(false);
-  const [problem, setProblem] = useState<PanelProblem | null>(null);
+  const [problem, setProblem] = useState<AssistantProblem | "noText" | "notSaved" | null>(null);
   const [answer, setAnswer] = useState<AssistantSuggestion | null>(null);
-  const [notice, setNotice] = useState<"applied" | "off" | null>(null);
+  const [notice, setNotice] = useState<"applied" | "offNotice" | null>(null);
   const [turningOff, setTurningOff] = useState(false);
 
   const dialog = useRef<HTMLDialogElement>(null);
@@ -86,10 +68,9 @@ export function AssistantPanel({
   const accepted = useRef(false); // the dialog closed because the owner turned the assistant on
   const started = useRef(false);
   const busy = useRef(false); // one request at a time, whatever the renders in between
-  const focusTo = useRef<FocusTarget>(null); // read after the render that shows the target
+  const focusTo = useRef<HTMLElement | null | undefined>(undefined); // read after the render that shows it
   const titleId = useId();
   const bodyId = useId();
-  const headingId = useId();
 
   function openDialog(why: AssistantProblem | null) {
     accepted.current = false;
@@ -104,55 +85,37 @@ export function AssistantPanel({
     setWorking(false);
     if (result.ok) {
       setAnswer(result.value);
-      focusTo.current = "heading";
-      return;
-    }
-    if (result.problem === "consentRequired") {
+      focusTo.current = heading.current;
+    } else if (result.problem === "consent_required") {
       // The opt-in ended since it was read (signed out elsewhere, or turned off in another tab): ask again.
       const read = await calls.consentState(id);
-      if (read.ok) {
-        setConsent(read.value);
-        openDialog("consentRequired");
-        return;
-      }
-      setProblem(read.problem);
-      return;
-    }
-    setProblem(result.problem);
+      if (!read.ok) return setProblem(read.problem);
+      setConsent(read.value);
+      openDialog("consent_required");
+    } else setProblem(result.problem);
   }
 
   async function ask() {
     if (busy.current) return;
     busy.current = true;
+    setProblem(null);
+    setNotice(null);
     try {
-      setProblem(null);
-      setNotice(null);
-      if (!state.title.trim() && !state.summary.trim()) {
-        setProblem("noText");
-        return;
-      }
+      if (!state.title.trim() && !state.summary.trim()) return setProblem("noText");
       setWorking(true);
       // The assistant reads the saved draft: what is on the screen is saved first, or nothing is asked.
       const saved = await saveAll();
       const id = getId();
       if (saved || !id) {
         setWorking(false);
-        setProblem(saved ? "notSaved" : "failed");
-        return;
+        return setProblem(saved ? "notSaved" : "failed");
       }
       if (!consent?.granted) {
         const read = await calls.consentState(id);
-        if (!read.ok) {
-          setWorking(false);
-          setProblem(read.problem);
-          return;
-        }
+        setWorking(false);
+        if (!read.ok) return setProblem(read.problem);
         setConsent(read.value);
-        if (!read.value.granted) {
-          setWorking(false);
-          openDialog(null);
-          return;
-        }
+        if (!read.value.granted) return openDialog(null);
       }
       await request(id);
     } finally {
@@ -167,20 +130,19 @@ export function AssistantPanel({
     setDialogProblem(null);
     const result = await calls.grantConsent(id, consent.version);
     if (!result.ok) {
-      if (result.problem === "consentTextChanged") {
+      if (result.problem === "consent_text_changed") {
         // The wording changed since it was shown: show the new one, whose version the next press sends.
         const read = await calls.consentState(id);
         if (read.ok) setConsent(read.value);
       }
       setGranting(false);
-      setDialogProblem(result.problem);
-      return;
+      return setDialogProblem(result.problem);
     }
     setGranting(false);
     setConsent(result.value);
     accepted.current = true;
     setDialogOpen(false);
-    focusTo.current = "heading";
+    focusTo.current = heading.current;
     busy.current = true;
     try {
       await request(id);
@@ -196,20 +158,11 @@ export function AssistantPanel({
     setProblem(null);
     const result = await calls.withdrawConsent(id);
     setTurningOff(false);
-    if (!result.ok) {
-      setProblem(result.problem);
-      return;
-    }
+    if (!result.ok) return setProblem(result.problem);
     setConsent(result.value);
     setAnswer(null); // the assistant is off: its last answer goes with it
-    setNotice("off");
-    focusTo.current = "notice";
-  }
-
-  function use(teaser: SuggestedTeaser) {
-    onUse(teaser);
-    setNotice("applied");
-    focusTo.current = "notice";
+    setNotice("offNotice");
+    focusTo.current = null; // the notice, once it is shown
   }
 
   // Opening the panel is the request: ask once (a ref, so a development double effect does not ask twice).
@@ -224,128 +177,145 @@ export function AssistantPanel({
   // The native dialog follows dialogOpen: showModal traps focus and makes the rest of the page inert. Focus starts on
   // "Not now", the choice that sends nothing (React never renders the autofocus attribute on the client).
   useEffect(() => {
-    const node = dialog.current;
-    if (!node) return;
+    const node = dialog.current!;
     if (dialogOpen && !node.open) {
       node.showModal();
-      node.querySelector<HTMLButtonElement>("[data-dialog-cancel]")?.focus();
+      node.querySelector<HTMLElement>("[data-dialog-cancel]")?.focus();
     }
     if (!dialogOpen && node.open) node.close();
   }, [dialogOpen]);
 
-  // After the render that shows it: the answer's heading, or the notice that replaced the button just pressed.
+  // After the render that shows it: the answer's heading, or (null) the notice that replaced the button just pressed.
   useEffect(() => {
-    const target = focusTo.current;
-    if (!target) return;
-    focusTo.current = null;
-    (target === "heading" ? heading.current : noticeRef.current)?.focus();
+    if (focusTo.current === undefined) return;
+    (focusTo.current ?? noticeRef.current)?.focus();
+    focusTo.current = undefined;
   });
 
-  const teaser = answer?.teaser ?? null;
-  const key = answer ? statusKey(answer) : null;
-  const granted = consent?.granted === true;
+  const teaser = !working && answer?.teaser;
+  const key = !working && answer && statusKey(answer);
+  const side = (caption: string, title: string, summary: string, suggested?: boolean) => (
+    <dl
+      data-teaser={suggested ? "suggested" : "now"}
+      className={cn("flex min-w-0 flex-col gap-1 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
+    >
+      <p className={cn("mb-2 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
+      {[
+        [t("field.title"), title],
+        [t("field.summary"), summary],
+      ].map(([label, text]) => (
+        <div key={label} className="mb-2 [overflow-wrap:anywhere]">
+          <dt className="text-sm text-ink-soft">{label}</dt>
+          <dd className={text.trim() ? "whitespace-pre-line" : "text-ink-soft"}>{text.trim() ? text : t("notWritten")}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+  // The labels docs/spec/09 requires on AI output: at most two (docs/spec/07 item 2).
+  const chip = (text: string, quiet?: boolean) => (
+    <span
+      data-chip=""
+      className={cn(
+        "rounded-control border px-2 py-0.5 text-sm font-semibold",
+        quiet ? "border-ink-soft text-ink-soft" : "border-jacaranda text-jacaranda",
+      )}
+    >
+      {text}
+    </span>
+  );
 
   return (
-    <div id="assistant-panel" className="flex flex-col gap-5 rounded-panel border border-line bg-field p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h4 id={headingId} ref={heading} tabIndex={-1} className="font-semibold text-ink focus:outline-none">
-            {t("heading")}
-          </h4>
-          {/* The labels docs/spec/09 requires on AI output: at most two (docs/spec/07 item 2). */}
-          {answer?.ai_drafted ? <Label>{t("aiDrafted")}</Label> : null}
-          {answer?.demo_fallback ? <Label quiet>{t("demoFallback")}</Label> : null}
-        </div>
-        <Button variant="link" className="text-sm" onClick={onClose}>
+    <div id="assistant-panel" className="flex flex-col gap-5 rounded-panel border border-line bg-field p-4 text-ink sm:p-6">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h4 ref={heading} tabIndex={-1} className="font-semibold focus:outline-none">
+          {t("heading")}
+        </h4>
+        {answer?.ai_drafted && chip(t("aiDrafted"))}
+        {answer?.demo_fallback && chip(t("demoFallback"), true)}
+        <Button variant="link" className="ml-auto text-sm" onClick={onClose}>
           {t("close")}
         </Button>
       </div>
 
-      <p role="status" className={cn("text-ink-soft", !working && "sr-only")}>
-        {working ? t("working") : ""}
+      <p role="status" className={working ? "text-ink-soft" : "sr-only"}>
+        {working && t("working")}
       </p>
-
-      {problem ? <Alert>{t(`problem.${problem}`)}</Alert> : null}
-      {notice ? (
+      {problem && <Alert>{t(`problem.${problem}`)}</Alert>}
+      {notice && (
         <Alert tone="ok" ref={noticeRef}>
-          {t(notice === "applied" ? "applied" : "offNotice")}
+          {t(notice)}
         </Alert>
-      ) : null}
+      )}
+      {key && <p>{t(`status.${key}`)}</p>}
 
-      {key && !working ? <p className="text-ink">{t(`status.${key}`)}</p> : null}
-
-      {teaser && !working ? (
-        <div className="flex flex-col gap-4">
+      {teaser && (
+        <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Teaser caption={t("now")} title={state.title} summary={state.summary} />
-            <Teaser caption={t("suggested")} title={teaser.title} summary={teaser.summary} suggested />
+            {side(t("now"), state.title, state.summary)}
+            {side(t("suggested"), teaser.title, teaser.summary, true)}
           </div>
-          {notice === "applied" ? null : (
-            <Button variant="secondary" className="self-start" onClick={() => use(teaser)}>
+          {notice !== "applied" && (
+            <Button
+              className="self-start"
+              onClick={() => {
+                onUse(teaser);
+                setNotice("applied");
+                focusTo.current = null;
+              }}
+            >
               {t("use")}
             </Button>
           )}
-        </div>
-      ) : null}
+        </>
+      )}
 
-      {answer && answer.placement.length > 0 && !working ? (
-        <section aria-labelledby={`${headingId}-placement`} className="flex flex-col gap-3">
-          <h5 id={`${headingId}-placement`} className="font-semibold text-ink">
-            {t("placementTitle")}
-          </h5>
-          <ul className="flex flex-col gap-3">
+      {!working && !!answer?.placement.length && (
+        <div>
+          <h5 className="font-semibold">{t("placementTitle")}</h5>
+          <ul className="mt-3 flex flex-col gap-3">
             {answer.placement.map((hint) => (
-              <li key={hint.field} className="border-l-2 border-line pl-3">
-                <p className="text-ink">
-                  {t(hint.move === "to_tier2" ? "toTier2" : "toTier1", { name: f(FIELD_KEY[hint.field]) })}
-                </p>
-                <p className="mt-0.5 text-sm [overflow-wrap:anywhere] text-ink-soft">{hint.reason}</p>
+              <li key={hint.field} className="border-l-2 border-line pl-3 [overflow-wrap:anywhere]">
+                {t(hint.move === "to_tier2" ? "toTier2" : "toTier1", { name: t(`field.${hint.field}`) })}
+                <p className="mt-0.5 text-sm text-ink-soft">{hint.reason}</p>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-
-      {!working && (answer || problem || notice) ? (
-        <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
-          <Button variant="secondary" className="self-start" onClick={() => void ask()}>
-            {t("askAgain")}
-          </Button>
-          {granted ? (
-            <Button variant="link" className="self-start text-left" busy={turningOff} onClick={() => void turnOff()}>
-              {turningOff ? t("turningOff") : t("turnOff")}
-            </Button>
-          ) : null}
         </div>
-      ) : null}
+      )}
+
+      {!working && (answer || problem || notice) && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-4">
+          <Button onClick={() => void ask()}>{t("askAgain")}</Button>
+          {consent?.granted && (
+            <Button variant="link" className="text-left" busy={turningOff} onClick={() => void turnOff()}>
+              {t(turningOff ? "turningOff" : "turnOff")}
+            </Button>
+          )}
+        </div>
+      )}
 
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         // While the assistant is being turned on the dialog stays open: Escape and "Not now" wait for the answer.
-        onCancel={(event) => {
-          if (granting) event.preventDefault();
-        }}
+        onCancel={(event) => granting && event.preventDefault()}
         onClose={() => {
           setDialogOpen(false);
           if (!accepted.current) onClose(); // "Not now" or Escape: nothing was sent, and the panel closes
         }}
-        className={cn(
-          "m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel border border-line bg-paper p-6 text-ink",
-          "backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]",
-        )}
+        className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel border border-line bg-paper p-6 text-ink backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)]"
       >
-        <h2 id={titleId} className="text-lg text-ink">
+        <h2 id={titleId} className="text-lg">
           {t("dialog.title")}
         </h2>
         {/* The consent wording is the API's, shown as it is: its version is what "Turn on" sends back. */}
-        <p id={bodyId} data-consent-version={consent?.version} className="mt-3 whitespace-pre-line text-ink">
+        <p id={bodyId} data-consent-version={consent?.version} className="my-4 whitespace-pre-line">
           {consent?.text}
         </p>
-        {dialogProblem ? <Alert className="mt-4">{t(`problem.${dialogProblem}`)}</Alert> : null}
+        {dialogProblem && <Alert>{t(`problem.${dialogProblem}`)}</Alert>}
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" busy={granting} onClick={() => dialog.current?.close()} data-dialog-cancel="">
+          <Button busy={granting} onClick={() => dialog.current?.close()} data-dialog-cancel="">
             {t("dialog.cancel")}
           </Button>
           {/* Styled as the dialog's main button but not the screen's primary action (data-primary stays on the page's). */}
@@ -355,68 +325,10 @@ export function AssistantPanel({
             aria-disabled={granting || undefined}
             className={buttonClass("primary")}
           >
-            {granting ? t("dialog.busy") : t("dialog.confirm")}
+            {t(granting ? "dialog.busy" : "dialog.confirm")}
           </button>
         </div>
       </dialog>
-    </div>
-  );
-}
-
-/** A label on AI output: an outlined tag with words (never colour alone). */
-function Label({ children, quiet = false }: { children: string; quiet?: boolean }) {
-  return (
-    <span
-      data-chip=""
-      className={cn(
-        "inline-flex items-center rounded-control border px-2 py-0.5 text-sm font-semibold",
-        quiet ? "border-ink-soft text-ink-soft" : "border-jacaranda text-jacaranda",
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** One side of the comparison: a title and a summary under a caption. */
-function Teaser({
-  caption,
-  title,
-  summary,
-  suggested = false,
-}: {
-  caption: string;
-  title: string;
-  summary: string;
-  suggested?: boolean;
-}) {
-  const t = useStrings("ideaAssistant");
-  const f = useStrings("ideaFields");
-  const value = (text: string) =>
-    text.trim() ? (
-      <dd className="whitespace-pre-line [overflow-wrap:anywhere] text-ink">{text}</dd>
-    ) : (
-      <dd className="text-ink-soft">{t("notWritten")}</dd>
-    );
-  return (
-    <div
-      data-teaser={suggested ? "suggested" : "now"}
-      className={cn(
-        "flex min-w-0 flex-col gap-3 rounded-control p-4",
-        suggested ? "bg-jacaranda-wash" : "border border-line",
-      )}
-    >
-      <p className={cn("text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
-      <dl className="flex flex-col gap-3">
-        <div>
-          <dt className="text-sm text-ink-soft">{f("title")}</dt>
-          {value(title)}
-        </div>
-        <div>
-          <dt className="text-sm text-ink-soft">{f("summary")}</dt>
-          {value(summary)}
-        </div>
-      </dl>
     </div>
   );
 }

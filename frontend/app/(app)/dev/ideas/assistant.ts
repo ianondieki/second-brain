@@ -3,7 +3,8 @@ import type { components } from "@/lib/api/schema";
 
 // The submission assistant's calls (REQ-PROP-05; docs/spec/06 6.3, docs/spec/09). They load with the editor's
 // assistant panel, when the owner opens it, never with the page. Each settles into its value or a problem the panel
-// words with its own [[COPY-REVIEW]] string: the API's `message` and `detail.message` are never shown.
+// words with its own [[COPY-REVIEW]] string (ideaAssistant.problem.*): the API's `message` and `detail.message` are
+// never shown.
 //
 // Nothing here imports the API client, outcomes.ts or error-code.ts at the top: a module imported statically is copied
 // into the panel's chunk even when the editor's save chunk already holds it (docs/spec/07 item 5: the editor is close
@@ -15,17 +16,21 @@ export type AssistantSuggestion = Schemas["AssistantSuggestionOut"];
 export type PlacementHint = Schemas["PlacementHintOut"];
 export type SuggestedTeaser = Schemas["SuggestedTeaserOut"];
 
-/** Why the assistant did not answer, as the panel words it (keys under ideaAssistant.problem.*). */
+/** The assistant's own refusal codes (bridge/proposals/assistant.py, assistant_router.py, access.tier2_gate). */
+export type AssistantCode =
+  | "consent_required"
+  | "consent_text_changed"
+  | "assistant_busy"
+  | "assistant_rate_limited"
+  | "assistant_budget"
+  | "assistant_paused"
+  | "assistant_off"
+  | "assistant_demo_only"
+  | "tier2_disabled";
+
+/** Why the assistant did not answer: its own code, or one every editor call shares (as outcomes.ts `common`). */
 export type AssistantProblem =
-  | "consentRequired"
-  | "consentTextChanged"
-  | "busy"
-  | "dailyLimit"
-  | "budget"
-  | "paused"
-  | "off"
-  | "demoOnly"
-  | "tier2Disabled"
+  | AssistantCode
   | "signedOut"
   | "mfaRequired"
   | "rateLimited"
@@ -37,88 +42,65 @@ export type AssistantProblem =
 
 export type AssistantOutcome<T> = { ok: true; value: T } | { ok: false; problem: AssistantProblem };
 
-/** The assistant's own refusal codes (bridge/proposals/assistant.py, assistant_router.py, access.tier2_gate). */
-const CODES: Record<string, AssistantProblem> = {
-  consent_required: "consentRequired",
-  consent_text_changed: "consentTextChanged",
-  assistant_busy: "busy",
-  assistant_rate_limited: "dailyLimit",
-  assistant_budget: "budget",
-  assistant_paused: "paused",
-  assistant_off: "off",
-  assistant_demo_only: "demoOnly",
-  tier2_disabled: "tier2Disabled",
-};
-
-/** `detail.code` of an API error body (bridge.errors.ApiError), or undefined. */
-function codeOf(body: unknown): string | undefined {
-  const detail = typeof body === "object" && body !== null ? (body as { detail?: unknown }).detail : undefined;
-  const code = typeof detail === "object" && detail !== null ? (detail as { code?: unknown }).code : undefined;
-  return typeof code === "string" ? code : undefined;
-}
+const OWN = /^(consent_(required|text_changed)|assistant_(busy|rate_limited|budget|paused|off|demo_only)|tier2_disabled)$/;
 
 /**
  * A refused assistant call: its own codes first (a 503 `assistant_off` is not a generic outage), then the ones every
- * editor call shares (as outcomes.ts `common` reads them).
+ * editor call shares, by status.
  */
 export function assistantRefusal(status: number, body: unknown): AssistantProblem {
-  const code = codeOf(body);
-  if (code !== undefined && Object.hasOwn(CODES, code)) return CODES[code];
+  const detail = (body as { detail?: { code?: unknown } } | null | undefined)?.detail;
+  const code = typeof detail === "object" && detail !== null ? detail.code : undefined;
+  if (typeof code === "string" && OWN.test(code)) return code as AssistantCode;
   if (status === 0) return "network";
   if (status === 401) return code === "mfa_required" ? "mfaRequired" : "signedOut";
   if (status === 429) return "rateLimited";
   if (status === 404) return "notFound";
   if (status === 409 && code === "proposal_hidden") return "hidden";
-  if (status === 503) return "unavailable";
-  return "failed";
+  return status === 503 ? "unavailable" : "failed";
 }
 
 type Answer = { data?: unknown; error?: unknown; response: Response };
+type Call = (client: ApiClient) => Promise<Answer>;
 
-/** The typed client from the editor's save chunk (a fetch that fails to load it counts as offline). */
-const shared = (): Promise<ApiClient> => import("./save").then((save) => save.api);
-
-async function settle<T>(call: () => Promise<Answer>): Promise<AssistantOutcome<T>> {
-  let answer: Answer;
+/**
+ * One call with the given client, or the typed client from the editor's save chunk. A thrown fetch (offline, or the
+ * chunk failed to load) is "network".
+ */
+async function settle<T>(call: Call, client?: ApiClient): Promise<AssistantOutcome<T>> {
   try {
-    answer = await call();
+    const answer = await call(client ?? (await import("./save")).api);
+    return answer.response.ok
+      ? { ok: true, value: answer.data as T }
+      : { ok: false, problem: assistantRefusal(answer.response.status, answer.error) };
   } catch {
     return { ok: false, problem: "network" };
   }
-  if (answer.response.ok) return { ok: true, value: answer.data as T };
-  return { ok: false, problem: assistantRefusal(answer.response.status, answer.error) };
 }
 
+const CONSENT = "/api/me/proposals/{proposal_id}/assistant/consent";
 const path = (id: string) => ({ params: { path: { proposal_id: id } } });
 
 /** Whether the assistant is on for this sign-in, with the consent wording and its version to show. */
 export function consentState(id: string, client?: ApiClient) {
-  return settle<AssistantConsent>(async () =>
-    (client ?? (await shared())).GET("/api/me/proposals/{proposal_id}/assistant/consent", path(id)),
-  );
+  return settle<AssistantConsent>((api) => api.GET(CONSENT, path(id)), client);
 }
 
 /** Turns the assistant on for this sign-in, naming the version of the wording that was shown. */
 export function grantConsent(id: string, version: string, client?: ApiClient) {
-  return settle<AssistantConsent>(async () =>
-    (client ?? (await shared())).POST("/api/me/proposals/{proposal_id}/assistant/consent", {
-      ...path(id),
-      body: { version },
-    }),
-  );
+  return settle<AssistantConsent>((api) => api.POST(CONSENT, { ...path(id), body: { version } }), client);
 }
 
 /** Turns the assistant off for this sign-in. */
 export function withdrawConsent(id: string, client?: ApiClient) {
-  return settle<AssistantConsent>(async () =>
-    (client ?? (await shared())).DELETE("/api/me/proposals/{proposal_id}/assistant/consent", path(id)),
-  );
+  return settle<AssistantConsent>((api) => api.DELETE(CONSENT, path(id)), client);
 }
 
 /** One suggestion for the saved draft. The API never writes the proposal; neither does this. */
 export function suggest(id: string, client?: ApiClient) {
-  return settle<AssistantSuggestion>(async () =>
-    (client ?? (await shared())).POST("/api/me/proposals/{proposal_id}/assistant/suggestions", path(id)),
+  return settle<AssistantSuggestion>(
+    (api) => api.POST("/api/me/proposals/{proposal_id}/assistant/suggestions", path(id)),
+    client,
   );
 }
 
@@ -130,27 +112,13 @@ export interface AssistantCalls {
   suggest: typeof suggest;
 }
 
-/** The answer's message key under ideaAssistant.status.*, or null when there is something to show. */
-export type StatusKey = "noSuggestion" | "demoFallback" | "injection" | "unavailable" | "hintsOnly";
-
 /**
- * What to say about an answer. A suggestion with no new teaser but placement hints says so; every other status has
- * its fixed sentence. `no_suggestion` covers each reason the API keeps to itself (nothing to improve, a suggestion
- * the Tier-1 sanitiser refused, or one that copied wording from the confidential fields: `rejected:tier2_overlap`).
+ * The answer's sentence key under ideaAssistant.status.*, or null when a new teaser is shown. `no_suggestion` also
+ * covers each reason the API keeps to itself: nothing to improve, a suggestion the Tier-1 sanitiser refused, or one
+ * that copied wording from the confidential fields (`rejected:tier2_overlap`).
  */
-export function statusKey(answer: AssistantSuggestion): StatusKey | null {
-  switch (answer.status) {
-    case "suggested":
-      if (answer.teaser) return null;
-      return answer.placement.length > 0 ? "hintsOnly" : "noSuggestion";
-    case "demo_fallback":
-      return "demoFallback";
-    case "injection_suspected":
-      return "injection";
-    case "unavailable":
-      return "unavailable";
-    default:
-      return "noSuggestion";
-  }
+export function statusKey(answer: AssistantSuggestion) {
+  if (answer.status !== "suggested") return answer.status;
+  if (answer.teaser) return null;
+  return answer.placement.length > 0 ? "hints_only" : "no_suggestion";
 }
-
