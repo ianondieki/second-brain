@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
-import { AccountMenu } from "./AccountMenu";
+import { AccountMenu, AccountMenuScope } from "./AccountMenu";
 
 // REQ-BIL-08, REQ-UX-01: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing, Notifications, Help and
 // Sign out, as a disclosure.
@@ -82,5 +82,32 @@ describe("AccountMenu", () => {
     fireEvent.click(toggle);
     act(() => screen.getByRole("button", { name: "Elsewhere" }).focus());
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("leaves out Plan & billing for a staff-only account in the console (P15-F MINOR 7)", () => {
+    renderWithIntl(
+      <AccountMenuScope billing={false}>
+        <AccountMenu />
+      </AccountMenuScope>,
+    );
+    const toggle = screen.getByRole("button", { name: "Account" });
+    fireEvent.click(toggle);
+    const panel = document.getElementById(toggle.getAttribute("aria-controls")!);
+    expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull();
+    expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
+      "Notifications",
+      "Help",
+      "Sign out",
+    ]);
+  });
+
+  it("keeps Plan & billing inside a scope that has a plan", () => {
+    renderWithIntl(
+      <AccountMenuScope billing>
+        <AccountMenu />
+      </AccountMenuScope>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.getByRole("link", { name: "Plan & billing" }).getAttribute("href")).toBe("/billing");
   });
 });
