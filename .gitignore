@@ -41,6 +41,9 @@ graphify-out/
 coverage.xml
 .hypothesis/
 
+# The recorded walkthrough's videos (make demo-walkthrough; the screenshots in docs/demo/screenshots/ are committed)
+docs/demo/video/
+
 # The local demo's generated secrets (infra/demo/demo.py writes them on first run; never commit)
 infra/demo/.env
 infra/demo/*.env

@@ -25,7 +25,7 @@ export const DEMO_PASSWORD = "bridge-demo-2026";
  * after the last one this process used: a retry or a rerun runs in a new worker, and the API refuses a code whose
  * window is not later than the last accepted one.
  */
-class DemoStaff extends Person {
+export class DemoStaff extends Person {
   private last = 0;
 
   override async code(): Promise<string> {
