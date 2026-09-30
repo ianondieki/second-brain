@@ -5,7 +5,9 @@ import { cn } from "./cn";
 export type ButtonVariant = "primary" | "secondary" | "danger" | "link";
 
 const base =
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control text-base font-semibold " +
+  // py-2 and text-center: a label that wraps at 360 px ("Start a proposal from this problem") keeps breathing room and
+  // stays centred; a one-line button is still 48 px (min-h-12).
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control py-2 text-center text-base font-semibold " +
   "transition-colors duration-150 ease-out aria-disabled:cursor-progress";
 
 const variants: Record<ButtonVariant, string> = {
