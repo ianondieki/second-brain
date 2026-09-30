@@ -31,6 +31,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "errorPage",
   "ideaEditor",
   "ideaFields",
+  "ideaAssistant",
   "ideaDelete",
   "pitch",
   "tagWithdraw",

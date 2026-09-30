@@ -54,7 +54,7 @@ export async function EditorScreen({ id, step }: { id: string | null; step: Step
           {idea ? t("backToIdea") : ideas("back")}
         </Link>
       </p>
-      <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields"])}>
+      <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant"])}>
         <Editor
           id={idea?.id ?? null}
           hasDraft={idea?.draft != null}
