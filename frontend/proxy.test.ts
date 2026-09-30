@@ -65,13 +65,19 @@ describe("signed-out visits to the signed-in portals", () => {
     vi.stubGlobal("fetch", fetchImpl);
     const response = await proxy(request(path));
     expect(response.status).toBe(307);
-    expect(getRedirectUrl(response)).toBe("http://localhost:3000/login");
+    const location = new URL(getRedirectUrl(response)!);
+    expect(`${location.origin}${location.pathname}`).toBe("http://localhost:3000/login");
+    expect(location.searchParams.get("next")).toBe(path); // P16-C1: back to the page after signing in
     expect(fetchImpl).not.toHaveBeenCalled(); // no API call
   });
 
-  it("carries no query or return path to /login", async () => {
+  it("carries the page and its query as the return path, and nothing unsafe", async () => {
     const response = await proxy(request("/dev/discover?view=projects&niche=dairy"));
-    expect(getRedirectUrl(response)).toBe("http://localhost:3000/login");
+    expect(getRedirectUrl(response)).toBe("http://localhost:3000/login?next=%2Fdev%2Fdiscover%3Fview%3Dprojects%26niche%3Ddairy");
+    // A path the return-path rule refuses (an encoded character, a double slash) goes to /login without one.
+    for (const path of ["/dev//evil.example", "/dev/%41", "/settings/notifications?x=//evil.example"]) {
+      expect(getRedirectUrl(await proxy(request(path))), path).toBe("http://localhost:3000/login");
+    }
   });
 
   it("lets a request with a session cookie through, without asking the API (the page decides)", async () => {

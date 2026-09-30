@@ -57,6 +57,19 @@ export async function getMe(): Promise<Me | null> {
   return data;
 }
 
+/**
+ * The person when fully signed in (second factor given), else null: signed out, still owing the second factor, or the
+ * API not answering (a public page must open regardless). For public pages that send a signed-in person onwards.
+ */
+export async function getSignedIn(): Promise<Me | null> {
+  try {
+    const me = await getMe();
+    return me && !isPending(me) ? me : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Signed-in pages: no session goes to /login, a session still owing its second factor goes to /auth/mfa. */
 export async function requireMe(): Promise<Me> {
   const me = await getMe();
