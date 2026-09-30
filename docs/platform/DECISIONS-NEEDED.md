@@ -176,6 +176,19 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype.
 - Decision:
 
+### D-47 · What the `profiling` consent covers: liked niches and county, or only activity (P12; REQ-PERS-01)
+- Why: the `profiling` consent text reads "Use my niches and activity to recommend problems and proposals, with an
+  explanation for each." (default off). P12-B ranks "Recommended for you" on the liked niches and county the developer
+  entered for that purpose without the consent, and reads activity (f1, f9: history, behaviour) only with it. The
+  wording and the behaviour disagree.
+- Options: (a) liked niches and county are declared preferences, used without the consent; the consent covers
+  activity only, and its text becomes "Use my activity on Bridge to recommend…" (a new consent text version, part of
+  the D-39 wording review); (b) keep the text; without the consent, recommendations are not personalised at all
+  (generic trending only).
+- Recommended default: (a). It is what the prototype does now; the text change waits for the D-39 review.
+- Blocks: nothing in the prototype.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
