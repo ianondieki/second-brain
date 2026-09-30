@@ -101,7 +101,8 @@ export function ConfirmDialog({
         {children}
       </div>
       {problem ? <div className="mt-4">{problem}</div> : null}
-      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      {/* Cancel first, on top on phones and on the left from 640 px: the visual order is the focus order. */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
         <Button variant="secondary" busy={busy} onClick={() => ref.current?.close()} data-dialog-cancel="">
           {cancelLabel}
         </Button>

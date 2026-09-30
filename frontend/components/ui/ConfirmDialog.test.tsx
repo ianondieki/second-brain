@@ -72,6 +72,13 @@ describe("ConfirmDialog", () => {
     );
   });
 
+  it("puts Cancel first in the DOM and on screen at every width (visual order = focus order)", () => {
+    render(<Harness />);
+    const buttons = within(dialog()).getAllByRole("button", { hidden: true });
+    expect(buttons.map((b) => b.textContent)).toEqual(["Keep it", "Delete"]);
+    expect(buttons[0].parentElement!.className).not.toContain("reverse");
+  });
+
   it("names the action on its button and runs it once", () => {
     const onConfirm = vi.fn();
     render(<Harness onConfirm={onConfirm} />);
