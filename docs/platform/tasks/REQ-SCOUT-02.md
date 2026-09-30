@@ -349,5 +349,5 @@ route (integration's `/org/inbox` 141,339 against this branch's 140,096, both bu
 merge about 148,296, 148,105 and 147,812: under budget with under 2 KB to spare. Screenshots of the round:
 `scratchpad/p10f/shots2/` (375 and 1440 px).
 
-Open items 1 and 5 above are addressed (the handle by `fix/REQ-AUTH-01-random-handle`; the tracker route measured).
-Items 2, 3, 4 (now fixed: the picker keeps the tab) and 6 stand except 4.
+P10-F open items 1 (by `fix/REQ-AUTH-01-random-handle`), 4 (the picker keeps the tab) and 5 (the tracker route
+measured) are addressed; items 2, 3 and 6 stand.
