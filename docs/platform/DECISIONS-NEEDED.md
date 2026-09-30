@@ -48,6 +48,7 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
   (d) **150 KiB (153,600 bytes)** under either counting. Every route passes both ways today (largest: 152,195 with headers, `/settings/security`).
 - Recommended default: (a) with (c) once an HTTP/2 target exists. Users on Slow 4G receive the bodies, and header bytes are an artefact of the local HTTP/1.1 server. The byte unit stays KB = 1,000 (the stricter reading), with about 1.5 KB of headroom on the heaviest route (`/settings/security`, 1,482 bytes) for Phase 2 screens.
 - Blocks: the T7.4 Lighthouse CI thresholds (Phase 7); nothing now.
+- Addendum 2026-09-30 (P13-F, `/dev/ideas/<id>/edit`): code loaded only after a user action (the writing-assistant panel, a dynamic import behind "Suggest a clearer teaser") is not first load. Page load with the panel closed is 146,078 B, and 148,115 B through the first edit; opening the panel brings it to 150,926 B. The prototype runs on the reading that the budget counts page load (AC-UX-3 measures page load with Lighthouse), with on-demand chunks reported separately (`js-budget.mjs --press=`), not on a changed pass rule. Your call if on-demand chunks must also fit the 150 KB.
 - Decision:
 
 ### D-29 · Refusal fallback models for runtime LLM tasks (T2.2, REQ-LLM-01)
