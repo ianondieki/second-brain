@@ -15,6 +15,8 @@ describe("PageSkeleton", () => {
     const status = screen.getByRole("status");
     expect(status.textContent).toBe("Loading this page…");
     expect(screen.getByText("Loading this page…").className).toBe("sr-only");
+    // The loading page's one heading (the page's own h1 replaces it): no page without an h1 (axe page-has-heading-one).
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Loading this page…");
   });
 
   it("draws the header, the lead and three rows as hidden, still blocks", () => {

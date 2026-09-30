@@ -2,14 +2,15 @@ import { useTranslations } from "next-intl";
 
 /**
  * A route's loading state (loading.tsx): still blocks where the page header, its lead and three rows will be, and a
- * hidden sentence for screen readers (docs/platform/design/p16-design-system.md, Loading). A server component: no
+ * hidden heading for screen readers (docs/platform/design/p16-design-system.md, Loading). A server component: no
  * client JavaScript, no shimmer or animation (low bandwidth, reduced motion), nothing to announce twice.
  */
 export function PageSkeleton() {
   const t = useTranslations("common");
   return (
     <div role="status" data-skeleton="">
-      <span className="sr-only">{t("loading")}</span>
+      {/* The loading page's one heading, for screen readers: the page's own h1 replaces it. */}
+      <h1 className="sr-only">{t("loading")}</h1>
       <div aria-hidden="true">
         <div className="h-7 w-3/4 max-w-sm bg-jacaranda-wash lg:h-9" />
         <div className="mt-3 h-5 w-full max-w-md bg-wash-soft" />
