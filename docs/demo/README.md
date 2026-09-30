@@ -21,6 +21,9 @@ is decided, the clock moves a day), so start from a fresh demo each time:
    rewritten in `docs/demo/screenshots/`. `WALKTHROUGH_PAUSE_MS` sets the pause between steps (default 1200);
    `WALKTHROUGH_DEMO_REPO` names the checkout that started the demo, when you run the walkthrough from another one.
 
+The same walkthrough runs on every pull request as the `demo-story` check (`.github/workflows/pr.yml`): on a fresh CI
+stack with the demo data, without the video, and with its screenshots kept out of `docs/demo/screenshots/`.
+
 ## Screenshots
 
 | File | What it shows |
