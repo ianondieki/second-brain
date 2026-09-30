@@ -33,6 +33,8 @@ const HELP_HREF = "/help";
 const itemClass =
   "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-jacaranda-wash";
 
+// The popover floats over the page: the one elevation (shadow-overlay, docs/platform/design/p16-design-system.md).
+
 /**
  * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, Notifications, Help, then Sign out. A disclosure button with a list
  * of links (not an ARIA menu): Escape closes it and returns focus to the button, as does a press outside it. Plain
@@ -90,7 +92,7 @@ export function AccountMenu() {
       <div
         id={panelId}
         hidden={!open}
-        className="absolute top-full right-0 z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-control border border-line bg-field p-2"
+        className="absolute top-full right-0 z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-control border border-line bg-field p-2 shadow-overlay"
       >
         <ul className="flex flex-col">
           <li>

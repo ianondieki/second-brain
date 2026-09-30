@@ -2,8 +2,9 @@
 
 import { useStrings } from "./ClientStrings";
 
-// Every route in a group downloads its error boundary, so this stays small: a plain button with the primary
-// button's look (components/ui/Button.tsx) instead of importing the Button module and next/link with it.
+// Every route in a group downloads its error boundary, so this stays small: on purpose it keeps its own plain button
+// with the primary button's look and tokens (components/ui/Button.tsx, bg-jacaranda, hover --accent-strong) instead
+// of importing the Button module (docs/platform/design/p16-design-system.md, Errors; the 150 KB budget).
 const PRIMARY =
   "inline-flex min-h-12 w-full items-center justify-center rounded-control bg-jacaranda px-6 text-base " +
   "font-semibold text-on-accent sm:w-auto hover:bg-accent-strong";
