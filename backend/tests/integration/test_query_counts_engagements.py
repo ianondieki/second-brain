@@ -16,7 +16,10 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import interest as interest_module
+from bridge.engagements.history import summaries
+from bridge.engagements.service import load_many
 from bridge.ids import uuid7
 from tests.integration import world as w
 from tests.integration.engagements.api_world import (
@@ -32,7 +35,7 @@ from tests.integration.engagements.api_world import (
     walk_to,
 )
 from tests.integration.matching.scout_world import Org, add_person, add_scout
-from tests.integration.query_counts import LARGE, SMALL, counted
+from tests.integration.query_counts import LARGE, SMALL, counted, statements
 
 
 async def interested(owner_engine: AsyncEngine, world: World, signatory: httpx.AsyncClient, today: date) -> UUID:
@@ -221,3 +224,18 @@ async def test_scout_matches_and_scouts(owner_engine: AsyncEngine, app_engine: A
         assert len(body["items"]) >= LARGE
         assert len(listed["items"]) == 10
         assert (more_matches, more_scouts) == (matches, scouts)
+
+
+async def test_no_engagements_read_nothing_more(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """An empty page reads no tracker facts and no summaries (``load_many`` and ``summaries`` of nothing)."""
+    world = await build(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        count, body = await counted(s.dev, app_engine, "/api/me/engagements")
+    assert body == {"items": []}
+    async with create_session_factory(app_engine)() as db, db.begin():
+        await bind_tenant(db, user_id=world.developer)
+        with statements(app_engine) as seen:
+            assert await load_many(db, [], deals_enabled=True) == {}
+            assert await summaries(db, [], deals_enabled=True, developer_caller=True) == []
+    assert seen == []
+    assert count < 16  # the listed page's 16, less every per-page read of the rows
