@@ -19,8 +19,10 @@ from procrastinate.jobs import Job
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge.crypto.envelope import LocalKeyWrapper
+from bridge.jobs.app import app
 from bridge.jobs.provenance import TIMESTAMP_RETRY
 from bridge.models.enums import ProvenanceStatus
+from bridge.provenance import service
 from bridge.provenance.service import hash_manifest, sign_manifest, timestamp_manifest
 from bridge.provenance.signing import LocalSigner
 from bridge.provenance.tsa import TsaClient, TsaEndpoint, TsaUnavailableError
@@ -48,14 +50,24 @@ async def offline_tsa(kind: str) -> AsyncIterator[TsaClient]:
 
     async def never_answer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         silent.append(writer)
-        await reader.read()  # reads the request, answers nothing, until the client gives up
+        try:
+            await reader.read()  # reads the request, answers nothing, until the client gives up
+        finally:
+            writer.close()
 
     server = await asyncio.start_server(never_answer, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
-    async with server:
+    try:
         yield TsaClient([TsaEndpoint(f"http://127.0.0.1:{port}/tsr", None)], timeout=30.0, deadline=1.0)
+    finally:
+        # Whatever the test body did, even failing with the client's connection still open: close every connection
+        # first (Server.wait_closed waits for them), then the server, bounded, so a regression fails fast instead of
+        # holding the suite to CI's timeout.
         for writer in silent:
             writer.close()
+        server.close()
+        async with asyncio.timeout(5):
+            await server.wait_closed()
 
 
 async def evidence(app_engine: AsyncEngine, kek: bytes, built: Built) -> tuple[dict[str, Any], str]:
@@ -92,9 +104,13 @@ async def test_an_offline_tsa_leaves_timestamp_pending_and_a_later_retry_fills_i
             await timestamp_manifest(s, built.version_id, built.owner_id, tsa=down)
     timed_out = "no answer within the 1 s deadline" in str(failed.value)
     assert timed_out is (kind == "timeout")  # refused at once, or cut off by the attempt's deadline
-    # The job is retried later (a minute on the first attempt, growing, for two weeks), not failed for good.
-    job = Job(queue="provenance", lock=None, queueing_lock=None, task_name="provenance.timestamp_manifest")
-    assert TIMESTAMP_RETRY.get_retry_decision(exception=failed.value, job=job) is not None
+    # The timestamp job retries it later (a minute on the first attempt, growing, for two weeks), not failed for good:
+    # the strategy attached to the task itself, and its decision for this very error.
+    app.perform_import_paths()  # type: ignore[no-untyped-call]
+    strategy = app.tasks[service.TASK_TIMESTAMP].retry_strategy
+    assert strategy is TIMESTAMP_RETRY
+    job = Job(queue=service.QUEUE, lock=None, queueing_lock=None, task_name=service.TASK_TIMESTAMP)
+    assert strategy.get_retry_decision(exception=failed.value, job=job) is not None
 
     sql = "SELECT status, tsa_token, tsa_serial FROM provenance_records WHERE version_id = :v"
     [record] = await rows(owner_engine, sql, v=built.version_id)
