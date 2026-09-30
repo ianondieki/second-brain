@@ -257,3 +257,26 @@ the checkout's confirm, "Check your phone", paid and failed steps (session scrat
    `frontend/app/(app)/billing/` (one route for both sides) with `frontend/e2e/billing.spec.ts`. The row is the
    orchestrator's to update.
 9. Polling carries on while the tab is hidden (bounded by the 2-minute budget); an M2 polish could pause it.
+
+### P14-F fix round (reviewer PASS; ux-reviewer CHANGES_REQUIRED on 3fd9615)
+
+| Finding | Fix |
+|---|---|
+| MAJOR (ux): Try again after a failed or cancelled payment dropped focus to `<body>` | The confirm step's heading takes the step ref and `tabIndex=-1`; `checkout.test.tsx` asserts `document.activeElement` (red without the fix) |
+| Completed steps looked like upcoming ones | Done steps take their own border (no class conflict), a check icon and a visually hidden "…: done" |
+| "Check your phone" contradicted "no prompt arrives" | A simulated wait is titled "Waiting for the simulated payment" `[[COPY-REVIEW]]` |
+| No exit sentence while pending | "You can leave this page: your plan changes once the payment is confirmed." `[[COPY-REVIEW]]` |
+| Two ways back on empty states and blocked refusals | Empty states on `/billing/upgrade` render no page back link; a refusal whose action is Back to Plan & billing hides it (`[data-checkout-blocked]`, CSS `:has`; Firefox before 121 shows both) |
+| `?plan=dev_free` said "cannot be bought here yet" | The current plan is checked first ("You are already on Free."); otherwise a free plan says it costs nothing (`billing.refused.freePlan`) |
+| Legend and options formed one sentence across keys | The legend is a question; each option stands alone |
+| The account menu dropped `?org=` | `billingHref(useSearchParams().get("org"))`, checked as a UUID |
+| Price beside the name at 375 px | Its own line below the name under 640 px |
+| Reviewer: `plan_active` gate untested (M18) | `checkout.test.tsx` "offers the way back only once the plan is active" |
+| Reviewer: the 4 failed reads not pinned | `machine.test.ts` asserts `MAX_POLL_ERRORS === 4` |
+| Reviewer: any 403 read as the organisation-payer sentence | `startRefusal(…, { forOrg })`: only an organisation's 403 `forbidden`; `csrf_failed` and other 403s are the retryable "failed" |
+| Reviewer: a polled answer for another id froze polling | Counted as a transient failed read (stalls after 4) |
+| Reviewer: e2e `signOut` chose its path before the page rendered | Waits for the Account button or Sign out first |
+
+Also: the e2e publish helper waits for the review step to settle and checks the three boxes are ticked before
+Publish (a late render had unticked one at 360 px). Checks: eslint, tsc, vitest (44 files, 643 tests), api:check,
+copy lint and traceability pass; `e2e/billing.spec.ts` and `e2e/auth.spec.ts` 32/32 on the isolated stack.
