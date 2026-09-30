@@ -13,7 +13,7 @@ import { titleLinkClass } from "./ProblemRow";
 import {
   DECISION_KEY,
   FIT_KEY,
-  leadWhy,
+  explain,
   type Decision,
   type Recommendation,
   type RecommendationsState,
@@ -84,7 +84,7 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
   const { decision } = item.pursuit;
   const pursuit = t(`pursuit.${DECISION_KEY[decision]}`);
   const DecisionIcon = DECISION_ICON[decision];
-  const why = leadWhy(item);
+  const { lead: why, reasons, fits } = explain(item);
   const titleId = `recommended-${item.problem.id}`;
 
   return (
@@ -99,6 +99,10 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
           {item.problem.title}
         </Link>
       </h3>
+      <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
+        {item.problem.niche ? <span>{item.problem.niche.label}</span> : null}
+        {item.problem.label ? <span data-label="">{item.problem.label}</span> : null}
+      </p>
       <Chips items={why ? [why] : []}>
         <li data-chip="pursuit" className={cn("inline-flex items-start gap-1.5 text-sm font-semibold", DECISION_TONE[decision])}>
           <DecisionIcon className="mt-0.5 size-4 shrink-0" />
@@ -109,18 +113,22 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
       <details className="group">
         <MoreSummary>{t("details")}</MoreSummary>
         <div className="mt-2 flex max-w-[65ch] flex-col gap-4 border-l-2 border-jacaranda-wash pl-4">
-          <section>
-            <h4 className="text-sm font-semibold text-ink">{t("reasonsTitle", { pursuit })}</h4>
-            <div className="mt-1">
-              <ChipList items={item.pursuit.reasons} />
-            </div>
-          </section>
-          <section>
-            <h4 className="text-sm font-semibold text-ink">{t("whyTitle")}</h4>
-            <div className="mt-1">
-              <ChipList items={item.why} />
-            </div>
-          </section>
+          {reasons.length > 0 ? (
+            <section>
+              <h4 className="text-sm font-semibold text-ink">{t("reasonsTitle", { pursuit })}</h4>
+              <div className="mt-1">
+                <ChipList items={reasons} />
+              </div>
+            </section>
+          ) : null}
+          {fits.length > 0 ? (
+            <section>
+              <h4 className="text-sm font-semibold text-ink">{t("whyTitle")}</h4>
+              <div className="mt-1">
+                <ChipList items={fits} />
+              </div>
+            </section>
+          ) : null}
           {item.why_not ? (
             <section>
               <h4 className="text-sm font-semibold text-ink">{t("whyNotTitle")}</h4>

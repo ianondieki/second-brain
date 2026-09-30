@@ -1314,8 +1314,9 @@
     "problemsLead": "Rising fastest first, then new this week.",
     "coldTitle": "New this week",
     "coldLead": "Nothing is trending here yet, so these are the problems published in the last 7 days.",
+    "coldProjectsLead": "Nothing is trending here yet, so these are the projects published in the last 7 days.",
     "projectsTitle": "Trending projects",
-    "projectsLead": "Each one beside the problem it solves.",
+    "projectsLead": "Rising fastest first, then new this week; each one beside the problem it solves.",
     "gapTitle": "Opportunity gap",
     "gapLead": "Rising problems with fewer than 3 proposals so far.",
     "proposals": "{count, plural, one {# proposal} other {# proposals}}",
@@ -1324,7 +1325,11 @@
     "moreProject": "More about this project",
     "whyTitle": "Why it is here",
     "sourcesTitle": "Newest sources",
-    "noSources": "No cited sources: a developer described this problem.",
+    "noSources": {
+      "developer": "No cited sources: a developer described this problem.",
+      "org_brief": "No cited sources: a verified organisation described this problem in its brief.",
+      "research_agent": "No source to show here; the problem card lists every source it cites."
+    },
     "sourceUnnamed": "Source",
     "sourcePublished": "Published {date}",
     "solvedBy": "Projects solving it",

@@ -114,7 +114,7 @@ export function recommendation(overrides: Partial<Recommendation> = {}): Recomme
     pursuit: { decision: "pursue", label: "Pursue", reasons: ["Trending in its niche", "Good fit for you"] },
     why: ["In a niche you like", "Trending in its niche", "Backed by cited sources"],
     why_not: null,
-    trend: { trending: false, new_this_week: true, z: 1.2, score: 4, badge: null },
+    trend: { trending: true, new_this_week: true, z: 2.1, score: 9, badge: "Trending in Health · Kenya: 3 companies scouting" },
     features: features(),
     ...overrides,
   };

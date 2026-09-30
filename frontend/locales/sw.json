@@ -1314,8 +1314,9 @@
     "problemsLead": "Yanayopanda kwa kasi zaidi kwanza, kisha mapya wiki hii.",
     "coldTitle": "Mapya wiki hii",
     "coldLead": "Hakuna kinachovuma hapa bado, kwa hiyo haya ni matatizo yaliyochapishwa katika siku 7 zilizopita.",
+    "coldProjectsLead": "Hakuna kinachovuma hapa bado, kwa hiyo hii ni miradi iliyochapishwa katika siku 7 zilizopita.",
     "projectsTitle": "Miradi inayovuma",
-    "projectsLead": "Kila mmoja kando ya tatizo unalotatua.",
+    "projectsLead": "Yanayopanda kwa kasi zaidi kwanza, kisha mapya wiki hii; kila mmoja kando ya tatizo unalotatua.",
     "gapTitle": "Pengo la fursa",
     "gapLead": "Matatizo yanayopanda yenye mapendekezo chini ya 3 hadi sasa.",
     "proposals": "Mapendekezo: {count}",
@@ -1324,7 +1325,11 @@
     "moreProject": "Zaidi kuhusu mradi huu",
     "whyTitle": "Kwa nini liko hapa",
     "sourcesTitle": "Vyanzo vipya zaidi",
-    "noSources": "Hakuna vyanzo vilivyotajwa: msanidi programu alieleza tatizo hili.",
+    "noSources": {
+      "developer": "Hakuna vyanzo vilivyotajwa: msanidi programu alieleza tatizo hili.",
+      "org_brief": "Hakuna vyanzo vilivyotajwa: shirika lililothibitishwa lilieleza tatizo hili katika maelezo yake.",
+      "research_agent": "Hakuna chanzo cha kuonyesha hapa; kadi ya tatizo inaorodhesha kila chanzo inachotaja."
+    },
     "sourceUnnamed": "Chanzo",
     "sourcePublished": "Kilichapishwa {date}",
     "solvedBy": "Miradi inayolitatua",

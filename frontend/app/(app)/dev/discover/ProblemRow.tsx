@@ -66,6 +66,8 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
         {problem.niche ? <span>{problem.niche.label}</span> : null}
         <span>{place}</span>
         <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
+        {/* Provenance: developer-reported, AI-drafted and human-reviewed, or a seeded demo example (the API's words). */}
+        {problem.label ? <span data-label="">{problem.label}</span> : null}
       </p>
       <p className="line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
       <Chips items={chips} className="mt-1" />
@@ -92,7 +94,7 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
                 ))}
               </ul>
             ) : (
-              <p className="mt-1 text-ink-soft">{t("noSources")}</p>
+              <p className="mt-1 text-ink-soft">{t(`noSources.${problem.source}`)}</p>
             )}
           </section>
           {projects.length > 0 ? (

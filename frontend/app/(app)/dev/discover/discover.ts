@@ -90,20 +90,29 @@ export function problemAnchor(problemId: string): string {
 }
 
 /**
+ * Chips that say "Trending" only when the item trends (docs/spec/06 6.6: the badge and its words wait for the
+ * baseline and 3 distinct actors). The API words them from the same facts; this keeps a card honest if they ever
+ * disagree.
+ */
+export function honestChips(trending: boolean, chips: readonly string[]): string[] {
+  return trending ? [...chips] : chips.filter((chip) => !/^trending\b/i.test(chip.trim()));
+}
+
+/**
  * The chips a card shows (docs/spec/07 item 2: at most two). A trending card's badge already explains the trend in a
  * sentence, so it keeps one Why chip that the badge does not already say; any other card shows up to two. The rest
  * are listed when the card is expanded.
  */
 export function cardChips(trend: { trending: boolean; badge: string | null }, why: readonly string[]): string[] {
   const badge = trend.trending ? (trend.badge ?? "") : "";
-  const fresh = why.filter((chip) => !badge.includes(chip));
+  const fresh = honestChips(trend.trending, why).filter((chip) => !badge.includes(chip));
   return fresh.slice(0, badge ? 1 : 2);
 }
 
 /** Why chips not shown on the card itself (they go under "More about this problem"). */
 export function moreWhy(trend: { trending: boolean; badge: string | null }, why: readonly string[]): string[] {
   const shown = new Set(cardChips(trend, why));
-  return why.filter((chip) => !shown.has(chip));
+  return honestChips(trend.trending, why).filter((chip) => !shown.has(chip));
 }
 
 /**

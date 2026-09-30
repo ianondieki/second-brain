@@ -24,8 +24,8 @@ export type DiscoverListProps = { query: DiscoverQuery; counties: readonly Count
 );
 
 /**
- * The chosen list with its heading and one line on what it holds. Cold start (nothing trends yet) titles the problems
- * "New this week". An empty list is one sentence and one action (docs/spec/07 item 4): clear the filters when they
+ * The chosen list with its heading and one line on what it holds. Cold start (nothing in the list trends yet) titles
+ * the problems or the projects "New this week". An empty list is one sentence and one action (docs/spec/07 item 4): clear the filters when they
  * narrowed it, else the next useful step.
  */
 export function DiscoverList(props: DiscoverListProps) {
@@ -58,8 +58,13 @@ export function DiscoverList(props: DiscoverListProps) {
   const { board } = props;
   if (query.view === "projects") {
     const items = board.projects.slice(0, MAX_ITEMS);
+    const coldProjects = isColdStart(items);
     return (
-      <Section id="discover-projects" title={t("projectsTitle")} lead={t("projectsLead")}>
+      <Section
+        id="discover-projects"
+        title={coldProjects ? t("coldTitle") : t("projectsTitle")}
+        lead={coldProjects ? t("coldProjectsLead") : t("projectsLead")}
+      >
         {items.length === 0 ? (
           <EmptyState
             {...(narrowed ? clear : { sentence: t("projectsEmpty"), action: t("toProblems"), href: discoverHref({}) })}

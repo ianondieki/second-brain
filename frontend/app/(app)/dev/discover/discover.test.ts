@@ -21,7 +21,7 @@ import {
 import { nichesRefusal, countIssue, profilingRefusal, sameIds, toggle } from "./niches/picker";
 import { recommendation, recommendations as answer } from "@/test/discover";
 
-import { HOME_RECOMMENDATIONS, leadWhy, recommendationsState } from "./recommendations";
+import { explain, HOME_RECOMMENDATIONS, recommendationsState } from "./recommendations";
 
 // REQ-TREND-02, REQ-PERS-01, REQ-PERS-03 (P12-F): the pure rules behind Discover, "Recommended for you" and the
 // liked-niches picker. docs/spec/06 6.6 (cold start, badges), 6.7 (pursuit chip, Why chips) and docs/spec/07 item 2
@@ -182,8 +182,23 @@ describe("Home's recommendations", () => {
     expect(state.personalised).toBe(true);
   });
 
-  it("takes the first Why chip for the card", () => {
-    expect(leadWhy(recommendation())).toBe("In a niche you like");
-    expect(leadWhy(recommendation({ why: [] }))).toBeNull();
+  it("takes the first Why chip for the card, and never repeats a reason under Why it fits", () => {
+    expect(explain(recommendation())).toEqual({
+      lead: "In a niche you like",
+      reasons: ["Trending in its niche", "Good fit for you"],
+      fits: ["In a niche you like", "Backed by cited sources"],
+    });
+    expect(explain(recommendation({ why: [] })).lead).toBeNull();
+  });
+
+  it("never says Trending for a card that does not trend", () => {
+    const quiet = recommendation({ trend: { trending: false, new_this_week: false, z: 1.4, score: 3, badge: null } });
+    expect(explain(quiet)).toEqual({
+      lead: "In a niche you like",
+      reasons: ["Good fit for you"],
+      fits: ["In a niche you like", "Backed by cited sources"],
+    });
+    const trending = recommendation({ trend: { trending: true, new_this_week: false, z: 2, score: 9, badge: "Trending in Health · Kenya: 3 companies scouting" } });
+    expect(explain(trending).reasons).toContain("Trending in its niche");
   });
 });

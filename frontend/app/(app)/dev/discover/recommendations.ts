@@ -1,5 +1,7 @@
 import type { components } from "@/lib/api/schema";
 
+import { honestChips } from "./discover";
+
 // "Recommended for you" (REQ-PERS-01; docs/spec/06 6.7, docs/spec/07 item 2): types and pure helpers for Home's list.
 
 type Schemas = components["schemas"];
@@ -51,7 +53,19 @@ export function recommendationsState(answer: Recommendations | null): Recommenda
   };
 }
 
-/** The card's one Why chip beside the pursuit chip (docs/spec/07 item 2: at most two chips). */
-export function leadWhy(item: Recommendation): string | null {
-  return item.why[0] ?? null;
+/** What a recommendation says, never "Trending" for a card that does not trend (discover.ts honestChips). */
+export interface Explanation {
+  /** The card's one Why chip beside the pursuit chip (docs/spec/07 item 2: at most two chips), or null. */
+  lead: string | null;
+  /** The pursuit decision's reasons ("Why “Pursue”"). */
+  reasons: string[];
+  /** The Why chips not already given as a reason ("Why it fits"). */
+  fits: string[];
+}
+
+export function explain(item: Recommendation): Explanation {
+  const why = honestChips(item.trend.trending, item.why);
+  const reasons = honestChips(item.trend.trending, item.pursuit.reasons);
+  const given = new Set(reasons);
+  return { lead: why[0] ?? null, reasons, fits: why.filter((chip) => !given.has(chip)) };
 }
