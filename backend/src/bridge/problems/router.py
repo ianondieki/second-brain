@@ -2,7 +2,7 @@
 
 - ``GET /api/problems``: the editor's linked-Problem picker and the problem list: published problems clear of
   moderation, newest first, filtered by niche (a parent niche includes its children), country, county (AC-RES-4) and
-  text in the title or statement.
+  text in the title or statement; paged with ``limit``, ``cursor`` and ``next_cursor`` (``bridge.pagination``).
 - ``GET /api/problems/{problem_id}``: one published, clear problem card with its cited sources (URL, publisher, source
   type, dates, verbatim quote) and its label: "AI-drafted, human-reviewed on <date>" for a research card
   (``[[COPY-REVIEW]]``; a card the demo seed made says so instead), "Developer-reported" for a developer's. Anything
@@ -19,6 +19,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
+from bridge import pagination
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, not_found
 from bridge.problems import service
@@ -36,6 +37,7 @@ class ProblemCard(ProblemRef):
 
 class ProblemPage(BaseModel):
     items: list[ProblemCard]
+    next_cursor: str | None = Field(description="Pass as ?cursor= for the next page; null on the last page")
 
 
 class CitationOut(BaseModel):
@@ -66,19 +68,21 @@ async def list_problems(
     county: Annotated[str | None, Query(pattern=COUNTY)] = None,
     q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=NO_NUL)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+    cursor: pagination.Cursor = None,
 ) -> ProblemPage:
     rows = await service.list_published(
         db,
         niche=niche,
         q=(q.strip() or None) if q else None,
-        limit=limit,
-        offset=offset,
+        limit=limit + 1,
+        after=pagination.decode(cursor),
         country=country,
         county=county,
     )
+    last = rows[limit - 1] if len(rows) > limit else None
     return ProblemPage(
-        items=[ProblemCard(**ref.model_dump(), statement=statement) for ref, statement, _published_at in rows]
+        items=[ProblemCard(**ref.model_dump(), statement=statement) for ref, statement, _ in rows[:limit]],
+        next_cursor=None if last is None else pagination.encode(last[2], last[0].id),
     )
 
 

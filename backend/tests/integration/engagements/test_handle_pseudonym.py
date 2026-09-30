@@ -52,7 +52,7 @@ async def test_no_organisation_view_before_interest_confirmed_carries_a_piece_of
     async with clients(app_engine, SETTINGS, org.signatory, org.viewer, developer) as (signatory, viewer, dev):
         seen = {
             "teaser": await signatory.get(f"/api/proposals/{proposal}"),
-            "browse": await signatory.get("/api/proposals", params={"problem": str(world.problem)}),
+            "browse": await signatory.get("/api/proposals", params={"problem_id": str(world.problem)}),
             "match": await signatory.get(f"/api/orgs/{org.id}/matches/{match.id}"),
         }
         created = await signatory.post(f"/api/orgs/{org.id}/interest", json=interest(world, proposal, match.id, today))

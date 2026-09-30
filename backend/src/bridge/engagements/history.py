@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID
 
@@ -55,7 +56,7 @@ from bridge.engagements.schemas import (
     PendingOut,
     SignatureOut,
 )
-from bridge.engagements.service import Loaded, Party, app_now, load, load_holidays
+from bridge.engagements.service import Loaded, Party, app_now, load, load_holidays, load_many
 from bridge.errors import forbidden, not_found
 from bridge.legal.models import LegalTemplate, NdaTemplate
 from bridge.models.enums import (
@@ -105,18 +106,62 @@ async def developer_identity(
     return None, handle or HANDLE_FALLBACK, False
 
 
-async def summary(
-    db: AsyncSession,
+@dataclass(frozen=True, slots=True)
+class _Shown:
+    """What summaries show beside the engagements' own columns, read for all of them at once: the organisations'
+    names, the versions' titles and handles, which engagements have revealed their developer, and the display names
+    of the developers the caller may see (``developer_identity``'s rule)."""
+
+    orgs: dict[UUID, str]
+    versions: dict[UUID, tuple[str | None, str | None]]
+    revealed: set[UUID]
+    developers: dict[UUID, str]
+
+
+async def _shown(db: AsyncSession, engagements: Sequence[Engagement], *, developer_caller: bool) -> _Shown:
+    orgs = await db.execute(
+        select(Organization.id, Organization.legal_name).where(
+            Organization.id.in_(list({e.org_id for e in engagements}))
+        )
+    )
+    versions = await db.execute(
+        select(ProposalVersion.id, ProposalVersion.title, ProposalVersion.owner_handle).where(
+            ProposalVersion.id.in_(list({e.version_id for e in engagements}))
+        )
+    )
+    revealed: set[UUID] = set()
+    if not developer_caller:
+        found = await db.scalars(
+            select(EngagementEvent.engagement_id)
+            .where(
+                EngagementEvent.engagement_id.in_([e.id for e in engagements]),
+                EngagementEvent.to_state.in_(REVEALED_STATES),
+            )
+            .distinct()
+        )
+        revealed = set(found.all())
+    named = [e.developer_id for e in engagements if developer_caller or e.id in revealed]
+    return _Shown(
+        orgs=dict(orgs.tuples().all()),  # a list: a Result has keys(), so dict() would treat it as a mapping
+        versions={row.id: (row.title, row.owner_handle) for row in versions},
+        revealed=revealed,
+        developers=await _names(db, named),
+    )
+
+
+def _summary(
     engagement: Engagement,
     loaded: Loaded,
+    shown: _Shown,
     now: datetime,
     holidays: frozenset[date],
     *,
     developer_caller: bool,
 ) -> EngagementSummary:
-    org = await db.get(Organization, engagement.org_id)
-    version = await db.get(ProposalVersion, engagement.version_id)
-    developer_id, developer, named = await developer_identity(db, engagement, developer_caller=developer_caller)
+    title, handle = shown.versions.get(engagement.version_id, (None, None))
+    named = developer_caller or engagement.id in shown.revealed
+    developer_id = engagement.developer_id if named else None
+    developer = (shown.developers.get(engagement.developer_id) if named else handle) or HANDLE_FALLBACK
     due = None
     if engagement.stage_deadline_at is not None and engagement.ended_at is None:
         d = sm.due(engagement.stage_deadline_at, now, holidays)
@@ -125,9 +170,9 @@ async def summary(
         id=engagement.id,
         proposal_id=engagement.proposal_id,
         version_id=engagement.version_id,
-        proposal_title=(version.title if version is not None else None) or "Proposal",
+        proposal_title=title or "Proposal",
         org_id=engagement.org_id,
-        org_name=org.legal_name if org is not None else "Organisation",
+        org_name=shown.orgs.get(engagement.org_id, "Organisation"),
         developer_id=developer_id,
         developer_name=developer,
         developer_named=named,
@@ -146,16 +191,30 @@ async def summary(
     )
 
 
+async def summary(
+    db: AsyncSession,
+    engagement: Engagement,
+    loaded: Loaded,
+    now: datetime,
+    holidays: frozenset[date],
+    *,
+    developer_caller: bool,
+) -> EngagementSummary:
+    shown = await _shown(db, [engagement], developer_caller=developer_caller)
+    return _summary(engagement, loaded, shown, now, holidays, developer_caller=developer_caller)
+
+
 async def summaries(
     db: AsyncSession, engagements: Sequence[Engagement], *, deals_enabled: bool, developer_caller: bool
 ) -> list[EngagementSummary]:
+    """The summary of each engagement (the lists), with one query per kind of row however many there are (P16-E1)."""
+    if not engagements:
+        return []
     now = await app_now(db)
     holidays = await load_holidays(db, local_date(now))
-    items = []
-    for engagement in engagements:
-        loaded = await load(db, engagement, deals_enabled=deals_enabled, developer_caller=developer_caller)
-        items.append(await summary(db, engagement, loaded, now, holidays, developer_caller=developer_caller))
-    return items
+    loaded = await load_many(db, engagements, deals_enabled=deals_enabled, developer_caller=developer_caller)
+    shown = await _shown(db, engagements, developer_caller=developer_caller)
+    return [_summary(e, loaded[e.id], shown, now, holidays, developer_caller=developer_caller) for e in engagements]
 
 
 def _endorsement(row: EngagementEndorsement, names: dict[UUID, str], hidden: UUID | None = None) -> EndorsementOut:

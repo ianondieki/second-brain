@@ -46,7 +46,7 @@ from fastapi import APIRouter, Depends, Header, Request, Response
 from fastapi.responses import HTMLResponse
 
 from bridge.auth.deps import CurrentSession, Db, SettingsDep
-from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody
+from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, json_errors
 from bridge.legal import nda
 from bridge.profiles.verification import D1Developer
 from bridge.proposals import access, attestations, editor, lifecycle, render, service, views
@@ -216,7 +216,8 @@ async def who_has_seen(proposal_id: UUID, live: CurrentSession, db: Db) -> views
 # --- Tier 2 for organisations (gated by FEATURE_TIER2_ENABLED, then by can_view_tier2) -------------------------------
 
 HTML_PAGE: dict[int | str, dict[str, Any]] = {
-    200: {"content": {"text/html": {"schema": {"type": "string"}}}, "description": "The marked page"}
+    200: {"content": {"text/html": {"schema": {"type": "string"}}}, "description": "The marked page"},
+    **json_errors(*ERROR_RESPONSES, 503),  # errors are JSON, as everywhere, not HTML
 }
 ALREADY_ACCEPTED: dict[int | str, dict[str, Any]] = {
     200: {"model": nda.NdaAcceptanceOut, "description": "Already accepted"}
@@ -269,7 +270,7 @@ async def accept_evaluation_nda(
 @tier2_router.get(
     "/api/orgs/{org_id}/proposals/{proposal_id}/tier2",
     response_class=HTMLResponse,
-    responses={**HTML_PAGE, **UNAVAILABLE},
+    responses=HTML_PAGE,
 )
 async def tier2_page(
     org_id: UUID, proposal_id: UUID, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
@@ -285,7 +286,7 @@ async def tier2_page(
 @tier2_router.get(
     "/api/me/proposals/{proposal_id}/tier2",
     response_class=HTMLResponse,
-    responses={**HTML_PAGE, **UNAVAILABLE},
+    responses=HTML_PAGE,
 )
 async def tier2_preview(
     proposal_id: UUID, request: Request, live: CurrentSession, db: Db, settings: SettingsDep

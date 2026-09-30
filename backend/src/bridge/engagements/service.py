@@ -12,6 +12,8 @@ organisation (``app.org_id``).
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Final
@@ -161,47 +163,16 @@ class Loaded:
     final_payment: PaymentRecord | None = None
 
 
-async def stage_round(db: AsyncSession, engagement: Engagement) -> int:
-    """How many times the engagement entered its current stage (the database's ``stage_round`` for endorsements)."""
-    count = await db.scalar(
-        select(func.count())
-        .select_from(EngagementEvent)
-        .where(
-            EngagementEvent.engagement_id == engagement.id,
-            EngagementEvent.to_state == engagement.state,
-            EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
-        )
-    )
-    return int(count or 0)
+# The command whose event carries the document a state's signatures are for (the NDA, the acceptance certificate).
+_DOCUMENT_OF: Final = {
+    EngagementState.NDA_PENDING: (sm.Command.SEND_NDA, SignatureDocumentKind.MUTUAL_NDA),
+    EngagementState.SIGN_OFF: (sm.Command.ACCEPT_DELIVERY, SignatureDocumentKind.ACCEPTANCE_CERTIFICATE),
+}
 
 
-async def _latest_document(db: AsyncSession, engagement_id: UUID, command: sm.Command) -> DocumentRef | None:
-    event = await db.scalar(
-        select(EngagementEvent)
-        .where(EngagementEvent.engagement_id == engagement_id, EngagementEvent.command == command.value)
-        .order_by(EngagementEvent.seq.desc())
-        .limit(1)
-    )
-    if event is None:
-        return None
-    kind = (
-        SignatureDocumentKind.MUTUAL_NDA
-        if command is sm.Command.SEND_NDA
-        else SignatureDocumentKind.ACCEPTANCE_CERTIFICATE
-    )
+def _document(event: EngagementEvent, kind: SignatureDocumentKind) -> DocumentRef:
     payload = dict(event.payload)
     return DocumentRef(kind, UUID(payload["document_ref"]), bytes.fromhex(payload["document_sha256"]), payload)
-
-
-async def signed_parties(
-    db: AsyncSession, engagement_id: UUID, kind: SignatureDocumentKind, ref: UUID
-) -> frozenset[EngagementParty]:
-    rows = await db.execute(
-        select(Signature.party).where(
-            Signature.engagement_id == engagement_id, Signature.document_kind == kind, Signature.document_ref == ref
-        )
-    )
-    return frozenset(rows.scalars().all())
 
 
 async def load(
@@ -209,71 +180,164 @@ async def load(
 ) -> Loaded:
     """The facts of ``engagement`` for the state machine, and the rows behind them. ``developer_caller``: the caller
     is the engagement's developer, the only one who may read their verification level (D2, for signing)."""
-    state = engagement.state
-    round_ = await stage_round(db, engagement)
-    endorsed = await db.execute(
-        select(EngagementEndorsement.party).where(
-            EngagementEndorsement.engagement_id == engagement.id,
-            EngagementEndorsement.stage == state,
-            EngagementEndorsement.stage_round == round_,
+    loaded = await load_many(db, [engagement], deals_enabled=deals_enabled, developer_caller=developer_caller)
+    return loaded[engagement.id]
+
+
+async def load_many(
+    db: AsyncSession, engagements: Sequence[Engagement], *, deals_enabled: bool, developer_caller: bool = False
+) -> dict[UUID, Loaded]:
+    """``load`` for each of ``engagements`` with one query per kind of row, however many there are (the lists,
+    P16-E1): the current stage's round and endorsements, the agreement versions, the signed agreement's milestones,
+    the final payment, the NDA or acceptance certificate and its signatures, and the developer's level."""
+    if not engagements:
+        return {}
+    ids = [e.id for e in engagements]
+    # How many times each engagement entered each state (the database's stage_round for endorsements).
+    entered = await db.execute(
+        select(EngagementEvent.engagement_id, EngagementEvent.to_state, func.count())
+        .where(
+            EngagementEvent.engagement_id.in_(ids),
+            EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
+        )
+        .group_by(EngagementEvent.engagement_id, EngagementEvent.to_state)
+    )
+    rounds = {(eid, state): int(count) for eid, state, count in entered.tuples()}
+    endorsements = await db.execute(
+        select(
+            EngagementEndorsement.engagement_id,
+            EngagementEndorsement.stage,
+            EngagementEndorsement.stage_round,
+            EngagementEndorsement.party,
+        ).where(
+            EngagementEndorsement.engagement_id.in_(ids),
+            EngagementEndorsement.stage.in_(list({e.state for e in engagements})),
             EngagementEndorsement.milestone_id.is_(None),
         )
     )
-    agreements = list(
-        (
-            await db.execute(
-                select(Agreement).where(Agreement.engagement_id == engagement.id).order_by(Agreement.version.desc())
-            )
-        ).scalars()
+    endorsed: dict[tuple[UUID, EngagementState, int], set[EngagementParty]] = defaultdict(set)
+    for eid, stage, stage_round, party in endorsements.tuples():
+        endorsed[(eid, stage, stage_round)].add(party)
+    agreements: dict[UUID, list[Agreement]] = defaultdict(list)
+    for agreement in (
+        await db.execute(
+            select(Agreement)
+            .where(Agreement.engagement_id.in_(ids))
+            .order_by(Agreement.engagement_id, Agreement.version.desc())
+        )
+    ).scalars():
+        agreements[agreement.engagement_id].append(agreement)
+    milestones: dict[UUID, list[Milestone]] = defaultdict(list)
+    signed_ids = [a.id for versions in agreements.values() for a in versions if a.status is AgreementStatus.SIGNED]
+    if signed_ids:
+        found_milestones = await db.execute(
+            select(Milestone).where(Milestone.agreement_id.in_(signed_ids)).order_by(Milestone.seq)
+        )
+        for milestone in found_milestones.scalars():
+            milestones[milestone.agreement_id].append(milestone)
+    payments: dict[UUID, PaymentRecord] = {}
+    found_payments = await db.execute(
+        select(PaymentRecord)
+        .where(PaymentRecord.engagement_id.in_(ids), PaymentRecord.milestone_id.is_(None))
+        .order_by(PaymentRecord.engagement_id, PaymentRecord.recorded_at, PaymentRecord.id)
     )
+    for payment in found_payments.scalars():
+        payments.setdefault(payment.engagement_id, payment)
+    documents: dict[UUID, DocumentRef] = {}
+    with_documents = {e.id: _DOCUMENT_OF[e.state] for e in engagements if e.state in _DOCUMENT_OF}
+    if with_documents:
+        latest = await db.execute(
+            select(EngagementEvent)
+            .where(
+                EngagementEvent.engagement_id.in_(list(with_documents)),
+                EngagementEvent.command.in_(list({command.value for command, _ in with_documents.values()})),
+            )
+            .order_by(EngagementEvent.engagement_id, EngagementEvent.command, EngagementEvent.seq.desc())
+            .distinct(EngagementEvent.engagement_id, EngagementEvent.command)
+        )
+        for event in latest.scalars():
+            command, kind = with_documents[event.engagement_id]
+            if event.command == command.value:
+                documents[event.engagement_id] = _document(event, kind)
+    signing: dict[UUID, tuple[SignatureDocumentKind, UUID]] = {}
+    for e in engagements:
+        final = next((a for a in agreements.get(e.id, ()) if a.status is AgreementStatus.FINAL), None)
+        if e.id in documents:
+            signing[e.id] = (documents[e.id].kind, documents[e.id].ref)
+        elif e.state is EngagementState.AGREEMENT_SIGNING and final is not None:
+            signing[e.id] = (SignatureDocumentKind.AGREEMENT, final.id)
+    signatures: dict[tuple[UUID, SignatureDocumentKind, UUID], set[EngagementParty]] = defaultdict(set)
+    if signing:
+        found_signatures = await db.execute(
+            select(Signature.engagement_id, Signature.document_kind, Signature.document_ref, Signature.party).where(
+                Signature.engagement_id.in_(list(signing))
+            )
+        )
+        for eid, kind, ref, party in found_signatures.tuples():
+            signatures[(eid, kind, ref)].add(party)
+    levels: dict[UUID, DevVerification | None] = {}
+    if developer_caller:
+        found_levels = await db.execute(
+            select(DeveloperProfile.user_id, DeveloperProfile.verification_level).where(
+                DeveloperProfile.user_id.in_(list({e.developer_id for e in engagements}))
+            )
+        )
+        levels = dict(found_levels.tuples().all())
+    return {
+        e.id: _loaded(
+            e,
+            round_=rounds.get((e.id, e.state), 0),
+            endorsed=frozenset(endorsed.get((e.id, e.state, rounds.get((e.id, e.state), 0)), ())),
+            agreements=agreements.get(e.id, []),
+            milestones=milestones,
+            payment=payments.get(e.id),
+            document=documents.get(e.id),
+            signed=frozenset(signatures.get((e.id, *signing[e.id]), ())) if e.id in signing else frozenset(),
+            developer_d2=developer_caller and levels.get(e.developer_id) in _D2_OR_ABOVE,
+            deals_enabled=deals_enabled,
+        )
+        for e in engagements
+    }
+
+
+def _loaded(
+    engagement: Engagement,
+    *,
+    round_: int,
+    endorsed: frozenset[EngagementParty],
+    agreements: Sequence[Agreement],
+    milestones: Mapping[UUID, Sequence[Milestone]],
+    payment: PaymentRecord | None,
+    document: DocumentRef | None,
+    signed: frozenset[EngagementParty],
+    developer_d2: bool,
+    deals_enabled: bool,
+) -> Loaded:
+    """One engagement's ``Loaded`` from the rows ``load_many`` read (agreements newest version first)."""
     latest = agreements[0] if agreements else None
     final = next((a for a in agreements if a.status is AgreementStatus.FINAL), None)
     signed_agreement = next((a for a in agreements if a.status is AgreementStatus.SIGNED), None)
-    milestones: list[Milestone] = []
-    if signed_agreement is not None:
-        milestones = list(
-            (
-                await db.execute(
-                    select(Milestone).where(Milestone.agreement_id == signed_agreement.id).order_by(Milestone.seq)
-                )
-            ).scalars()
-        )
+    own_milestones = list(milestones.get(signed_agreement.id, ())) if signed_agreement is not None else []
     loaded = Loaded(sm.Facts(), round_, latest_agreement=latest, final_agreement=final)
-    loaded.signed_agreement, loaded.milestones = signed_agreement, milestones
-    loaded.final_payment = await db.scalar(
-        select(PaymentRecord).where(PaymentRecord.engagement_id == engagement.id, PaymentRecord.milestone_id.is_(None))
-    )
-    signed: frozenset[EngagementParty] = frozenset()
-    if state is EngagementState.NDA_PENDING:
-        loaded.nda = await _latest_document(db, engagement.id, sm.Command.SEND_NDA)
-        if loaded.nda is not None:
-            signed = await signed_parties(db, engagement.id, loaded.nda.kind, loaded.nda.ref)
-    elif state is EngagementState.AGREEMENT_SIGNING and final is not None:
-        signed = await signed_parties(db, engagement.id, SignatureDocumentKind.AGREEMENT, final.id)
-    elif state is EngagementState.SIGN_OFF:
-        loaded.certificate = await _latest_document(db, engagement.id, sm.Command.ACCEPT_DELIVERY)
-        if loaded.certificate is not None:
-            signed = await signed_parties(db, engagement.id, loaded.certificate.kind, loaded.certificate.ref)
-    developer_d2 = False
-    if developer_caller:
-        level = await db.scalar(
-            select(DeveloperProfile.verification_level).where(DeveloperProfile.user_id == engagement.developer_id)
-        )
-        developer_d2 = level in _D2_OR_ABOVE
+    loaded.signed_agreement, loaded.milestones, loaded.final_payment = signed_agreement, own_milestones, payment
+    if engagement.state is EngagementState.NDA_PENDING:
+        loaded.nda = document
+    elif engagement.state is EngagementState.SIGN_OFF:
+        loaded.certificate = document
     drafted_by = None
     terms_source = final or latest
     if latest is not None:
         drafted_by = EngagementParty.DEVELOPER if latest.created_by == engagement.developer_id else EngagementParty.ORG
     loaded.facts = sm.Facts(
-        endorsed=frozenset(endorsed.scalars().all()),
+        endorsed=endorsed,
         signed=signed,
         contact_named=engagement.contact_user_id is not None,
         draft_by=drafted_by,
         draft_status=latest.status if latest is not None else None,
         ip_terms=terms_source.ip_terms if terms_source is not None else None,
-        milestones=tuple(m.state for m in milestones),
+        milestones=tuple(m.state for m in own_milestones),
         developer_d2=developer_d2,
-        payment_recorded=loaded.final_payment is not None,
+        payment_recorded=payment is not None,
         deals_enabled=deals_enabled,
     )
     return loaded

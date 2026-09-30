@@ -22,8 +22,9 @@ The queue (P15) shows what a moderator needs to decide: the subject's current Ti
 (``actions``) with the code it answers otherwise (``blocked``: ``already_decided``, ``unsupported_subject`` for a case
 decided from its own queue, ``subject_gone``, ``own_content``, ``cannot_approve_vulnerability``). Plain code works these
 out as the decision does; the database still decides (``app_moderate_*``). Unresolved cases come oldest first; decided
-ones newest decision first, with who decided. At most 200 either way. Claims are read in their own queue
-(``bridge.admin.claims``); research approval is ``bridge.admin.research``; reports arrive after the prototype.
+ones newest decision first, with who decided. At most 200 either way; one case is read by its id wherever it falls.
+Claims are read in their own queue (``bridge.admin.claims``); research approval is ``bridge.admin.research``; reports
+arrive after the prototype.
 """
 
 from __future__ import annotations
@@ -130,6 +131,7 @@ _DECIDED_CASES = text(
     _CASES_SELECT + " WHERE m.status NOT IN ('open', 'held', 'escalated')"
     " ORDER BY m.decided_at DESC NULLS LAST, m.created_at DESC, m.id DESC LIMIT 200"
 )
+_ONE_CASE = text(_CASES_SELECT + " WHERE m.id = :id")
 
 
 def decision_options(
@@ -205,6 +207,13 @@ async def list_cases(db: AsyncSession, *, unresolved: bool, staff_id: UUID) -> C
     """The queue as ``staff_id`` sees it: unresolved cases oldest first, or decided ones newest decision first."""
     rows = (await db.execute(_OPEN_CASES if unresolved else _DECIDED_CASES, {"staff": staff_id})).all()
     return CaseList(items=[await _case_out(row, unresolved=unresolved) for row in rows])
+
+
+async def get_case(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -> CaseOut | None:
+    """One case as ``staff_id`` sees it in the queue, open or decided, wherever it falls in the lists; None when
+    there is no such case (the case page, P16-E1: a queue longer than 200 no longer hides it)."""
+    row = (await db.execute(_ONE_CASE, {"id": case_id, "staff": staff_id})).one_or_none()
+    return None if row is None else await _case_out(row, unresolved=row.status in UNRESOLVED)
 
 
 _CASE = text("SELECT id, subject_type, subject_id, status FROM moderation_cases WHERE id = :id FOR UPDATE")

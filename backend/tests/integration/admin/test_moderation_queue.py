@@ -320,3 +320,62 @@ async def test_a_decision_is_made_by_the_moderation_function(
     assert proposal.moderation_state == "clear"
     reader = await developers(level="d0")
     assert (await reader.get(f"/api/proposals/{created['id']}")).status_code == 200
+
+
+async def test_one_case_opens_by_its_id_wherever_it_falls_in_the_queue(
+    developers: Developers, moderators: Staff, proposal_world: ProposalWorld, owner_engine: AsyncEngine
+) -> None:
+    """P16-E1 item 3 (P16-C2 carried MINOR 4): the case page reads its case by id. With 200 older open cases ahead
+    of it the queue (at most 200, oldest first) no longer lists it, yet the case opens as the queue would show it;
+    once decided, as the decided list shows it. The same gates as the queue: 404 for everyone but staff (and for an
+    unknown case), 403 for staff without the moderator role or with a stale second factor."""
+    owner = await developers()
+    body = draft_body(proposal_world, title="Beyond the queue")
+    body["new_problem"] = {"title": "Queue overflow", "statement": "Pumps stall at noon."}
+    problem_id = str((await publish(owner, (await create(owner, body))["id"])).json()["new_problem_id"])
+    moderator = await moderators()
+    [case] = await cases_about(moderator, problem_id)
+    url = f"/api/admin/moderation/cases/{case['id']}"
+    ahead = [uuid7() for _ in range(200)]
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source, created_at)"
+                " SELECT id, 'problem', gen_random_uuid(), ARRAY['security_vulnerability'], 'regex', '2000-01-01'"
+                " FROM unnest(CAST(:ids AS uuid[])) AS id"
+            ),
+            {"ids": ahead},
+        )
+    try:
+        assert await cases_about(moderator, problem_id) == []  # the 201st open case: not in the list
+        opened = await moderator.get(url)
+        assert opened.status_code == 200, opened.text
+        assert opened.json() == case
+        assert (await decide(moderator, case, "approve")).status_code == 200
+        [decided] = await cases_about(moderator, problem_id, decided=True)
+        reopened = await moderator.get(url)
+        assert reopened.json() == decided
+        assert (decided["status"], decided["actions"], decided["blocked"]) == ("approved", [], "already_decided")
+
+        unknown = await moderator.get(f"/api/admin/moderation/cases/{uuid7()}")
+        assert unknown.status_code == 404
+        assert unknown.json() == {"detail": {"code": "not_found", "message": "No such case."}}
+        assert (await moderator.get("/api/admin/moderation/cases/not-a-uuid")).status_code == 422
+        hidden = await owner.get(url)
+        assert hidden.status_code == 404
+        assert hidden.json() == {"detail": {"code": "not_found", "message": "Not found."}}
+        support = await moderators(role="support")
+        refused = await support.get(url)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "forbidden")
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE sessions SET mfa_verified_at = now() - interval '13 hours' WHERE user_id = :u"),
+                {"u": user_of(moderator)},
+            )
+        stale = await moderator.get(url)
+        assert (stale.status_code, stale.json()["detail"]["code"]) == (403, "step_up_required")
+        admin = await moderators(role="admin")
+        assert (await admin.get(url)).json() == decided
+    finally:
+        async with owner_engine.begin() as conn:  # the session's other tests read the queue's first 200
+            await conn.execute(text("DELETE FROM moderation_cases WHERE id = ANY(:ids)"), {"ids": ahead})

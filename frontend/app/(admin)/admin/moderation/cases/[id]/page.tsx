@@ -46,7 +46,8 @@ const ROLES = new Set(["admin", "moderator"]);
 /**
  * One moderation case (REQ-MOD-01; docs/spec/06 6.12; M2 walkthrough step 6): why it was filed, the subject's public
  * summary (Tier 1 only) field by field with the flagged fields marked by a margin rule, a mark and a word (never colour
- * alone), and the decision. A case that is in neither list reads as gone.
+ * alone), and the decision. A case that does not exist reads as gone (it is read by its id, wherever it falls in the
+ * queue).
  */
 export default async function CasePage({ params }: PageProps<"/admin/moderation/cases/[id]">) {
   const { role } = await staffContext();

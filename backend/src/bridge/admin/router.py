@@ -9,6 +9,8 @@
 - ``GET /moderation/cases``: the moderation queue, unresolved cases first-in first-out (``?decided=true`` for the
   decided ones, newest decision first), each with its proposal's or problem's Tier-1 text, the flagged fields and the
   decisions open to the caller (staff admin or moderator; REQ-MOD-01, ``bridge.admin.moderation``).
+- ``GET /moderation/cases/{case_id}``: one case as the queue shows it, open or decided, whatever its place in the
+  queue (the case page; the lists stop at 200). 404 when there is no such case; the same staff gate as the queue.
 - ``POST /moderation/cases/{case_id}/decision``: approve or reject the version reviewed (``subject_version_id``;
   409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``; audited as
   ``moderation.case_decided``.
@@ -152,6 +154,14 @@ async def moderation_queue(
     staff: StaffModerator, db: Db, decided: Annotated[bool, Query(description="Decided cases instead")] = False
 ) -> moderation.CaseList:
     return await moderation.list_cases(db, unresolved=not decided, staff_id=staff.live.user.id)
+
+
+@router.get("/moderation/cases/{case_id}")
+async def moderation_case(case_id: UUID, staff: StaffModerator, db: Db) -> moderation.CaseOut:
+    found = await moderation.get_case(db, case_id=case_id, staff_id=staff.live.user.id)
+    if found is None:
+        raise not_found("No such case.")
+    return found
 
 
 @router.post("/moderation/cases/{case_id}/decision")

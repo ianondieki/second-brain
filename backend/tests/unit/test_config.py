@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -156,3 +157,22 @@ def test_half_an_oauth_configuration_is_refused(provider: str, half: str) -> Non
 def test_blank_oauth_values_count_as_unset() -> None:
     settings = make(github_client_id=SecretStr(""), github_client_secret=SecretStr("  "))
     assert settings.github_client_id is not None  # present but blank: the provider stays off (bridge.auth.oauth)
+
+
+def test_the_suite_never_reads_a_developers_backend_env(tmp_path: Path) -> None:
+    """P16-E1 item 7: ``make demo`` writes ``backend/.env`` (``PAYMENT_PROVIDER=fake``, the demo's URLs); the suite
+    ignores it (``tests/conftest.py``), so a test sees the same settings on every machine. A file named explicitly is
+    still read, as the app reads ``backend/.env`` outside the tests."""
+    assert Settings.model_config["env_file"] is None
+    env = tmp_path / ".env"
+    env.write_text("PAYMENT_PROVIDER=fake\nLOG_LEVEL=DEBUG\n", encoding="utf-8")
+    values: dict[str, Any] = {
+        "database_url": SecretStr("postgresql+psycopg://u:p@localhost/db"),
+        "secret_key": SecretStr(GOOD),
+        "data_encryption_key": SecretStr(GOOD_KEY),
+        "recovery_code_pepper": SecretStr(GOOD),
+    }
+    read = Settings(**values, _env_file=env)
+    assert (read.payment_provider, read.log_level) == ("fake", "DEBUG")
+    default = Settings(**values)
+    assert default.log_level == "INFO"

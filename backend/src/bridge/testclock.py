@@ -25,7 +25,7 @@ from sqlalchemy.exc import DBAPIError
 from bridge.admin.deps import staff_member
 from bridge.auth.deps import Db, current_session
 from bridge.config import Settings
-from bridge.errors import ApiError
+from bridge.errors import ERROR_RESPONSES, ApiError
 from bridge.models.enums import StaffRole
 
 MAX_OFFSET = timedelta(days=366)
@@ -50,7 +50,11 @@ def build_router(settings: Settings) -> APIRouter:
         raise RuntimeError("the test clock is never mounted in production")
     guard = staff_member(StaffRole.ADMIN) if settings.app_env == "staging" else current_session
     router = APIRouter(
-        prefix="/api/test-clock", tags=["test-clock"], include_in_schema=False, dependencies=[Depends(guard)]
+        prefix="/api/test-clock",
+        tags=["test-clock"],
+        include_in_schema=False,
+        dependencies=[Depends(guard)],
+        responses=ERROR_RESPONSES,
     )
 
     async def _read(db: Db) -> ClockOut:

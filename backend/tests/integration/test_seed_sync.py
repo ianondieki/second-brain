@@ -9,7 +9,6 @@ import copy
 import hashlib
 import os
 import subprocess
-import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -25,6 +24,7 @@ from bridge.config import get_settings
 from bridge.ids import uuid7
 from bridge.seed.legal import load_legal_templates, seed_legal_templates, template_body
 from bridge.seed.reference import load_reference, seed_all, seed_holidays, seed_plans
+from tests.hermetic import python_module
 
 BACKEND = Path(__file__).resolve().parents[2]
 
@@ -144,9 +144,7 @@ async def test_an_unaccepted_template_follows_its_body_and_an_accepted_one_is_fr
 def test_the_seed_command_runs_twice_with_the_same_counts(database_url: URL) -> None:
     env = {**os.environ, "DATABASE_OWNER_URL": database_url.render_as_string(hide_password=False)}
     runs = [
-        subprocess.run(
-            [sys.executable, "-m", "bridge.seed"], cwd=BACKEND, env=env, capture_output=True, text=True, check=False
-        )
+        subprocess.run(python_module("bridge.seed"), cwd=BACKEND, env=env, capture_output=True, text=True, check=False)
         for _ in range(2)
     ]
     assert [r.returncode for r in runs] == [0, 0], runs[0].stderr + runs[1].stderr

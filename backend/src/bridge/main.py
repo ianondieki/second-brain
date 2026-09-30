@@ -13,7 +13,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from bridge import __version__
+from bridge import __version__, errors
 from bridge.admin.claims import router as claims_admin_router
 from bridge.admin.research import router as research_admin_router
 from bridge.admin.router import router as admin_router
@@ -96,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.responsiveness = NoResponsivenessData()  # the directory score has no data until Phase 3
+    errors.install(app, headers=SECURITY_HEADERS)  # one error shape (bridge.errors)
 
     @app.middleware("http")
     async def csrf_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
