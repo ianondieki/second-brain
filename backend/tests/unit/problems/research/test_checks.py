@@ -166,6 +166,7 @@ def test_every_number_must_be_inside_a_cited_quote(statement: str, ok: bool) -> 
         ("Fraud cost Sh11bn and 11 thousand claims.", "ke-hlt-001"),
         ("Coverage reached 89xyz.", "ke-tel-001"),  # an unknown glued suffix fails closed
         ("Sh89 was the fee.", "ke-tel-001"),  # a bare number needs a bare one
+        ("Operators roll out 4G by 2029.", "ke-tel-002"),  # an unknown glued suffix: the quote's four is bare
     ],
 )
 def test_p11_major_1_a_number_carries_its_scale(statement: str, excerpt_id: str) -> None:
@@ -288,6 +289,21 @@ def test_a_bidi_or_format_character_in_any_field_is_refused(bidi: str) -> None:
         changes: dict[str, Any] = {field: value}
         assert check(dataclasses.replace(TELECOM, **changes)) == Discarded("control_character"), field
     assert check(dataclasses.replace(TELECOM, named_orgs=(f"Acme{bidi}",))) == Discarded("control_character")
+
+
+def test_nfkc_never_creates_a_control_or_format_character() -> None:
+    """Why ``has_control`` may check the text as given: no code point's NFKC form holds a C0/C1 control or a Cf
+    character unless the code point is one."""
+    import sys
+    import unicodedata
+
+    def hidden(text: str) -> bool:
+        return any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F or unicodedata.category(c) == "Cf" for c in text)
+
+    created = [
+        cp for cp in range(sys.maxunicode + 1) if not hidden(chr(cp)) and hidden(unicodedata.normalize("NFKC", chr(cp)))
+    ]
+    assert created == []
 
 
 def test_collapse_normalises_nfkc_and_keeps_curly_quotes() -> None:

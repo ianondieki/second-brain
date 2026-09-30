@@ -31,9 +31,10 @@ def collapse(value: str) -> str:
 
 
 def has_control(value: str) -> bool:
-    """Whether the NFKC form of ``value`` holds a C0 or C1 control or a format (Cf) character."""
-    text = normalise(value)
-    return _C0_C1.search(text) is not None or any(unicodedata.category(c) == "Cf" for c in text)
+    """Whether ``value`` holds a C0 or C1 control or a format (Cf) character. Checked on the text as given: NFKC maps
+    no character into those sets (tested over every code point), so the NFKC form holds one exactly when the text
+    does."""
+    return _C0_C1.search(value) is not None or any(unicodedata.category(c) == "Cf" for c in value)
 
 
 def word_count(value: str) -> int:
