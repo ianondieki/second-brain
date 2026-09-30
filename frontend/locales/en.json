@@ -32,6 +32,7 @@
     "signOutFailed": "Sign-out did not finish, so you may still be signed in.",
     "signOutRetry": "Try signing out again",
     "account": "Account",
+    "security": "Sign-in security",
     "notifications": "Notifications",
     "help": "Help",
     "billing": "Plan & billing"
