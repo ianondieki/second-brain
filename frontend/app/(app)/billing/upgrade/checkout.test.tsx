@@ -149,6 +149,8 @@ describe("the simulated checkout", () => {
     expect(primaries()).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(phase()).toBe("confirm");
+    // Focus moves to the step that opened again, never back to <body>.
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "You pay" }));
     expect(window.location.search).not.toContain("checkout=");
   });
 

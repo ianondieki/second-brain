@@ -134,6 +134,7 @@ export function Checkout(props: CheckoutProps) {
           onOutcome={setOutcome}
           onStart={() => void start()}
           alertRef={alert}
+          headingRef={heading}
         />
       ) : phase.kind === "pending" || phase.kind === "stalled" ? (
         <section aria-labelledby="checkout-step" className="flex flex-col gap-4" data-phase={phase.kind}>
@@ -208,6 +209,7 @@ function Steps({ current }: { current: 1 | 2 | 3 }) {
 
 function Confirm({
   alertRef,
+  headingRef,
   ...props
 }: CheckoutProps & {
   busy: boolean;
@@ -216,6 +218,8 @@ function Confirm({
   onOutcome: (outcome: SimulatedOutcome) => void;
   onStart: () => void;
   alertRef: Ref<HTMLDivElement>;
+  /** Takes focus when the step opens again ("Try again" after a failed or cancelled payment). */
+  headingRef: Ref<HTMLHeadingElement>;
 }) {
   const t = useStrings("checkout");
   const { problem } = props;
@@ -223,7 +227,7 @@ function Confirm({
   return (
     <section aria-labelledby="checkout-step" className="flex flex-col gap-6" data-phase="confirm">
       <div className="border-y border-line py-5">
-        <h2 id="checkout-step" className="text-sm font-medium text-ink-soft">
+        <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-sm font-medium text-ink-soft focus:outline-none">
           {t("youPay")}
         </h2>
         <p className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink tabular-nums" data-price="">
