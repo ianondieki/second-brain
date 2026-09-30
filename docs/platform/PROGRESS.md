@@ -366,8 +366,10 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
 | `feat/REQ-BIL-08-fe` (M2, P14-F) | `6fb3f00`+ | impl-frontend: `/billing`, `/billing/upgrade?plan=` (simulated M-Pesa steps), 402 links, avatar-menu entry | reviewer + ux-reviewer; merge |
-| `feat/REQ-RES-02-research` (M2, P11 backend) | `8f175b5` | fix round 1 done (both MAJORs, MINORs a–f; 41/41 mutants killed) | reviewer re-review, CI; merge |
-| `feat/REQ-SCOUT-02-scouts` (M2, P10 backend) | `c1d3fd4` | backend done; reviewer CHANGES_REQUIRED (MAJOR: with the model on, the digest orders by the blended score, so Preview no longer equals the first digest, AC-SCOUT-5); security-reviewer CHANGES_REQUIRED (MAJOR: Express interest and the tracker API name the developer (`developer_name`, `developer_id`) before INTEREST_CONFIRMED; the same code names the developer on M1's pitched engagements at SUBMITTED, spec 06 6.1 says pseudonymous handle until INTEREST_CONFIRMED). The agent's merge of integration was refused by the permission check; the branch merges into integration after its fix round, and the scout demo seed follows in a branch off integration | fix round (both MAJORs, which also fixes M1's tracker, plus cheap MINORs) when a slot frees; re-review; CI; merge |
+| `feat/REQ-RES-02-research` (M2, P11 backend) | `8f175b5` | reviewer round 2 CHANGES_REQUIRED (MAJOR: "Sh90-million", plurals and bracketed scales pass as bare numbers; MINORs: default-ignorable characters and Cyrillic look-alikes hide names, capitalised "Treasury") | fix round 2 in progress |
+| `feat/REQ-PROP-05-screens` (M2, P13-F) | `03c91a5` | editor assistant panel done (vitest 575, e2e 6/6); page load 146,078 B, 926 B over the budget only after the panel is opened; `tier2_overlap` has no message of its own (the API sends no reason) | reviewer + ux-reviewer, CI; merge |
+| `feat/REQ-AUTH-07-fe` (M2, P17-F) | `f58efab`+ | impl-frontend: Cancel setup, new recovery codes with the password | reviewer + ux-reviewer; merge |
+| `feat/REQ-SCOUT-02-scouts` (M2, P10 backend) | `b1f6551` | fix round done (both MAJORs, MINORs a–l); security-reviewer PASS round 2 (2 MINORs: the own-member 404 timing and no throttle on `POST /interest`; a match found before the author joined still shows `allowed`; both go to the scout follow-up branch) | reviewer re-review, CI; merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 
 
