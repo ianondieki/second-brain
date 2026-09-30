@@ -8,7 +8,7 @@ import { ProblemCard } from "@/components/problem/ProblemCard";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { requireMe } from "@/lib/api/server";
-import { homeFor } from "@/lib/auth/routing";
+import { homeOf } from "@/lib/auth/routing";
 
 export async function generateMetadata({ params }: PageProps<"/problems/[id]">): Promise<Metadata> {
   const t = await getTranslations("problem");
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps<"/problems/[id]">):
  */
 export default async function ProblemPage({ params }: PageProps<"/problems/[id]">) {
   const me = await requireMe();
-  const home = homeFor(me.side);
+  const home = homeOf(me);
   const t = await getTranslations("problem");
   const problem = await getProblem((await params).id);
   return (

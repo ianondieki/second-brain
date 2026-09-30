@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { destinationFor, homeFor, isMfaPending, isPending, needsMfaSetup } from "./routing";
+import { destinationFor, homeFor, homeOf, isMfaPending, isPending, needsMfaSetup } from "./routing";
 import { checkEmail, validateLogin, validateSignup, type SignupValues } from "./validation";
 
 const developer: SignupValues = {
@@ -58,7 +58,18 @@ describe("routing helpers", () => {
   it("sends each side to its home", () => {
     expect(homeFor("developer")).toBe("/dev");
     expect(homeFor("org")).toBe("/org");
-    expect(homeFor("staff")).toBe("/admin"); // the staff console (REQ-RES-01 P11-F), no longer the developer placeholder
+    expect(homeFor("staff")).toBe("/dev");
+  });
+
+  it("sends staff to the console only when their role has a section and two-step sign-in is on", () => {
+    const on = { required: true, enrolled: true, verified: true };
+    const off = { required: true, enrolled: false, verified: false };
+    expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "admin" } })).toBe("/admin");
+    expect(homeOf({ side: "staff", mfa: off, user: { staff_role: "admin" } })).toBe("/dev");
+    expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "moderator" } })).toBe("/dev");
+    expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "support" } })).toBe("/dev");
+    expect(homeOf({ side: "org", mfa: on, user: { staff_role: null } })).toBe("/org");
+    expect(homeOf({ side: "developer", mfa: on })).toBe("/dev");
   });
 
   it("knows when the second factor is still owed", () => {
@@ -73,7 +84,8 @@ describe("routing helpers", () => {
     expect(isPending({ side: "pending", mfa: owed })).toBe(true);
     expect(destinationFor({ side: "pending", mfa: owed })).toBe("/auth/mfa");
     expect(destinationFor({ side: "org", mfa: done })).toBe("/org");
-    expect(destinationFor({ side: "staff", mfa: done })).toBe("/admin");
+    expect(destinationFor({ side: "staff", mfa: done })).toBe("/dev");
+    expect(destinationFor({ side: "staff", mfa: done, user: { staff_role: "admin" } })).toBe("/admin");
     expect(destinationFor({ side: "developer", mfa: { required: false, enrolled: false, verified: false } })).toBe("/dev");
   });
 
