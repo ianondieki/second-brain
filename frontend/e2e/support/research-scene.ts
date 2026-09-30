@@ -61,9 +61,14 @@ async function signUp(request: APIRequestContext, email: string, name: string): 
 
 /**
  * A new staff admin with two-step sign-in on, set up in a browser context of its own (so the test's page signs in
- * through the login screen, as a person would). Returns the person, whose `code()` gives fresh codes.
+ * through the login screen, as a person would). Returns the person, whose `code()` gives fresh codes. With
+ * `totp: false` two-step sign-in stays off (the API does not admit such staff to the console).
  */
-export async function newStaffAdmin(browser: Browser, baseURL: string): Promise<Person> {
+export async function newStaffAdmin(
+  browser: Browser,
+  baseURL: string,
+  { totp = true }: { totp?: boolean } = {},
+): Promise<Person> {
   const context = await browser.newContext({ baseURL });
   try {
     const request = context.request;
@@ -76,6 +81,7 @@ export async function newStaffAdmin(browser: Browser, baseURL: string): Promise<
       { email },
     );
     expect(updated, "the staff admin").toMatch(/^[0-9a-f-]{36}$/);
+    if (!totp) return new Person(email, name, "");
     const { secret } = await post<{ secret: string }>(request, "/api/auth/totp/enrol", { password: PASSWORD });
     const person = new Person(email, name, secret);
     await post(request, "/api/auth/totp/confirm", { code: await person.code() });

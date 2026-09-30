@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { formatConfidence, formatDate, formatMoment, safeHttpsUrl } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
-import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
+import { CheckIcon, ClockIcon, ClosedIcon, CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 
 import {
   nicheLabel,
@@ -35,7 +35,8 @@ export async function CandidateRow({ candidate, niches }: { candidate: Candidate
       <h3 className="text-lg text-ink">
         <Link
           href={reviewHref(candidate.id)}
-          className="font-semibold [overflow-wrap:anywhere] text-ink underline decoration-line decoration-1 underline-offset-4 hover:text-jacaranda hover:decoration-jacaranda"
+          data-review-link=""
+          className="inline-flex min-h-11 items-center font-semibold [overflow-wrap:anywhere] text-ink underline decoration-line decoration-1 underline-offset-4 hover:text-jacaranda hover:decoration-jacaranda"
         >
           {candidate.title}
         </Link>
@@ -82,7 +83,12 @@ export async function RunRow({ run, niches }: { run: Run; niches: readonly Admin
   );
 }
 
-const FRESHNESS_TONE = { fresh: "text-ok", stale: "text-ink", archived: "text-ink-soft" } as const;
+/** Freshness as a mark, a word and a colour (docs/spec/07 item 6: never colour alone). */
+const FRESHNESS = {
+  fresh: { tone: "text-ok", Icon: CheckIcon },
+  stale: { tone: "text-ink", Icon: ClockIcon },
+  archived: { tone: "text-ink-soft", Icon: ClosedIcon },
+} as const;
 
 /**
  * The saved excerpts a run reads (GET /api/admin/research/sources), by niche and folded away until opened: each with
@@ -101,7 +107,7 @@ export async function SavedExcerpts({
   const locale = await getLocale();
   return (
     <details className="group border-t border-line pt-6">
-      <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-lg font-semibold text-ink marker:content-none">
+      <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-ink marker:content-none">
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
@@ -114,7 +120,7 @@ export async function SavedExcerpts({
         >
           <path d="m7.5 4.75 5.25 5.25-5.25 5.25" />
         </svg>
-        {t("sources.summary", { count: total })}
+        <h2 className="text-lg text-ink">{t("sources.summary", { count: total })}</h2>
       </summary>
       <p className="mt-3 max-w-[60ch] text-ink-soft">{t("sources.lead", { date: formatDate(locale, asOf) })}</p>
       <div className="mt-6 flex flex-col gap-8">
@@ -131,9 +137,7 @@ export async function SavedExcerpts({
                     <span>{excerpt.publisher}</span>
                     <span>{formatDate(locale, excerpt.published_date)}</span>
                     {excerpt.official ? <span>{t("sources.official")}</span> : null}
-                    <span className={`font-semibold ${FRESHNESS_TONE[excerpt.freshness]}`}>
-                      {t(`sources.${excerpt.freshness}`)}
-                    </span>
+                    <FreshnessMark freshness={excerpt.freshness} label={t(`sources.${excerpt.freshness}`)} />
                   </p>
                 </li>
               ))}
@@ -157,5 +161,15 @@ function ExcerptLink({ url, children }: { url: string; children: ReactNode }) {
     >
       {children}
     </a>
+  );
+}
+
+function FreshnessMark({ freshness, label }: { freshness: Excerpt["freshness"]; label: string }) {
+  const { tone, Icon } = FRESHNESS[freshness];
+  return (
+    <span data-freshness={freshness} className={`inline-flex items-center gap-1 font-semibold ${tone}`}>
+      <Icon className="size-4 shrink-0" />
+      {label}
+    </span>
   );
 }

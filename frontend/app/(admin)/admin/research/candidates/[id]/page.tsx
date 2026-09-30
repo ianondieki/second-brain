@@ -30,10 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
  * and the decision. A card that is no longer a candidate (decided, or never one) reads the same as an unknown id.
  */
 export default async function ReviewPage({ params }: PageProps<"/admin/research/candidates/[id]">) {
-  const { me, role } = await staffContext();
+  const { role } = await staffContext();
   const { id } = await params;
   const t = await getTranslations("adminResearch");
-  const ta = await getTranslations("admin");
   const back = (
     <p className="-mt-2 mb-4">
       <Link href={RESEARCH_PATH} className={standaloneLinkClass}>
@@ -47,16 +46,17 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
       {children}
     </AdminShell>
   );
-  const empty = (sentence: string, action: string, href: string, primary = false) =>
+  const empty = (sentence: string, action: string, href: string) =>
     shell(
       <>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("review.pageTitle")}</h1>
+        <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
+          {t("review.pageTitle")}
+        </h1>
         <div className="mt-6">
-          <EmptyState sentence={sentence} action={action} href={href} primary={primary} />
+          <EmptyState sentence={sentence} action={action} href={href} />
         </div>
       </>,
     );
-  if (!me.mfa.enrolled) return empty(ta("mfaNeeded"), ta("mfaAction"), "/settings/security", true);
   if (role !== "admin") return empty(t("notAdmin"), t("notAdminAction"), "/admin");
   if (!isUuid(id)) return empty(t("review.gone"), t("review.goneAction"), RESEARCH_PATH);
 
@@ -66,7 +66,9 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
   if (loaded.kind === "stepUp") {
     return shell(
       <>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("review.pageTitle")}</h1>
+        <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
+          {t("review.pageTitle")}
+        </h1>
         <div className="mt-6">
           <ClientStrings strings={strings}>
             <PageStepUp />
@@ -92,7 +94,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
           {candidate.seeded_example ? <InfoIcon className="size-4" /> : <PencilIcon className="size-4" />}
           {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
         </p>
-        <h1 id="card-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
+        <h1 id="card-title" tabIndex={-1} className="text-xl [overflow-wrap:anywhere] text-ink focus:outline-none lg:text-2xl">
           {candidate.title}
         </h1>
         <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] text-ink">{candidate.statement}</p>

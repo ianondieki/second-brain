@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
+import { CONSOLE_ROLES } from "@/lib/auth/routing";
+
 import { ADMIN_SECTIONS, AdminNav, adminSections } from "./AdminNav";
 
 afterEach(cleanup);
@@ -19,6 +21,14 @@ describe("AdminNav", () => {
       ["Research", "/admin/research"],
     ]);
     expect(links[0].getAttribute("aria-current")).toBe("page");
+    // One section: no bottom tab bar on phones (the rail from 1024 px only).
+    expect(nav.hasAttribute("data-tab-bar")).toBe(false);
+    expect(nav.className).toContain("hidden lg:block");
+  });
+
+  it("keeps the console roles of the sign-in routing in step with the sections", () => {
+    const roles = new Set(ADMIN_SECTIONS.flatMap((section) => [...section.roles]));
+    expect([...CONSOLE_ROLES].sort()).toEqual([...roles].sort());
   });
 
   it("shows a role only the sections the API admits it to", () => {

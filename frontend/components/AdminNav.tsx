@@ -32,20 +32,25 @@ export function adminSections(role: StaffRole) {
 
 /**
  * Bottom tabs under 1024 px, a left rail from 1024 px (one <nav>, restyled like DevNav and OrgNav). The current
- * section carries aria-current="page" and is marked by colour, weight and a bar, not colour alone.
+ * section carries aria-current="page" and is marked by colour, weight and a bar, not colour alone. With a single
+ * section there is no tab bar below 1024 px (the console home opens that section).
  */
 export function AdminNav({ current, role }: { current?: AdminSection; role: StaffRole }) {
   const t = useTranslations("admin");
   const sections = adminSections(role);
   if (sections.length === 0) return null;
+  // A bottom tab bar with one tab only takes room on a phone: below 1024 px the bar appears from two sections on.
+  const tabs = sections.length > 1;
   return (
     <nav
       aria-label={t("navLabel")}
-      data-tab-bar=""
-      className={
-        "fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] " +
-        "lg:static lg:z-auto lg:w-52 lg:shrink-0 lg:border-0 lg:bg-transparent lg:pt-16 lg:pb-0"
-      }
+      data-tab-bar={tabs ? "" : undefined}
+      className={cn(
+        tabs
+          ? "fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:pb-0"
+          : "hidden lg:block",
+        "lg:w-52 lg:shrink-0 lg:pt-16",
+      )}
     >
       <p className="hidden px-3 pb-3 text-sm font-medium text-ink-soft lg:block">{t("navLabel")}</p>
       <ul className="mx-auto flex max-w-md lg:max-w-none lg:flex-col lg:gap-1">

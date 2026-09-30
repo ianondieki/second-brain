@@ -10,7 +10,7 @@ import {
   savedExcerpts,
   type SavedExcerpt,
 } from "./support/research-scene";
-import { checkScreen, expectEmptyState } from "./support/screen";
+import { checkScreen, expectEmptyState, expectSeparateTargets } from "./support/screen";
 import { PASSWORD, type Person } from "./support/tracker-scene";
 
 // REQ-RES-01 and REQ-RES-02 (prototype part; M2 walkthrough step 3): a staff admin signs in, starts a research run,
@@ -35,26 +35,39 @@ async function signIn(page: Page, person: Person) {
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
-/** The not-found page an unknown address gets, as text. */
-async function notFoundText(page: Page): Promise<string> {
-  const response = await page.goto("/no-such-page-anywhere");
-  expect(response?.status()).toBe(404);
-  return page.locator("body").innerText();
+/** What identifies a response before any script runs: its status, <html lang> and <title>, and its text. */
+async function rawAnswer(page: Page, path: string) {
+  const response = await page.request.get(path, { maxRedirects: 0 });
+  const html = await response.text();
+  return {
+    status: response.status(),
+    lang: /<html[^>]*\slang="([^"]*)"/.exec(html)?.[1] ?? null,
+    title: /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? null,
+  };
 }
 
-test("the staff console is not found for signed-out visitors and for people who are not staff", async ({ page }) => {
-  const unknown = await notFoundText(page);
-  for (const path of ["/admin", "/admin/research", "/admin/research/candidates/01a0ee62-f783-733e-9321-9f34ec389ac2"]) {
+/** The console answers `page`'s session exactly as an unknown address does, before and after scripts run. */
+async function expectUnknownAddress(page: Page, paths: string[]) {
+  const unknown = await rawAnswer(page, "/no-such-page-anywhere");
+  expect(unknown.status).toBe(404);
+  await page.goto("/no-such-page-anywhere");
+  const unknownText = await page.locator("body").innerText();
+  for (const path of paths) {
+    expect(await rawAnswer(page, path), path).toEqual(unknown);
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(404);
-    expect(await page.locator("body").innerText(), path).toBe(unknown);
+    expect(await page.locator("body").innerText(), path).toBe(unknownText);
   }
+}
+
+const CONSOLE_PATHS = ["/admin", "/admin/research", "/admin/research/candidates/01a0ee62-f783-733e-9321-9f34ec389ac2"];
+
+test("the staff console answers signed-out visitors and people who are not staff like an unknown address", async ({
+  page,
+}) => {
+  await expectUnknownAddress(page, CONSOLE_PATHS);
   await newDeveloper(page.request);
-  for (const path of ["/admin", "/admin/research"]) {
-    const response = await page.goto(path);
-    expect(response?.status(), path).toBe(404);
-    expect(await page.locator("body").innerText(), path).toBe(unknown);
-  }
+  await expectUnknownAddress(page, CONSOLE_PATHS);
 });
 
 test.describe("a staff admin", () => {
@@ -62,6 +75,21 @@ test.describe("a staff admin", () => {
     expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL makes the staff admin and writes the drafted card").toBeTruthy();
   });
   test.setTimeout(150_000);
+
+  test("without two-step sign-in gets the unknown-address answer too, and a portal home", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    const staff = await newStaffAdmin(browser, baseURL!, { totp: false });
+    await page.goto("/login");
+    await hydrated(page);
+    await page.getByLabel("Email address").fill(staff.email);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    await expect(page).toHaveURL(/\/dev$/, SERVER_STEP);
+    await expectUnknownAddress(page, CONSOLE_PATHS);
+  });
 
   test("runs research, approves a cited card, and developers can read it", async ({ page, browser, baseURL }, info) => {
     const staff = await newStaffAdmin(browser, baseURL!);
@@ -88,7 +116,7 @@ test.describe("a staff admin", () => {
     const runs = page.getByRole("list", { name: "Recent research runs" });
     await expect(runs.locator("[data-run]").first()).toContainText(niche, SERVER_STEP);
     await expect(runs.locator("[data-run]").first()).toContainText(
-      "No card: the model gave no usable answer, so the demo fallback was used.",
+      "No card: this run used the demo fallback (no live model answer).",
     );
     await checkScreen(page);
 
@@ -121,6 +149,7 @@ test.describe("a staff admin", () => {
     await expect(card).toContainText("AI-drafted");
     await expect(card).toContainText("Names an organisation");
     expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
+    await expectSeparateTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
     await checkScreen(page);
     await card.getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/research/candidates/${problemId}$`), SERVER_STEP);
@@ -189,7 +218,7 @@ test.describe("a staff admin", () => {
     await hydrated(page);
     await page.getByLabel("Code from your app").fill(await staff.code());
     await page.getByRole("button", { name: "Confirm" }).click();
-    await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible(SERVER_STEP);
+    await expect(page.getByRole("heading", { name: title, level: 1 })).toBeFocused(SERVER_STEP);
 
     await page.getByRole("button", { name: "Approve and publish" }).click();
     const refusal = page.locator('[data-refusal="publish.source_not_saved"]');
@@ -199,10 +228,21 @@ test.describe("a staff admin", () => {
       SERVER_STEP,
     );
     await expect(page.getByText("source_not_saved")).toHaveCount(0); // never the API's own words
+    // The check is final: Reject is now the one primary action and Approve is inert.
+    await expect(page.locator("[data-primary]")).toHaveText("Reject");
+    await expect(page.getByRole("button", { name: "Approve and publish" })).toHaveAttribute("aria-disabled", "true");
     await checkScreen(page);
 
+    // Reject asks once more, with focus on the question; Cancel gives focus back to Reject.
     await page.getByRole("button", { name: "Reject", exact: true }).click();
-    await expect(page.getByText("Reject this card? It stays private and cannot be published later.")).toBeVisible();
+    const question = page.getByRole("group", {
+      name: "Reject this card? It stays private and cannot be published later.",
+    });
+    await expect(question).toBeFocused();
+    await checkScreen(page);
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
     await page.getByRole("button", { name: "Reject card" }).click();
     await expect(page.locator('[data-decision="reject"]')).toHaveText("Rejected. The card stays private.", SERVER_STEP);
 

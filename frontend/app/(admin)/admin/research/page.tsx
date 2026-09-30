@@ -27,25 +27,25 @@ const RUNS_SHOWN = 5;
  * admins only; a stale second factor asks for a fresh code first.
  */
 export default async function ResearchPage() {
-  const { me, role } = await staffContext();
+  const { role } = await staffContext();
   const t = await getTranslations("adminResearch");
-  const ta = await getTranslations("admin");
   const header = (
     <header>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+      <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
+        {t("title")}
+      </h1>
       <p className="mt-2 max-w-[60ch] text-ink-soft">{t("lead")}</p>
     </header>
   );
 
-  const refused = (sentence: string, action: string, href: string, primary = false) => (
+  const refused = (sentence: string, action: string, href: string) => (
     <AdminShell role={role} current="research">
       {header}
       <div className="mt-8">
-        <EmptyState sentence={sentence} action={action} href={href} primary={primary} />
+        <EmptyState sentence={sentence} action={action} href={href} />
       </div>
     </AdminShell>
   );
-  if (!me.mfa.enrolled) return refused(ta("mfaNeeded"), ta("mfaAction"), "/settings/security", true);
   if (role !== "admin") return refused(t("notAdmin"), t("notAdminAction"), "/admin");
 
   const loaded = await getResearch();
