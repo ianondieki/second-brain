@@ -194,16 +194,17 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
     t = cfg.trending
     today = nairobi_day(facts.now)
     recent = today - timedelta(days=t.badge_days)
+    oldest = today - timedelta(days=t.window_days)  # table facts older than the signals' window count for nothing
     events: dict[UUID, list[Event]] = defaultdict(list)
     actors: dict[UUID, set[object]] = defaultdict(set)
     signals = {pid: ProblemSignals(brief=p.source == "org_brief") for pid, p in facts.problems.items()}
 
     for p in facts.problems.values():
-        if p.source == "org_brief" and p.published_at is not None:
+        if p.source == "org_brief" and p.published_at is not None and nairobi_day(p.published_at) >= oldest:
             events[p.id].append(Event("verified_org_brief", nairobi_day(p.published_at), 1))
             actors[p.id].add(("brief", p.id))
     for s in {(s.problem_id, s.publisher_key, s.published_date): s for s in facts.sources}.values():
-        if s.published_date is None:
+        if s.published_date is None or s.published_date < oldest:
             continue
         events[s.problem_id].append(
             Event("official_source" if s.official else "independent_source", s.published_date, 1)
@@ -219,7 +220,7 @@ def board(facts: Facts, cfg: RankingConfig) -> Board:
         for problem_id in proposal.problem_ids:
             signals[problem_id].proposals += 1
             signals[problem_id].new_proposals += int(day >= recent)
-            if proposal.owner_id != facts.problems[problem_id].created_by:  # no self-boost
+            if day >= oldest and proposal.owner_id != facts.problems[problem_id].created_by:  # no self-boost
                 submitted.append((proposal.owner_id, problem_id, day))
                 actors[problem_id].add(("owner", proposal.owner_id))
     for (problem_id, day), count in once_per_actor_and_day(submitted).items():

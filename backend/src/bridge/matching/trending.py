@@ -181,7 +181,7 @@ def trends(subjects: Iterable[Subject], decay: Decay, cfg: TrendConfig, now: dat
     for subject in listed:
         score = scores[subject.id]
         base = baselines.get(subject.niche_id)
-        z = None if base is None else round((score - base.mean) / base.sd, 3)
+        z = None if base is None else round((score - base.mean) / base.sd, 3) + 0.0  # never -0.0
         trending = z is not None and z >= cfg.z_trending and score >= cfg.min_score and subject.actors >= cfg.min_actors
         new = subject.published_at is not None and now - subject.published_at <= timedelta(days=cfg.new_days)
         out[subject.id] = Trend(round(score, 3), z, trending, new, subject.actors)
