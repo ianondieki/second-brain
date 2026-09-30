@@ -142,13 +142,16 @@ export function AssistantPanel({
     setDialogProblem(null);
     const result = await calls.grantConsent(id, consent.version);
     if (!result.ok) {
-      if (result.problem === "consent_text_changed") {
-        // The wording changed since it was shown: show the new one, whose version the next press sends.
+      let why = result.problem;
+      if (why === "consent_text_changed") {
+        // The wording changed since it was shown: show the new one, whose version the next press sends. When it cannot
+        // be read, the old wording goes and "Turn on" stays off until the panel is opened again and reads it.
         const read = await calls.consentState(id);
-        if (read.ok) setConsent(read.value);
+        setConsent(read.ok ? read.value : null);
+        if (!read.ok) why = read.problem;
       }
       setGranting(false);
-      return setDialogProblem(result.problem);
+      return setDialogProblem(why);
     }
     setGranting(false);
     setConsent(result.value);
@@ -337,7 +340,7 @@ export function AssistantPanel({
           <button
             type="button"
             onClick={() => void grant()}
-            aria-disabled={granting || undefined}
+            aria-disabled={granting || !consent || undefined}
             className={buttonClass("primary")}
           >
             {t(granting ? "dialog.busy" : "dialog.confirm")}

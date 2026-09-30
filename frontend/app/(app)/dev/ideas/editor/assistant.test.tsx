@@ -141,6 +141,27 @@ describe("the consent dialog", () => {
     expect(fake.suggest).toHaveBeenCalledTimes(1);
   });
 
+  it("when the new wording cannot be read, says why and keeps 'Turn on' off until it is read again", async () => {
+    const fake = assistantCalls({
+      grantConsent: vi.fn(async () => ({ ok: false as const, problem: "consent_text_changed" as const })),
+      consentState: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, value: CONSENT_OFF })
+        .mockResolvedValueOnce({ ok: false, problem: "network" }),
+    });
+    await open(fake);
+    await press("Turn on and ask");
+    expect(within(dialog()).getByRole("alert").textContent).toBe(
+      "We could not reach the server. Check your connection, then try again.",
+    );
+    expect(dialog().textContent).not.toContain(CONSENT_OFF.text); // the outdated wording is gone
+    const confirm = within(dialog()).getByRole("button", { name: "Turn on and ask" });
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
+    await press("Turn on and ask");
+    expect(fake.grantConsent).toHaveBeenCalledTimes(1);
+    expect(fake.suggest).not.toHaveBeenCalled();
+  });
+
   it("is skipped while the assistant is already on for this sign-in", async () => {
     const fake = assistantCalls({ consentState: vi.fn(async () => ({ ok: true as const, value: CONSENT_ON })) });
     await open(fake);
