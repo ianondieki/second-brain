@@ -118,30 +118,32 @@ export function StartRun({
           <p data-refusal={refusalKey(phase.refusal)}>{t(refusalKey(phase.refusal))}</p>
         </Alert>
       ) : null}
-      <div className="max-w-sm">
-        <SelectField
-          id="run-niche"
-          name="niche"
-          label={t("start.niche")}
-          hint={t("start.nicheHint")}
-          value={niche}
-          onChange={(event) => setNiche(event.target.value)}
-        >
-          {options.map((option) => (
-            <option key={option.slug} value={option.slug}>
-              {option.label}
-            </option>
-          ))}
-        </SelectField>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <div className="min-w-0 sm:w-80">
+          <SelectField
+            id="run-niche"
+            name="niche"
+            label={t("start.niche")}
+            hint={t("start.nicheHint")}
+            value={niche}
+            onChange={(event) => setNiche(event.target.value)}
+          >
+            {options.map((option) => (
+              <option key={option.slug} value={option.slug}>
+                {option.label}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+        <SubmitButton variant="primary" busy={busy}>
+          {phase.kind === "starting" ? t("start.starting") : t("start.submit")}
+        </SubmitButton>
       </div>
       <dl className="flex gap-2 text-ink">
         <dt className="text-ink-soft">{t("start.country")}</dt>
         <dd className="font-medium">{t("start.kenya")}</dd>
       </dl>
       <div className="flex flex-col items-start gap-3">
-        <SubmitButton variant="primary" busy={busy}>
-          {phase.kind === "starting" ? t("start.starting") : t("start.submit")}
-        </SubmitButton>
         <p role="status" data-run-status={phase.kind} className="max-w-[60ch] text-ink empty:hidden">
           {status}
         </p>

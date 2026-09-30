@@ -20,10 +20,10 @@ export async function Citations({ sources, labelledBy }: { sources: readonly Cit
         const type = sourceType(source.source_type);
         return (
           <li key={`${source.url}-${index}`} data-citation="" className="flex min-w-0 flex-col gap-3">
-            <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-semibold [overflow-wrap:anywhere] text-ink">{publisher}</span>
               <span className="inline-flex items-center gap-1 text-sm font-medium text-ink-soft">
-                {type === "official" ? <CheckIcon className="size-4 self-center text-ok" /> : null}
+                {type === "official" ? <CheckIcon className="size-4 text-ok" /> : null}
                 {t("sourceType", { type })}
               </span>
               <span className="text-sm text-ink-soft">
