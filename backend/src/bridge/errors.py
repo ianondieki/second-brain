@@ -5,7 +5,8 @@ One shape for every error the API answers (REQ-FND-01, P16-E1): ``{"detail": {"c
 (``ApiErrorBody``). FastAPI's request-validation 422 (``{"detail": [{"loc", "msg", "type"}, ...]}``) is the one
 documented exception. ``install`` makes the framework's own refusals (an unknown path, a method a path does not take,
 a body it cannot parse) and an unexpected failure (500) answer in the same shape: an unknown path's 404 is then the
-same body as a hidden resource's, so nothing tells the two apart.
+same body as a hidden resource's, so nothing tells the two apart. The 422 never quotes the value it refused (a
+password, a code, free text; REQ-SEC-04).
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from http import HTTPStatus
 from typing import Any, Final
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -100,6 +103,19 @@ async def http_error(request: Request, exc: Exception) -> Response:
     return JSONResponse({"detail": error_detail(exc.status_code, exc.detail)}, exc.status_code, headers=headers)
 
 
+# What a request-validation error keeps: where, what and why. Pydantic's ``input`` echoes the value sent (a password,
+# a code, free text) and ``ctx``/``url`` add nothing a client uses (REQ-SEC-04, P16-E1).
+VALIDATION_KEYS: Final = ("loc", "msg", "type")
+
+
+async def validation_error(request: Request, exc: Exception) -> Response:
+    """FastAPI's 422 (``{"detail": [{"loc", "msg", "type"}, ...]}``) without the value each error echoes."""
+    if not isinstance(exc, RequestValidationError):  # registered for RequestValidationError only
+        raise exc
+    errors = [{key: error[key] for key in VALIDATION_KEYS if key in error} for error in exc.errors()]
+    return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+
+
 def install(app: FastAPI, *, headers: Mapping[str, str]) -> None:
     """Every error in one shape: the framework's HTTP errors, and an unexpected exception as a 500 with a fixed body
     (never the exception's text; Starlette still raises it after answering, so it is logged). ``headers`` go on the
@@ -109,4 +125,5 @@ def install(app: FastAPI, *, headers: Mapping[str, str]) -> None:
         return JSONResponse({"detail": INTERNAL_ERROR}, status_code=500, headers=dict(headers))
 
     app.add_exception_handler(StarletteHTTPException, http_error)
+    app.add_exception_handler(RequestValidationError, validation_error)
     app.add_exception_handler(Exception, server_error)

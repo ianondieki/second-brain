@@ -14,6 +14,7 @@ import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from bridge import errors, testclock
@@ -101,6 +102,11 @@ async def test_the_handler_keeps_headers_and_answers_bodiless_statuses_without_a
         await http_error(None, ValueError("not an HTTP error"))  # type: ignore[arg-type]
 
 
+class Secretive(BaseModel):
+    password: str = Field(max_length=8)
+    count: int
+
+
 def _app_with_a_failing_route() -> FastAPI:
     app = create_app(get_settings())
     broken = APIRouter(prefix="/api/p16-e1", responses=ERROR_RESPONSES)
@@ -155,3 +161,35 @@ async def test_the_failure_is_still_raised_after_the_answer() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
         with pytest.raises(RuntimeError, match="secret-ish"):
             await client.get("/api/p16-e1/boom")
+
+
+async def test_a_validation_error_never_echoes_what_was_sent() -> None:
+    """REQ-SEC-04 (P16-E1 item 6): FastAPI's 422 quotes each invalid value (``input``); a password, a code or free
+    text sent back in a response reaches browser tools, proxies and error trackers. The 422 keeps loc, msg and type."""
+    app = create_app(get_settings())
+    probe = APIRouter(prefix="/api/p16-e1", responses=ERROR_RESPONSES)
+
+    @probe.post("/echo")
+    async def echo(body: Secretive) -> None:
+        return None
+
+    app.include_router(probe)
+    async with _client(app) as client:
+        response = await client.post("/api/p16-e1/echo", json={"password": "hunter2-is-too-long", "count": "many"})
+        broken = await client.post(
+            "/api/p16-e1/echo", content=b'{"password": "hunter2-secret"', headers={"content-type": "application/json"}
+        )
+    assert response.status_code == 422
+    assert "hunter2" not in response.text
+    assert "many" not in response.text
+    detail = response.json()["detail"]
+    assert [error["loc"] for error in detail] == [["body", "password"], ["body", "count"]]
+    assert all(set(error) == {"loc", "msg", "type"} for error in detail)
+    assert broken.status_code == 422
+    assert "hunter2" not in broken.text
+    assert broken.json()["detail"][0]["type"] == "json_invalid"
+
+
+async def test_the_validation_handler_is_for_validation_errors_only() -> None:
+    with pytest.raises(ValueError, match="other"):
+        await errors.validation_error(None, ValueError("other"))  # type: ignore[arg-type]
