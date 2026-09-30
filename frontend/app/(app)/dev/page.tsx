@@ -11,6 +11,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { homeFor, needsMfaSetup } from "@/lib/auth/routing";
 
@@ -67,12 +68,7 @@ export default async function DeveloperHome() {
 
       <div className="mt-10 flex max-w-3xl flex-col gap-10">
         {engagements.length === 0 ? (
-          <div data-empty-state="" className="flex flex-col items-start gap-3 border-t border-line pt-6">
-            <p className="max-w-[52ch] text-ink">{t("empty")}</p>
-            <Link href="/dev/ideas" className={standaloneLinkClass}>
-              {t("emptyAction")}
-            </Link>
-          </div>
+          <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/ideas" />
         ) : null}
 
         {waiting.length > 0 ? (

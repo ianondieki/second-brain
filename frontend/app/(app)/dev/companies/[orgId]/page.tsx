@@ -7,11 +7,11 @@ import type { ReactNode } from "react";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { getOrgCard } from "../directory";
-import { Empty } from "../DirectoryResults";
 import { filtersHref, parseFilters } from "../filters";
 import { VerificationBadge } from "../VerificationBadge";
 
@@ -67,7 +67,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
         <>
           <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
           <div className="mt-6">
-            <Empty sentence={t("notFound")} action={t("detailBack")} href={back} />
+            <EmptyState sentence={t("notFound")} action={t("detailBack")} href={back} />
           </div>
         </>
       )}

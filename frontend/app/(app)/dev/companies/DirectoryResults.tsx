@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 import {
   BASE_PATH,
@@ -29,15 +30,15 @@ export function DirectoryResults(props: ResultsProps) {
   const firstPage = filtersHref({ ...filters, cursor: undefined });
 
   if (props.kind === "staleCursor") {
-    return <Empty sentence={t("staleCursor")} action={t("firstPage")} href={firstPage} />;
+    return <EmptyState sentence={t("staleCursor")} action={t("firstPage")} href={firstPage} />;
   }
   const { page } = props;
   if (countOrgs(page) === 0) {
-    if (filters.cursor) return <Empty sentence={t("staleCursor")} action={t("firstPage")} href={firstPage} />;
+    if (filters.cursor) return <EmptyState sentence={t("staleCursor")} action={t("firstPage")} href={firstPage} />;
     return isNarrowed(filters) ? (
-      <Empty sentence={t("emptyFiltered")} action={t("clear")} href={BASE_PATH} />
+      <EmptyState sentence={t("emptyFiltered")} action={t("clear")} href={BASE_PATH} />
     ) : (
-      <Empty sentence={t("emptyAll")} action={t("goHome")} href="/dev" />
+      <EmptyState sentence={t("emptyAll")} action={t("goHome")} href="/dev" />
     );
   }
 
@@ -83,17 +84,5 @@ function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFi
         ))}
       </div>
     </section>
-  );
-}
-
-/** An empty state: one sentence and one action. */
-export function Empty({ sentence, action, href }: { sentence: string; action: string; href: string }) {
-  return (
-    <div data-empty-state="" className="border-t border-line pt-6">
-      <p className="text-ink">{sentence}</p>
-      <Link href={href} className={standaloneLinkClass}>
-        {action}
-      </Link>
-    </div>
   );
 }

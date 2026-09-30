@@ -11,6 +11,7 @@ import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { ClockIcon, SendIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -64,7 +65,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   if (!idea) {
     return shell(
       <Header>
-        <Empty sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />
+        <EmptyState className="mt-6" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />
       </Header>,
     );
   }
@@ -77,20 +78,20 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
       </Header>,
     );
   if (status !== "published") {
-    return header(<Empty sentence={t(`blocked.${status}`)} action={t("back")} href={back} />);
+    return header(<EmptyState className="mt-6" sentence={t(`blocked.${status}`)} action={t("back")} href={back} />);
   }
 
   const [page, niches] = await Promise.all([pickerPage(idea.id, query), nicheTree()]);
-  if (page.kind === "notFound") return header(<Empty sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />);
+  if (page.kind === "notFound") return header(<EmptyState className="mt-6" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />);
   if (page.kind === "staleCursor") {
     const first = pitchHref(idea.id, { ...query, cursor: undefined });
-    return header(<Empty sentence={t("staleCursor")} action={t("firstPage")} href={first} />);
+    return header(<EmptyState className="mt-6" sentence={t("staleCursor")} action={t("firstPage")} href={first} />);
   }
   const { picker } = page;
   // Published but not public to the API: moderation changed after the list was read.
-  if (!picker.proposal_public) return header(<Empty sentence={t("blocked.held")} action={t("back")} href={back} />);
+  if (!picker.proposal_public) return header(<EmptyState className="mt-6" sentence={t("blocked.held")} action={t("back")} href={back} />);
   if (pitchesLeft(picker.cap) === 0) {
-    return header(<Empty sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
+    return header(<EmptyState className="mt-6" sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
   }
   const groups = await pickerGroups(picker);
   // Choices made on another page or search, resolved by id so each is shown by name with its outcome (else dropped).
@@ -101,13 +102,14 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   if (groups.length === 0 && !query.cursor) {
     return header(
       narrowed ? (
-        <Empty
+        <EmptyState
+          className="mt-6"
           sentence={t("emptyFiltered")}
           action={t("clear")}
           href={pitchHref(idea.id, { selected: query.selected })}
         />
       ) : (
-        <Empty sentence={t("emptyAll")} action={t("back")} href={back} />
+        <EmptyState className="mt-6" sentence={t("emptyAll")} action={t("back")} href={back} />
       ),
     );
   }
@@ -152,18 +154,6 @@ async function Header({ back, title, children }: { back?: string; title?: string
       ) : null}
       {children}
     </>
-  );
-}
-
-/** An empty or blocked state: one sentence and one action (docs/spec/07 item 4). */
-function Empty({ sentence, action, href }: { sentence: string; action: string; href: string }) {
-  return (
-    <div data-empty-state="" className="mt-6 border-t border-line pt-6">
-      <p className="text-ink">{sentence}</p>
-      <Link href={href} className={standaloneLinkClass}>
-        {action}
-      </Link>
-    </div>
   );
 }
 

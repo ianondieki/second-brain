@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
+import { EmptyStateFrame } from "@/components/ui/EmptyStateFrame";
 
 import type { searchProblems } from "../calls";
 import { LIMITS, MAX_PROBLEMS, type NicheNode, type ProblemCard, type ProblemMode, type ProblemRef } from "../ideas";
@@ -175,12 +176,14 @@ export function ProblemPanels(props: ProblemPanelsProps) {
               })}
             </ul>
           ) : (
-            <div data-empty-state="" className="border-t border-line pt-4">
-              <p className="text-ink">{searched ? t("noProblems") : t("noProblemsYet")}</p>
-              <Button variant="link" onClick={() => onMode("new")}>
-                {t("describeInstead")}
-              </Button>
-            </div>
+            <EmptyStateFrame
+              sentence={searched ? t("noProblems") : t("noProblemsYet")}
+              action={
+                <Button variant="link" onClick={() => onMode("new")}>
+                  {t("describeInstead")}
+                </Button>
+              }
+            />
           )}
         </div>
       ) : (

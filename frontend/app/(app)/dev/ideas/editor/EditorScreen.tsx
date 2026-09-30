@@ -6,6 +6,7 @@ import { DevNav } from "@/components/DevNav";
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
@@ -40,12 +41,7 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
     return (
       <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
         <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitleEdit")}</h1>
-        <div data-empty-state="" className="mt-6 border-t border-line pt-6">
-          <p className="text-ink">{ideas("notFound")}</p>
-          <Link href={BASE_PATH} className={standaloneLinkClass}>
-            {ideas("back")}
-          </Link>
-        </div>
+        <EmptyState className="mt-6" sentence={ideas("notFound")} action={ideas("back")} href={BASE_PATH} />
       </SignedInShell>
     );
   }

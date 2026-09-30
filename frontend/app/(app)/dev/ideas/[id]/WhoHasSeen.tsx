@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 import { formatMoment } from "../dates";
 import type { ProposalViews } from "./pitch/picker";
@@ -24,12 +23,7 @@ export async function WhoHasSeen({ views }: { views: ProposalViews | null }) {
       {!views ? (
         <p className="mt-4 text-ink">{t("loadFailed")}</p>
       ) : views.items.length === 0 ? (
-        <div data-empty-state="" className="mt-4 border-t border-line pt-4">
-          <p className="text-ink">{t("empty")}</p>
-          <Link href="/dev/companies" className={standaloneLinkClass}>
-            {t("emptyAction")}
-          </Link>
-        </div>
+        <EmptyState className="mt-4" sentence={t("empty")} action={t("emptyAction")} href="/dev/companies" />
       ) : (
         <ol aria-label={t("listLabel")} className="mt-4 border-b border-line">
           {views.items.map((view) => (
