@@ -380,14 +380,19 @@ loaded Sign out, made to save 0.6 KB on `/settings/security`, crashed the page w
 no code split may fail into a route's error boundary). **Stage B is done**: every screen of the four portals is built
 from one design system (`docs/platform/design/p16-design-system.md`), with zero axe violations of any impact on every
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
-gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Next:**
-Stage D (vercel-react-best-practices over the frontend; Lighthouse mobile on each portal's main pages, all three
-scores ≥90), then E and F in order. The demo is in a used state after the reviewer's walkthrough run: `make
+gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Stage D is
+done** (`fc87608`: five read waterfalls fixed with fetch-order tests, the scout form back under 150 KB, Lighthouse
+mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E in flight**: E1
+`feat/P16-backend-consistency` (card `tasks/P16-E1.md`: one error shape, one pagination style, naming, N+1 query-count
+tests, log PII audit, hermetic tests, moderation case by id, trend G5 test) and E2 `feat/P16-coverage-gate` (card
+`tasks/P16-E2.md`: tenancy to ≥95 %, the coverage gate in `pr.yml`, one test per integration, Vitest gaps). Backend
+baseline (CI-equivalent, no `backend/.env`): 4017 tests, 97.92 % total; tenancy 89.01 %. **Then:** the full e2e suite
+three times in CI mode, `make check`, traceability, legacy suite; Stage F. The demo is in a used state after the reviewer's walkthrough run: `make
 demo-reset` before recording or showing it. **Stage E backlog**:
 the moderation case page finds a case only in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test
 G5 (REQ-TREND-01 re-review MINOR 1); `requirePendingMfa` return path for a signed-out person (P16-C1).
 
-**Open branches** (2026-09-30, session 3): none. Integration head: the Stage C merges (after `c6873e8`).
+**Open branches** (2026-09-30, session 3): `feat/P16-backend-consistency`, `feat/P16-coverage-gate`. Integration head `4d71dc5`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
