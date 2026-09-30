@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-import { demoTotpSecret } from "./totp";
+import { ownerSql as researchOwnerSql } from "./research-scene";
+import { demoTotpSecret, totp } from "./totp";
 import { ownerSql, Person, post, signUp, tag } from "./tracker-scene";
 
 /**
@@ -19,12 +20,34 @@ import { ownerSql, Person, post, signUp, tag } from "./tracker-scene";
  */
 
 export const DEMO_PASSWORD = "bridge-demo-2026";
-export const DEMO_MODERATOR = new Person(
+/**
+ * A demo staff login. Its codes start after the last one the API accepted for the account (read by the owner), not
+ * after the last one this process used: a retry or a rerun runs in a new worker, and the API refuses a code whose
+ * window is not later than the last accepted one.
+ */
+class DemoStaff extends Person {
+  private last = 0;
+
+  override async code(): Promise<string> {
+    const stored = Number(
+      researchOwnerSql("SELECT coalesce(totp_last_counter, 0) FROM users WHERE email = :'email';", {
+        email: this.email,
+      }),
+    );
+    const now = Math.floor(Date.now() / 30_000);
+    const counter = Math.max(this.last + 1, stored + 1, now - 1);
+    if (counter > now + 1) await new Promise((r) => setTimeout(r, (counter - now - 1) * 30_000 + 1_000));
+    this.last = counter;
+    return totp(this.secret, { time: counter * 30_000 });
+  }
+}
+
+export const DEMO_MODERATOR = new DemoStaff(
   "moderator@staff.example",
   "Staff Moderator (demo)",
   demoTotpSecret("moderator@staff.example"),
 );
-export const DEMO_ADMIN = new Person(
+export const DEMO_ADMIN = new DemoStaff(
   "admin@staff.example",
   "Staff Admin (demo)",
   demoTotpSecret("admin@staff.example"),
@@ -34,20 +57,56 @@ export const P6_TITLE = "Clear loan-fee statements for SACCO members";
 export const P6_PROBLEM_TITLE = "SACCO members cannot check loan fees";
 export const DEMO_CLAIM_ORG = "County Government of C (fixture)";
 
-/** The demo's staff and moderation cases are there (the owner reads them): a clear message when the seed is missing. */
-export function expectDemoQueues(): void {
+/** The demo items a walkthrough run decides: P6 itself (desktop) or the new problem P6 describes (360 px). */
+export type DemoItem = "proposal" | "problem";
+
+const DEMO_SUBJECT: Record<DemoItem, string> = {
+  proposal: "SELECT id FROM proposals WHERE title = :'title'",
+  problem: "SELECT id FROM problems WHERE title = :'title' AND source = 'developer'",
+};
+const DEMO_TITLE: Record<DemoItem, string> = { proposal: P6_TITLE, problem: P6_PROBLEM_TITLE };
+
+/**
+ * The demo seed is there (the owner reads it): both demo staff, County C's claim and, with `item`, that item's case,
+ * unresolved. A clear message when it is not.
+ */
+export function expectDemoQueues(item?: DemoItem): void {
   const found = ownerSql(
     "SELECT (SELECT count(*) FROM users WHERE email IN ('moderator@staff.example', 'admin@staff.example')" +
       " AND staff_role IS NOT NULL) || ',' ||" +
-      " (SELECT count(*) FROM moderation_cases m JOIN proposals p ON m.subject_type = 'proposal' AND p.id = m.subject_id" +
-      " WHERE p.title = :'title') || ',' ||" +
       " (SELECT count(*) FROM org_claims c JOIN organizations o ON o.id = c.org_id WHERE o.legal_name = :'org');",
-    { title: P6_TITLE, org: DEMO_CLAIM_ORG },
+    { org: DEMO_CLAIM_ORG },
   );
-  expect(
-    found,
-    "the demo seed's staff (2), P6's case (1) and County C's claim (1): run python -m bridge.seed --demo",
-  ).toBe("2,1,1");
+  expect(found, "the demo seed's staff (2) and County C's claim (1): run python -m bridge.seed --demo").toBe("2,1");
+  if (!item) return;
+  const open = ownerSql(
+    `SELECT count(*) FROM moderation_cases WHERE subject_type = :'type' AND subject_id IN (${DEMO_SUBJECT[item]})` +
+      " AND status IN ('open', 'held', 'escalated') AND decided_at IS NULL;",
+    { type: item, title: DEMO_TITLE[item] },
+  );
+  expect(open, `one unresolved case of "${DEMO_TITLE[item]}": run python -m bridge.seed --demo`).toBe("1");
+}
+
+/**
+ * Puts one demo item back as the seed left it, so the walkthrough can run again (a second project's run, a CI retry,
+ * a local rerun): P6 held, or P6's new problem published and clear, and its case open with no decision. Each project
+ * resets only the item it decides, so the two runs never touch each other's. Test data only (the demo refuses to seed
+ * outside dev and test).
+ */
+export function reopenDemoItem(item: DemoItem): void {
+  const title = DEMO_TITLE[item];
+  const subject =
+    item === "proposal"
+      ? "UPDATE proposals SET moderation_state = 'held' WHERE title = :'title';"
+      : "UPDATE problems SET moderation_state = 'clear', status = 'published'" +
+        " WHERE title = :'title' AND source = 'developer';";
+  ownerSql(
+    "BEGIN; " +
+      subject +
+      " UPDATE moderation_cases SET status = 'open', decided_by = NULL, decided_at = NULL, updated_at = now()" +
+      ` WHERE subject_type = :'type' AND subject_id IN (${DEMO_SUBJECT[item]}); COMMIT;`,
+    { title, type: item },
+  );
 }
 
 /** A proposal's moderation case id (the owner reads it), to open the case page directly. */

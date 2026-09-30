@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   caseOfProposal,
+  type DemoItem,
   DEMO_ADMIN,
   DEMO_CLAIM_ORG,
   DEMO_MODERATOR,
@@ -12,6 +13,7 @@ import {
   P6_TITLE,
   publishAs,
   publishNewVersion,
+  reopenDemoItem,
   signInThroughScreens,
   teaserStatus,
   vulnerabilityTeaser,
@@ -47,9 +49,16 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
   });
   test.setTimeout(150_000);
 
-  // Each demo login signs in from one project only (the API refuses a TOTP code used twice), and each demo case can
-  // be decided once: the desktop run is the demo moderator approving P6, the 360 px run the demo admin approving the
-  // new problem P6 describes.
+  // Each demo login signs in from one project only (the API refuses a TOTP code used twice), and each project decides
+  // its own demo item: the desktop run is the demo moderator approving P6, the 360 px run the demo admin approving the
+  // new problem P6 describes. Before each run the item is put back as the seed left it (a retry, the other project's
+  // timing and a local rerun all start from the same state).
+  const itemOf = (project: string): DemoItem => (project === "desktop" ? "proposal" : "problem");
+  test.beforeEach(({}, info) => {
+    reopenDemoItem(itemOf(info.project.name));
+    expectDemoQueues(itemOf(info.project.name));
+  });
+
   test("staff approve the demo's held proposal from the moderation queue, and it publishes", async ({
     page,
     browser,
@@ -77,19 +86,25 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     await expect(page.getByRole("heading", { name: "Moderation", level: 1 })).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("Review the oldest case");
 
-    // P6 waits, held and hidden, with the reason the pre-screen gave; every row has at most two tags.
-    const heldRow = page.locator("[data-case]").filter({ hasText: P6_TITLE });
-    await expect(heldRow).toContainText("Hidden until decided");
-    await expect(heldRow).toContainText("Speaks negatively of a named organisation");
+    // This run's item waits with the reason it was filed (P6 held and hidden; its problem public while checked). The
+    // other project's item is not asserted: it may be decided at any moment. Every row has at most two tags.
+    const title = desktop ? P6_TITLE : P6_PROBLEM_TITLE;
+    const row = page.locator("[data-case]").filter({ hasText: title });
+    if (desktop) {
+      await expect(row).toContainText("Hidden until decided");
+      await expect(row).toContainText("Speaks negatively of a named organisation");
+    } else {
+      await expect(row).toContainText("Public while checked");
+      await expect(row).toContainText("New problem from a developer");
+    }
     for (const row of await page.locator("[data-case]").all()) {
       expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
     }
     await expectSeparateTargets(page.locator("[data-case-link]"));
     await checkScreen(page);
-    expect(await teaserStatus(developer.request, p6)).toBe(404); // held: nobody else can read it
+    if (desktop) expect(await teaserStatus(developer.request, p6)).toBe(404); // held: nobody else can read it
 
-    const title = desktop ? P6_TITLE : P6_PROBLEM_TITLE;
-    await page.locator("[data-case]").filter({ hasText: title }).getByRole("link", { name: title }).click();
+    await row.getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(/\/admin\/moderation\/cases\/[0-9a-f-]{36}$/, SERVER_STEP);
     await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
     if (desktop) {
