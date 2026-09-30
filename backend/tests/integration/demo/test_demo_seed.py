@@ -66,11 +66,13 @@ from bridge.seed.demo.data import (
     PROPOSALS,
     SACCO_B,
     STAFF_ADMIN,
+    STAFF_MODERATOR,
     TELCO_A,
     VIEWED,
     all_accounts,
     totp_secret,
 )
+from bridge.seed.demo.queues import CLAIMED, HELD
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
@@ -342,7 +344,8 @@ async def test_the_proposals_are_published_with_certificates_and_problems(
     seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine
 ) -> None:
     report = seeded[0]
-    published = (*PROPOSALS, SCOUTED)  # P10's scout step publishes one more (bridge.seed.demo.scouts)
+    # P10's scout step publishes one more (bridge.seed.demo.scouts), P15's queues one held for moderation (.queues).
+    published = (*PROPOSALS, SCOUTED, HELD)
     assert set(report.cert_ids) == {p.key for p in published}
     assert len(set(report.cert_ids.values())) == len(published)
     for proposal in published:
@@ -359,7 +362,7 @@ async def test_the_proposals_are_published_with_certificates_and_problems(
         )[0]
         assert (found.status, found.moderation, found.version, found.owner) == (
             "published",
-            "clear",
+            "held" if proposal is HELD else "clear",
             "registered",
             proposal.owner,
         )
@@ -624,6 +627,64 @@ async def test_telco_a_has_a_scout_whose_first_scan_matched_the_untagged_proposa
         page = (await signatory.call("GET", f"/api/orgs/{org}/matches/{match.id}")).json()
     assert (page["available"], page["engagement_id"]) == (True, None)
     assert page["interest"] == {"allowed": True, "reason": None}
+
+
+# ------------------------------------------------------------------------------------------------ staff queues
+
+
+async def test_each_staff_queue_has_an_item_for_the_demo_moderator_and_admin(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """M2 walkthrough step 6 (P15): the demo staff moderator (TOTP through the enrolment path) finds Amina's held P6
+    in the moderation queue, filed by the pre-screen when she published it through the API, and may approve or reject
+    it; the demo staff admin finds County C's E2 claim, written by its owner under RLS, in the claims queue with its
+    review SLA. The moderator has no claims queue."""
+    report = seeded[0]
+    [staff] = await rows(
+        owner,
+        "SELECT staff_role::text AS role, demo_account, totp_enabled_at IS NOT NULL AS totp FROM users WHERE id = :id",
+        id=report.users[STAFF_MODERATOR.email],
+    )
+    assert (staff.role, staff.demo_account, staff.totp) == ("moderator", True, True)
+    assert HELD.pitch_to == ()
+    async with in_process_app(demo_settings(), app, runtime) as (demo_app, _):
+        async with signed_in(demo_app, owner, STAFF_MODERATOR.email) as moderator:
+            cases = (await moderator.call("GET", "/api/admin/moderation/cases")).json()["items"]
+            await moderator.call("GET", "/api/admin/claims", expect=(403,))
+        async with signed_in(demo_app, owner, STAFF_ADMIN.email) as admin:
+            claims = (await admin.call("GET", "/api/admin/claims")).json()
+    [held] = [case for case in cases if case["subject_id"] == str(report.proposals[HELD.key])]
+    assert (held["subject_type"], held["subject_state"], held["reasons"], held["source"]) == (
+        "proposal",
+        "held",
+        ["names_real_org_negative"],
+        "regex",
+    )
+    assert (held["flagged_fields"], held["actions"], held["blocked"]) == (
+        ["problem_statement"],
+        ["approve", "reject"],
+        None,
+    )
+    problems = [case["preview"]["title"] for case in cases if case["subject_type"] == "problem"]
+    described = [p.new_problem.title for p in (*PROPOSALS, SCOUTED, HELD) if p.new_problem is not None]
+    assert sorted(problems) == sorted(described)  # every developer-reported problem waits for review, once
+    assert CLAIMED.owner is not None
+    [claim] = claims["items"]
+    assert (claim["org"]["legal_name"], claim["claimant"]["display_name"]) == (
+        CLAIMED.legal_name,
+        CLAIMED.owner.display_name,
+    )
+    assert (claim["domain"], claim["level"], claim["status"], claim["dispute_case_id"]) == (
+        CLAIMED.domain,
+        "e2",
+        "pending_review",
+        None,
+    )
+    assert claims["review_sla_bd"] == 2
+    assert claim["sla"]["overdue"] is False
+    assert 0 < claim["sla"]["business_days_left"] <= 2  # filed today (2 left), or yesterday if midnight passed
+    [filed] = await rows(owner, "SELECT count(*) FROM org_claims")
+    assert filed[0] == 1  # the re-runs filed nothing more
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

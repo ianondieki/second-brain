@@ -59,6 +59,7 @@ from bridge.seed.demo.data import (
 )
 from bridge.seed.demo.engagements import drive
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
+from bridge.seed.demo.queues import seed_queues
 from bridge.seed.demo.research import ensure_staff, seed_research_card, seeded_niches
 from bridge.seed.demo.runtime import (
     Actors,
@@ -142,6 +143,7 @@ async def seed_demo(
             await step(SCOUTED.key, ensure_proposal(owner_engine, actors, SCOUTED, niches, report))
         mail = runtime.email_provider
         await step("Telco A scout", ensure_scout(owner_engine, actors, factory, settings, mail, niches, report))
+        await step("staff queues", seed_queues(owner_engine, actors, factory, niches, report))
     return report
 
 
