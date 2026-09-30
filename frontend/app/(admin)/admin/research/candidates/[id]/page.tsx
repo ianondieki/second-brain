@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
@@ -8,8 +7,8 @@ import { isUuid } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { Citations } from "@/components/problem/Citations";
 import { formatConfidence, formatMoment, problemHref } from "@/components/problem/problem";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
+import { BackLink } from "@/components/ui/BackLink";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { AdminShell } from "../../../AdminShell";
@@ -34,11 +33,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
   const { id } = await params;
   const t = await getTranslations("adminResearch");
   const back = (
-    <p className="-mt-2 mb-4">
-      <Link href={RESEARCH_PATH} className={standaloneLinkClass}>
-        {t("review.back")}
-      </Link>
-    </p>
+    <BackLink href={RESEARCH_PATH}>{t("review.back")}</BackLink>
   );
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current="research">

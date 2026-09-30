@@ -1,12 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
@@ -50,11 +49,7 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
   const version = idea ? editableVersion(idea) : null;
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-      <p className="-mt-2 mb-4">
-        <Link href={idea ? ideaHref(idea.id) : BASE_PATH} className={standaloneLinkClass}>
-          {idea ? t("backToIdea") : ideas("back")}
-        </Link>
-      </p>
+      <BackLink href={idea ? ideaHref(idea.id) : BASE_PATH}>{idea ? t("backToIdea") : ideas("back")}</BackLink>
       <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant"])}>
         <Editor
           id={idea?.id ?? null}

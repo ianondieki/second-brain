@@ -2,11 +2,20 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { standaloneLinkClass } from "./Button";
+import { cn } from "./cn";
+
+export interface BackLinkProps {
+  href: string;
+  children: ReactNode;
+  /** For the rare page that hides it while a notice carries the way on (the checkout). */
+  className?: string;
+  [data: `data-${string}`]: string | undefined;
+}
 
 /** The link back to the list a page was opened from, on its own 44 px line above the page title. */
-export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+export function BackLink({ href, children, className, ...data }: BackLinkProps) {
   return (
-    <p className="-mt-2 mb-4">
+    <p className={cn("-mt-2 mb-4", className)} {...data}>
       <Link href={href} className={standaloneLinkClass}>
         {children}
       </Link>

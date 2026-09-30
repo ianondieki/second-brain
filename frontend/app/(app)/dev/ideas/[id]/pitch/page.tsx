@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -7,11 +6,12 @@ import type { ReactNode } from "react";
 import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass } from "@/components/ui/Button";
 import { ClockIcon, SendIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -141,11 +141,7 @@ async function Header({ back, title, children }: { back?: string; title?: string
   const ideas = await getTranslations("ideas");
   return (
     <>
-      <p className="-mt-2 mb-4">
-        <Link href={back ?? BASE_PATH} className={standaloneLinkClass}>
-          {back ? t("back") : t("allIdeas")}
-        </Link>
-      </p>
+      <BackLink href={back ?? BASE_PATH}>{back ? t("back") : t("allIdeas")}</BackLink>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
       {back ? (
         <p className="mt-1 [overflow-wrap:anywhere] text-ink-soft">

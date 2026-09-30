@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
@@ -8,9 +7,9 @@ import { isUuid } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
+import { BackLink } from "@/components/ui/BackLink";
 
 import { AdminShell } from "../../../AdminShell";
 import { PageStepUp } from "../../../research/PageStepUp";
@@ -52,11 +51,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   const t = await getTranslations("adminModeration");
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current="moderation">
-      <p className="-mt-2 mb-4">
-        <Link href={MODERATION_PATH} className={standaloneLinkClass}>
-          {t("case.back")}
-        </Link>
-      </p>
+      <BackLink href={MODERATION_PATH}>{t("case.back")}</BackLink>
       {children}
     </AdminShell>
   );

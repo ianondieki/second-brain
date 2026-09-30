@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -8,7 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -48,11 +47,7 @@ export default async function LikedNichesPage() {
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />}>
-      <p className="-mt-2 mb-4">
-        <Link href={DISCOVER_PATH} className={standaloneLinkClass}>
-          {t("back")}
-        </Link>
-      </p>
+      <BackLink href={DISCOVER_PATH}>{t("back")}</BackLink>
       <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
       {liked ? (
         <>

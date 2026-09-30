@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { InfoIcon } from "@/components/ui/status-icons";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -13,6 +11,7 @@ import { billingHref, isOrgId, isPlanCode, safeNext } from "@/lib/billing/upgrad
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { getCurrentPlan, getPlans, planName } from "../data";
 import { billingSubject, sideOf } from "../plans";
 import { SamplePrices } from "../SamplePrices";
@@ -50,11 +49,9 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   const shell = (title: string, children: ReactNode, tag?: ReactNode, withBack = true) => (
     <SignedInShell homeHref={home}>
       {withBack ? (
-        <p className="-mt-2 mb-4 [main:has([data-checkout-blocked])_&]:hidden" data-page-back="">
-          <Link href={back} className={standaloneLinkClass}>
-            {tc("back")}
-          </Link>
-        </p>
+        <BackLink href={back} className="[main:has([data-checkout-blocked])_&]:hidden" data-page-back="">
+          {tc("back")}
+        </BackLink>
       ) : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{title}</h1>

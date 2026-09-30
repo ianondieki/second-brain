@@ -57,4 +57,15 @@ describe("BackLink", () => {
     expect(link.parentElement?.tagName).toBe("P");
     expect(link.parentElement?.className).toBe("-mt-2 mb-4");
   });
+
+  it("takes a class and data attributes for a page that hides it while a notice carries the way on", () => {
+    render(
+      <BackLink href="/billing" className="[main:has([data-checkout-blocked])_&]:hidden" data-page-back="">
+        Plan and billing
+      </BackLink>,
+    );
+    const line = screen.getByRole("link", { name: "Plan and billing" }).parentElement!;
+    expect(line.getAttribute("data-page-back")).toBe("");
+    expect(line.className).toBe("-mt-2 mb-4 [main:has([data-checkout-blocked])_&]:hidden");
+  });
 });
