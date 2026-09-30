@@ -165,10 +165,14 @@ def test_at_most_three_per_niche_in_the_top_ten_and_one_exploration_slot() -> No
 
 
 def test_mmr_spreads_niches_before_repeating_one() -> None:
-    liked = [card(z=2.0, orgs=3) for _ in range(3)]
-    sibling = card(niche=SIBLING, z=2.0, orgs=3)
+    liked = [card(z=2.0, orgs=4) for _ in range(3)]
+    sibling = card(niche=SIBLING, z=2.0, orgs=3)  # a point or two below the liked niche's cards
     rows = rank([*liked, sibling], dev(liked=frozenset({LIKED, SIBLING})), R, T, NOW)
-    assert rows[1].card is sibling  # a close second from another niche beats a third of the same niche
+    assert rows[0].score > rows[1].score
+    assert rows[0].card in liked
+    assert rows[1].card is sibling  # a close second from another niche beats the same niche's equal cards
+    without_mmr = rank([*liked, sibling], dev(liked=frozenset({LIKED, SIBLING})), replace(R, mmr_lambda=1.0), T, NOW)
+    assert without_mmr[3].card is sibling  # by score alone it would come last
 
 
 def test_only_research_cards_and_briefs_are_recommended() -> None:
