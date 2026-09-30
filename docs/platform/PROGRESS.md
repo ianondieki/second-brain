@@ -363,7 +363,20 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 **In flight.** Merged into the integration branch on 2026-09-29 (session 2): schema v2 `ba42e69` (round 6: reviewer PASS, security-reviewer PASS, CI green), T2.6a `309330b`, D1 `44bd06d`, T2.4 `f5f322b` (re-check: reviewer PASS, security-reviewer PASS, CI green), T2.2 (reviewer PASS round 2; security-reviewer PASS after two sanitiser fixes: bounded input and a linear, total block scan; CI green); 1657 backend tests pass on the merged tree, frontend 180. The MINOR follow-ups of each review are in the task cards (REQ-REPO-01, REQ-PROV-01, REQ-LLM-01).
 
-**Open branches: none** (2026-09-30). Every M2 build branch is merged; integration head `a07b269`.
+**Session 3 (2026-09-30, new container; the M2 finish, stages A–F of the owner's brief).** Stage A done: the five
+vetted skills load (`frontend-design`, `impeccable`, `webapp-testing`, `vercel-react-best-practices`,
+`/ecc-code-review`); Linux setup redone (dockerd, `bridge-testdb`, backend venv, legacy venv 307 OK, `cloudflared`
+stub, Playwright shim at `/home/user/pw-shim`, `npm ci`); the compose CA override (scratchpad `compose.ccr.json`,
+`gen_ccr.py`) must escape `$` as `$$` in `dockerfile_inline`, or compose interpolates `$WITH_DEV_TOOLS` to empty and the
+demo seed is left out of the image. CodeQL on `37c89c6` (run 36682487514): exactly the eight D-42 findings, nothing
+new. Stage B1 done: `docs/demo/ui-inventory.md` (42 routes, 10 email kinds, every one-off pattern) and the design
+plan `docs/platform/design/p16-design-system.md` (`83646d8`). **In flight:** B2 design-system pass
+(`feat/P16-design-system`, card `tasks/P16-B.md`, impl-frontend). **Next:** B2 reviews and merge, then B3 as two
+cards run in parallel (C1 developer/public/settings on port 3101, C2 organisation/tracker/admin on port 3102; drafts in
+the scratchpad `cards/`, carried MINORs from `P16.md`, `REQ-ADM-01.md`, `REQ-TREND-01.md` assigned there), then stages
+C–F in order.
+
+**Open branches** (2026-09-30, session 3): `feat/P16-design-system`. Integration head `83646d8`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
