@@ -216,13 +216,58 @@ Fix-round mutations (each applied alone by a private script that restores the or
 With M1-M25 re-run on the fixed code: 41 of 41 killed. One mutant, NFKC inside `has_control`, was equivalent
 (proved over every code point) and the NFKC call there was removed.
 
+## Fix round 2 (re-review CHANGES_REQUIRED at `8f175b5`: one MAJOR, two MINORs)
+
+- **MAJOR, the word after a number** (`75b80b4`, `e59b3c2`). An unrecognised scale after a hyphen, a space or a
+  bracket was still a bare number: "Farmers lost Sh90-million." passed on ke-agr-002's "90-kilogramme", and so did
+  "Sh90 millions", "Sh90 mln", "Sh90 (million)", "Sh2,000 crore", "50 per-cent" and "Sh50 billions". Now the word
+  after a number decides its scale whatever joins it: glued letters, a dash-joined word ("90-kilogramme" is suffix
+  `kilogramme`, "Sh90-million" 90 million, "four-year" suffix `year`), a bracketed word, or the next word after a
+  space (a dash with a space on either side reads as a space). Known scales are normalised (plurals, `mln`, `bln`,
+  `mio`, `pct`, `pp`, `bps`, "per cent" with any dash); **any other word becomes the number's suffix** and needs the
+  same word after the same number in a quote. **Why a suffix rather than refusing:** the code cannot tell a magnitude
+  ("crore", a typo, a unit) from a noun, so it asks the quote to carry the same word, which fails closed on every
+  unknown magnitude while a figure copied with its quote's words ("Level 4 public", "90-kilogramme bags") still passes;
+  refusing every figure followed by a word would discard nearly every card. The one exception is function words
+  (a closed class that can never be a magnitude: "to", "per", "by", "and", ...), which leave the number bare, as in
+  "Sh0.41 to Sh0.3 per minute by March 2029". The prompt now asks the model to copy the word that follows each figure.
+  The seeded answers and the eval pass unchanged. Tests: every scenario above, "Sh90 [bn]", a spaced em dash,
+  "Sh2,000crore", "Sh50 billions", positives ("25 millions of bags", "Sh11 billions", "for a 50 kilogram bag"), a
+  unit that differs ("90 bags" against "90-kilogramme" fails), and the publish gate ("Sh90-million" gets 409).
+- **MINOR 1, invisible and look-alike characters** (`6c6d7ad`, `e59b3c2`). `has_control` also refuses every
+  Default_Ignorable_Code_Point (U+034F, U+FE00-FE0F, U+115F, U+1160, U+3164, tag characters, ...) and U+2800, in
+  every card field and in the saved excerpts' quotes, and the D-45 detection ignores them. Look-alikes: a card's
+  title, statement and affected group may hold only Latin letters, ASCII digits (after NFKC) and no combining marks
+  (`non_latin_text`); chosen over a confusables skeleton as the simpler rule that cannot miss a script, since cards
+  are English or Swahili. Tests: each character above, U+0430, U+0441, U+0405, Greek alpha, Arabic-Indic digits,
+  Latin accents passing, the excerpt loader, and the publish gate.
+- **MINOR 2, "Treasury"** (`f8f6394`). An alias may be `{text: Treasury, case_sensitive: true}`: matched only as
+  written or in capitals. "the Treasury said" needs an official source; "treasury bills" does not.
+
+Fix-round-2 mutations (all killed; the whole list re-run on `e59b3c2`: **55 of 55 killed**):
+
+| # | Mutation | Killed by |
+|---|---|---|
+| MC1 | a dash-joined word ignored | `test_checks.py` |
+| MC2 | a bracketed word ignored | `test_checks.py` |
+| MC3 | an unknown dash-joined or bracketed word read as bare | `test_checks.py` |
+| MC4 | any word after a space read as bare (the old rule) | `test_checks.py` |
+| MC5 | function words taken as suffixes too | `test_checks.py`, the eval |
+| MC6-MC8 | `millions`, `mln`, `billions` unknown | `test_checks.py` |
+| MA4 | an unknown glued suffix read as bare (updated) | `test_checks.py` (`Sh2,000crore`) |
+| MB2 | Cf characters that are not default-ignorable allowed | `test_checks.py` (U+0600, U+FFF9) |
+| MB6 | default-ignorable characters allowed | `test_checks.py`, `test_sources.py`, `test_research_api.py` |
+| MB7-MB9 | the Latin-only rule off, or letters or marks and digits unchecked | `test_checks.py` |
+| MD1 | the case-sensitive flag ignored | `test_checks.py` |
+| MD2 | a case-sensitive alias matched in any case | `test_checks.py` |
+
 ## Commit sizes
 
 CLAUDE.md asks for commits of about 300 changed lines. Over it: `f1e7fd6` (+856: loader, policy and their tests),
 `9b9f511` (+544, checks and tests), `838bc08` (+1129: pipeline, job, test rig and tests), `caf7230` (+903: review,
 admin API and its tests), `a62d96a` (+330), `eda1086` (+421: seed module and tests), and `816a339` (+2924/-289,
 generated `openapi.json` and `schema.d.ts` only). Each is one concern with its tests; the generated files are
-regenerated, never hand-edited. The fix-round commits are 12-150 lines. `9b9f511` and `eda1086` went in with a lint
+regenerated, never hand-edited. The fix-round commits are 12-150 lines (round 2: 8 to 243 lines; `75b80b4` is the largest, mostly tests). `9b9f511` and `eda1086` went in with a lint
 and a mypy error, fixed in `047b5e5` and `1de8ff5`.
 
 ## Deviations and notes

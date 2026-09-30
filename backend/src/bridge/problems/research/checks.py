@@ -3,10 +3,11 @@ decides whether a draft becomes a candidate card, and whether a candidate may be
 
 A draft (``Draft``, the model's answer after parsing) is kept only when, in this order:
 
-1. **Text.** NFKC and whitespace collapsed (the revision 0005 operating rule), then no control or format character,
-   a title of 1 to 90 characters, a statement of 1 to 120 words and at most 1500 characters, an affected group of at
-   most 200 characters, at most 10 named organisations of at most 200 characters (``text_out_of_bounds``,
-   ``control_character``).
+1. **Text.** NFKC and whitespace collapsed (the revision 0005 operating rule), then no control, format or
+   default-ignorable character (``control_character``), only Latin letters, ASCII digits and no combining marks in the
+   title, statement and affected group (``non_latin_text``), a title of 1 to 90 characters, a statement of 1 to 120
+   words and at most 1500 characters, an affected group of at most 200 characters, at most 10 named organisations of
+   at most 200 characters (``text_out_of_bounds``).
 2. **Citations.** At least one (``no_citation``); every cited id is one of the excerpts this run sent, else the whole
    draft is discarded (``unknown_excerpt``: the model invented a source). A citation counts only when its supporting
    text (at least ``min_support_words`` words) appears verbatim in the excerpt's quote after whitespace collapsing,
@@ -14,15 +15,18 @@ A draft (``Draft``, the model's answer after parsing) is kept only when, in this
    ``no_verified_citation``.
 3. **Numbers.** Every number in the title, statement, affected group and named organisations appears in a cited
    quote with the same scale (``unsupported_number``): digits (``2,000`` is 2000; ``11.6`` is not 11) and the number
-   words two to ninety; letters glued to a number are its scale ("Sh15m" is 15 million, "89B" 89 billion, an unknown
-   suffix such as "4G" matches only itself), and after a space the scale words percent, percentage points,
-   thousand, million, billion, trillion and their abbreviations; a bare number needs a bare one. So figures from two
+   words two to ninety; the word glued to a number, joined by a dash, in brackets or after a space is its scale
+   ("Sh15m", "Sh90-million", "Sh90 (mln)" and "Sh90 millions" are all 90 or 15 million), any word it does not know
+   being a suffix that only the same word after the same number in a quote supports ("90-kilogramme", "crore"),
+   except function words, which leave the number bare ("Sh0.3 per minute"; see ``_SCALES``); a bare number needs a
+   bare one. So figures from two
    excerpts are never merged, rounded or averaged into a new one (ke-hlt-001's Sh11 billion and ke-hlt-002's
    Sh11.6 billion stay apart), and "89 percent" never supports "Sh89m".
 4. **Named organisations (D-45 default (a)).** The organisations of the allowlist (and every publisher) found in the
    text as whole words, plus whatever the model listed in ``named_orgs``: a card naming any needs an official cited
-   source (``named_org_without_official``). Detection runs on the NFKC text with format characters ignored, in any
-   case, a hyphen matching any dash, a space or nothing; the model's own list is the second net; the approval screen
+   source (``named_org_without_official``). Detection runs on the NFKC text with invisible characters ignored, in any
+   case (a ``case_sensitive`` alias such as "Treasury": as written or in capitals), a hyphen matching any dash, a
+   space or nothing; the model's own list is the second net; the approval screen
    shows the names with the checklist placeholder.
 5. **Sources (AC-RES-1).** One official cited source (an allowlisted government or regulator domain) or two
    independent publishers (the allowlist's publisher, so one publisher's two domains are one)
