@@ -375,16 +375,17 @@ were built, measured (+0.35 s LCP from React's reveal hold) and replaced by a na
 C2 organisation portal, tracker and staff console `02a1953` (reviewer and ux-reviewer PASS round 2). CI on B2 found two
 test races, fixed at the cause (`settled()` waits for running transitions before axe; the scout test reads its own
 digest item). The demo was reset at `beec285` (the long-lived demo database had 431 open moderation cases, over the
-API's 200-row list, so two moderation e2e tests failed there only). **In flight:** C1 (developer portal, public pages,
-billing, settings; `feat/P16-polish-dev`, card `tasks/P16-C1.md`) in fix round 1: it merges integration (conflicts in
-`components/ui/RowList.tsx` and `components/AccountMenu.tsx`, mapped on the C2 card's review), fixes an unpublished
-problem's `published_at` in `_ref()`, the three C2 specs expecting a bare `/login` (now `/login?next=`), pending hints
-on buttons/section/empty-state links, org-titled engagement rows, one date format on `/verify`. **Next:** C1 round-2
-reviews and merge; then Stage C (demo reset, `make demo-stats` peak, the recorded walkthrough, README "Run the demo",
-the M2 report draft), D, E, F in order. **Stage E backlog** (found so far): the moderation case page finds a case only
-in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test G5 (REQ-TREND-01 re-review MINOR 1).
+API's 200-row list, so two moderation e2e tests failed there only). C1 developer portal, public pages, billing and settings `106f01f` (reviewer and ux-reviewer PASS round 3; a lazily
+loaded Sign out, made to save 0.6 KB on `/settings/security`, crashed the page when its chunk failed and was reverted:
+no code split may fail into a route's error boundary). **Stage B is done**: every screen of the four portals is built
+from one design system (`docs/platform/design/p16-design-system.md`), with zero axe violations of any impact on every
+state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
+gzipped. **Next:** Stage C (clean `make demo-reset`, `make demo-stats` peak, the recorded Playwright walkthrough with
+screenshots in `docs/demo/`, README "Run the demo", the M2 report draft), then D, E, F in order. **Stage E backlog**:
+the moderation case page finds a case only in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test
+G5 (REQ-TREND-01 re-review MINOR 1); `requirePendingMfa` return path for a signed-out person (P16-C1).
 
-**Open branches** (2026-09-30, session 3): `feat/P16-polish-dev`. Integration head `beec285`.
+**Open branches** (2026-09-30, session 3): none. Integration head: the P16-C1 merge record (after `106f01f`).
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
