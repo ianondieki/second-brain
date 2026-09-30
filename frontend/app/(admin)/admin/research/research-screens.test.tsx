@@ -137,9 +137,14 @@ describe("StartRun (REQ-RES-01)", () => {
       <StartRun options={OPTIONS} startImpl={startImpl} getRunImpl={getRunImpl} pollMs={5} />,
     );
     await hydrate();
+    // The live region is in the tree while empty, and stays the same node across the step-up.
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
-    await screen.findByLabelText("Code from your app");
+    const code = await screen.findByLabelText("Code from your app");
     expect(container.querySelector('[data-refusal="step_up_required"]')).not.toBeNull();
+    expect(code.getAttribute("aria-describedby")).toContain("admin-step-up-code-hint");
+    expect(screen.getByRole("status")).toBe(status);
     expect(startImpl).toHaveBeenCalledTimes(1);
   });
 });
@@ -246,7 +251,12 @@ describe("Decision (REQ-RES-01, D-45)", () => {
     ];
     const decideImpl = vi.fn<typeof decide>(async () => outcomes.shift()!);
     renderWithIntl(
-      <Decision {...props} checklist={["Check the named organisation."]} needsChecklist={false} decideImpl={decideImpl} />,
+      <Decision
+        {...props}
+        checklist={["Check the named organisation."]}
+        needsChecklist={false}
+        decideImpl={decideImpl}
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
     await screen.findByText("This card names an organisation: tick the checklist, then approve it again.");

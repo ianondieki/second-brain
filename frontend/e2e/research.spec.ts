@@ -204,10 +204,7 @@ test.describe("a staff admin", () => {
     await page.getByRole("button", { name: "Reject", exact: true }).click();
     await expect(page.getByText("Reject this card? It stays private and cannot be published later.")).toBeVisible();
     await page.getByRole("button", { name: "Reject card" }).click();
-    await expect(page.locator('[data-decision="reject"]')).toHaveText(
-      "Rejected. The card stays private.",
-      SERVER_STEP,
-    );
+    await expect(page.locator('[data-decision="reject"]')).toHaveText("Rejected. The card stays private.", SERVER_STEP);
 
     // Rejected is private for good: not on the public page, not in the queue.
     await page.goto(`/problems/${problemId}`);

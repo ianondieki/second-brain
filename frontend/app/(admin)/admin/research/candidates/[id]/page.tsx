@@ -120,7 +120,10 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
       </section>
 
       {named ? (
-        <section aria-labelledby="checklist" className="flex flex-col gap-4 rounded-panel border border-line bg-field px-4 py-5 sm:px-6">
+        <section
+          aria-labelledby="checklist"
+          className="flex flex-col gap-4 rounded-panel border border-line bg-field px-4 py-5 sm:px-6"
+        >
           <h2 id="checklist" className="inline-flex items-center gap-2 text-lg text-ink">
             <CompaniesIcon className="size-5 shrink-0" />
             {t("review.checklistHeading")}

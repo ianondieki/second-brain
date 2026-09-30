@@ -87,7 +87,13 @@ describe("runOutcome", () => {
   });
 
   it("names each known stop reason and folds the rest", () => {
-    for (const reason of ["stale", "not_enough_excerpts", "search_or_fetch_cap", "input_token_cap", "injection_suspected"]) {
+    for (const reason of [
+      "stale",
+      "not_enough_excerpts",
+      "search_or_fetch_cap",
+      "input_token_cap",
+      "injection_suspected",
+    ]) {
       expect(runOutcome({ ...run, status: "stopped", stop_reason: reason })).toEqual({ key: `stop.${reason}` });
     }
     expect(runOutcome({ ...run, status: "stopped", stop_reason: "something_new" })).toEqual({ key: "stop.other" });
@@ -117,7 +123,9 @@ describe("refusals", () => {
       publishReason(body("publish_check_failed", "This card cannot be published: needs_official_or_two_publishers.")),
     ).toBe("needs_official_or_two_publishers");
     // Unknown reasons, other shapes and junk fall back to the general sentence.
-    expect(publishReason(body("publish_check_failed", "This card cannot be published: brand_new_check."))).toBe("other");
+    expect(publishReason(body("publish_check_failed", "This card cannot be published: brand_new_check."))).toBe(
+      "other",
+    );
     expect(publishReason(body("publish_check_failed", "Cannot publish: non_latin_text."))).toBe("other");
     expect(publishReason(body("publish_check_failed", "This card cannot be published: <b>x</b>."))).toBe("other");
     expect(publishReason("not json")).toBe("other");

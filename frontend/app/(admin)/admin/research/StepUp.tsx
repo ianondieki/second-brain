@@ -21,7 +21,7 @@ export interface StepUpProps {
 /**
  * The fresh second factor the staff console asks for when the last one is older than 12 hours (403
  * step_up_required; ADR-002): a code from the authenticator app, then the page or the action carries on. Confirm is
- * the one primary action while it is shown.
+ * the one primary action while it is shown. Why the code is asked for is the field's hint (aria-describedby).
  */
 export function StepUp({ onConfirmed, onCancel, confirmImpl = confirmStepUp }: StepUpProps) {
   const t = useStrings("adminResearch");
@@ -72,13 +72,11 @@ export function StepUp({ onConfirmed, onCancel, confirmImpl = confirmStepUp }: S
   return (
     <Form onSubmit={confirm} data-step-up="" className="flex flex-col items-start gap-4">
       {failed ? <Alert className="w-full">{t("refusal.generic")}</Alert> : null}
-      <p className="max-w-[60ch] text-ink" data-refusal="step_up_required">
-        {t("stepUp.body")}
-      </p>
       <OtpInput
         id="admin-step-up-code"
         name="code"
         label={t("stepUp.code")}
+        hint={<span data-refusal="step_up_required">{t("stepUp.body")}</span>}
         value={code}
         onChange={(value) => {
           setCode(value);

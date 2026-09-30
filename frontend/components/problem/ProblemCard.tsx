@@ -26,7 +26,9 @@ export async function ProblemCard({ problem }: { problem: ProblemDetail }) {
         {label ? (
           <p data-label={label.key} className="inline-flex items-start gap-1.5 text-sm font-semibold text-jacaranda">
             <LabelIcon className="mt-0.5 size-4 shrink-0" />
-            <span>{label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date })}</span>
+            <span>
+              {label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date })}
+            </span>
           </p>
         ) : null}
         <h1 id="problem-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">

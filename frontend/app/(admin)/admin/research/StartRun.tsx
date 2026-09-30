@@ -13,6 +13,13 @@ import { getRun, startRun } from "./calls";
 import { refusalKey, RUN_POLL_MS, RUN_POLLS, type NicheOption, type Refusal } from "./research";
 import { StepUp } from "./StepUp";
 
+const START_ID = "start-run-button";
+
+/** Focus the Start run button once the form is back on the page (after a step-up). */
+function focusStart() {
+  requestAnimationFrame(() => document.getElementById(START_ID)?.focus());
+}
+
 type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
@@ -97,10 +104,6 @@ export function StartRun({
     void start();
   }
 
-  if (phase.kind === "stepUp") {
-    return <StepUp onConfirmed={start} onCancel={() => setPhase({ kind: "idle" })} />;
-  }
-
   const busy = phase.kind === "starting" || phase.kind === "polling";
   const status =
     phase.kind === "polling"
@@ -111,48 +114,63 @@ export function StartRun({
           ? t("start.slow", { name: phase.name })
           : "";
 
+  // The status line stays in the tree (and in the same place) whatever is shown above it, empty or not, so every
+  // message is announced, including the first one and the one after a step-up.
   return (
-    <Form onSubmit={submit} className="flex flex-col gap-4">
-      {phase.kind === "refused" ? (
-        <Alert ref={refusalRef}>
-          <p data-refusal={refusalKey(phase.refusal)}>{t(refusalKey(phase.refusal))}</p>
-        </Alert>
+    <div className="flex flex-col">
+      {phase.kind === "stepUp" ? (
+        <StepUp
+          onConfirmed={async () => {
+            await start();
+            focusStart();
+          }}
+          onCancel={() => {
+            setPhase({ kind: "idle" });
+            focusStart();
+          }}
+        />
+      ) : (
+        <Form onSubmit={submit} className="flex flex-col gap-4">
+          {phase.kind === "refused" ? (
+            <Alert ref={refusalRef}>
+              <p data-refusal={refusalKey(phase.refusal)}>{t(refusalKey(phase.refusal))}</p>
+            </Alert>
+          ) : null}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 sm:w-80">
+              <SelectField
+                id="run-niche"
+                name="niche"
+                label={t("start.niche")}
+                hint={t("start.nicheHint")}
+                value={niche}
+                onChange={(event) => setNiche(event.target.value)}
+              >
+                {options.map((option) => (
+                  <option key={option.slug} value={option.slug}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <SubmitButton id={START_ID} variant="primary" busy={busy}>
+              {phase.kind === "starting" ? t("start.starting") : t("start.submit")}
+            </SubmitButton>
+          </div>
+          <dl className="flex gap-2 text-ink">
+            <dt className="text-ink-soft">{t("start.country")}</dt>
+            <dd className="font-medium">{t("start.kenya")}</dd>
+          </dl>
+        </Form>
+      )}
+      <p role="status" data-run-status={phase.kind} className="mt-4 max-w-[60ch] text-ink empty:mt-0">
+        {status}
+      </p>
+      {phase.kind === "slow" ? (
+        <Button variant="secondary" className="mt-3 self-start" onClick={() => router.refresh()}>
+          {t("start.refresh")}
+        </Button>
       ) : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <div className="min-w-0 sm:w-80">
-          <SelectField
-            id="run-niche"
-            name="niche"
-            label={t("start.niche")}
-            hint={t("start.nicheHint")}
-            value={niche}
-            onChange={(event) => setNiche(event.target.value)}
-          >
-            {options.map((option) => (
-              <option key={option.slug} value={option.slug}>
-                {option.label}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-        <SubmitButton variant="primary" busy={busy}>
-          {phase.kind === "starting" ? t("start.starting") : t("start.submit")}
-        </SubmitButton>
-      </div>
-      <dl className="flex gap-2 text-ink">
-        <dt className="text-ink-soft">{t("start.country")}</dt>
-        <dd className="font-medium">{t("start.kenya")}</dd>
-      </dl>
-      <div className="flex flex-col items-start gap-3">
-        <p role="status" data-run-status={phase.kind} className="max-w-[60ch] text-ink empty:hidden">
-          {status}
-        </p>
-        {phase.kind === "slow" ? (
-          <Button variant="secondary" onClick={() => router.refresh()}>
-            {t("start.refresh")}
-          </Button>
-        ) : null}
-      </div>
-    </Form>
+    </div>
   );
 }
