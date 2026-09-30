@@ -42,7 +42,7 @@ export function NichePicker({ niches, initial, min, max, saveImpl = saveNiches }
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [issue, setIssue] = useState<CountIssue | null>(null);
   const alert = useRef<HTMLDivElement>(null);
-  const fieldset = useRef<HTMLFieldSetElement>(null);
+  const issueBox = useRef<HTMLDivElement>(null);
 
   function change(id: string) {
     const next = toggle(chosen, id);
@@ -58,7 +58,8 @@ export function NichePicker({ niches, initial, min, max, saveImpl = saveNiches }
     const found = countIssue(chosen.length, min, max);
     if (found) {
       setIssue(found);
-      fieldset.current?.querySelector<HTMLInputElement>("input")?.focus();
+      // The sentence takes focus (and is announced), so the reason is where keyboard and screen reader users land.
+      requestAnimationFrame(() => issueBox.current?.focus());
       return;
     }
     setIssue(null);
@@ -81,13 +82,13 @@ export function NichePicker({ niches, initial, min, max, saveImpl = saveNiches }
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-6">
-      <fieldset ref={fieldset} aria-describedby={`liked-niches-count${issue ? ` ${issueId}` : ""}`} className="min-w-0">
+      <fieldset aria-describedby={`liked-niches-count${issue ? ` ${issueId}` : ""}`} className="min-w-0">
         <legend className="font-semibold text-ink">{t("legend")}</legend>
         <p id="liked-niches-count" aria-live="polite" className="mt-1 text-sm text-ink-soft">
           {t("chosen", { count: chosen.length, max })}
         </p>
         {issue ? (
-          <div className="mt-2" role="alert">
+          <div ref={issueBox} tabIndex={-1} className="mt-2" role="alert">
             <FieldError id={issueId}>{issue === "tooFew" ? t("tooFew", { count: min }) : t("tooMany", { max })}</FieldError>
           </div>
         ) : null}

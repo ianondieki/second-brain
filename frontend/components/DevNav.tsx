@@ -41,14 +41,16 @@ export function DevNav({ current }: { current: DevSection }) {
         {DEV_SECTIONS.map(({ key, href, Icon }) => {
           const active = key === current;
           return (
-            <li key={key} className="flex-1 lg:flex-none">
+            <li key={key} className="min-w-0 flex-1 lg:flex-none">
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  // Five tabs share 360 px: labels stay on one line, a size smaller below 380 px.
-                  "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-sm whitespace-nowrap no-underline max-[380px]:text-xs sm:px-2",
-                  "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-base",
+                  // Five tabs share 360 px: a size smaller below 380 px, where a two-word label (Swahili's "Mawazo
+                  // yangu") may wrap onto a second line inside its own tab rather than run into the next one.
+                  "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-center text-sm whitespace-nowrap no-underline",
+                  "max-[380px]:px-0.5 max-[380px]:text-xs max-[380px]:leading-tight max-[380px]:whitespace-normal sm:px-2",
+                  "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-left lg:text-base",
                   active
                     ? "font-semibold text-jacaranda lg:bg-jacaranda-wash"
                     : "font-medium text-ink-soft hover:text-ink lg:hover:bg-[color-mix(in_oklab,var(--jacaranda-wash)_55%,var(--paper))]",

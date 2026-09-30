@@ -63,7 +63,8 @@ export function ProfilingToggle({ consent, setImpl = setProfiling }: ProfilingTo
         <span>{granted ? t("profiling.on") : t("profiling.off")}</span>
       </p>
       {problem ? <Alert ref={alert}>{t(`profiling.problem.${problem}`)}</Alert> : null}
-      <Button variant="secondary" busy={busy} onClick={flip}>
+      {/* "Turn on" alone says little out of context: the section title describes it. */}
+      <Button variant="secondary" busy={busy} onClick={flip} aria-describedby="profiling-title">
         {busy ? t("profiling.saving") : granted ? t("profiling.turnOff") : t("profiling.turnOn")}
       </Button>
     </section>
