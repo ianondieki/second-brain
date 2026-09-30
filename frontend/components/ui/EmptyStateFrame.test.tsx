@@ -32,7 +32,7 @@ describe("EmptyStateFrame", () => {
     const { container } = render(
       <EmptyStateFrame
         sentence="This pitch is closed."
-        action={<a href="/dev/ideas">Go to My ideas</a>}
+        action={<button type="button">Pitch it again</button>}
         rule={false}
         className="mt-2"
         data-refusal="closed"
