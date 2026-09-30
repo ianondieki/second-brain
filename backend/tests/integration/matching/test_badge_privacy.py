@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from bridge.ids import uuid7
-from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import add_org, run
 from tests.integration.matching.trend_world import build, developer_problem, proposal, research_card, signals
 from tests.integration.proposals.helpers import TIER2_MARKERS, Developers, ProposalWorld, published
