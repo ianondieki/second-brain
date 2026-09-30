@@ -5,9 +5,9 @@ For each item (a problem or a project) the decayed score is ``T(t) = Σ w_e · 2
 Africa/Nairobi day (h = 14 days for problems, 7 for projects; the weights are ``config/ranking/weights_v1.yaml``'s).
 It is shown as a z-score against the item's niche: the baseline is every item of the niche scored at weekly points
 over the last 90 days (an item counts from its publication or its first dated event, whichever is earlier: a research
-card's sources may predate the card), so a small niche can trend against its own history. A niche with too few non-zero baseline scores has no z-score (cold start): its items can be "New this
-week" but never "Trending". An item is Trending when its z-score, its score and its distinct actors all reach the
-configured floors.
+card's sources may predate the card), so a small niche can trend against its own history. A niche with too few
+non-zero baseline scores has no z-score (cold start): its items can be "New this week" but never "Trending". An item
+is Trending when its z-score, its score and its distinct actors all reach the configured floors.
 
 Anti-gaming, the cheap part (docs/spec/06 6.6):
 
