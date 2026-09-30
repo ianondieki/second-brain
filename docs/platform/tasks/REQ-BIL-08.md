@@ -170,3 +170,90 @@ price) are 0005's, proved there (REQ-SCOUT-01 card M1-M12, M35, N19-N22).
     fallback to `provider_<status>` (`checkout.py:250`, R10); the route's `price_kes_minor <= 0` guard (`checkout.py:131`,
     R11; the INSERT policy backs it).
 12. Three commits exceed ~300 lines (07ece4a, 0825548, bb81a88); keep later ones smaller.
+
+## P14-F (frontend half)
+
+- Task: the screens of P14 (`docs/platform/prototype-m2-plan.md` §3): `/billing`, `/billing/upgrade?plan=`, the
+  avatar-menu entry and the 402 upgrade links. Agent: impl-frontend. Branch `feat/REQ-BIL-08-fe` from integration
+  head `6fb3f00` (P14 backend merged). No backend, OpenAPI or schema change: the typed client is the frozen
+  `backend/openapi.json`.
+- Files: `frontend/app/(app)/billing/{page,plans,data,text,SamplePrices}.ts(x)`,
+  `frontend/app/(app)/billing/upgrade/{page,Checkout,machine,calls}.ts(x)`, `frontend/lib/billing/upgrade.ts`,
+  `frontend/components/AccountMenu.tsx` (+ one line in `SignedInShell.tsx`), the 402 links in
+  `dev/ideas/{outcomes,refusals}.ts`, `dev/ideas/editor/Review.tsx`, `dev/ideas/[id]/pitch/{refusals.ts,PitchForm.tsx}`,
+  `lib/i18n/client-strings.ts` (the `checkout` namespace, `plan` and `price` placeholders), `locales/{en,sw}.json`
+  (`billing.*`, `checkout.*`, `shell.account`, `shell.billing`, `*.problem.planLimitUpgrade`; `_meta.reviewP14`), the
+  e2e sign-out helper in `e2e/auth.spec.ts` (opens the account menu first).
+
+### Design
+
+- **Whose plan** (`plans.ts` `billingSubject`): a developer's own; with `?org=` an organisation the person pays for
+  (owner, admin, finance), else one sentence and one action (not a member: never a silent switch; not a payer; no
+  organisation). An organisation member without `?org=` gets the first organisation they pay for. A missing second
+  factor (401 `mfa_required`, 403 `mfa_enrolment_required` from the entitlements route) is an empty state with its
+  action.
+- **The ladder** (`/billing`): `GET /api/plans?side=` in plans.yaml order on a rail (the tracker stepper's visual
+  language): the current plan's mark filled with "Your plan" (icon and words), each plan's price ("KES 499 a month";
+  "Not available to buy here yet" for plans that are not `purchasable`) and at most five entitlement lines in plain
+  words (ICU plurals; `planLines` reads only what differs between plans; a plan that allows the same as an earlier one
+  says "Everything in Pro (monthly)" once). The current plan's `upgrade_to`, when it can be bought here, is the one
+  primary action ("Upgrade to …"); later purchasable plans get a "Choose …" link; no downgrade links (REQ-BIL-06).
+  "Sample prices, not final" (D-44) sits beside the "Plans" heading and beside the price on the checkout while
+  `sample_prices` is true.
+- **The checkout** (`/billing/upgrade?plan=&org=&next=&checkout=`): the server checks the plan against the subject's
+  side (unknown, not sold here, already on it: one sentence and one action) and labels the page "Simulated M-Pesa"
+  when `simulated_checkout` is true. `machine.ts` is a pure reducer: confirm → starting → pending → succeeded |
+  failed | cancelled, plus stalled (polling stopped) and lost (the checkout cannot be read by this person). Polling
+  waits the API's `poll_after_seconds` (2 s), then ×1.5 each time up to 10 s, and stops after 2 minutes or 4 failed
+  reads in a row ("No answer yet …", **Check again**); 401/403/404 stop at once. `simulate` is sent only when the
+  provider simulates (a radio group: confirms, too little money, cancels; default confirms). The checkout id goes into
+  the address (`history.replaceState`), so a reload carries on polling instead of starting another; 409
+  `checkout_pending` follows the other plan's checkout (id checked as a UUID). Each start refusal has its own sentence;
+  a refusal that would be refused again (already on the plan, no provider, not a payer, …) shows no button, only its
+  action. Outcomes: paid → "Continue where you left off" (`next`, only `/dev…` or `/org…` paths of this site,
+  `safeNext`) or "See your plan"; failed or cancelled → **Try again**; the page's back link is always Plan & billing.
+- **402 links**: publish (editor review step) and pitch keep the 402 body's `upgrade.plan` (the code only, matched
+  against `^[a-z][a-z0-9_]{0,39}$`; the body's URL is never followed) and link to
+  `/billing/upgrade?plan=<upgrade_to>&next=<the page>`; none at the top of the ladder (`upgrade: null`).
+- **Avatar menu** (`AccountMenu.tsx`): the top bar's one control becomes a disclosure button ("Account"; the avatar
+  alone under 640 px, the name kept for screen readers) with **Plan & billing** and **Sign out**; Escape, a press or
+  focus outside close it. Plain links, so every signed-in page ships no extra router code. Labelled "Plan & billing"
+  as docs/spec/07 item 1 names it (the brief said "Billing").
+
+### Tests
+
+| What | Tests |
+|---|---|
+| Refusal mapping (start and poll), backoff, stop, phases, address resume | `app/(app)/billing/upgrade/machine.test.ts` (40) |
+| The steps on screen: poll timing, outcomes, stall and Check again, transient errors, lost, resume, refusals (one sentence, one action, no button that would be refused again), otherPending, double press | `app/(app)/billing/upgrade/checkout.test.tsx` (17) |
+| Whose plan, prices, entitlement lines, "Everything in", row actions | `app/(app)/billing/plans.test.ts` (13) |
+| Upgrade code from a 402 body, safe `next`, links | `lib/billing/upgrade.test.ts` (19) |
+| 402 links on publish and pitch | `dev/ideas/editor/editor.test.tsx` (+2), `dev/ideas/[id]/pitch/pitch-screens.test.tsx` (+2), `ideas.test.ts` (+1), `pitch.test.ts` (+1) |
+| Account menu | `components/AccountMenu.test.tsx` (3) |
+| E2E on the seeded stack, both projects, axe + one primary + no horizontal scroll on every screen | `e2e/billing.spec.ts` (5 × 2): the ladder from the account menu; a Free developer refused on the 4th publish (AC-SUB-1 through the screens) who upgrades through the simulated checkout and then publishes; failed and cancelled payments keep the plan; plans that cannot be bought here; an organisation owner pays for Starter |
+
+Screenshots (375 and 1440 px): Plan & billing on Free and on Pro, the account menu, the publish 402 with its link,
+the checkout's confirm, "Check your phone", paid and failed steps (session scratchpad `p14f/shots/`; not committed).
+
+### Open items (P14-F)
+
+1. The `impeccable` skill is not installed in this environment: the polish was a self-critique pass on the
+   screenshots (repeated entitlement lists collapsed, duplicate "Free" price and duplicate way-back links removed, the
+   header kept to one line at 360 px).
+2. Swahili is not live (`SWAHILI_LIVE = false` until G5), so axe ran in English only; the `sw` strings are drafts
+   (`[[SW-REVIEW]]`). Swahili entitlement lines put the count after the noun (no plural forms needed).
+3. D-44 stays open: "Sample prices, not final" and "Simulated M-Pesa" are the recommended default's labels,
+   `[[COPY-REVIEW]]` in `_meta.reviewP14`.
+4. The pitch picker's "You have used all N pitches" empty state (the cap reached before any 402) keeps its one action
+   (back to the idea) and has no upgrade link; the organisation-side 402s (P10's scout cap, unlocks) should link with
+   `upgradeHref(plan, { org, next })` from `lib/billing/upgrade.ts` when those screens surface them.
+5. The avatar menu has Plan & billing and Sign out only; Profile, Notification settings, Language and Help
+   (docs/spec/07 item 1) do not exist yet.
+6. Organisation members who do not pay see no plan (one sentence); the entitlements route would let any member read
+   it, if a read-only view is wanted later.
+7. The real-provider path (`simulated: false`: "Pay with M-Pesa", "Enter your M-Pesa PIN …") is covered by unit tests
+   only. A real rail needs a phone-number step (REQ-BIL-04; the payments table has no phone column by design).
+8. REQUIREMENTS.md's REQ-BIL-08 row names `frontend/app/(dev)/billing/` and `(org)/team/billing/`; the screens are at
+   `frontend/app/(app)/billing/` (one route for both sides) with `frontend/e2e/billing.spec.ts`. The row is the
+   orchestrator's to update.
+9. Polling carries on while the tab is hidden (bounded by the 2-minute budget); an M2 polish could pause it.
