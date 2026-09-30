@@ -1,4 +1,5 @@
-"""Liveness and readiness (docs/spec/08: Better Stack uptime on /healthz and /readyz)."""
+"""Liveness and readiness (docs/spec/08: Better Stack uptime on /healthz and /readyz). Probes for uptime monitors and
+the containers' health checks, outside ``/api``: they answer ``{"status": ...}``, not the API's error shape."""
 
 from __future__ import annotations
 
@@ -14,7 +15,11 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/readyz", response_model=None)
+@router.get(
+    "/readyz",
+    response_model=None,
+    responses={503: {"description": 'Not ready: the database does not answer ({"status": "unavailable"})'}},
+)
 async def readyz(request: Request) -> JSONResponse | dict[str, str]:
     try:
         async with request.app.state.engine.connect() as conn:

@@ -15526,7 +15526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Unauthorized */
@@ -15535,7 +15535,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Payment Required */
@@ -15544,7 +15544,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Forbidden */
@@ -15553,7 +15553,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Not Found */
@@ -15562,7 +15562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Conflict */
@@ -15571,7 +15571,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Unprocessable Entity */
@@ -15580,7 +15580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Too Many Requests */
@@ -15589,7 +15589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Service Unavailable */
@@ -15598,7 +15598,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
         };
@@ -17391,7 +17391,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Unauthorized */
@@ -17400,7 +17400,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Payment Required */
@@ -17409,7 +17409,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Forbidden */
@@ -17418,7 +17418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Not Found */
@@ -17427,7 +17427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Conflict */
@@ -17436,7 +17436,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Unprocessable Entity */
@@ -17445,7 +17445,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Too Many Requests */
@@ -17454,7 +17454,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description Service Unavailable */
@@ -17463,7 +17463,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": components["schemas"]["ApiErrorBody"];
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
         };
@@ -18811,6 +18811,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
+            /** @description No key to open it on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
         };
     };
     transparency_api_transparency_get: {
@@ -18978,6 +18987,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Larger than 10 MB */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19234,6 +19252,13 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Not ready: the database does not answer ({"status": "unavailable"}) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

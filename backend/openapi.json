@@ -21395,7 +21395,7 @@
           },
           "400": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21405,7 +21405,7 @@
           },
           "401": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21415,7 +21415,7 @@
           },
           "402": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21425,7 +21425,7 @@
           },
           "403": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21435,7 +21435,7 @@
           },
           "404": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21445,7 +21445,7 @@
           },
           "409": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21455,7 +21455,7 @@
           },
           "422": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21465,7 +21465,7 @@
           },
           "429": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -21475,7 +21475,7 @@
           },
           "503": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23755,7 +23755,7 @@
           },
           "400": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23765,7 +23765,7 @@
           },
           "401": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23775,7 +23775,7 @@
           },
           "402": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23785,7 +23785,7 @@
           },
           "403": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23795,7 +23795,7 @@
           },
           "404": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23805,7 +23805,7 @@
           },
           "409": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23815,7 +23815,7 @@
           },
           "422": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23825,7 +23825,7 @@
           },
           "429": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -23835,7 +23835,7 @@
           },
           "503": {
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorBody"
                 }
@@ -25700,6 +25700,16 @@
               }
             },
             "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "No key to open it on this server"
           }
         },
         "summary": "Manifest Json",
@@ -25928,6 +25938,16 @@
               }
             },
             "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Larger than 10 MB"
           },
           "422": {
             "content": {
@@ -26220,6 +26240,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Not ready: the database does not answer ({\"status\": \"unavailable\"})"
           }
         },
         "summary": "Readyz",
