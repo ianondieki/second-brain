@@ -93,7 +93,8 @@ describe("a Discover project", () => {
     const card = screen.getByRole("article");
     const solves = card.querySelector<HTMLElement>(`[data-solves="${PROBLEM_ID}"]`)!;
     expect(within(solves).getByText("Solves")).toBeTruthy();
-    expect(within(solves).getByRole("link").getAttribute("href")).toBe(`/problems/${PROBLEM_ID}`);
+    const link = within(solves).getByRole("link", { name: "Tower sites go down when generators run dry" });
+    expect(link.getAttribute("href")).toBe(`/problems/${PROBLEM_ID}`);
     expect(card.id).toBe(`project-${PROJECT_ID}`);
     expect(card.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
     expect(card.textContent).not.toMatch(/\d+ (companies|organisations)/);
