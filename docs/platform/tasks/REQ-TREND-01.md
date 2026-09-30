@@ -288,9 +288,138 @@ changed in round 2 (`openapi --check` clean without regeneration); only the badg
   besides the generated types); the legacy runner exits 2 in this sandbox before running (its skip list names ids
   the sandbox's interpreter cannot import), with no legacy file touched.
 
+## P12-F (screens: REQ-TREND-02 frontend, REQ-PERS-01 frontend, REQ-PERS-03 picker)
+
+- Branch `feat/REQ-TREND-02-fe` from P12-B `4a590f1`, with P12-B's fix round `2c233a0` merged in; agent impl-frontend. Reviews: reviewer, ux-reviewer.
+  No backend change; the types are the generated `schema.d.ts` of P12-B.
+
+### Files
+
+| Area | Files (all under `frontend/`) |
+|---|---|
+| Discover | `app/(app)/dev/discover/{page,DiscoverList,DiscoverControls,ProblemRow,ProjectRow,Chips}.tsx`, `discover.ts` (pure), `data.ts` (server calls) |
+| Home | `app/(app)/dev/discover/{RecommendedForYou.tsx,recommendations.ts}`; `app/(app)/dev/page.tsx` (one call, one section) |
+| Liked niches and profiling | `app/(app)/dev/discover/niches/{page,NichePicker,ProfilingToggle}.tsx`, `calls.ts`, `picker.ts` (pure) |
+| Editor | `app/(app)/dev/ideas/new/page.tsx` (`?problem=`), `editor/EditorScreen.tsx`, `data.ts` (`linkableProblem`), `versions.ts` (`stateWithProblem`) |
+| Shared | `components/DevNav.tsx` (+ Discover), `components/discover-icons.tsx`, `lib/i18n/client-strings.ts` (+ `likedNiches`), `locales/{en,sw}.json` (`nav.discover`, `discover.*`, `recommendations.*`, `likedNiches.*`, `_meta.reviewP12f`) |
+| Tests | `app/(app)/dev/discover/{discover.test.ts,discover-screens.test.tsx}`, `test/discover.ts` (fixtures), `components/DevNav.test.tsx`, `e2e/discover.spec.ts`, `e2e/support/discover-scene.ts` |
+
+### What it does
+
+- `/dev/discover`: one list at a time in the address (`?view=problems|projects|gap`, `niche`, `county`), a plain GET
+  filter form, server-rendered with no script of its own. Problem cards: the badge only when trending, title linking
+  to `/problems/{id}`, niche, county or country, proposal count, statement, at most two Why chips (one beside a badge,
+  which already states the counts), the rest with the three newest sources and the projects solving it under "More
+  about this problem", and "Start a proposal from this problem". Projects always show the problem they solve beside
+  them (AC-TREND-2); no organisation count or name. Cold start titles the list "New this week". At most 20 per list.
+  Empty lists are one sentence and one action (clear the filters when they narrowed it).
+- Home "Recommended for you": the first 3 in ranker order; each card shows the problem (a link to its card), the
+  pursuit chip ("Pursue · Good fit", from the `decision` and fit enums mapped to our own keys, never the API's
+  `pursuit.label`) and one Why chip; the reasons, Why and Why not are under a disclosure. A one-line note says
+  whether the ranking uses activity (`personalised`) and links `/dev/discover/niches#profiling`. No liked niches: the
+  picker prompt. No items: empty state. A failed ranker call leaves Home standing ("cannot be shown right now").
+  `features` is never read.
+- `/dev/discover/niches`: 3 to 5 checkboxes (children under their parent), counted before sending; PUT sends the
+  whole list, so it changes but is never cleared (the page says so); 422 `liked_niches_count` and `unknown_niche`
+  are fixed sentences. Below it, the profiling consent: the API's wording verbatim, recorded on its version with
+  `PUT /api/me/consents` (409 `consent_text_changed` asks for a reload). There was no consent setting screen, so
+  this is "the consent setting" Home links to.
+- "Start a proposal from this problem" opens `/dev/ideas/new?problem=<id>`: the editor did not accept a problem, so
+  `new/page.tsx` now reads it, `EditorScreen` fetches `GET /api/problems/{id}` and starts in "Link a listed problem"
+  with that problem and its niche; nothing is saved until the developer types (P13-F edits the same editor next).
+
+### Tests
+
+- vitest: 18 pure (`discover.test.ts`: address parsing, chips ≤ 2, cold start, safe source links, dates, picker
+  rules and refusals, Home states, `stateWithProblem`) and 16 screen tests (`discover-screens.test.tsx`: badge only
+  when trending, links, disclosure contents, projects beside problems, 20 cap, empty states, pursuit and Why chips,
+  personalised note, Not now / Consider / Exploring / Why not, picker count and refusals, profiling toggle and 409).
+- Playwright `e2e/discover.spec.ts` (M2 walkthrough step 4), both projects: a new developer sees the picker prompt on
+  Home, is refused at 2 niches, saves 3, sees Discover with the demo's trending problem (badge, Why chip, sources,
+  project), the Projects view (each project's problem linked, no organisation counts), the Opportunity gap (< 3
+  proposals each), a niche filter, Home recommendations (pursuit chip + one Why chip, reasons on demand, the
+  personalised note and its link), opens a problem card; "Start a proposal" opens the editor with the problem
+  linked; a filtered empty list is one sentence and one action. `checkWidths` runs axe, the one-primary-action and
+  no-horizontal-scroll checks at 360 and 375 (mobile project) and 1440 (desktop). It uses the demo seed's trends, as
+  the CI e2e job seeds them (`discover-scene.ts` fails with how to seed when they are missing); no owner database
+  access is needed.
+
+### Open items
+
+1. **Problem card route (resolved in the fix round).** `/problems/{id}` is REQ-RES-01's (`feat/REQ-RES-01-fe`), not on this base: the link is
+   built by `discover.ts` `problemHref` (the same address as that branch's `components/problem/problem.ts`); after
+   both merge, import that one and add a heading assertion after "opens a problem card" in `discover.spec.ts` (the
+   test now checks the address and the card through `GET /api/problems/{id}`). On this base the missing route's
+   prefetch never settles in Chromium, so `npm run budget` times out on `/dev` and `/dev/discover` waiting for
+   network idle; measured with a load-based copy of the script instead (below). It resolves once the route exists.
+2. **Simulated numbers.** The API has no "simulated" flag, so Discover does not label the demo's numbers; P16's
+   README "real vs simulated" table must list Discover's trend counts and badges (demo signals from pseudonyms, card
+   open item 5) and the keyword-based fit.
+3. **English chips.** Why chips, badges, pursuit reasons and Why-not lines are the API's English text
+   (`[[COPY-REVIEW]]` in `bridge/matching`); the Swahili UI would show them in English. The fit and pursuit words are
+   mapped to our keys and translated. Translating the chips needs codes from the API (a later P12-B change).
+4. **D-47.** `likedNiches.profiling.lead` states today's behaviour (niches and county always, activity only with the
+   consent) next to the consent's own wording ("Use my niches and activity …"); if D-47 goes to option (b), change
+   the lead and the Home note.
+5. **Swahili nav at 360 px.** Five tabs fit in English at 360 px; Swahili labels ("Mawazo yangu", "Ushirikiano")
+   are a little longer and Swahili is off until G5: check the tab bar at 360 px when it goes live.
+6. **P12-B fix round (done).** `origin/feat/REQ-TREND-01-trending` at `2c233a0` merged into this branch (its parent;
+   merge commit `29f9b86`), bringing `FeaturesOut` and the Literal pursuit label with the regenerated `schema.d.ts`.
+   The screens read neither; `test/discover.ts` now builds the full named feature vector instead of casting. The
+   e2e was re-run against the `2c233a0` backend and demo seed (the P2 problem still trends with its project; the gap
+   holds one problem).
+
+### Checks
+
+- eslint, `tsc` (`npm run typecheck`), vitest, `npm run api:check`, `scripts/copy_lint.py`, traceability: see the
+  report. JS per route (production build, gzipped, load-based count): `/dev` and `/dev/discover` (all three views)
+  140.1 KB, `/dev/discover/niches` 143.1 KB (budget 150; the AccountMenu from integration adds about 1.2 KB).
+- Screenshots (375 and 1440): `p12f-{home,discover,projects,niches}-{375,1440}.jpg` in the P12-F session scratchpad.
+- Full Playwright suite against a production build and the `2c233a0` backend with the demo seed: 104 passed, 2
+  failed (`tracker.spec.ts` "From Achieng Otieno", failing on base `84e0af0` too and fixed on integration by
+  `e63a182`).
+
+### P12-F fix round (reviewer and ux-reviewer CHANGES_REQUIRED on d2bc7d4)
+
+Integration `7877c1e` merged in (`6329582`; locales and client-strings resolved as a union), then P12-B fix round 2
+`710e3e2` (`825e202`).
+
+| Finding | Change | Test |
+|---|---|---|
+| UX MAJOR 1: provenance | each Discover problem and Home recommendation shows `problem.label` in its meta line (`data-label`) | `discover-fixes.test.tsx` provenance |
+| UX MAJOR 2: projects cold start | `isColdStart` on projects ("New this week" and its own lead); mixed lead "Rising fastest first, then new this week; each one beside the problem it solves" `[[COPY-REVIEW]]` | honest trends: projects list |
+| UX MAJOR 3: Trending/Rising | `honestChips` drops a chip or reason starting "Trending" when `trend.trending` is false (cards, reasons, Why) | honest trends (problem, recommendation) |
+| Reviewer MAJOR 1: Home on failure | `recommendations()` null on 500, 404, timeout, offline; redirect only on 401 | `data.test.ts`; unavailable render |
+| Reviewer MAJOR 2: `setProfiling` | call-layer tests with a fake client: body, 200 list, 409, offline; `saveNiches` too | `niches/calls.test.ts` |
+| Reviewer MAJOR 3: `?problem=` | `linkableProblem` never fetches a non-uuid; null on 404, 422, 5xx, timeout; redirect only on 401 | `data.test.ts`; e2e "an unknown problem in ?problem= links nothing and saves nothing before typing" |
+| MINORs | project row asserts the problem link's name; markup in chips, badge, sources and Why-not renders as text (no `<img>`); only plain https sources are links (integration's `safeHttpsUrl`); Swahili pursuit chip; consent shows what the API recorded; noSources by `problem.source`; picker count error takes focus; reasons not repeated under "Why it fits"; profiling button `aria-describedby` its title; DevNav labels may wrap below 380 px | `discover-fixes.test.tsx`, `discover-screens.test.tsx` |
+| After the merge | own `problemHref`, `sourceUrl`, `formatSourceDate` deleted: `@/components/problem/problem` (`problemHref`, `safeHttpsUrl`, `formatDate`); e2e asserts the problem page's h1 | `discover.spec.ts` |
+
+Checks: eslint, typecheck, vitest 916/916, `api:check`, `bridge.openapi --check`, copy lint, traceability PASS.
+Playwright, full suite, production build, isolated stack on this branch's backend (P12-B `710e3e2` + integration):
+130 passed. `npm run budget` (the real script; `/problems/{id}` now exists): `/dev`, `/dev/discover` (3 views),
+`/dev/companies` 141.3 KB; `/dev/discover/niches` 144.1 KB (budget 150; AccountMenu included).
+
+Still open: the label is the API's English string (`DiscoverProblem` has no `seeded_example`, so integration's
+`problemLabel` cannot be used; once P16-A writes "30 Sep 2026" on the problem page, Discover still shows the API's
+"30 September 2026"): P12-B could add `seeded_example` to `DiscoverProblem`/`ProblemRef`. Swahili DevNav at 360 px is
+a G5 check. Open items 2-4 above stand.
+
 ## Re-review MINORs (P12-B fix round 2, reviewer PASS on 710e3e2; carried)
 1. `matching/trend_facts.py:275`: no test pins that a project's actors come from the recent window (mutant Q3, whole-window
    `interest` for `recent_interest`, survived). Add the reviewer's G5: old project interest only → not trending, no
    interest chip.
 2. Sock E1 organisations can inflate `scout_match` (three self-signup E1 organisations with scouts): recorded as a
    THREAT_MODEL residual and D-50.
+
+## Re-review MINORs (P12-F fix round, reviewer PASS and ux-reviewer PASS on 3532f71; carried)
+1. `discover-screens.test.tsx:64`: pin exactly "Published 28 Sep 2026" now that P16-A is merged (the `Sept?` option can
+   no longer match anything real).
+2. Discover and Home show the API's English `label` ("30 September 2026") while the problem page shows `problemLabel`
+   ("30 Sep 2026", translated). Follow-up: `seeded_example` on `DiscoverProblem`/`ProblemRef`, then `problemLabel()`.
+3. Discover's trend counts are simulated in the demo: the README "Real, simulated or planned" table must list them (P16).
+4. `DevNav.tsx:52`: "Engagements" can collide with "Companies" at 360 px with a wide fallback font (82.8 px in a 72 px
+   tab); Swahili nav at 360 px has no automated check (G5 checklist).
+5. `ProjectRow.tsx:52-59`: the Solves pane omits the problem's provenance label.
+6. `discover.ts:113-116`: `moreWhy` repeats what the trend badge says ("4 companies scouting").
+7. `e2e/discover.spec.ts`: assert a non-empty `[data-label]` on every problem and recommendation.

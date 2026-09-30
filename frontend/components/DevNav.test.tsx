@@ -9,13 +9,14 @@ afterEach(cleanup);
 
 // docs/spec/07 item 1 and AC-UX-1: at most five items per portal; the current one is marked for assistive tech.
 describe("DevNav", () => {
-  it("lists at most five sections in the spec's order, My ideas, Engagements and Companies among them", () => {
+  it("lists at most five sections in the spec's order, Discover, My ideas, Engagements and Companies among them", () => {
     expect(DEV_SECTIONS.length).toBeLessThanOrEqual(5);
     renderWithIntl(<DevNav current="companies" />);
     const nav = screen.getByRole("navigation", { name: "Developer" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["Home", "/dev"],
+      ["Discover", "/dev/discover"],
       ["My ideas", "/dev/ideas"],
       ["Engagements", "/dev/engagements"],
       ["Companies", "/dev/companies"],

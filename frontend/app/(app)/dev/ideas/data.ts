@@ -10,6 +10,7 @@ import {
   type MyProposalItem,
   type NicheNode,
   type ProblemCard,
+  type ProblemRef,
 } from "./ideas";
 import { isProposalId } from "./routes";
 
@@ -75,6 +76,29 @@ export async function editorOptions(): Promise<EditorOptions> {
     attestations: attestations.data,
     problems: problems.data.items,
   };
+}
+
+/**
+ * A published problem a new idea can link, as the editor holds linked problems, or null when it cannot be linked: an
+ * id that is not a uuid (never fetched), one the API does not show (a candidate, a held or rejected card and an
+ * unknown id all answer 404; 422 for a malformed one), or an API that fails or does not answer in time. The editor
+ * then opens empty, as without `?problem=`. Only a lost session (401) leaves the page, to sign in again.
+ */
+export async function linkableProblem(problemId: string): Promise<ProblemRef | null> {
+  if (!isProposalId(problemId)) return null; // the same uuid shape
+  let answer;
+  try {
+    answer = await serverApi().GET("/api/problems/{problem_id}", {
+      params: { path: { problem_id: problemId } },
+      ...(await options()),
+    });
+  } catch {
+    return null; // timeout or network: the idea starts without the problem
+  }
+  const { data, response } = answer;
+  if (data) return { id: data.id, title: data.title, source: data.source, label: data.label, niche: data.niche };
+  if (response.status === 401) redirect("/login");
+  return null;
 }
 
 /** A county's name by its code (KE-30 → Nairobi City), or the code when the list cannot be read. */
