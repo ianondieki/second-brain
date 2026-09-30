@@ -11,10 +11,31 @@ import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
 
-// Loaded only when turning two-step sign-in off asks for a fresh code (403 step_up_required).
+// Loaded only when an action asks for a fresh code (403 step_up_required): turning two-step sign-in off, or getting
+// new recovery codes.
+
+export interface StepUpFormProps {
+  /** Retries the action that asked for the fresh code. */
+  onConfirmed: () => Promise<void>;
+  busyLabel: string;
+  /** What the code is for (default: turning two-step sign-in off). */
+  lead?: string;
+  submitLabel?: string;
+  /** "primary" where the code step is the screen's main task (new recovery codes); turning off keeps "secondary". */
+  variant?: "primary" | "secondary";
+  /** The id of text the submit button should be read with (a warning about what it does). */
+  describedBy?: string;
+}
 
 /** A fresh second factor (POST /api/auth/step-up), then `onConfirmed` retries the action that asked for it. */
-export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Promise<void>; busyLabel: string }) {
+export function StepUpForm({
+  onConfirmed,
+  busyLabel,
+  lead,
+  submitLabel,
+  variant = "secondary",
+  describedBy,
+}: StepUpFormProps) {
   const t = useTranslations("security");
   const tv = useTranslations("validation");
   const te = useTranslations("errors");
@@ -55,7 +76,7 @@ export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Prom
   return (
     <Form onSubmit={confirm} className="flex w-full flex-col items-start gap-4">
       <ErrorNotice error={error} />
-      <p className="text-ink">{t("stepUp")}</p>
+      <p className="text-ink">{lead ?? t("stepUp")}</p>
       <OtpInput
         id="totp-code"
         name="code"
@@ -67,8 +88,8 @@ export function StepUpForm({ onConfirmed, busyLabel }: { onConfirmed: () => Prom
         }}
         error={codeError}
       />
-      <SubmitButton variant="secondary" busy={busy}>
-        {busy ? busyLabel : t("stepUpSubmit")}
+      <SubmitButton variant={variant} busy={busy} aria-describedby={describedBy}>
+        {busy ? busyLabel : (submitLabel ?? t("stepUpSubmit"))}
       </SubmitButton>
     </Form>
   );

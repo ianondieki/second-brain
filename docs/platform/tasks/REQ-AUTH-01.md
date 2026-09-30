@@ -162,3 +162,107 @@ of follow-up 8; the session-only signup rule; the security review round 1 fixes 
 pending label and unopenable envelopes, the recovery-codes proof and daily notice, `record_decisions`); and the paths
 the new tests reach. Next: the security-reviewer's check of the round 1 fixes, then the frontend halves
 (impl-frontend) with ux-reviewer.
+
+## P17-F: frontend halves of follow-ups 7 and 8 (2026-09-30, `feat/REQ-AUTH-07-fe`)
+
+**Follow-up 7, Cancel setup.** "Cancel setup" always sends `DELETE /api/auth/totp/enrol` (CSRF-checked, 10 s
+timeout) and acts on its answer, never on GET /api/auth/me: 204 or 409 `no_pending_enrolment` go to the "cancelled"
+notice; 409 `totp_already_enabled` goes to the "on" screen with the codes-not-shown notice; anything else keeps the
+setup steps with the status-unknown notice. A confirmation answering 409 `no_pending_enrolment` (replaced, or open
+over 15 minutes) settles the same way: back to the start when the DELETE says off. The mapping is
+`cancelStatus` in `frontend/app/(app)/settings/security/outcomes.ts`. The lost-answer tests now mock the DELETE instead
+of GET /me.
+
+**Follow-up 8, new recovery codes.** The "on" screen has a "Recovery codes" section. Its "Get new recovery codes"
+button opens a form that loads on demand (`NewRecoveryCodes.tsx`). The form warns that the old codes stop working,
+asks for the current password when the account has one, then sends `POST /api/auth/totp/recovery-codes`:
+- 403 `step_up_required` shows the code form (`POST /api/auth/step-up`), then sends again with the password already
+  typed.
+- 403 `current_password_required` asks for the password again (the field is emptied and focused, and it also appears
+  for an account the page thought had no password).
+- 409 `totp_not_enabled` goes back to the start with `errors.totp_not_enabled`.
+- Any other refusal keeps the form with its `errors.*` message. Unknown codes read `generic`; the API's own
+  `message` is never shown.
+
+The ten codes are shown once (`RecoveryCodeList.tsx`, shared with setup), with copy, download and "Your new recovery
+codes are ready. Your old codes no longer work." "I have saved my codes" returns focus to the button. While the form
+is open, turning off and the Password section step aside. After a lost setup answer, the button is the screen's one
+primary action. `security.codesNotShown` points at it for every role. `security.codesNotShownTurnOff` and the
+`onWithoutCodes` comment are gone. The mapping is `renewalStep` in `outcomes.ts`.
+
+**Tests.**
+- Vitest: `outcomes.test.ts` covers every answer of both routes. `recovery-codes.test.tsx` covers the section and the
+  primary rule; the password (empty, wrong, absent); step-up and retry; `totp_not_enabled`; fixed messages for
+  throttling, CSRF, 5xx, unknown codes and no connection, where the API's text never appears; busy presses; and copy
+  and download. `settings.test.tsx` has the lost-answer cases on the DELETE. Five mutations of the new code were each
+  caught.
+- Playwright: `frontend/e2e/two-step.spec.ts` runs in mobile-360 and desktop:
+  - Cancel clears `totp_pending_enc`, and a code from the cancelled key gets 409 `no_pending_enrolment`.
+  - A confirmation whose answer is cut off leads, on Cancel, to "on" with the notice.
+  - With a 13-hour-old second factor: password, then a fresh code, then ten new codes; the notice email reaches
+    Mailpit; at the next sign-in an old code is refused and a new one signs in.
+  - axe, one primary action and no horizontal scroll on each screen, at the project width and at 375 px. A `beforeAll`
+    expect requires `E2E_DATABASE_OWNER_URL`.
+- `auth.spec.ts` and `smoke.spec.ts` stay green on the same stack.
+
+Screenshots (`E2E_SHOTS_DIR`, 375 and 1440 px): `p17f-cancelled`, `p17f-codes-not-shown`, `p17f-renew-form`,
+`p17f-renew-step-up`, `p17f-renew-codes`.
+
+**Fix round 1 (reviews: reviewer PASS, ux-reviewer PASS, security-reviewer CHANGES_REQUIRED):**
+- **MAJOR (security), fixed.** Cancel no longer reads an unclear answer as "off" when this tab sent no
+  confirmation. Setup begun in a laptop tab and confirmed on the phone with the same key revokes the laptop's
+  session. Cancel there got 401 and advised deleting the live entry. Now every "unknown" keeps the setup steps with
+  the status-unknown notice, and the `maybeOn` ref is gone. This reverses the old open item 1. Tests: the wrong-code
+  case expects the notice when there is no answer, and a new case covers 401 after a confirmation elsewhere.
+- **Back-forward cache, fixed.** `RecoveryCodeList` replaces the codes with one line (`security.codesCleared`). It
+  does so synchronously on `pagehide`, and again on a `pageshow` from the cache, at setup and for new codes. Unit
+  tests cover all four events and the end of setup. An E2E test checks that Back after a full navigation shows no
+  code. With these `no-store` pages, Chromium 1243 reloads on Back rather than restoring from the cache, so only the
+  unit tests prove the clearing itself.
+- **New codes: timeout, lost answer and password, fixed.**
+  - `POST /api/auth/totp/recovery-codes` now has a 10 s timeout.
+  - No answer, a timeout, a 5xx, an unknown code or a success without codes is `renewalStep` "unknown". It shows a
+    fixed notice (`security.newCodesUnknown`) that the old codes may no longer work.
+  - A test shows the password is held neither in the page nor in React state once the codes show. It reads React's
+    fiber, test only. Removing the success-path clear now fails that test.
+- **ux, fixed.**
+  - The form's import starts in `openRenewal`, with a "Loading…" `role="status"` fallback.
+  - `StepUpForm` takes a `variant` and a `describedBy`. In this flow, "Confirm and get new codes" is primary and is
+    read with the warning, which now also shows at the code step. Turning off keeps a secondary button.
+  - Copy and Download are full width below `sm`.
+- **Copy nits, fixed.** `codesNotShown` says "sign in", and `recoveryLead` ends "Your old codes will stop working."
+- **`THREAT_MODEL.md` §1.** The three rows take the security-reviewer's wording. Where that wording predates this
+  round, it is brought up to date:
+  - Row B drops the "if the deviation is kept" clause.
+  - Row C adds the timeout and the lost-answer notice, and says the codes leave the page on `pagehide`.
+  - Row C's test column says a success without codes reads "unknown".
+  - A new I row: "Recovery codes restored from the back-forward cache after a full navigation away".
+
+**Open items (P17-F):**
+1. **A DELETE after the confirmation's `no_pending_enrolment` can clear another tab's setup.** That DELETE also clears
+   a key a newer setup in another tab left pending; that tab's confirmation then starts again. Safe, but visible.
+   Recorded in the threat model's row A.
+2. **The JS budget is close.** Signed in, local production build: `/settings/security` loads 148,622 of 150,000
+   bytes of gzipped JS. The new form loads on demand; the section and button are in the first load.
+3. **Copy.** New copy is `[[COPY-REVIEW]]` (`_meta.reviewP17f`); the Swahili is a draft (`[[SW-REVIEW]]`).
+   `mfa.recoveryLead` now reads "Enter one of the recovery codes you saved."
+4. **Shared files.** `lib/api/errors.ts` gains one known code (`totp_not_enabled`). This may overlap with parallel
+   edits to that list.
+5. **Skill not installed.** The `impeccable` skill is not installed here, so the polish pass was a manual review of
+   the screenshots against docs/spec/07.
+6. **One test reads React internals.** The password-in-state test reads React's fiber, so a React upgrade that
+   renames `__reactFiber$` fails it loudly rather than passing silently.
+
+### P17-F security re-review MINORs (2026-09-30; security-reviewer PASS round 2 on 05d9a9f) — follow-ups
+
+1. **Setup's cleared-codes line has no route to new codes** (`EnrolmentSteps.tsx:256-263`): after `pagehide` clears the
+   list at the end of setup, the line says to get new recovery codes but step 3 offers no such action. Give
+   `RecoveryCodeList` an `onCleared` callback so setup switches to the "on" screen (or link the line to
+   `/settings/security`).
+2. **Codes stay in the parents' React state after the clear** (`EnrolmentSteps.codes`, `NewRecoveryCodes.stage.codes`);
+   the same `onCleared` callback lets the parents drop them.
+3. **Backend: renewal is not idempotent** (`NewRecoveryCodes.tsx:73-80` with `POST /api/auth/totp/recovery-codes`): a
+   retry after the 10 s timeout while the first request is still queued can end with the codes shown being replaced
+   by unseen ones. Add an idempotency key or a generation precondition; meanwhile a residual in THREAT_MODEL §1 row C.
+4. Copy: `security.statusUnknown` still says "to log in".
+5. Optional THREAT_MODEL precision (row C and the I row) as worded in the review.

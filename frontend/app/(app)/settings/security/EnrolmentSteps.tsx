@@ -17,24 +17,27 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
+import { cancelStatus, type TwoStepStatus } from "./outcomes";
+import { RecoveryCodeList } from "./RecoveryCodeList";
 import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
 // Loaded only after POST /api/auth/totp/enrol succeeds (React.lazy, see lazy.ts), with the QR encoder, so none of
 // this is in the page's first download (docs/spec/07 item 5: 150 KB, i.e. 150,000 bytes, of gzipped JS per route).
 
-type Notice = "keyCopied" | "codesCopied" | "copyFailed" | null;
+type Notice = "keyCopied" | "copyFailed" | null;
 
 /** How long "Cancel setup" waits for the server to say whether two-step sign-in is on before saying it cannot tell. */
 const STATUS_CHECK_MS = 10_000;
 
 /**
- * Whether two-step sign-in is on at the server (GET /api/auth/me), or null when that cannot be told: offline, an
- * error, the session ended, or no answer in time.
+ * Cancels the setup at the server (DELETE /api/auth/totp/enrol clears the pending key) and says what that answer
+ * shows: two-step sign-in "off", "on" (a confirmation committed first, its answer lost), or "unknown" (offline, an
+ * error, the session ended, or no answer in time). The route waits for a confirmation still in progress, so its
+ * answer is final where GET /api/auth/me could read "off" just before a lost confirmation commits.
  */
-async function enrolledOnServer(): Promise<boolean | null> {
-  const outcome = await settle(api.GET("/api/auth/me", { signal: AbortSignal.timeout(STATUS_CHECK_MS) }));
-  return outcome.ok ? outcome.data.mfa.enrolled : null;
+async function cancelOnServer(): Promise<TwoStepStatus> {
+  return cancelStatus(await settle(api.DELETE("/api/auth/totp/enrol", { signal: AbortSignal.timeout(STATUS_CHECK_MS) })));
 }
 
 /** "ABCDEFGHIJKL" -> ["ABCD", "EFGH", "IJKL"]: easier to type into an authenticator app by hand. */
@@ -50,24 +53,18 @@ function qrMatrix(uri: string): boolean[][] | null {
   }
 }
 
-function download(codes: string[]) {
-  const url = URL.createObjectURL(new Blob([`${codes.join("\n")}\n`], { type: "text/plain" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "recovery-codes.txt";
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export interface EnrolmentStepsProps {
   secret: string;
   otpauthUri: string;
   homeHref: string;
   /** The name the authenticator app lists the entry under (the setup key's issuer, else the product name). */
   entryName: string;
-  /** The server lost the pending enrolment (no_pending_enrolment) and two-step sign-in is off: back to the start. */
+  /**
+   * The server has no pending setup (no_pending_enrolment: replaced, or begun over 15 minutes ago) and two-step
+   * sign-in is off: back to the start.
+   */
   onRestart: (error: ErrorKey) => void;
-  /** "Cancel setup", with two-step sign-in known to be off: back to the start. */
+  /** "Cancel setup", with the server's pending key cleared and two-step sign-in known to be off: back to the start. */
   onCancel: () => void;
   /** Two-step sign-in is on at the server, but the answer with the recovery codes never arrived. */
   onEnrolled: () => void;
@@ -101,13 +98,6 @@ export function EnrolmentSteps({
   const [error, setError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusUnknown, setStatusUnknown] = useState(false);
-  // Set once a confirmation fails other than with a wrong code. Past the code check the server commits in one go
-  // (two-step sign-in on, recovery codes made, the "turned on" email queued), and a lost answer (offline, a reset
-  // connection), a 5xx or a proxy timeout can come after that commit. From then on, the page asks the server before
-  // it says setup was cancelled: "delete that entry" to someone whose two-step sign-in is on, with recovery codes
-  // they never saw, locks them out at the next sign-in. It stays set: a later wrong-code answer does not prove the
-  // earlier try failed.
-  const maybeOn = useRef(false);
 
   const current = codes ? 3 : codeFocused ? 2 : 1;
   // Steps 1 and 2 count as done only once the code is confirmed, not because the code field has focus.
@@ -118,10 +108,10 @@ export function EnrolmentSteps({
     heading.current?.focus();
   }, [codes]);
 
-  async function copy(text: string, done: Exclude<Notice, "copyFailed" | null>) {
+  async function copyKey() {
     try {
-      await navigator.clipboard.writeText(text);
-      setNotice(done);
+      await navigator.clipboard.writeText(secret);
+      setNotice("keyCopied");
     } catch {
       setNotice("copyFailed");
     }
@@ -152,10 +142,10 @@ export function EnrolmentSteps({
       document.getElementById("totp-code")?.focus();
       return;
     }
-    maybeOn.current = true;
     if (outcome.key === "no_pending_enrolment") {
-      // No setup is waiting: it was replaced, or an earlier try whose answer was lost turned two-step sign-in on.
-      await askServer(() => onRestart("no_pending_enrolment"));
+      // No setup is waiting: it was replaced, it expired (15 minutes), or an earlier try whose answer was lost turned
+      // two-step sign-in on. Cancelling tells which, and clears any key a newer setup left pending.
+      await cancelAtServer(() => onRestart("no_pending_enrolment"));
       return;
     }
     // The error shows above the steps, out of sight from the Confirm button at 360 px: focus brings it into view.
@@ -169,12 +159,15 @@ export function EnrolmentSteps({
   }
 
   /**
-   * Asks the server whether two-step sign-in is on (busy meanwhile, so neither Confirm nor Cancel acts): on goes to
-   * the "on" screen, off goes on with `whenOff`, and no answer keeps these steps with a hint to reload, focused.
+   * Cancels at the server and acts on its answer (busy meanwhile, so neither Confirm nor Cancel acts): "on" goes to
+   * the "on" screen with the codes-not-shown notice, "off" goes on with `whenOff`, and "unknown" keeps these steps
+   * with a hint to reload, focused. "Unknown" never counts as off, even when this page sent no confirmation: setup
+   * may have been finished elsewhere (the same key on another device), and that confirmation ends this session, so
+   * Cancel here gets 401. "Delete that entry" would then remove the live entry (security review, P17-F).
    */
-  async function askServer(whenOff: () => void) {
-    const enrolled = await enrolledOnServer();
-    if (enrolled === null) {
+  async function cancelAtServer(whenOff: () => void) {
+    const status = await cancelOnServer();
+    if (status === "unknown") {
       reveal(
         () => {
           setBusy(false);
@@ -185,20 +178,16 @@ export function EnrolmentSteps({
       return;
     }
     setBusy(false);
-    if (enrolled) onEnrolled();
+    if (status === "on") onEnrolled();
     else whenOff();
   }
 
   async function cancel() {
     if (busy) return;
-    if (!maybeOn.current) {
-      onCancel(); // only wrong codes so far, or no try: nothing was turned on
-      return;
-    }
     setBusy(true);
     setError(null);
     setStatusUnknown(false);
-    await askServer(onCancel);
+    await cancelAtServer(onCancel);
   }
 
   const noticeLine = (
@@ -229,7 +218,7 @@ export function EnrolmentSteps({
         </dd>
       </dl>
       <div className="flex flex-col items-start gap-1">
-        <Button variant="secondary" onClick={() => copy(secret, "keyCopied")}>
+        <Button variant="secondary" onClick={copyKey}>
           {t("copyKey")}
         </Button>
         {noticeLine}
@@ -260,34 +249,7 @@ export function EnrolmentSteps({
   const codesBody = codes ? (
     <div className="flex flex-col items-start gap-5">
       <p className="text-ink-soft">{t("codesLead")}</p>
-      <div className="w-full">
-        <h4 id="codes-label" className="text-base font-medium">
-          {t("codesLabel")}
-        </h4>
-        <ul
-          aria-labelledby="codes-label"
-          data-testid="recovery-codes"
-          className={
-            "code-figures mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 " + // ten codes: five even rows
-            "border border-line bg-field px-4 py-3 text-base font-semibold text-ink sm:text-lg"
-          }
-        >
-          {codes.map((recovery) => (
-            <li key={recovery} className="whitespace-nowrap">
-              {recovery}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={() => copy(codes.join("\n"), "codesCopied")}>
-          {t("copyCodes")}
-        </Button>
-        <Button variant="secondary" onClick={() => download(codes)}>
-          {t("download")}
-        </Button>
-      </div>
-      {noticeLine}
+      <RecoveryCodeList codes={codes} />
       <Button variant="primary" onClick={() => router.push(homeHref)}>
         {t("done")}
       </Button>

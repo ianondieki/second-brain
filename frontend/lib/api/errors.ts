@@ -22,6 +22,7 @@ export const KNOWN_ERROR_CODES = [
   "invalid_code",
   "totp_already_enabled",
   "no_pending_enrolment",
+  "totp_not_enabled",
   "mfa_mandatory_for_role",
   "current_password_required",
   "recent_sign_in_required",
