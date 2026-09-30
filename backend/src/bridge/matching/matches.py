@@ -11,8 +11,10 @@
 
 Reads have no side effect (a digest link only opens a page: nothing changes on GET). Each match shows the proposal's
 current teaser (Tier 1 only, through ``current_version_id``), or none once the proposal is no longer published and
-clear (``available`` false: then no why and no rules either, since both quote or describe the teaser);
-``demo_fallback`` is true when no model wrote the why.
+clear, or once its developer is an active member of the organisation (a match found before the author joined): then
+``available`` is false, with no why and no rules either (both quote or describe the teaser), and Express interest is
+``proposal_unavailable``, as the interest route answers 404 for both (round-2 review MINOR 2). ``demo_fallback`` is
+true when no model wrote the why.
 """
 
 from __future__ import annotations
@@ -44,6 +46,8 @@ _MATCHES: Final = (
     " v.owner_handle, n.id AS niche_id, n.slug AS niche_slug, n.name_en AS niche_name, pn.name_en AS parent_name"
     " FROM agent_matches m"
     " LEFT JOIN proposals p ON p.id = m.proposal_id AND p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND NOT EXISTS (SELECT 1 FROM memberships om WHERE om.org_id = m.org_id AND om.user_id = p.owner_id"
+    " AND om.status = 'active')"
     " LEFT JOIN proposal_versions v ON v.id = p.current_version_id"
     " LEFT JOIN niches n ON n.id = coalesce(v.niche_id, m.niche_id) LEFT JOIN niches pn ON pn.id = n.parent_id"
     " WHERE m.org_id = :org"
