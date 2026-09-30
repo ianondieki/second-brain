@@ -3377,6 +3377,32 @@ export interface components {
             /** Weight */
             weight: number;
         };
+        /**
+         * FeaturesOut
+         * @description The feature vector f1-f10 behind a score (docs/spec/06 6.7).
+         */
+        FeaturesOut: {
+            /** @description f8: raw is the published proposals; negative weight */
+            crowding: components["schemas"]["FeatureOut"];
+            /** @description f6: raw is the card's confidence (1.0 for a Brief) */
+            evidence_confidence: components["schemas"]["FeatureOut"];
+            /** @description f10: raw is the age in days */
+            freshness: components["schemas"]["FeatureOut"];
+            /** @description f7: raw is scouting organisations + Briefs */
+            market_pull: components["schemas"]["FeatureOut"];
+            /** @description f2: liked 1, adjacent 0.5 */
+            niche_match: components["schemas"]["FeatureOut"];
+            /** @description f3: your county 1, nationwide 0.5 */
+            region_match: components["schemas"]["FeatureOut"];
+            /** @description f1: keywords shared with your profile and proposals (consent only) */
+            semantic_fit: components["schemas"]["FeatureOut"];
+            /** @description f4: no data in the prototype; never applies */
+            skill_coverage: components["schemas"]["FeatureOut"];
+            /** @description f9: (done + 1) / (started + 2) in the niche (consent only) */
+            track_record: components["schemas"]["FeatureOut"];
+            /** @description f5: raw is the card's trend z-score */
+            trend: components["schemas"]["FeatureOut"];
+        };
         /** FeedbackIn */
         FeedbackIn: {
             feedback: components["schemas"]["MatchFeedback"];
@@ -4700,8 +4726,11 @@ export interface components {
              * @enum {string}
              */
             decision: "pursue" | "consider" | "not_now";
-            /** Label */
-            label: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "Pursue" | "Consider" | "Not now";
             /** Reasons */
             reasons: string[];
         };
@@ -4712,13 +4741,7 @@ export interface components {
              * @description The exploration slot: a card outside your liked niches
              */
             exploring: boolean;
-            /**
-             * Features
-             * @description The feature vector f1-f10 behind the score
-             */
-            features: {
-                [key: string]: components["schemas"]["FeatureOut"];
-            };
+            features: components["schemas"]["FeaturesOut"];
             /**
              * Label
              * @enum {string}

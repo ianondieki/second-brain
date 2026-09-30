@@ -2859,6 +2859,65 @@
         "title": "FeatureOut",
         "type": "object"
       },
+      "FeaturesOut": {
+        "description": "The feature vector f1-f10 behind a score (docs/spec/06 6.7).",
+        "properties": {
+          "crowding": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f8: raw is the published proposals; negative weight"
+          },
+          "evidence_confidence": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f6: raw is the card's confidence (1.0 for a Brief)"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f10: raw is the age in days"
+          },
+          "market_pull": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f7: raw is scouting organisations + Briefs"
+          },
+          "niche_match": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f2: liked 1, adjacent 0.5"
+          },
+          "region_match": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f3: your county 1, nationwide 0.5"
+          },
+          "semantic_fit": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f1: keywords shared with your profile and proposals (consent only)"
+          },
+          "skill_coverage": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f4: no data in the prototype; never applies"
+          },
+          "track_record": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f9: (done + 1) / (started + 2) in the niche (consent only)"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/FeatureOut",
+            "description": "f5: raw is the card's trend z-score"
+          }
+        },
+        "required": [
+          "semantic_fit",
+          "niche_match",
+          "region_match",
+          "skill_coverage",
+          "trend",
+          "evidence_confidence",
+          "market_pull",
+          "crowding",
+          "track_record",
+          "freshness"
+        ],
+        "title": "FeaturesOut",
+        "type": "object"
+      },
       "FeedbackIn": {
         "additionalProperties": false,
         "properties": {
@@ -6278,6 +6337,11 @@
             "type": "string"
           },
           "label": {
+            "enum": [
+              "Pursue",
+              "Consider",
+              "Not now"
+            ],
             "title": "Label",
             "type": "string"
           },
@@ -6306,12 +6370,7 @@
             "type": "boolean"
           },
           "features": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/FeatureOut"
-            },
-            "description": "The feature vector f1-f10 behind the score",
-            "title": "Features",
-            "type": "object"
+            "$ref": "#/components/schemas/FeaturesOut"
           },
           "label": {
             "enum": [

@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.errors import not_found
 from bridge.matching.discover import niches, problem_out, trend_out
-from bridge.matching.discover_schemas import FeatureOut, PursuitOut, Recommendation, RecommendationsOut
+from bridge.matching.discover_schemas import FeatureOut, FeaturesOut, PursuitOut, Recommendation, RecommendationsOut
 from bridge.matching.ranker import DECISION_LABELS, RECOMMENDABLE, Card, Developer, keywords, rank
 from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import board, load
@@ -90,10 +90,12 @@ async def recommendations(db: AsyncSession, cfg: RankingConfig, user_id: UUID) -
             why=list(r.why),
             why_not=r.why_not,
             trend=trend_out(r.card.fact, r.card.signals, r.card.trend, tree),
-            features={
-                name: FeatureOut(raw=f.raw, value=f.value, weight=f.weight, applies=f.applies)
-                for name, f in r.features.items()
-            },
+            features=FeaturesOut(
+                **{
+                    name: FeatureOut(raw=f.raw, value=f.value, weight=f.weight, applies=f.applies)
+                    for name, f in r.features.items()
+                }
+            ),
         )
         for position, r in enumerate(rows, start=1)
     ]
