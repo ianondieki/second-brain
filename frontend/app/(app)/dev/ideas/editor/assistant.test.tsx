@@ -224,6 +224,34 @@ describe("a suggestion", () => {
     expect(fake.suggest).toHaveBeenCalledTimes(1); // applying never asks again
   });
 
+  it("keeps the owner's words as 'Before' once the suggestion is in, and 'Undo' puts them back through the editor", async () => {
+    const editor = calls();
+    const fake = assistantCalls({ consentState: vi.fn(async () => ({ ok: true as const, value: CONSENT_ON })) });
+    await renderEditor({ id: PROPOSAL_ID, initial: READY, assistant: fake, calls: editor });
+    await press(OPEN);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use this" })).toBeTruthy());
+    await press("Use this");
+
+    const before = document.querySelector("[data-teaser='before']")!;
+    expect(before.textContent).toContain("Before");
+    expect(before.textContent).toContain(READY.title);
+    expect(before.textContent).toContain(READY.summary);
+    expect(document.querySelector("[data-teaser='suggested']")!.textContent).toContain(SUGGESTED.teaser!.title);
+    expect(document.querySelector("[data-teaser='now']")).toBeNull(); // never the text beside itself
+
+    await press("Undo");
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe(READY.title);
+    expect((screen.getByLabelText("Summary") as HTMLTextAreaElement).value).toBe(READY.summary);
+    expect(document.activeElement?.textContent).toBe("Your title and summary are back as they were.");
+    expect(document.querySelector("[data-teaser='now']")!.textContent).toContain(READY.title);
+    expect(screen.getByRole("button", { name: "Use this" })).toBeTruthy(); // it can go in again
+    // The undo is an ordinary edit: the editor's autosave writes the owner's words back.
+    await waitFor(() => expect(editor.saveState).toHaveBeenCalled(), { timeout: 3000 });
+    const saved = vi.mocked(editor.saveState).mock.calls.at(-1)![1];
+    expect(saved.title).toBe(READY.title);
+    expect(saved.summary).toBe(READY.summary);
+  });
+
   it("labels a demo fallback, offers nothing to use, and never shows the API's message", async () => {
     await open(
       assistantCalls({

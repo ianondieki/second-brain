@@ -59,7 +59,8 @@ export function AssistantPanel({
   const [working, setWorking] = useState(false);
   const [problem, setProblem] = useState<AssistantProblem | "noText" | "notSaved" | null>(null);
   const [answer, setAnswer] = useState<AssistantSuggestion | null>(null);
-  const [notice, setNotice] = useState<"applied" | "offNotice" | null>(null);
+  const [notice, setNotice] = useState<"applied" | "undone" | "offNotice" | null>(null);
+  const [before, setBefore] = useState<SuggestedTeaser | null>(null); // the owner's words, while a suggestion is in
   const [turningOff, setTurningOff] = useState(false);
 
   const dialog = useRef<HTMLDialogElement>(null);
@@ -108,6 +109,7 @@ export function AssistantPanel({
     setProblem(null);
     setNotice(null);
     setAnswer(null); // a new ask: the last answer goes, so a refusal never shows it again
+    setBefore(null);
     // "Ask again" hides while the request runs (and the editor's button is gone): focus waits on the heading.
     heading.current?.focus();
     try {
@@ -204,9 +206,9 @@ export function AssistantPanel({
 
   const teaser = !working && answer?.teaser;
   const key = !working && answer && statusKey(answer);
-  const side = (caption: string, title: string, summary: string, suggested?: boolean) => (
+  const side = (caption: string, { title, summary }: SuggestedTeaser, suggested?: boolean) => (
     <div
-      data-teaser={suggested ? "suggested" : "now"}
+      data-teaser={suggested ? "suggested" : before ? "before" : "now"}
       className={cn("min-w-0 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
     >
       <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
@@ -263,21 +265,22 @@ export function AssistantPanel({
       {teaser && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            {side(t("now"), state.title, state.summary)}
-            {side(t("suggested"), teaser.title, teaser.summary, true)}
+            {/* Once the suggestion is in, the owner's own words stay beside it as "Before", and "Undo" puts them back. */}
+            {side(t(before ? "before" : "now"), before ?? state)}
+            {side(t("suggested"), teaser, true)}
           </div>
-          {notice !== "applied" && (
-            <Button
-              className="self-start"
-              onClick={() => {
-                onUse(teaser);
-                setNotice("applied");
-                focusTo.current = "notice";
-              }}
-            >
-              {t("use")}
-            </Button>
-          )}
+          <Button
+            variant={before ? "link" : "secondary"}
+            className="self-start"
+            onClick={() => {
+              onUse(before ?? teaser);
+              setBefore(before ? null : { title: state.title, summary: state.summary });
+              setNotice(before ? "undone" : "applied");
+              focusTo.current = "notice";
+            }}
+          >
+            {t(before ? "undo" : "use")}
+          </Button>
         </>
       )}
 
