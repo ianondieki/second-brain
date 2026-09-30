@@ -3,8 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { billingHref } from "@/lib/billing/upgrade";
-
+import { menuBillingHref } from "./billing-link";
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "./ui/cn";
@@ -47,7 +46,7 @@ export function AccountMenu() {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   // Organisation screens carry the organisation as ?org= (members of several): Plan & billing keeps it.
-  const billing = billingHref(useSearchParams().get("org") ?? undefined);
+  const billing = menuBillingHref(useSearchParams().get("org"));
 
   useEffect(() => {
     if (!open) return;
