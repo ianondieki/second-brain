@@ -191,13 +191,15 @@ async def test_own_gone_and_other_subjects_cannot_be_decided_from_this_queue(
     moderators: Staff, proposal_world: ProposalWorld, owner_engine: AsyncEngine
 ) -> None:
     moderator = await moderators()
-    own_case, gone_case, claim_case = uuid7(), uuid7(), uuid7()
+    own_case, own_problem_case, gone_case, claim_case = uuid7(), uuid7(), uuid7(), uuid7()
     async with owner_engine.begin() as conn:
         own_proposal, _ = await w.add_proposal(
             conn, user_of(moderator), proposal_world.niche_id, proposal_world.problem_id, moderation_state="held"
         )
+        own_problem = await w.add_problem(conn, user_of(moderator), proposal_world.niche_id, moderation_state="held")
         for case_id, subject_type, subject_id, source in (
             (own_case, "proposal", own_proposal, "regex"),
+            (own_problem_case, "problem", own_problem, "regex"),
             (gone_case, "proposal", uuid7(), "regex"),
             (claim_case, "org_claim", uuid7(), "claim_dispute"),
         ):
@@ -211,13 +213,26 @@ async def test_own_gone_and_other_subjects_cannot_be_decided_from_this_queue(
     listed = {c["id"]: c for c in (await moderator.get("/api/admin/moderation/cases")).json()["items"]}
     own, gone, claim = listed[str(own_case)], listed[str(gone_case)], listed[str(claim_case)]
     assert (own["actions"], own["blocked"], own["subject_state"]) == ([], "own_content", "held")
+    own_problem_listed = listed[str(own_problem_case)]  # a problem the staff member reported themselves
+    assert (own_problem_listed["actions"], own_problem_listed["blocked"]) == ([], "own_content")
+    assert own_problem_listed["fields"] == [
+        {"name": "title", "text": "RLS problem"},
+        {"name": "statement", "text": "Statement"},
+    ]
     assert (gone["actions"], gone["blocked"], gone["fields"], gone["subject_state"]) == ([], "subject_gone", [], None)
     assert (claim["actions"], claim["blocked"], claim["fields"]) == ([], "unsupported_subject", [])
     assert claim["preview"] == {"title": None, "text": None}
     unsupported = await decide(moderator, claim, "reject")
     assert (unsupported.status_code, unsupported.json()["detail"]["code"]) == (409, "unsupported_subject")
-    own_refused = await decide(moderator, own, "reject")
-    assert (own_refused.status_code, own_refused.json()["detail"]["code"]) == (403, "own_content")
+    # The route answers what the queue says (app_moderate_* refuses own content; a missing subject is caught first).
+    for case in (own, own_problem_listed):
+        refused = await decide(moderator, case, "reject")
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (403, case["blocked"])
+    for decision in ("approve", "reject"):
+        refused = await decide(moderator, gone, decision)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "subject_gone")
+    [still] = await rows(owner_engine, "SELECT moderation_state FROM problems WHERE id = :p", p=own_problem)
+    assert still.moderation_state == "held"
 
 
 async def test_open_cases_come_oldest_first_and_decided_ones_newest_decision_first(
