@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { RadioGroup } from "@/components/ui/RadioGroup";
-import { ClockIcon } from "@/components/ui/status-icons";
+import { CheckIcon, ClockIcon } from "@/components/ui/status-icons";
 
 import { formatKes } from "../plans";
 import { checkoutCalls, type CheckoutCalls } from "./calls";
@@ -122,6 +122,9 @@ export function Checkout(props: CheckoutProps) {
   }
 
   const headingProps = { ref: heading, tabIndex: -1, className: "text-lg text-ink focus:outline-none" };
+  // A simulated checkout sends no prompt to any phone, so its waiting step does not say "Check your phone".
+  const simulated = props.simulated || (phase.kind === "pending" && phase.checkout?.simulated === true);
+  const waitingTitle = simulated ? t("simulatedTitle") : t("phoneTitle");
   return (
     <div className="mt-6 flex flex-col gap-8">
       <Steps current={stepOf(phase)} />
@@ -139,9 +142,9 @@ export function Checkout(props: CheckoutProps) {
       ) : phase.kind === "pending" || phase.kind === "stalled" ? (
         <section aria-labelledby="checkout-step" className="flex flex-col gap-4" data-phase={phase.kind}>
           <h2 id="checkout-step" {...headingProps}>
-            {t("phoneTitle")}
+            {waitingTitle}
           </h2>
-          {props.simulated || phase.checkout?.simulated ? (
+          {simulated || phase.checkout?.simulated ? (
             <p className="max-w-[60ch] text-ink">{t("phoneLeadSimulated")}</p>
           ) : phase.checkout ? (
             <p className="max-w-[60ch] text-ink">
@@ -149,10 +152,13 @@ export function Checkout(props: CheckoutProps) {
             </p>
           ) : null}
           {phase.kind === "pending" ? (
-            <p role="status" className="flex items-center gap-2 font-medium text-ink">
-              <ClockIcon className="size-5 shrink-0 text-jacaranda motion-safe:animate-pulse" />
-              {phase.checkout ? t("waiting") : t("checking")}
-            </p>
+            <>
+              <p role="status" className="flex items-center gap-2 font-medium text-ink">
+                <ClockIcon className="size-5 shrink-0 text-jacaranda motion-safe:animate-pulse" />
+                {phase.checkout ? t("waiting") : t("checking")}
+              </p>
+              <p className="max-w-[60ch] text-sm text-ink-soft">{t("canLeave")}</p>
+            </>
           ) : (
             <>
               <Alert tone="info">{t("stalled")}</Alert>
@@ -167,7 +173,7 @@ export function Checkout(props: CheckoutProps) {
       ) : phase.kind === "lost" ? (
         <section aria-labelledby="checkout-step" className="flex flex-col gap-4" data-phase="lost">
           <h2 id="checkout-step" {...headingProps}>
-            {t("phoneTitle")}
+            {waitingTitle}
           </h2>
           <Alert>
             <p>{t(phase.problem === "notFound" ? "problem.checkoutNotFound" : `problem.${phase.problem}`)}</p>
@@ -189,17 +195,30 @@ function Steps({ current }: { current: 1 | 2 | 3 }) {
     <ol aria-label={t("stepsLabel")} className="grid grid-cols-3 gap-2">
       {names.map((name, index) => {
         const step = index + 1;
+        const done = step < current;
         return (
           <li
             key={name}
             aria-current={step === current ? "step" : undefined}
+            data-done={done ? "" : undefined}
             className={cn(
-              "min-w-0 border-t-4 pt-2 text-sm leading-snug",
-              step === current ? "border-jacaranda font-semibold text-ink" : "border-line font-medium text-ink-soft",
-              step < current && "border-[color-mix(in_oklab,var(--jacaranda)_45%,var(--paper))]",
+              "flex min-w-0 items-start gap-1 border-t-4 pt-2 text-sm leading-snug",
+              step === current
+                ? "border-jacaranda font-semibold text-ink"
+                : done
+                  ? "border-[color-mix(in_oklab,var(--jacaranda)_45%,var(--paper))] font-medium text-ink"
+                  : "border-line font-medium text-ink-soft",
             )}
           >
-            {name}
+            {done ? (
+              <>
+                <CheckIcon className="mt-px size-4 shrink-0 text-jacaranda" />
+                <span aria-hidden="true">{name}</span>
+                <span className="sr-only">{t("stepDone", { name })}</span>
+              </>
+            ) : (
+              name
+            )}
           </li>
         );
       })}

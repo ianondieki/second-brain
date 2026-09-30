@@ -108,12 +108,12 @@ test.describe("a developer on the Free plan", () => {
     await expect(page.getByRole("list", { name: "Payment steps" }).locator("[aria-current='step']")).toHaveText(
       "Confirm",
     );
-    await expect(page.getByRole("radio", { name: "Confirms the payment" })).toBeChecked();
+    await expect(page.getByRole("radio", { name: "The payment is confirmed" })).toBeChecked();
     await checkScreen(page);
     await page.getByRole("button", { name: "Start the simulated payment" }).click();
 
-    // Check your phone, then the fake provider's answer.
-    await expect(page.getByRole("heading", { name: "Check your phone" })).toBeVisible(SERVER_STEP);
+    // Waiting (a simulated checkout says so instead of "Check your phone"), then the fake provider's answer.
+    await expect(page.getByRole("heading", { name: "Waiting for the simulated payment" })).toBeVisible(SERVER_STEP);
     await expect(page.getByRole("status").filter({ hasText: "Waiting for the payment to be confirmed" })).toBeVisible();
     await expect(page).toHaveURL(/checkout=[0-9a-f-]{36}/);
     await checkScreen(page);
@@ -143,7 +143,7 @@ test.describe("a developer on the Free plan", () => {
     await page.goto("/billing/upgrade?plan=dev_pro_yearly");
     await expect(page.locator("[data-price]")).toHaveText("KES 4,990 a year", SERVER_STEP);
 
-    await page.getByRole("radio", { name: "Has too little money" }).check();
+    await page.getByRole("radio", { name: "There is too little money" }).check();
     await page.getByRole("button", { name: "Start the simulated payment" }).click();
     await expect(page.getByRole("heading", { name: "Payment not completed" })).toBeVisible(PAYMENT_STEP);
     await expect(page.locator("main").getByRole("alert")).toHaveText(
@@ -154,7 +154,7 @@ test.describe("a developer on the Free plan", () => {
     await checkScreen(page);
 
     await page.getByRole("button", { name: "Try again" }).click();
-    await page.getByRole("radio", { name: "Cancels the payment" }).check();
+    await page.getByRole("radio", { name: "The payment is cancelled" }).check();
     await page.getByRole("button", { name: "Start the simulated payment" }).click();
     await expect(page.getByRole("heading", { name: "Payment cancelled" })).toBeVisible(PAYMENT_STEP);
     await checkScreen(page);

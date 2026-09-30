@@ -89,14 +89,18 @@ describe("the simulated checkout", () => {
       "Confirm",
     );
     expect(primaries()).toHaveLength(1);
-    fireEvent.click(screen.getByRole("radio", { name: "Has too little money" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Confirms the payment" }));
+    fireEvent.click(screen.getByRole("radio", { name: "There is too little money" }));
+    fireEvent.click(screen.getByRole("radio", { name: "The payment is confirmed" }));
     fireEvent.click(screen.getByRole("button", { name: "Start the simulated payment" }));
     await advance(0);
 
     expect(calls.start).toHaveBeenCalledWith({ planCode: "dev_pro_monthly", orgId: undefined, simulate: "succeed" });
     expect(phase()).toBe("pending");
-    expect(screen.getByRole("heading", { name: "Check your phone" })).toBe(document.activeElement);
+    expect(screen.getByRole("heading", { name: "Waiting for the simulated payment" })).toBe(document.activeElement);
+    expect(screen.getByText("You can leave this page: your plan changes once the payment is confirmed.")).toBeTruthy();
+    const steps = screen.getByRole("list", { name: "Payment steps" });
+    expect(steps.querySelector("[data-done]")?.textContent).toContain("Confirm: done");
+    expect(steps.querySelector("[aria-current='step']")?.textContent).toBe("Check your phone");
     expect(screen.getByRole("status").textContent).toContain("Waiting for the payment to be confirmed");
     expect(primaries()).toHaveLength(0);
     expect(window.location.search).toContain(`checkout=${ID}`); // a reload carries on with this checkout
@@ -129,6 +133,7 @@ describe("the simulated checkout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pay with M-Pesa" }));
     await advance(0);
     expect(calls.start).toHaveBeenCalledWith({ planCode: "dev_pro_monthly", orgId: undefined, simulate: undefined });
+    expect(screen.getByRole("heading", { name: "Check your phone" })).toBeTruthy();
     expect(screen.getByText("Enter your M-Pesa PIN in the prompt on your phone to pay KES 499.")).toBeTruthy();
   });
 
@@ -137,7 +142,7 @@ describe("the simulated checkout", () => {
       { ok: true, checkout: checkout({ status: "failed", failure_code: "insufficient_funds" }) },
     ]);
     renderCheckout(calls);
-    fireEvent.click(screen.getByRole("radio", { name: "Has too little money" }));
+    fireEvent.click(screen.getByRole("radio", { name: "There is too little money" }));
     fireEvent.click(screen.getByRole("button", { name: "Start the simulated payment" }));
     await advance(0);
     await advance(2000);
