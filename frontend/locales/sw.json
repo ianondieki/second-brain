@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead [[SW-REVIEW]] draft Swahili",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
@@ -1306,5 +1307,171 @@
       "email": "Barua pepe",
       "noEmail": "Msanidi programu bado hana barua pepe iliyothibitishwa."
     }
+  },
+  "admin": {
+    "pageTitle": "Dashibodi ya wafanyakazi",
+    "title": "Dashibodi ya wafanyakazi",
+    "navLabel": "Dashibodi ya wafanyakazi",
+    "nav": {
+      "research": "Utafiti"
+    },
+    "noSection": "Jukumu lako la wafanyakazi bado halina sehemu kwenye dashibodi.",
+    "noSectionAction": "Kuingia na usalama",
+    "mfaNeeded": "Washa kuingia kwa hatua mbili ili utumie dashibodi ya wafanyakazi.",
+    "mfaAction": "Washa kuingia kwa hatua mbili"
+  },
+  "adminResearch": {
+    "pageTitle": "Utafiti",
+    "title": "Utafiti",
+    "lead": "Andaa kadi za matatizo kutoka vyanzo vilivyohifadhiwa, kisha kagua kila moja dhidi ya nukuu zake kabla haijawekwa hadharani.",
+    "notAdmin": "Mizunguko ya utafiti ni ya wasimamizi wa wafanyakazi.",
+    "notAdminAction": "Rudi kwenye dashibodi",
+    "start": {
+      "heading": "Anzisha mzunguko",
+      "niche": "Fani",
+      "nicheHint": "Fani zenye manukuu yaliyohifadhiwa pekee ndizo zimeorodheshwa. Mzunguko unasoma manukuu hayo na haupakui chochote.",
+      "country": "Nchi",
+      "kenya": "Kenya",
+      "submit": "Anzisha mzunguko",
+      "starting": "Inaanzisha…",
+      "running": "Mzunguko wa {name} unaendelea. Kwa kawaida huchukua sekunde chache.",
+      "finished": "Mzunguko wa {name} umekamilika. Matokeo yake yako chini ya Mizunguko ya hivi karibuni.",
+      "slow": "Mzunguko wa {name} bado unaendelea. Onyesha upya ukurasa baada ya dakika moja uone matokeo yake.",
+      "refresh": "Onyesha upya",
+      "noNiches": "Bado hakuna manukuu yaliyohifadhiwa, kwa hiyo hakuna cha kuendesha."
+    },
+    "refusal": {
+      "no_saved_excerpts": "Fani hii haina manukuu yaliyohifadhiwa ya Kenya, kwa hiyo mzunguko haungekuwa na cha kusoma.",
+      "unknown_niche": "Fani hiyo haipo tena. Onyesha upya ukurasa na uchague nyingine.",
+      "run_in_progress": "Mzunguko wa fani hii tayari unaendelea. Subiri ukamilike, kisha anzisha mwingine.",
+      "checklist_required": "Kadi hii inataja shirika: weka tiki kwenye orodha ya ukaguzi, kisha uiidhinishe tena.",
+      "already_decided": "Mtu mwingine tayari ameamua kuhusu kadi hii. Rudi kwenye Utafiti uone kilichobaki.",
+      "not_found": "Kadi hii haisubiri tena ukaguzi.",
+      "forbidden": "Mizunguko ya utafiti ni ya wasimamizi wa wafanyakazi.",
+      "generic": "Hilo halikufanikiwa. Angalia muunganisho wako kisha ujaribu tena."
+    },
+    "publish": {
+      "no_allowlist": "Kadi hii haiwezi kuchapishwa: nchi yake bado haina orodha ya vyanzo.",
+      "no_citation": "Kadi hii haiwezi kuchapishwa: haitaji chanzo chochote.",
+      "source_not_saved": "Kadi hii haiwezi kuchapishwa: chanzo kilichotajwa hakilingani tena na nukuu yake iliyohifadhiwa (kiungo, mchapishaji, tarehe au nukuu). Ikatae.",
+      "sources_archived": "Kadi hii haiwezi kuchapishwa: kila chanzo kilichotajwa sasa kina umri wa zaidi ya miezi 18. Ikatae kisha uendeshe utafiti tena upate vyanzo vya sasa.",
+      "control_character": "Kadi hii haiwezi kuchapishwa: maandishi yake yana herufi zilizofichwa au za udhibiti. Ikatae.",
+      "non_latin_text": "Kadi hii haiwezi kuchapishwa: maandishi yake yanatumia herufi au tarakimu zisizo za alfabeti ya Kilatini, ambazo zinaweza kuficha jina. Ikatae.",
+      "text_out_of_bounds": "Kadi hii haiwezi kuchapishwa: kichwa, maelezo au kundi lililoathirika ni refu kuliko kadi inavyoruhusu.",
+      "unsupported_number": "Kadi hii haiwezi kuchapishwa: namba iliyomo haionekani, kwa kipimo kilekile, katika nukuu yoyote iliyotajwa.",
+      "named_org_without_official": "Kadi hii haiwezi kuchapishwa: inataja shirika lakini haitaji chanzo rasmi.",
+      "needs_official_or_two_publishers": "Kadi hii haiwezi kuchapishwa: inahitaji chanzo kimoja rasmi au wachapishaji wawili huru.",
+      "low_confidence": "Kadi hii haiwezi kuchapishwa: kiwango chake cha uhakika kiko chini ya kima cha chini cha 0.40.",
+      "other": "Kadi hii haikupita ukaguzi wa uchapishaji. Ikatae, au endesha utafiti tena."
+    },
+    "stepUp": {
+      "body": "Ukaguzi wako wa mwisho wa hatua mbili ulikuwa zaidi ya saa 12 zilizopita. Weka msimbo kutoka programu yako ya uthibitishaji ili uendelee.",
+      "code": "Msimbo kutoka programu yako",
+      "submit": "Thibitisha",
+      "checking": "Inakagua…",
+      "invalid": "Msimbo huo haukufanya kazi. Weka msimbo mpya zaidi kutoka programu yako ya uthibitishaji.",
+      "cancel": "Ghairi"
+    },
+    "queue": {
+      "heading": "Zinasubiri ukaguzi",
+      "empty": "Hakuna kadi zinazosubiri ukaguzi.",
+      "emptyAction": "Anzisha mzunguko",
+      "aiDrafted": "Imeandaliwa na AI",
+      "seeded": "Mfano wa maonyesho",
+      "namesOrgs": "Inataja shirika",
+      "confidence": "Uhakika {value}",
+      "sources": "Vyanzo: {count}",
+      "drafted": "Iliandaliwa {date}"
+    },
+    "runs": {
+      "heading": "Mizunguko ya hivi karibuni",
+      "listLabel": "Mizunguko ya utafiti ya hivi karibuni",
+      "started": "Ilianza {date}",
+      "status": {
+        "running": "Inaendelea",
+        "completed": "Imekamilika",
+        "stopped": "Imesimamishwa",
+        "failed": "Imeshindwa"
+      },
+      "cards": "Kadi zilizoandaliwa: {count}. Zilizotupwa: {total}.",
+      "noCard": "Hakuna rasimu iliyopita ukaguzi, kwa hiyo hakuna kadi iliyotengenezwa.",
+      "demoFallback": "Hakuna kadi: modeli haikutoa jibu linalofaa, kwa hiyo jibu mbadala la maonyesho lilitumika.",
+      "going": "Bado unaendelea.",
+      "failed": "Ombi kwa modeli lilishindwa, kwa hiyo hakuna kadi iliyotengenezwa. Jaribu tena baadaye.",
+      "stop": {
+        "stale": "Umesimamishwa: mzunguko haukukamilika ndani ya saa moja.",
+        "no_saved_excerpts": "Umesimamishwa: fani hii haina manukuu yaliyohifadhiwa.",
+        "not_enough_excerpts": "Umesimamishwa: manukuu ya sasa ni machache mno kutengeneza kadi.",
+        "search_or_fetch_cap": "Umesimamishwa: mzunguko ulifikia kikomo chake cha utafutaji au upakuaji.",
+        "input_token_cap": "Umesimamishwa: manukuu yalikuwa marefu kuliko mzunguko mmoja unavyoweza kusoma.",
+        "injection_suspected": "Umesimamishwa: nukuu moja ilisomeka kama maagizo kwa modeli, kwa hiyo hakuna kadi iliyotengenezwa.",
+        "other": "Umesimamishwa kabla kadi yoyote haijatengenezwa."
+      }
+    },
+    "sources": {
+      "summary": "Manukuu yaliyohifadhiwa ({count})",
+      "lead": "Mizunguko inasoma manukuu haya pekee, kila moja likiwa limehifadhiwa na kiungo, tarehe na nukuu yake neno kwa neno. Hali ya upya kufikia {date}.",
+      "fresh": "Ya sasa",
+      "stale": "Zaidi ya miezi 12",
+      "archived": "Kumbukumbu, haitumiki",
+      "official": "Rasmi"
+    },
+    "review": {
+      "pageTitle": "Kagua kadi",
+      "back": "Utafiti",
+      "gone": "Kadi hii haisubiri tena ukaguzi.",
+      "goneAction": "Rudi kwenye Utafiti",
+      "affected": "Wanaoathirika",
+      "niche": "Fani",
+      "region": "Eneo",
+      "confidence": "Uhakika",
+      "confidenceValue": "{value} kati ya 1",
+      "drafted": "Iliandaliwa",
+      "namedOrgs": "Mashirika yaliyotajwa",
+      "sourcesHeading": "Vyanzo",
+      "sourcesLead": "Kagua kila dai lililo kwenye kadi dhidi ya nukuu hizi kabla hujaamua.",
+      "checklistHeading": "Orodha ya ukaguzi ya mashirika yaliyotajwa",
+      "checklistConfirm": "Nimepitia orodha ya ukaguzi iliyo hapo juu kwa kadi hii.",
+      "checklistRequired": "Weka tiki kwenye orodha ya ukaguzi kabla hujaidhinisha kadi hii.",
+      "decisionHeading": "Uamuzi wako",
+      "decisionLead": "Kuidhinisha kunachapisha kadi na vyanzo vyake kwa watu walioingia. Kukataa kunaifanya ibaki ya faragha daima.",
+      "approve": "Idhinisha na uchapishe",
+      "approving": "Inachapisha…",
+      "reject": "Kataa",
+      "rejectConfirm": "Ukatae kadi hii? Itabaki ya faragha na haiwezi kuchapishwa baadaye.",
+      "rejectYes": "Kataa kadi",
+      "rejecting": "Inakataa…",
+      "cancel": "Ghairi",
+      "published": "Imechapishwa. Watu walioingia sasa wanaweza kuona kadi hii na vyanzo vyake.",
+      "openPublic": "Fungua kadi ya umma",
+      "rejected": "Imekataliwa. Kadi inabaki ya faragha.",
+      "backToResearch": "Rudi kwenye Utafiti"
+    }
+  },
+  "problem": {
+    "pageTitle": "Tatizo",
+    "notFound": "Tatizo hili halipatikani.",
+    "back": "Rudi nyumbani",
+    "label": {
+      "aiDrafted": "Imeandaliwa na AI, imekaguliwa na mtu tarehe {date}",
+      "seeded": "Mfano wa maonyesho (si matokeo halisi ya AI), umekaguliwa na mtu tarehe {date}",
+      "developer": "Imeripotiwa na msanidi programu"
+    },
+    "affected": "Wanaoathirika",
+    "niche": "Fani",
+    "region": "Eneo",
+    "regionCounty": "{county}, {country}",
+    "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
+    "confidence": "Uhakika",
+    "confidenceValue": "{value} kati ya 1",
+    "namedOrgs": "Mashirika yaliyotajwa",
+    "sourcesHeading": "Vyanzo",
+    "sourcesCount": "{count, plural, one {Chanzo #, kimenukuliwa kama kilivyochapishwa} other {Vyanzo #, vimenukuliwa kama vilivyochapishwa}}",
+    "sourceType": "{type, select, official {Rasmi} filing {Taarifa rasmi ya kampuni} news {Habari} ngo {Shirika lisilo la kiserikali} blog {Blogu} social {Mitandao ya kijamii} verified_org {Shirika lililothibitishwa} other {Chanzo}}",
+    "publishedOn": "Ilichapishwa {date}",
+    "noDate": "Hakuna tarehe ya kuchapishwa",
+    "unknownPublisher": "Mchapishaji hajatajwa",
+    "open": "Isome kwa {publisher}",
+    "external": "(inafungua tovuti nyingine)"
   }
 }

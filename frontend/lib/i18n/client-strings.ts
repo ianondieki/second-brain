@@ -37,6 +37,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "tagWithdraw",
   "orgProposal",
   "trackerActions",
+  "adminResearch",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

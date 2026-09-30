@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead",
     "review": "[[COPY-REVIEW]] G2/G5",
@@ -1306,5 +1307,171 @@
       "email": "Email",
       "noEmail": "The developer has no verified email address yet."
     }
+  },
+  "admin": {
+    "pageTitle": "Staff console",
+    "title": "Staff console",
+    "navLabel": "Staff console",
+    "nav": {
+      "research": "Research"
+    },
+    "noSection": "Your staff role has no console section yet.",
+    "noSectionAction": "Sign-in and security",
+    "mfaNeeded": "Turn on two-step sign-in to use the staff console.",
+    "mfaAction": "Turn on two-step sign-in"
+  },
+  "adminResearch": {
+    "pageTitle": "Research",
+    "title": "Research",
+    "lead": "Draft problem cards from saved sources, then check each one against its quotes before it goes public.",
+    "notAdmin": "Research runs are for staff admins.",
+    "notAdminAction": "Back to the console",
+    "start": {
+      "heading": "Start a run",
+      "niche": "Niche",
+      "nicheHint": "Only niches with saved excerpts are listed. A run reads those excerpts and fetches nothing.",
+      "country": "Country",
+      "kenya": "Kenya",
+      "submit": "Start run",
+      "starting": "Starting…",
+      "running": "The {name} run is going. This usually takes a few seconds.",
+      "finished": "The {name} run has finished. Its result is under Recent runs.",
+      "slow": "The {name} run is still going. Refresh the page in a minute to see its result.",
+      "refresh": "Refresh",
+      "noNiches": "There are no saved excerpts yet, so there is nothing to run."
+    },
+    "refusal": {
+      "no_saved_excerpts": "This niche has no saved excerpts for Kenya, so a run would have nothing to read.",
+      "unknown_niche": "That niche no longer exists. Refresh the page and choose another.",
+      "run_in_progress": "A run of this niche is already going. Wait for it to finish, then start another.",
+      "checklist_required": "This card names an organisation: tick the checklist, then approve it again.",
+      "already_decided": "Someone already decided this card. Go back to Research to see what is left.",
+      "not_found": "This card is no longer waiting for review.",
+      "forbidden": "Research runs are for staff admins.",
+      "generic": "That did not work. Check your connection and try again."
+    },
+    "publish": {
+      "no_allowlist": "This card cannot be published: its country has no source list yet.",
+      "no_citation": "This card cannot be published: it cites no source.",
+      "source_not_saved": "This card cannot be published: a cited source no longer matches its saved excerpt (link, publisher, date or quote). Reject it.",
+      "sources_archived": "This card cannot be published: every cited source is now older than 18 months. Reject it and run the research again for current sources.",
+      "control_character": "This card cannot be published: its text contains hidden or control characters. Reject it.",
+      "non_latin_text": "This card cannot be published: its text uses letters or digits outside the Latin alphabet, which can disguise a name. Reject it.",
+      "text_out_of_bounds": "This card cannot be published: its title, statement or affected group is longer than a card allows.",
+      "unsupported_number": "This card cannot be published: a number in it does not appear, with the same unit, in any cited quote.",
+      "named_org_without_official": "This card cannot be published: it names an organisation but cites no official source.",
+      "needs_official_or_two_publishers": "This card cannot be published: it needs one official source or two independent publishers.",
+      "low_confidence": "This card cannot be published: its confidence is below the 0.40 minimum.",
+      "other": "This card did not pass the publish checks. Reject it, or run the research again."
+    },
+    "stepUp": {
+      "body": "Your last two-step check was more than 12 hours ago. Enter a code from your authenticator app to continue.",
+      "code": "Code from your app",
+      "submit": "Confirm",
+      "checking": "Checking…",
+      "invalid": "That code did not work. Enter the newest code from your authenticator app.",
+      "cancel": "Cancel"
+    },
+    "queue": {
+      "heading": "Waiting for review",
+      "empty": "No cards are waiting for review.",
+      "emptyAction": "Start a run",
+      "aiDrafted": "AI-drafted",
+      "seeded": "Seeded example",
+      "namesOrgs": "Names an organisation",
+      "confidence": "Confidence {value}",
+      "sources": "Sources: {count}",
+      "drafted": "Drafted {date}"
+    },
+    "runs": {
+      "heading": "Recent runs",
+      "listLabel": "Recent research runs",
+      "started": "Started {date}",
+      "status": {
+        "running": "Running",
+        "completed": "Finished",
+        "stopped": "Stopped",
+        "failed": "Failed"
+      },
+      "cards": "Cards drafted: {count}. Discarded: {total}.",
+      "noCard": "No draft passed the checks, so no card was made.",
+      "demoFallback": "No card: the model gave no usable answer, so the demo fallback was used.",
+      "going": "Still going.",
+      "failed": "The model call failed, so no card was made. Try again later.",
+      "stop": {
+        "stale": "Stopped: the run did not finish within an hour.",
+        "no_saved_excerpts": "Stopped: this niche has no saved excerpts.",
+        "not_enough_excerpts": "Stopped: too few current excerpts to make a card.",
+        "search_or_fetch_cap": "Stopped: the run reached its search or fetch limit.",
+        "input_token_cap": "Stopped: the excerpts were longer than one run may read.",
+        "injection_suspected": "Stopped: an excerpt read like instructions to the model, so no card was made.",
+        "other": "Stopped before any card was made."
+      }
+    },
+    "sources": {
+      "summary": "Saved excerpts ({count})",
+      "lead": "Runs read only these excerpts, each saved with its link, date and verbatim quote. Freshness as of {date}.",
+      "fresh": "Current",
+      "stale": "Older than 12 months",
+      "archived": "Archived, not used",
+      "official": "Official"
+    },
+    "review": {
+      "pageTitle": "Review a card",
+      "back": "Research",
+      "gone": "This card is no longer waiting for review.",
+      "goneAction": "Back to Research",
+      "affected": "Who is affected",
+      "niche": "Niche",
+      "region": "Region",
+      "confidence": "Confidence",
+      "confidenceValue": "{value} out of 1",
+      "drafted": "Drafted",
+      "namedOrgs": "Named organisations",
+      "sourcesHeading": "Sources",
+      "sourcesLead": "Check every claim in the card against these quotes before you decide.",
+      "checklistHeading": "Named-organisation checklist",
+      "checklistConfirm": "I have worked through the checklist above for this card.",
+      "checklistRequired": "Tick the checklist before you approve this card.",
+      "decisionHeading": "Your decision",
+      "decisionLead": "Approving publishes the card and its sources to signed-in people. Rejecting keeps it private for good.",
+      "approve": "Approve and publish",
+      "approving": "Publishing…",
+      "reject": "Reject",
+      "rejectConfirm": "Reject this card? It stays private and cannot be published later.",
+      "rejectYes": "Reject card",
+      "rejecting": "Rejecting…",
+      "cancel": "Cancel",
+      "published": "Published. Signed-in people can now see this card and its sources.",
+      "openPublic": "Open the public card",
+      "rejected": "Rejected. The card stays private.",
+      "backToResearch": "Back to Research"
+    }
+  },
+  "problem": {
+    "pageTitle": "Problem",
+    "notFound": "This problem is not available.",
+    "back": "Back to home",
+    "label": {
+      "aiDrafted": "AI-drafted, human-reviewed on {date}",
+      "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",
+      "developer": "Developer-reported"
+    },
+    "affected": "Who is affected",
+    "niche": "Niche",
+    "region": "Region",
+    "regionCounty": "{county}, {country}",
+    "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
+    "confidence": "Confidence",
+    "confidenceValue": "{value} out of 1",
+    "namedOrgs": "Organisations named",
+    "sourcesHeading": "Sources",
+    "sourcesCount": "{count, plural, one {# source, quoted as published} other {# sources, quoted as published}}",
+    "sourceType": "{type, select, official {Official} filing {Filing} news {News} ngo {NGO} blog {Blog} social {Social media} verified_org {Verified organisation} other {Source}}",
+    "publishedOn": "Published {date}",
+    "noDate": "No publication date",
+    "unknownPublisher": "Unnamed publisher",
+    "open": "Read it at {publisher}",
+    "external": "(opens another site)"
   }
 }
