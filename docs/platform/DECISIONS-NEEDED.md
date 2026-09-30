@@ -189,6 +189,19 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype.
 - Decision:
 
+### D-48 · Staff accounts and portal accounts: one account or separate (P11-F; spec 03 roles, spec 07 item 1)
+- Why: `/api/auth/me` reports `side: "staff"` for any account with a staff role, so a staff member who is also a
+  developer or an organisation member cannot use `/org` (and the web's home logic has to guess). P11-F now sends staff to
+  `/admin` only when their role has a console section and two-step sign-in is on, and never redirects them away from
+  a portal, but the API's side stays single.
+- Options: (a) staff accounts are separate accounts (staff never hold a developer profile or a membership; the admin
+  tools refuse to grant a staff role to such an account); (b) one account may be both: `/api/auth/me` returns every
+  side, and spec 07's portal switcher chooses.
+- Recommended default: (a) for the prototype and launch (smaller blast radius for staff sessions, simpler audit);
+  revisit with the portal switcher.
+- Blocks: nothing in the prototype (the demo's staff accounts are staff only).
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
