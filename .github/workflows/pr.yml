@@ -108,9 +108,9 @@ jobs:
         run: infra/ci/sandboxed.sh python scripts/run_legacy_tests.py --no-skip --verbose
 
   backend:
-    name: backend (ruff, mypy --strict, OpenAPI drift, pytest incl. migrations and RLS)
+    name: backend (ruff, mypy --strict, OpenAPI drift, pytest incl. migrations and RLS, coverage gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35   # was 25 before the suite ran measured (coverage's tracer slows it)
     services:
       postgres:
         image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
@@ -137,8 +137,10 @@ jobs:
         run: |
           bash infra/ci/egress-lock.sh
           infra/ci/sandboxed.sh python infra/ci/egress_probe.py
-      - name: make check-backend (offline)
-        run: infra/ci/sandboxed.sh env UV_OFFLINE=1 make check-backend
+      - name: make check-backend with coverage, then the coverage gate (offline; REQ-FND-01)
+        # The same checks and tests as make check-backend, measured; infra/ci/coverage_gate.py then fails the job
+        # below 85 % overall or 95 % in auth, tenancy, billing, provenance or engagements (docs/spec/08).
+        run: infra/ci/sandboxed.sh env UV_OFFLINE=1 make check-backend-coverage
 
   frontend:
     name: frontend (eslint, tsc, vitest, API types drift)
