@@ -308,35 +308,66 @@ async def test_approval_re_reads_the_text_for_hidden_names_scales_and_format_cha
     assert reason in refused.json()["detail"]["message"]
 
 
-async def _one_source_candidate(app_engine: AsyncEngine, world: ResearchWorld) -> UUID:
-    """A card with one news source, made through the definer (which accepts it: the source rule is the publish
-    gate's)."""
-    excerpt = world.catalogue.get("ke-tel-004")
-    assert excerpt is not None
+async def _definer_candidate(app_engine: AsyncEngine, world: ResearchWorld, *excerpt_ids: str) -> UUID:
+    """A card citing these saved excerpts, made through the definer (which checks the sources' form only: the source
+    rule and freshness are the publish gate's)."""
     run_id = await start(app_engine, world, "networks-telecommunications")
-    source = {
-        "url": excerpt.url,
-        "publisher": excerpt.publisher,
-        "source_type": excerpt.source_type,
-        "published_date": excerpt.published_date.isoformat(),
-        "retrieved_at": excerpt.retrieved_at.isoformat(),
-        "quote": excerpt.quote,
-        "excerpt_ref": excerpt.id,
-    }
+    sources = []
+    for excerpt_id in excerpt_ids:
+        excerpt = world.catalogue.get(excerpt_id)
+        assert excerpt is not None
+        sources.append(
+            {
+                "url": excerpt.url,
+                "publisher": excerpt.publisher,
+                "source_type": excerpt.source_type,
+                "published_date": excerpt.published_date.isoformat(),
+                "retrieved_at": excerpt.retrieved_at.isoformat(),
+                "quote": excerpt.quote,
+                "excerpt_ref": excerpt.id,
+            }
+        )
     factory = create_session_factory(app_engine)
     async with factory() as db:
         await bind_tenant(db, user_id=world.admin)
         problem_id: UUID = (
             await db.execute(
                 text(
-                    "SELECT app_create_research_candidate(:run, 'One publisher only', 'Smaller operators say the"
-                    " regime disadvantages them.', '', NULL, 0.5, '{}', CAST(:sources AS jsonb))"
+                    "SELECT app_create_research_candidate(:run, 'Smaller operators are squeezed', 'Smaller operators"
+                    " say the regime disadvantages them.', '', NULL, 0.5, '{}', CAST(:sources AS jsonb))"
                 ),
-                {"run": run_id, "sources": json.dumps([source])},
+                {"run": run_id, "sources": json.dumps(sources)},
             )
         ).scalar_one()
         await db.commit()
     return problem_id
+
+
+async def _one_source_candidate(app_engine: AsyncEngine, world: ResearchWorld) -> UUID:
+    return await _definer_candidate(app_engine, world, "ke-tel-004")
+
+
+async def test_approval_refuses_a_card_whose_sources_have_aged_out_on_the_clock(
+    world: ResearchWorld, as_user: Client, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    """Minor (a) of the P11 review: freshness is judged at approval on the shared clock. Moved 366 days ahead (the
+    test clock's limit), ke-tel-002 (2026-02-27) and ke-tel-004 (2026-01-16) are past 18 months, so a card citing only
+    them is refused although its two publishers would otherwise pass."""
+    problem_id = await _definer_candidate(app_engine, world, "ke-tel-002", "ke-tel-004")
+    admin = await as_user(world.admin)
+    async with owner_engine.begin() as conn:
+        before = (await conn.execute(text("SELECT enabled, clock_offset FROM test_clock"))).one()
+        await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = interval '366 days'"))
+    try:
+        refused = await admin.post(f"{BASE}/candidates/{problem_id}/decision", json={"decision": "approve"})
+    finally:
+        async with owner_engine.begin() as conn:
+            restore = {"e": before.enabled, "o": before.clock_offset}
+            await conn.execute(text("UPDATE test_clock SET enabled = :e, clock_offset = :o"), restore)
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "publish_check_failed")
+    assert "sources_archived" in refused.json()["detail"]["message"]
+    approved = await admin.post(f"{BASE}/candidates/{problem_id}/decision", json={"decision": "approve"})
+    assert approved.json()["status"] == "published"  # back on today's clock both are fresh
 
 
 async def test_one_publisher_fails_in_code_and_the_backstop_holds_without_the_code(
