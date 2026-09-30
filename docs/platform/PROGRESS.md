@@ -365,11 +365,11 @@ workarounds in the laptop notes stay in their files. **Session 2 additions (netw
 
 | Branch | Last commit | Status | Next step |
 |---|---|---|---|
-| `feat/REQ-BIL-08-fe` (M2, P14-F) | `6fb3f00`+ | impl-frontend: `/billing`, `/billing/upgrade?plan=` (simulated M-Pesa steps), 402 links, avatar-menu entry | reviewer + ux-reviewer; merge |
-| `feat/REQ-RES-02-research` (M2, P11 backend) | `8f175b5` | reviewer round 2 CHANGES_REQUIRED (MAJOR: "Sh90-million", plurals and bracketed scales pass as bare numbers; MINORs: default-ignorable characters and Cyrillic look-alikes hide names, capitalised "Treasury") | fix round 2 in progress |
-| `feat/REQ-PROP-05-screens` (M2, P13-F) | `03c91a5` | editor assistant panel done (vitest 575, e2e 6/6); page load 146,078 B, 926 B over the budget only after the panel is opened; `tier2_overlap` has no message of its own (the API sends no reason) | reviewer + ux-reviewer, CI; merge |
+| `feat/REQ-BIL-08-fe` (M2, P14-F) | `3fd9615` | done: `/billing`, `/billing/upgrade` (simulated M-Pesa), 402 links, account menu; vitest 639, e2e billing 10/10 | reviewer + ux-reviewer, CI; merge |
+| `feat/REQ-RES-02-research` (M2, P11 backend) | `db03f39` | fix round 2 done (scale words, default-ignorables, Latin-only card text, case-sensitive "Treasury") | reviewer round 3, CI; merge |
+| `feat/REQ-PROP-05-screens` (M2, P13-F) | `03c91a5` | reviewer PASS; ux-reviewer CHANGES_REQUIRED (MAJORs: focus lost on refusals; after "Use this" the original wording is gone) | fix round in progress |
 | `feat/REQ-AUTH-07-fe` (M2, P17-F) | `f58efab`+ | impl-frontend: Cancel setup, new recovery codes with the password | reviewer + ux-reviewer; merge |
-| `feat/REQ-SCOUT-02-scouts` (M2, P10 backend) | `b1f6551` | fix round done (both MAJORs, MINORs a–l); security-reviewer PASS round 2 (2 MINORs: the own-member 404 timing and no throttle on `POST /interest`; a match found before the author joined still shows `allowed`; both go to the scout follow-up branch) | reviewer re-review, CI; merge |
+| `feat/REQ-SCOUT-02-fe` (M2, P10-F) | `a5043eb`+ | impl-frontend: Inbox Matches tab, configure scout, match page with Express interest, developer accept and Share Tier 2 | reviewer + ux-reviewer; merge |
 | `feat/REQ-RES-01-sources` (P11 excerpts) | `0bb707d` | done; merges with P11 | — |
 
 
@@ -594,7 +594,7 @@ merge after this tag, in the order of `docs/platform/prototype-m2-plan.md`.
 | P8 M1 screens | done (parts 1–5; tracker and Home `b2ce311`) | |
 | P9 `make demo` (basic) | in review (`4443470`) | demo TSA is the real DigiCert/FreeTSA (free, hash only); offline shows "Timestamp pending" |
 | M1 merged, tag `prototype-m1`, M1 report | done (`fa5aeb6`; tag local, push from the laptop) | Playwright 86/86 on `make demo`; no e2e skip left; CI green |
-| P10 scout | backend in progress (on 0005) | M2 |
+| P10 scout | backend merged (`ddf670b`); screens (P10-F) in progress; follow-up (demo seed, review MINORs) queued | M2 |
 | P11 research | backend fix round done, in re-review | M2 |
 | P12 trending + ranker | todo | M2 |
 | P13 submission assistant | backend done (`7e813ce`); editor panel (P13-F) todo | M2 |
