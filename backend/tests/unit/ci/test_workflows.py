@@ -134,15 +134,43 @@ def test_only_nightly_evals_may_name_a_provider(name: str) -> None:
     assert not PROVIDER_SECRETS.search(text), f"{name} reads a provider secret"
 
 
-@pytest.mark.parametrize("job_id", ["legacy", "backend", "frontend", "e2e"])
+@pytest.mark.parametrize("job_id", ["legacy", "backend", "frontend", "e2e", "demo-story"])
 def test_pr_test_jobs_run_inside_the_egress_lock(job_id: str) -> None:
     job = load("pr.yml")["jobs"][job_id]
     names = [str(step.get("run", "")) for step in job["steps"]]
     lock = next(i for i, run in enumerate(names) if "infra/ci/egress-lock.sh" in run)
-    tests = [i for i, run in enumerate(names) if "make check" in run or "run_legacy_tests.py" in run]
+    test_commands = ("make check", "run_legacy_tests.py", "playwright test")
+    tests = [i for i, run in enumerate(names) if any(command in run for command in test_commands)]
     assert tests, f"{job_id} runs no test command"
     assert all(i > lock for i in tests), f"{job_id} runs tests before the egress lock"
     assert all("infra/ci/sandboxed.sh" in names[i] for i in tests), f"{job_id} runs tests outside the sandbox user"
+
+
+def test_demo_story_job_is_the_e2e_setup_then_the_walkthrough_without_touching_committed_screenshots() -> None:
+    """P16-E3: the demo walkthrough as a PR check, in parallel with e2e, on its own stack set up exactly as e2e's."""
+    jobs = load("pr.yml")["jobs"]
+    e2e, demo = jobs["e2e"], jobs["demo-story"]
+    assert "needs" not in demo, "demo-story runs in parallel with e2e (no added wall time)"
+    assert demo["runs-on"] == e2e["runs-on"]
+    assert demo["timeout-minutes"] <= e2e["timeout-minutes"]
+    assert demo.get("continue-on-error", False) is False
+    assert all(step.get("continue-on-error", False) is False for step in demo["steps"])
+    seed = next(i for i, step in enumerate(e2e["steps"]) if "bridge.seed --demo" in str(step.get("run", ""))) + 1
+    assert demo["steps"][:seed] == e2e["steps"][:seed], "the set-up is the e2e job's, step for step, to the seed"
+    walkthrough = [step for step in demo["steps"] if "demo/walkthrough.config.ts" in str(step.get("run", ""))]
+    assert len(walkthrough) == 1
+    assert demo["steps"].index(walkthrough[0]) >= seed
+    step = walkthrough[0]
+    assert str(step["run"]).startswith("../infra/ci/sandboxed.sh ")
+    assert step["working-directory"] == "frontend"
+    assert step["env"]["WALKTHROUGH_RUN_DEMO_CMDS"] == "1"
+    # The clock and reminders commands target the stack this job started, not make demo's project.
+    stack = next(str(s["run"]) for s in demo["steps"] if " up -d --build --wait" in str(s.get("run", "")))
+    assert f"docker compose {step['env']['WALKTHROUGH_COMPOSE']} up" in stack
+    assert "docs/demo/screenshots" not in yaml.safe_dump(demo), "CI never writes the committed screenshots"
+    upload = next(s for s in demo["steps"] if str(s.get("uses", "")).startswith("actions/upload-artifact@"))
+    assert upload["if"] == "failure()"
+    assert "frontend/playwright-report/walkthrough" in upload["with"]["path"]
 
 
 def test_egress_probe_runs_in_pr() -> None:
