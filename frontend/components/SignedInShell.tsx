@@ -14,8 +14,8 @@ export interface SignedInShellProps {
 }
 
 /**
- * Signed-in screens: top bar with the account menu (Plan & billing, Sign out), the portal navigation when given, and
- * one column of content.
+ * Signed-in screens: top bar with the account menu (Plan & billing, Notifications, Help, Sign out), the portal
+ * navigation when given, and one column of content.
  */
 export function SignedInShell({ homeHref, children, nav, wide = false }: SignedInShellProps) {
   return (

@@ -27,11 +27,14 @@ function ChevronIcon(props: IconProps) {
   );
 }
 
+const NOTIFICATIONS_HREF = "/settings/notifications";
+const HELP_HREF = "/help";
+
 const itemClass =
   "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-jacaranda-wash";
 
 /**
- * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, then Sign out. A disclosure button with a list
+ * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, Notifications, Help, then Sign out. A disclosure button with a list
  * of links (not an ARIA menu): Escape closes it and returns focus to the button, as does a press outside it. Plain
  * links, so the top bar ships no router code (this is on every signed-in page, docs/spec/07 item 5).
  */
@@ -93,6 +96,16 @@ export function AccountMenu() {
           <li>
             <a href={billing} className={itemClass}>
               {t("billing")}
+            </a>
+          </li>
+          <li>
+            <a href={NOTIFICATIONS_HREF} className={itemClass}>
+              {t("notifications")}
+            </a>
+          </li>
+          <li>
+            <a href={HELP_HREF} className={itemClass}>
+              {t("help")}
             </a>
           </li>
         </ul>
