@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { Children, type HTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "./cn";
 import { noticeBox, noticeIconTone, noticeTone, type NoticeTone } from "./notice";
@@ -49,7 +49,9 @@ export function Callout({
             {title}
           </p>
         ) : null}
-        {children ? <div className={title ? "mt-1" : undefined}>{children}</div> : null}
+        {Children.toArray(children).length > 0 ? (
+          <div className={cn("flex flex-col gap-1", Boolean(title) && "mt-1")}>{children}</div>
+        ) : null}
       </div>
     </Tag>
   );

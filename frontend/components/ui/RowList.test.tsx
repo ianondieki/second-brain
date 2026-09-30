@@ -20,8 +20,9 @@ describe("RowList and Row", () => {
     expect(list.className).not.toMatch(/\bborder/);
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row.className.split(" ")).toEqual(expect.arrayContaining(["border-t", "border-line"]));
-    expect(container.querySelectorAll("article.py-5")).toHaveLength(2);
+    const articles = container.querySelectorAll("li > article");
+    expect(articles).toHaveLength(2);
+    for (const row of articles) expect(row.className.split(" ")).toEqual(expect.arrayContaining(["border-t", "border-line", "py-5"]));
   });
 
   it("makes the title a link stretched over the row when the row has a page", () => {
