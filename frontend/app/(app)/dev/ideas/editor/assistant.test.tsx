@@ -340,6 +340,8 @@ describe("refusals", () => {
     ["403 tier2_disabled", { status: 403, body: refusal("tier2_disabled") }, "The writing assistant is not available on this server right now."],
     ["503 without a code", { status: 503, body: { detail: "Service Unavailable" } }, "The writing assistant could not answer just now. Try again later."],
     ["401", { status: 401, body: refusal("unauthenticated") }, "Your session has ended. Log in again, then come back to this idea."],
+    ["401 mfa_required", { status: 401, body: refusal("mfa_required") }, "Your session needs the code from your authenticator app. Log in again, then come back to this idea."],
+    ["a plain 429", { status: 429, body: refusal("rate_limited") }, "Too many attempts. Wait a minute, then try again."],
     ["404", { status: 404, body: refusal("not_found") }, "This idea is not one of yours, or it was deleted."],
     ["409 proposal_hidden", { status: 409, body: refusal("proposal_hidden") }, "This idea was deleted, so the assistant cannot read it."],
     ["a lost connection", "offline", "We could not reach the server. Check your connection, then try again."],
@@ -357,6 +359,41 @@ describe("refusals", () => {
     expect(document.activeElement).toBe(alert); // focus stays in the panel: the button pressed is gone
     expect(document.body.textContent).not.toContain(SERVER_MESSAGE);
     expect(screen.getByRole("button", { name: "Ask again" })).toBeTruthy();
+  });
+
+  const CONSENT_READS: Array<[string, FakeAnswer, string]> = [
+    ["503", { status: 503, body: { detail: "Service Unavailable" } }, "The writing assistant could not answer just now. Try again later."],
+    ["401", { status: 401, body: refusal("unauthenticated") }, "Your session has ended. Log in again, then come back to this idea."],
+    ["409 proposal_hidden", { status: 409, body: refusal("proposal_hidden") }, "This idea was deleted, so the assistant cannot read it."],
+    ["a lost connection", "offline", "We could not reach the server. Check your connection, then try again."],
+  ];
+
+  it.each(CONSENT_READS)("a refused GET /consent on open (%s) has its sentence, and nothing more is sent", async (_, answer, sentence) => {
+    const http = httpAssistant({ [`GET ${ROUTE.consent}`]: [answer] });
+    await open(http.calls);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(sentence);
+    expect(document.activeElement).toBe(alert);
+    expect(dialog().open).toBe(false);
+    expect(http.seen.map(({ method, path }) => `${method} ${path}`)).toEqual([`GET ${ROUTE.consent}`]);
+    expect(document.body.textContent).not.toContain(SERVER_MESSAGE);
+  });
+
+  it("a refused DELETE /consent says so and leaves the assistant on (and the button to turn it off)", async () => {
+    const http = httpAssistant({
+      [`GET ${ROUTE.consent}`]: [{ status: 200, body: CONSENT_ON }],
+      [`POST ${ROUTE.suggestions}`]: [{ status: 200, body: SUGGESTED }],
+      [`DELETE ${ROUTE.consent}`]: [{ status: 500, body: refusal("internal") }],
+    });
+    await open(http.calls);
+    await waitFor(() => expect(screen.getByText(SUGGESTED.teaser!.title)).toBeTruthy());
+    await press("Turn off the assistant for this sign-in");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Something went wrong. Try again in a moment.");
+    expect(document.activeElement).toBe(alert);
+    expect(screen.queryByText("The writing assistant is off for this sign-in.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Turn off the assistant for this sign-in" })).toBeTruthy();
+    expect(http.seen.at(-1)).toMatchObject({ method: "DELETE", path: ROUTE.consent });
   });
 
   const STATUSES: Array<[AssistantSuggestion["status"], string]> = [
