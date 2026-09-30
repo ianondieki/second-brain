@@ -39,3 +39,13 @@ export async function getCurrentPlan(subject: Extract<Subject, { kind: "develope
   if (response.status === 401) redirect("/login"); // the session ended between the page's /me check and this call
   throw new Error(`GET entitlements answered ${response.status}`);
 }
+
+/** A plan's name for the page title, or null when it is not in the catalogue (or the API cannot say in time). */
+export async function planName(code: string): Promise<string | null> {
+  try {
+    const { data } = await serverApi().GET("/api/plans", { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    return data?.plans.find((p) => p.code === code)?.name ?? null;
+  } catch {
+    return null;
+  }
+}
