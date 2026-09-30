@@ -389,12 +389,13 @@
     "whySource": {
       "model": "Imeandaliwa na AI kutoka kwa muhtasari",
       "code": "Limepatikana kwa kanuni za skauti",
-      "demoFallback": "Limepatikana kwa kanuni za skauti. Mbadala wa onyesho: hakuna modeli iliyoandika maelezo"
+      "demoFallback": "Limepatikana kwa kanuni za skauti; hakuna maelezo ya AI yaliyopatikana."
     },
     "unavailable": "Halipatikani tena",
     "unavailableTitle": "Pendekezo ambalo halipatikani tena",
     "unavailableNote": "Liliondolewa au limezuiliwa kwa ukaguzi, kwa hiyo muhtasari wake umefichwa.",
-    "nicheNotGiven": "Fani haijatajwa"
+    "nicheNotGiven": "Fani haijatajwa",
+    "changeNamed": "Badilisha skauti anayetafuta {niches}"
   },
   "scoutMatch": {
     "pageTitle": "Lililopatikana na skauti",
@@ -404,7 +405,7 @@
     "interestTitle": "Onyesha nia",
     "interestLead": "Msanidi programu anaarifiwa na anaweza kukubali au kukataa ndani ya siku tano za kazi. Nia si mkataba wala ahadi ya kununua.",
     "reason": {
-      "org_not_e2": "Kuonyesha nia kunahitaji {org} ithibitishwe kwa hati za usajili (E2).",
+      "org_not_e2": "Kuonyesha nia kunahitaji {org} ithibitishwe kwanza kwa hati zake za usajili.",
       "org_unavailable": "{org} haiwezi kuonyesha nia wakati akaunti yake imesimamishwa au kuondolewa.",
       "role_required": "Ni mtia saini wa {org} pekee anayeweza kuonyesha nia.",
       "engagement_exists": "{org} tayari ina ushirikiano kwa pendekezo hili.",
@@ -436,7 +437,7 @@
     "sent": "Nia imetumwa. Inafungua kifuatiliaji…",
     "refusal": {
       "role_required": "Ni mtia saini wa {org} pekee anayeweza kuonyesha nia.",
-      "org_not_e2": "Kuonyesha nia kunahitaji {org} ithibitishwe kwa hati za usajili (E2).",
+      "org_not_e2": "Kuonyesha nia kunahitaji {org} ithibitishwe kwanza kwa hati zake za usajili.",
       "org_unavailable": "{org} haiwezi kuonyesha nia wakati akaunti yake imesimamishwa au kuondolewa.",
       "engagement_exists": "{org} tayari ina ushirikiano kwa pendekezo hili. Ukurasa umesasishwa kuuonyesha.",
       "proposal_unavailable": "Pendekezo hili halipatikani tena, kwa hiyo hakuna nia iliyotumwa.",
@@ -452,7 +453,7 @@
     "titleEdit": "Badilisha Wakala Skauti wako",
     "back": "Rudi kwa yaliyopatikana na skauti",
     "lead": "Chagua kile skauti anachotafuta. Anasoma muhtasari wa umma wa mapendekezo yaliyochapishwa, kamwe si mapendekezo kamili.",
-    "cap": "Mawakala Skauti katika mpango wako: {count}.",
+    "cap": "{count, plural, one {# Wakala Skauti yumo katika mpango wako.} other {# Mawakala Skauti wamo katika mpango wako.}}",
     "capUnlimited": "Mpango wako unajumuisha Mawakala Skauti wengi kadri unavyohitaji.",
     "pending": "{org} bado haijathibitishwa: unaweza kuweka na kuhakiki skauti, na muhtasari wa barua pepe utaanza uthibitisho ukikamilika.",
     "notAdmin": "Ni mmiliki au msimamizi wa {org} pekee anayeweza kuweka Wakala Skauti.",
@@ -524,13 +525,19 @@
       "notFound": "Skauti huyu hayupo tena.",
       "network": "Hatukuweza kufikia seva. Angalia muunganisho wako kisha ujaribu tena.",
       "generic": "Hitilafu imetokea, kwa hiyo hakuna kilichohifadhiwa. Jaribu tena."
-    }
+    },
+    "dropped": "Baadhi ya machaguo yaliyohifadhiwa hayatolewi tena, kwa hiyo yameondolewa. Angalia fani, kaunti na wapokeaji wa muhtasari, kisha uhifadhi.",
+    "restored": "Mipangilio yako ambayo haikuhifadhiwa imerudi.",
+    "planNote": "Mpango wako haujumuishi ratiba hii.",
+    "statusLabel": "Hali",
+    "statusActive": "Anafanya kazi",
+    "statusPaused": "Amesitishwa"
   },
   "tier2Share": {
     "title": "Pendekezo kamili",
     "notShared": "{org} inaona muhtasari wa umma pekee. Shiriki pendekezo kamili unapotaka walitathmini.",
     "share": "Shiriki pendekezo kamili",
-    "confirm": "Shiriki pendekezo kamili na {org}? Watu waliothibitishwa katika {org} wanaweza kulifungua baada ya kukubali NDA ya Tathmini, na kila mtazamo unarekodiwa na kuwekewa alama ya mtazamaji.",
+    "confirm": "Shiriki pendekezo kamili na {org}? Watu waliothibitishwa katika {org} wanaweza kulifungua baada ya kukubali NDA ya Tathmini, na kila mtazamo unarekodiwa na kuwekewa alama ya mtazamaji. Huwezi kulirudisha.",
     "sharing": "Inashiriki…",
     "cancel": "Ghairi",
     "shared": "Ulishiriki pendekezo kamili na {org} tarehe {date}.",
@@ -1033,7 +1040,7 @@
     "ourTurn": "Zamu yetu",
     "withOrg": "Na {org}",
     "fromDeveloper": "Kutoka kwa {name}",
-    "fromHandle": "Kutoka kwa {name} (jina bandia: jina la msanidi programu linaonekana kuanzia Mawasiliano na NDA)",
+    "fromHandle": "Kutoka kwa {name}, jina la utambulisho la msanidi programu. Utaona jina lake mawasiliano yakikubaliwa.",
     "back": "Ushirikiano wote",
     "stepperLabel": "Hatua",
     "group": {
@@ -1324,7 +1331,7 @@
       "submit": "Thibitisha na uendelee",
       "checking": "Inakagua…",
       "invalid": "Weka nambari ya tarakimu 6 kutoka kwa programu yako ya uthibitishaji.",
-      "notEnrolled": "Hatua hii inahitaji kuingia kwa hatua mbili. Iwashe, kisha urudi kwenye ushirikiano huu.",
+      "notEnrolled": "Hatua hii inahitaji kuingia kwa hatua mbili. Iwashe, kisha urudi ujaribu tena.",
       "turnOn": "Washa kuingia kwa hatua mbili"
     },
     "form": {

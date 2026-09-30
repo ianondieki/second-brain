@@ -389,12 +389,13 @@
     "whySource": {
       "model": "AI-drafted from the teaser",
       "code": "Matched by the scout's rules",
-      "demoFallback": "Matched by the scout's rules. Demo fallback: no model wrote an explanation"
+      "demoFallback": "Matched by the scout's rules; no AI explanation was available."
     },
     "unavailable": "No longer available",
     "unavailableTitle": "A proposal that is no longer available",
     "unavailableNote": "It was unpublished or is held for review, so its teaser is hidden.",
-    "nicheNotGiven": "Niche not given"
+    "nicheNotGiven": "Niche not given",
+    "changeNamed": "Change the scout that looks for {niches}"
   },
   "scoutMatch": {
     "pageTitle": "Scout match",
@@ -404,7 +405,7 @@
     "interestTitle": "Express interest",
     "interestLead": "The developer is told and can accept or decline within five business days. Interest is not a contract or a commitment to buy.",
     "reason": {
-      "org_not_e2": "Expressing interest needs {org} to be verified with registration documents (E2).",
+      "org_not_e2": "Expressing interest needs {org} to be verified with its registration documents first.",
       "org_unavailable": "{org} cannot express interest while its account is suspended or delisted.",
       "role_required": "Only a signatory of {org} can express interest.",
       "engagement_exists": "{org} already has an engagement for this proposal.",
@@ -436,7 +437,7 @@
     "sent": "Interest sent. Opening the tracker…",
     "refusal": {
       "role_required": "Only a signatory of {org} can express interest.",
-      "org_not_e2": "Expressing interest needs {org} to be verified with registration documents (E2).",
+      "org_not_e2": "Expressing interest needs {org} to be verified with its registration documents first.",
       "org_unavailable": "{org} cannot express interest while its account is suspended or delisted.",
       "engagement_exists": "{org} already has an engagement for this proposal. The page is refreshed to show it.",
       "proposal_unavailable": "This proposal is no longer available, so no interest was sent.",
@@ -452,7 +453,7 @@
     "titleEdit": "Change your Scout Agent",
     "back": "Back to scout matches",
     "lead": "Choose what the scout looks for. It reads the public teasers of published proposals, never full proposals.",
-    "cap": "Scout Agents your plan includes: {count}.",
+    "cap": "{count, plural, one {# Scout Agent is included in your plan.} other {# Scout Agents are included in your plan.}}",
     "capUnlimited": "Your plan includes as many Scout Agents as you need.",
     "pending": "{org} is not verified yet: you can set up and preview the scout, and digests start once verification is finished.",
     "notAdmin": "Only an owner or admin of {org} can set up the Scout Agent.",
@@ -524,13 +525,19 @@
       "notFound": "This scout no longer exists.",
       "network": "We could not reach the server. Check your connection and try again.",
       "generic": "Something went wrong, so nothing was saved. Try again."
-    }
+    },
+    "dropped": "Some saved choices are no longer offered, so they were taken out. Check the niches, counties and digest recipients, then save.",
+    "restored": "Your unsaved settings are back.",
+    "planNote": "Your plan does not include this schedule.",
+    "statusLabel": "Status",
+    "statusActive": "Active",
+    "statusPaused": "Paused"
   },
   "tier2Share": {
     "title": "Full proposal",
     "notShared": "{org} sees only the public teaser. Share the full proposal when you want them to evaluate it.",
     "share": "Share the full proposal",
-    "confirm": "Share the full proposal with {org}? Verified people at {org} can open it after accepting the Evaluation NDA, and every view is logged and watermarked to the viewer.",
+    "confirm": "Share the full proposal with {org}? Verified people at {org} can open it after accepting the Evaluation NDA, and every view is logged and watermarked to the viewer. You cannot take this back.",
     "sharing": "Sharing…",
     "cancel": "Cancel",
     "shared": "You shared the full proposal with {org} on {date}.",
@@ -1033,7 +1040,7 @@
     "ourTurn": "Our turn",
     "withOrg": "With {org}",
     "fromDeveloper": "From {name}",
-    "fromHandle": "From {name} (a pseudonym: the developer's name shows from Contact and NDA)",
+    "fromHandle": "From {name}, the developer's handle. You see their name once contact is agreed.",
     "back": "All engagements",
     "stepperLabel": "Stages",
     "group": {
@@ -1324,7 +1331,7 @@
       "submit": "Confirm and continue",
       "checking": "Checking…",
       "invalid": "Enter the 6-digit code from your authenticator app.",
-      "notEnrolled": "This step needs two-step sign-in. Turn it on, then come back to this engagement.",
+      "notEnrolled": "This step needs two-step sign-in. Turn it on, then come back and try again.",
       "turnOn": "Turn on two-step sign-in"
     },
     "form": {
