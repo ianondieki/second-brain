@@ -11,7 +11,10 @@ import { EmptyState } from "../EmptyState";
 import { engagementsHref, first, inboxHref, proposalHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
+import { matchesHref } from "../scout";
 import { InboxRow } from "./InboxRow";
+import { InboxTabs, inboxTab } from "./InboxTabs";
+import { ScoutMatches } from "./matches/ScoutMatches";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("inbox");
@@ -32,13 +35,24 @@ export default async function InboxScreen({ searchParams }: PageProps<"/org/inbo
   const t = await getTranslations("inbox");
   const cursorParam = first(params.cursor);
   const cursor = cursorParam && CURSOR.test(cursorParam) ? cursorParam : undefined;
+  const tab = inboxTab(first(params.tab));
 
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="inbox" query={query} />} wide>
       <div className="max-w-3xl">
         <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
         {org ? (
-          <InboxBody memberships={memberships} org={org} cursor={cursor} />
+          <>
+            <InboxTabs
+              current={tab}
+              hrefs={{ tagged: inboxHref(memberships, org.org_id), matches: matchesHref(memberships, org.org_id) }}
+            />
+            {tab === "matches" ? (
+              <ScoutMatches memberships={memberships} org={org} />
+            ) : (
+              <InboxBody memberships={memberships} org={org} cursor={cursor} />
+            )}
+          </>
         ) : (
           <div className="mt-6">
             {missing === "notMember" ? (
@@ -96,7 +110,7 @@ async function InboxBody({
 
   return (
     <>
-      <p className="mt-2 max-w-[62ch] text-ink-soft">{t("lead", { org: orgName })}</p>
+      <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: orgName })}</p>
       {memberships.length > 1 ? (
         <div className="mt-6">
           <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox" />
