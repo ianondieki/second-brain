@@ -43,6 +43,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "scoutForm",
   "expressInterest",
   "tier2Share",
+  "adminResearch",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

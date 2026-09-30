@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { IntlScope } from "@/components/IntlScope";
 import { SignedInShell } from "@/components/SignedInShell";
 import { requireMe } from "@/lib/api/server";
-import { homeFor } from "@/lib/auth/routing";
+import { homeOf } from "@/lib/auth/routing";
 
 import { PasswordSettings } from "./PasswordSettings";
 import { PasswordStateProvider } from "./PasswordState";
@@ -20,7 +20,7 @@ export default async function SecurityPage() {
   const me = await requireMe();
   const t = await getTranslations("security");
   const tApp = await getTranslations("app");
-  const home = homeFor(me.side);
+  const home = homeOf(me);
   return (
     <SignedInShell homeHref={home}>
       <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>

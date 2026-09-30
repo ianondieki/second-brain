@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import createClient from "openapi-fetch";
 
 import { signupConsents, type ShownConsents } from "@/lib/auth/consents";
-import { homeFor, isPending, type Me } from "@/lib/auth/routing";
+import { homeOf, isPending, type Me } from "@/lib/auth/routing";
 
 import { cookieSecure, sessionCookieHeader } from "./cookies";
 import type { paths } from "./schema";
@@ -69,7 +69,7 @@ export async function requireMe(): Promise<Me> {
 export async function requirePendingMfa(): Promise<Me> {
   const me = await getMe();
   if (!me) redirect("/login");
-  if (!isPending(me)) redirect(homeFor(me.side));
+  if (!isPending(me)) redirect(homeOf(me));
   return me;
 }
 
