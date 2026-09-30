@@ -71,7 +71,11 @@ export async function childNiche(request: APIRequestContext): Promise<Niche> {
 
 export interface Published {
   person: Person;
-  /** The developer's display name: never shown to the organisation before INTEREST_CONFIRMED. */
+  /**
+   * The developer's display name: never shown to the organisation before INTEREST_CONFIRMED. The spec checks the name
+   * as written; the handle itself is built from it (backend auth/service.py `_handle_from`: "achieng-otieno-2b2356"),
+   * which is a backend follow-up (tasks/REQ-SCOUT-02.md, P10-F section), not something a screen can hide.
+   */
   name: string;
   title: string;
   proposalId: string;

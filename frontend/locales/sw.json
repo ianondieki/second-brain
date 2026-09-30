@@ -1033,7 +1033,7 @@
     "ourTurn": "Zamu yetu",
     "withOrg": "Na {org}",
     "fromDeveloper": "Kutoka kwa {name}",
-    "fromHandle": "Kutoka kwa {name} (jina bandia hadi Imeidhinishwa kuendelea)",
+    "fromHandle": "Kutoka kwa {name} (jina bandia: jina la msanidi programu linaonekana kuanzia Mawasiliano na NDA)",
     "back": "Ushirikiano wote",
     "stepperLabel": "Hatua",
     "group": {

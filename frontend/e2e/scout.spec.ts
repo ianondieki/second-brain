@@ -167,7 +167,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await orgPage.getByRole("button", { name: "Confirm and continue" }).click();
     await expect(orgPage).toHaveURL(/\/org\/engagements\/[0-9a-f-]{36}$/, SERVER_STEP);
     const engagementId = new URL(orgPage.url()).pathname.split("/").pop()!;
-    await expect(orgPage.locator("main")).toContainText("(pseudonym until Approved to proceed)");
+    await expect(orgPage.locator("main")).toContainText("(a pseudonym: the developer's name shows from Contact and NDA)");
     await expect(orgPage.locator("main")).not.toContainText(dev.name);
     await checkScreen(orgPage);
     await shot(orgPage, info, "scout-org-stage0");

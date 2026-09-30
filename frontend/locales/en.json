@@ -1033,7 +1033,7 @@
     "ourTurn": "Our turn",
     "withOrg": "With {org}",
     "fromDeveloper": "From {name}",
-    "fromHandle": "From {name} (pseudonym until Approved to proceed)",
+    "fromHandle": "From {name} (a pseudonym: the developer's name shows from Contact and NDA)",
     "back": "All engagements",
     "stepperLabel": "Stages",
     "group": {
