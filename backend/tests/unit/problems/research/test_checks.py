@@ -152,6 +152,49 @@ def test_every_number_must_be_inside_a_cited_quote(statement: str, ok: bool) -> 
         assert verdict == Discarded("unsupported_number")
 
 
+@pytest.mark.parametrize(
+    ("statement", "excerpt_id"),
+    [
+        ("The leader earned Sh89m.", "ke-tel-001"),  # the quote says 89 percent
+        ("The leader earned Sh89B.", "ke-tel-001"),
+        ("The leader earned Sh89 thousand.", "ke-tel-001"),
+        ("The leader has 89k agents.", "ke-tel-001"),
+        ("The leader earned 89 mn.", "ke-tel-001"),
+        ("Share fell by 2 percentage points.", "ke-tel-001"),  # neither 2 nor percentage points in the quote
+        ("Share slimmed to 89 percentage points.", "ke-tel-001"),
+        ("Fraud cost Sh11m.", "ke-hlt-001"),  # the quote says Sh11 billion
+        ("Fraud cost Sh11bn and 11 thousand claims.", "ke-hlt-001"),
+        ("Coverage reached 89xyz.", "ke-tel-001"),  # an unknown glued suffix fails closed
+        ("Sh89 was the fee.", "ke-tel-001"),  # a bare number needs a bare one
+    ],
+)
+def test_p11_major_1_a_number_carries_its_scale(statement: str, excerpt_id: str) -> None:
+    """P11 review MAJOR 1: an unknown or abbreviated scale was read as a bare number, so "Sh89m" passed on a quote
+    saying "89 percent". Letters glued to a number, or a scale word after a space, are its scale, which must match."""
+    assert checks.unsupported_numbers([statement], [excerpt(excerpt_id).quote]), statement
+    draft = dataclasses.replace(TELECOM, statement=statement)
+    assert check(draft) == Discarded("unsupported_number")
+
+
+@pytest.mark.parametrize(
+    ("statement", "excerpt_id"),
+    [
+        ("Satellite providers pay a licence of at least Sh15m.", "ke-tel-003"),  # the quote says Sh15 million
+        ("Satellite providers pay up to 0.4 per cent of turnover.", "ke-tel-003"),  # quote: 0.4 percent
+        ("Fraud cost Sh11bn.", "ke-hlt-001"),
+        ("Share slimmed to 89% from 91pc.", "ke-tel-001"),
+    ],
+)
+def test_an_abbreviated_scale_matches_the_same_scale_in_words(statement: str, excerpt_id: str) -> None:
+    assert checks.unsupported_numbers([statement], [excerpt(excerpt_id).quote]) == [], statement
+
+
+def test_numbers_in_named_organisations_are_checked_too() -> None:
+    """Minor (e): a declared name is text on the card too, so its figures must be in a quote."""
+    draft = dataclasses.replace(SACCO, named_orgs=("SACCO Societies Regulatory Authority 2030",))
+    assert check(draft, "microfinance-saccos") == Discarded("unsupported_number")
+
+
 def test_numbers_in_the_title_and_affected_group_are_checked_too() -> None:
     assert check(dataclasses.replace(TELECOM, title="Rates fall 40 percent")) == Discarded("unsupported_number")
     assert check(dataclasses.replace(TELECOM, affected_group="About 3 operators")) == Discarded("unsupported_number")

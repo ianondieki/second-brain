@@ -3,24 +3,27 @@ decides whether a draft becomes a candidate card, and whether a candidate may be
 
 A draft (``Draft``, the model's answer after parsing) is kept only when, in this order:
 
-1. **Text.** Whitespace collapsed (the revision 0005 operating rule), then no control character left, a title of 1 to
-   90 characters, a statement of 1 to 120 words and at most 1500 characters, an affected group of at most 200
-   characters, at most 10 named organisations of at most 200 characters (``text_out_of_bounds``,
+1. **Text.** NFKC and whitespace collapsed (the revision 0005 operating rule), then no control or format character,
+   a title of 1 to 90 characters, a statement of 1 to 120 words and at most 1500 characters, an affected group of at
+   most 200 characters, at most 10 named organisations of at most 200 characters (``text_out_of_bounds``,
    ``control_character``).
 2. **Citations.** At least one (``no_citation``); every cited id is one of the excerpts this run sent, else the whole
    draft is discarded (``unknown_excerpt``: the model invented a source). A citation counts only when its supporting
    text (at least ``min_support_words`` words) appears verbatim in the excerpt's quote after whitespace collapsing,
    Unicode-exact; an unverified citation is dropped and lowers the extraction agreement; none left is
    ``no_verified_citation``.
-3. **Numbers.** Every number in the title, statement and affected group appears in a cited quote
-   (``unsupported_number``): digits (``2,000`` is 2000; ``11.6`` is not 11) and the number words two to ninety; a
-   number followed by a scale (billion, million, trillion, percent) must appear with that scale. So figures from two
+3. **Numbers.** Every number in the title, statement, affected group and named organisations appears in a cited
+   quote with the same scale (``unsupported_number``): digits (``2,000`` is 2000; ``11.6`` is not 11) and the number
+   words two to ninety; letters glued to a number are its scale ("Sh15m" is 15 million, "89B" 89 billion, an unknown
+   suffix such as "4G" matches only itself), and after a space the scale words percent, percentage points,
+   thousand, million, billion, trillion and their abbreviations; a bare number needs a bare one. So figures from two
    excerpts are never merged, rounded or averaged into a new one (ke-hlt-001's Sh11 billion and ke-hlt-002's
-   Sh11.6 billion stay apart).
+   Sh11.6 billion stay apart), and "89 percent" never supports "Sh89m".
 4. **Named organisations (D-45 default (a)).** The organisations of the allowlist (and every publisher) found in the
    text as whole words, plus whatever the model listed in ``named_orgs``: a card naming any needs an official cited
-   source (``named_org_without_official``). Detection is case-sensitive (proper nouns), so the model's own list is the
-   second net; the approval screen shows the names with the checklist placeholder.
+   source (``named_org_without_official``). Detection runs on the NFKC text with format characters ignored, in any
+   case, a hyphen matching any dash, a space or nothing; the model's own list is the second net; the approval screen
+   shows the names with the checklist placeholder.
 5. **Sources (AC-RES-1).** One official cited source (an allowlisted government or regulator domain) or two
    independent publishers (the allowlist's publisher, so one publisher's two domains are one)
    (``needs_official_or_two_publishers``).
@@ -63,20 +66,33 @@ _TENS: Final = ("thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninet
 _NUMBER_WORDS: Final = {word: value for value, word in enumerate((*_SMALL, *_TEENS), start=2)} | {
     word: 30 + 10 * index for index, word in enumerate(_TENS)
 }
+# A number's scale (P11 review MAJOR 1). Letters glued to digits are always a scale ("Sh15m", "89B", "12.5pc", "4G"):
+# a known one is normalised, an unknown one is kept as ``suffix:<letters>`` and matches only the same suffix in a
+# quote (fail closed). After a space only these words count ("89 percent", "Sh11 billion", "25 million", "3 k"); any
+# other word after a space is not a scale ("Level 4 public", "2029 by").
 _SCALES: Final = {
-    "billion": "billion",
-    "bn": "billion",
-    "million": "million",
-    "trillion": "trillion",
-    "tn": "trillion",
+    "%": "percent",
     "percent": "percent",
     "per cent": "percent",
     "pc": "percent",
-    "%": "percent",
+    "percentage point": "percentage_points",
+    "percentage points": "percentage_points",
+    "thousand": "thousand",
+    "k": "thousand",
+    "million": "million",
+    "m": "million",
+    "mn": "million",
+    "billion": "billion",
+    "bn": "billion",
+    "b": "billion",
+    "trillion": "trillion",
+    "tn": "trillion",
 }
-_SCALE: Final = r"(?:\s*(?P<scale>%|per\s+cent|percent|pc|billion|bn|million|trillion|tn)(?![A-Za-z]))?"
+_SPACED: Final = r"%|per\s*cent|percentage\s+points?|percent|pc|thousand|million|billion|trillion|mn|bn|tn|[mbk]"
+_LETTER: Final = r"[^\W\d_]"
 _NUMBER: Final = re.compile(
-    r"(?P<num>\d+(?:,\d{3})*(?:\.\d+)?|(?<![A-Za-z])(?:" + "|".join(_NUMBER_WORDS) + r")(?![A-Za-z]))" + _SCALE,
+    rf"(?P<num>\d+(?:,\d{{3}})*(?:\.\d+)?)(?:(?P<attached>{_LETTER}+|%)|\s*(?P<spaced>{_SPACED})(?!{_LETTER}))?"
+    rf"|(?<!{_LETTER})(?P<word>{'|'.join(_NUMBER_WORDS)})(?!{_LETTER})(?:\s*(?P<wscale>{_SPACED})(?!{_LETTER}))?",
     re.IGNORECASE,
 )
 
@@ -162,29 +178,34 @@ def _value(token: str) -> Decimal | None:
         return None
 
 
+def _scale(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    key = re.sub(r"\s+", " ", raw.lower())
+    return _SCALES.get(key, f"suffix:{key}")
+
+
 def numbers_in(value: str) -> set[tuple[Decimal, str | None]]:
-    """Every (number, scale) in ``value``; scale is None when no scale word follows."""
+    """Every (number, scale) in the NFKC form of ``value``; scale is None when no scale follows (see ``_SCALES``)."""
     found: set[tuple[Decimal, str | None]] = set()
-    for match in _NUMBER.finditer(value):
-        number = _value(match.group("num"))
+    for match in _NUMBER.finditer(normalise(value)):
+        number = _value(match.group("num") or match.group("word"))
         if number is None:
             continue
-        scale = match.group("scale")
-        found.add((number, None if scale is None else _SCALES[re.sub(r"\s+", " ", scale.lower())]))
+        found.add((number, _scale(match.group("attached") or match.group("spaced") or match.group("wscale"))))
     return found
 
 
 def unsupported_numbers(fields: Iterable[str], quotes: Iterable[str]) -> list[str]:
-    """The numbers in ``fields`` that no quote carries (with its scale, when the field gives one)."""
+    """The numbers in ``fields`` that no quote carries with the same scale: a bare number needs a bare one, "Sh89m"
+    needs "89 million" (or "89m"), and "89 percent" never supports "Sh89m" or "89 thousand"."""
     supported: set[tuple[Decimal, str | None]] = set()
     for quote in quotes:
         supported |= numbers_in(quote)
-    plain = {number for number, _ in supported}
     missing: list[str] = []
     for field in fields:
         for number, scale in sorted(numbers_in(field), key=lambda item: (item[0], item[1] or "")):
-            carried = number in plain if scale is None else (number, scale) in supported
-            if not carried:
+            if (number, scale) not in supported:
                 missing.append(f"{number}{'' if scale is None else ' ' + scale}")
     return missing
 
@@ -238,7 +259,7 @@ def confidence(sources: Sequence[Excerpt], agreement: Decimal, as_of: date, poli
 
 def rule_violation(text: CardText, sources: Sequence[Excerpt]) -> str | None:
     """Numbers, named organisations and the source rule for a card's text and its cited sources."""
-    if unsupported_numbers(text.fields, (e.quote for e in sources)):
+    if unsupported_numbers((*text.fields, *text.named_orgs), (e.quote for e in sources)):
         return "unsupported_number"
     if text.named_orgs and not any(e.official for e in sources):
         return "named_org_without_official"

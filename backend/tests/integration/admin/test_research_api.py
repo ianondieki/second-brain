@@ -284,9 +284,10 @@ async def test_a_tampered_source_fails_the_publish_checks(
         ("statement", "Smaller operators say safaricom keeps most mobile money.", "named_org_without_official"),
         ("statement", "Smaller operators say Safari\u200bcom keeps most mobile money.", "control_character"),
         ("statement", "Smaller operators say M\u2011Pesa keeps most mobile money.", "named_org_without_official"),
+        ("statement", "The market leader earned Sh89m from mobile money.", "unsupported_number"),  # MAJOR 1
     ],
 )
-async def test_approval_re_reads_the_text_for_hidden_names_and_format_characters(
+async def test_approval_re_reads_the_text_for_hidden_names_scales_and_format_characters(
     world: ResearchWorld,
     as_user: Client,
     app_engine: AsyncEngine,
