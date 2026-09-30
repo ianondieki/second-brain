@@ -564,6 +564,7 @@ async def test_the_staff_admin_approved_one_seeded_research_card_per_niche(
     ):
         shown = (await amina.call("GET", f"/api/problems/{cards[0].id}")).json()
     assert shown["seeded_example"] is True
+    assert shown["ai_generated"] is False  # written in code, not by a model (P11 review minor d)
     assert shown["label"].startswith("Seeded example for the demo (not a live AI result), human-reviewed on ")
     assert "AI-drafted" not in shown["label"]
     assert len(shown["citations"]) == 3

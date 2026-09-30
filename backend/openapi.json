@@ -4561,6 +4561,7 @@
             "title": "Affected Group"
           },
           "ai_generated": {
+            "description": "A model drafted the card (false for a demo seed card, written in code)",
             "title": "Ai Generated",
             "type": "boolean"
           },

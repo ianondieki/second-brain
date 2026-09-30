@@ -3676,7 +3676,10 @@ export interface components {
         ProblemDetail: {
             /** Affected Group */
             affected_group: string | null;
-            /** Ai Generated */
+            /**
+             * Ai Generated
+             * @description A model drafted the card (false for a demo seed card, written in code)
+             */
             ai_generated: boolean;
             /** Citations */
             citations: components["schemas"]["CitationOut"][];

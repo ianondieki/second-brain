@@ -10,7 +10,7 @@ all from the saved excerpts file and nothing else (no tenant, user or run data: 
 ``InputField(public=True)``: public platform data with no owner, the only ownerless text a free provider may take
 (D-37; ``bridge.llm.demo_data``). ``excerpt_fields`` is the only place in the code base that marks a field public,
 and it accepts ``Excerpt`` objects only (made by ``bridge.problems.research.sources`` from the saved file), so nothing
-else can pass as public (P7 MINOR, checked by ``tests/unit/problems/research/test_public_fields.py``). The LLM layer
+else can pass as public (P7 MINOR, checked by ``tests/unit/problems/research/test_synthesis.py``). The LLM layer
 sanitises and nonce-frames every field, so an excerpt that reads like instructions stays data; the schema carries
 ``injection_suspected``, and a suspected injection makes no card.
 
