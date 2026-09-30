@@ -1,0 +1,24 @@
+---
+title: Optimize SVG Precision
+impact: LOW
+impactDescription: reduces file size
+tags: rendering, svg, optimization, svgo
+---
+
+## Optimize SVG Precision
+
+Reduce SVG coordinate precision to decrease file size. The optimal precision depends on the viewBox size, but in general reducing precision should be considered.
+
+**Incorrect (excessive precision):**
+
+```svg
+<path d="M 10.293847 20.847362 L 30.938472 40.192837" />
+```
+
+**Correct (1 decimal place):**
+
+```svg
+<path d="M 10.3 20.8 L 30.9 40.2" />
+```
+
+**Automate with SVGO:** not available in this copy. Bridge local change: the upstream `npx svgo` command was removed because it downloads a package; adding SVGO is a new dependency and needs the human (`CLAUDE.md`). Reduce precision by hand or with a tool already in `frontend/package.json`.
