@@ -16,7 +16,7 @@
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages [[SW-REVIEW]] draft Swahili",
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
-    "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.* (rasimu ya Kiswahili)"
+    "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)"
   },
   "app": {
     "name": "Bridge",
@@ -958,6 +958,7 @@
       "reasonsHeading": "Kwa nini iko hapa",
       "textHeading": "Maandishi yanayokaguliwa",
       "textLead": "Muhtasari wa umma kama unavyosomeka sasa, sehemu kwa sehemu. Maelezo ya siri hayaonyeshwi hapa kamwe.",
+      "textLeadDecided": "Muhtasari kama ulivyosomeka kesi ilipoamuliwa, sehemu kwa sehemu. Maelezo ya siri hayaonyeshwi hapa kamwe.",
       "flagged": "Imealamishwa",
       "noText": "Hakuna maandishi ya kuonyesha kwa kesi hii.",
       "decisionHeading": "Uamuzi",

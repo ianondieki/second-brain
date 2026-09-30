@@ -159,6 +159,8 @@ test.describe("a staff admin", () => {
     await expect(card).toContainText("AI-drafted");
     await expect(card).toContainText("Names an organisation");
     expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
+    // At 360 px the titles wrap to about 45 px, so this check cannot notice a broken stretched link there; the desktop
+    // project (one-line titles) is the one that would catch it (P16-C2 review MINOR 2).
     await expectSeparateTapTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
     await checkScreen(page, { strict: true });
     await card.getByRole("link", { name: title }).click();
