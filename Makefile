@@ -13,7 +13,7 @@ DEMO = $(DEMO_PY) infra/demo/demo.py
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
         check-legacy check-copy check-e2e test-integration e2e budget \
         demo demo-down demo-reset demo-totp demo-logins demo-logs demo-stats demo-clock \
-        demo-reminders demo-scouts
+        demo-reminders demo-scouts demo-walkthrough
 
 help:
 	@echo "dev             start the seeded local stack (Postgres+pgvector, Mailpit, S3 stand-in, api, worker, web)"
@@ -34,6 +34,7 @@ help:
 	@echo "demo-clock      show the demo's dev/test clock, or move it: make demo-clock DAYS=3 (HOURS=5)"
 	@echo "demo-reminders  send today's developer nudges and organisation digests now (they land in Mailpit)"
 	@echo "demo-scouts     run the due scouts now on the demo's clock (their digests land in Mailpit)"
+	@echo "demo-walkthrough record the demo story after make demo-reset: video in docs/demo/video, docs/demo/screenshots"
 
 dev:
 	$(COMPOSE) up -d --build --wait
@@ -106,6 +107,14 @@ demo-reminders:
 
 demo-scouts:
 	$(DEMO) scouts
+
+# The recorded walkthrough (P16-W; docs/demo/README.md): run it right after make demo-reset (it changes demo data). It
+# moves the demo clock a day and sends the reminders with the same DEMO_PY (WALKTHROUGH_RUN_DEMO_CMDS=1).
+demo-walkthrough: export WALKTHROUGH_RUN_DEMO_CMDS ?= 1
+demo-walkthrough: export DEMO_PY := $(DEMO_PY)
+demo-walkthrough:
+	$(DEMO) e2e-env
+	cd frontend && npm run demo:walkthrough
 
 # docs/spec/07 item 5: at most 150,000 bytes of gzipped JS per route (frontend/scripts/js-budget.mjs). Measures the
 # default routes; BUDGET_BASE_URL and BUDGET_COOKIE (frontend/.env.example) come from the shell.

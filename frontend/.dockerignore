@@ -3,6 +3,8 @@ node_modules
 e2e
 # Tests never ship in the image (next build type-checks every included file; test/ imports e2e/).
 test
+# The recorded walkthrough (demo/ imports e2e/): never in the image either.
+demo
 **/*.test.ts
 **/*.test.tsx
 test-results

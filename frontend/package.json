@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
+    "demo:walkthrough": "playwright test -c demo/walkthrough.config.ts",
     "api:types": "openapi-typescript ../backend/openapi.json -o lib/api/schema.d.ts",
     "api:check": "node scripts/check-api-types.mjs",
     "budget": "node scripts/js-budget.mjs"
