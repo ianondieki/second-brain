@@ -190,6 +190,78 @@ def test_an_abbreviated_scale_matches_the_same_scale_in_words(statement: str, ex
     assert checks.unsupported_numbers([statement], [excerpt(excerpt_id).quote]) == [], statement
 
 
+AGRI = Draft(
+    title="Drought losses squeeze grain farmers",
+    statement="Farmers lost Sh90-million.",
+    affected_group="Grain farmers",
+    named_orgs=(),
+    citations=(
+        Citation("ke-agr-003", "farmers will access the fertiliser at KSh 2,000 per 50 kilogram bag"),
+        Citation("ke-agr-002", "import 25 million 90-kilogramme bags of maize"),
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "Farmers lost Sh90-million.",  # the reviewer's scenario: the quote's 90 is "90-kilogramme"
+        "Farmers lost Sh90 millions.",
+        "Farmers lost Sh90 mln.",
+        "Farmers lost Sh90 (million).",
+        "Farmers lost Sh90 [bn].",
+        "Farmers lost Sh90 \u2014 million.",
+        "Fertiliser costs Sh2,000 crore.",  # the quote's 2,000 is followed by "per": bare
+        "Harvests fell 50 per-cent.",  # the quote's 50 is "50 kilogram"
+        "Farmers lost Sh50 billions.",
+        "Imports reach 25 billions.",  # the quote's 25 is 25 million
+    ],
+)
+def test_p11_round_2_a_word_after_a_dash_space_or_bracket_is_a_scale(statement: str) -> None:
+    """P11 re-review MAJOR: a scale after a hyphen, a space or a bracket was read as a bare number."""
+    verdict = check(dataclasses.replace(AGRI, statement=statement), "agriculture")
+    assert verdict == Discarded("unsupported_number"), statement
+
+
+@pytest.mark.parametrize(
+    ("statement", "ok"),
+    [
+        ("Farmers need 90-kilogramme bags of maize.", True),
+        ("Farmers need 90 bags of maize.", False),  # "bags" is not what follows 90 in the quote
+        ("Fertiliser sells at KSh 2,000 per 50 kilogram bag.", True),
+        ("Fertiliser sells at KSh 2,000 for a 50 kilogram bag.", True),  # "for" is a function word
+        ("Fertiliser sells at KSh 2,000 shillings a bag.", False),  # an unknown word: fail closed
+        ("Imports reach 25 million bags.", True),
+        ("Imports reach 25 millions of bags.", True),  # a plural is the same scale
+    ],
+)
+def test_the_word_after_a_number_must_be_the_quotes_unless_it_is_a_function_word(statement: str, ok: bool) -> None:
+    """The choice for a word the code does not know: it becomes the number's suffix, so the quote must carry the
+    same word after the same number. A function word (a closed class, never a magnitude) leaves the number bare."""
+    verdict = check(dataclasses.replace(AGRI, statement=statement), "agriculture")
+    assert isinstance(verdict, Accepted) is ok, verdict
+
+
+def test_numbers_read_every_separator_the_same_way() -> None:
+    read = checks.numbers_in
+    assert (
+        read("Sh90-million")
+        == read("Sh90 million")
+        == read("Sh90m")
+        == read("Sh90 (mln)")
+        == {(Decimal(90), "million")}
+    )
+    assert read("2 percentage points") == {(Decimal(2), "percentage_points")}
+    assert read("50 per-cent") == read("50 per cent") == read("50%") == {(Decimal(50), "percent")}
+    assert read("a four-year path") == {(Decimal(4), "suffix:year")}
+    assert read("Sh0.41 to Sh0.3 per minute by March 2029, while") == {
+        (Decimal("0.41"), None),
+        (Decimal("0.3"), None),
+        (Decimal(2029), None),
+    }
+    assert read("2026\u20132029 contracting") == {(Decimal(2026), None), (Decimal(2029), "suffix:contracting")}
+
+
 def test_numbers_in_named_organisations_are_checked_too() -> None:
     """Minor (e): a declared name is text on the card too, so its figures must be in a quote."""
     draft = dataclasses.replace(SACCO, named_orgs=("SACCO Societies Regulatory Authority 2030",))

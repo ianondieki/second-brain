@@ -66,35 +66,155 @@ _TENS: Final = ("thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninet
 _NUMBER_WORDS: Final = {word: value for value, word in enumerate((*_SMALL, *_TEENS), start=2)} | {
     word: 30 + 10 * index for index, word in enumerate(_TENS)
 }
-# A number's scale (P11 review MAJOR 1). Letters glued to digits are always a scale ("Sh15m", "89B", "12.5pc", "4G"):
-# a known one is normalised, an unknown one is kept as ``suffix:<letters>`` and matches only the same suffix in a
-# quote (fail closed). After a space only these words count ("89 percent", "Sh11 billion", "25 million", "3 k"); any
-# other word after a space is not a scale ("Level 4 public", "2029 by").
+# A number's scale (P11 review MAJOR 1, fix rounds 1 and 2). What follows a number decides:
+# - letters glued to it ("Sh15m", "89B", "12.5pc", "4G") or joined by any dash ("Sh90-million", "90-kilogramme",
+#   "four-year") are its scale;
+# - after a space or inside brackets, the next word is its scale ("89 percent", "Sh90 millions", "Sh90 (mln)",
+#   "50 per-cent", "Sh2,000 crore", "50 kilogram", "Level 4 public"), unless it is a function word (``_FUNCTION``: a
+#   closed class that can never be a magnitude, as in "Sh0.41 to Sh0.3 per minute by March 2029");
+# - nothing (punctuation, a digit, the end) leaves it bare.
+# Known scales are normalised (``_SCALES``: plurals, abbreviations, "per cent"); any other word is kept as
+# ``suffix:<word>`` and matches only the same word after the same number in a quote. Taking the word, rather than
+# ignoring it or refusing every figure followed by a word, is the choice that fails closed on an unknown magnitude
+# ("crore", "mln", a typo, a unit) while keeping figures copied with their quote's own words ("Level 4 public",
+# "90-kilogramme bags"): the code cannot tell a magnitude from a noun, so it asks the quote to carry the same word.
 _SCALES: Final = {
     "%": "percent",
     "percent": "percent",
+    "percents": "percent",
     "per cent": "percent",
     "pc": "percent",
+    "pct": "percent",
     "percentage point": "percentage_points",
     "percentage points": "percentage_points",
+    "pp": "percentage_points",
+    "basis point": "basis_points",
+    "basis points": "basis_points",
+    "bps": "basis_points",
     "thousand": "thousand",
+    "thousands": "thousand",
     "k": "thousand",
     "million": "million",
+    "millions": "million",
     "m": "million",
     "mn": "million",
+    "mln": "million",
+    "mio": "million",
     "billion": "billion",
+    "billions": "billion",
     "bn": "billion",
+    "bln": "billion",
     "b": "billion",
     "trillion": "trillion",
+    "trillions": "trillion",
     "tn": "trillion",
+    "trn": "trillion",
 }
-_SPACED: Final = r"%|per\s*cent|percentage\s+points?|percent|pc|thousand|million|billion|trillion|mn|bn|tn|[mbk]"
+# Words that can never be a magnitude or a unit: after a space they leave the number bare.
+_FUNCTION: Final = frozenset(
+    [
+        "a",
+        "an",
+        "the",
+        "this",
+        "that",
+        "these",
+        "those",
+        "and",
+        "or",
+        "nor",
+        "but",
+        "than",
+        "as",
+        "to",
+        "of",
+        "per",
+        "by",
+        "in",
+        "on",
+        "at",
+        "for",
+        "from",
+        "into",
+        "onto",
+        "over",
+        "under",
+        "with",
+        "without",
+        "within",
+        "via",
+        "vs",
+        "versus",
+        "since",
+        "until",
+        "till",
+        "after",
+        "before",
+        "during",
+        "between",
+        "among",
+        "against",
+        "through",
+        "about",
+        "around",
+        "up",
+        "down",
+        "out",
+        "off",
+        "while",
+        "when",
+        "whereas",
+        "if",
+        "so",
+        "then",
+        "its",
+        "their",
+        "his",
+        "her",
+        "our",
+        "your",
+        "my",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "has",
+        "have",
+        "had",
+        "will",
+        "would",
+        "can",
+        "could",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "should",
+        "do",
+        "does",
+        "did",
+        "not",
+        "no",
+        "each",
+        "every",
+    ]
+)
 _LETTER: Final = r"[^\W\d_]"
+_DASH: Final = "\\-\u2010-\u2015\u2212"
+_WORD: Final = (
+    rf"(?:percentage[\s{_DASH}]+points?|basis[\s{_DASH}]+points?|per[\s{_DASH}]*cent|{_LETTER}+)(?!{_LETTER})|%"
+)
 _NUMBER: Final = re.compile(
-    rf"(?P<num>\d+(?:,\d{{3}})*(?:\.\d+)?)(?:(?P<attached>{_LETTER}+|%)|\s*(?P<spaced>{_SPACED})(?!{_LETTER}))?"
-    rf"|(?<!{_LETTER})(?P<word>{'|'.join(_NUMBER_WORDS)})(?!{_LETTER})(?:\s*(?P<wscale>{_SPACED})(?!{_LETTER}))?",
+    rf"(?P<num>\d+(?:,\d{{3}})*(?:\.\d+)?)|(?<!{_LETTER})(?P<word>{'|'.join(_NUMBER_WORDS)})(?!{_LETTER})",
     re.IGNORECASE,
 )
+_GLUED: Final = re.compile(rf"(?P<glued>{_WORD})", re.IGNORECASE)
+_DASHED: Final = re.compile(rf"[{_DASH}](?P<dashed>{_WORD})", re.IGNORECASE)
+_BRACKETED: Final = re.compile(rf"\s*[(\[]\s*(?P<bracketed>{_WORD})\s*[)\]]", re.IGNORECASE)
+# A dash with a space on either side reads as a space ("Sh89 - million", "Level 4 - the ...").
+_SPACED: Final = re.compile(rf"(?:\s*[{_DASH}]\s+|\s+[{_DASH}]\s*|\s+)(?P<spaced>{_WORD})", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,21 +298,39 @@ def _value(token: str) -> Decimal | None:
         return None
 
 
-def _scale(raw: str | None) -> str | None:
-    if raw is None:
+def _key(raw: str) -> str:
+    return re.sub(rf"[\s{_DASH}]+", " ", raw.lower())
+
+
+def _scale_after(text: str, end: int, *, digits: bool) -> str | None:
+    """The scale of the number ending at ``end`` (see ``_SCALES``): glued letters (digits only: a number word is
+    whole), a dashed, bracketed or spaced word; None when nothing, punctuation or a function word follows."""
+    glued = _GLUED.match(text, end) if digits else None
+    if glued is not None:
+        key = _key(glued.group("glued"))
+        return _SCALES.get(key, f"suffix:{key}")
+    joined = _DASHED.match(text, end) or _BRACKETED.match(text, end)
+    if joined is not None:
+        key = _key(joined.group(joined.lastgroup or 0))
+        return _SCALES.get(key, f"suffix:{key}")
+    spaced = _SPACED.match(text, end)
+    if spaced is None:
         return None
-    key = re.sub(r"\s+", " ", raw.lower())
-    return _SCALES.get(key, f"suffix:{key}")
+    key = _key(spaced.group("spaced"))
+    if key in _SCALES:
+        return _SCALES[key]
+    return None if key in _FUNCTION else f"suffix:{key}"
 
 
 def numbers_in(value: str) -> set[tuple[Decimal, str | None]]:
-    """Every (number, scale) in the NFKC form of ``value``; scale is None when no scale follows (see ``_SCALES``)."""
+    """Every (number, scale) in the NFKC form of ``value``; scale is None when nothing that counts follows."""
+    text = normalise(value)
     found: set[tuple[Decimal, str | None]] = set()
-    for match in _NUMBER.finditer(normalise(value)):
+    for match in _NUMBER.finditer(text):
         number = _value(match.group("num") or match.group("word"))
         if number is None:
             continue
-        found.add((number, _scale(match.group("attached") or match.group("spaced") or match.group("wscale"))))
+        found.add((number, _scale_after(text, match.end(), digits=match.group("num") is not None)))
     return found
 
 
