@@ -15,8 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The staff console's home (REQ-ADM-01): the first section the staff member's role may open. A role with no section
- * yet (moderators and support until P15) is told so, with the way to their portal.
+ * The staff console's home (REQ-ADM-01): the first section the staff member's role may open (Research for staff
+ * admins, Moderation for moderators). A role with no section yet (support) is told so, with the way to their portal.
  */
 export default async function StaffConsoleHome() {
   const { me, role } = await staffContext();
