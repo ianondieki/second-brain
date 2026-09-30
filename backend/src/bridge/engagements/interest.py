@@ -51,6 +51,7 @@ from bridge.logging import get_logger
 from bridge.models.enums import (
     AuditActor,
     EngagementOrigin,
+    EngagementParty,
     EngagementState,
     GrantSource,
     OrgRole,
@@ -61,6 +62,7 @@ from bridge.notifications.in_app import post_in_app
 from bridge.tenancy import signals
 from bridge.tenancy.deps import OrgContext
 from bridge.tenancy.service import membership_of
+from bridge.web_paths import engagement_path
 
 S = EngagementState
 INTEREST_ORIGINS: Final = frozenset({EngagementOrigin.ORG_AGENT_MATCH, EngagementOrigin.ORG_BROWSE})
@@ -94,7 +96,6 @@ _ACTIVATE = text(
 # [[COPY-REVIEW]] the organisation's in-app notice when the developer shares the full proposal.
 SHARED_TITLE: Final = "Full proposal shared"
 SHARED_BODY: Final = 'The developer shared the full proposal "{title}" with your organisation. Open it under NDA.'
-SHARED_LINK: Final = "/org/engagements/{engagement}"  # the organisation's tracker (frontend app/(app)/org/engagements)
 log = get_logger(__name__)
 
 
@@ -314,7 +315,7 @@ async def tell_organisation(
                     kind="engagement.tier2_shared",
                     title=SHARED_TITLE,
                     body=body,
-                    link=SHARED_LINK.format(engagement=engagement_id),
+                    link=engagement_path(EngagementParty.ORG, engagement_id),
                     dedupe_key=f"tier2share:{grant_id}:{user_id}",
                 )
                 await db.commit()

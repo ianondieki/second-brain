@@ -55,7 +55,7 @@ def test_em2_has_the_spec_copy() -> None:
     assert "Your disclosure record c-0192ab (23 Sep 2026, 14:05 EAT) is attached to this engagement." in text
     assert "Your full proposal has not been shared yet." in text
     assert "If nobody contacts you by 6 Oct 2026, we follow up with Telco A (fixture) automatically." in text
-    assert f"Open your tracker: https://bridge.example/engagements/{ENGAGEMENT}" in text
+    assert f"Open your tracker: https://bridge.example/dev/engagements/{ENGAGEMENT}" in text
     assert f"Engagement ref {ENGAGEMENT}" in text
     assert "Nairobi, Kenya" in text
     assert "Public bodies" not in text

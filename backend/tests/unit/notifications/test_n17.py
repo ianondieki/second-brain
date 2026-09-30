@@ -36,7 +36,7 @@ def test_the_email_says_who_what_and_by_when() -> None:
         assert "not a contract or a commitment to buy" in part
         assert "dairy.example.com" not in part  # a party's text never becomes a link
         assert "approve" not in part.lower()
-    assert "https://bridge.example.test/engagements/" + str(ENGAGEMENT) in rendered.text
+    assert "https://bridge.example.test/dev/engagements/" + str(ENGAGEMENT) in rendered.text  # the developer's
     hrefs = re.findall(r'href="([^"]+)"', rendered.html)
     assert all(h.startswith("https://bridge.example.test/") for h in hrefs)
     assert rendered.html.count('data-cta="') == 1
