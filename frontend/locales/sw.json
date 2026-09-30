@@ -5,7 +5,8 @@
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
-    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is attestation wording held as a draft under D-39 item 7 (DECISIONS-NEEDED; the API stores only a boolean) [[SW-REVIEW]] draft Swahili"
+    "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is attestation wording held as a draft under D-39 item 7 (DECISIONS-NEEDED; the API stores only a boolean) [[SW-REVIEW]] draft Swahili",
+    "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages [[SW-REVIEW]] draft Swahili"
   },
   "app": {
     "name": "Bridge",
@@ -810,7 +811,78 @@
     "detailsFiles": "Faili: {count}",
     "detailsLinks": "Viungo: {count}",
     "backToIdea": "Rudi kwenye wazo",
-    "noProblemsYet": "Bado hakuna matatizo yaliyoorodheshwa."
+    "noProblemsYet": "Bado hakuna matatizo yaliyoorodheshwa.",
+    "assistantTitle": "Msaidizi wa uandishi",
+    "assistantHint": "Si lazima. Hupendekeza kichwa na muhtasari ulio wazi zaidi. Hakuna kinachobadilika usipochagua kuutumia.",
+    "assistantOpen": "Pendekeza muhtasari wa umma ulio wazi zaidi",
+    "assistantOpening": "Msaidizi wa uandishi unafunguliwa…"
+  },
+  "ideaAssistant": {
+    "heading": "Pendekezo",
+    "headingAnswer": "Jibu la msaidizi wa uandishi",
+    "close": "Funga",
+    "working": "Tunamuuliza msaidizi wa uandishi. Hili linaweza kuchukua sekunde chache.",
+    "aiDrafted": "Imeandikwa na AI",
+    "demoFallback": "Mbadala wa onyesho",
+    "now": "Sasa",
+    "suggested": "Inayopendekezwa",
+    "before": "Kabla",
+    "notWritten": "Bado haijaandikwa",
+    "use": "Tumia hili",
+    "undo": "Tendua",
+    "applied": "Pendekezo sasa limo kwenye kichwa na muhtasari wako. Linahifadhiwa kama mabadiliko mengine yoyote, na bado unaweza kulihariri.",
+    "undone": "Kichwa na muhtasari wako vimerudi kama vilivyokuwa.",
+    "placementTitle": "Mahali ambapo baadhi ya maelezo yanaweza kufaa",
+    "toTier1": "{name} inaweza kufaa kwenye muhtasari wa umma.",
+    "toTier2": "{name} inaweza kufaa kwenye maelezo kamili, ambayo yanabaki siri.",
+    "askAgain": "Uliza tena",
+    "turnOff": "Zima msaidizi kwa kipindi hiki cha kuingia",
+    "turningOff": "Inazimwa…",
+    "offNotice": "Msaidizi wa uandishi umezimwa kwa kipindi hiki cha kuingia.",
+    "status": {
+      "no_suggestion": "Hakuna pendekezo la kuonyesha kwa muhtasari huu. Mapendekezo yanayonakili maneno kutoka maelezo yako kamili hayaonyeshwi.",
+      "hints_only": "Hakuna kichwa wala muhtasari mpya safari hii, lakini baadhi ya maelezo yanaweza kufaa mahali pengine.",
+      "demo_fallback": "Onyesho hili halina modeli ya AI iliyounganishwa, kwa hivyo hakuna pendekezo.",
+      "injection_suspected": "Sehemu ya wazo lako inasomeka kama maagizo kwa msaidizi, kwa hivyo haukutoa pendekezo. Kagua maandishi, kisha uulize tena.",
+      "unavailable": "Msaidizi wa uandishi haukuweza kujibu sasa hivi. Jaribu tena baadaye."
+    },
+    "problem": {
+      "noText": "Andika kichwa au muhtasari kwanza, kisha uulize.",
+      "notSaved": "Mabadiliko yako ya karibuni hayajahifadhiwa, kwa hivyo msaidizi hakuulizwa. Rekebisha sehemu zilizowekwa alama, kisha uulize tena.",
+      "consent_required": "Msaidizi wa uandishi umezimwa kwa kipindi hiki cha kuingia. Uwashe ili uulize.",
+      "consent_text_changed": "Maneno yamebadilika. Yasome tena, kisha uchague.",
+      "assistant_busy": "Msaidizi wa uandishi bado unashughulikia ombi lako la mwisho. Jaribu tena baada ya muda mfupi.",
+      "assistant_rate_limited": "Umeomba mapendekezo mengi leo. Jaribu tena kesho.",
+      "assistant_budget": "Umetumia kiwango cha mwezi huu cha msaidizi wa uandishi.",
+      "assistant_paused": "Msaidizi wa uandishi umesimamishwa kwa leo. Jaribu tena kesho.",
+      "assistant_off": "Msaidizi wa uandishi umezimwa kwa sasa.",
+      "assistant_demo_only": "Katika onyesho hili, msaidizi wa uandishi hufanya kazi na akaunti za onyesho pekee.",
+      "tier2_disabled": "Msaidizi wa uandishi haupatikani kwenye seva hii sasa hivi.",
+      "signedOut": "Muda wa kuingia umeisha. Ingia tena, kisha urudi kwenye wazo hili.",
+      "mfaRequired": "Kipindi chako kinahitaji msimbo kutoka programu yako ya uthibitishaji. Ingia tena, kisha urudi kwenye wazo hili.",
+      "rateLimited": "Majaribio mengi mno. Subiri dakika moja, kisha ujaribu tena.",
+      "notFound": "Wazo hili si lako, au limefutwa.",
+      "hidden": "Wazo hili limefutwa, kwa hivyo msaidizi hawezi kulisoma.",
+      "unavailable": "Msaidizi wa uandishi haukuweza kujibu sasa hivi. Jaribu tena baadaye.",
+      "network": "Hatukuweza kufikia seva. Kagua muunganisho wako, kisha ujaribu tena.",
+      "failed": "Hitilafu imetokea. Jaribu tena baada ya muda mfupi."
+    },
+    "dialog": {
+      "title": "Uwashe msaidizi wa uandishi?",
+      "confirm": "Washa na uulize",
+      "busy": "Inawashwa…",
+      "cancel": "Si sasa"
+    },
+    "field": {
+      "title": "Kichwa",
+      "problem_statement": "Tatizo inalotatua",
+      "impact_claims": "Matokeo yanayotarajiwa",
+      "summary": "Muhtasari",
+      "approach": "Mbinu",
+      "architecture": "Muundo wa kiufundi",
+      "pricing": "Bei",
+      "notes": "Maelezo mengine"
+    }
   },
   "devHome": {
     "lead": "Kinachokusubiri sasa, kisha mengine yote.",

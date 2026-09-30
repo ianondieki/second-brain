@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useRef, useState, type ComponentProps } from "react";
+import { Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -13,6 +13,7 @@ import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 import { preloadable } from "@/lib/preloadable";
 
+import type { AssistantCalls } from "../assistant";
 import type { Calls } from "../calls";
 import {
   ASKS,
@@ -59,6 +60,36 @@ function Review(props: ComponentProps<typeof import("./Review").Review>) {
   return <Step {...props} />;
 }
 
+// The writing assistant's panel (REQ-PROP-05) loads when the owner opens it: closed, it costs this page one button.
+// Never import it statically (editor/assistant-load.test.tsx fails if it is): its code would join the page's.
+const loadAssistant = () => preloadable(() => import("./AssistantPanel"));
+let assistantModule = loadAssistant();
+
+/** Starts loading the assistant panel's code (tests render it at once). */
+export function preloadAssistant() {
+  return assistantModule();
+}
+
+function AssistantPanel(props: ComponentProps<typeof import("./AssistantPanel").AssistantPanel>) {
+  const { AssistantPanel: Panel } = use(assistantModule());
+  return <Panel {...props} />;
+}
+
+/** A panel whose code did not load (offline) or broke: the editor stays, and the next press loads it afresh. */
+class PanelBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    assistantModule = loadAssistant(); // a rejected load is kept by preloadable: start a new one
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export interface EditorProps {
   /** The proposal's id; null for a new idea (the first save creates it). */
   id: string | null;
@@ -73,6 +104,8 @@ export interface EditorProps {
   attestations: AttestationText;
   problems: ProblemCard[];
   calls?: Calls;
+  /** The writing assistant's calls (tests pass fakes; the panel loads the real ones when it opens). */
+  assistant?: AssistantCalls;
 }
 
 type Save =
@@ -115,6 +148,7 @@ const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
 export function Editor(props: EditorProps) {
   const t = useStrings("ideaEditor");
   const f = useStrings("ideaFields");
+  const assistantT = useStrings("ideaAssistant");
   const issueMessage = useIssueMessage();
   const injected = props.calls;
   const getCalls = () => (injected ? Promise.resolve(injected) : loadCalls());
@@ -127,6 +161,8 @@ export function Editor(props: EditorProps) {
   const [showRequired, setShowRequired] = useState(false);
   const [created, setCreated] = useState(props.id !== null);
   const [publishing, setPublishing] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantFailed, setAssistantFailed] = useState(false);
 
   const idRef = useRef<string | null>(props.id);
   const draftRef = useRef(props.hasDraft ?? props.id !== null);
@@ -140,6 +176,7 @@ export function Editor(props: EditorProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const stepRef = useRef(step);
+  const returnToAssistant = useRef(false); // the panel closed: its button takes focus once it is back
 
   // Plain functions, not hooks: everything they change lives in refs, so a timer set in one render still saves what
   // the fields hold when it fires.
@@ -244,6 +281,17 @@ export function Editor(props: EditorProps) {
     fieldset.current.disabled = false;
     fieldset.current.dataset.hydrated = "true";
   }, []);
+
+  function closeAssistant() {
+    returnToAssistant.current = true;
+    setAssistantOpen(false);
+  }
+
+  useEffect(() => {
+    if (assistantOpen || !returnToAssistant.current) return;
+    returnToAssistant.current = false;
+    document.getElementById("assistant-open")?.focus();
+  }, [assistantOpen]);
 
   // Leaving the editor (a link, the back button) saves what was typed instead of dropping the pending autosave.
   useEffect(() => {
@@ -467,6 +515,59 @@ export function Editor(props: EditorProps) {
               error={errorFor("impact_claims")}
               onChange={(e) => update({ impactClaims: e.target.value })}
             />
+          </section>
+
+          <section aria-labelledby="assistant-title" className="flex flex-col gap-4 border-t border-line pt-6">
+            <div>
+              <h3 id="assistant-title" className="font-semibold text-ink">
+                {t("assistantTitle")}
+              </h3>
+              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("assistantHint")}</p>
+            </div>
+            {assistantOpen ? (
+              <PanelBoundary
+                onError={() => {
+                  setAssistantFailed(true);
+                  closeAssistant();
+                }}
+              >
+                <Suspense
+                  fallback={
+                    <p role="status" className="text-ink-soft">
+                      {t("assistantOpening")}
+                    </p>
+                  }
+                >
+                  <AssistantPanel
+                    state={state}
+                    getId={() => idRef.current}
+                    saveAll={() => {
+                      // A new idea's first ask still needs a draft; a save already under way creates it.
+                      if (!idRef.current && edits.current === savedEdits.current) edits.current += 1;
+                      return saveAll();
+                    }}
+                    onUse={(teaser) => update({ title: teaser.title, summary: teaser.summary })}
+                    onClose={closeAssistant}
+                    calls={props.assistant}
+                  />
+                </Suspense>
+              </PanelBoundary>
+            ) : (
+              <>
+                {assistantFailed ? <Alert>{assistantT("problem.network")}</Alert> : null}
+                <Button
+                  id="assistant-open"
+                  variant="secondary"
+                  className="self-start"
+                  onClick={() => {
+                    setAssistantFailed(false);
+                    setAssistantOpen(true);
+                  }}
+                >
+                  {t("assistantOpen")}
+                </Button>
+              </>
+            )}
           </section>
         </div>
       ) : null}

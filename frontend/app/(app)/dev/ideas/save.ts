@@ -7,6 +7,9 @@ import { saveRefusal, type Refusal, type SaveProblem } from "./outcomes";
 // Saving a draft: the only call the editor needs on the first edit, so it loads on its own (docs/spec/07 item 5).
 // The other calls are in calls.ts, which re-exports these.
 
+/** The typed client, for the writing assistant's calls (assistant.ts): they share this chunk instead of a copy. */
+export { api };
+
 export type Outcome<T, P extends string> = { ok: true; value: T } | ({ ok: false } & Refusal<P>);
 
 type Answer = { data?: unknown; error?: unknown; response: Response };
