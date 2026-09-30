@@ -1,45 +1,53 @@
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import {
-  ideaHref,
-  type MyProposalItem,
-} from "./ideas";
+import { Badge } from "@/components/ui/Badge";
+import { Row } from "@/components/ui/RowList";
+
 import { formatDay } from "./dates";
-import { hasUnpublishedChanges, ideaStatus } from "./status";
+import { ideaHref, type MyProposalItem } from "./ideas";
 import { IdeaStatusBadge } from "./IdeaStatusBadge";
+import { hasUnpublishedChanges, ideaStatus } from "./status";
+
+/** A filled dot: saved edits wait to be published. */
+function DotIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="4" fill="currentColor" />
+    </svg>
+  );
+}
 
 /**
- * One idea in the list: its title as the link, the niche, and at most two chips (docs/spec/07 item 2): the status
- * and, for a published idea with saved edits, "Unpublished changes".
+ * One idea in the list (a Row, the whole row its link): its title, the niche and last change, and at most two badges
+ * (docs/spec/07 item 2): the status and, for a published idea with saved edits, "Unpublished changes" (in the accent:
+ * the developer can act on it).
  */
 export function IdeaRow({ item, headingLevel = 2 }: { item: MyProposalItem; headingLevel?: 2 | 3 }) {
-  const Heading = headingLevel === 3 ? "h3" : "h2";
   const t = useTranslations("ideas");
   const fields = useTranslations("ideaFields");
   const locale = useLocale();
-  const changes = hasUnpublishedChanges(item);
+  const status = <IdeaStatusBadge key="status" status={ideaStatus(item.status, item.moderation_state)} />;
   return (
-    <article className="relative flex flex-col gap-1.5 border-t border-line py-5">
-      <Heading className="text-lg [overflow-wrap:anywhere] text-ink">
-        <Link
-          href={ideaHref(item.id)}
-          className="underline decoration-line decoration-1 underline-offset-4 after:absolute after:inset-0 hover:decoration-jacaranda"
-        >
-          {item.title?.trim() || t("untitled")}
-        </Link>
-      </Heading>
-      {item.niche ? <p className="text-sm text-ink-soft">{item.niche.label}</p> : null}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-        <IdeaStatusBadge status={ideaStatus(item.status, item.moderation_state)} className="text-sm" />
-        {changes ? (
-          <span data-chip="" className="inline-flex items-center gap-1.5 font-medium text-ink">
-            <span aria-hidden="true" className="size-2 rounded-full bg-jacaranda" />
-            {fields("unpublishedChanges")}
-          </span>
-        ) : null}
-        <span className="text-ink-soft">{t("changed", { date: formatDay(locale, item.updated_at) })}</span>
-      </div>
-    </article>
+    <Row
+      title={item.title?.trim() || t("untitled")}
+      href={ideaHref(item.id)}
+      headingLevel={headingLevel}
+      meta={
+        <span className="flex flex-wrap gap-x-4">
+          {item.niche ? <span>{item.niche.label}</span> : null}
+          <span>{t("changed", { date: formatDay(locale, item.updated_at) })}</span>
+        </span>
+      }
+      badges={
+        hasUnpublishedChanges(item)
+          ? [
+              status,
+              <Badge key="changes" data-chip="" tone="accent" icon={<DotIcon />}>
+                {fields("unpublishedChanges")}
+              </Badge>,
+            ]
+          : [status]
+      }
+    />
   );
 }
