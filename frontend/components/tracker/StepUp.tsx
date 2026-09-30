@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -18,6 +18,8 @@ export interface StepUpProps {
   onConfirmed: () => Promise<void>;
   onCancel: () => void;
   confirmImpl?: typeof confirmStepUp;
+  /** Confirm is the screen's primary action (default); false when another primary button is on the screen. */
+  primary?: boolean;
 }
 
 /**
@@ -25,8 +27,10 @@ export interface StepUpProps {
  * authenticator code within 12 hours), inline where the button was: the code, then the step runs again. Like the
  * security settings' StepUpForm, with the tracker's server-formatted strings instead of next-intl's client runtime.
  */
-export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmStepUp }: StepUpProps) {
+export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmStepUp, primary = true }: StepUpProps) {
   const t = useStrings("trackerActions");
+  // Its own id: the step-up appears on the tracker and on the scout match page, never twice with one id.
+  const codeId = `${useId()}-step-up-code`;
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | undefined>();
   const [failed, setFailed] = useState(false);
@@ -36,11 +40,11 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    document.getElementById("tracker-step-up-code")?.focus();
+    document.getElementById(codeId)?.focus();
     return () => {
       mounted.current = false;
     };
-  }, []);
+  }, [codeId]);
 
   if (!enrolled) {
     return (
@@ -61,7 +65,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
     if (busy) return;
     if (code.length !== 6) {
       setCodeError(t("stepUp.invalid"));
-      document.getElementById("tracker-step-up-code")?.focus();
+      document.getElementById(codeId)?.focus();
       return;
     }
     setBusy(true);
@@ -73,7 +77,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
       setCode("");
       if (outcome.invalidCode) {
         setCodeError(t("stepUp.invalid"));
-        document.getElementById("tracker-step-up-code")?.focus();
+        document.getElementById(codeId)?.focus();
       } else {
         setFailed(true);
       }
@@ -91,7 +95,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
       {failed ? <Alert className="w-full">{t("refusal.generic")}</Alert> : null}
       <p className="max-w-[60ch] text-ink">{t("stepUp.body")}</p>
       <OtpInput
-        id="tracker-step-up-code"
+        id={codeId}
         name="code"
         label={t("stepUp.code")}
         value={code}
@@ -102,7 +106,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
         error={codeError}
       />
       <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-        <SubmitButton variant="primary" busy={busy}>
+        <SubmitButton variant={primary ? "primary" : "secondary"} busy={busy}>
           {busy ? t("stepUp.checking") : t("stepUp.submit")}
         </SubmitButton>
         {/* Inert while the code is checked: the step may already be running. */}

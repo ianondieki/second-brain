@@ -168,7 +168,7 @@ describe("InboxRow (Tier 1 only)", () => {
     engagement: { id: "01a0ee62-f839-719d-8432-0d3a82415fe0", state: "SUBMITTED", stage_deadline_at: null },
     proposal: {
       id: PROPOSAL,
-      owner_handle: "achieng-otieno-f7cd06",
+      owner_handle: "dev-7k2m9qxp",
       cert_id: "0F2DRAHDCRSMY6CP",
       version_no: 1,
       published_at: "2026-09-29T18:17:38Z",

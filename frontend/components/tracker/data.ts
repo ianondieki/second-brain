@@ -6,6 +6,7 @@ import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import type { Member } from "./CommandForm";
 import type { Detail, DocumentKind, History, Summary } from "./model";
+import type { Tier2Share } from "./share";
 
 // Server-side reads for the tracker screens (signed in only). Each call is bounded, so a hung API ends in the route's
 // error page instead of a page that never renders; the session cookie is forwarded.
@@ -102,4 +103,17 @@ export async function orgMembers(orgId: string): Promise<Member[] | null> {
   });
   if (response.status === 401) redirect("/login");
   return data ? data.map((m) => ({ user_id: m.user_id, display_name: m.display_name })) : null;
+}
+
+/**
+ * Whether the developer shared the full proposal with the organisation (GET …/share-tier2; both parties), or null
+ * when it could not be read (the section is then left out rather than guessing).
+ */
+export async function tier2ShareState(id: string): Promise<Tier2Share | null> {
+  const { data, response } = await serverApi().GET("/api/engagements/{engagement_id}/share-tier2", {
+    params: { path: { engagement_id: id } },
+    ...(await options()),
+  });
+  if (response.status === 401) redirect("/login");
+  return data ?? null;
 }

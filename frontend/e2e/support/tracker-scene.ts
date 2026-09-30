@@ -27,7 +27,7 @@ export const PASSWORD = "jacaranda season in nairobi";
 
 const TEST_EMAIL = /^[a-z0-9.+-]+@([a-z0-9-]+\.)*example\.com$/;
 
-function ownerSql(sql: string, variables: Record<string, string>): string {
+export function ownerSql(sql: string, variables: Record<string, string>): string {
   if (!OWNER_DATABASE_URL) throw new Error("E2E_DATABASE_OWNER_URL is not set");
   if (variables.email && !TEST_EMAIL.test(variables.email)) throw new Error("test accounts (@example.com) only");
   const args = [OWNER_DATABASE_URL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1"];
@@ -37,7 +37,7 @@ function ownerSql(sql: string, variables: Record<string, string>): string {
   return result.stdout.trim();
 }
 
-function tag() {
+export function tag() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
@@ -47,7 +47,7 @@ async function csrf(request: APIRequestContext): Promise<string> {
   return ((await response.json()) as { csrf_token: string }).csrf_token;
 }
 
-async function post<T>(request: APIRequestContext, path: string, data: unknown, status = 200): Promise<T> {
+export async function post<T>(request: APIRequestContext, path: string, data: unknown, status = 200): Promise<T> {
   const response = await request.post(path, { headers: { "X-CSRF-Token": await csrf(request) }, data });
   expect(response.status(), `${path}: ${await response.text()}`).toBe(status);
   return (await response.json()) as T;
@@ -82,7 +82,7 @@ export class Person {
 }
 
 /** Signs up on `request` (a page's request context, so the page shares the session) and opens the emailed link. */
-async function signUp(request: APIRequestContext, body: Record<string, unknown>): Promise<void> {
+export async function signUp(request: APIRequestContext, body: Record<string, unknown>): Promise<void> {
   const signup = await request.post("/api/auth/signup", {
     headers: { "X-CSRF-Token": await csrf(request) },
     data: { password: PASSWORD, accept_terms: true, ...body },
@@ -93,7 +93,7 @@ async function signUp(request: APIRequestContext, body: Record<string, unknown>)
   await post(request, "/api/auth/magic-link/consume", { token });
 }
 
-async function turnOnTotp(request: APIRequestContext, email: string, name: string): Promise<Person> {
+export async function turnOnTotp(request: APIRequestContext, email: string, name: string): Promise<Person> {
   const { secret } = await post<{ secret: string }>(request, "/api/auth/totp/enrol", { password: PASSWORD });
   const person = new Person(email, name, secret);
   await post(request, "/api/auth/totp/confirm", { code: await person.code() });
