@@ -1,12 +1,13 @@
-import { api, type ApiClient } from "@/lib/api/client";
-import { apiErrorCode } from "@/lib/api/error-code";
+import type { ApiClient } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
-
-import { common } from "./outcomes";
 
 // The submission assistant's calls (REQ-PROP-05; docs/spec/06 6.3, docs/spec/09). They load with the editor's
 // assistant panel, when the owner opens it, never with the page. Each settles into its value or a problem the panel
 // words with its own [[COPY-REVIEW]] string: the API's `message` and `detail.message` are never shown.
+//
+// Nothing here imports the API client, outcomes.ts or error-code.ts at the top: a module imported statically is copied
+// into the panel's chunk even when the editor's save chunk already holds it (docs/spec/07 item 5: the editor is close
+// to 150 KB). The typed client comes from the save chunk itself, which the first edit has usually loaded already.
 
 type Schemas = components["schemas"];
 export type AssistantConsent = Schemas["AssistantConsentOut"];
@@ -49,18 +50,33 @@ const CODES: Record<string, AssistantProblem> = {
   tier2_disabled: "tier2Disabled",
 };
 
-/** A refused assistant call: its own codes first (a 503 `assistant_off` is not a generic outage), then the shared ones. */
+/** `detail.code` of an API error body (bridge.errors.ApiError), or undefined. */
+function codeOf(body: unknown): string | undefined {
+  const detail = typeof body === "object" && body !== null ? (body as { detail?: unknown }).detail : undefined;
+  const code = typeof detail === "object" && detail !== null ? (detail as { code?: unknown }).code : undefined;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * A refused assistant call: its own codes first (a 503 `assistant_off` is not a generic outage), then the ones every
+ * editor call shares (as outcomes.ts `common` reads them).
+ */
 export function assistantRefusal(status: number, body: unknown): AssistantProblem {
-  const code = apiErrorCode(body);
-  const own = code !== undefined && Object.hasOwn(CODES, code) ? CODES[code] : undefined;
-  if (own) return own;
-  const shared = common(status, code);
-  if (shared === "network" || shared === "signedOut" || shared === "mfaRequired") return shared;
-  if (shared === "rateLimited" || shared === "notFound" || shared === "hidden" || shared === "unavailable") return shared;
+  const code = codeOf(body);
+  if (code !== undefined && Object.hasOwn(CODES, code)) return CODES[code];
+  if (status === 0) return "network";
+  if (status === 401) return code === "mfa_required" ? "mfaRequired" : "signedOut";
+  if (status === 429) return "rateLimited";
+  if (status === 404) return "notFound";
+  if (status === 409 && code === "proposal_hidden") return "hidden";
+  if (status === 503) return "unavailable";
   return "failed";
 }
 
 type Answer = { data?: unknown; error?: unknown; response: Response };
+
+/** The typed client from the editor's save chunk (a fetch that fails to load it counts as offline). */
+const shared = (): Promise<ApiClient> => import("./save").then((save) => save.api);
 
 async function settle<T>(call: () => Promise<Answer>): Promise<AssistantOutcome<T>> {
   let answer: Answer;
@@ -76,26 +92,33 @@ async function settle<T>(call: () => Promise<Answer>): Promise<AssistantOutcome<
 const path = (id: string) => ({ params: { path: { proposal_id: id } } });
 
 /** Whether the assistant is on for this sign-in, with the consent wording and its version to show. */
-export function consentState(id: string, client: ApiClient = api) {
-  return settle<AssistantConsent>(() => client.GET("/api/me/proposals/{proposal_id}/assistant/consent", path(id)));
+export function consentState(id: string, client?: ApiClient) {
+  return settle<AssistantConsent>(async () =>
+    (client ?? (await shared())).GET("/api/me/proposals/{proposal_id}/assistant/consent", path(id)),
+  );
 }
 
 /** Turns the assistant on for this sign-in, naming the version of the wording that was shown. */
-export function grantConsent(id: string, version: string, client: ApiClient = api) {
-  return settle<AssistantConsent>(() =>
-    client.POST("/api/me/proposals/{proposal_id}/assistant/consent", { ...path(id), body: { version } }),
+export function grantConsent(id: string, version: string, client?: ApiClient) {
+  return settle<AssistantConsent>(async () =>
+    (client ?? (await shared())).POST("/api/me/proposals/{proposal_id}/assistant/consent", {
+      ...path(id),
+      body: { version },
+    }),
   );
 }
 
 /** Turns the assistant off for this sign-in. */
-export function withdrawConsent(id: string, client: ApiClient = api) {
-  return settle<AssistantConsent>(() => client.DELETE("/api/me/proposals/{proposal_id}/assistant/consent", path(id)));
+export function withdrawConsent(id: string, client?: ApiClient) {
+  return settle<AssistantConsent>(async () =>
+    (client ?? (await shared())).DELETE("/api/me/proposals/{proposal_id}/assistant/consent", path(id)),
+  );
 }
 
 /** One suggestion for the saved draft. The API never writes the proposal; neither does this. */
-export function suggest(id: string, client: ApiClient = api) {
-  return settle<AssistantSuggestion>(() =>
-    client.POST("/api/me/proposals/{proposal_id}/assistant/suggestions", path(id)),
+export function suggest(id: string, client?: ApiClient) {
+  return settle<AssistantSuggestion>(async () =>
+    (client ?? (await shared())).POST("/api/me/proposals/{proposal_id}/assistant/suggestions", path(id)),
   );
 }
 

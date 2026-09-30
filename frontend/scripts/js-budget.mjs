@@ -2,7 +2,9 @@
 // 1 KB = 1,000 bytes, so 150,000 bytes. Counted: every script the route fetches in a real browser until the network
 // is idle, lazily loaded chunks included, each at its gzip-compressed size (the server's gzip, or gzip at the default
 // level when a response is not compressed). With --first-edit the count continues through the first keystroke in the
-// page's first text field (chunks that load on the first edit, such as the idea editor's save calls, count too).
+// page's first text field (chunks that load on the first edit, such as the idea editor's save calls, count too). With
+// --press=<name> it then presses the button of that accessible name and counts the chunks that load with it (the idea
+// editor's writing assistant panel: --press="Suggest a clearer teaser").
 // Response headers are printed alongside (their HTTP/1.1 size), since Lighthouse's transfer size includes them
 // (DECISIONS-NEEDED D-28).
 //
@@ -10,6 +12,7 @@
 //   npm run budget                                        the default routes: / /login /signup /settings/security
 //   npm run budget -- /dev/ideas/new --first-edit         named routes (the leading slash is optional)
 //   npm run budget -- /org --allow-skip                   a redirect is a skip, not a failure
+//   npm run budget -- /dev/ideas/<id>/edit --press="Suggest a clearer teaser"   after pressing a button
 // BUDGET_BASE_URL  the web app (default http://localhost:3000; http or https).
 // BUDGET_COOKIE    a Cookie header for signed-in routes, e.g. "__Host-bridge_session=<token>" of a test account.
 // Needs Playwright's Chromium (PLAYWRIGHT_BROWSERS_PATH where it is installed). --first-edit types into the page, so
@@ -28,6 +31,7 @@ const cookie = process.env.BUDGET_COOKIE;
 const args = process.argv.slice(2);
 const allowSkip = args.includes("--allow-skip");
 const firstEdit = args.includes("--first-edit");
+const press = args.find((arg) => arg.startsWith("--press="))?.slice("--press=".length);
 const named = args.filter((arg) => !arg.startsWith("--")).map((arg) => (arg.startsWith("/") ? arg : `/${arg}`));
 const routes = named.length > 0 ? named : DEFAULT_ROUTES;
 
@@ -77,6 +81,13 @@ async function measure(browser, route) {
         await page.waitForTimeout(SETTLE_MS + 1500); // the editor saves 1.2 s after typing stops
       }
     }
+    if (press) {
+      const button = page.getByRole("button", { name: press, exact: true });
+      if ((await button.count()) === 0) return { failed: `no button named "${press}"` };
+      await button.first().click();
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(SETTLE_MS);
+    }
     await Promise.all(reads);
     const values = [...scripts.values()];
     return {
@@ -107,7 +118,7 @@ for (const route of routes) {
   }
   const over = result.bytes > BUDGET_BYTES;
   if (over) failed = true;
-  const when = firstEdit ? " through the first edit" : "";
+  const when = [firstEdit ? " through the first edit" : "", press ? ` after pressing "${press}"` : ""].join("");
   console.log(
     `${route}: ${result.bytes} bytes of gzipped JS in ${result.count} scripts${when} (budget ${BUDGET_BYTES}): ` +
       `${over ? "OVER" : "ok"}; ${result.bytes + result.headerBytes} with response headers`,
