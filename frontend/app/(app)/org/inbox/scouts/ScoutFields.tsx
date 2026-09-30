@@ -70,9 +70,9 @@ export function NicheChoice(props: {
   const t = useStrings("scoutForm");
   return (
     <Group id={props.id} legend={t("niches")} hint={t("nichesHint", { max: props.max })} error={props.error}>
-      <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+      <ul className="gap-x-8 sm:columns-2">
         {props.niches.map((parent) => (
-          <li key={parent.id} className="min-w-0">
+          <li key={parent.id} className="min-w-0 break-inside-avoid">
             <Checkbox
               id={`${props.id}-${parent.id}`}
               label={<span className="font-semibold">{parent.name}</span>}
