@@ -38,15 +38,17 @@ export type ListedProblem = Pick<ProblemDetail, "source" | "label"> & {
  * Discover's and Home's label (REQ-TREND-02, REQ-PERS-01): the problem page's own label in the page's language and
  * date format (problemLabel), so one problem reads the same on every screen. An API older than P16-C1 sends no
  * `seeded_example`; then its English words are shown as they are rather than guessing whether the card is a seeded
- * example.
+ * example. When the API sends no label (a research card that is not published, archived for example), none is built
+ * here either: the API decides whether a problem is labelled, the page only words it.
  */
 export function listedProblemLabel(problem: ListedProblem, locale: string): ProblemLabel | { key: "api"; text: string } {
+  if (!problem.label) return null;
   if (problem.source === "developer") return { key: "developer" };
   if (typeof problem.seeded_example === "boolean" && problem.published_at !== undefined) {
     const label = problemLabel({ ...problem, seeded_example: problem.seeded_example, published_at: problem.published_at }, locale);
     if (label) return label;
   }
-  return problem.label ? { key: "api", text: problem.label } : null;
+  return { key: "api", text: problem.label };
 }
 
 /** A moment in Nairobi ("30 Sep 2026, 14:06"), the web app's one date format (lib/format.ts). */

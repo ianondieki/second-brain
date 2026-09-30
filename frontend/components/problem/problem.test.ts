@@ -55,6 +55,14 @@ describe("listedProblemLabel (Discover and Home, P12-F MINOR 2)", () => {
     });
     expect(listedProblemLabel({ source: "org_brief", label: null, seeded_example: false, published_at: null }, "en")).toBeNull();
   });
+
+  it("never builds a label the API withholds (an archived research card linked to an idea; reviewer MAJOR 1)", () => {
+    const archived = { source: "research_agent", label: null, seeded_example: false, published_at: null } as const;
+    expect(listedProblemLabel(archived, "en")).toBeNull();
+    // Even if an older API still sent the publication day with no label.
+    expect(listedProblemLabel({ ...archived, published_at: "2026-09-29T22:30:00Z" }, "en")).toBeNull();
+    expect(listedProblemLabel({ ...archived, source: "developer" }, "en")).toBeNull();
+  });
 });
 
 describe("dates and numbers", () => {
