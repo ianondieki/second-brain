@@ -195,21 +195,23 @@ export function AssistantPanel({
   const teaser = !working && answer?.teaser;
   const key = !working && answer && statusKey(answer);
   const side = (caption: string, title: string, summary: string, suggested?: boolean) => (
-    <dl
+    <div
       data-teaser={suggested ? "suggested" : "now"}
-      className={cn("flex min-w-0 flex-col gap-1 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
+      className={cn("min-w-0 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
     >
-      <p className={cn("mb-2 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
-      {[
-        [t("field.title"), title],
-        [t("field.summary"), summary],
-      ].map(([label, text]) => (
-        <div key={label} className="mb-2 [overflow-wrap:anywhere]">
-          <dt className="text-sm text-ink-soft">{label}</dt>
-          <dd className={text.trim() ? "whitespace-pre-line" : "text-ink-soft"}>{text.trim() ? text : t("notWritten")}</dd>
-        </div>
-      ))}
-    </dl>
+      <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
+      <dl>
+        {[
+          [t("field.title"), title],
+          [t("field.summary"), summary],
+        ].map(([label, text]) => (
+          <div key={label} className="mb-2 [overflow-wrap:anywhere]">
+            <dt className="text-sm text-ink-soft">{label}</dt>
+            <dd className={text.trim() ? "whitespace-pre-line" : "text-ink-soft"}>{text.trim() ? text : t("notWritten")}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
   // The labels docs/spec/09 requires on AI output: at most two (docs/spec/07 item 2).
   const chip = (text: string, quiet?: boolean) => (
