@@ -170,12 +170,17 @@ export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: N
   if (stage.name === "stepUp") {
     return (
       <div className="flex w-full flex-col items-start gap-4">
-        <Suspense fallback={null}>
+        <p id="renew-warning" className="text-ink">
+          {t("newCodesWarning")}
+        </p>
+        <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
           <StepUpForm
             onConfirmed={request}
             busyLabel={t("gettingCodes")}
             lead={t("newCodesStepUp")}
             submitLabel={t("newCodesStepUpSubmit")}
+            variant="primary"
+            describedBy="renew-warning"
           />
         </Suspense>
         {cancel}

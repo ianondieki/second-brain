@@ -21,10 +21,21 @@ export interface StepUpFormProps {
   /** What the code is for (default: turning two-step sign-in off). */
   lead?: string;
   submitLabel?: string;
+  /** "primary" where the code step is the screen's main task (new recovery codes); turning off keeps "secondary". */
+  variant?: "primary" | "secondary";
+  /** The id of text the submit button should be read with (a warning about what it does). */
+  describedBy?: string;
 }
 
 /** A fresh second factor (POST /api/auth/step-up), then `onConfirmed` retries the action that asked for it. */
-export function StepUpForm({ onConfirmed, busyLabel, lead, submitLabel }: StepUpFormProps) {
+export function StepUpForm({
+  onConfirmed,
+  busyLabel,
+  lead,
+  submitLabel,
+  variant = "secondary",
+  describedBy,
+}: StepUpFormProps) {
   const t = useTranslations("security");
   const tv = useTranslations("validation");
   const te = useTranslations("errors");
@@ -77,7 +88,7 @@ export function StepUpForm({ onConfirmed, busyLabel, lead, submitLabel }: StepUp
         }}
         error={codeError}
       />
-      <SubmitButton variant="secondary" busy={busy}>
+      <SubmitButton variant={variant} busy={busy} aria-describedby={describedBy}>
         {busy ? busyLabel : (submitLabel ?? t("stepUpSubmit"))}
       </SubmitButton>
     </Form>

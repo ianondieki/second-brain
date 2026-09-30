@@ -369,7 +369,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
   // in progress and answers 409 totp_already_enabled when it committed (follow-up 7).
   const NOT_SHOWN =
     "Your recovery codes could not be shown. Keep the Bridge entry in your authenticator app: you need its codes " +
-    "to log in. Then get new recovery codes below.";
+    "to sign in. Then get new recovery codes below.";
   // A reload that finds it on says only "Two-step sign-in is on.", so this notice says now that in that case the
   // recovery codes were not shown and the app entry is the way in.
   const UNKNOWN =

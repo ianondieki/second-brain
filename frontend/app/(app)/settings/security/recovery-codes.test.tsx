@@ -153,6 +153,23 @@ describe("the 'on' screen", () => {
   });
 });
 
+describe("opening the form", () => {
+  it("fetches its code at the press and says it is loading meanwhile", async () => {
+    const lazy = await import("./lazy");
+    const load = vi.spyOn(lazy, "loadNewRecoveryCodes");
+    onScreen();
+    fireEvent.click(opener());
+    expect(load).toHaveBeenCalledTimes(1);
+    const loading = screen.queryByText("Loading…");
+    // The form may already be loaded by an earlier test; either the loading line or the form is on screen at once.
+    if (loading) expect(loading.getAttribute("role")).toBe("status");
+    else expect(screen.getByText("Your old recovery codes stop working as soon as the new ones are made.")).toBeTruthy();
+    await screen.findByText("Your old recovery codes stop working as soon as the new ones are made.");
+    expect(screen.queryByText("Loading…")).toBeNull();
+    load.mockRestore();
+  });
+});
+
 describe("getting new recovery codes with a password on file", () => {
   it("asks for the password first, with focus on it, and one task on screen", async () => {
     const { container } = onScreen({ required: false });
@@ -210,11 +227,18 @@ describe("getting new recovery codes with a password on file", () => {
 
   it("asks for a fresh authenticator code when the second factor is stale, then sends the same password again", async () => {
     answers({ [RENEW]: [answer(403, "step_up_required"), NEW_CODES], "/api/auth/step-up": [answer(204)] });
-    onScreen();
+    const { container } = onScreen();
     await submitWith("jacaranda");
     expect(await screen.findByText("To get new codes, enter the current code from your authenticator app.")).toBeTruthy();
     const code = screen.getByLabelText("Code from your app");
     await waitFor(() => expect(document.activeElement).toBe(code));
+    // The code step is this screen's main task: its button is the one primary action, read with the warning.
+    const confirm = screen.getByRole("button", { name: "Confirm and get new codes" });
+    expect(confirm.hasAttribute("data-primary")).toBe(true);
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
+    expect(document.getElementById(confirm.getAttribute("aria-describedby")!)?.textContent).toBe(
+      "Your old recovery codes stop working as soon as the new ones are made.",
+    );
     fireEvent.change(code, { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and get new codes" }));
 

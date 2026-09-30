@@ -15,7 +15,7 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
-import { EnrolmentSteps, loadEnrolmentSteps, NewRecoveryCodes, StepUpForm } from "./lazy";
+import { EnrolmentSteps, loadEnrolmentSteps, loadNewRecoveryCodes, NewRecoveryCodes, StepUpForm } from "./lazy";
 import { usePasswordState } from "./PasswordState";
 import { reveal } from "./reveal";
 import { Steps } from "./Steps";
@@ -85,6 +85,8 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
 
   /** Opens "Get new recovery codes": one task at a time, so turning off and the Password section step aside. */
   function openRenewal() {
+    // Fetch the form's code at the press, as setup does; a failed fetch surfaces through React.lazy.
+    loadNewRecoveryCodes().catch(() => undefined);
     setError(null);
     setStepUp(false);
     setRenewing(true);
@@ -225,7 +227,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             {t("recoveryTitle")}
           </h3>
           {renewing ? (
-            <Suspense fallback={null}>
+            <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
               <NewRecoveryCodes
                 email={email}
                 onClose={closeRenewal}

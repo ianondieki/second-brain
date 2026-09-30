@@ -10,7 +10,8 @@ export const loadEnrolmentSteps = () => import("./EnrolmentSteps");
 export const EnrolmentSteps = lazy(() => loadEnrolmentSteps().then((m) => ({ default: m.EnrolmentSteps })));
 
 /** "Get new recovery codes": the confirmation, the fresh code it may ask for, then the ten codes. */
-export const NewRecoveryCodes = lazy(() => import("./NewRecoveryCodes").then((m) => ({ default: m.NewRecoveryCodes })));
+export const loadNewRecoveryCodes = () => import("./NewRecoveryCodes");
+export const NewRecoveryCodes = lazy(() => loadNewRecoveryCodes().then((m) => ({ default: m.NewRecoveryCodes })));
 
 /** The fresh-code form that turning two-step sign-in off, or getting new recovery codes, may ask for. */
 export const StepUpForm = lazy(() => import("./StepUpForm").then((m) => ({ default: m.StepUpForm })));
