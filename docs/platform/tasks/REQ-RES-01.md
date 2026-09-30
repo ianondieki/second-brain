@@ -161,6 +161,70 @@ update the register's paths).
 | M24 | a stale running run still blocks its niche | `test_research_pipeline.py` |
 | M25 | a fresh running run no longer blocks its niche | `test_research_pipeline.py` |
 
+## Fix round 1 (reviewer CHANGES_REQUIRED at `30c249a`: two MAJORs, six MINORs)
+
+- **MAJOR 1, number scales** (`fbb07c7`). Any unknown scale used to be read as a bare number, so "Sh89m" passed on a
+  quote saying "89 percent". Now letters glued to a number are its scale (m, mn, b, bn, k, tn, pc and % normalised;
+  an unknown suffix such as "4G" is kept as `suffix:g` and matches only itself: fail closed); after a space the scale
+  words percent, per cent, percentage points, thousand, million, billion, trillion and their abbreviations count;
+  every (number, scale) of a card must appear in a cited quote, a bare number needing a bare one. Tests: the
+  reviewer's Sh89m, Sh89B, Sh89 thousand, 89k and Sh11m, plus 89 mn, percentage points, an unknown suffix, a bare
+  number against a scaled one, positives ("Sh15m" against ke-tel-003's "Sh15 million", "Sh11bn", "89%", "91pc"), and
+  the publish gate.
+- **MAJOR 2, hidden names and format characters** (`d13f77d`, `d803a84`). `collapse` normalises NFKC before
+  collapsing whitespace; `has_control` refuses C0/C1 controls and every format character (Cf: soft hyphen,
+  zero-width space and joiner, bidi overrides and isolates such as U+202E, BOM), refused, never repaired. NFKC maps
+  no code point into those sets (a test over every code point), so `has_control` checks the text as given. Aliases
+  match case-insensitively on the NFKC text with format characters ignored, a hyphen matching any dash (U+2010-U+2015,
+  U+2212), a space or nothing. Tests: `M‑Pesa` (U+2011), em dash, minus, "M Pesa", "MPESA", lower-case `safaricom`,
+  full-width letters, `Safari​com` (ZWSP), soft hyphen, ZWJ, and bidi and format characters in every field, at the
+  draft checks and at the publish gate (the definer stores Cf characters, it refuses only C0 and DEL). The saved
+  excerpts are NFKC-stable (tested). The bare "Treasury" alias is dropped (a common lower-case word).
+- **(a)** `17c9c52`: with the shared test clock 366 days ahead (its limit), a card citing only ke-tel-002 and
+  ke-tel-004 is refused at approval with 409 `publish_check_failed` (`sources_archived`) and approved on today's
+  clock; kills the archived-filter mutant (Mm1).
+- **(b)** `e933a86`: `InputField.public` is keyword-only; the AST guard also flags `InputField(**…)` and
+  `replace(**…)`. Every caller already passed it by keyword. (This touches `bridge/llm/types.py`.)
+- **(c)** `ef69558`: `start_run` takes `pg_advisory_xact_lock('research-run:<niche id>:<country>')` before counting,
+  so two admins starting a niche at once get one run and a 409 (tested with two concurrent sessions);
+  `execute_run` stops a run older than `stale_run_minutes` (`stop_reason = 'stale'`) without calling the model.
+- **(d)** `7611847`: `GET /api/problems/{id}` returns `ai_generated = row.ai_generated and not seeded_example`.
+- **(e)** `fbb07c7`: named organisations are part of the numbers check.
+- **(f)** `7611847`: the synthesis docstring names `test_synthesis.py`.
+
+Fix-round mutations (each applied alone by a private script that restores the original bytes; all killed):
+
+| # | Mutation | Killed by |
+|---|---|---|
+| MA1 | glued letters not read as a scale | `test_checks.py` |
+| MA2 | `m` not million | `test_checks.py` (the Sh15m positive) |
+| MA3 | a bare number matches any scale (the old rule) | `test_checks.py` |
+| MA4 | an unknown glued suffix read as bare | `test_checks.py` (4G) |
+| MA5 | `k` mapped to percent | `test_checks.py` |
+| MB1 | no NFKC in `collapse` | `test_checks.py` |
+| MB2 | format characters allowed | `test_checks.py`, `test_research_api.py` |
+| MB3 | aliases case-sensitive | `test_checks.py`, `test_research_api.py` |
+| MB4 | a hyphen matches only `-` | `test_checks.py`, `test_research_api.py` |
+| MB5 | format characters not ignored in detection | `test_checks.py` |
+| Mm1 | archived sources count at approval | `test_research_api.py` |
+| Mm2 | no niche lock at start | `test_research_pipeline.py` |
+| Mm3 | a stale run still runs | `test_research_pipeline.py` |
+| Mm4 | a seeded card reported `ai_generated` | `test_demo_seed.py` |
+| Mm5 | named organisations outside the numbers check | `test_checks.py` |
+| Mm6 | `public` positional again | `test_synthesis.py` |
+
+With M1-M25 re-run on the fixed code: 41 of 41 killed. One mutant, NFKC inside `has_control`, was equivalent
+(proved over every code point) and the NFKC call there was removed.
+
+## Commit sizes
+
+CLAUDE.md asks for commits of about 300 changed lines. Over it: `f1e7fd6` (+856: loader, policy and their tests),
+`9b9f511` (+544, checks and tests), `838bc08` (+1129: pipeline, job, test rig and tests), `caf7230` (+903: review,
+admin API and its tests), `a62d96a` (+330), `eda1086` (+421: seed module and tests), and `816a339` (+2924/-289,
+generated `openapi.json` and `schema.d.ts` only). Each is one concern with its tests; the generated files are
+regenerated, never hand-edited. The fix-round commits are 12-150 lines. `9b9f511` and `eda1086` went in with a lint
+and a mypy error, fixed in `047b5e5` and `1de8ff5`.
+
 ## Deviations and notes
 
 - No search or fetch at runtime (PLAN §8 P11): the spec's planner, web tools, Haiku extraction batch, dedupe and
