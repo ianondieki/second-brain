@@ -1,7 +1,8 @@
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { Section } from "@/components/ui/Section";
 
 import { Chip } from "./Chip";
 import {
@@ -32,23 +33,6 @@ const MILESTONE_CHIP: Record<MilestoneState, ChipKind> = {
   CHANGES_REQUESTED: "onHold",
 };
 
-function Heading({ id, children }: { id: string; children: ReactNode }) {
-  return (
-    <h2 id={id} className="text-lg text-ink">
-      {children}
-    </h2>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 sm:contents">
-      <dt className="text-sm font-medium text-ink-soft sm:pt-0.5">{label}</dt>
-      <dd className="min-w-0 [overflow-wrap:anywhere] text-ink">{children}</dd>
-    </div>
-  );
-}
-
 /** "KES 250,000" */
 export function Kes({ minor }: { minor: number }) {
   const t = useTranslations("tracker");
@@ -63,8 +47,7 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
   const sorted = [...detail.agreements].sort((a, b) => b.version - a.version);
   const [latest, ...earlier] = sorted;
   return (
-    <section aria-labelledby="agreement-heading">
-      <Heading id="agreement-heading">{t("agreement.title")}</Heading>
+    <Section title={t("agreement.title")} headingId="agreement-heading">
       <AgreementVersion agreement={latest} endorsements={detail.endorsements} />
       {earlier.length > 0 ? (
         <details className="mt-4 border-t border-line pt-3">
@@ -72,20 +55,28 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
             {t("agreement.earlier", { count: earlier.length })}
           </summary>
           {earlier.map((agreement) => (
-            <AgreementVersion key={agreement.id} agreement={agreement} endorsements={[]} />
+            <AgreementVersion key={agreement.id} agreement={agreement} endorsements={[]} className="mt-3" />
           ))}
         </details>
       ) : null}
-    </section>
+    </Section>
   );
 }
 
-function AgreementVersion({ agreement, endorsements }: { agreement: Agreement; endorsements: Endorsement[] }) {
+function AgreementVersion({
+  agreement,
+  endorsements,
+  className,
+}: {
+  agreement: Agreement;
+  endorsements: Endorsement[];
+  className?: string;
+}) {
   const t = useTranslations("tracker");
   const eat = useEat();
   const status: ChipKind = agreement.status === "signed" ? "completed" : agreement.status === "final" ? "current" : "pending";
   return (
-    <article data-agreement={agreement.status} className="mt-3 border-t border-line pt-4">
+    <article data-agreement={agreement.status} className={cn("border-t border-line pt-4", className)}>
       <h3 className="flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink">
         {t("agreement.version", { version: agreement.version })}
         <Chip kind={status}>{t(`agreement.status.${agreement.status}`)}</Chip>
@@ -93,19 +84,19 @@ function AgreementVersion({ agreement, endorsements }: { agreement: Agreement; e
       <p className="mt-1 text-sm text-ink-soft">
         {t(`agreement.draftedBy.${agreement.drafted_by}`, { when: eat(agreement.created_at) })}
       </p>
-      <dl className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-[minmax(10rem,auto)_1fr]">
-        <Field label={t("agreement.ipTerms")}>
+      <DescriptionList className="mt-3">
+        <Description label={t("agreement.ipTerms")}>
           {agreement.ip_terms ? t(`ipTerms.${agreement.ip_terms}`) : t("agreement.notGiven")}
-        </Field>
-        <Field label={t("agreement.deemed")}>
+        </Description>
+        <Description label={t("agreement.deemed")}>
           {agreement.deemed_acceptance_days === null
             ? t("agreement.notGiven")
             : agreement.deemed_acceptance_days === 0
               ? t("agreement.deemedNever")
               : t("agreement.deemedDays", { count: agreement.deemed_acceptance_days })}
-        </Field>
-        <Field label={t("agreement.exclusivity")}>{agreement.exclusivity ?? t("agreement.noExclusivity")}</Field>
-      </dl>
+        </Description>
+        <Description label={t("agreement.exclusivity")}>{agreement.exclusivity ?? t("agreement.noExclusivity")}</Description>
+      </DescriptionList>
       {agreement.milestones.length > 0 ? (
         <>
           <h4 className="mt-5 font-semibold text-ink">{t("milestone.title")}</h4>
@@ -181,9 +172,8 @@ export function Signatures({ signatures }: { signatures: Signature[] }) {
   const t = useTranslations("tracker");
   if (signatures.length === 0) return null;
   return (
-    <section aria-labelledby="signatures-heading">
-      <Heading id="signatures-heading">{t("signature.title")}</Heading>
-      <ul className="mt-3 flex flex-col">
+    <Section title={t("signature.title")} headingId="signatures-heading">
+      <ul className="flex flex-col">
         {signatures.map((s) => (
           <li key={s.id} data-signature={s.document_kind} className="border-t border-line py-3">
             <p className="font-semibold text-ink">{t(`document.${s.document_kind}`)}</p>
@@ -201,7 +191,7 @@ export function Signatures({ signatures }: { signatures: Signature[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 
@@ -210,10 +200,8 @@ export function Payments({ payments }: { payments: Payment[] }) {
   const t = useTranslations("tracker");
   if (payments.length === 0) return null;
   return (
-    <section aria-labelledby="payments-heading">
-      <Heading id="payments-heading">{t("payment.title")}</Heading>
-      <p className="mt-1 text-sm text-ink-soft">{t("payment.lead")}</p>
-      <ul className="mt-3 flex flex-col">
+    <Section title={t("payment.title")} headingId="payments-heading" description={t("payment.lead")}>
+      <ul className="flex flex-col">
         {payments.map((p) => {
           const confirmed = p.confirmed_at !== null;
           return (
@@ -226,16 +214,16 @@ export function Payments({ payments }: { payments: Payment[] }) {
                   {confirmed ? t("payment.confirmed") : t("payment.recorded")}
                 </Chip>
               </p>
-              <dl className="mt-2 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-[minmax(10rem,auto)_1fr]">
-                <Field label={t("payment.method")}>{t(`paymentMethod.${p.method}`)}</Field>
-                {p.reference ? <Field label={t("payment.reference")}>{p.reference}</Field> : null}
-                <Field label={t("payment.paidOn")}>
+              <DescriptionList dense className="mt-2">
+                <Description label={t("payment.method")}>{t(`paymentMethod.${p.method}`)}</Description>
+                {p.reference ? <Description label={t("payment.reference")}>{p.reference}</Description> : null}
+                <Description label={t("payment.paidOn")}>
                   <Day day={p.paid_on} />
-                </Field>
-                <Field label={t("payment.recordedAt")}>
+                </Description>
+                <Description label={t("payment.recordedAt")}>
                   <Eat iso={p.recorded_at} />
-                </Field>
-                <Field label={t("payment.confirmedAt")}>
+                </Description>
+                <Description label={t("payment.confirmedAt")}>
                   {p.confirmed_at ? (
                     <>
                       <Eat iso={p.confirmed_at} />
@@ -248,13 +236,13 @@ export function Payments({ payments }: { payments: Payment[] }) {
                   ) : (
                     <span className="text-ink-soft">{t("payment.notConfirmed")}</span>
                   )}
-                </Field>
-              </dl>
+                </Description>
+              </DescriptionList>
             </li>
           );
         })}
       </ul>
-    </section>
+    </Section>
   );
 }
 
@@ -264,22 +252,21 @@ export function ContactPerson({ detail }: { detail: Pick<Detail, "contact" | "my
   const contact = detail.contact;
   if (!contact) return null;
   return (
-    <section aria-labelledby="contact-heading">
-      <Heading id="contact-heading">{t("contact.title")}</Heading>
-      <dl className={cn("mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-[minmax(10rem,auto)_1fr]")}>
-        <Field label={t("contact.person")}>
+    <Section title={t("contact.title")} headingId="contact-heading">
+      <DescriptionList>
+        <Description label={t("contact.person")}>
           {contact.name ?? t("endorsements.platform")}
           {contact.role ? (
             <span className="ml-2 text-sm text-ink-soft">
               {ROLES.has(contact.role) ? t(`role.${contact.role as Endorsement["role"]}`) : contact.role}
             </span>
           ) : null}
-        </Field>
-        <Field label={t("contact.channel")}>{t(`channel.${contact.channel}`)}</Field>
-        <Field label={t("contact.by")}>
+        </Description>
+        <Description label={t("contact.channel")}>{t(`channel.${contact.channel}`)}</Description>
+        <Description label={t("contact.by")}>
           <Day day={contact.contact_by} />
-        </Field>
-      </dl>
-    </section>
+        </Description>
+      </DescriptionList>
+    </Section>
   );
 }

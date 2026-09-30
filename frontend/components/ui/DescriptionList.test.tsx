@@ -48,4 +48,15 @@ describe("DescriptionList", () => {
     );
     expect(container.querySelector("dl")!.className).toContain("[&_dd]:tabular-nums");
   });
+
+  it("sits closer and smaller inside a list row when dense", () => {
+    const { container } = render(
+      <DescriptionList dense>
+        <Description label="Method">M-Pesa</Description>
+      </DescriptionList>,
+    );
+    const classes = container.querySelector("dl")!.className.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["gap-y-2", "text-sm"]));
+    expect(classes).not.toContain("gap-y-4");
+  });
 });

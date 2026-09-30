@@ -1,6 +1,8 @@
 import { useTranslations } from "next-intl";
 
-import { cn } from "@/components/ui/cn";
+import { Badge } from "@/components/ui/Badge";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { Section } from "@/components/ui/Section";
 
 import { ChipMark } from "./Chip";
 import { endorsementRows, type Detail, type Endorsement, type Party } from "./model";
@@ -16,18 +18,15 @@ export function Endorsements({ detail }: { detail: Pick<Detail, "endorsements" |
   const t = useTranslations("tracker");
   const rows = endorsementRows(detail);
   return (
-    <section aria-labelledby="endorsements-heading">
-      <h2 id="endorsements-heading" className="text-lg text-ink">
-        {t("endorsements.title")}
-      </h2>
-      <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+    <Section title={t("endorsements.title")} headingId="endorsements-heading">
+      <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         {PARTIES.map((party) => (
           <li key={party}>
             <EndorsementRow party={party} endorsement={rows[party]} />
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 
@@ -38,26 +37,23 @@ function EndorsementRow({ party, endorsement }: { party: Party; endorsement: End
     <article
       data-endorsement={party}
       data-endorsed={done ? "true" : "false"}
-      className={cn("h-full border-t-2 pt-3", done ? "border-ok" : "border-line")}
+      className="h-full border-t border-line pt-3"
     >
       <h3 className="font-semibold text-ink">{t(`endorsements.by.${party}`)}</h3>
-      <p className={cn("mt-1 flex items-center gap-1.5 text-sm font-semibold", done ? "text-ok" : "text-ink-soft")}>
-        <ChipMark kind={done ? "completed" : "pending"} className="size-4" />
-        {done ? t("endorsements.endorsed") : t("endorsements.notYet")}
+      <p className="mt-1">
+        <Badge tone={done ? "ok" : "neutral"} icon={<ChipMark kind={done ? "completed" : "pending"} />}>
+          {done ? t("endorsements.endorsed") : t("endorsements.notYet")}
+        </Badge>
       </p>
       {endorsement ? (
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-          <dt className="text-ink-soft">{t("endorsements.name")}</dt>
-          <dd className="min-w-0 [overflow-wrap:anywhere] text-ink">{endorsement.name ?? t("endorsements.platform")}</dd>
-          <dt className="text-ink-soft">{t("endorsements.role")}</dt>
-          <dd className="text-ink">{t(`role.${endorsement.role}`)}</dd>
-          <dt className="text-ink-soft">{t("endorsements.time")}</dt>
-          <dd className="text-ink">
+        <DescriptionList dense className="mt-2">
+          <Description label={t("endorsements.name")}>{endorsement.name ?? t("endorsements.platform")}</Description>
+          <Description label={t("endorsements.role")}>{t(`role.${endorsement.role}`)}</Description>
+          <Description label={t("endorsements.time")}>
             <Eat iso={endorsement.endorsed_at} />
-          </dd>
-          <dt className="text-ink-soft">{t("endorsements.method")}</dt>
-          <dd className="text-ink">{t(`method.${endorsement.method}`)}</dd>
-        </dl>
+          </Description>
+          <Description label={t("endorsements.method")}>{t(`method.${endorsement.method}`)}</Description>
+        </DescriptionList>
       ) : null}
     </article>
   );
