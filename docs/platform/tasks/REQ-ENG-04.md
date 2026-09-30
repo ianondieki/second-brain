@@ -17,13 +17,15 @@
 ## Scope (docs/spec/06 6.9 stage 0; REQUIREMENTS.md §5 N17)
 
 **Express interest: `POST /api/orgs/{org_id}/interest`** with `{proposal_id, origin (org_agent_match | org_browse),
-match_id?, contact_user_id, channel, contact_by}` (201, the engagement as the signatory now sees it). Refusals in
+match_id?, contact_user_id, channel, contact_by}` (201, the engagement as the signatory now sees it: the developer as
+the version's pseudonymous handle, no developer id, until the developer accepts). Refusals in
 order: a non-member 404 (the organisation dependency); not a signatory 403 `role_required` (a reviewer, an owner or an
 admin without the signatory role; AC-TRACK-8); no second factor within 12 h 403 `step_up_required` (ADR-002); the
 organisation not E2 403 `org_not_e2` (AC-SCOUT-8: until E2), suspended or delisted 403 `org_unavailable`;
 `org_agent_match` without `match_id` 422 `match_required`, `org_browse` with one 422 `unexpected_match`; a match that is
-not the organisation's or not of that proposal 404; a proposal that is not published and clear 404; the developer a
-member of the organisation 409 `own_organisation`; an engagement for the pair 409 `engagement_exists`; a contact-by date
+not the organisation's or not of that proposal 404; a proposal that is not published and clear 404; the developer an
+active member of the organisation the same 404 (no oracle telling an employer an author is its member; the refusal is
+audited, condition only, as a system event on the global chain: `tasks/REQ-SCOUT-02.md` deviation 8); an engagement for the pair 409 `engagement_exists`; a contact-by date
 outside today to 5 BD 422 `invalid_contact_by`; a contact who is not an active member 422 `invalid_contact`. Then one
 transaction: the engagement (`ORG_INTEREST`, the current registered version, the named contact, the stage's 5 BD
 deadline) whose genesis event names the signatory, its N17 notification job, an `org_interest` signal and the
@@ -40,7 +42,8 @@ proposal stays private unless they share it), mutable (the `n17` email preferenc
 only (403 `not_your_action`; a non-party 404), with a fresh second factor (403 `step_up_required`), on an
 organisation-origin engagement (409 `share_not_applicable` for a tagged one: its disclosure policy applies) that has not
 ended (409 `engagement_ended`), for a published, clear proposal of theirs. Idempotent: a live grant is returned as it
-is; an organisation's pending request is activated (keeping its source); else an active tier-2 grant with source
+is; an organisation's pending request is activated (keeping its source, with `counts_as_unlock` and `billing_month`
+set as for a new grant, on the shared clock); else an active tier-2 grant with source
 `org_interest`, `counts_as_unlock` true unless the developer tagged the organisation, `billing_month` the Nairobi month
 (REQ-BIL-03 counts it later). Audited (`tier2.grant_created` / `tier2.grant_activated` with the engagement); the
 organisation's people on the engagement (the signatory who expressed interest and the named contact) are told in-app.
@@ -52,14 +55,18 @@ The grant opens nothing on its own: `can_view_tier2` still needs every other con
   (scout match; reviewer and owner 403; N17 in-app and email; accept with step-up; the developer's endorsement of stage
   0; EM2 exactly once; the signal and audit event), `::test_the_same_flow_from_a_browse_teaser` (origin `org_browse`,
   decline: no EM2), `::test_refusals`, `::test_an_e1_organisation_gets_403_until_e2` (AC-SCOUT-8),
-  `::test_the_developer_may_not_be_a_member`.
+  `::test_the_developer_may_not_be_a_member` (the 404 identical to an unavailable proposal; the audit row no member
+  reads).
+- The pseudonymous developer (docs/spec/06 6.1; P10 review MAJOR 1): `integration/engagements/test_pseudonymous_developer.py`
+  (the 201 body, a viewer's detail and list, the History on a stage-0 decline, a pitched engagement at SUBMITTED and
+  UNDER_REVIEW; the name only from INTEREST_CONFIRMED), `integration/reminders/test_facts.py` (the org digest).
 - AC-TRACK-8/b: `integration/matching/test_stage0_from_digest.py::test_stage_0_from_a_real_digest` (from the EM3 link).
 - The share: `integration/engagements/test_share_tier2.py` (grant, idempotence, `app_tier2_granted` opens only after
   it, the in-app notice, EM2's sentence; developer only; step-up; tagged and ended engagements; an organisation's
   request activated).
 - N17: `unit/notifications/test_n17.py`, `unit/engagements/test_notify.py::test_an_organisations_interest_tells_the_developer_n17`.
 
-Mutation proofs E1-E11: `tasks/REQ-SCOUT-02.md`.
+Mutation proofs E1-E11, and the fix round's M1a, M1b, Fa1-Fa3, Fb, Fj: `tasks/REQ-SCOUT-02.md`.
 
 ## Follow-ups
 
@@ -68,3 +75,6 @@ Mutation proofs E1-E11: `tasks/REQ-SCOUT-02.md`.
 2. Stage 0's expiry (`EXPIRED`, `NO_DEV_RESPONSE` at 5 BD) and the org's status email on the developer's answer come
    with the side states after the prototype (REQUIREMENTS.md §7).
 3. Revoking a manual grant (the owner) comes after the prototype, as for P3's grants.
+4. Frontend: the org tracker shows `developer_name`, which now carries the handle until INTEREST_CONFIRMED;
+   `developer_named` (new) tells the two apart if a screen wants to label the handle; `developer_id` is null for the
+   organisation until then (no current screen reads it).
