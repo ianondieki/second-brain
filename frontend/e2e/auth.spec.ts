@@ -1,8 +1,10 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { pathOf, waitForSignInLink } from "./support/mailpit";
 import { totp } from "./support/totp";
+import { signUpDeveloper } from "./support/accounts";
+import { loginReturningTo } from "./support/login";
+import { checkScreen as checkPageRules } from "./support/screen";
 
 // X1-1 (REQ-AUTH-01): signup, email link, password login and TOTP against the compose stack (`make dev`), in the
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
@@ -20,21 +22,12 @@ function uniqueEmail(label: string) {
 }
 
 /**
- * The page-level rules every auth screen keeps: axe finds nothing serious or critical (AC-UX-4), at most one
- * primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, checked at 360 px in the mobile project).
+ * The page-level rules every auth screen keeps: axe finds no violation of any impact (P16-C1 tightened this from
+ * serious/critical, AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, checked at
+ * 360 px in the mobile project). The shared helper, strict.
  */
 async function checkScreen(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"])
-    .analyze();
-  const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-  expect(serious, JSON.stringify(serious.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })), null, 2))
-    .toEqual([]);
-  expect(await page.locator("[data-primary]").count()).toBeLessThanOrEqual(1);
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow, "horizontal scroll").toBeLessThanOrEqual(0);
+  await checkPageRules(page, { strict: true });
 }
 
 /** Forms stay inert until React hydrates (components/ui/Form.tsx); wait for that before typing and submitting. */
@@ -62,10 +55,12 @@ async function signOut(page: Page) {
 }
 
 test("signed-out visits to signed-in pages go to the login page", async ({ page }) => {
-  for (const path of ["/dev", "/org", "/settings/security", "/auth/mfa"]) {
+  for (const path of ["/dev", "/org", "/settings/security"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path)); // back there after signing in (P16-C1)
   }
+  await page.goto("/auth/mfa");
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 test("landing, login and an unusable link meet the page rules", async ({ page }) => {
@@ -347,4 +342,35 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
   await expect(page.getByText("Two-step sign-in is on.")).toBeVisible();
+});
+
+// P16-C1 (P16-B review MINOR 3, P16-A open item 2): the landing and login pages send a signed-in person on with a
+// server-side redirect, to the return path when it is one of this site's signed-in pages, else home; never elsewhere.
+test("the landing and login pages send a signed-in person home, or to a safe return path only", async ({ page, baseURL }) => {
+  await signUpDeveloper(page, "Otieno Were");
+  const target = async (path: string) => {
+    const response = await page.request.get(path, { maxRedirects: 0 });
+    expect(response.status(), path).toBe(307);
+    const location = new URL(response.headers()["location"] ?? "", baseURL);
+    expect(location.origin, path).toBe(new URL(baseURL!).origin);
+    return `${location.pathname}${location.search}`;
+  };
+  expect(await target("/")).toBe("/dev");
+  expect(await target("/login")).toBe("/dev");
+  expect(await target("/signup")).toBe("/dev");
+  expect(await target("/login?next=%2Fsettings%2Fnotifications")).toBe("/settings/notifications");
+  expect(await target("/login?next=%2Fdev%2Fdiscover%3Fview%3Dgap")).toBe("/dev/discover?view=gap");
+  for (const attempt of [
+    "//evil.example",
+    "https://evil.example/dev",
+    "/\\evil.example",
+    "/%2F%2Fevil.example",
+    "%2F%2Fevil.example",
+    "/dev//evil.example",
+    "/dev/../../evil.example",
+    "javascript:alert(1)",
+    "/login",
+  ]) {
+    expect(await target(`/login?next=${encodeURIComponent(attempt)}`), attempt).toBe("/dev");
+  }
 });

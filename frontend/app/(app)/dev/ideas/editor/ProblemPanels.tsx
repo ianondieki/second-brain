@@ -69,8 +69,8 @@ export function ProblemPanels(props: ProblemPanelsProps) {
 
   function link(problem: ProblemCard) {
     if (full || linkedIds.has(problem.id)) return;
-    const { id: problemId, title, source, label, niche: problemNiche } = problem;
-    onLinked([...linked, { id: problemId, title, source, label, niche: problemNiche }]);
+    const { id: problemId, title, source, label, niche: problemNiche, seeded_example, published_at } = problem;
+    onLinked([...linked, { id: problemId, title, source, label, niche: problemNiche, seeded_example, published_at }]);
   }
 
   return (

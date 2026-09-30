@@ -42,11 +42,11 @@ function ownerValue(sql: string, email: string): string {
  * E2E_SHOTS_DIR, a screenshot at 375 px (mobile) or 1440 px (desktop).
  */
 async function checkAndShoot(page: Page, info: TestInfo, name: string) {
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
   const size = page.viewportSize()!;
   const width = info.project.name.startsWith("mobile") ? 375 : 1440;
   await page.setViewportSize({ width, height: size.height });
-  if (width !== size.width) await checkScreen(page);
+  if (width !== size.width) await checkScreen(page, { strict: true });
   const dir = process.env.E2E_SHOTS_DIR;
   if (dir) {
     mkdirSync(dir, { recursive: true });

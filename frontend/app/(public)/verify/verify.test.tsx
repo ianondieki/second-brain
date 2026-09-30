@@ -82,8 +82,9 @@ describe("VerifyRecord", () => {
     const fingerprint = container.querySelector("[data-fingerprint]");
     expect(fingerprint?.getAttribute("data-fingerprint")).toBe(HASH);
     expect(fingerprint?.textContent).toBe(HASH); // copies as one string, no spaces
-    expect(screen.getByText(/29 September 2026 at 14:06:25 Nairobi time/)).toBeTruthy();
-    expect(screen.getByText(/11:06:25 UTC/)).toBeTruthy();
+    // The product's one format to the second, for both zones (P16-C1 fix round 1; no "Sept", no long form).
+    expect(screen.getByText("29 Sep 2026, 14:06:25 Nairobi time")).toBeTruthy();
+    expect(screen.getByText("29 Sep 2026, 11:06:25 UTC")).toBeTruthy();
     expect(container.querySelector("time")?.getAttribute("dateTime")).toBe(RECORD.timestamp);
     const terms = screen.getAllByRole("term").map((term) => term.textContent);
     expect(terms).toEqual(["Timestamp", "Timestamp serial number", "Signing key ID", "Signature (Ed25519)"]);

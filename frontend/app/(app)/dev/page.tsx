@@ -7,11 +7,14 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementRow } from "@/components/tracker/EngagementRow";
+import { Badge } from "@/components/ui/Badge";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { cn } from "@/components/ui/cn";
-import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeFor, needsMfaSetup } from "@/lib/auth/routing";
 
@@ -38,7 +41,7 @@ const ENGAGEMENTS_PATH = "/dev/engagements";
  * tracker, then the others; then their latest ideas. "New proposal" is the screen's one primary action (a button, not
  * a nav item); with no engagements yet, an empty state points to My ideas. The two-step sign-in status stays, since
  * signing and payments need it. "Recommended for you" (P12) follows what needs the developer; the reminder summary
- * comes with P6's in-app route.
+ * comes with P6's in-app route. Composed from the design system: PageHeader, Sections of RowLists, Badges.
  */
 export default async function DeveloperHome() {
   const me = await requireMe();
@@ -51,98 +54,80 @@ export default async function DeveloperHome() {
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
   const MfaIcon = mfa === "on" ? CheckIcon : mfa === "required" ? AlertIcon : InfoIcon;
 
+  const rowHref = (id: string) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}`;
+
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="home" />} wide>
-      <div className="flex max-w-3xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
-            {th("title", { name: me.user.display_name })}
-          </h1>
-          <p className="mt-2 text-ink-soft">{t("lead")}</p>
-        </div>
-        <ButtonLink href={NEW_PATH} variant="primary" className="shrink-0">
-          <PlusIcon />
-          {t("newProposal")}
-        </ButtonLink>
+      <div className="max-w-3xl">
+        <PageHeader
+          title={th("title", { name: me.user.display_name })}
+          lead={t("lead")}
+          action={
+            <ButtonLink href={NEW_PATH} variant="primary">
+              <PlusIcon />
+              {t("newProposal")}
+            </ButtonLink>
+          }
+        />
       </div>
 
-      <div className="mt-10 flex max-w-3xl flex-col gap-10">
+      <div className="mt-10 flex max-w-3xl flex-col gap-12">
         {engagements.length === 0 ? (
           <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/ideas" />
         ) : null}
 
         {waiting.length > 0 ? (
-          <section aria-labelledby="home-needs-you" data-home="needs-you">
-            <h2 id="home-needs-you" className="text-lg text-ink">
-              {t("needsYou")}
-            </h2>
-            <ul className="mt-2 border-b border-line">
+          <Section title={t("needsYou")} headingId="home-needs-you" data-home="needs-you">
+            <RowList>
               {waiting.map((item) => (
-                <li key={item.id}>
-                  <EngagementRow item={item} mine="developer" href={`${ENGAGEMENTS_PATH}/${encodeURIComponent(item.id)}`} />
-                </li>
+                <EngagementRow key={item.id} item={item} mine="developer" href={rowHref(item.id)} />
               ))}
-            </ul>
-          </section>
+            </RowList>
+          </Section>
         ) : null}
 
         <RecommendedForYou state={recommendationsState(recommended)} />
 
         {others.length > 0 ? (
-          <section aria-labelledby="home-others" data-home="others">
-            <h2 id="home-others" className="text-lg text-ink">
-              {t("others")}
-            </h2>
-            <ul className="mt-2 border-b border-line">
+          <Section
+            title={t("others")}
+            headingId="home-others"
+            data-home="others"
+            link={{ href: ENGAGEMENTS_PATH, label: t("allEngagements") }}
+          >
+            <RowList>
               {others.slice(0, OTHERS_SHOWN).map((item) => (
-                <li key={item.id}>
-                  <EngagementRow item={item} mine="developer" href={`${ENGAGEMENTS_PATH}/${encodeURIComponent(item.id)}`} />
-                </li>
+                <EngagementRow key={item.id} item={item} mine="developer" href={rowHref(item.id)} />
               ))}
-            </ul>
-            <Link href={ENGAGEMENTS_PATH} className={cn(standaloneLinkClass, "mt-2")}>
-              {t("allEngagements")}
-            </Link>
-          </section>
+            </RowList>
+          </Section>
         ) : null}
 
         {ideas.length > 0 ? (
-          <section aria-labelledby="home-ideas" data-home="ideas">
-            <h2 id="home-ideas" className="text-lg text-ink">
-              {t("ideasTitle")}
-            </h2>
-            <ul className="mt-2 border-b border-line">
+          <Section
+            title={t("ideasTitle")}
+            headingId="home-ideas"
+            data-home="ideas"
+            link={{ href: "/dev/ideas", label: t("allIdeas") }}
+          >
+            <RowList>
               {ideas.slice(0, IDEAS_SHOWN).map((item) => (
-                <li key={item.id}>
-                  <IdeaRow item={item} headingLevel={3} />
-                </li>
+                <IdeaRow key={item.id} item={item} headingLevel={3} />
               ))}
-            </ul>
-            <Link href="/dev/ideas" className={cn(standaloneLinkClass, "mt-2")}>
-              {t("allIdeas")}
-            </Link>
-          </section>
+            </RowList>
+          </Section>
         ) : null}
 
-        <section aria-labelledby="home-security" className="border-t border-line pt-6">
-          <h2 id="home-security" className="text-base font-semibold text-ink">
-            {t("security")}
-          </h2>
-          <p
-            className={cn(
-              "mt-2 flex items-start gap-2",
-              mfa === "on" && "text-ok",
-              mfa === "required" && "text-error",
-              mfa === "off" && "text-ink",
-            )}
-          >
-            <MfaIcon className="mt-0.5 size-5 shrink-0" />
-            <span>{mfa === "on" ? th("mfaOn") : mfa === "required" ? th("mfaRequired") : th("mfaOff")}</span>
-          </p>
-          <Link href="/settings/security" className={standaloneLinkClass}>
-            {me.mfa.enrolled ? th("manage") : th("setUp")}
-          </Link>
-        </section>
+        <Section title={t("security")} headingId="home-security" data-home="security">
+          <div className="flex flex-col items-start gap-1">
+            <Badge tone={mfa === "on" ? "ok" : mfa === "required" ? "error" : "neutral"} icon={<MfaIcon />}>
+              {mfa === "on" ? th("mfaOn") : mfa === "required" ? th("mfaRequired") : th("mfaOff")}
+            </Badge>
+            <Link href="/settings/security" className={standaloneLinkClass}>
+              {me.mfa.enrolled ? th("manage") : th("setUp")}
+            </Link>
+          </div>
+        </Section>
       </div>
     </SignedInShell>
   );

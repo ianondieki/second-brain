@@ -137,4 +137,11 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     render(await resolve(await ProblemCard({ problem: { ...problem, seeded_example: false, ai_generated: true } })));
     expect(document.querySelector("[data-label]")?.textContent).toBe("AI-drafted, human-reviewed on 30 Sep 2026");
   });
+
+  it("shows the label as a neutral badge: the accent is for acting, not for provenance (P16-B ux-review)", async () => {
+    render(await resolve(await ProblemCard({ problem })));
+    const classes = document.querySelector("[data-label]")!.className.split(" ");
+    expect(classes).toContain("text-ink-soft");
+    expect(classes).not.toContain("text-jacaranda");
+  });
 });

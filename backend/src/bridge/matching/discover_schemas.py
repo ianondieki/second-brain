@@ -17,7 +17,6 @@ class DiscoverProblem(ProblemRef):
     statement: str
     country: str
     county_code: str | None
-    published_at: datetime | None
 
 
 class DiscoverSource(BaseModel):

@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { IntlScope } from "@/components/IntlScope";
-import { buttonClass } from "@/components/ui/Button";
+import { buttonClass, primaryMark } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { TextField } from "@/components/ui/TextField";
 
 import { normaliseCertId } from "./certificate";
@@ -32,9 +33,8 @@ export default async function VerifyPage({ searchParams }: PageProps<"/verify">)
 
   return (
     <VerifyShell>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead")}</p>
-      <form method="get" action="/verify" noValidate className="mt-6 flex max-w-md flex-col gap-5">
+      <PageHeader title={t("title")} lead={t("lead")} />
+      <form method="get" action="/verify" noValidate className="mt-8 flex max-w-md flex-col gap-5">
         <TextField
           id="cert-id"
           name="id"
@@ -50,13 +50,14 @@ export default async function VerifyPage({ searchParams }: PageProps<"/verify">)
           autoFocus={invalid}
         />
         <div>
-          <button type="submit" data-primary="" className={buttonClass("primary")}>
+          {/* A plain GET form on a server page: the Button component's click handler cannot cross to the browser. */}
+          <button type="submit" className={buttonClass("primary")} {...primaryMark("primary")}>
             {t("submit")}
           </button>
         </div>
       </form>
 
-      <div className="mt-12 border-t border-line pt-8">
+      <div className="mt-12">
         <IntlScope namespaces={["verifyFile"]}>
           <FileCheck />
         </IntlScope>

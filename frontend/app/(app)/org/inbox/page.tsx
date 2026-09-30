@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RowList } from "@/components/ui/RowList";
@@ -18,6 +16,7 @@ import { matchesHref } from "../scout";
 import { InboxRow } from "./InboxRow";
 import { InboxTabs, inboxTab } from "./InboxTabs";
 import { ScoutMatches } from "./matches/ScoutMatches";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("inbox");
@@ -178,16 +177,16 @@ async function InboxList({
       {cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
           {cursor ? (
-            <Link href={newest} className={standaloneLinkClass}>
+            <StandaloneLink href={newest}>
               {t("newestPage")}
-            </Link>
+            </StandaloneLink>
           ) : (
             <span />
           )}
           {page.next_cursor ? (
-            <Link href={inboxHref(memberships, org.org_id, page.next_cursor)} className={standaloneLinkClass}>
+            <StandaloneLink href={inboxHref(memberships, org.org_id, page.next_cursor)}>
               {t("older")}
-            </Link>
+            </StandaloneLink>
           ) : null}
         </nav>
       ) : null}

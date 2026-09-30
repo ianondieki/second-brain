@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import type { ReactNode } from "react";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BackLink } from "@/components/ui/BackLink";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -38,13 +38,15 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />}>
       {org ? (
         <>
-          <BackLink href={back}>{t("detailBack")}</BackLink>
-          <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{org.name}</h1>
-          <VerificationBadge badge={org.badge} className="mt-3 text-base" />
-          <dl className="mt-8 grid gap-x-8 gap-y-4 border-t border-line pt-6 sm:grid-cols-[minmax(9rem,auto)_1fr]">
-            <Row label={t("detailType")}>{kinds(org.kind)}</Row>
-            <Row label={t("detailCounty")}>{org.county?.name ?? t("detailNone")}</Row>
-            <Row label={t("detailNiches")}>
+          <PageHeader back={{ href: back, label: t("detailBack") }} title={org.name}>
+            <p className="mt-3">
+              <VerificationBadge badge={org.badge} />
+            </p>
+          </PageHeader>
+          <DescriptionList className="mt-10">
+            <Description label={t("detailType")}>{kinds(org.kind)}</Description>
+            <Description label={t("detailCounty")}>{org.county?.name ?? t("detailNone")}</Description>
+            <Description label={t("detailNiches")}>
               {org.niches.length > 0 ? (
                 <ul className="flex flex-col gap-1">
                   {org.niches.map((niche) => (
@@ -54,27 +56,18 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
               ) : (
                 t("detailNone")
               )}
-            </Row>
-            {org.responsiveness ? <Row label={t("detailResponse")}>{org.responsiveness.text}</Row> : null}
-          </dl>
+            </Description>
+            {org.responsiveness ? (
+              <Description label={t("detailResponse")}>{org.responsiveness.text}</Description>
+            ) : null}
+          </DescriptionList>
         </>
       ) : (
         <>
-          <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-          <div className="mt-6">
-            <EmptyState sentence={t("notFound")} action={t("detailBack")} href={back} />
-          </div>
+          <PageHeader title={t("title")} />
+          <EmptyState sentence={t("notFound")} action={t("detailBack")} href={back} className="mt-8" />
         </>
       )}
     </SignedInShell>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 sm:contents">
-      <dt className="text-sm font-medium text-ink-soft sm:pt-0.5">{label}</dt>
-      <dd className="min-w-0 text-ink">{children}</dd>
-    </div>
   );
 }

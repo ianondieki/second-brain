@@ -4,6 +4,7 @@ import {
   formatConfidence,
   formatDate,
   formatMoment,
+  listedProblemLabel,
   problemHref,
   problemLabel,
   safeHttpsUrl,
@@ -33,6 +34,34 @@ describe("problemLabel (REQ-RES-02, docs/spec/06 6.5)", () => {
     });
     expect(problemLabel({ source: "org_brief", seeded_example: false, published_at: published }, "en")).toBeNull();
     expect(problemLabel({ source: "research_agent", seeded_example: false, published_at: null }, "en")).toBeNull();
+  });
+});
+
+describe("listedProblemLabel (Discover and Home, P12-F MINOR 2)", () => {
+  const published = "2026-09-29T22:30:00Z";
+  const english = "Seeded example for the demo (not a live AI result), human-reviewed on 30 September 2026";
+
+  it("builds the problem page's label from what the API sends, not its English words", () => {
+    const seeded = { source: "research_agent", label: english, seeded_example: true, published_at: published } as const;
+    expect(listedProblemLabel(seeded, "en")).toEqual({ key: "seeded", date: "30 Sep 2026" });
+    expect(listedProblemLabel({ ...seeded, seeded_example: false }, "en")).toEqual({ key: "aiDrafted", date: "30 Sep 2026" });
+    expect(listedProblemLabel({ source: "developer", label: "Developer-reported" }, "en")).toEqual({ key: "developer" });
+  });
+
+  it("shows an older API's English words as they are, never guessing a seeded card is AI-drafted", () => {
+    expect(listedProblemLabel({ source: "research_agent", label: english, published_at: published }, "en")).toEqual({
+      key: "api",
+      text: english,
+    });
+    expect(listedProblemLabel({ source: "org_brief", label: null, seeded_example: false, published_at: null }, "en")).toBeNull();
+  });
+
+  it("never builds a label the API withholds (an archived research card linked to an idea; reviewer MAJOR 1)", () => {
+    const archived = { source: "research_agent", label: null, seeded_example: false, published_at: null } as const;
+    expect(listedProblemLabel(archived, "en")).toBeNull();
+    // Even if an older API still sent the publication day with no label.
+    expect(listedProblemLabel({ ...archived, published_at: "2026-09-29T22:30:00Z" }, "en")).toBeNull();
+    expect(listedProblemLabel({ ...archived, source: "developer" }, "en")).toBeNull();
   });
 });
 

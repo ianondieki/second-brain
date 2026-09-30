@@ -86,6 +86,22 @@ describe("the notification settings", () => {
     expect(screen.getByRole("status").textContent).toBe("");
   });
 
+  it("disables the choices while a save is in flight, then shows what was saved (P16-A review MINOR 4)", async () => {
+    let answer: (outcome: SaveOutcome) => void = () => {};
+    const saveImpl = renderChoices(consents());
+    saveImpl.mockReturnValue(new Promise<SaveOutcome>((resolve) => (answer = resolve)));
+    fireEvent.click(screen.getByRole("checkbox", { name: MARKETING }));
+    save();
+    await waitFor(() => expect(screen.getByRole("group", { name: "Email" })).toHaveProperty("disabled", true));
+    expect(screen.getByRole("checkbox", { name: REMINDERS }).matches(":disabled")).toBe(true); // through the fieldset
+    expect(screen.getByRole("button", { name: "Saving…" }).getAttribute("aria-disabled")).toBe("true");
+    answer({ ok: true, items: consents({ marketing: true }) });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Your choices are saved."));
+    expect(screen.getByRole("group", { name: "Email" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("checkbox", { name: MARKETING })).toHaveProperty("checked", true);
+    expect(screen.getByRole("checkbox", { name: REMINDERS })).toHaveProperty("checked", true);
+  });
+
   it("sends nothing when nothing changed", async () => {
     const saveImpl = renderChoices(consents());
     save();

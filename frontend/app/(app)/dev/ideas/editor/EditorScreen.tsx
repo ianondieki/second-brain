@@ -5,6 +5,7 @@ import { DevNav } from "@/components/DevNav";
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -39,8 +40,8 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
   if (id && !idea) {
     return (
       <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitleEdit")}</h1>
-        <EmptyState className="mt-6" sentence={ideas("notFound")} action={ideas("back")} href={BASE_PATH} />
+        <PageHeader title={t("pageTitleEdit")} />
+        <EmptyState className="mt-8" sentence={ideas("notFound")} action={ideas("back")} href={BASE_PATH} />
       </SignedInShell>
     );
   }

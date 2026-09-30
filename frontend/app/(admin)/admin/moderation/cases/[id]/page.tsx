@@ -136,7 +136,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
         <Section
           title={result ? t("case.textHeadingDecided") : t("case.textHeading")}
           headingId="text"
-          description={t("case.textLead")}
+          description={result ? t("case.textLeadDecided") : t("case.textLead")}
           data-case-text=""
         >
           <CaseText item={item} flagged={flagged} label={t("case.flagged")} empty={t("case.noText")} />

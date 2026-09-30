@@ -96,7 +96,10 @@ export async function linkableProblem(problemId: string): Promise<ProblemRef | n
     return null; // timeout or network: the idea starts without the problem
   }
   const { data, response } = answer;
-  if (data) return { id: data.id, title: data.title, source: data.source, label: data.label, niche: data.niche };
+  if (data) {
+    const { id, title, source, label, niche, seeded_example, published_at } = data;
+    return { id, title, source, label, niche, seeded_example, published_at };
+  }
   if (response.status === 401) redirect("/login");
   return null;
 }

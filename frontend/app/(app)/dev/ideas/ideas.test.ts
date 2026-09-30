@@ -26,6 +26,8 @@ const PROBLEM = {
   source: "developer" as const,
   label: "Developer-reported",
   niche: null,
+  seeded_example: false,
+  published_at: null,
 };
 
 const READY: EditorState = {

@@ -3248,8 +3248,16 @@ export interface components {
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
-            /** Published At */
+            /**
+             * Published At
+             * @description When the problem was published (null while it is not)
+             */
             published_at: string | null;
+            /**
+             * Seeded Example
+             * @description A demo seed card made from a fixed answer, never a live AI result
+             */
+            seeded_example: boolean;
             source: components["schemas"]["ProblemSource"];
             /** Statement */
             statement: string;
@@ -4796,8 +4804,16 @@ export interface components {
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
-            /** Published At */
+            /**
+             * Published At
+             * @description When the problem was published (null while it is not)
+             */
             published_at: string | null;
+            /**
+             * Seeded Example
+             * @description A demo seed card made from a fixed answer, never a live AI result
+             */
+            seeded_example: boolean;
             source: components["schemas"]["ProblemSource"];
             /** Statement */
             statement: string;
@@ -4834,7 +4850,10 @@ export interface components {
             /** Named Orgs */
             named_orgs: string[];
             niche: components["schemas"]["NicheOut"] | null;
-            /** Published At */
+            /**
+             * Published At
+             * @description When the problem was published (null while it is not)
+             */
             published_at: string | null;
             /**
              * Seeded Example
@@ -4865,6 +4884,16 @@ export interface components {
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /**
+             * Published At
+             * @description When the problem was published (null while it is not)
+             */
+            published_at: string | null;
+            /**
+             * Seeded Example
+             * @description A demo seed card made from a fixed answer, never a live AI result
+             */
+            seeded_example: boolean;
             source: components["schemas"]["ProblemSource"];
             /** Title */
             title: string;

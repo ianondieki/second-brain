@@ -265,6 +265,16 @@ describe("a row in the Engagements list", () => {
     expect(screen.getByText("From Achieng Otieno")).toBeTruthy();
     expect(container.querySelectorAll("[data-chip]")).toHaveLength(1);
   });
+
+  it("is titled by the organisation under its proposal's heading, without repeating the proposal (P16-C1)", () => {
+    const { container } = renderWithIntl(
+      <EngagementRow item={detail({ whose_turn: ["developer"] })} mine="developer" href="/dev/engagements/e1" titleBy="organisation" />,
+    );
+    expect(screen.getByRole("link", { name: "Telco A (fixture)" }).getAttribute("href")).toBe("/dev/engagements/e1");
+    expect(container.textContent).not.toContain("Cold chain for dairy co-ops");
+    expect(screen.queryByText("With Telco A (fixture)")).toBeNull();
+    expect([...container.querySelectorAll("[data-chip]")].map((c) => c.textContent)).toEqual(["Proposal submitted", "Your turn"]);
+  });
 });
 
 describe("the contact person", () => {

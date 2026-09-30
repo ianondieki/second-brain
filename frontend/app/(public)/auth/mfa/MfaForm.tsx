@@ -12,10 +12,10 @@ import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
-import { continueAfterSignIn } from "@/lib/auth/session";
+import { continueToReturnPath } from "@/lib/sign-in-return";
 
 /** Second step of sign-in: a code from the authenticator app, or one recovery code. */
-export function MfaForm() {
+export function MfaForm({ next }: { next?: string }) {
   const t = useTranslations();
   const router = useRouter();
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -50,7 +50,7 @@ export function MfaForm() {
     setBusy(true);
     const outcome = await settle(api.POST("/api/auth/mfa/verify", { body: { code: value } }));
     if (outcome.ok) {
-      await continueAfterSignIn(router, false);
+      await continueToReturnPath(router, false, next);
       return;
     }
     setBusy(false);

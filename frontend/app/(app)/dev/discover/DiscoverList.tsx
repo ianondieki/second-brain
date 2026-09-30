@@ -2,6 +2,8 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
 
 import {
   discoverHref,
@@ -37,21 +39,19 @@ export function DiscoverList(props: DiscoverListProps) {
   if (props.kind === "gap") {
     const items = props.gap.items.slice(0, MAX_ITEMS);
     return (
-      <Section id="discover-gap" title={t("gapTitle")} lead={t("gapLead")}>
+      <List id="discover-gap" title={t("gapTitle")} lead={t("gapLead")}>
         {items.length === 0 ? (
           <EmptyState
             {...(narrowed ? clear : { sentence: t("gapEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <ol className="border-b border-line">
+          <RowList ordered>
             {items.map((item) => (
-              <li key={item.problem.id}>
-                <ProblemRow item={item} counties={counties} query={query} />
-              </li>
+              <ProblemRow key={item.problem.id} item={item} counties={counties} query={query} />
             ))}
-          </ol>
+          </RowList>
         )}
-      </Section>
+      </List>
     );
   }
 
@@ -60,7 +60,7 @@ export function DiscoverList(props: DiscoverListProps) {
     const items = board.projects.slice(0, MAX_ITEMS);
     const coldProjects = isColdStart(items);
     return (
-      <Section
+      <List
         id="discover-projects"
         title={coldProjects ? t("coldTitle") : t("projectsTitle")}
         lead={coldProjects ? t("coldProjectsLead") : t("projectsLead")}
@@ -70,15 +70,13 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("projectsEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <ol className="border-b border-line">
+          <RowList ordered>
             {items.map((item) => (
-              <li key={item.proposal.id}>
-                <ProjectRow item={item} />
-              </li>
+              <ProjectRow key={item.proposal.id} item={item} />
             ))}
-          </ol>
+          </RowList>
         )}
-      </Section>
+      </List>
     );
   }
 
@@ -86,7 +84,7 @@ export function DiscoverList(props: DiscoverListProps) {
   const cold = isColdStart(items);
   const projects = projectsById(board.projects);
   return (
-    <Section
+    <List
       id="discover-problems"
       title={cold ? t("coldTitle") : t("problemsTitle")}
       lead={cold ? t("coldLead") : t("problemsLead")}
@@ -98,33 +96,29 @@ export function DiscoverList(props: DiscoverListProps) {
             : { sentence: t("problemsEmpty"), action: t("problemsEmptyAction"), href: "/dev/ideas/new" })}
         />
       ) : (
-        <ol className="border-b border-line">
+        <RowList ordered>
           {items.map((item) => (
-            <li key={item.problem.id}>
-              <ProblemRow
-                item={item}
-                counties={counties}
-                query={query}
-                projects={item.project_ids
-                  .map((id) => projects.get(id))
-                  .filter((project): project is TrendingProject => project !== undefined)}
-              />
-            </li>
+            <ProblemRow
+              key={item.problem.id}
+              item={item}
+              counties={counties}
+              query={query}
+              projects={item.project_ids
+                .map((id) => projects.get(id))
+                .filter((project): project is TrendingProject => project !== undefined)}
+            />
           ))}
-        </ol>
+        </RowList>
       )}
-    </Section>
+    </List>
   );
 }
 
-function Section({ id, title, lead, children }: { id: string; title: string; lead: string; children: ReactNode }) {
+/** One list: its heading, one line on what it holds, then the rows (Section). */
+function List({ id, title, lead, children }: { id: string; title: string; lead: string; children: ReactNode }) {
   return (
-    <section aria-labelledby={id} data-list={id}>
-      <h2 id={id} className="text-lg text-ink">
-        {title}
-      </h2>
-      <p className="mt-1 mb-3 max-w-[62ch] text-sm text-ink-soft">{lead}</p>
+    <Section title={title} headingId={id} description={lead} data-list={id}>
       {children}
-    </section>
+    </Section>
   );
 }

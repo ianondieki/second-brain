@@ -62,8 +62,7 @@ const CHOSEN_ELSEWHERE = row(ELSEWHERE, "Elsewhere Ltd", <p data-outcome="sent">
 const GROUPS: PickerGroup[] = [
   {
     key: "ict",
-    parent: "ICT",
-    name: "Networks & Telecommunications",
+    name: "ICT › Networks & Telecommunications",
     rows: [
       row(SAFCELL, "Safcell", <p data-outcome="sent">Gets it now</p>),
       row(TELMARK, "Telmark", <p data-outcome="saved">Saved until they verify</p>),

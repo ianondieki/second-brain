@@ -11,9 +11,11 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
  * The day, the three-letter month and the year in the page's language. en-KE on its own writes "Sept", so the month
  * comes from the short month names that use three letters (en-US for English); the order and spacing stay en-KE's.
  */
-function dayMonthYear(at: Date, locale: string, timeZone: string, withTime = false): string {
+function dayMonthYear(at: Date, locale: string, timeZone: string, withTime: false | "minutes" | "seconds" = false): string {
   const month = new Intl.DateTimeFormat(locale === "en" ? "en-US" : `${locale}-KE`, { month: "short", timeZone }).format(at);
-  const time: Intl.DateTimeFormatOptions = withTime ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : {};
+  const time: Intl.DateTimeFormatOptions = withTime
+    ? { hour: "2-digit", minute: "2-digit", ...(withTime === "seconds" ? { second: "2-digit" } : {}), hourCycle: "h23" }
+    : {};
   return new Intl.DateTimeFormat(`${locale}-KE`, { day: "numeric", month: "short", year: "numeric", timeZone, ...time })
     .formatToParts(at)
     .map((part) => (part.type === "month" ? month : part.value))
@@ -42,7 +44,15 @@ export function formatDay(locale: string, iso: string): string {
 
 /** A moment in Nairobi, day and time ("30 Sep 2026, 14:06"; the language's own separator between them). */
 export function formatMoment(locale: string, iso: string): string {
-  return dayMonthYear(new Date(iso), locale, NAIROBI, true);
+  return dayMonthYear(new Date(iso), locale, NAIROBI, "minutes");
+}
+
+/**
+ * A moment to the second, in the one format ("30 Sep 2026, 10:49:20"), in Nairobi or another zone ("UTC"): the
+ * certificate page, where a timestamp authority's time is read to the second. The message around it names the zone.
+ */
+export function formatMomentSeconds(locale: string, iso: string, timeZone: string = NAIROBI): string {
+  return dayMonthYear(new Date(iso), locale, timeZone, "seconds");
 }
 
 /**

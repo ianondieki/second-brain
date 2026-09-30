@@ -44,7 +44,7 @@ export function CheckEmail({ kind }: { kind: CheckEmailKind }) {
 
   return (
     <>
-      <p className="mt-3 text-ink-soft">
+      <p className="mt-2 max-w-[62ch] text-ink-soft">
         {email
           ? t.rich(kind, { email, minutes: LINK_MINUTES, b: bold })
           : t("noEmail", { minutes: LINK_MINUTES })}

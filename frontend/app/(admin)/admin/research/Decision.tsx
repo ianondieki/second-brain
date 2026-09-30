@@ -5,13 +5,14 @@ import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { Checkbox } from "@/components/ui/Checkbox";
 
 import { decide, type Decision as Choice } from "./calls";
 import { refusalKey, refusalNext, type Refusal } from "./research";
 import { StepUp } from "./StepUp";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 type Phase =
   | { kind: "idle" }
@@ -108,13 +109,13 @@ export function Decision({
           <p data-decision={phase.choice}>{published ? t("review.published") : t("review.rejected")}</p>
         </Alert>
         {published ? (
-          <Link href={publicHref} className={standaloneLinkClass}>
+          <StandaloneLink href={publicHref}>
             {t("review.openPublic")}
-          </Link>
+          </StandaloneLink>
         ) : null}
-        <Link href={researchHref} className={standaloneLinkClass}>
+        <StandaloneLink href={researchHref}>
           {t("review.backToResearch")}
-        </Link>
+        </StandaloneLink>
       </div>
     );
   }

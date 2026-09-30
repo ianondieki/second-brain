@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, typ
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { ClockIcon, SendIcon } from "@/components/ui/status-icons";
 import { upgradeHref } from "@/lib/billing/upgrade";
@@ -24,6 +25,7 @@ import {
   type TagCap,
 } from "./picker";
 import type { PitchProblem, PitchRefusal } from "./refusals";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
  * One organisation as the picker lists it. `about` (type, county, badge) and `outcome` (sent now, or saved until it
@@ -39,7 +41,7 @@ export interface PickerRow {
 
 export interface PickerGroup {
   key: string;
-  parent?: string;
+  /** The niche's two-level name ("ICT › Networks & Telecommunications"), one line: no label above the heading. */
   name: string;
   rows: PickerRow[];
 }
@@ -190,14 +192,15 @@ export function PitchForm({
     onToggle: toggle,
   });
   return (
-    <>
+    // The form starts at the lead, not at the search field: a sticky element stays inside its containing block, so a
+    // form that began lower held the Pitch bar under the tab bar at 360 x 640 (P16-C1 fix round 1, ux item 11).
+    <form method="get" onSubmit={submit}>
       <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max })}</p>
       <p className="mt-3 text-ink" data-cap="">
         {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: capNow.limit ?? 0 })}
       </p>
-      <form method="get" onSubmit={submit} className="mt-6">
         {/* Nothing changes the list while a Pitch is under way. */}
-        <fieldset disabled={busy} className="m-0 max-w-3xl min-w-0 border-0 p-0">
+        <fieldset disabled={busy} className="m-0 mt-6 max-w-3xl min-w-0 border-0 p-0">
           <div role="search">{filters}</div>
           {narrowed ? (
             <p className="mt-2">
@@ -236,11 +239,8 @@ export function PitchForm({
           ) : null}
           {groups.map((group, index) => (
             <section key={group.key} className="mt-10 first:mt-0" aria-labelledby={`pitch-group-${index}`}>
-              <h2 id={`pitch-group-${index}`} className="flex flex-col text-lg text-ink">
-                {group.parent ? (
-                  <span className="text-sm font-medium tracking-normal text-ink-soft">{group.parent}</span>
-                ) : null}
-                <span>{group.name}</span>
+              <h2 id={`pitch-group-${index}`} className="text-lg text-ink">
+                {group.name}
               </h2>
               <ul className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
                 {group.rows.map((row) => (
@@ -274,7 +274,8 @@ export function PitchForm({
         <div
           data-action-bar=""
           className={cn(
-            "sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[5] -mx-4 mt-8 border-t border-line bg-paper",
+            // Above the tab bar: its 56 px tabs, its 1 px top border and the safe area.
+            "sticky bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] z-[5] -mx-4 mt-8 border-t border-line bg-paper",
             "px-4 pt-3 pb-4 sm:-mx-6 sm:px-6 lg:bottom-0 lg:mx-0 lg:px-0",
           )}
         >
@@ -295,8 +296,7 @@ export function PitchForm({
             </Button>
           </div>
         </div>
-      </form>
-    </>
+    </form>
   );
 }
 
@@ -397,11 +397,11 @@ function Refused({
   } else if (problem === "orgsGone" || problem === "changed") {
     action = <a href={pitchHref(proposalId)} className={standaloneLinkClass}>{t("reload")}</a>;
   } else if (problem === "notPublic" || problem === "notFound") {
-    action = <Link href={ideaHref} className={standaloneLinkClass}>{t("back")}</Link>;
+    action = <StandaloneLink href={ideaHref}>{t("back")}</StandaloneLink>;
   } else if ((problem === "planLimit" || problem === "planLimitUnknown") && refusal?.upgrade) {
     // The next plan up, and back to this picker once it is paid for (REQ-BIL-08).
     const href = upgradeHref(refusal.upgrade, { next: pitchHref(proposalId) });
-    action = <Link href={href} className={standaloneLinkClass}>{t("problem.planLimitUpgrade")}</Link>;
+    action = <StandaloneLink href={href}>{t("problem.planLimitUpgrade")}</StandaloneLink>;
   }
   return (
     <Alert tone={problem === "chooseOne" ? "info" : "error"} ref={alertRef}>
@@ -436,13 +436,13 @@ function PitchDone({
       </p>
       {sent.length > 0 ? (
         <div className="mt-6">
-          <h3 className="flex items-center gap-2 text-lg text-ok">
-            <SendIcon className="size-5 shrink-0" />
+          <h3 className="flex items-center gap-2 text-lg text-ink">
+            <SendIcon className="size-5 shrink-0 text-ok" />
             {t("sentTitle", { count: result.sent_count })}
           </h3>
-          <ul className="mt-2 border-t border-line">
+          <ul className="mt-2">
             {sent.map((tag) => (
-              <li key={tag.id} className="border-b border-line py-3 font-semibold [overflow-wrap:anywhere] text-ink">
+              <li key={tag.id} className="border-t border-line py-3 font-semibold [overflow-wrap:anywhere] text-ink">
                 {tag.org?.name ?? t("orgUnlisted")}
               </li>
             ))}
@@ -452,15 +452,15 @@ function PitchDone({
       ) : null}
       {saved.length > 0 ? (
         <div className="mt-8">
-          <h3 className="flex items-center gap-2 text-lg text-jacaranda">
-            <ClockIcon className="size-5 shrink-0" />
+          <h3 className="flex items-center gap-2 text-lg text-ink">
+            <ClockIcon className="size-5 shrink-0 text-ink-soft" />
             {t("savedTitle", { count: result.saved_count })}
           </h3>
-          <ul className="mt-2 border-t border-line">
+          <ul className="mt-2">
             {saved.map((tag) => {
               const name = tag.org?.name ?? t("orgUnlisted");
               return (
-                <li key={tag.id} className="flex flex-col gap-1 border-b border-line py-3">
+                <li key={tag.id} className="flex flex-col gap-1 border-t border-line py-3">
                   <span className="font-semibold [overflow-wrap:anywhere] text-ink">{name}</span>
                   <span className="text-sm text-ink-soft">{t(heldKey(tag.status)!, { name })}</span>
                 </li>
@@ -470,9 +470,9 @@ function PitchDone({
         </div>
       ) : null}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-        <Link href={ideaHref} className={buttonClass("primary")} data-primary="">
+        <ButtonLink href={ideaHref} variant="primary">
           {t("back")}
-        </Link>
+        </ButtonLink>
         <a href={againHref} className={standaloneLinkClass}>
           {t("pitchMore")}
         </a>

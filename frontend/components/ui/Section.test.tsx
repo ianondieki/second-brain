@@ -45,4 +45,23 @@ describe("Section", () => {
     rerender(<Section title="History" headingLevel={3} />);
     expect(screen.getByRole("heading", { level: 3 }).id).not.toBe("");
   });
+
+  it("can take focus at its heading when a change ends there, without a ring (P16-C1)", () => {
+    render(<Section title="Pitches" headingId="pitches-heading" focusable />);
+    const heading = screen.getByRole("heading", { level: 2, name: "Pitches" });
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+    expect(heading.className).toContain("focus:outline-none");
+    cleanup();
+    render(<Section title="Pitches" />);
+    expect(screen.getByRole("heading").hasAttribute("tabindex")).toBe(false);
+  });
+
+  it("puts the description before the secondary link in reading order when it has both (P16-C1)", () => {
+    const { container } = render(
+      <Section title="Repayment nudges" description="Pitched to 2 organisations" link={{ href: "/dev/ideas/1", label: "Open the idea" }} />,
+    );
+    const order = [...container.querySelectorAll("h2, p, a")].map((el) => el.textContent);
+    expect(order).toEqual(["Repayment nudges", "Pitched to 2 organisations", "Open the idea"]);
+    expect(screen.getByRole("link", { name: "Open the idea" }).className).toContain("sm:col-start-2");
+  });
 });

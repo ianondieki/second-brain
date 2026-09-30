@@ -4,6 +4,7 @@ import createClient from "openapi-fetch";
 
 import { signupConsents, type ShownConsents } from "@/lib/auth/consents";
 import { homeOf, isPending, type Me } from "@/lib/auth/routing";
+import { safeReturnPath } from "@/lib/return-path";
 
 import { cookieSecure, sessionCookieHeader } from "./cookies";
 import type { paths } from "./schema";
@@ -57,6 +58,19 @@ export async function getMe(): Promise<Me | null> {
   return data;
 }
 
+/**
+ * The person when fully signed in (second factor given), else null: signed out, still owing the second factor, or the
+ * API not answering (a public page must open regardless). For public pages that send a signed-in person onwards.
+ */
+export async function getSignedIn(): Promise<Me | null> {
+  try {
+    const me = await getMe();
+    return me && !isPending(me) ? me : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Signed-in pages: no session goes to /login, a session still owing its second factor goes to /auth/mfa. */
 export async function requireMe(): Promise<Me> {
   const me = await getMe();
@@ -65,11 +79,14 @@ export async function requireMe(): Promise<Me> {
   return me;
 }
 
-/** The second-factor page: only for a session that is waiting for it. */
-export async function requirePendingMfa(): Promise<Me> {
+/**
+ * The second-factor page: only for a session that is waiting for it. Someone already fully signed in goes on to the
+ * page they were returning to (`next`, when it is one of this site's signed-in pages; lib/return-path.ts), else home.
+ */
+export async function requirePendingMfa(next?: string): Promise<Me> {
   const me = await getMe();
   if (!me) redirect("/login");
-  if (!isPending(me)) redirect(homeOf(me));
+  if (!isPending(me)) redirect(safeReturnPath(next) ?? homeOf(me));
   return me;
 }
 

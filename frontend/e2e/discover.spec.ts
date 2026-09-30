@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { signUpDeveloper } from "./support/accounts";
 import { checkWidths, publishedProblemTitle, seededTrend, shot } from "./support/discover-scene";
 import { expectEmptyState } from "./support/screen";
+import { loginReturningTo } from "./support/login";
 
 // REQ-TREND-02, REQ-PERS-01, REQ-PERS-03 (P12-F): the M2 walkthrough's step 4 against the compose stack with the demo
 // seed (as the CI e2e job runs it): a new developer picks liked niches, sees Discover with trending problems, their
@@ -21,10 +22,23 @@ async function expectAtMostTwoChips(cards: Locator) {
   for (const card of await cards.all()) expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
 }
 
+/**
+ * Every problem says where it comes from: a non-empty provenance label, in the problem page's words (developer-reported,
+ * AI-drafted and human-reviewed on a day, or a seeded example), never the API's English date ("30 September 2026").
+ */
+async function expectLabelled(cards: Locator) {
+  for (const card of await cards.all()) {
+    const label = card.locator("[data-label]");
+    await expect(label).toHaveCount(1);
+    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Seeded example for the demo)/);
+    await expect(label).not.toHaveText(/(January|February|March|April|June|July|August|September|October|November|December)/);
+  }
+}
+
 test("signed-out visits to Discover and the niches page go to the login page", async ({ page }) => {
   for (const path of ["/dev/discover", "/dev/discover?view=gap", "/dev/discover/niches"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path));
   }
 });
 
@@ -80,6 +94,7 @@ test.describe("a new developer", () => {
     expect(await problems.count()).toBeGreaterThan(0);
     expect(await problems.count()).toBeLessThanOrEqual(20);
     await expectAtMostTwoChips(problems);
+    await expectLabelled(problems); // provenance on every card (P12-F re-review MINOR 7)
 
     // The demo's trending problem: its self-explaining badge, a Why chip, its sources and the project beside it.
     const card = page.locator(`article[data-problem="${trend.problemId}"]`);
@@ -104,6 +119,7 @@ test.describe("a new developer", () => {
       await expect(project).not.toContainText(/\d+ (companies|organisations)/);
     }
     await expectAtMostTwoChips(projects);
+    await expectLabelled(projects.locator("[data-solves]"));
     await expect(page.locator(`[data-solves="${trend.problemId}"]`).first()).toBeVisible();
     await checkWidths(page, info);
     await shot(page, info, "p12f-projects");
@@ -139,6 +155,7 @@ test.describe("a new developer", () => {
     const rows = section.locator("article[data-recommendation]");
     expect(await rows.count()).toBeGreaterThan(0);
     expect(await rows.count()).toBeLessThanOrEqual(3);
+    await expectLabelled(rows);
     for (const row of await rows.all()) {
       await expect(row.locator("[data-chip=pursuit]")).toHaveText(PURSUIT_CHIP);
       await expect(row.locator("[data-chip=why]")).toHaveCount(1);
@@ -159,6 +176,10 @@ test.describe("a new developer", () => {
     const problemId = new URL(page.url()).pathname.split("/").pop()!;
     expect(await publishedProblemTitle(page.request, problemId)).toBe(title);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title, SERVER_STEP);
+    // Its one action is Discover's "Start a proposal from this problem"; the way back leads to Discover (P16-C1).
+    await expect(page.locator("[data-primary]")).toHaveText("Start a proposal from this problem");
+    await expect(page.locator("[data-primary]")).toHaveAttribute("href", `/dev/ideas/new?problem=${problemId}`);
+    await expect(page.getByRole("link", { name: "Back to Discover" })).toHaveAttribute("href", "/dev/discover");
     await checkWidths(page, info);
   });
 

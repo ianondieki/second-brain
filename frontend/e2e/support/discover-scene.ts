@@ -59,12 +59,12 @@ export async function shot(page: Page, info: TestInfo, name: string) {
  * and, on the mobile project, again at 375 px.
  */
 export async function checkWidths(page: Page, info: TestInfo) {
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
   if (!info.project.name.startsWith("mobile")) return;
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 375, height: size.height });
   try {
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   } finally {
     await page.setViewportSize(size);
   }

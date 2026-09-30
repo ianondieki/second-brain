@@ -44,6 +44,58 @@ describe("RowList and Row", () => {
     expect(screen.getByText("Agriculture › Dairy").className).toContain("text-ink-soft");
   });
 
+  it("keeps the title alone as the link when the row holds its own controls, and names the title", () => {
+    render(
+      <RowList>
+        <Row title="Tower sites go down" href="/problems/1" stretch={false} titleId="p1-title">
+          <button type="button">Start a proposal</button>
+        </Row>
+      </RowList>,
+    );
+    const link = screen.getByRole("link", { name: "Tower sites go down" });
+    expect(link.className).not.toContain("after:absolute");
+    expect(link.className).toContain("min-h-11");
+    expect(screen.getByRole("heading", { level: 3 }).id).toBe("p1-title");
+    expect(screen.getByRole("button", { name: "Start a proposal" })).toBeTruthy();
+  });
+
+  it("puts the pending hint on the row's top hairline, where it takes no room from the title", () => {
+    render(
+      <RowList>
+        <Row title="Cold chain" href="/dev/ideas/1" />
+      </RowList>,
+    );
+    const hint = screen.getByRole("link", { name: "Cold chain" }).querySelector("[data-link-pending]")!;
+    expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["absolute", "-top-px", "left-0"]));
+    expect(hint.className).not.toContain("ml-2");
+  });
+
+  it("keeps a figure's column only when there is a figure, so a title otherwise has the full width", () => {
+    const { container } = render(
+      <RowList>
+        <Row title="Without" />
+        <Row title="With" figure="KES 1,250" />
+      </RowList>,
+    );
+    const [without, withFigure] = [...container.querySelectorAll("article")];
+    expect(without.className).not.toContain("grid-cols-");
+    expect(without.className).not.toContain("gap-x-6");
+    expect(withFigure.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(withFigure.className).toContain("gap-x-6");
+  });
+
+  it("can keep a figure's column from 640 px only, so a phone row keeps the whole width", () => {
+    const { container } = render(
+      <RowList>
+        <Row title="Pro (monthly)" figure="KES 499 a month" figureFrom="sm" />
+      </RowList>,
+    );
+    const row = container.querySelector("article")!;
+    expect(row.className).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
+    expect(row.className.split(" ")).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(screen.getByText("KES 499 a month").className.split(" ")).toEqual(expect.arrayContaining(["hidden", "sm:block"]));
+  });
+
   it("is ordered when asked", () => {
     render(
       <RowList ordered>

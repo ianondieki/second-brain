@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import { SignedInShell } from "@/components/SignedInShell";
 import { TopBar } from "@/components/TopBar";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { getMe } from "@/lib/api/server";
 import { homeOf, isPending, type Home } from "@/lib/auth/routing";
 
@@ -36,15 +38,11 @@ export default async function HelpPage() {
   const home = await signedInHome();
   const content = (
     <>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-      <p className="mt-3 max-w-[60ch] text-ink-soft">{t("lead")}</p>
-      <div className="mt-8 flex flex-col gap-8">
+      <PageHeader title={t("pageTitle")} lead={t("lead")} />
+      <div className="mt-10 flex flex-col gap-12">
         {HELP_SECTIONS.map(({ id, paragraphs }) => (
-          <section key={id} aria-labelledby={`help-${id}`} data-help-section={id} className="border-t border-line pt-6">
-            <h2 id={`help-${id}`} className="text-lg text-ink">
-              {t(`${id}.title`)}
-            </h2>
-            <div className="mt-2 flex max-w-[60ch] flex-col gap-3 text-ink">
+          <Section key={id} title={t(`${id}.title`)} headingId={`help-${id}`} data-help-section={id}>
+            <div className="flex max-w-[65ch] flex-col gap-3 text-ink">
               {paragraphs.map((key) => (
                 <p key={key} data-support-placeholder={key === "support.body" ? "" : undefined}>
                   {key === "reminders.manage"
@@ -59,7 +57,7 @@ export default async function HelpPage() {
                 </p>
               ))}
             </div>
-          </section>
+          </Section>
         ))}
       </div>
     </>

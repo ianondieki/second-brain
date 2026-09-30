@@ -13,12 +13,14 @@ import { TextField } from "@/components/ui/TextField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
-import { continueAfterSignIn, rememberEmail } from "@/lib/auth/session";
+import { rememberEmail } from "@/lib/auth/session";
 import { checkEmail, validateLogin, type LoginValues } from "@/lib/auth/validation";
+import { continueToReturnPath } from "@/lib/sign-in-return";
 
 type Busy = "login" | "link" | null;
 
-export function LoginForm() {
+/** `next`: the page to return to after signing in (checked on the server and again here; lib/return-path.ts). */
+export function LoginForm({ next }: { next?: string }) {
   const t = useTranslations();
   const router = useRouter();
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -55,7 +57,7 @@ export function LoginForm() {
       api.POST("/api/auth/login", { body: { email: values.email.trim(), password: values.password } }),
     );
     if (outcome.ok) {
-      await continueAfterSignIn(router, outcome.data.mfa_required);
+      await continueToReturnPath(router, outcome.data.mfa_required, next);
       return;
     }
     setBusy(null);
@@ -119,7 +121,7 @@ export function LoginForm() {
         </Button>
       </div>
 
-      <p className="border-t border-line pt-6 text-ink">
+      <p className="pt-4 text-ink">
         {t.rich("login.noAccount", {
           signup: (chunks) => (
             <Link href="/signup" className={textLinkClass}>

@@ -2,67 +2,75 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
-import { CheckIcon, InfoIcon } from "@/components/ui/icons";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { Section } from "@/components/ui/Section";
 
-import { formatKenyan, KEYS_HREF, NAIROBI, tokenHref, type CertificateCheck } from "./certificate";
+import { formatMomentSeconds } from "@/lib/format";
+
+import { KEYS_HREF, NAIROBI, tokenHref, type CertificateCheck } from "./certificate";
 import { Fingerprint } from "./Fingerprint";
 
 /**
  * One certificate as the public sees it (docs/spec/06 6.4 item 2): status, fingerprint, timestamp, TSA serial, key id
  * and signature, and nothing that names the owner or the proposal (D-33 default: no name or title). The status is
- * icon + words + colour; the API's own status label is not shown, so the wording can be translated.
+ * icon + words + tone (a Callout); the API's own status label is not shown, so the wording can be translated. The
+ * record's facts are a DescriptionList under the fingerprint's Section.
  */
 export function VerifyRecord({ record }: { record: CertificateCheck }) {
   const t = useTranslations("verify");
   const locale = useLocale();
   const done = record.status === "timestamped";
-  const when = record.timestamp ? new Date(record.timestamp) : null;
+  const at = record.timestamp;
 
   return (
     <div>
-      <p className={cn("flex items-start gap-2 text-lg font-semibold", done ? "text-ok" : "text-jacaranda")}>
-        {done ? <CheckIcon className="mt-1 size-5 shrink-0" /> : <InfoIcon className="mt-1 size-5 shrink-0" />}
-        <span data-testid="verify-status">{done ? t("statusTimestamped") : t("statusPending")}</span>
-      </p>
-      <p className="mt-2 max-w-[62ch] text-ink-soft">{done ? t("explainTimestamped") : t("explainPending")}</p>
+      {/* The answer first, as the system's notice: icon + words + tone (ok when timestamped, info while pending). */}
+      <Callout
+        tone={done ? "ok" : "info"}
+        titleSize="lg"
+        title={<span data-testid="verify-status">{done ? t("statusTimestamped") : t("statusPending")}</span>}
+      >
+        <p className="max-w-[62ch] text-ink-soft">{done ? t("explainTimestamped") : t("explainPending")}</p>
+      </Callout>
 
-      {/* The record itself hangs off one jacaranda stroke: the bridge line, as on the certificate. */}
-      <div className="mt-8 border-l-4 border-jacaranda pl-4 sm:pl-6">
-        <h2 className="text-sm font-medium text-ink-soft">{t("hash")}</h2>
-        <Fingerprint hex={record.content_hash} className="mt-1" />
+      <Section title={t("hash")} className="mt-10">
+        <Fingerprint hex={record.content_hash} />
 
-        <dl className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-[minmax(10rem,auto)_1fr]">
-          <Row label={t("time")}>
-            {when ? (
+        <DescriptionList figures className="mt-6">
+          <Description label={t("time")}>
+            {at ? (
               <>
-                <time dateTime={record.timestamp ?? undefined} className="block text-ink">
+                <time dateTime={at} className="block text-ink">
                   {t("timeEat", {
-                    time: formatKenyan(locale, when, { dateStyle: "long", timeStyle: "medium", timeZone: NAIROBI }),
+                    time: formatMomentSeconds(locale, at, NAIROBI),
                   })}
                 </time>
                 <span className="block text-sm text-ink-soft">
                   {t("timeUtc", {
-                    time: formatKenyan(locale, when, { dateStyle: "medium", timeStyle: "medium", timeZone: "UTC" }),
+                    time: formatMomentSeconds(locale, at, "UTC"),
                   })}
                 </span>
               </>
             ) : (
               <NotYet label={t("notYet")} />
             )}
-          </Row>
-          <Row label={t("serial")}>
+          </Description>
+          <Description label={t("serial")}>
             {record.tsa_serial ? <Code>{record.tsa_serial}</Code> : <NotYet label={t("notYet")} />}
-          </Row>
-          <Row label={t("key")}>{record.key_id ? <Code>{record.key_id}</Code> : <NotYet label={t("notYet")} />}</Row>
-          <Row label={t("signature")}>
+          </Description>
+          <Description label={t("key")}>
+            {record.key_id ? <Code>{record.key_id}</Code> : <NotYet label={t("notYet")} />}
+          </Description>
+          <Description label={t("signature")}>
             {record.signature ? (
               <Code className="text-sm text-ink-soft">{record.signature}</Code>
             ) : (
               <NotYet label={t("notYet")} />
             )}
-          </Row>
-        </dl>
+          </Description>
+        </DescriptionList>
 
         <ul className="mt-4 flex flex-col items-start" data-testid="record-links">
           {done ? (
@@ -78,19 +86,10 @@ export function VerifyRecord({ record }: { record: CertificateCheck }) {
             </a>
           </li>
         </ul>
-      </div>
+      </Section>
 
-      <p className="mt-8 max-w-[62ch] text-sm text-ink-soft">{t("evidence")}</p>
+      <p className="mt-10 max-w-[62ch] text-sm text-ink-soft">{t("evidence")}</p>
       <p className="mt-2 max-w-[62ch] text-sm text-ink-soft">{t("private")}</p>
-    </div>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 sm:contents">
-      <dt className="text-sm font-medium text-ink-soft sm:pt-0.5">{label}</dt>
-      <dd className="min-w-0">{children}</dd>
     </div>
   );
 }

@@ -65,7 +65,8 @@ describe("a card's chips", () => {
 
   it("shows at most two, and one beside a trend badge that already says the rest", () => {
     expect(cardChips({ trending: true, badge: TREND_BADGE }, why)).toEqual(["1 new proposal this month"]);
-    expect(moreWhy({ trending: true, badge: TREND_BADGE }, why)).toEqual(["4 companies scouting", "New this week"]);
+    // Under the disclosure, never what the badge already says ("4 companies scouting"; P12-F re-review MINOR 6).
+    expect(moreWhy({ trending: true, badge: TREND_BADGE }, why)).toEqual(["New this week"]);
     expect(cardChips({ trending: false, badge: null }, why)).toEqual(["4 companies scouting", "1 new proposal this month"]);
     expect(moreWhy({ trending: false, badge: null }, why)).toEqual(["New this week"]);
     expect(cardChips({ trending: false, badge: null }, [])).toEqual([]);
@@ -120,6 +121,8 @@ describe("niches and projects", () => {
       source: "developer" as const,
       label: "Developer-reported",
       niche: { id: "c1", slug: "networks-telecommunications", label: "ICT › Networks & Telecommunications" },
+      seeded_example: false,
+      published_at: null,
     };
     const state = stateWithProblem(problem);
     expect(state.problemMode).toBe("pick");

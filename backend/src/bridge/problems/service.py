@@ -101,14 +101,27 @@ def label_for(
     return LABELS.get(source)
 
 
+def published_facts(
+    status: ProblemStatus, published_at: datetime | None, seeded_example: bool
+) -> tuple[datetime | None, bool]:
+    """``published_at`` and ``seeded_example`` as a reference may show them: only for a PUBLISHED problem, the rule of
+    ``label_for`` (an archived or withdrawn card keeps no publication day or seed marker a client could label it by)."""
+    if status is not ProblemStatus.PUBLISHED:
+        return None, False
+    return published_at, seeded_example
+
+
 def _ref(row: Any) -> ProblemRef:
     problem_id, title, source, niche_id, slug, name, parent_name, status, published_at, seeded = row
+    shown_at, shown_seeded = published_facts(ProblemStatus(status), published_at, bool(seeded))
     return ProblemRef(
         id=problem_id,
         title=title,
         source=source,
         label=label_for(ProblemSource(source), ProblemStatus(status), published_at, bool(seeded)),
         niche=niche_out(niche_id, slug, name, parent_name),
+        seeded_example=shown_seeded,
+        published_at=shown_at,
     )
 
 

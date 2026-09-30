@@ -432,7 +432,7 @@ export function Editor(props: EditorProps) {
             onNewStatement={(newProblemStatement) => update({ newProblemStatement })}
           />
 
-          <section aria-labelledby="teaser-title" className="flex flex-col gap-6 border-t border-line pt-6">
+          <section aria-labelledby="teaser-title" className="flex flex-col gap-6 pt-4">
             <div>
               <h3 id="teaser-title" className="font-semibold text-ink">
                 {f("teaserTitle")}
@@ -517,7 +517,7 @@ export function Editor(props: EditorProps) {
             />
           </section>
 
-          <section aria-labelledby="assistant-title" className="flex flex-col gap-4 border-t border-line pt-6">
+          <section aria-labelledby="assistant-title" className="flex flex-col gap-4 pt-4">
             <div>
               <h3 id="assistant-title" className="font-semibold text-ink">
                 {t("assistantTitle")}
@@ -608,7 +608,7 @@ export function Editor(props: EditorProps) {
           />
         </Suspense>
       ) : (
-        <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           {step > 1 ? (
             <Button variant="secondary" onClick={() => goTo((step - 1) as Step)}>
               {t("back")}

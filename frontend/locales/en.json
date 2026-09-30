@@ -15,7 +15,8 @@
     "reviewP12f": "[[COPY-REVIEW]] P12-F (REQ-TREND-02, REQ-PERS-01, REQ-PERS-03): nav.discover, discover.*, recommendations.*, likedNiches.*; the Why chips, badges, pursuit reasons and Why-not lines come from the API in English (written in code, bridge/matching); likedNiches.profiling.lead describes the ranker's behaviour under D-47 (open), and the consent wording itself comes from the API verbatim (backend config/consents.yaml, D-39)",
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages",
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
-    "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)"
+    "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
+    "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided"
   },
   "app": {
     "name": "Bridge",
@@ -31,6 +32,7 @@
     "signOutFailed": "Sign-out did not finish, so you may still be signed in.",
     "signOutRetry": "Try signing out again",
     "account": "Account",
+    "security": "Sign-in security",
     "notifications": "Notifications",
     "help": "Help",
     "billing": "Plan & billing"
@@ -956,6 +958,7 @@
       "reasonsHeading": "Why it is here",
       "textHeading": "Text under review",
       "textLead": "The public summary as it reads now, field by field. Confidential details are never shown here.",
+      "textLeadDecided": "The summary as it read when the case was decided, field by field. Confidential details are never shown here.",
       "flagged": "Flagged",
       "noText": "There is no text to show for this case.",
       "decisionHeading": "Decision",
@@ -1121,6 +1124,7 @@
     "pageTitle": "Problem",
     "notFound": "This problem is not available.",
     "back": "Back to home",
+    "backToDiscover": "Back to Discover",
     "label": {
       "aiDrafted": "AI-drafted, human-reviewed on {date}",
       "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",
@@ -1718,7 +1722,7 @@
   "tracker": {
     "pageTitle": "Engagements",
     "title": "Engagements",
-    "devLead": "Every company you pitched an idea to, and where things stand with each.",
+    "devLead": "Every organisation you pitched an idea to, and where things stand with each.",
     "orgLead": "Proposals your organisation is working through, and whose turn it is.",
     "listLabel": "Engagements",
     "needsYou": "Needs you",
@@ -2236,5 +2240,15 @@
     "title": "Page not found",
     "body": "There is no page at this address.",
     "home": "Go to the home page"
+  },
+  "settingsNav": {
+    "label": "Settings",
+    "security": "Security",
+    "notifications": "Notifications"
+  },
+  "devEngagements": {
+    "organisations": "Pitched to {count, plural, one {# organisation} other {# organisations}}",
+    "openIdea": "Open the idea",
+    "rowsLabel": "Organisations for {title}"
   }
 }

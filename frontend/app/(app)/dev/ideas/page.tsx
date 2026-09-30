@@ -7,6 +7,8 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { Alert } from "@/components/ui/Alert";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { RowList } from "@/components/ui/RowList";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -34,16 +36,18 @@ export default async function MyIdeasPage({ searchParams }: PageProps<"/dev/idea
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />} wide>
-      <div className="flex max-w-3xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-          <p className="mt-2 max-w-[62ch] text-ink-soft">{t("lead")}</p>
-        </div>
-        {items.length > 0 ? (
-          <ButtonLink href={NEW_PATH} variant="primary" className="shrink-0">
-            {t("newIdea")}
-          </ButtonLink>
-        ) : null}
+      <div className="max-w-3xl">
+        <PageHeader
+          title={t("title")}
+          lead={t("lead")}
+          action={
+            items.length > 0 ? (
+              <ButtonLink href={NEW_PATH} variant="primary">
+                {t("newIdea")}
+              </ButtonLink>
+            ) : undefined
+          }
+        />
       </div>
 
       {removed === "hidden" || removed === "deleted" ? (
@@ -52,15 +56,13 @@ export default async function MyIdeasPage({ searchParams }: PageProps<"/dev/idea
         </Alert>
       ) : null}
 
-      <div className="mt-8 max-w-3xl">
+      <div className="mt-10 max-w-3xl">
         {items.length > 0 ? (
-          <ul aria-label={t("listLabel")} className="border-b border-line">
+          <RowList aria-label={t("listLabel")}>
             {items.map((item) => (
-              <li key={item.id}>
-                <IdeaRow item={item} />
-              </li>
+              <IdeaRow key={item.id} item={item} />
             ))}
-          </ul>
+          </RowList>
         ) : (
           <EmptyState sentence={t("empty")} action={t("newIdea")} href={NEW_PATH} primary />
         )}

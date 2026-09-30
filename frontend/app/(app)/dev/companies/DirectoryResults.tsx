@@ -1,20 +1,20 @@
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
 
 import {
   BASE_PATH,
   countOrgs,
   filtersHref,
   isNarrowed,
-  splitNicheLabel,
   type DirectoryFilters,
   type DirectoryGroup,
   type DirectoryPage,
 } from "./filters";
 import { OrgRow } from "./OrgRow";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export type ResultsProps =
   | { kind: "page"; page: DirectoryPage; filters: DirectoryFilters }
@@ -43,23 +43,23 @@ export function DirectoryResults(props: ResultsProps) {
   }
 
   return (
-    <div>
+    <div className="flex flex-col gap-12">
       {page.groups.map((group, index) => (
         <Group key={`${group.niche?.id ?? "none"}-${index}`} group={group} filters={filters} />
       ))}
       {filters.cursor || page.next_cursor ? (
-        <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
+        <nav aria-label={t("pages")} className="flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
           {filters.cursor ? (
-            <Link href={firstPage} className={standaloneLinkClass}>
+            <StandaloneLink href={firstPage}>
               {t("firstPage")}
-            </Link>
+            </StandaloneLink>
           ) : (
             <span />
           )}
           {page.next_cursor ? (
-            <Link href={filtersHref({ ...filters, cursor: page.next_cursor })} className={standaloneLinkClass}>
+            <StandaloneLink href={filtersHref({ ...filters, cursor: page.next_cursor })}>
               {t("nextPage")}
-            </Link>
+            </StandaloneLink>
           ) : null}
         </nav>
       ) : null}
@@ -67,22 +67,16 @@ export function DirectoryResults(props: ResultsProps) {
   );
 }
 
+/** One niche's organisations: a Section titled with the niche's two-level name (no label above it), rows of two. */
 function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFilters }) {
   const t = useTranslations("companies");
-  const label = group.niche ? splitNicheLabel(group.niche.label) : null;
   return (
-    <section className="mt-10 first:mt-0">
-      <h2 className="flex flex-col text-lg text-ink">
-        {label?.parent ? (
-          <span className="text-sm font-medium tracking-normal text-ink-soft">{label.parent}</span>
-        ) : null}
-        <span>{label ? label.name : t("noNiche")}</span>
-      </h2>
-      <div className="mt-2 grid grid-cols-1 gap-x-10 md:grid-cols-2">
+    <Section title={group.niche ? group.niche.label : t("noNiche")}>
+      <RowList className="md:grid md:grid-cols-2 md:gap-x-10">
         {group.orgs.map((org) => (
           <OrgRow key={org.id} org={org} filters={filters} />
         ))}
-      </div>
-    </section>
+      </RowList>
+    </Section>
   );
 }

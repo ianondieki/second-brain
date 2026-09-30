@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { cookieSecure, sessionCookieHeader } from "@/lib/api/cookies";
+import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 
 // Two jobs, before any page renders:
 //
@@ -9,7 +10,8 @@ import { cookieSecure, sessionCookieHeader } from "@/lib/api/cookies";
 //    itself (requireMe) could only arrive inside a 200 as a streamed meta refresh. This is a presence check only: a
 //    request with no session cookie (as sessionCookieHeader reads it) is redirected; one with a cookie goes on, and the
 //    page's requireMe()/requirePendingMfa() decides as before (an expired session, a second factor still owed). No API
-//    call here.
+//    call here. The page asked for rides along as `?next=` when it is one of this site's signed-in pages written
+//    plainly (lib/return-path.ts), so the reader lands back on it after signing in.
 //
 // 2. The staff console is not discoverable (REQ-ADM-01; bridge/admin/deps.py answers 404 to everyone but staff with
 //    TOTP). Before any /admin page renders, this asks the API who the session is (GET /api/admin/me): staff (200, or
@@ -42,7 +44,7 @@ export async function admitsStaff(cookie: string | undefined, fetchImpl: typeof 
 }
 
 /** The signed-in portals: a request without a session cookie is sent to /login before the page renders. */
-export const SIGNED_IN_PREFIXES = ["/dev", "/org", "/billing", "/settings", "/problems"] as const;
+export { SIGNED_IN_PREFIXES };
 
 /** Whether `pathname` is one of the signed-in portals or below one (exact case, as the matcher). */
 export function isSignedInPath(pathname: string): boolean {
@@ -56,10 +58,8 @@ export async function proxy(request: NextRequest) {
   );
   if (isSignedInPath(request.nextUrl.pathname)) {
     if (cookie) return NextResponse.next();
-    const login = request.nextUrl.clone();
-    login.pathname = "/login";
-    login.search = "";
-    return NextResponse.redirect(login, 307);
+    const { pathname, search } = request.nextUrl;
+    return NextResponse.redirect(new URL(loginHref(`${pathname}${search}`), request.url), 307);
   }
   if (await admitsStaff(cookie)) return NextResponse.next();
   return NextResponse.rewrite(new URL(UNMATCHED_PATH, request.url));

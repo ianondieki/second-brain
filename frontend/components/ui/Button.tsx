@@ -5,7 +5,9 @@ import { cn } from "./cn";
 export type ButtonVariant = "primary" | "secondary" | "danger" | "link";
 
 const base =
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control text-base font-semibold " +
+  // py-2 and text-center: a label that wraps at 360 px ("Start a proposal from this problem") keeps breathing room and
+  // stays centred; a one-line button is still 48 px (min-h-12).
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control py-2 text-center text-base font-semibold " +
   "transition-colors duration-150 ease-out aria-disabled:cursor-progress";
 
 const variants: Record<ButtonVariant, string> = {
@@ -41,6 +43,12 @@ export const textLinkClass =
 export const standaloneLinkClass =
   "inline-flex min-h-11 items-center font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
   "hover:text-accent-strong";
+
+/**
+ * A title that is a link (a row's title, a problem named inside a row): the words stay ink, with a quiet hairline
+ * underline that turns to the accent on hover.
+ */
+export const titleLinkClass = "underline decoration-line decoration-1 underline-offset-4 hover:decoration-jacaranda";
 
 export function buttonClass(variant: ButtonVariant, className?: string) {
   return cn(base, variants[variant], className);

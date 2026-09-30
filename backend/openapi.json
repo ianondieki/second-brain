@@ -2439,7 +2439,13 @@
                 "type": "null"
               }
             ],
+            "description": "When the problem was published (null while it is not)",
             "title": "Published At"
+          },
+          "seeded_example": {
+            "description": "A demo seed card made from a fixed answer, never a live AI result",
+            "title": "Seeded Example",
+            "type": "boolean"
           },
           "source": {
             "$ref": "#/components/schemas/ProblemSource"
@@ -2459,10 +2465,11 @@
           "source",
           "label",
           "niche",
+          "seeded_example",
+          "published_at",
           "statement",
           "country",
-          "county_code",
-          "published_at"
+          "county_code"
         ],
         "title": "DiscoverProblem",
         "type": "object"
@@ -6403,7 +6410,13 @@
                 "type": "null"
               }
             ],
+            "description": "When the problem was published (null while it is not)",
             "title": "Published At"
+          },
+          "seeded_example": {
+            "description": "A demo seed card made from a fixed answer, never a live AI result",
+            "title": "Seeded Example",
+            "type": "boolean"
           },
           "source": {
             "$ref": "#/components/schemas/ProblemSource"
@@ -6423,8 +6436,9 @@
           "source",
           "label",
           "niche",
-          "statement",
-          "published_at"
+          "seeded_example",
+          "published_at",
+          "statement"
         ],
         "title": "ProblemCard",
         "type": "object"
@@ -6525,6 +6539,7 @@
                 "type": "null"
               }
             ],
+            "description": "When the problem was published (null while it is not)",
             "title": "Published At"
           },
           "seeded_example": {
@@ -6550,13 +6565,13 @@
           "source",
           "label",
           "niche",
-          "statement",
+          "seeded_example",
           "published_at",
+          "statement",
           "affected_group",
           "country",
           "county_code",
           "ai_generated",
-          "seeded_example",
           "confidence",
           "named_orgs",
           "citations"
@@ -6609,6 +6624,24 @@
               }
             ]
           },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the problem was published (null while it is not)",
+            "title": "Published At"
+          },
+          "seeded_example": {
+            "description": "A demo seed card made from a fixed answer, never a live AI result",
+            "title": "Seeded Example",
+            "type": "boolean"
+          },
           "source": {
             "$ref": "#/components/schemas/ProblemSource"
           },
@@ -6622,7 +6655,9 @@
           "title",
           "source",
           "label",
-          "niche"
+          "niche",
+          "seeded_example",
+          "published_at"
         ],
         "title": "ProblemRef",
         "type": "object"

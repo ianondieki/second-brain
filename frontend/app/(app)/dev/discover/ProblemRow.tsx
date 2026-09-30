@@ -2,9 +2,11 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { formatDate, problemHref, safeHttpsUrl } from "@/components/problem/problem";
+import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { Row } from "@/components/ui/RowList";
 
-import { ChipList, Chips, MoreSummary, TrendBadge } from "./Chips";
+import { cardBadges, ChipList, MoreSummary, TrendBadge, WhyChip } from "./Chips";
 import {
   cardChips,
   countryName,
@@ -20,10 +22,7 @@ import {
   type TrendingProblem,
   type TrendingProject,
 } from "./discover";
-
-export const titleLinkClass =
-  "-my-2 inline-flex min-h-11 items-center py-2 font-semibold [overflow-wrap:anywhere] text-ink " +
-  "underline decoration-transparent decoration-1 underline-offset-[0.2em] hover:decoration-jacaranda";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface ProblemRowProps {
   item: TrendingProblem;
@@ -34,10 +33,11 @@ export interface ProblemRowProps {
 }
 
 /**
- * One trending, new or under-served problem (REQ-TREND-02; docs/spec/06 6.6): its trend badge when it trends, its
- * title linking to the public problem card, niche, place and proposal count, the statement, at most two Why chips
- * (docs/spec/07 item 2), and "Start a proposal from this problem". The other chips, its newest sources and the
- * projects solving it sit under "More about this problem" (a native disclosure: no script).
+ * One trending, new or under-served problem (REQ-TREND-02; docs/spec/06 6.6), a Row: its title linking to the problem
+ * card, one meta line (niche, place, proposal count, provenance), at most two badges (the trend badge when it trends,
+ * then Why chips; docs/spec/07 item 2), the statement, and "Start a proposal from this problem". The other chips, its
+ * newest sources and the projects solving it sit under "More about this problem" (a native disclosure: no script).
+ * The title is the only link to the card (the row holds its own controls, so it is not stretched).
  */
 export function ProblemRow({ item, counties, projects = [], query }: ProblemRowProps) {
   const t = useTranslations("discover");
@@ -49,32 +49,34 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
   const titleId = `${problemAnchor(problem.id)}-title`;
 
   return (
-    <article
+    <Row
       id={problemAnchor(problem.id)}
       aria-labelledby={titleId}
       data-problem={problem.id}
       data-trending={trend.trending ? "" : undefined}
-      className="flex min-w-0 flex-col gap-2 border-t border-line py-5"
+      title={problem.title}
+      titleId={titleId}
+      href={problemHref(problem.id)}
+      stretch={false}
+      meta={
+        <span className="flex flex-wrap gap-x-4">
+          {problem.niche ? <span>{problem.niche.label}</span> : null}
+          <span>{place}</span>
+          <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
+          {/* Provenance in the page's language: developer-reported, AI-drafted and human-reviewed, or a seeded example. */}
+          <ProblemLabelText problem={problem} />
+        </span>
+      }
+      badges={cardBadges([
+        trend.trending && trend.badge ? <TrendBadge key="trend" badge={trend.badge} /> : null,
+        ...chips.map((chip) => <WhyChip key={chip}>{chip}</WhyChip>),
+      ])}
     >
-      <TrendBadge badge={trend.trending ? trend.badge : null} />
-      <h3 id={titleId} className="text-lg leading-snug">
-        <Link href={problemHref(problem.id)} className={titleLinkClass}>
-          {problem.title}
-        </Link>
-      </h3>
-      <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
-        {problem.niche ? <span>{problem.niche.label}</span> : null}
-        <span>{place}</span>
-        <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
-        {/* Provenance: developer-reported, AI-drafted and human-reviewed, or a seeded demo example (the API's words). */}
-        {problem.label ? <span data-label="">{problem.label}</span> : null}
-      </p>
-      <p className="line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
-      <Chips items={chips} className="mt-1" />
+      <p className="mt-1 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
 
       <details className="group">
         <MoreSummary>{t("moreProblem")}</MoreSummary>
-        <div className="mt-2 flex max-w-[65ch] flex-col gap-5 border-l-2 border-jacaranda-wash pl-4">
+        <div className="mt-1 mb-2 flex max-w-[65ch] flex-col gap-5">
           {rest.length > 0 ? (
             <section>
               <h4 className="text-sm font-semibold text-ink">{t("whyTitle")}</h4>
@@ -118,11 +120,11 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
       </details>
 
       <p>
-        <Link href={startProposalHref(problem.id)} className={standaloneLinkClass}>
+        <StandaloneLink href={startProposalHref(problem.id)}>
           {t("start")}
-        </Link>
+        </StandaloneLink>
       </p>
-    </article>
+    </Row>
   );
 }
 

@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { signUpDeveloper } from "./support/accounts";
 import { checkScreen, expectEmptyState } from "./support/screen";
 import { makeD1, OWNER_DATABASE_URL } from "./support/verification";
+import { loginReturningTo } from "./support/login";
 
 // REQ-PROP-01 (F2) and REQ-PROV-02: Developer › My ideas against the compose stack, in both projects (360 px and
 // desktop): the list, the three-step editor with autosave, the Tier-1 sanitiser shown inline, attachments (the fake
@@ -42,7 +43,7 @@ async function fillStepOne(page: Page, title: string) {
 test("signed-out visits to My ideas go to the login page", async ({ page }) => {
   for (const path of ["/dev/ideas", "/dev/ideas/new", "/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path));
   }
 });
 
@@ -63,13 +64,13 @@ test.describe("a signed-in developer", () => {
       "Write up your first idea: a short public teaser, then the confidential details.",
       "New idea",
     );
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.getByRole("link", { name: "New idea" }).click();
     await expect(page).toHaveURL(/\/dev\/ideas\/new$/, SERVER_STEP);
     await expect(page.locator("ol [aria-current='step']")).toContainText("Problem and teaser");
     await expect(page.locator("[data-primary]")).toHaveText("Continue");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // The sanitiser's findings sit next to their field; nothing is saved until the teaser is clean.
     await page.getByLabel("Title", { exact: true }).fill("Dairy cold chain");
@@ -91,7 +92,7 @@ test.describe("a signed-in developer", () => {
     await expect(row).toBeVisible();
     await expect(row.locator("[data-status]")).toHaveText("Draft");
     expect(await row.locator("[data-status], [data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
   });
 
   test("goes through the three steps, attaches files and cannot publish below D1", async ({ page }) => {
@@ -119,13 +120,13 @@ test.describe("a signed-in developer", () => {
     await upload.setInputFiles({ name: "setup.exe", mimeType: "application/octet-stream", buffer: Buffer.from("MZ") });
     await expect(page.getByText("Attach a PDF, PNG, JPG, Markdown or plain-text file.")).toBeVisible();
     await waitForSave(page);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.locator("ol [aria-current='step']")).toContainText("Review and publish");
     await expect(page.locator("[data-primary]")).toHaveText("Publish");
     await expect(page.getByText("Files: 1")).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // The three statements come from the API and must all be confirmed.
     await page.getByRole("button", { name: "Publish", exact: true }).click();
@@ -169,7 +170,7 @@ test.describe("a signed-in developer", () => {
     // A published idea's next step is pitching it (REQ-PROP-03); editing stays one button away.
     await expect(page.locator("[data-primary]")).toHaveText("Pitch to companies");
     await expect(page.getByRole("link", { name: "Edit idea" })).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // The new problem is now listed: a second idea can link it from the picker.
     await page.goto("/dev/ideas/new");
@@ -200,7 +201,7 @@ test.describe("a signed-in developer", () => {
     await page.getByRole("link", { name: "Throwaway draft" }).click();
     await expect(page.getByText("This idea is a draft: only you can see it until you publish.")).toBeVisible();
     await expect(page.getByText("A certificate is issued when you publish.")).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.getByRole("button", { name: "Delete idea" }).click();
     const dialog = page.getByRole("dialog", { name: "Delete this idea?" });
     await expect(dialog).toContainText("never published");

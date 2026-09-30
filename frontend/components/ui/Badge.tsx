@@ -4,8 +4,12 @@ import { cn } from "./cn";
 
 export type BadgeTone = "accent" | "ok" | "error" | "neutral";
 
-/** The shape every status mark shares: an icon and words on one line, small and bold. */
-export const badgeBase = "inline-flex items-center gap-1.5 text-sm font-semibold [&>svg]:size-4 [&>svg]:shrink-0";
+/**
+ * The shape every status mark shares: an icon and words, small and bold. The icon sits on the first line (a 16 px
+ * mark 2 px down a 20 px line: centred on one line, and still beside the first line when a long badge wraps).
+ */
+export const badgeBase =
+  "inline-flex items-start gap-1.5 text-sm font-semibold [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0";
 
 const tones: Record<BadgeTone, string> = {
   accent: "text-jacaranda",

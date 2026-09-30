@@ -199,11 +199,12 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
 
   if (phase.name === "on") {
     return (
-      <div className="mt-8 flex flex-col items-start gap-6">
+      <div className="flex flex-col items-start gap-6">
         {errorBlock}
-        <p className="inline-flex items-start gap-2 font-semibold text-ok">
-          <CheckIcon className="mt-0.5 size-5 shrink-0" />
-          {t("on")}
+        {/* Badge's markup (icon + words in the ok tone), written out: the page is at the JS budget (see page.tsx). */}
+        <p className="inline-flex items-start gap-1.5 text-sm font-semibold text-ok">
+          <CheckIcon className="mt-0.5 size-4 shrink-0" />
+          <span>{t("on")}</span>
         </p>
         {notice?.key === "codesNotShown" ? (
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
@@ -219,35 +220,35 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             {busy ? t("turningOff") : t("turnOff")}
           </Button>
         )}
-        <section
-          aria-labelledby="recovery-heading"
-          className="flex w-full flex-col items-start gap-4 border-t border-line pt-6"
-        >
+        {/* Section's markup at level 3, written out for the JS budget (see page.tsx). */}
+        <section aria-labelledby="recovery-heading" className="mt-6 w-full">
           <h3 id="recovery-heading" className="text-base text-ink">
             {t("recoveryTitle")}
           </h3>
-          {renewing ? (
-            <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
-              <NewRecoveryCodes
-                email={email}
-                onClose={closeRenewal}
-                onReplaced={() => setNotice(null)}
-                onTwoStepOff={() => backToStart("totp_not_enabled", null)}
-              />
-            </Suspense>
-          ) : (
-            <>
-              <p className="text-ink-soft">{t("recoveryLead")}</p>
-              <Button
-                id="new-codes"
-                // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
-                variant={notice?.key === "codesNotShown" ? "primary" : "secondary"}
-                onClick={openRenewal}
-              >
-                {t("newCodes")}
-              </Button>
-            </>
-          )}
+          <div className="mt-4 flex flex-col items-start gap-4">
+            {renewing ? (
+              <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
+                <NewRecoveryCodes
+                  email={email}
+                  onClose={closeRenewal}
+                  onReplaced={() => setNotice(null)}
+                  onTwoStepOff={() => backToStart("totp_not_enabled", null)}
+                />
+              </Suspense>
+            ) : (
+              <>
+                <p className="text-ink-soft">{t("recoveryLead")}</p>
+                <Button
+                  id="new-codes"
+                  // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
+                  variant={notice?.key === "codesNotShown" ? "primary" : "secondary"}
+                  onClick={openRenewal}
+                >
+                  {t("newCodes")}
+                </Button>
+              </>
+            )}
+          </div>
         </section>
         <Link href={homeHref} className={textLinkClass}>
           {t("back")}
@@ -259,7 +260,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   if (phase.name === "setup") {
     const entryName = issuerOf(phase.otpauthUri) ?? productName;
     return (
-      <div className="mt-8">
+      <div>
         <Suspense fallback={<p role="status" className="text-ink-soft">{t("starting")}</p>}>
           <EnrolmentSteps
             secret={phase.secret}
@@ -276,7 +277,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   }
 
   return (
-    <div className="mt-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {notice?.key === "off" ? (
         <Alert ref={noticeRef} tone="info">
           {t("off")}

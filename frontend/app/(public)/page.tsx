@@ -1,11 +1,17 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
 import { textLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { getSignedIn } from "@/lib/api/server";
+import { homeOf } from "@/lib/auth/routing";
 
+/** The landing page for visitors; a signed-in person goes to their own home (a server-side redirect, no script). */
 export default async function Landing() {
+  const me = await getSignedIn();
+  if (me) redirect(homeOf(me));
   const t = await getTranslations("landing");
   return (
     <AuthShell landing>

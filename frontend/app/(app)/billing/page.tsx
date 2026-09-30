@@ -1,21 +1,25 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { SignedInShell } from "@/components/SignedInShell";
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
+import { Badge } from "@/components/ui/Badge";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Row, RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
+
 import { getCurrentPlan, getPlans } from "./data";
 import { SamplePrices } from "./SamplePrices";
 import { billingSubject, priceKind, rowAction, sameLinesAs, sideOf, type Plan, type RowAction } from "./plans";
 import { lineTexts, priceText } from "./text";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("billing");
@@ -36,9 +40,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
 
   const shell = (lead: ReactNode, children: ReactNode) => (
     <SignedInShell homeHref={home}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-      {lead}
-      <div className="mt-8">{children}</div>
+      <PageHeader title={t("pageTitle")}>{lead}</PageHeader>
+      <div className="mt-10">{children}</div>
     </SignedInShell>
   );
 
@@ -56,7 +59,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   const orgId = subject.kind === "org" ? subject.membership.org_id : undefined;
   const forOrg =
     subject.kind === "org" ? (
-      <p className="mt-1 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
+      <p className="mt-2 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
     ) : null;
   const [catalogue, current] = await Promise.all([getPlans(sideOf(subject)), getCurrentPlan(subject)]);
 
@@ -88,43 +91,40 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
         {t("current", { plan: currentName })}
       </p>
     </>,
-    <section aria-labelledby="plans-title">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line pb-3">
-        <h2 id="plans-title" className="text-lg text-ink">
-          {t("plansTitle")}
-        </h2>
-        {catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : null}
-      </div>
-      <ol className="mt-6 flex flex-col" data-ladder="">
+    <Section
+      title={t("plansTitle")}
+      headingId="plans-title"
+      description={catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : undefined}
+    >
+      <RowList ordered data-ladder="">
         {plans.map((plan, index) => (
           <PlanRow
             key={plan.code}
             plan={plan}
             action={rowAction(plans, current.code, plan)}
-            last={index === plans.length - 1}
             sameAs={sameAs[index]}
             href={upgradeHref(plan.code, { org: orgId })}
           />
         ))}
-      </ol>
-    </section>,
+      </RowList>
+    </Section>,
   );
 }
 
 /**
- * One rung of the ladder: a mark on the rail (filled for the current plan), the name and price, what the plan allows,
- * and its action. Only the upgrade the API's 402 would point to is the primary button.
+ * One plan of the ladder, a Row: its name, its price on the right (tabular figures) or "not sold here" under the name,
+ * "Your plan" as the accent Badge on the current one (you are here), what the plan allows, and its action: the
+ * primary "Upgrade to" on the plan a 402 would point to, the same words as a link on other plans that can be bought
+ * (the checkout page is titled that way too).
  */
 async function PlanRow({
   plan,
   action,
-  last,
   href,
   sameAs,
 }: {
   plan: Plan;
   action: RowAction;
-  last: boolean;
   href: string;
   /** An earlier plan that allows the same: said once instead of repeating its list. */
   sameAs: string | null;
@@ -134,65 +134,47 @@ async function PlanRow({
   const lines = sameAs ? [t("sameAs", { plan: sameAs })] : listed;
   const kind = priceKind(plan);
   const current = action === "current";
-  const reachable = action === "upgrade" || action === "choose";
   return (
-    <li
+    <Row
       aria-current={current ? "true" : undefined}
       data-plan={plan.code}
-      className="relative flex gap-4 pb-8 last:pb-0"
+      title={plan.name}
+      // A free plan's name already says so ("Free", "Claimed (Free)"); a plan not sold here says why under its name.
+      // The price is the row's figure from 640 px; below that it is the meta line, so what the plan allows and its
+      // one action keep the whole width at 360 px (ux-review round 2).
+      figure={kind === "free" || kind === "notSold" ? undefined : price}
+      figureFrom="sm"
+      meta={
+        kind === "notSold" ? price : kind === "free" ? undefined : <span className="text-base text-ink sm:hidden">{price}</span>
+      }
+      badges={
+        current
+          ? [
+              <Badge key="yours" tone="accent" icon={<CheckIcon />} data-your-plan="">
+                {t("yourPlan")}
+              </Badge>,
+            ]
+          : undefined
+      }
     >
-      {last ? null : <span aria-hidden="true" className="absolute top-7 bottom-1 left-[11px] w-0.5 rounded-full bg-line" />}
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2",
-          current
-            ? "border-jacaranda bg-jacaranda text-on-accent"
-            : reachable
-              ? "border-jacaranda bg-paper"
-              : "border-line bg-paper",
-        )}
-      >
-        {current ? <CheckIcon className="size-4" /> : null}
-      </span>
-      <div className="min-w-0 flex-1">
-        {/* Under 640 px the price always has its own line below the name; from 640 px it sits on the right. */}
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4">
-          <h3 className="text-lg leading-7 [overflow-wrap:anywhere] text-ink">
-            {plan.name}
-          </h3>
-          {/* A free plan's name already says so ("Free", "Claimed (Free)"). */}
-          {kind === "free" ? null : (
-            <p className={cn("tabular-nums", kind === "notSold" ? "text-sm text-ink-soft" : "text-ink")}>{price}</p>
-          )}
-        </div>
-        {current ? (
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-jacaranda" data-your-plan="">
-            <CheckIcon className="size-4 shrink-0" />
-            {t("yourPlan")}
-          </p>
-        ) : null}
-        {lines.length > 0 ? (
-          <ul className="mt-2 flex flex-col gap-1 text-ink-soft">
-            {lines.map((line) => (
-              <li key={line} className="flex gap-2">
-                <span aria-hidden="true" className="mt-[0.7em] size-1 shrink-0 rounded-full bg-ink-soft" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {action === "upgrade" ? (
-          <Link href={href} data-primary="" className={buttonClass("primary", "mt-4 no-underline")}>
+      {lines.length > 0 ? (
+        <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-ink-soft marker:text-ink-soft">
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
+      {action === "upgrade" ? (
+        <div className="mt-3">
+          <ButtonLink href={href} variant="primary" className="no-underline">
             {t("upgradeTo", { plan: plan.name })}
-          </Link>
-        ) : action === "choose" ? (
-          <Link href={href} className={cn(standaloneLinkClass, "mt-2")}>
-            {t("choose", { plan: plan.name })}
-          </Link>
-        ) : null}
-      </div>
-    </li>
+          </ButtonLink>
+        </div>
+      ) : action === "choose" ? (
+        <p className="mt-1">
+          <StandaloneLink href={href}>{t("upgradeTo", { plan: plan.name })}</StandaloneLink>
+        </p>
+      ) : null}
+    </Row>
   );
 }
-

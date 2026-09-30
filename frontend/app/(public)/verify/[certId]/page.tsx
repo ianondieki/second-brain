@@ -5,12 +5,14 @@ import { getTranslations } from "next-intl/server";
 
 import { IntlScope } from "@/components/IntlScope";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import { normaliseCertId } from "../certificate";
 import { FileCheck } from "../FileCheck";
 import { lookupCertificate } from "../lookup";
 import { VerifyShell } from "../VerifyShell";
 import { VerifyRecord } from "../VerifyRecord";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /** The path segment as typed; a stray "%" that does not decode is kept as is (it then fails the id pattern). */
 function segment(value: string): string {
@@ -47,19 +49,19 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
     const again = lookup.kind === "rateLimited" || lookup.kind === "unavailable";
     return (
       <VerifyShell>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-        <p className="mt-3 text-ink" data-testid="verify-message">
+        <PageHeader title={t("pageTitle")} />
+        <p className="mt-4 max-w-[60ch] text-ink" data-testid="verify-message">
           {lookup.kind === "rateLimited"
             ? t("rateLimited")
             : lookup.kind === "unavailable"
               ? t("unavailable")
               : t("notFound")}
         </p>
-        <div className="mt-6">
+        <div className="mt-3">
           {again && certId ? (
-            <Link href={`/verify/${certId}`} className={standaloneLinkClass}>
+            <StandaloneLink href={`/verify/${certId}`}>
               {t("retry")}
-            </Link>
+            </StandaloneLink>
           ) : (
             <Link href="/verify" className={standaloneLinkClass}>
               {t("another")}
@@ -72,11 +74,11 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
 
   return (
     <VerifyShell>
-      <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{t("recordTitle", { certId })}</h1>
-      <div className="mt-4">
+      <PageHeader title={t("recordTitle", { certId })} />
+      <div className="mt-8">
         <VerifyRecord record={lookup.record} />
       </div>
-      <div className="mt-12 border-t border-line pt-8">
+      <div className="mt-12">
         <IntlScope namespaces={["verifyFile"]}>
           <FileCheck certId={certId} primary />
         </IntlScope>

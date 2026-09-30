@@ -2,6 +2,7 @@
 
 import { useStrings } from "@/components/ClientStrings";
 
+import { Callout } from "@/components/ui/Callout";
 import { LockIcon } from "@/components/ui/status-icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
@@ -31,14 +32,16 @@ export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
   const issueMessage = useIssueMessage();
   const linkProblem = linksProblem(state.links);
   return (
-    <section aria-labelledby="details-notice" className="flex flex-col gap-6 border-l-4 border-jacaranda pl-4 sm:pl-6">
-      <div>
-        <p id="details-notice" className="inline-flex items-center gap-1.5 font-semibold text-jacaranda">
-          <LockIcon className="size-5 shrink-0" />
-          {f("confidentialBadge")}
-        </p>
-        <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{f("confidentialNotice")}</p>
-      </div>
+    <section aria-labelledby="details-notice" className="flex flex-col gap-6">
+      {/* Who can read this step, as a static notice with a lock (no coloured left rule). */}
+      <Callout
+        tone="neutral"
+        titleId="details-notice"
+        title={f("confidentialBadge")}
+        icon={<LockIcon className="mt-0.5 size-5 shrink-0 text-ink-soft" />}
+      >
+        <p className="max-w-[62ch] text-sm text-ink-soft">{f("confidentialNotice")}</p>
+      </Callout>
       {WRITTEN.map((key) => (
         <TextAreaField
           key={key}

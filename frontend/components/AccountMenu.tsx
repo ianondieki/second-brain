@@ -3,9 +3,8 @@
 import { useSearchParams } from "next/navigation";
 import { use, useEffect, useId, useRef, useState } from "react";
 
-import { billingHref } from "@/lib/billing/upgrade";
-
 import { MenuOptions } from "./AccountMenuScope";
+import { menuBillingHref } from "./billing-link";
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "./ui/cn";
@@ -28,7 +27,9 @@ function ChevronIcon(props: IconProps) {
   );
 }
 
+const SECURITY_HREF = "/settings/security";
 const NOTIFICATIONS_HREF = "/settings/notifications";
+
 const HELP_HREF = "/help";
 
 const itemClass =
@@ -49,7 +50,7 @@ export function AccountMenu() {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   // Organisation screens carry the organisation as ?org= (members of several): Plan & billing keeps it.
-  const billing = billingHref(useSearchParams().get("org") ?? undefined);
+  const billing = menuBillingHref(useSearchParams().get("org"));
 
   useEffect(() => {
     if (!open) return;
@@ -104,6 +105,11 @@ export function AccountMenu() {
               </a>
             </li>
           ) : null}
+          <li>
+            <a href={SECURITY_HREF} className={itemClass}>
+              {t("security")}
+            </a>
+          </li>
           <li>
             <a href={NOTIFICATIONS_HREF} className={itemClass}>
               {t("notifications")}

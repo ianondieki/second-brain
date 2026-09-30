@@ -11,6 +11,7 @@ import { DiscoverList } from "./DiscoverList";
 import { NichePicker } from "./niches/NichePicker";
 import { ProfilingToggle } from "./niches/ProfilingToggle";
 import { ProblemRow } from "./ProblemRow";
+import { ProjectRow } from "./ProjectRow";
 import { RecommendedForYou } from "./RecommendedForYou";
 import { recommendationsState } from "./recommendations";
 
@@ -33,16 +34,36 @@ function renderSw(ui: ReactElement) {
 }
 
 describe("provenance", () => {
-  it("shows the problem's label on a Discover card and on a Home recommendation", () => {
+  it("shows the problem's label on a Discover card and on a Home recommendation, as the problem page words it", () => {
     const seeded = "Seeded example for the demo (not a live AI result), human-reviewed on 30 September 2026";
     const { unmount } = renderWithIntl(
       <ProblemRow item={trendingProblem()} counties={COUNTIES} query={{ view: "problems" }} />,
     );
     expect(document.querySelector("[data-label]")?.textContent).toBe("Developer-reported");
     unmount();
-    const item = recommendation({ problem: { ...recommendation().problem, label: seeded } });
-    renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [item] }))} />);
+    // The API's English label says "30 September 2026"; the page builds its own, in the problem page's date format.
+    const item = recommendation({ problem: { ...recommendation().problem, label: seeded, seeded_example: true } });
+    const home = renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [item] }))} />);
+    expect(document.querySelector("[data-label]")?.textContent).toBe(
+      "Seeded example for the demo (not a live AI result), human-reviewed on 30 Sep 2026",
+    );
+    home.unmount();
+    // An API without the field: its own words, never a guess.
+    const { seeded_example: _dropped, ...older } = item.problem;
+    void _dropped;
+    renderWithIntl(
+      <RecommendedForYou state={recommendationsState(recommendations({ items: [{ ...item, problem: older as typeof item.problem }] }))} />,
+    );
     expect(document.querySelector("[data-label]")?.textContent).toBe(seeded);
+  });
+
+  it("labels the problem a project solves (P12-F re-review MINOR 5)", () => {
+    const project = trendingProject({
+      problem: { ...trendingProject().problem, source: "research_agent", label: "x", seeded_example: false },
+    });
+    renderWithIntl(<ProjectRow item={project} />);
+    const solves = document.querySelector("[data-solves]")!;
+    expect(solves.querySelector("[data-label]")?.textContent).toBe("AI-drafted, human-reviewed on 30 Sep 2026");
   });
 
   it("words the missing sources by who described the problem", () => {

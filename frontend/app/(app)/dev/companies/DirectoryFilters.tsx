@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass, primaryMark } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -15,6 +14,7 @@ import {
   type FilterOptions,
   type NicheNode,
 } from "./filters";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface DirectoryFiltersProps {
   filters: Filters;
@@ -26,8 +26,8 @@ export interface DirectoryFiltersProps {
 
 /**
  * Search and filters as a plain GET form: the URL holds the state, so results are server-rendered, shareable and
- * work before JavaScript loads (docs/spec/07 item 5). The name search and "Show companies" (the screen's one primary
- * action) stay in view; niche, org type and county sit in a disclosure that starts open when one is set.
+ * work before JavaScript loads (docs/spec/07 item 5). The name search stays in view; niche, org type and county sit in
+ * a disclosure that starts open when one is set; "Show companies" (the screen's one primary action) comes after them.
  */
 export function DirectoryFilters({ filters, niches, options, showClear = true }: DirectoryFiltersProps) {
   const t = useTranslations("companies");
@@ -36,23 +36,16 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
 
   return (
     <form method="get" action={BASE_PATH} role="search" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="min-w-0 flex-1">
-          <TextField
-            id="directory-q"
-            name="q"
-            type="search"
-            label={t("searchLabel")}
-            defaultValue={filters.q}
-            maxLength={100}
-            autoComplete="off"
-            enterKeyHint="search"
-          />
-        </div>
-        <button type="submit" data-primary="" className={buttonClass("primary", "shrink-0")}>
-          {t("submit")}
-        </button>
-      </div>
+      <TextField
+        id="directory-q"
+        name="q"
+        type="search"
+        label={t("searchLabel")}
+        defaultValue={filters.q}
+        maxLength={100}
+        autoComplete="off"
+        enterKeyHint="search"
+      />
 
       <details open={active > 0} className="group">
         <summary
@@ -103,11 +96,19 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
         </div>
       </details>
 
+      {/* After every field it submits, in reading and tab order (ux item 12). A plain GET form on a server page: the
+          Button component's click handler cannot cross to the browser. */}
+      <div>
+        <button type="submit" className={buttonClass("primary")} {...primaryMark("primary")}>
+          {t("submit")}
+        </button>
+      </div>
+
       {showClear && isNarrowed(filters) ? (
         <p>
-          <Link href={BASE_PATH} className={standaloneLinkClass}>
+          <StandaloneLink href={BASE_PATH}>
             {t("clear")}
-          </Link>
+          </StandaloneLink>
         </p>
       ) : null}
     </form>

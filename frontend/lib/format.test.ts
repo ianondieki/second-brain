@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCalendarDate, formatDay, formatMoment, formatTime, nairobiParts } from "./format";
+import { formatCalendarDate, formatDay, formatMoment, formatMomentSeconds, formatTime, nairobiParts } from "./format";
 
 // REQ-UX-07 (docs/spec/07 item 7): one date format on every screen, "30 Sep 2026", shown in Nairobi time.
 
@@ -49,8 +49,16 @@ describe("the shared date format", () => {
     expect(formatCalendarDate("en", "not a date")).toBe("not a date");
   });
 
+  it("writes a moment to the second in the same format, in Nairobi or UTC", () => {
+    expect(formatMomentSeconds("en", "2026-09-30T07:49:20Z")).toBe("30 Sep 2026, 10:49:20");
+    expect(formatMomentSeconds("en", "2026-09-30T07:49:20Z", "UTC")).toBe("30 Sep 2026, 07:49:20");
+    expect(formatMomentSeconds("en", "2026-09-30T21:30:05Z")).toBe("1 Oct 2026, 00:30:05"); // the next day in Nairobi
+    expect(formatMomentSeconds("sw", "2026-10-10T11:06:25Z")).toBe("10 Okt 2026, 14:06:25");
+  });
+
   it("uses the same shape in Swahili", () => {
-    expect(formatDay("sw", "2026-09-30T08:00:00Z")).toMatch(/^30 \S+ 2026$/);
-    expect(formatMoment("sw", "2026-09-30T11:06:00Z")).toMatch(/^30 \S+ 2026, 14:06$/);
+    expect(formatDay("sw", "2026-09-30T08:00:00Z")).toBe("30 Sep 2026");
+    expect(formatDay("sw", "2026-10-10T08:00:00Z")).toBe("10 Okt 2026");
+    expect(formatMoment("sw", "2026-10-10T11:06:00Z")).toBe("10 Okt 2026, 14:06");
   });
 });

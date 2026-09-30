@@ -13,6 +13,7 @@ import {
 } from "./support/pitch-scene";
 import { checkScreen } from "./support/screen";
 import { makeD1 } from "./support/verification";
+import { loginReturningTo } from "./support/login";
 
 // REQ-PROP-03 (F2 picker, AC-PROP-1/a from the developer's side), REQ-DIR-04 (held tags, AC-DIR-1's sentence),
 // REQ-PROV-03 and REQ-REPO-03 ("Who has seen this") against the compose stack, in both projects (360 px and desktop):
@@ -25,7 +26,7 @@ const E0_SENTENCE = (name: string) =>
 
 test("signed-out visits to the picker go to the login page", async ({ page }) => {
   await page.goto("/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3/pitch");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(loginReturningTo("/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3/pitch"));
 });
 
 /** Searches the picker by name and ticks the organisation's row. */
@@ -72,16 +73,27 @@ test.describe("a D1 developer with a published idea", () => {
       await expect(views.locator("[data-empty-state] p")).toHaveText("Nobody has opened the full details yet.");
       await expect(views.locator("[data-empty-state]").getByRole("link")).toHaveCount(1);
       await expect(views).toContainText("every view is logged and watermarked to the viewer");
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       // The picker: the directory by niche with badges, the cap, one primary action.
       await page.locator("[data-primary]").click();
       await expect(page).toHaveURL(new RegExp(`/dev/ideas/${idea.id}/pitch$`), SERVER_STEP);
+      // At 360 x 640, before any scrolling, the whole Pitch button clears the tab bar (P16-C1 fix round 1).
+      const size = page.viewportSize()!;
+      await page.setViewportSize({ width: 360, height: 640 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const clear = await page.evaluate(() => {
+        const tabs = document.querySelector("nav[data-tab-bar]")!.getBoundingClientRect();
+        const pitch = document.querySelector("[data-action-bar] button")!.getBoundingClientRect();
+        return { pitchBottom: pitch.bottom, tabsTop: tabs.top };
+      });
+      expect(clear.pitchBottom).toBeLessThanOrEqual(clear.tabsTop);
+      await page.setViewportSize(size);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pitch to companies");
       await expect(page.locator("[data-cap]")).toHaveText(/^\d+ of \d+ pitches left for this idea on your plan\.$|no limit/);
       await expect(page.locator("[data-primary]")).toHaveText("Pitch");
       await expect(page.locator("[data-badge]").first()).toBeVisible();
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       // Choices survive a new search: the E2 buyer first, then the E0 company.
       await choose(page, buyer.orgName);
@@ -98,7 +110,7 @@ test.describe("a D1 developer with a published idea", () => {
       await expect(listedRow.locator("[data-badge='e0']")).toBeVisible();
       await expect(listedRow.locator("[data-outcome]")).toHaveText("Saved until they verify");
       await expect(page.getByText(/^2 of \d+ chosen$/)).toBeVisible();
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       await page.locator("[data-primary]").click();
       const result = page.locator("[data-pitch-result]");
@@ -109,7 +121,7 @@ test.describe("a D1 developer with a published idea", () => {
       await expect(result).toContainText(E0_SENTENCE(listed.name));
       await expect(result).toContainText("A record of this pitch goes to your email address.");
       await expect(page.locator("[data-primary]")).toHaveText("Back to your idea");
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       // The idea's pitches: sent and saved, one chip each; the saved one can be withdrawn.
       await page.locator("[data-primary]").click();
@@ -121,7 +133,7 @@ test.describe("a D1 developer with a published idea", () => {
       for (const row of await page.getByRole("list", { name: "Companies you pitched this idea to" }).getByRole("listitem").all()) {
         expect(await row.locator("[data-status], [data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
       }
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       await pitchRow(page, listed.name).getByRole("button", { name: `Withdraw the pitch to ${listed.name}` }).click();
       const dialog = page.getByRole("dialog", { name: "Withdraw this pitch?" });
@@ -142,7 +154,7 @@ test.describe("a D1 developer with a published idea", () => {
       await expect(seen.first()).toContainText(`${buyer.name}, ${buyer.orgName}`);
       await expect(seen.first()).toContainText(/Nairobi time/);
       await expect(seen.first()).toContainText("Version 1");
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
 
       // The buyer is now pitched: the picker says so and refuses the row.
       await page.goto(`/dev/ideas/${idea.id}/pitch?q=${encodeURIComponent(buyer.orgName)}`);
@@ -168,7 +180,7 @@ test.describe("a D1 developer with a published idea", () => {
       await chosen.getByRole("checkbox", { name: buyer.orgName }).uncheck();
       await page.getByRole("checkbox", { name: listed.name, exact: true }).first().check();
       await expect(page.getByText(/^1 of \d+ chosen$/)).toBeVisible();
-      await checkScreen(page);
+      await checkScreen(page, { strict: true });
       await page.locator("[data-primary]").click();
       const result = page.locator("[data-pitch-result]");
       await expect(result.getByRole("heading", { name: "Saved until they verify (1)" })).toBeVisible(SERVER_STEP);
@@ -199,7 +211,7 @@ test.describe("a D1 developer with a published idea", () => {
     await expect(row.getByRole("checkbox")).not.toBeChecked();
     await expect(row.locator("[data-reason]")).toHaveText(`This idea is already pitched to ${listed.name}.`);
     await expect(page.getByText(/^0 of \d+ chosen$/)).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Focus is never hidden under the sticky bar and the tab bar (WCAG 2.4.11): after a refusal the bar stays the
     // summary and Pitch, both bars fit inside the focus scroll padding, and a focused field lands above them.
@@ -232,7 +244,7 @@ test.describe("a D1 developer with a published idea", () => {
     await expect(empty.locator("p")).toHaveText("Publish this idea before you pitch it.");
     await expect(empty.getByRole("link")).toHaveText("Back to your idea");
     await expect(page.locator("[data-primary]")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await page.goto(`/dev/ideas/${idea.id}`);
     await expect(page.getByRole("heading", { name: "Pitches" })).toHaveCount(0); // nothing registered yet

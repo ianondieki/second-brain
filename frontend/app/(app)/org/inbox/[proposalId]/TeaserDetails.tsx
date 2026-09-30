@@ -1,14 +1,12 @@
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import { standaloneLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { Section } from "@/components/ui/Section";
 
 import type { TeaserCard } from "../../data";
 import { MATURITY_KEY } from "../../labels";
 import { formatDay } from "../../format";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
  * The public teaser (Tier 1): what every signed-in person may read. The developer appears by their pseudonymous
@@ -47,12 +45,10 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
             <time dateTime={card.registered_at}>{formatDay(locale, card.registered_at)}</time>
           </Description>
           <Description label={t("certificate")}>
-            <Link
-              href={`/verify/${encodeURIComponent(card.cert_id)}`}
-              className={cn(standaloneLinkClass, "-my-2.5")}
-            >
+            <StandaloneLink
+              href={`/verify/${encodeURIComponent(card.cert_id)}`} className="-my-2.5">
               {t("certificateLink", { id: card.cert_id })}
-            </Link>
+            </StandaloneLink>
           </Description>
         </DescriptionList>
       </Section>

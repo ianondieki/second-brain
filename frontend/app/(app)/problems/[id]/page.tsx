@@ -6,8 +6,12 @@ import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
+import { ButtonLink } from "@/components/ui/ButtonLink";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
+
+import { DISCOVER_PATH, startProposalHref } from "../../dev/discover/discover";
 
 export async function generateMetadata({ params }: PageProps<"/problems/[id]">): Promise<Metadata> {
   const t = await getTranslations("problem");
@@ -24,20 +28,33 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("problem");
+  const td = await getTranslations("discover");
   const problem = await getProblem((await params).id);
+  // Developers come here from Discover and can start a proposal from the problem; other sides go back home.
+  const developer = home === "/dev";
+  const back = developer
+    ? { href: DISCOVER_PATH, label: t("backToDiscover") }
+    : { href: home, label: t("back") };
   return (
     <SignedInShell homeHref={home}>
       {problem ? (
         <>
-          <BackLink href={home}>{t("back")}</BackLink>
-          <ProblemCard problem={problem} />
+          <BackLink href={back.href}>{back.label}</BackLink>
+          <ProblemCard
+            problem={problem}
+            action={
+              developer ? (
+                <ButtonLink href={startProposalHref(problem.id)} variant="primary">
+                  {td("start")}
+                </ButtonLink>
+              ) : undefined
+            }
+          />
         </>
       ) : (
         <>
-          <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-          <div className="mt-6">
-            <EmptyState sentence={t("notFound")} action={t("back")} href={home} />
-          </div>
+          <PageHeader title={t("pageTitle")} />
+          <EmptyState sentence={t("notFound")} action={back.label} href={back.href} className="mt-8" />
         </>
       )}
     </SignedInShell>

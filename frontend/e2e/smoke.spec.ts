@@ -22,6 +22,7 @@ test("signed-out visits to signed-in routes answer 307 to /login", async ({ page
     const response = await page.request.get(path, { maxRedirects: 0 });
     expect(response.status(), path).toBe(307);
     const location = new URL(response.headers()["location"] ?? "", baseURL);
-    expect(`${location.pathname}${location.search}`, path).toBe("/login");
+    // With the page as its return path (P16-C1, lib/return-path.ts).
+    expect(`${location.pathname}${location.search}`, path).toBe(`/login?${new URLSearchParams({ next: path })}`);
   }
 });

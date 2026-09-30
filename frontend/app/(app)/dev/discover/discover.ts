@@ -109,10 +109,14 @@ export function cardChips(trend: { trending: boolean; badge: string | null }, wh
   return fresh.slice(0, badge ? 1 : 2);
 }
 
-/** Why chips not shown on the card itself (they go under "More about this problem"). */
+/**
+ * Why chips not shown on the card itself (they go under "More about this problem"): neither the chips on the card nor
+ * what the trend badge already says (P12-F re-review MINOR 6).
+ */
 export function moreWhy(trend: { trending: boolean; badge: string | null }, why: readonly string[]): string[] {
   const shown = new Set(cardChips(trend, why));
-  return honestChips(trend.trending, why).filter((chip) => !shown.has(chip));
+  const badge = trend.trending ? (trend.badge ?? "") : "";
+  return honestChips(trend.trending, why).filter((chip) => !shown.has(chip) && !(badge && badge.includes(chip)));
 }
 
 /**

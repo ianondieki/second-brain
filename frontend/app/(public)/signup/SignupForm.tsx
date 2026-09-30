@@ -238,7 +238,8 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
         </>
       ) : null}
 
-      <div className="border-t border-line pt-6">
+      {/* Groups are set apart by space, not rules (the hairline belongs to lists: p16-design-system.md). */}
+      <div className="pt-4">
         <fieldset aria-describedby="consents-hint" className="flex flex-col">
           <legend className="font-medium text-ink">{t("signup.consentsLegend")}</legend>
           <p id="consents-hint" className="mt-1 mb-1 text-sm text-ink-soft">
@@ -266,7 +267,7 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
         </fieldset>
       </div>
 
-      <div className="border-t border-line pt-4">
+      <div className="pt-2">
         <Checkbox
           id="terms"
           name="accept_terms"

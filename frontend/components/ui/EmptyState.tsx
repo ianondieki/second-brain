@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { buttonClass, standaloneLinkClass } from "./Button";
+import { cn } from "./cn";
+import { LinkPending } from "./LinkPending";
 import { EmptyStateFrame, type DataAttributes } from "./EmptyStateFrame";
 
 export interface EmptyStateProps extends DataAttributes {
@@ -24,12 +26,14 @@ export function EmptyState({ sentence, action, href, primary = false, ...frame }
       sentence={sentence}
       action={
         primary ? (
-          <Link href={href} data-primary="" className={buttonClass("primary", "no-underline")}>
+          <Link href={href} data-primary="" className={buttonClass("primary", "relative no-underline")}>
             {action}
+            <LinkPending tone="current" className="absolute bottom-1.5 left-1/2 -translate-x-1/2" />
           </Link>
         ) : (
-          <Link href={href} className={standaloneLinkClass}>
+          <Link href={href} className={cn(standaloneLinkClass, "relative")}>
             {action}
+            <LinkPending className="absolute bottom-0.5 left-0" />
           </Link>
         )
       }

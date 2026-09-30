@@ -57,11 +57,12 @@ describe("a Discover problem", () => {
   it("lists the other chips, its sources and the projects solving it under the disclosure", () => {
     renderWithIntl(<ProblemRow item={trendingProblem()} counties={COUNTIES} projects={[trendingProject()]} query={{ view: "problems", niche: "ict" }} />);
     const more = screen.getByText("More about this problem").closest("details")!;
-    expect(within(more).getByText("4 companies scouting")).toBeTruthy();
+    expect(within(more).getByText("New this week")).toBeTruthy();
+    expect(within(more).queryByText("4 companies scouting")).toBeNull(); // the badge says it already
     const source = within(more).getByRole("link", { name: "Communications Authority of Kenya" });
     expect(source.getAttribute("href")).toBe("https://www.ca.go.ke/report");
     expect(source.getAttribute("rel")).toContain("noopener");
-    expect(within(more).getByText(/^Published 28 Sept? 2026$/)).toBeTruthy(); // "Sept" or "Sep" (P16-A)
+    expect(within(more).getByText("Published 28 Sep 2026")).toBeTruthy(); // one date format (REQ-UX-07)
     expect(within(more).getByRole("link", { name: "Fuel-level alerts for off-grid tower sites" }).getAttribute("href")).toBe(
       `/dev/discover?view=projects&niche=ict#project-${PROJECT_ID}`,
     );

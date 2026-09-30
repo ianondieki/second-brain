@@ -10,9 +10,14 @@ vi.mock("next/headers", () => ({
   }),
   headers: async () => mocks.headers,
 }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+const redirect = vi.hoisted(() =>
+  vi.fn((to: string) => {
+    throw new Error(`redirect:${to}`);
+  }),
+);
+vi.mock("next/navigation", () => ({ redirect }));
 
-const { forwardHeaders } = await import("./server");
+const { forwardHeaders, requirePendingMfa } = await import("./server");
 
 const TOKEN = "a".repeat(43); // secrets.token_urlsafe(32)
 
@@ -52,5 +57,32 @@ describe("forwardHeaders", () => {
     // Headers refuses CR/LF itself; stub the getter so the pattern is what is tested.
     mocks.headers = { get: () => value } as unknown as Headers;
     expect(await forwardHeaders({ session: false })).toEqual({});
+  });
+});
+
+// Reviewer MINOR 6 (P16-C1 fix round 1): /auth/mfa for someone already fully signed in.
+describe("requirePendingMfa", () => {
+  const me = (pending: boolean) => ({
+    side: pending ? "pending" : "developer",
+    mfa: { enrolled: true, verified: !pending, required: false },
+    user: { staff_role: null },
+  });
+  function answer(body: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } })));
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a fully signed-in person to a safe return path, else home", async () => {
+    mocks.cookies.set("__Host-bridge_session", TOKEN);
+    answer(me(false));
+    await expect(requirePendingMfa("/settings/notifications")).rejects.toThrow("redirect:/settings/notifications");
+    await expect(requirePendingMfa("//evil.example")).rejects.toThrow("redirect:/dev");
+    await expect(requirePendingMfa()).rejects.toThrow("redirect:/dev");
+  });
+
+  it("keeps a session that still owes its second factor on the page", async () => {
+    mocks.cookies.set("__Host-bridge_session", TOKEN);
+    answer(me(true));
+    await expect(requirePendingMfa("/dev")).resolves.toMatchObject({ side: "pending" });
   });
 });

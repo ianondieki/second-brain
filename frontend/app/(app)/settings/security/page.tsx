@@ -3,9 +3,12 @@ import { getTranslations } from "next-intl/server";
 
 import { IntlScope } from "@/components/IntlScope";
 import { SignedInShell } from "@/components/SignedInShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 
+import { SettingsTabs } from "../SettingsTabs";
 import { PasswordSettings } from "./PasswordSettings";
 import { PasswordStateProvider } from "./PasswordState";
 import { SecuritySettings } from "./SecuritySettings";
@@ -15,7 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("pageTitle") };
 }
 
-/** Sign-in security: two-step sign-in first (the page's one primary action), then the password. */
+/**
+ * Sign-in security: two-step sign-in first (the page's one primary action), then the password. The page is within a
+ * few hundred bytes of the 150 KB JS budget (docs/spec/07 item 5): its client parts write out the Section and Badge
+ * markup instead of importing them (as ErrorScreen does for its button); the server parts compose the system.
+ */
 export default async function SecurityPage() {
   const me = await requireMe();
   const t = await getTranslations("security");
@@ -23,14 +30,11 @@ export default async function SecurityPage() {
   const home = homeOf(me);
   return (
     <SignedInShell homeHref={home}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
+      <SettingsTabs current="security" />
+      <PageHeader title={t("pageTitle")} />
       <IntlScope namespaces={["security", "password", "signup", "fields", "validation", "errors"]}>
         <PasswordStateProvider initial={me.user.password_set}>
-          <section aria-labelledby="two-step-heading" className="mt-8">
-            <h2 id="two-step-heading" className="text-lg text-ink">
-              {t("title")}
-            </h2>
-            <p className="mt-2 text-ink-soft">{t("lead")}</p>
+          <Section title={t("title")} headingId="two-step-heading" description={t("lead")} className="mt-10">
             <SecuritySettings
               enrolled={me.mfa.enrolled}
               required={me.mfa.required}
@@ -38,7 +42,7 @@ export default async function SecurityPage() {
               email={me.user.email}
               productName={tApp("name")}
             />
-          </section>
+          </Section>
           <PasswordSettings email={me.user.email} />
         </PasswordStateProvider>
       </IntlScope>
