@@ -34,14 +34,15 @@ from tests.integration.engagements.api_world import (
 )
 
 
-async def in_app(owner_engine: AsyncEngine, user: UUID, engagement: UUID) -> list[dict[str, Any]]:
+async def in_app(owner_engine: AsyncEngine, user: UUID, engagement: UUID, portal: str) -> list[dict[str, Any]]:
+    """The user's in-app notices that open the engagement in their own portal (``dev`` or ``org``)."""
     async with owner_engine.connect() as conn:
         rows = await conn.execute(
             text(
                 "SELECT kind, title, body FROM in_app_notifications WHERE user_id = :u AND link = :l"
                 " ORDER BY created_at"
             ),
-            {"u": user, "l": f"/engagements/{engagement}"},
+            {"u": user, "l": f"/{portal}/engagements/{engagement}"},
         )
         return [dict(r._mapping) for r in rows]
 
@@ -91,7 +92,7 @@ async def test_a_decline_already_in_progress_internally_records_the_attestation(
         assert (after.status_code, after.json()["detail"]["code"]) == (409, "illegal_transition")
     assert await tag_of(owner_engine, world) == ("delivered", True)  # closed with the engagement
     await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
-    [notice] = await in_app(owner_engine, world.developer, engagement)
+    [notice] = await in_app(owner_engine, world.developer, engagement, "dev")
     assert notice["kind"] == "engagement.n03"
     assert "already solved internally" in notice["body"]
     assert f"since {started}" in notice["body"]
@@ -129,7 +130,7 @@ async def test_a_decline_for_another_reason_needs_20_characters_kept_out_of_the_
         ).scalar_one()
     assert details == reason
     await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
-    started, notice = await in_app(owner_engine, world.developer, engagement)
+    started, notice = await in_app(owner_engine, world.developer, engagement, "dev")
     assert "started reviewing" in started["body"]
     assert notice["body"].endswith(f"Their reason: {reason}")
 
@@ -153,9 +154,9 @@ async def test_the_developer_withdraws_before_the_agreement_is_signed(
     assert await tag_of(owner_engine, world) == ("withdrawn", True)
     await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
     for person in (world.reviewer, world.signatory, world.owner):  # the organisation's people on this engagement
-        notices = await in_app(owner_engine, person, engagement)
+        notices = await in_app(owner_engine, person, engagement, "org")
         assert [n["kind"] for n in notices][-1] == "engagement.withdrawn"
-    assert await in_app(owner_engine, world.finance, engagement) == []  # never acted on it
+    assert await in_app(owner_engine, world.finance, engagement, "org") == []  # never acted on it
 
     signed = await build(owner_engine)
     t2 = Tracker(await open_engagement(app_engine, signed))
@@ -239,7 +240,7 @@ async def test_stage_0_the_developer_accepts_an_organisations_interest(
     await run_notifications(owner_engine, app_engine, engagement, provider, settings)
     assert [m.to for m in provider.outbox] == [world.developer_email]  # EM2 on entering INTEREST_CONFIRMED
     for person in (world.signatory, world.owner):  # the one who expressed interest, and the named contact
-        assert [n["kind"] for n in await in_app(owner_engine, person, engagement)] == ["engagement.n17"]
+        assert [n["kind"] for n in await in_app(owner_engine, person, engagement, "org")] == ["engagement.n17"]
 
 
 async def test_stage_0_the_developer_declines_an_organisations_interest(
@@ -259,5 +260,5 @@ async def test_stage_0_the_developer_declines_an_organisations_interest(
     provider = FakeEmailProvider()
     await run_notifications(owner_engine, app_engine, engagement, provider)
     assert provider.outbox == []  # no EM2: the engagement never entered INTEREST_CONFIRMED
-    [notice] = await in_app(owner_engine, world.signatory, engagement)
+    [notice] = await in_app(owner_engine, world.signatory, engagement, "org")
     assert notice["kind"] == "engagement.n17"

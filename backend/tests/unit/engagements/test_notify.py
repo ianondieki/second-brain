@@ -56,7 +56,8 @@ def test_the_other_party_is_told(
     party, notice = composed
     assert (party, notice.kind) == (told, kind)
     assert notice.title == sm.STAGE_LABELS[to_state]
-    assert notice.link == f"/engagements/{ENGAGEMENT}"
+    portal = "dev" if told is DEV else "org"  # each party opens the engagement in its own portal
+    assert notice.link == f"/{portal}/engagements/{ENGAGEMENT}"
     assert '"Cold-chain alerts"' in notice.body
 
 
@@ -99,7 +100,7 @@ def test_an_organisations_interest_tells_the_developer_n17() -> None:
     party, notice = composed
     assert (party, notice.kind, notice.title) == (DEV, "engagement.n17", "Organisation interested")
     assert notice.body == 'Telco A (fixture) is interested in "Cold-chain alerts". Accept or decline on your tracker.'
-    assert notice.link == f"/engagements/{ENGAGEMENT}"
+    assert notice.link == f"/dev/engagements/{ENGAGEMENT}"
     assert notify.is_interest(genesis)
     for role in (EngagementActorRole.DEVELOPER, EngagementActorRole.SYSTEM):  # nobody opens stage 0 but the org
         assert not notify.is_interest(event("create", role, EngagementState.ORG_INTEREST))

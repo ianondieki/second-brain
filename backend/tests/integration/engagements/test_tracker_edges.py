@@ -119,7 +119,7 @@ async def test_notifications_reach_only_current_members_and_verified_addresses(
             (
                 await conn.execute(
                     text("SELECT user_id FROM in_app_notifications WHERE kind = 'engagement.withdrawn' AND link = :l"),
-                    {"l": f"/engagements/{engagement}"},
+                    {"l": f"/org/engagements/{engagement}"},
                 )
             ).scalars()
         )

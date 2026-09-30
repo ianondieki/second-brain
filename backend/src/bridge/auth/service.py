@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge import clock
 from bridge.audit.service import record as audit
-from bridge.auth import emails, passwords, sessions, throttle, totp
+from bridge.auth import emails, handles, passwords, sessions, throttle, totp
 from bridge.auth.cookies import identity_binding, signup_binding
 from bridge.auth.crypto import decode_key, decrypt, encrypt, new_token, token_hash
 from bridge.auth.mailer import PendingEmail
@@ -66,6 +66,8 @@ REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minut
 PENDING_TOTP_TTL = timedelta(minutes=15)  # the magic-link lifetime: a setup left open longer must start again
 # Associated data of the pending envelope: its kind, then the user id (the active envelope binds the user id only).
 PENDING_LABEL = b"totp-pending|"
+HANDLE_ATTEMPTS = 5  # a taken handle is drawn again; with ~40 random bits a second clash in a row is vanishingly rare
+HANDLE_CONSTRAINT = "uq_developer_profiles_handle"
 
 
 class AuthError(Exception):
@@ -79,6 +81,10 @@ class AuthError(Exception):
         self.status = status
         self.pending = pending or []
         self.binding = binding  # this browser just proved the password: bind verification to it
+
+
+class HandleUnavailable(RuntimeError):
+    """Every handle drawn for a new developer was taken (``HANDLE_ATTEMPTS`` in a row): the signup fails closed."""
 
 
 @dataclass(slots=True)
@@ -154,9 +160,22 @@ async def issue_link(db: AsyncSession, settings: Settings, user: User, purpose: 
     return token
 
 
-def _handle_from(display_name: str) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")[:24] or "dev"
-    return f"{base}-{secrets.token_hex(3)}"
+async def _add_developer_profile(db: AsyncSession, user_id: UUID) -> None:
+    """The new developer's profile under a random handle (``handles.new_handle``: nothing of the display name or the
+    email address goes into it). A taken handle is retried in a savepoint, at most ``HANDLE_ATTEMPTS`` times; any other
+    integrity error is raised."""
+    for _ in range(HANDLE_ATTEMPTS):
+        try:
+            async with db.begin_nested():
+                db.add(DeveloperProfile(user_id=user_id, handle=handles.new_handle()))
+                await db.flush()
+        except IntegrityError as exc:
+            if getattr(getattr(exc.orig, "diag", None), "constraint_name", None) != HANDLE_CONSTRAINT:
+                raise
+            log.info("auth.handle_taken")  # drawn again; the handle itself is not logged
+            continue
+        return
+    raise HandleUnavailable(f"no free developer handle in {HANDLE_ATTEMPTS} draws")
 
 
 def _slug_from(name: str) -> str:
@@ -289,8 +308,7 @@ async def create_account(
 
     org_id: UUID | None = None
     if account.side == "developer":
-        db.add(DeveloperProfile(user_id=user.id, handle=_handle_from(user.display_name)))
-        await db.flush()
+        await _add_developer_profile(db, user.id)
         await start_free_subscription(db, settings, side=PlanSide.DEVELOPER, user_id=user.id)
     else:
         assert account.org is not None

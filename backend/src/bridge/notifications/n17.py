@@ -17,9 +17,10 @@ from uuid import UUID
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
-from bridge.models.enums import EngagementOrigin
+from bridge.models.enums import EngagementOrigin, EngagementParty
 from bridge.notifications.em1 import unlinkable
 from bridge.notifications.em2 import eat_date
+from bridge.web_paths import engagement_path
 
 KIND: Final = "n17"
 # [[COPY-REVIEW]] how the organisation found the proposal.
@@ -66,7 +67,7 @@ def render(facts: N17Facts) -> Rendered:
         "title": title,
         "found_by": FOUND_BY.get(facts.origin, "on the platform"),
         "respond_by": f"by {eat_date(facts.respond_by)}" if facts.respond_by else "within 5 business days",
-        "tracker_url": f"{base}/engagements/{facts.engagement_id}",
+        "tracker_url": base + engagement_path(EngagementParty.DEVELOPER, facts.engagement_id),
         "settings_url": f"{base}/settings/notifications",
         "help_url": f"{base}/help",
         "engagement_ref": str(facts.engagement_id),

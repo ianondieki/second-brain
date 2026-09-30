@@ -137,6 +137,10 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     // P10 backend's review fix, tasks/REQ-SCOUT-02.md MAJOR 1).
     await expect(orgRow).toContainText("From ");
     await expect(orgRow).not.toContainText("Achieng Otieno");
+    // Nor any piece of it: the handle is random since the REQ-AUTH-01 fix (it was the name slugged,
+    // "achieng-otieno-2b2356"): "dev-" and eight Crockford base32 characters.
+    await expect(orgRow).not.toContainText(/achieng|otieno/i);
+    await expect(orgRow).toContainText(/From dev-[0-9a-hjkmnp-tv-z]{8}/);
     await expect(orgRow.locator("[data-chip='turn']")).toHaveText("Our turn");
     await checkScreen(orgPage);
     await shot(orgPage, info, "org-list");

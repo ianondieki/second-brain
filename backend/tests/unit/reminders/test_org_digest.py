@@ -87,7 +87,7 @@ def test_the_digest_is_the_fixed_layout_filled_with_the_facts() -> None:
         "- “Farm data” by Otieno (Proposal submitted): On track.\n"
         "- “Kiosk app” by Wanjiru (Implementation): On track. Milestones due: milestone 1 “Beta” due 14 Oct 2026.\n"
         "\n"
-        f"Open your organisation's tracker: {BASE_URL}/engagements\n"
+        f"Open your organisation's tracker: {BASE_URL}/org/engagements?org={ORG_ID}\n"
         "\n"
         "--\n"
         "You get this daily digest for Telco A (fixture) because you turned reminders on.\n"

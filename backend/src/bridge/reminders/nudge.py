@@ -27,7 +27,6 @@ from bridge.notifications.email import EmailMessage
 from bridge.reminders.health import Assessment, EngagementFact, Health, Reason, ReasonCode, assess
 from bridge.reminders.render import (
     HEALTH_LABELS,
-    TRACKER_PATH,
     Email,
     developer_action,
     eat_date,
@@ -41,6 +40,7 @@ from bridge.reminders.render import (
     sections,
 )
 from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
+from bridge.web_paths import DEV_ENGAGEMENTS
 
 KIND: Final = "em7"
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
@@ -298,7 +298,7 @@ def email(nudge: Nudge, wording: Wording) -> Email:
         ),
         next_step=wording.next_step,
         cta_label=CTA,
-        cta_path=TRACKER_PATH,
+        cta_path=DEV_ENGAGEMENTS,  # the developer's own engagements list
         footer=FOOTER,
     )
 

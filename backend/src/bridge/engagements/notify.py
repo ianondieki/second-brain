@@ -55,6 +55,7 @@ from bridge.notifications.preferences import channel_enabled
 from bridge.proposals.models import DisclosureGrant, DocumentView, ProposalVersion
 from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
+from bridge.web_paths import engagement_path
 
 QUEUE: Final = "notifications"
 TASK: Final = "engagements.notify"
@@ -153,7 +154,7 @@ def compose(
     if is_interest(event):
         body = INTEREST_SENTENCE.format(org=em2.one_line(company), title=em2.one_line(title))
         label = sm.STAGE_LABELS[EngagementState.ORG_INTEREST]
-        return DEV, Notice(N17_KIND, label, body, f"/engagements/{event.engagement_id}")
+        return DEV, Notice(N17_KIND, label, body, engagement_path(DEV, event.engagement_id))
     try:
         command = sm.Command(event.command)
     except ValueError:  # the genesis ("create") and anything outside the table
@@ -173,8 +174,8 @@ def compose(
     if reason_text:
         body += f" Their reason: {reason_text}"
     label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
-    link = f"/engagements/{event.engagement_id}"
-    return sm.other(acted), Notice(f"engagement.{notice.lower()}", label, body, link)
+    told = sm.other(acted)
+    return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
 
 
 async def _in_app(db: AsyncSession, user_id: UUID, org_id: UUID | None, notice: Notice, event_id: UUID) -> bool:
