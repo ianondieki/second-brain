@@ -1,6 +1,27 @@
 import type { TrendingProblem, TrendingProject } from "@/app/(app)/dev/discover/discover";
 import type { Recommendation, Recommendations } from "@/app/(app)/dev/discover/recommendations";
 
+type Features = Recommendation["features"];
+const FEATURE_NAMES = [
+  "semantic_fit",
+  "niche_match",
+  "region_match",
+  "skill_coverage",
+  "trend",
+  "evidence_confidence",
+  "market_pull",
+  "crowding",
+  "track_record",
+  "freshness",
+] as const satisfies readonly (keyof Features)[];
+
+/** A feature vector as the ranker returns it (the screens never read it; it keeps the fixture's shape exact). */
+function features(): Features {
+  return Object.fromEntries(
+    FEATURE_NAMES.map((name) => [name, { raw: null, value: null, weight: 0, applies: false }]),
+  ) as Features;
+}
+
 // Discover and "Recommended for you" fixtures for the P12-F tests (REQ-TREND-02, REQ-PERS-01), shaped like the demo
 // seed's answers from GET /api/discover/trending and GET /api/me/recommendations.
 
@@ -94,8 +115,9 @@ export function recommendation(overrides: Partial<Recommendation> = {}): Recomme
     why: ["In a niche you like", "Trending in its niche", "Backed by cited sources"],
     why_not: null,
     trend: { trending: false, new_this_week: true, z: 1.2, score: 4, badge: null },
+    features: features(),
     ...overrides,
-  } as Recommendation; // `features` is not read by the screens (its shape is P12-B's to tighten)
+  };
 }
 
 export function recommendations(overrides: Partial<Recommendations> = {}): Recommendations {
