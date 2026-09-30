@@ -22,10 +22,11 @@
  * between steps (default 1200). WALKTHROUGH_DEMO_REPO names the checkout that started the demo (its infra/demo/.env), when
  * it is not this one (a second worktree). Output: docs/demo/video/ (gitignored) and docs/demo/screenshots/ (committed).
  */
+import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 import { DEMO_PASSWORD, DemoStaff, signInThroughScreens } from "../e2e/support/moderation-scene";
 import { demoTotpSecret } from "../e2e/support/totp";
@@ -34,10 +35,13 @@ import { ownerSql } from "../e2e/support/tracker-scene";
 const REPO = join(__dirname, "..", "..");
 const SHOTS = join(REPO, "docs", "demo", "screenshots");
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
+const MAILPIT = (process.env.E2E_MAILPIT_URL ?? "http://localhost:8025").replace(/\/$/, "");
 const PAUSE_MS = Number(process.env.WALKTHROUGH_PAUSE_MS ?? 1200);
+const RUN_DEMO_CMDS = process.env.WALKTHROUGH_RUN_DEMO_CMDS === "1";
 const SLOW = { timeout: 60_000 };
 
 const DESKTOP = { width: 1440, height: 900 };
+const PHONE = { width: 375, height: 812 };
 
 // The seeded story (backend/src/bridge/seed/demo/data.py, queues.py).
 const IDEA = "Repayment nudges for SACCO members";
@@ -50,6 +54,10 @@ function demoLogin(email: string, name: string): DemoStaff {
 }
 
 const AMINA = demoLogin("amina@developers.example", "Amina Wanjiru");
+const TELCO_REVIEWER = demoLogin("reviewer@telco-a.example", "Telco A reviewer");
+const TELCO_OWNER = demoLogin("owner@telco-a.example", "Telco A owner");
+const STAFF_ADMIN = demoLogin("admin@staff.example", "Staff Admin (demo)");
+const STAFF_MODERATOR = demoLogin("moderator@staff.example", "Staff Moderator (demo)");
 
 /** A short pause, so the video can be followed. */
 async function pause(page: Page, times = 1) {
@@ -109,6 +117,30 @@ function nav(page: Page, name: string): Locator {
   return page.getByRole("navigation", { name });
 }
 
+/** One of the demo launcher's commands (the same as make demo-clock / make demo-reminders), from the repository. */
+function demoCommand(args: string[]): void {
+  const python = process.env.DEMO_PY ?? (process.platform === "win32" ? "python" : "python3");
+  console.log(`walkthrough: ${python} infra/demo/demo.py ${args.join(" ")}`);
+  const checkout = process.env.WALKTHROUGH_DEMO_REPO ?? REPO;
+  execFileSync(python, ["infra/demo/demo.py", ...args], { cwd: checkout, stdio: "inherit", timeout: 180_000 });
+}
+
+/** How many developer nudges have reached `to` (Mailpit's API). */
+async function nudgesTo(page: Page, to: string): Promise<number> {
+  const response = await page.request.get(`${MAILPIT}/api/v1/messages?limit=500`);
+  expect(response.ok(), `Mailpit at ${MAILPIT}`).toBeTruthy();
+  const { messages = [] } = (await response.json()) as {
+    messages?: Array<{ Subject?: string; To?: Array<{ Address: string }> }>;
+  };
+  return messages.filter(
+    (m) => /^Your day on Bridge/.test(m.Subject ?? "") && m.To?.some((r) => r.Address.toLowerCase() === to),
+  ).length;
+}
+
+async function phoneContext(browser: Browser): Promise<BrowserContext> {
+  return browser.newContext({ baseURL: BASE_URL, viewport: PHONE, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+}
+
 test.beforeAll(() => {
   // The story needs the demo seed as `make demo-reset` leaves it (the owner reads it; nothing is written here).
   expect(process.env.E2E_DATABASE_OWNER_URL, "run python infra/demo/demo.py e2e-env first").toBeTruthy();
@@ -122,6 +154,7 @@ test.beforeAll(() => {
 
 test("the demo story, from a fresh make demo-reset", async ({ page, browser }) => {
   let certId = "";
+  let saccoTracker = "";
 
   await test.step("Developer: Amina's Home, Discover and My ideas", async () => {
     await signIn(page, AMINA, /\/dev$/);
@@ -225,6 +258,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await pause(page);
     await page.getByRole("region", { name: IDEA }).getByRole("link", { name: SACCO_B }).click();
     await expect(page).toHaveURL(/\/dev\/engagements\/[0-9a-f-]{36}$/, SLOW);
+    saccoTracker = new URL(page.url()).pathname;
     await expect(page.locator("[data-whose-turn]")).toContainText("Awaiting: you");
     await expect(page.getByRole("list", { name: "Stages" }).locator("[aria-current='step']")).toContainText("Agreement");
     await pause(page);
@@ -260,4 +294,169 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await signOut(page);
   });
 
+  await test.step("Organisation: Telco A's reviewer opens Brian's proposal under the Evaluation NDA", async () => {
+    await signIn(page, TELCO_REVIEWER, /\/org(\/inbox)?$/);
+    await nav(page, "Organisation").getByRole("link", { name: "Inbox" }).click();
+    await expect(page).toHaveURL(/\/org\/inbox$/, SLOW);
+    await pause(page);
+    await page.getByRole("main").getByRole("link", { name: BRIAN_IDEA }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(BRIAN_IDEA, SLOW);
+    await pause(page);
+    const full = page.getByRole("region", { name: "Full proposal" });
+    await expect(page.locator("[data-primary]")).toHaveText("Accept and view");
+    await show(page, full);
+    await shot(page, "08-org-inbox-nda-1440");
+    await page.getByRole("button", { name: "Accept and view" }).click();
+    await expect(page).toHaveURL(/\?view=full$/, SLOW);
+    const frame = page.frameLocator("[data-tier2-frame]");
+    await expect(frame.getByRole("heading", { level: 1 })).toHaveText(BRIAN_IDEA, SLOW);
+    await show(page, page.locator("[data-tier2-frame]"), 2);
+    await shot(page, "09-org-full-proposal-1440");
+    await signOut(page);
+  });
+
+  await test.step("Organisation: Telco A's owner, the scout's match, its settings and the first step", async () => {
+    await signIn(page, TELCO_OWNER, /\/org(\/inbox)?$/);
+    await nav(page, "Organisation").getByRole("link", { name: "Inbox" }).click();
+    await expect(page).toHaveURL(/\/org\/inbox$/, SLOW);
+    await nav(page, "Inbox sections").getByRole("link", { name: "Scout matches" }).click();
+    await expect(page).toHaveURL(/\/org\/inbox\?tab=matches$/, SLOW);
+    const matches = page.getByRole("list", { name: /^Scout matches for / });
+    await expect(matches.locator("article").first()).toContainText("Why this matches");
+    await pause(page);
+    await shot(page, "10-org-scout-matches-1440");
+    await matches.locator("article").first().getByRole("heading").getByRole("link").click();
+    await expect(page.getByRole("region", { name: "Why this matches" })).toBeVisible(SLOW);
+    await pause(page, 2);
+    await page.getByRole("link", { name: "Back to scout matches" }).click();
+    await expect(page).toHaveURL(/\/org\/inbox\?tab=matches$/, SLOW);
+    await page.getByRole("link", { name: /^Change the scout/ }).first().click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Change your Scout Agent", SLOW);
+    await page.locator("form[data-scout-form][data-hydrated='true']").waitFor(SLOW);
+    await pause(page);
+    const preview = page.getByRole("button", { name: "Preview matches" });
+    await show(page, preview);
+    await preview.click(); // Preview only: the scout is not saved.
+    const previewed = page.getByRole("region", { name: "Preview", exact: true });
+    await expect(previewed.getByRole("list", { name: "Preview of matching proposals" })).toBeVisible(SLOW);
+    await show(page, previewed, 2);
+
+    await toTop(page);
+    await nav(page, "Organisation").getByRole("link", { name: "Engagements" }).click();
+    await expect(page).toHaveURL(/\/org\/engagements$/, SLOW);
+    await pause(page);
+    await page.getByRole("region", { name: "Needs us" }).getByRole("link", { name: BRIAN_IDEA }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(BRIAN_IDEA, SLOW);
+    await expect(page.locator("[data-whose-turn]")).toContainText("Awaiting: you");
+    await expect(page.locator("[data-primary]")).toHaveText("Start the review");
+    await pause(page, 1.5);
+    await page.locator("[data-actions]").getByRole("button", { name: "Start the review", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Done. The tracker is up to date." })).toBeVisible(SLOW);
+    await expect(page.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");
+    await pause(page);
+    await shot(page, "11-org-tracker-step-1440");
+    await signOut(page);
+  });
+
+  await test.step("Staff: Research and Claims (admin)", async () => {
+    await signIn(page, STAFF_ADMIN, /\/admin\/research$/);
+    await page.locator('form[data-hydrated="true"]').first().waitFor(SLOW);
+    await page.getByLabel("Niche").selectOption({ label: "Health" });
+    await pause(page);
+    await page.getByRole("button", { name: "Start run" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "The Health run has finished." })).toBeVisible({
+      timeout: 90_000,
+    });
+    const waiting = page.getByRole("region", { name: "Waiting for review" });
+    // With the fake LLM a run drafts no card (the demo fallback); with a provider, a card waits for review.
+    const card = waiting.locator("[data-candidate]").first();
+    if (await card.count()) {
+      await card.getByRole("link").first().click();
+      await expect(page.getByRole("heading", { name: "Named-organisation checklist" })).toBeVisible(SLOW);
+      await page.getByLabel("I have worked through the checklist above for this card.").check();
+      await pause(page);
+      await page.getByRole("button", { name: "Approve and publish" }).click();
+      await expect(page.locator('[data-decision="approve"]')).toBeVisible(SLOW);
+      await pause(page);
+      await nav(page, "Staff console").getByRole("link", { name: "Research" }).click();
+    } else {
+      console.log("walkthrough: the run drafted no card (demo fallback, no LLM provider): nothing to approve");
+    }
+    await show(page, page.getByRole("region", { name: "Recent runs" }));
+    await toTop(page);
+    await shot(page, "12-admin-research-1440");
+
+    await nav(page, "Staff console").getByRole("link", { name: "Claims" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Claims" })).toBeVisible(SLOW);
+    await pause(page);
+    await page.locator("[data-claim]").first().getByRole("link").first().click();
+    await expect(page.locator("[data-read-only]")).toBeVisible(SLOW);
+    await pause(page, 2);
+    await signOut(page);
+  });
+
+  await test.step("Staff: the moderator decides the oldest case", async () => {
+    await signIn(page, STAFF_MODERATOR, /\/admin\/moderation$/);
+    await expect(page.locator("[data-primary]")).toHaveText("Review the oldest case");
+    await pause(page);
+    await page.locator("[data-primary]").click();
+    await expect(page).toHaveURL(/\/admin\/moderation\/cases\/[0-9a-f-]{36}$/, SLOW);
+    await expect(page.locator("[data-primary]")).toHaveText("Approve");
+    await page.locator('main [data-hydrated="true"]').first().waitFor(SLOW);
+    await pause(page);
+    await shot(page, "13-admin-moderation-1440");
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Approved\./ })).toBeVisible(SLOW);
+    await pause(page, 1.5);
+    await signOut(page);
+  });
+
+  await test.step("Time and email: a day later, the reminders in Mailpit", async () => {
+    if (RUN_DEMO_CMDS) {
+      const before = await nudgesTo(page, AMINA.email);
+      demoCommand(["clock", "--days", "1"]);
+      demoCommand(["reminders"]);
+      await expect.poll(() => nudgesTo(page, AMINA.email), SLOW).toBeGreaterThan(before);
+    } else {
+      console.log(
+        "walkthrough: WALKTHROUGH_RUN_DEMO_CMDS is not 1, so the clock and reminders commands were skipped;" +
+          " Mailpit shows the reminders the demo sent on its first day",
+      );
+    }
+    await page.goto(MAILPIT);
+    const nudge = page.getByText(/Your day on Bridge/).first();
+    await expect(nudge).toBeVisible(SLOW);
+    await expect(page.getByText(/Telco A \(fixture\): (weekly )?progress digest/).first()).toBeVisible();
+    await pause(page);
+    await shot(page, "14-mailpit-reminders-1440");
+    await nudge.click();
+    await pause(page, 2.5);
+    await page.goBack();
+    await page.getByText(/Telco A \(fixture\): (weekly )?progress digest/).first().click();
+    await pause(page, 2.5);
+  });
+
+  await test.step("Phone width: Amina's Home and tracker, Telco A's Inbox (375 x 812)", async () => {
+    const amina = await phoneContext(browser);
+    try {
+      const phone = await amina.newPage();
+      await signIn(phone, AMINA, /\/dev$/);
+      await shot(phone, "15-dev-home-375");
+      await phone.goto(saccoTracker);
+      await expect(phone.locator("[data-whose-turn]")).toContainText("Awaiting: you");
+      await shot(phone, "16-dev-tracker-375");
+    } finally {
+      await amina.close();
+    }
+    const telco = await phoneContext(browser);
+    try {
+      const phone = await telco.newPage();
+      await signIn(phone, TELCO_OWNER, /\/org(\/inbox)?$/);
+      await phone.goto("/org/inbox");
+      await expect(phone.getByRole("main").getByRole("link", { name: BRIAN_IDEA })).toBeVisible(SLOW);
+      await shot(phone, "17-org-inbox-375");
+    } finally {
+      await telco.close();
+    }
+  });
 });
