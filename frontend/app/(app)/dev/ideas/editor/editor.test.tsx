@@ -182,6 +182,40 @@ describe("publishing", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("links a plan limit to the next plan up and back to this step (REQ-BIL-08)", async () => {
+    const fake = calls({
+      publish: vi.fn(async () => ({
+        ok: false as const,
+        fields: [],
+        problem: "planLimit" as const,
+        limit: 3,
+        upgrade: "dev_pro_monthly",
+      })),
+    });
+    await renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
+    check();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    });
+    const link = within(screen.getByRole("alert")).getByRole("link", { name: "Upgrade your plan" });
+    expect(link.getAttribute("href")).toBe(
+      "/billing/upgrade?plan=dev_pro_monthly&next=%2Fdev%2Fideas%2Fp1%2Fedit%3Fstep%3D3",
+    );
+    expect(primary()).toHaveLength(1); // the link is not a second primary action
+  });
+
+  it("offers no upgrade at the top of the plan ladder", async () => {
+    const fake = calls({
+      publish: vi.fn(async () => ({ ok: false as const, fields: [], problem: "planLimit" as const, limit: 3 })),
+    });
+    await renderEditor({ id: "p1", initial: READY, step: 3, calls: fake });
+    check();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    });
+    expect(within(screen.getByRole("alert")).queryAllByRole("link")).toHaveLength(0);
+  });
+
   it("reads the statements again when their wording changed, and asks to confirm again", async () => {
     const changed: AttestationText = {
       ...TEXT,

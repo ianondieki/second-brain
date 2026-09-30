@@ -1,4 +1,5 @@
 import { apiErrorCode, detailOf } from "@/lib/api/error-code";
+import { upgradePlanOf } from "@/lib/billing/upgrade";
 
 import { isPitchReason, orgKey, type PitchReason } from "./picker";
 
@@ -33,6 +34,8 @@ export interface PitchRefusal {
   /** 402 `plan_limit`: the plan's pitches per idea and how many are used. */
   limit?: number;
   used?: number;
+  /** 402 `plan_limit`: the next plan up (lib/billing/upgrade.ts), absent at the top of the ladder. */
+  upgrade?: string;
 }
 
 function common(status: number, code: string | undefined): Common | null {
@@ -64,10 +67,11 @@ export function pitchRefusal(status: number, body: unknown): PitchRefusal {
   if (status === 403 && code === "d1_required") return { problem: "d1Required", conflicts: [] };
   if (status === 402) {
     const { limit, used } = detail ?? {};
+    const upgrade = upgradePlanOf(body) ?? undefined;
     if (typeof limit === "number" && typeof used === "number") {
-      return { problem: "planLimit", conflicts: [], limit, used };
+      return { problem: "planLimit", conflicts: [], limit, used, ...(upgrade ? { upgrade } : {}) };
     }
-    return { problem: "planLimitUnknown", conflicts: [] };
+    return { problem: "planLimitUnknown", conflicts: [], ...(upgrade ? { upgrade } : {}) };
   }
   if (status === 404) {
     // The proposal is not the caller's (or was deleted), or some organisations left the directory (`org_ids`).
