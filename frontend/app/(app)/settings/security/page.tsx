@@ -18,7 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("pageTitle") };
 }
 
-/** Sign-in security: two-step sign-in first (the page's one primary action), then the password. */
+/**
+ * Sign-in security: two-step sign-in first (the page's one primary action), then the password. The page is within a
+ * few hundred bytes of the 150 KB JS budget (docs/spec/07 item 5): its client parts write out the Section and Badge
+ * markup instead of importing them (as ErrorScreen does for its button); the server parts compose the system.
+ */
 export default async function SecurityPage() {
   const me = await requireMe();
   const t = await getTranslations("security");

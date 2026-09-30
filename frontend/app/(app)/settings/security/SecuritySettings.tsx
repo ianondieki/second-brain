@@ -7,11 +7,9 @@ import { Suspense, useRef, useState, type FormEvent } from "react";
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Badge } from "@/components/ui/Badge";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { PasswordField } from "@/components/ui/PasswordField";
-import { Section } from "@/components/ui/Section";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
@@ -203,10 +201,10 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
     return (
       <div className="flex flex-col items-start gap-6">
         {errorBlock}
-        <p>
-          <Badge tone="ok" icon={<CheckIcon />}>
-            {t("on")}
-          </Badge>
+        {/* Badge's markup (icon + words in the ok tone), written out: the page is at the JS budget (see page.tsx). */}
+        <p className="inline-flex items-start gap-1.5 text-sm font-semibold text-ok">
+          <CheckIcon className="mt-0.5 size-4 shrink-0" />
+          <span>{t("on")}</span>
         </p>
         {notice?.key === "codesNotShown" ? (
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
@@ -222,8 +220,12 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             {busy ? t("turningOff") : t("turnOff")}
           </Button>
         )}
-        <Section title={t("recoveryTitle")} headingId="recovery-heading" headingLevel={3} className="mt-6 w-full">
-          <div className="flex flex-col items-start gap-4">
+        {/* Section's markup at level 3, written out for the JS budget (see page.tsx). */}
+        <section aria-labelledby="recovery-heading" className="mt-6 w-full">
+          <h3 id="recovery-heading" className="text-base text-ink">
+            {t("recoveryTitle")}
+          </h3>
+          <div className="mt-4 flex flex-col items-start gap-4">
             {renewing ? (
               <Suspense fallback={<p role="status" className="text-ink-soft">{t("loading")}</p>}>
                 <NewRecoveryCodes
@@ -247,7 +249,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
               </>
             )}
           </div>
-        </Section>
+        </section>
         <Link href={homeHref} className={textLinkClass}>
           {t("back")}
         </Link>

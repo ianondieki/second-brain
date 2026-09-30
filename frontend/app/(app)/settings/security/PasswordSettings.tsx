@@ -6,7 +6,6 @@ import { useRef, useState, type FormEvent } from "react";
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Section } from "@/components/ui/Section";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -83,15 +82,14 @@ export function PasswordSettings({ email }: { email: string }) {
   }
 
   return (
-    <Section
-      id="password"
-      title={t("title")}
-      headingId="password-heading"
-      description={t("lead")}
-      hidden={enrolling}
-      className="mt-12 scroll-mt-8"
-    >
-      <Form onSubmit={save} className="flex flex-col gap-5">
+    // Section's markup (h2 20 px, one-line description, content 16 px below; no rule), written out here rather than
+    // imported: this page is within a few hundred bytes of the 150 KB budget (docs/spec/07 item 5; P16-C1 card).
+    <section id="password" aria-labelledby="password-heading" hidden={enrolling} className="mt-12 scroll-mt-8">
+      <h2 id="password-heading" className="text-lg text-ink">
+        {t("title")}
+      </h2>
+      <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("lead")}</p>
+      <Form onSubmit={save} className="mt-4 flex flex-col gap-5">
         <AccountUsername email={email} />
         {saved ? <Alert tone="ok">{t("saved")}</Alert> : null}
         <ErrorNotice error={error} email={email} alertRef={summaryRef} />
@@ -129,6 +127,6 @@ export function PasswordSettings({ email }: { email: string }) {
           </SubmitButton>
         </div>
       </Form>
-    </Section>
+    </section>
   );
 }

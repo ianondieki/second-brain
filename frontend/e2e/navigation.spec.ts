@@ -73,3 +73,31 @@ test("after a tapped section loads, focus is on its page title", async ({ page }
   await expect(title).not.toBeFocused();
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
 });
+
+// P12-F re-review MINOR 4 (P16-C1): at 360 px the developer tabs never run into each other, with this machine's
+// fallback font for the system stack, in English and in Swahili, with the longest label ("Engagements",
+// "Ushirikiano") current and bold.
+test("the developer tabs keep every label inside its own tab at 360 px, in English and Swahili", async ({ page, baseURL }) => {
+  await signUpDeveloper(page, "Akinyi Odera");
+  await page.setViewportSize({ width: 360, height: 780 }); // the tab bar, in both projects
+  for (const locale of ["en", "sw"]) {
+    await page.context().addCookies([{ name: "NEXT_LOCALE", value: locale, url: baseURL! }]);
+    for (const path of ["/dev/engagements", "/dev/companies"]) {
+      await page.goto(path);
+      const nav = page.getByRole("navigation").filter({ has: page.locator("a[aria-current='page']") }).first();
+      const boxes = await nav.locator("li").evaluateAll((items) =>
+        items.map((li) => {
+          const tab = li.getBoundingClientRect();
+          const label = li.querySelector("a > span:not([aria-hidden])")!.getBoundingClientRect();
+          return { tab: [tab.left, tab.right], label: [label.left, label.right], text: li.textContent };
+        }),
+      );
+      expect(boxes).toHaveLength(5);
+      for (const { tab, label, text } of boxes) {
+        expect(label[0], `${locale} ${path} ${text}`).toBeGreaterThanOrEqual(tab[0] - 0.5);
+        expect(label[1], `${locale} ${path} ${text}`).toBeLessThanOrEqual(tab[1] + 0.5);
+      }
+      for (let i = 1; i < boxes.length; i++) expect(boxes[i].tab[0]).toBeGreaterThanOrEqual(boxes[i - 1].tab[1] - 0.5);
+    }
+  }
+});
