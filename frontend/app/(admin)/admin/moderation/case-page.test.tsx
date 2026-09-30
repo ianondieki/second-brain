@@ -159,8 +159,30 @@ describe("the case page", () => {
     // longer "under review".
     expect(container.querySelector("[data-decided]")!.querySelector("[data-chip]")).toBeNull();
     expect(screen.getAllByText("Approved")).toHaveLength(1);
-    expect(screen.getByRole("heading", { level: 2, name: "Public summary" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Text under review" })).toBeNull();
+  });
+
+  it("names a rejected case's text truthfully: nothing on the page calls it public (fix round 1)", async () => {
+    data.view = {
+      kind: "ok",
+      data: {
+        item: held({
+          status: "rejected",
+          subject_state: "rejected",
+          actions: [],
+          blocked: "already_decided",
+          decided_at: "2026-09-30T07:30:00Z",
+          decided_by: { id: "01a0f012-0000-7000-8000-000000000012", display_name: "Staff Moderator (demo)" },
+        }),
+        nextId: null,
+      },
+    };
+    const { container } = await page();
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
+    const headings = [...container.querySelectorAll("h1, h2, h3")].map((h) => h.textContent ?? "");
+    for (const heading of headings) expect(heading).not.toMatch(/public/i);
+    expect(container.querySelector('[data-header-tag="outcome"]')!.textContent).toBe("Rejected");
   });
 
   it("says what the case is about in the header's meta line, not as a label above the title (P16)", async () => {

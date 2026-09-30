@@ -960,7 +960,7 @@
       "decisionHeading": "Decision",
       "leadHidden": "Approve to make it public, or reject to keep it hidden.",
       "leadPublic": "Approve to keep it public, or reject to take it down.",
-      "textHeadingDecided": "Public summary"
+      "textHeadingDecided": "Text as reviewed"
     },
     "decision": {
       "approve": "Approve",
