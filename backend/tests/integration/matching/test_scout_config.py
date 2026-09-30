@@ -4,6 +4,7 @@ pause and resume, delete, and Preview: rules only, the last 30 days, nothing wri
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import timedelta
 from typing import Any
@@ -24,6 +25,7 @@ from tests.integration.matching.scout_world import (
     NAIROBI_CODE,
     Teaser,
     add_person,
+    add_scout,
     build,
     deps,
     outbox_of,
@@ -204,6 +206,35 @@ async def test_plan_limits_answer_402(owner_engine: AsyncEngine, app_engine: Asy
         assert (resume.json()["detail"]["limit_key"], resume.json()["detail"]["used"]) == ("scout_agents", 4)
         assert (await owner.patch(path(org.id, f"/{ids[1]}"), json={"min_fit": 50})).status_code == 200
         await owner.delete(path(org.id, f"/{ids[1]}"))
+
+
+async def test_parallel_creates_never_pass_the_plan_limit(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """ECC review HIGH (P16-F): the free plan's one scout held against four parallel creates; before the plan lock,
+    two of them were created ([201, 201, 402, 402])."""
+    world = await build(owner_engine)
+    org = world.org
+    async with clients(app_engine, SETTINGS, org.owner) as (owner,):
+        made = await asyncio.gather(*(owner.post(path(org.id), json=form(world.niche)) for _ in range(4)))
+    assert sorted(r.status_code for r in made) == [201, 402, 402, 402]
+    [row] = await rows(owner_engine, "SELECT count(*) AS n FROM scout_agents WHERE org_id = :o", o=org.id)
+    assert row.n == 1
+
+
+async def test_parallel_resumes_never_pass_the_plan_limit(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """ECC review HIGH (P16-F): two paused scouts (left from a paid plan) resumed at once on the free plan's one
+    scout: one resumes, the other answers 402."""
+    world = await build(owner_engine)
+    org = world.org
+    ids = [await add_scout(owner_engine, org, [world.niche]) for _ in range(2)]
+    async with owner_engine.begin() as conn:
+        await execute(conn, "UPDATE scout_agents SET paused_at = now() WHERE org_id = :o", o=org.id)
+    async with clients(app_engine, SETTINGS, org.owner) as (owner,):
+        resumed = await asyncio.gather(*(owner.patch(path(org.id, f"/{i}"), json={"paused": False}) for i in ids))
+    assert sorted(r.status_code for r in resumed) == [200, 402]
+    [row] = await rows(
+        owner_engine, "SELECT count(*) AS n FROM scout_agents WHERE org_id = :o AND paused_at IS NULL", o=org.id
+    )
+    assert row.n == 1
 
 
 async def test_invalid_forms_are_422(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
