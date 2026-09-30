@@ -18,6 +18,8 @@ export interface StepUpProps {
   onConfirmed: () => Promise<void>;
   onCancel: () => void;
   confirmImpl?: typeof confirmStepUp;
+  /** Confirm is the screen's primary action (default); false when another primary button is on the screen. */
+  primary?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface StepUpProps {
  * authenticator code within 12 hours), inline where the button was: the code, then the step runs again. Like the
  * security settings' StepUpForm, with the tracker's server-formatted strings instead of next-intl's client runtime.
  */
-export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmStepUp }: StepUpProps) {
+export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmStepUp, primary = true }: StepUpProps) {
   const t = useStrings("trackerActions");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | undefined>();
@@ -102,7 +104,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
         error={codeError}
       />
       <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-        <SubmitButton variant="primary" busy={busy}>
+        <SubmitButton variant={primary ? "primary" : "secondary"} busy={busy}>
           {busy ? t("stepUp.checking") : t("stepUp.submit")}
         </SubmitButton>
         {/* Inert while the code is checked: the step may already be running. */}
