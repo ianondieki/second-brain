@@ -3,6 +3,8 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { RowList } from "@/components/ui/RowList";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 
@@ -36,12 +38,7 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
   const shell = (lead: ReactNode, children: ReactNode) => (
     <AdminShell role={role} current="claims" wide>
       <div className="flex max-w-3xl flex-col gap-8">
-        <header>
-          <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-            {t("title")}
-          </h1>
-          {lead}
-        </header>
+        <PageHeader title={t("title")} lead={lead} focusable />
         {children}
       </div>
     </AdminShell>
@@ -64,18 +61,19 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
   const { items, reviewSlaDays } = loaded.data;
   const tabs = CLAIM_VIEWS.map((key) => ({ key, label: t(`tabs.${key}`), href: claimViewHref(key) }));
   return shell(
-    <p className="mt-2 max-w-[60ch] text-ink-soft">{t("lead", { days: reviewSlaDays })}</p>,
+    t("lead", { days: reviewSlaDays }),
     <div>
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <ol aria-label={t(`list.${view}`)} className="flex flex-col">
+          <RowList ordered aria-label={t(`list.${view}`)}>
             {items.map((claim) => (
               <ClaimRow key={claim.id} claim={claim} />
             ))}
-          </ol>
+          </RowList>
         ) : (
           <EmptyState
+            rule={false}
             sentence={t(`empty.${view}`)}
             action={t(`emptyAction.${view}`)}
             href={claimViewHref(EMPTY_TO[view])}

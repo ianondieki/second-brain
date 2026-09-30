@@ -152,6 +152,9 @@ describe("the claims queue", () => {
     expect(container.querySelector("button")).toBeNull();
     expect(screen.getByRole("list", { name: "Claims waiting for review, oldest first" })).toBeTruthy();
     expect(within(rows[0]).getByRole("link").getAttribute("href")).toBe(`/admin/claims/${CLAIM_ID}`);
+    // P15-F MINOR 6: row titles are h2 under the page's h1 (axe heading-order).
+    for (const row of rows) expect(row.querySelector("h2 a")).not.toBeNull();
+    expect(container.querySelector("h3")).toBeNull();
   });
 
   it("names an organisation staff cannot read by its id, with a plain note", async () => {
@@ -221,6 +224,10 @@ describe("a claim", () => {
     expect(screen.getByText("Domain verified (E1)")).toBeTruthy();
     expect(container.querySelector("button")).toBeNull();
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
+    // One label column for every group of facts (DescriptionList), and headings in order.
+    expect(container.querySelectorAll("dl").length).toBeGreaterThan(3);
+    const levels = [...container.querySelectorAll("h1, h2, h3")].map((h) => Number(h.tagName[1]));
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
   });
 
   it("names an organisation staff cannot read by its whole id", async () => {
