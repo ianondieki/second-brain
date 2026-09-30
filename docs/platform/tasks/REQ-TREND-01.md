@@ -267,7 +267,7 @@ mutants: killed.
 
 ## P12-F (screens: REQ-TREND-02 frontend, REQ-PERS-01 frontend, REQ-PERS-03 picker)
 
-- Branch `feat/REQ-TREND-02-fe` from P12-B `4a590f1` (in review); agent impl-frontend. Reviews: reviewer, ux-reviewer.
+- Branch `feat/REQ-TREND-02-fe` from P12-B `4a590f1`, with P12-B's fix round `2c233a0` merged in; agent impl-frontend. Reviews: reviewer, ux-reviewer.
   No backend change; the types are the generated `schema.d.ts` of P12-B.
 
 ### Files
@@ -340,8 +340,11 @@ mutants: killed.
    the lead and the Home note.
 5. **Swahili nav at 360 px.** Five tabs fit in English at 360 px; Swahili labels ("Mawazo yangu", "Ushirikiano")
    are a little longer and Swahili is off until G5: check the tab bar at 360 px when it goes live.
-6. **P12-B fix round.** Nothing here reads `features` or `pursuit.label`; after the tighter types land, regenerate
-   `schema.d.ts` only (`test/discover.ts` casts the fixture past `features`).
+6. **P12-B fix round (done).** `origin/feat/REQ-TREND-01-trending` at `2c233a0` merged into this branch (its parent;
+   merge commit `29f9b86`), bringing `FeaturesOut` and the Literal pursuit label with the regenerated `schema.d.ts`.
+   The screens read neither; `test/discover.ts` now builds the full named feature vector instead of casting. The
+   e2e was re-run against the `2c233a0` backend and demo seed (the P2 problem still trends with its project; the gap
+   holds one problem).
 
 ### Checks
 
@@ -349,3 +352,6 @@ mutants: killed.
   report. JS per route (production build, gzipped, load-based count): `/dev` and `/dev/discover` (all three views)
   140.1 KB, `/dev/discover/niches` 143.1 KB (budget 150; the AccountMenu from integration adds about 1.2 KB).
 - Screenshots (375 and 1440): `p12f-{home,discover,projects,niches}-{375,1440}.jpg` in the P12-F session scratchpad.
+- Full Playwright suite against a production build and the `2c233a0` backend with the demo seed: 104 passed, 2
+  failed (`tracker.spec.ts` "From Achieng Otieno", failing on base `84e0af0` too and fixed on integration by
+  `e63a182`).
