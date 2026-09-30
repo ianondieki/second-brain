@@ -77,10 +77,10 @@ async def test_a_rising_problem_trends_with_its_badge_sources_and_project_beside
     [shown] = [p for p in body["projects"] if p["proposal"]["id"] == str(project)]
     assert shown["problem"]["id"] == str(problem)  # AC-TREND-2: the card renders its linked problem
     assert shown["trend"]["trending"] is True
-    assert shown["trend"]["badge"] == f"Trending in {world.label('niche')}"
+    assert shown["trend"]["badge"] == f"Trending in {world.label('niche')}: verified organisations asking"
     assert not re.search(r"\d", shown["trend"]["badge"].replace(world.tag, ""))  # no organisation count
     assert "score" not in shown["trend"]
-    assert "Verified organisations expressed interest" in shown["why"]
+    assert "Verified organisation interest" in shown["why"]
     assert all(p["problem"]["id"] for p in body["projects"])  # every project card has its problem
 
     [research] = [p for p in body["problems"] if p["problem"]["id"] == str(card)]
@@ -152,7 +152,7 @@ async def test_one_organisations_seats_count_for_nothing(owner_engine: AsyncEngi
     assert item["trend"]["score"] == pytest.approx(2.0 * 0.5 ** (2 / 14), abs=1e-3)  # the proposal only (2 days old)
     assert "companies scouting" not in " ".join(item["why"])
     [shown] = [p for p in body["projects"] if p["proposal"]["id"] == str(project)]
-    assert "Verified organisations expressed interest" not in shown["why"]
+    assert "Verified organisation interest" not in shown["why"]
 
 
 async def test_old_sources_are_evidence_not_actors(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:

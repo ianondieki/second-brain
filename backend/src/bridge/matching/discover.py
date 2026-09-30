@@ -55,7 +55,8 @@ _CITATIONS = text(
 )
 BRIEF_CHIP: Final = "Verified organisation brief"  # [[COPY-REVIEW]] every chip and badge below
 NEW_CHIP: Final = "New this week"
-INTEREST_CHIP: Final = "Verified organisations expressed interest"
+INTEREST_CHIP: Final = "Verified organisation interest"  # one organisation or several: never a count
+PROJECT_BADGE_REASON: Final = "verified organisations asking"
 SOLVES_TRENDING_CHIP: Final = "Solves a trending problem"
 MAX_CHIPS: Final = 3
 
@@ -231,7 +232,8 @@ async def trending(db: AsyncSession, cfg: RankingConfig, *, niche: str | None, c
         project_niche = tree.out(b.facts.proposals[proposal_id].niche_id)
         badge = None
         if trend.trending:
-            badge = f"Trending in {project_niche.label}" if project_niche else "Trending"
+            where = f"Trending in {project_niche.label}" if project_niche else "Trending"
+            badge = f"{where}: {PROJECT_BADGE_REASON}"
         projects.append(
             TrendingProject(
                 proposal=teasers[proposal_id],
