@@ -20,3 +20,11 @@ Claim flow. E1: domain-email OTP plus a DNS TXT record (`DnsResolver` interface,
 ## Acceptance criteria and tests
 
 AC-DIR-2, AC-DIR-7, the AC-DIR-6 NGO clause (`integration/directory/test_claims.py`).
+
+## Prototype P15-B (2026-09-30): the claims queue, read only
+
+`GET /api/admin/claims?view=review|in_progress|closed` and `GET /api/admin/claims/{claim_id}` (staff admin;
+`bridge/admin/claims.py`) with the 2 BD review SLA (`policy.yaml` `claims.review_sla_bd`). Staff decide no claim in the
+prototype (`app_decide_claim` is not called). The demo seeds County C's E2 claim, filed by its owner under RLS.
+Open items for the claim flow: record when a claim enters review (the SLA counts from `created_at` meanwhile), a staff
+read of unlisted organisations, a signed download of the evidence documents (`REQ-ADM-01.md`, "Prototype P15-B").
