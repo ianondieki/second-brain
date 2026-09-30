@@ -699,6 +699,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/opportunity-gap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Opportunity Gap
+         * @description Problems in the top trend decile with fewer than 3 proposals.
+         */
+        get: operations["discover_opportunity_gap_api_discover_opportunity_gap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/trending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Trending
+         * @description Trending Problems and Trending Projects (with the problem each solves), Trending first, then New this week.
+         */
+        get: operations["discover_trending_api_discover_trending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}": {
         parameters: {
             query?: never;
@@ -1334,6 +1374,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/niches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Niches
+         * @description Your liked niches (they rank "Recommended for you"; any plan).
+         */
+        get: operations["my_niches_api_me_niches_get"];
+        /**
+         * Set My Niches
+         * @description Set your liked niches: 3 to 5 niche ids from ``GET /api/directory/niches``.
+         */
+        put: operations["set_my_niches_api_me_niches_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/profile": {
         parameters: {
             query?: never;
@@ -1585,6 +1649,26 @@ export interface paths {
          * @description "Who has seen this": every organisation view of your proposal's full version, newest first.
          */
         get: operations["who_has_seen_api_me_proposals__proposal_id__views_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Recommendations
+         * @description Research cards and verified organisations' Briefs ranked for you, each explained.
+         */
+        get: operations["my_recommendations_api_me_recommendations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2538,7 +2622,7 @@ export interface components {
             /** Seeded Example */
             seeded_example: boolean;
             /** Sources */
-            sources: components["schemas"]["SourceOut"][];
+            sources: components["schemas"]["bridge__admin__research__SourceOut"][];
             /** Statement */
             statement: string;
             /** Title */
@@ -2868,6 +2952,31 @@ export interface components {
              * @description Pass as ?cursor= for the next page; null on the last page
              */
             next_cursor: string | null;
+        };
+        /** DiscoverProblem */
+        DiscoverProblem: {
+            /** Country */
+            country: string;
+            /** County Code */
+            county_code: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Label
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             */
+            label: string | null;
+            niche: components["schemas"]["NicheOut"] | null;
+            /** Published At */
+            published_at: string | null;
+            source: components["schemas"]["ProblemSource"];
+            /** Statement */
+            statement: string;
+            /** Title */
+            title: string;
         };
         /** DocumentOut */
         DocumentOut: {
@@ -3233,6 +3342,23 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** FeatureOut */
+        FeatureOut: {
+            /** Applies */
+            applies: boolean;
+            /**
+             * Raw
+             * @description The fact behind the feature (f5: the trend z-score; f6: the confidence)
+             */
+            raw: number | null;
+            /**
+             * Value
+             * @description Normalised to 0-1; null when the feature does not apply
+             */
+            value: number | null;
+            /** Weight */
+            weight: number;
+        };
         /** FeedbackIn */
         FeedbackIn: {
             feedback: components["schemas"]["MatchFeedback"];
@@ -3413,6 +3539,23 @@ export interface components {
          * @enum {string}
          */
         IpTerms: "assignment" | "exclusive_licence" | "non_exclusive_licence" | "development_contract" | "revenue_share";
+        /** LikedNichesIn */
+        LikedNichesIn: {
+            /**
+             * Liked
+             * @description The niche ids you like (3 to 5)
+             */
+            liked: string[];
+        };
+        /** LikedNichesOut */
+        LikedNichesOut: {
+            /** Liked */
+            liked: components["schemas"]["NicheOut"][];
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+        };
         /** LoggingNotice */
         LoggingNotice: {
             /** Text */
@@ -3936,6 +4079,19 @@ export interface components {
             /** Authorize Url */
             authorize_url: string;
         };
+        /** OpportunityGapOut */
+        OpportunityGapOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Items
+             * @description Top-decile trending problems with fewer than 3 proposals
+             */
+            items: components["schemas"]["TrendingProblem"][];
+        };
         /** OrgCard */
         OrgCard: {
             badge: components["schemas"]["Badge"];
@@ -4394,6 +4550,18 @@ export interface components {
             /** Headline */
             headline?: string | null;
         };
+        /** ProjectTrendOut */
+        ProjectTrendOut: {
+            /**
+             * Badge
+             * @description Shown only when trending; never an organisation count or name
+             */
+            badge: string | null;
+            /** New This Week */
+            new_this_week: boolean;
+            /** Trending */
+            trending: boolean;
+        };
         /**
          * ProposalAsk
          * @enum {string}
@@ -4506,6 +4674,68 @@ export interface components {
             version_id: string;
             /** Version No */
             version_no: number;
+        };
+        /** PursuitOut */
+        PursuitOut: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "pursue" | "consider" | "not_now";
+            /** Label */
+            label: string;
+            /** Reasons */
+            reasons: string[];
+        };
+        /** Recommendation */
+        Recommendation: {
+            /**
+             * Exploring
+             * @description The exploration slot: a card outside your liked niches
+             */
+            exploring: boolean;
+            /**
+             * Features
+             * @description The feature vector f1-f10 behind the score
+             */
+            features: {
+                [key: string]: components["schemas"]["FeatureOut"];
+            };
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "Strong fit" | "Good fit" | "Stretch";
+            /** Position */
+            position: number;
+            problem: components["schemas"]["DiscoverProblem"];
+            pursuit: components["schemas"]["PursuitOut"];
+            /** Score */
+            score: number;
+            trend: components["schemas"]["TrendOut"];
+            /** Why */
+            why: string[];
+            /** Why Not */
+            why_not: string | null;
+        };
+        /** RecommendationsOut */
+        RecommendationsOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Items */
+            items: components["schemas"]["Recommendation"][];
+            /** Liked Niches */
+            liked_niches: components["schemas"]["NicheOut"][];
+            /**
+             * Personalised
+             * @description False without the profiling consent: liked niches and public facts only
+             */
+            personalised: boolean;
+            /** Ranker Version */
+            ranker_version: string;
         };
         /**
          * RecoveryCodesRequest
@@ -4809,26 +5039,6 @@ export interface components {
          * @enum {string}
          */
         SimulatedOutcome: "succeed" | "fail" | "cancel";
-        /** SourceOut */
-        SourceOut: {
-            /** Excerpt Ref */
-            excerpt_ref: string | null;
-            /** Published Date */
-            published_date: string | null;
-            /** Publisher */
-            publisher: string | null;
-            /** Quote */
-            quote: string | null;
-            /**
-             * Retrieved At
-             * Format: date-time
-             */
-            retrieved_at: string;
-            /** Source Type */
-            source_type: string | null;
-            /** Url */
-            url: string;
-        };
         /** SourcesOut */
         SourcesOut: {
             /** Allowlist */
@@ -5104,6 +5314,74 @@ export interface components {
             /** Snapshot At */
             snapshot_at: string | null;
         };
+        /** TrendOut */
+        TrendOut: {
+            /**
+             * Badge
+             * @description Shown only when trending, e.g. 'Trending in ICT › Fintech · Kenya: ...'
+             */
+            badge: string | null;
+            /** New This Week */
+            new_this_week: boolean;
+            /**
+             * Score
+             * @description The decayed trend score behind the z-score
+             */
+            score: number;
+            /** Trending */
+            trending: boolean;
+            /**
+             * Z
+             * @description z-score against the niche's 90-day baseline; null while the niche has none
+             */
+            z: number | null;
+        };
+        /** TrendingOut */
+        TrendingOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Problems */
+            problems: components["schemas"]["TrendingProblem"][];
+            /** Projects */
+            projects: components["schemas"]["TrendingProject"][];
+        };
+        /** TrendingProblem */
+        TrendingProblem: {
+            problem: components["schemas"]["DiscoverProblem"];
+            /**
+             * Project Ids
+             * @description Trending projects (in `projects`) that solve this problem
+             */
+            project_ids: string[];
+            /**
+             * Proposal Count
+             * @description Published proposals that link this problem
+             */
+            proposal_count: number;
+            /**
+             * Sources
+             * @description The newest cited sources
+             */
+            sources: components["schemas"]["bridge__matching__discover_schemas__SourceOut"][];
+            trend: components["schemas"]["TrendOut"];
+            /**
+             * Why
+             * @description Why chips written in code, at most 3
+             */
+            why: string[];
+        };
+        /** TrendingProject */
+        TrendingProject: {
+            /** @description The problem it solves (always present) */
+            problem: components["schemas"]["ProblemRef"];
+            proposal: components["schemas"]["TeaserItem"];
+            trend: components["schemas"]["ProjectTrendOut"];
+            /** Why */
+            why: string[];
+        };
         /**
          * UnlinkRequest
          * @description Removing a sign-in method: the current password when the account has one.
@@ -5301,6 +5579,44 @@ export interface components {
             status: components["schemas"]["ResearchRunStatus"];
             /** Stop Reason */
             stop_reason: string | null;
+        };
+        /** SourceOut */
+        bridge__admin__research__SourceOut: {
+            /** Excerpt Ref */
+            excerpt_ref: string | null;
+            /** Published Date */
+            published_date: string | null;
+            /** Publisher */
+            publisher: string | null;
+            /** Quote */
+            quote: string | null;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Source Type */
+            source_type: string | null;
+            /** Url */
+            url: string;
+        };
+        /** SourceOut */
+        bridge__matching__discover_schemas__SourceOut: {
+            /** Published Date */
+            published_date: string | null;
+            /** Publisher */
+            publisher: string | null;
+            /** Quote */
+            quote: string | null;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Source Type */
+            source_type: string | null;
+            /** Url */
+            url: string;
         };
         /** RunOut */
         bridge__matching__schemas__RunOut: {
@@ -9043,6 +9359,200 @@ export interface operations {
             };
         };
     };
+    discover_opportunity_gap_api_discover_opportunity_gap_get: {
+        parameters: {
+            query?: {
+                /** @description Niche slug (a parent includes children) */
+                niche?: string | null;
+                /** @description ISO 3166-2 county code */
+                county?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityGapOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    discover_trending_api_discover_trending_get: {
+        parameters: {
+            query?: {
+                /** @description Niche slug (a parent includes children) */
+                niche?: string | null;
+                /** @description ISO 3166-2 county code */
+                county?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrendingOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     get_engagement_api_engagements__engagement_id__get: {
         parameters: {
             query?: never;
@@ -12332,6 +12842,194 @@ export interface operations {
             };
         };
     };
+    my_niches_api_me_niches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikedNichesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    set_my_niches_api_me_niches_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LikedNichesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikedNichesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     get_profile_api_me_profile_get: {
         parameters: {
             query?: never;
@@ -14255,6 +14953,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProposalViews"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    my_recommendations_api_me_recommendations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationsOut"];
                 };
             };
             /** @description Bad Request */
