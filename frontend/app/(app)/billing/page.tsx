@@ -156,7 +156,8 @@ async function PlanRow({
         {current ? <CheckIcon className="size-4" /> : null}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        {/* Under 640 px the price always has its own line below the name; from 640 px it sits on the right. */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4">
           <h3 className="text-lg leading-7 [overflow-wrap:anywhere] text-ink">
             {plan.name}
           </h3>

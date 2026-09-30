@@ -1,6 +1,9 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+
+import { billingHref } from "@/lib/billing/upgrade";
 
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
@@ -38,6 +41,8 @@ export function AccountMenu() {
   const panelId = useId();
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  // Organisation screens carry the organisation as ?org= (members of several): Plan & billing keeps it.
+  const billing = billingHref(useSearchParams().get("org") ?? undefined);
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +91,7 @@ export function AccountMenu() {
       >
         <ul className="flex flex-col">
           <li>
-            <a href="/billing" className={itemClass}>
+            <a href={billing} className={itemClass}>
               {t("billing")}
             </a>
           </li>

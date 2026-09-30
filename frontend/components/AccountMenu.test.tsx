@@ -7,9 +7,16 @@ import { AccountMenu } from "./AccountMenu";
 
 // REQ-BIL-08: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing and Sign out, as a disclosure.
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
+const search = vi.hoisted(() => ({ value: "" }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(search.value),
+}));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  search.value = "";
+});
 
 function renderMenu() {
   renderWithIntl(
@@ -34,6 +41,18 @@ describe("AccountMenu", () => {
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps the organisation a screen acts for, and only a real organisation id", () => {
+    search.value = "org=0192a7c4-5b1e-7c3d-8e9f-0a1b2c3d4e5f&cursor=x";
+    fireEvent.click(renderMenu());
+    expect(screen.getByRole("link", { name: "Plan & billing" }).getAttribute("href")).toBe(
+      "/billing?org=0192a7c4-5b1e-7c3d-8e9f-0a1b2c3d4e5f",
+    );
+    cleanup();
+    search.value = "org=%2F%2Fevil.example";
+    fireEvent.click(renderMenu());
+    expect(screen.getByRole("link", { name: "Plan & billing" }).getAttribute("href")).toBe("/billing");
   });
 
   it("closes on Escape and gives focus back to its button", () => {
