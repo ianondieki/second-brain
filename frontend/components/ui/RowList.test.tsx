@@ -84,6 +84,18 @@ describe("RowList and Row", () => {
     expect(withFigure.className).toContain("gap-x-6");
   });
 
+  it("can keep a figure's column from 640 px only, so a phone row keeps the whole width", () => {
+    const { container } = render(
+      <RowList>
+        <Row title="Pro (monthly)" figure="KES 499 a month" figureFrom="sm" />
+      </RowList>,
+    );
+    const row = container.querySelector("article")!;
+    expect(row.className).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
+    expect(row.className.split(" ")).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(screen.getByText("KES 499 a month").className.split(" ")).toEqual(expect.arrayContaining(["hidden", "sm:block"]));
+  });
+
   it("is ordered when asked", () => {
     render(
       <RowList ordered>

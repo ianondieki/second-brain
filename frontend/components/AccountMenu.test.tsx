@@ -43,8 +43,7 @@ describe("AccountMenu", () => {
     expect(screen.getByRole("link", { name: "Sign-in security" }).getAttribute("href")).toBe("/settings/security");
     expect(screen.getByRole("link", { name: "Notifications" }).getAttribute("href")).toBe("/settings/notifications");
     expect(screen.getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
-    // Sign out's code arrives with the open menu (P16-C1 fix round 1: off every page's first load).
-    expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Plan & billing",
       "Sign-in security",
@@ -97,7 +96,6 @@ describe("AccountMenu", () => {
     fireEvent.click(toggle);
     const panel = document.getElementById(toggle.getAttribute("aria-controls")!);
     expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull();
-    await screen.findByRole("button", { name: "Sign out" });
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Sign-in security",
       "Notifications",

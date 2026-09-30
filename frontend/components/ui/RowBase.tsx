@@ -46,6 +46,11 @@ export interface RowBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title">
   badges?: RowBadges;
   /** A right-aligned figure (an amount, a count), in tabular figures. */
   figure?: ReactNode;
+  /**
+   * "sm": the figure's column only from 640 px; below it the row's content keeps the whole width (the caller says the
+   * figure in the meta line there, as the plan ladder does with its price).
+   */
+  figureFrom?: "sm";
   /** Anything else the row carries, after the badges (a quiet text, a secondary control). */
   children?: ReactNode;
 }
@@ -58,6 +63,7 @@ export function RowBase({
   meta,
   badges,
   figure,
+  figureFrom,
   className,
   children,
   ...rest
@@ -68,7 +74,11 @@ export function RowBase({
       // The figure's column (and its 24 px gap) only when there is a figure: without one the title keeps the full width.
       className={cn(
         "relative grid border-t border-line py-5",
-        figure ? "grid-cols-[minmax(0,1fr)_auto] gap-x-6" : undefined,
+        figure
+          ? figureFrom === "sm"
+            ? "sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6"
+            : "grid-cols-[minmax(0,1fr)_auto] gap-x-6"
+          : undefined,
         className,
       )}
       {...rest}
@@ -87,7 +97,11 @@ export function RowBase({
         ) : null}
         {children}
       </div>
-      {figure ? <div className="self-start text-right tabular-nums text-ink">{figure}</div> : null}
+      {figure ? (
+        <div className={cn("self-start text-right tabular-nums text-ink", figureFrom === "sm" && "hidden sm:block")}>
+          {figure}
+        </div>
+      ) : null}
     </article>
   );
 }

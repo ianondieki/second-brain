@@ -140,8 +140,13 @@ async function PlanRow({
       data-plan={plan.code}
       title={plan.name}
       // A free plan's name already says so ("Free", "Claimed (Free)"); a plan not sold here says why under its name.
+      // The price is the row's figure from 640 px; below that it is the meta line, so what the plan allows and its
+      // one action keep the whole width at 360 px (ux-review round 2).
       figure={kind === "free" || kind === "notSold" ? undefined : price}
-      meta={kind === "notSold" ? price : undefined}
+      figureFrom="sm"
+      meta={
+        kind === "notSold" ? price : kind === "free" ? undefined : <span className="text-base text-ink sm:hidden">{price}</span>
+      }
       badges={
         current
           ? [

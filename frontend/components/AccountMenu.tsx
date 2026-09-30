@@ -1,11 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { lazy, Suspense, use, useEffect, useId, useRef, useState } from "react";
+import { use, useEffect, useId, useRef, useState } from "react";
 
 import { MenuOptions } from "./AccountMenuScope";
 import { menuBillingHref } from "./billing-link";
 import { useStrings } from "./ClientStrings";
+import { SignOutButton } from "./SignOutButton";
 import { cn } from "./ui/cn";
 import { Icon, type IconProps } from "./ui/status-icons";
 
@@ -29,11 +30,6 @@ function ChevronIcon(props: IconProps) {
 const SECURITY_HREF = "/settings/security";
 const NOTIFICATIONS_HREF = "/settings/notifications";
 
-// Sign out loads with the open menu (fetched ahead when the pointer or focus reaches the Account button): its code is
-// not on every signed-in page's first load (docs/spec/07 item 5; P16-C1 fix round 1 found /settings/security at the
-// budget). A placeholder of the button's height keeps the menu from moving while it arrives.
-const loadSignOut = () => import("./SignOutButton");
-const SignOutButton = lazy(() => loadSignOut().then((module) => ({ default: module.SignOutButton })));
 const HELP_HREF = "/help";
 
 const itemClass =
@@ -87,8 +83,6 @@ export function AccountMenu() {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
-        onPointerEnter={() => void loadSignOut()}
-        onFocus={() => void loadSignOut()}
         className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-ink hover:bg-jacaranda-wash"
       >
         <span className="flex size-8 items-center justify-center rounded-full bg-jacaranda-wash text-jacaranda">
@@ -135,11 +129,7 @@ export function AccountMenu() {
             "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-jacaranda-wash [&_button:hover]:text-ink"
           }
         >
-          {open ? (
-            <Suspense fallback={<span aria-hidden="true" className="block min-h-11 w-full" />}>
-              <SignOutButton />
-            </Suspense>
-          ) : null}
+          <SignOutButton />
         </div>
       </div>
     </div>
