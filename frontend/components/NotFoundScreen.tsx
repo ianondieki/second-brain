@@ -1,43 +1,38 @@
 import { getTranslations } from "next-intl/server";
 
-import { getMe } from "@/lib/api/server";
-import { homeOf, isPending, type Me } from "@/lib/auth/routing";
-
-import { AuthShell } from "./AuthShell";
-import { SignedInShell } from "./SignedInShell";
-import { EmptyState } from "./ui/EmptyState";
+import { TopBarBase } from "./TopBarBase";
+import { buttonClass } from "./ui/Button";
+import { EmptyStateFrame } from "./ui/EmptyStateFrame";
 import { PageHeader } from "./ui/PageHeader";
 
-/** Who is asking, or null: a failed lookup shows the signed-out frame rather than an error page for a wrong address. */
-async function signedIn(): Promise<Me | null> {
-  try {
-    const me = await getMe();
-    return me && !isPending(me) ? me : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * An address with no page (not-found.tsx): the frame the person was in, the title, one sentence and one link home
- * (docs/spec/07 item 4). Signed in, it is the signed-in shell and their own home; otherwise the signed-out one. It
- * reads nothing from the address, so every unknown address, the staff console's included for anyone who is not
- * staff (proxy.ts), answers the same way for the same person.
+ * An address with no page (app/not-found.tsx): the top bar, the title, one sentence and one link home (docs/spec/07
+ * item 4). Fully static on purpose: Next.js embeds the not-found tree in every page's payload, so it reads no session
+ * and holds no client component (no account menu, plain links); anything more would ship on every route and call the
+ * API on every render. The same answer for every unknown address and for anyone, the staff console's included for
+ * those who are not staff (proxy.ts).
  */
 export async function NotFoundScreen() {
   const t = await getTranslations("notFound");
-  const me = await signedIn();
-  const body = (
+  return (
     <>
-      <PageHeader title={t("title")} />
-      <EmptyState
-        className="mt-6"
-        sentence={t("body")}
-        action={me ? t("homeSignedIn") : t("home")}
-        href={me ? homeOf(me) : "/"}
-        primary
-      />
+      <TopBarBase homeHref="/" Anchor="a" />
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 focus:outline-none sm:px-6 lg:pt-16">
+        <div className="max-w-md">
+          <PageHeader title={t("title")} />
+          <EmptyStateFrame
+            className="mt-6"
+            sentence={t("body")}
+            action={
+              // A plain link on purpose: this tree ships in every page's payload, so it holds no client component.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
+              <a href="/" data-primary="" className={buttonClass("primary", "no-underline")}>
+                {t("home")}
+              </a>
+            }
+          />
+        </div>
+      </main>
     </>
   );
-  return me ? <SignedInShell homeHref={homeOf(me)}>{body}</SignedInShell> : <AuthShell>{body}</AuthShell>;
 }
