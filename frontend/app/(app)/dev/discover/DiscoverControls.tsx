@@ -2,9 +2,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
+import { TabNav } from "@/components/ui/TabNav";
 
 import {
   DISCOVER_PATH,
@@ -17,35 +17,17 @@ import {
 } from "./discover";
 
 /**
- * Discover's three lists as links (one at a time; the address holds the choice, so each list is server-rendered and
- * shareable). The current one carries aria-current and is marked by weight and a bar, not colour alone.
+ * Discover's three lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
+ * server-rendered and shareable).
  */
 export function ViewSwitch({ query }: { query: DiscoverQuery }) {
   const t = useTranslations("discover");
   return (
-    <nav aria-label={t("viewsLabel")} className="border-b border-line">
-      <ul className="-mb-px flex gap-5 overflow-x-auto sm:gap-8">
-        {VIEWS.map((view) => {
-          const active = view === query.view;
-          return (
-            <li key={view} className="shrink-0">
-              <Link
-                href={discoverHref({ ...query, view })}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "inline-flex min-h-11 items-center border-b-2 pb-0.5 whitespace-nowrap no-underline",
-                  active
-                    ? "border-jacaranda font-semibold text-ink"
-                    : "border-transparent font-medium text-ink-soft hover:border-line hover:text-ink",
-                )}
-              >
-                {t(`views.${view}`)}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <TabNav
+      label={t("viewsLabel")}
+      current={query.view}
+      items={VIEWS.map((view) => ({ key: view, label: t(`views.${view}`), href: discoverHref({ ...query, view }) }))}
+    />
   );
 }
 

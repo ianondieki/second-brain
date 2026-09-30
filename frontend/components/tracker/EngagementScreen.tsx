@@ -5,6 +5,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
+import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import type { Me } from "@/lib/auth/routing";
 
@@ -128,24 +129,16 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         <Tier2Section detail={detail} enrolled={me.mfa.enrolled} query={query} />
       </div>
 
-      <nav aria-label={t("tabs.label")} className="mt-10 max-w-3xl border-b border-line">
-        <ul className="flex gap-1 overflow-x-auto">
-          {TABS.map((name) => (
-            <li key={name}>
-              <Link
-                href={withQuery(href, query, name === "tracker" ? {} : { tab: name })}
-                aria-current={name === tab ? "page" : undefined}
-                className={cn(
-                  "-mb-px inline-flex min-h-11 items-center border-b-2 px-3 font-semibold no-underline",
-                  name === tab ? "border-jacaranda text-jacaranda" : "border-transparent text-ink-soft hover:text-ink",
-                )}
-              >
-                {t(`tabs.${name}`)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <TabNav
+        label={t("tabs.label")}
+        current={tab}
+        className="mt-10 max-w-3xl"
+        items={TABS.map((name) => ({
+          key: name,
+          label: t(`tabs.${name}`),
+          href: withQuery(href, query, name === "tracker" ? {} : { tab: name }),
+        }))}
+      />
 
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
