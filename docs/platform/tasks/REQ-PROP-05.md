@@ -215,3 +215,31 @@ client and carries no mapping tables); the typed client itself is the save chunk
    the screenshots (frontend-design skill used for the layout).
 4. Swahili strings are drafts (`[[SW-REVIEW]]`).
 
+## P13-F review round 1 (2026-09-30): reviewer PASS; ux-reviewer CHANGES_REQUIRED, fixed
+
+- **MAJOR 1 (focus lost):** a new ask focuses the panel heading (the editor's button is gone and "Ask again" hides while
+  the request runs); every refusal moves focus to its sentence (`fail()` in `AssistantPanel.tsx`). Tests: the first
+  ask refused, and "Ask again" with focus on the button, then refused (mutation: the heading focus removed turns 1 red;
+  the refusal focus removed turns 15 red).
+- **MAJOR 2 (text beside itself after "Use this"):** the owner's previous title and summary stay in the left column as
+  "Before", and an "Undo" link-button puts them back through the editor's `update` (so its autosave). Vitest and e2e
+  (the API's draft holds the suggestion after "Use this" and the owner's words again after "Undo").
+- MINORs: a new ask clears the last answer (a refused "Ask again" never shows the old suggestion; mutation: 1 red); a
+  local error boundary (`PanelBoundary` in `Editor.tsx`) turns a failed chunk load into `problem.network` beside the
+  button with focus on it, and the next press loads the module afresh (preloadable keeps a rejected load); the Suspense
+  fallback is `role="status"`; `editor/assistant-load.test.tsx` fails when `Editor.tsx` imports the panel or the
+  assistant's calls statically, and walks a failed load and the retry (mutation: no fresh load turns 1 red); after 409
+  `consent_text_changed` with a failed re-read, the outdated wording goes, the problem shows and "Turn on and ask" is
+  `aria-disabled` and inert until the panel reads the wording again; HTTP rows for a refused `GET /consent` on open
+  (503, 401, 409 `proposal_hidden`, offline), 401 `mfa_required`, a plain 429 and a refused `DELETE`.
+- Copy (`[[COPY-REVIEW]]`): `status.demo_fallback` "This demo has no AI model connected, so there is no suggestion.";
+  the panel heading is "Writing assistant's answer" unless a teaser is suggested ("Suggestion"); after turning off, the
+  footer action reads "Turn on and ask"; new `before`, `undo`, `undone`, `headingAnswer`.
+- Left as they are (orchestrator): the "(Tier 2)" consent wording (D-39 item 6, backend); the budget pass rule (D-28
+  addendum records the page-load reading).
+- Screenshots re-taken for the states that changed: `assistant-answer`, `assistant-applied` (Before and Undo),
+  `assistant-off` ("Turn on and ask"), each at 375 and 1440 px.
+- JS budget after the round (same method as above): page load (panel closed) **146,247** (+433 over `c6bb896`; the
+  error boundary is 169 of it), through the first edit **148,284**, after pressing "Suggest a clearer teaser" **151,227**
+  (panel chunk 2,943 B).
+
