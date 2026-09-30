@@ -346,7 +346,7 @@ export function ScoutForm(props: ScoutFormProps) {
         </Alert>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:flex-wrap">
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
         <SubmitButton variant="primary" busy={busy !== null}>
           {busy === "save" ? t("saving") : t("save")}
         </SubmitButton>

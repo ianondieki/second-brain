@@ -96,7 +96,7 @@ describe("the case page", () => {
     const flagged = container.querySelector<HTMLElement>('[data-field="problem_statement"]')!;
     expect(flagged.hasAttribute("data-flagged")).toBe(true);
     const term = within(flagged).getByText("Flagged");
-    expect(term.querySelector("svg")).not.toBeNull(); // the mark, beside the word
+    expect(term.parentElement!.querySelector("svg")).not.toBeNull(); // the mark, beside the word (one Badge)
     expect(flagged.querySelector("dt")!.textContent).toBe("Problem statementFlagged");
     for (const name of ["title", "summary"]) {
       const field = container.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
@@ -155,6 +155,62 @@ describe("the case page", () => {
     expect(header.textContent).not.toContain("Public while checked");
     expect(header.textContent).not.toContain("Hidden until decided");
     expect(screen.queryByRole("button")).toBeNull();
+    // P15-F MINOR 2 and 3: "Approved" once (the header's tag; the decision says who and when), and the text is no
+    // longer "under review".
+    expect(container.querySelector("[data-decided]")!.querySelector("[data-chip]")).toBeNull();
+    expect(screen.getAllByText("Approved")).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Text under review" })).toBeNull();
+  });
+
+  it("names a rejected case's text truthfully: nothing on the page calls it public (fix round 1)", async () => {
+    data.view = {
+      kind: "ok",
+      data: {
+        item: held({
+          status: "rejected",
+          subject_state: "rejected",
+          actions: [],
+          blocked: "already_decided",
+          decided_at: "2026-09-30T07:30:00Z",
+          decided_by: { id: "01a0f012-0000-7000-8000-000000000012", display_name: "Staff Moderator (demo)" },
+        }),
+        nextId: null,
+      },
+    };
+    const { container } = await page();
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
+    const headings = [...container.querySelectorAll("h1, h2, h3")].map((h) => h.textContent ?? "");
+    for (const heading of headings) expect(heading).not.toMatch(/public/i);
+    expect(container.querySelector('[data-header-tag="outcome"]')!.textContent).toBe("Rejected");
+  });
+
+  it("says what the case is about in the header's meta line, not as a label above the title (P16)", async () => {
+    const { container } = await page();
+    const header = container.querySelector("header")!;
+    const h1 = header.querySelector("h1")!;
+    expect(h1.previousElementSibling).toBeNull(); // nothing above the title
+    expect(header.querySelector('[data-header-tag="kind"]')!.textContent).toBe("Proposal");
+    expect(header.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
+    expect(screen.getByRole("heading", { level: 2, name: "Text under review" })).toBeTruthy();
+  });
+
+  it("leaves out the text once the subject is gone (P15-F MINOR 3)", async () => {
+    data.view = {
+      kind: "ok",
+      data: { item: held({ subject_state: null, actions: [], blocked: "subject_gone", fields: [] }), nextId: null },
+    };
+    const { container } = await page();
+    expect(container.querySelector("[data-case-text]")).toBeNull();
+    expect(screen.queryByText("There is no text to show for this case.")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Decision" })).toBeTruthy();
+  });
+
+  it("follows the heading order: one h1, then h2 sections (axe heading-order)", async () => {
+    const { container } = await page();
+    const levels = [...container.querySelectorAll("h1, h2, h3, h4")].map((h) => Number(h.tagName[1]));
+    expect(levels[0]).toBe(1);
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
   });
 
   it("reads an unknown or malformed id as a case that is not in the queue", async () => {
@@ -210,6 +266,21 @@ describe("the queue", () => {
     expect(within(rows[1]).getByText("Public while checked")).toBeTruthy();
     expect(within(rows[1]).getByText("New problem from a developer")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Open cases, oldest first" })).toBeTruthy();
+    // P15-F MINOR 6 and the P16 tour: each row's title is an h2 under the page's h1 (axe heading-order), with nothing
+    // above it; what the case is about is a neutral badge in the meta line, not one of the row's two status badges.
+    for (const row of rows) {
+      const title = row.querySelector("h2")!;
+      expect(title.previousElementSibling).toBeNull();
+      expect(row.querySelector("h3")).toBeNull();
+    }
+    expect(within(rows[1]).getByText("Problem").closest("[data-chip]")).toBeNull();
+    // Fix round 1: the kind is plain meta text (not a badge), and the first row draws no second hairline under the tabs.
+    expect(within(rows[1]).getByText("Problem").className).toBe("font-medium text-ink");
+    expect(screen.getByRole("list", { name: "Open cases, oldest first" }).className).toContain(
+      "[&>li:first-child>article]:border-t-0",
+    );
+    for (const row of rows) expect(row.querySelector("h2 a[data-case-link]")).not.toBeNull();
+    expect(within(rows[0]).getByText("Proposal")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open" }).getAttribute("aria-current")).toBe("page");
   });
 

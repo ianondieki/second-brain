@@ -12,6 +12,7 @@ import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
 import {
+  isEndingCommand,
   nairobiToday,
   toMinor,
   type ApproveInput,
@@ -110,7 +111,8 @@ function Shell({
       {children}
       {props.notice}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <SubmitButton variant="primary" busy={props.busy}>
+        {/* An ending step (decline) submits as the danger button, like every confirmation that ends something. */}
+        <SubmitButton variant={isEndingCommand(props.command) ? "danger" : "primary"} busy={props.busy}>
           {props.busy ? t("busy") : t(`command.${props.command}`)}
         </SubmitButton>
         <Button variant="secondary" onClick={props.onCancel}>

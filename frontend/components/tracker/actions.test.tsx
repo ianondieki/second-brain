@@ -275,6 +275,12 @@ describe("forms for commands with a body", () => {
     fireEvent.click(screen.getByRole("button", { name: "Decline" }));
     fireEvent.change(await screen.findByLabelText("Reason"), { target: { value: "OTHER" } });
     fireEvent.change(screen.getByLabelText("Explain the reason"), { target: { value: "Too early for us." } });
+    // Fix round 1: an ending step submits as the danger button, never the primary one.
+    const submit = within(document.querySelector("[data-command-form]") as HTMLElement).getByRole("button", {
+      name: "Decline",
+    });
+    expect(submit.className).toContain("border-error");
+    expect(submit.hasAttribute("data-primary")).toBe(false);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Decline" })));
     expect(runImpl.mock.calls[0][0]).toMatchObject({
       path: "/api/engagements/{engagement_id}/decline",

@@ -47,7 +47,7 @@ async function formStep(page: Page, name: string, fill: () => Promise<void>) {
   await actions.getByRole("button", { name, exact: true }).click();
   await expect(actions.locator("[data-command-form]")).toBeVisible();
   await fill();
-  await checkScreen(page);
+  await checkScreen(page, { strict: true });
   await actions.locator("[data-command-form]").getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
   await expect(actions.locator("[data-command-form]")).toHaveCount(0);
@@ -120,7 +120,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(stepper.locator("[aria-current='step']")).toContainText("Review");
     await expect(stepper.locator("[aria-current='step']")).toContainText("Now: Proposal submitted");
     await expect(devPage.locator("[data-actions]").getByRole("button")).toHaveText(["Withdraw"]);
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await shot(devPage, info, "dev-tracker-submitted");
 
     // The organisation: the Inbox row's stage chip opens the tracker; the Engagements list puts it under "Needs us".
@@ -142,13 +142,13 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(orgRow).not.toContainText(/achieng|otieno/i);
     await expect(orgRow).toContainText(/From dev-[0-9a-hjkmnp-tv-z]{8}/);
     await expect(orgRow.locator("[data-chip='turn']")).toHaveText("Our turn");
-    await checkScreen(orgPage);
+    await checkScreen(orgPage, { strict: true });
     await shot(orgPage, info, "org-list");
     await orgRow.getByRole("link", { name: dev.title }).click();
     await expect(orgPage).toHaveURL(new RegExp(`${orgTracker}$`), SERVER_STEP);
     await expect(await banner(orgPage)).toContainText("Awaiting: you");
     await expect(orgPage.locator("[data-primary]")).toHaveText("Start the review");
-    await checkScreen(orgPage);
+    await checkScreen(orgPage, { strict: true });
     await step(orgPage, "Start the review");
     await expect(orgPage.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");
 
@@ -167,7 +167,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await orgPage.reload();
     await orgPage.locator("[data-actions]").getByRole("button", { name: "Mark first contact made" }).click();
     await expect(orgPage.getByLabel("Authenticator code")).toBeVisible(SERVER_STEP);
-    await checkScreen(orgPage);
+    await checkScreen(orgPage, { strict: true });
     await shot(orgPage, info, "org-step-up");
     await orgPage.getByLabel("Authenticator code").fill(await org.person.code());
     await orgPage.getByRole("button", { name: "Confirm and continue" }).click();
@@ -180,7 +180,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(devPage.locator("[data-endorsement='org']")).toContainText("Rita Wanjiru");
     await expect(devPage.locator("[data-endorsement='org']")).toContainText(/EAT/);
     await expect(devPage.locator("[data-endorsement='developer']")).toContainText("Not endorsed yet");
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await step(devPage, "Confirm first contact");
     await step(devPage, "Send the mutual NDA");
     await expect(await banner(devPage)).toContainText(`Awaiting: you and ${org.orgName}`);
@@ -191,7 +191,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
 
     await orgPage.getByRole("navigation", { name: "Engagement sections" }).getByRole("link", { name: "Documents" }).click();
     await expect(orgPage.locator("[data-document='mutual_nda']")).toContainText("Matches the recorded fingerprint");
-    await checkScreen(orgPage);
+    await checkScreen(orgPage, { strict: true });
     await orgPage.getByRole("navigation", { name: "Engagement sections" }).getByRole("link", { name: "Tracker" }).click();
 
     // Terms by the organisation, marked final by the developer, signed by both.
@@ -213,7 +213,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(devPage.getByRole("list", { name: "Stages" }).locator("[aria-current='step']")).toContainText(
       "Implementation",
     );
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await shot(devPage, info, "dev-tracker-implementation");
     await step(devPage, "Start milestone 1");
     await step(devPage, "Submit milestone 1 for review");
@@ -245,7 +245,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(await banner(devPage)).toContainText("This engagement is closed.");
     await expect(devPage.getByRole("list", { name: "Stages" }).locator("[data-state='completed']")).toHaveCount(5);
     await expect(devPage.locator("[data-actions]")).toHaveCount(0);
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await shot(devPage, info, "dev-tracker-closed");
 
     // AC-TRACK-3: the same History for both parties.
@@ -256,7 +256,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     expect(devEvents.length).toBeGreaterThan(15);
     expect(orgEvents).toEqual(devEvents);
     await expect(devPage.locator("[data-chain='verified']")).toBeVisible();
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await shot(devPage, info, "dev-history");
   } finally {
     await close();
@@ -276,7 +276,7 @@ test("the organisation declines with a reason and the developer sees where it en
     await expect(await banner(devPage)).toContainText("Reason: Budget");
     await expect(devPage.getByRole("list", { name: "Stages" }).locator("[data-state='ended']")).toContainText("Review");
     await expect(devPage.locator("[data-actions]")).toHaveCount(0);
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
   } finally {
     await close();
   }
@@ -289,7 +289,7 @@ test("the developer withdraws after confirming, and the organisation's buttons g
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
     await devPage.locator("[data-actions]").getByRole("button", { name: "Withdraw" }).click();
     await expect(devPage.getByText(/Withdraw this proposal from/)).toBeVisible();
-    await checkScreen(devPage);
+    await checkScreen(devPage, { strict: true });
     await step(devPage, "Withdraw");
     await expect(await banner(devPage)).toContainText("This engagement has ended.");
     await orgPage.goto(`/org/engagements/${dev.engagementId}`);

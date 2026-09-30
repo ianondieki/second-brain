@@ -1,7 +1,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
-import { cn } from "@/components/ui/cn";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 
 import { Chip } from "./Chip";
@@ -55,7 +55,12 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
             {t("agreement.earlier", { count: earlier.length })}
           </summary>
           {earlier.map((agreement) => (
-            <AgreementVersion key={agreement.id} agreement={agreement} endorsements={[]} className="mt-3" />
+            <AgreementVersion
+              key={agreement.id}
+              agreement={agreement}
+              endorsements={[]}
+              className="mt-3 border-t border-line pt-4"
+            />
           ))}
         </details>
       ) : null}
@@ -76,7 +81,8 @@ function AgreementVersion({
   const eat = useEat();
   const status: ChipKind = agreement.status === "signed" ? "completed" : agreement.status === "final" ? "current" : "pending";
   return (
-    <article data-agreement={agreement.status} className={cn("border-t border-line pt-4", className)}>
+    // No rule above the latest version: the rule belongs to lists (the milestones, the earlier versions).
+    <article data-agreement={agreement.status} className={className}>
       <h3 className="flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink">
         {t("agreement.version", { version: agreement.version })}
         <Chip kind={status}>{t(`agreement.status.${agreement.status}`)}</Chip>
@@ -173,24 +179,25 @@ export function Signatures({ signatures }: { signatures: Signature[] }) {
   if (signatures.length === 0) return null;
   return (
     <Section title={t("signature.title")} headingId="signatures-heading">
-      <ul className="flex flex-col">
+      <RowList>
         {signatures.map((s) => (
-          <li key={s.id} data-signature={s.document_kind} className="border-t border-line py-3">
-            <p className="font-semibold text-ink">{t(`document.${s.document_kind}`)}</p>
-            <p className="mt-0.5 text-sm text-ink">
-              {t("signature.by", {
-                name: s.signer_name ?? t("endorsements.platform"),
-                party: t(`party.${s.party}`),
-                method: t(`method.${s.step_up_method}`),
-              })}
-            </p>
-            <p className="mt-0.5 flex flex-wrap gap-x-4 text-sm text-ink-soft">
+          <Row
+            key={s.id}
+            data-signature={s.document_kind}
+            title={t(`document.${s.document_kind}`)}
+            meta={t("signature.by", {
+              name: s.signer_name ?? t("endorsements.platform"),
+              party: t(`party.${s.party}`),
+              method: t(`method.${s.step_up_method}`),
+            })}
+          >
+            <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
               <Eat iso={s.signed_at} />
               <span className="tabular-nums">{t("fingerprint", { hash: shortHash(s.document_sha256) })}</span>
             </p>
-          </li>
+          </Row>
         ))}
-      </ul>
+      </RowList>
     </Section>
   );
 }
@@ -201,20 +208,21 @@ export function Payments({ payments }: { payments: Payment[] }) {
   if (payments.length === 0) return null;
   return (
     <Section title={t("payment.title")} headingId="payments-heading" description={t("payment.lead")}>
-      <ul className="flex flex-col">
+      <RowList>
         {payments.map((p) => {
           const confirmed = p.confirmed_at !== null;
           return (
-            <li key={p.id} data-payment={confirmed ? "confirmed" : "recorded"} className="border-t border-line py-3">
-              <p className="flex flex-wrap items-baseline justify-between gap-x-4">
-                <span className="font-semibold text-ink">
-                  <Kes minor={p.amount_kes_minor} />
-                </span>
-                <Chip kind={confirmed ? "completed" : "current"}>
+            <Row
+              key={p.id}
+              data-payment={confirmed ? "confirmed" : "recorded"}
+              title={<Kes minor={p.amount_kes_minor} />}
+              badges={[
+                <Chip key="state" kind={confirmed ? "completed" : "current"}>
                   {confirmed ? t("payment.confirmed") : t("payment.recorded")}
-                </Chip>
-              </p>
-              <DescriptionList dense className="mt-2">
+                </Chip>,
+              ]}
+            >
+              <DescriptionList dense figures className="mt-2">
                 <Description label={t("payment.method")}>{t(`paymentMethod.${p.method}`)}</Description>
                 {p.reference ? <Description label={t("payment.reference")}>{p.reference}</Description> : null}
                 <Description label={t("payment.paidOn")}>
@@ -238,10 +246,10 @@ export function Payments({ payments }: { payments: Payment[] }) {
                   )}
                 </Description>
               </DescriptionList>
-            </li>
+            </Row>
           );
         })}
-      </ul>
+      </RowList>
     </Section>
   );
 }

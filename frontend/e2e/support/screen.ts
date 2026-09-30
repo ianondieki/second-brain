@@ -86,3 +86,41 @@ export async function expectSeparateTargets(targets: Locator) {
     }
   }
 }
+
+/**
+ * Stacked row links each keep their own tap area (WCAG 2.2 target size, docs/spec/07 item 6), measured as the person
+ * taps them: a link stretched over its row (`::after` absolutely positioned at inset 0, as Row draws it) is measured
+ * as the row it covers; any other link as its own box. Every area is at least 44 px tall and no two overlap. Without
+ * the stretch, a row title's own box (one line of text) is under 44 px, so the check fails.
+ */
+export async function expectSeparateTapTargets(targets: Locator) {
+  await settled(targets.page());
+  const boxes = [];
+  for (const target of await targets.all()) {
+    const box = await target.evaluate((element) => {
+      const after = getComputedStyle(element, "::after");
+      let rect = element.getBoundingClientRect();
+      const stretched =
+        after.content !== "none" &&
+        after.position === "absolute" &&
+        ["top", "right", "bottom", "left"].every((side) => after.getPropertyValue(side) === "0px");
+      if (stretched) {
+        let block = element.parentElement;
+        while (block && getComputedStyle(block).position === "static") block = block.parentElement;
+        if (block) rect = block.getBoundingClientRect();
+      }
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, name: element.textContent ?? "" };
+    });
+    boxes.push(box);
+  }
+  expect(boxes.length).toBeGreaterThan(0);
+  for (const box of boxes) expect(box.height, box.name).toBeGreaterThanOrEqual(44);
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [a, b] = [boxes[i], boxes[j]];
+      // Rows share their hairline edge: touching is not overlapping.
+      const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+      expect(overlap, `${a.name} overlaps ${b.name}`).toBe(false);
+    }
+  }
+}

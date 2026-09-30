@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
+import { Row } from "@/components/ui/RowList";
 
 import { claimHref, orgName, shortId, slaChip, slaState, STATUS_CHIP, type Claim } from "./claims";
 
@@ -28,35 +28,33 @@ export async function ClaimChip({ claim }: { claim: Pick<Claim, "status" | "sla"
 }
 
 /**
- * One claim in the queue (REQ-DIR-03 queue): the organisation (the way into the claim; by id when staff cannot read
- * it), one tag (the review time left, or the status), what it asks for, who filed it, the domain and when. No
- * registration number, KRA PIN or address here: those are on the claim's own page only.
+ * One claim in the queue (REQ-DIR-03 queue), a Row: the organisation (the way into the claim, an h2 under the page's
+ * h1; by id when staff cannot read it), one status badge (the review time left, or the status), then what it asks
+ * for, who filed it, the domain and when as the meta line. No registration number, KRA PIN or address here: those
+ * are on the claim's own page only.
  */
 export async function ClaimRow({ claim }: { claim: Claim }) {
   const t = await getTranslations("adminClaims");
   const locale = await getLocale();
   const name = orgName(claim.org);
   return (
-    <li data-claim={claim.id} className="border-t border-line py-5 first:border-t-0 first:pt-0">
-      <h3 className="text-lg text-ink">
-        <Link
-          href={claimHref(claim.id)}
-          data-claim-link=""
-          className="inline-flex min-h-11 items-center font-semibold [overflow-wrap:anywhere] text-ink underline decoration-line decoration-1 underline-offset-4 hover:text-jacaranda hover:decoration-jacaranda"
-        >
-          {name ?? t("unnamed", { id: shortId(claim.org.id) })}
-        </Link>
-      </h3>
+    <Row
+      data-claim={claim.id}
+      linkData={{ "data-claim-link": "" }}
+      headingLevel={2}
+      title={name ?? t("unnamed", { id: shortId(claim.org.id) })}
+      href={claimHref(claim.id)}
+      meta={
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="font-medium text-ink">{t(`level.${claim.level}`)}</span>
+          <span>{t("by", { name: claim.claimant.display_name })}</span>
+          <span className="[overflow-wrap:anywhere]">{claim.domain}</span>
+          <span>{t("filed", { date: formatMoment(locale, claim.created_at) })}</span>
+        </span>
+      }
+      badges={[await ClaimChip({ claim })]}
+    >
       {name ? null : <p className="max-w-[60ch] text-sm text-ink-soft">{t("unnamedNote")}</p>}
-      <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
-        <li>
-          <ClaimChip claim={claim} />
-        </li>
-        <li className="font-medium text-ink">{t(`level.${claim.level}`)}</li>
-        <li>{t("by", { name: claim.claimant.display_name })}</li>
-        <li className="[overflow-wrap:anywhere]">{claim.domain}</li>
-        <li>{t("filed", { date: formatMoment(locale, claim.created_at) })}</li>
-      </ul>
-    </li>
+    </Row>
   );
 }

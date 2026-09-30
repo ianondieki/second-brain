@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { adminSections } from "@/components/AdminNav";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -25,7 +26,7 @@ export default async function StaffConsoleHome() {
   const t = await getTranslations("admin");
   return (
     <AdminShell role={role}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+      <PageHeader title={t("title")} />
       <div className="mt-6">
         <EmptyState sentence={t("noSection")} action={t("noSectionAction")} href={homeFor(me.side)} primary />
       </div>

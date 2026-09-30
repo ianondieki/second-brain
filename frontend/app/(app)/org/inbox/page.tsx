@@ -5,6 +5,9 @@ import { getTranslations } from "next-intl/server";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { RowList } from "@/components/ui/RowList";
 
 import { getInbox, orgContext, type InboxPage, type OrgVerification } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -40,7 +43,7 @@ export default async function InboxScreen({ searchParams }: PageProps<"/org/inbo
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="inbox" query={query} />} wide>
       <div className="max-w-3xl">
-        <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+        <PageHeader title={t("title")} />
         {org ? (
           <>
             <InboxTabs
@@ -144,9 +147,9 @@ async function InboxList({
   const orgName = org.org_name;
   const held =
     page.held_count > 0 ? (
-      <p data-held-count={page.held_count} className="mb-6 max-w-[62ch] border-l-2 border-jacaranda pl-3 text-ink">
-        {t("held", { count: page.held_count, org: orgName })}
-      </p>
+      <Callout data-held-count={page.held_count} className="mb-6 max-w-[62ch]">
+        <p>{t("held", { count: page.held_count, org: orgName })}</p>
+      </Callout>
     ) : null;
 
   if (page.items.length === 0) {
@@ -162,7 +165,7 @@ async function InboxList({
   return (
     <>
       {held}
-      <section aria-label={t("listLabel", { org: orgName })}>
+      <RowList aria-label={t("listLabel", { org: orgName })}>
         {page.items.map((item) => (
           <InboxRow
             key={item.tag_id}
@@ -171,7 +174,7 @@ async function InboxList({
             trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
           />
         ))}
-      </section>
+      </RowList>
       {cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
           {cursor ? (

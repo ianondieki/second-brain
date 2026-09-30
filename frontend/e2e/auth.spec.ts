@@ -4,7 +4,7 @@ import { pathOf, waitForSignInLink } from "./support/mailpit";
 import { totp } from "./support/totp";
 import { signUpDeveloper } from "./support/accounts";
 import { loginReturningTo } from "./support/login";
-import { checkScreen as checkScreenStrict } from "./support/screen";
+import { checkScreen as checkPageRules } from "./support/screen";
 
 // X1-1 (REQ-AUTH-01): signup, email link, password login and TOTP against the compose stack (`make dev`), in the
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
@@ -27,7 +27,7 @@ function uniqueEmail(label: string) {
  * 360 px in the mobile project). The shared helper, strict.
  */
 async function checkScreen(page: Page) {
-  await checkScreenStrict(page, { strict: true });
+  await checkPageRules(page, { strict: true });
 }
 
 /** Forms stay inert until React hydrates (components/ui/Form.tsx); wait for that before typing and submitting. */

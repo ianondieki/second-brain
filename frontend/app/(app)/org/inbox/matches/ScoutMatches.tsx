@@ -3,6 +3,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { Panel } from "@/components/ui/Panel";
+import { RowList } from "@/components/ui/RowList";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { inboxHref, type Membership } from "../../membership";
@@ -72,13 +75,14 @@ async function Body({
   const room = list.plan.scout_agents === null || list.items.length < list.plan.scout_agents;
   return (
     <>
-      <section aria-labelledby="scout-heading" className="rounded-panel border border-line bg-field px-4 py-4 sm:px-5">
+      {/* The screen's one panel: the scout that brings these matches, and the way to change it. */}
+      <Panel as="section" aria-labelledby="scout-heading">
         <h2 id="scout-heading" className="text-lg text-ink">
           {t("scoutTitle")}
         </h2>
-        <ul className="mt-1 flex flex-col">
+        <ul className="mt-3 flex flex-col gap-4">
           {list.items.map((scout) => (
-            <li key={scout.id} className="border-t border-line pt-3 first:border-t-0 first:pt-1" data-scout={scout.id}>
+            <li key={scout.id} data-scout={scout.id}>
               <ScoutSummary scout={scout} href={admin ? scoutHref(memberships, org.org_id, scout.id) : undefined} />
             </li>
           ))}
@@ -90,9 +94,9 @@ async function Body({
             </Link>
           </p>
         ) : null}
-      </section>
+      </Panel>
 
-      <div className="mt-8">
+      <div className="mt-10">
         {matches.length === 0 ? (
           admin ? (
             <EmptyState
@@ -104,11 +108,11 @@ async function Body({
             <EmptyState sentence={t("emptyNoMatches")} action={t("seeSent")} href={sent} />
           )
         ) : (
-          <section aria-label={t("listLabel", { org: org.org_name })}>
+          <RowList aria-label={t("listLabel", { org: org.org_name })}>
             {matches.map((match) => (
               <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} />
             ))}
-          </section>
+          </RowList>
         )}
       </div>
     </>
@@ -120,10 +124,9 @@ async function ScoutSummary({ scout, href }: { scout: Scout; href?: string }) {
   // Each "Change the scout" link names its scout by what it looks for (several scouts, several links).
   const niches = new Intl.ListFormat(await getLocale(), { type: "conjunction" }).format(scout.niches.map((n) => n.label));
   return (
-    <div className="flex flex-col gap-2 pb-2">
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
-        <dt className="text-ink-soft">{t("looksFor")}</dt>
-        <dd className="min-w-0 text-ink">
+    <div className="flex flex-col gap-2">
+      <DescriptionList dense>
+        <Description label={t("looksFor")}>
           <ul>
             {scout.niches.map((niche) => (
               <li key={niche.id} className="[overflow-wrap:anywhere]">
@@ -131,14 +134,12 @@ async function ScoutSummary({ scout, href }: { scout: Scout; href?: string }) {
               </li>
             ))}
           </ul>
-        </dd>
-        <dt className="text-ink-soft">{t("runs")}</dt>
-        <dd className="text-ink">{t(`frequency.${scout.frequency}`)}</dd>
-        <dt className="text-ink-soft">{t("status")}</dt>
-        <dd>
+        </Description>
+        <Description label={t("runs")}>{t(`frequency.${scout.frequency}`)}</Description>
+        <Description label={t("status")}>
           <Chip kind={scout.paused ? "onHold" : "current"}>{scout.paused ? t("paused") : t("active")}</Chip>
-        </dd>
-      </dl>
+        </Description>
+      </DescriptionList>
       {href ? (
         <p>
           <Link href={href} className={standaloneLinkClass} aria-label={t("changeNamed", { niches })}>

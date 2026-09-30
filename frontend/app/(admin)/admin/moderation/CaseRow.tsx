@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
+import { Badge } from "@/components/ui/Badge";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
+import { Row } from "@/components/ui/RowList";
 
 import {
   caseHref,
@@ -29,9 +30,11 @@ export async function decidedLine(item: Case): Promise<string | null> {
 }
 
 /**
- * One case in the queue (REQ-MOD-01): what it is about, its title (the way into the case), the start of its public
- * summary, and at most two tags (docs/spec/07 item 2): whether the subject can be seen now (or, once decided, the
- * outcome) and the first reason it was filed. When it was filed, or who decided it, is plain text.
+ * One case in the queue (REQ-MOD-01), a Row: its title (the way into the case, an h2 under the page's h1), the meta
+ * line (what it is about, then when it was filed or who decided it), at most two status badges
+ * (docs/spec/07 item 2): whether the subject can be seen now (or, once decided, the outcome) and the first reason it
+ * was filed; then the start of its public summary. The whole row is the link's target (a stretched link);
+ * `data-case-link` marks that link.
  */
 export async function CaseRow({ item }: { item: Case }) {
   const t = await getTranslations("adminModeration");
@@ -42,43 +45,46 @@ export async function CaseRow({ item }: { item: Case }) {
   const result = outcome(item);
   const [reason] = caseReasons(item.reasons);
   const decided = await decidedLine(item);
+  const status = result ? (
+    <Chip key="status" kind={result === "approved" ? "completed" : "ended"}>
+      {t(`outcome.${result}`)}
+    </Chip>
+  ) : seen ? (
+    <Chip key="status" kind={VISIBILITY_CHIP[seen]}>
+      {t(`visibility.${seen}`)}
+    </Chip>
+  ) : null;
+  const flag =
+    reason && !result ? (
+      <Badge
+        key="reason"
+        data-chip="reason"
+        tone={reasonTone(reason) === "flag" ? "error" : "accent"}
+        icon={reasonTone(reason) === "flag" ? <AlertIcon /> : <InfoIcon />}
+      >
+        {t(`reason.${reason}`)}
+      </Badge>
+    ) : null;
+  const shown = [status, flag].filter((badge) => badge !== null);
   return (
-    <li data-case={item.id} className="border-t border-line py-5 first:border-t-0 first:pt-0">
-      <p className="text-sm font-medium text-ink-soft">{t(`kind.${kind}`)}</p>
-      <h3 className="text-lg text-ink">
-        <Link
-          href={caseHref(item.id)}
-          data-case-link=""
-          className="inline-flex min-h-11 items-center font-semibold [overflow-wrap:anywhere] text-ink underline decoration-line decoration-1 underline-offset-4 hover:text-jacaranda hover:decoration-jacaranda"
-        >
-          {title}
-        </Link>
-      </h3>
+    <Row
+      data-case={item.id}
+      linkData={{ "data-case-link": "" }}
+      headingLevel={2}
+      title={title}
+      href={caseHref(item.id)}
+      meta={
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {/* Plain meta text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
+          <span className="font-medium text-ink">{t(`kind.${kind}`)}</span>
+          <span>{decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}</span>
+        </span>
+      }
+      badges={shown.length === 2 ? [shown[0], shown[1]] : shown.length === 1 ? [shown[0]] : undefined}
+    >
       {item.preview.text ? (
         <p className="line-clamp-2 max-w-[65ch] [overflow-wrap:anywhere] text-ink-soft">{item.preview.text}</p>
       ) : null}
-      <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
-        {result ? (
-          <li>
-            <Chip kind={result === "approved" ? "completed" : "ended"}>{t(`outcome.${result}`)}</Chip>
-          </li>
-        ) : seen ? (
-          <li>
-            <Chip kind={VISIBILITY_CHIP[seen]}>{t(`visibility.${seen}`)}</Chip>
-          </li>
-        ) : null}
-        {reason && !result ? (
-          <li data-chip="reason" className="inline-flex items-center gap-1.5 font-semibold text-ink">
-            {reasonTone(reason) === "flag" ? (
-              <AlertIcon className="size-4 shrink-0 text-error" />
-            ) : (
-              <InfoIcon className="size-4 shrink-0 text-jacaranda" />
-            )}
-            {t(`reason.${reason}`)}
-          </li>
-        ) : null}
-        <li>{decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}</li>
-      </ul>
-    </li>
+    </Row>
   );
 }

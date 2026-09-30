@@ -10,7 +10,7 @@ import {
   savedExcerpts,
   type SavedExcerpt,
 } from "./support/research-scene";
-import { checkScreen, expectEmptyState, expectSeparateTargets } from "./support/screen";
+import { checkScreen, expectEmptyState, expectSeparateTapTargets } from "./support/screen";
 import { PASSWORD, type Person } from "./support/tracker-scene";
 
 // REQ-RES-01 and REQ-RES-02 (prototype part; M2 walkthrough step 3): a staff admin signs in, starts a research run,
@@ -111,7 +111,7 @@ test.describe("a staff admin", () => {
     expect(await nav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
     await expect(nav.getByRole("link", { name: "Research" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: "Research", level: 1 })).toBeVisible();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Start a run (the screen's one primary action). The dev stack's fake LLM gives no usable answer: the run
     // finishes with the demo fallback and no card, and says so.
@@ -128,7 +128,7 @@ test.describe("a staff admin", () => {
     await expect(runs.locator("[data-run]").first()).toContainText(
       "No card: this run used the demo fallback (no live model answer).",
     );
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // The card the run would have drafted, from the saved excerpts: it names SASRA, so it cites SASRA's own site.
     const runId = await page.locator("[data-run]").first().getAttribute("data-run");
@@ -159,8 +159,8 @@ test.describe("a staff admin", () => {
     await expect(card).toContainText("AI-drafted");
     await expect(card).toContainText("Names an organisation");
     expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
-    await expectSeparateTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
-    await checkScreen(page);
+    await expectSeparateTapTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
+    await checkScreen(page, { strict: true });
     await card.getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/research/candidates/${problemId}$`), SERVER_STEP);
 
@@ -170,7 +170,7 @@ test.describe("a staff admin", () => {
     await expect(page.getByRole("heading", { name: "Named-organisation checklist" })).toBeVisible();
     await expect(page.locator("[data-checklist] li")).not.toHaveCount(0);
     await expect(page.locator("[data-primary]")).toHaveText("Approve and publish");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Approving without the checklist is stopped on the page; ticked, the card is published.
     await page.getByRole("button", { name: "Approve and publish" }).click();
@@ -181,13 +181,13 @@ test.describe("a staff admin", () => {
       "Published. Signed-in people can now see this card and its sources.",
       SERVER_STEP,
     );
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // The published card, with its label and citations, for staff and developers alike.
     await page.getByRole("link", { name: "Open the public card" }).click();
     await expect(page).toHaveURL(new RegExp(`/problems/${problemId}$`), SERVER_STEP);
     await expectPublicCard(page, title, sources);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     await devPage.goto(`/problems/${problemId}`);
     await expectPublicCard(devPage, title, sources);
@@ -224,7 +224,7 @@ test.describe("a staff admin", () => {
     staff.staleSecondFactor();
     await page.goto(`/admin/research/candidates/${problemId}`);
     await expect(page.locator('[data-refusal="step_up_required"]')).toBeVisible(SERVER_STEP);
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await hydrated(page);
     await page.getByLabel("Code from your app").fill(await staff.code());
     await page.getByRole("button", { name: "Confirm" }).click();
@@ -241,7 +241,7 @@ test.describe("a staff admin", () => {
     // The check is final: Reject is now the one primary action and Approve is inert.
     await expect(page.locator("[data-primary]")).toHaveText("Reject");
     await expect(page.getByRole("button", { name: "Approve and publish" })).toHaveAttribute("aria-disabled", "true");
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
 
     // Reject asks once more, with focus on the question; Cancel gives focus back to Reject.
     await page.getByRole("button", { name: "Reject", exact: true }).click();
@@ -249,7 +249,7 @@ test.describe("a staff admin", () => {
       name: "Reject this card? It stays private and cannot be published later.",
     });
     await expect(question).toBeFocused();
-    await checkScreen(page);
+    await checkScreen(page, { strict: true });
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Reject", exact: true }).click();

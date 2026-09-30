@@ -1,11 +1,11 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { orgContext } from "../../data";
@@ -48,10 +48,7 @@ export async function ScoutScreen({
   const frame = (title: string, body: ReactNode) => (
     <SignedInShell homeHref={`/org${query}`} nav={nav} wide>
       <div className="max-w-3xl">
-        <Link href={back} className={standaloneLinkClass}>
-          {t("back")}
-        </Link>
-        <h1 className="mt-4 text-xl text-ink lg:text-2xl">{title}</h1>
+        <PageHeader back={{ href: back, label: t("back") }} title={title} />
         {body}
       </div>
     </SignedInShell>
@@ -121,9 +118,9 @@ export async function ScoutScreen({
         {plan.scout_agents === null ? t("capUnlimited") : t("cap", { count: plan.scout_agents })}
       </p>
       {pending ? (
-        <p className="mt-4 max-w-[62ch] border-l-2 border-jacaranda pl-3 text-ink">
-          {t("pending", { org: org.org_name })}
-        </p>
+        <Callout className="mt-4 max-w-[62ch]" data-pending="">
+          <p>{t("pending", { org: org.org_name })}</p>
+        </Callout>
       ) : null}
       <div className="mt-8">
         <ClientStrings strings={await clientStrings(["scoutForm", "ideaFields"])}>

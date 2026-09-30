@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { ConfidentialIcon } from "@/components/org-icons";
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 
 import { Fingerprint } from "@/app/(public)/verify/Fingerprint";
 
@@ -64,15 +65,17 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
     );
   }
   return (
-    <section aria-labelledby="full-proposal" className="mt-14" data-tier2-state={stateName(nda, viewing)}>
-      <div className="flex items-center gap-3 text-jacaranda">
-        <ConfidentialIcon open={open} className="size-6 shrink-0" />
-        <h2 id="full-proposal" className="shrink-0 text-lg font-semibold text-ink lg:text-xl">
+    // The fold between the public teaser and the full proposal: the lock, the heading and a hairline running to the
+    // column's edge (no coloured left rule under it; the content keeps the page's own left edge).
+    <section aria-labelledby="full-proposal" className="mt-6" data-tier2-state={stateName(nda, viewing)}>
+      <div className="flex items-center gap-3">
+        <ConfidentialIcon open={open} className="size-6 shrink-0 text-jacaranda" />
+        <h2 id="full-proposal" className="shrink-0 text-lg text-ink">
           {t("fullHeading")}
         </h2>
-        <span aria-hidden="true" className="h-px flex-1 bg-jacaranda" />
+        <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </div>
-      <div className="mt-5 border-l-2 border-jacaranda-wash pl-4 sm:pl-6">{body}</div>
+      <div className="mt-6">{body}</div>
     </section>
   );
 }
@@ -212,9 +215,9 @@ async function Accepted({ nda, hrefs }: { nda: EvaluationNda; hrefs: FullProposa
         {t("accepted", { version: nda.version, date: formatMoment(locale, nda.accepted_at!) })}
       </p>
       <p className="max-w-[60ch] text-sm text-ink-soft">{t("viewNote")}</p>
-      <Link href={hrefs.view} data-primary="" className={buttonClass("primary", "no-underline")}>
+      <ButtonLink href={hrefs.view} variant="primary">
         {t("view")}
-      </Link>
+      </ButtonLink>
     </div>
   );
 }

@@ -2,17 +2,18 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
-import { standaloneLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
+import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
+import { LinkPending } from "@/components/ui/LinkPending";
 import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
+import { documentLinkClass } from "./document-link";
 import { ContactReveal } from "./ContactReveal";
 import { engagementDocument, engagementHistory, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
@@ -205,26 +206,21 @@ async function DocumentsTab({
             <Link
               href={withQuery(href, query, { tab: "documents", doc: kind })}
               aria-current={kind === shown ? "page" : undefined}
-              className={cn(standaloneLinkClass, kind === shown && "text-ink no-underline")}
+              className={documentLinkClass(kind === shown)}
             >
               {t(`document.${kind}`)}
+              <LinkPending className="ml-2" />
             </Link>
           </li>
         ))}
       </ul>
       {text ? (
-        <article data-document={text.kind} className="mt-4 border-t border-line pt-4">
+        <article data-document={text.kind} className="mt-6">
           <h3 className="font-semibold text-ink">{t(`document.${text.kind}`)}</h3>
-          <p
-            className={cn(
-              "mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium",
-              text.intact ? "text-ok" : "text-error",
-            )}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              {text.intact ? <CheckIcon className="size-4" /> : <AlertIcon className="size-4" />}
+          <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <Badge tone={text.intact ? "ok" : "error"} icon={text.intact ? <CheckIcon /> : <AlertIcon />}>
               {text.intact ? t("documents.intact") : t("documents.changed")}
-            </span>
+            </Badge>
             <span className="text-ink-soft tabular-nums">{t("fingerprint", { hash: shortHash(text.sha256) })}</span>
           </p>
           <div
