@@ -460,18 +460,32 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(screen.getByRole("alert").textContent).toBe(NOT_SHOWN);
   });
 
-  it("cancels at the server after only a wrong code, and says so even without an answer (nothing was on)", async () => {
+  it("cancels at the server after only a wrong code, and never says 'cancelled' without the server's answer", async () => {
     await confirmFails(answer(401, "invalid_code"));
     await cancelSetup();
     expect(screen.getByRole("status").textContent).toBe(CANCELLED);
     expect(mocks.del).toHaveBeenCalledTimes(1);
     cleanup();
 
-    // The key it could not clear is refused after 15 minutes; only wrong codes were sent, so nothing was turned on.
-    await confirmFails(answer(401, "invalid_code"), new TypeError("Failed to fetch"));
-    await cancelSetup();
-    expect(screen.getByRole("status").textContent).toBe(CANCELLED);
-    expect(screen.queryByText(UNKNOWN)).toBeNull();
+    // Only wrong codes were sent from this page, but setup may have been finished elsewhere: no answer is not "off".
+    const { container } = await confirmFails(answer(401, "invalid_code"), new TypeError("Failed to fetch"));
+    fireEvent.click(cancelButton());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(UNKNOWN));
+    expect(container.textContent).not.toMatch(/delete|cancelled/i);
+    expect(screen.getByTestId("totp-key")).toBeTruthy();
+  });
+
+  it("keeps the entry when setup was finished on another device and ended this session (401 at Cancel)", async () => {
+    // Setup started in a laptop tab and confirmed on the phone with the same key: that confirmation revokes the
+    // laptop's session, so its Cancel gets 401. The entry is the live one: never "delete that entry".
+    answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT), [CANCEL]: answer(401, "unauthenticated") });
+    const { container } = page(true, twoStep);
+    await startSetup();
+    fireEvent.click(cancelButton());
+    const unknown = await screen.findByText(UNKNOWN);
+    expect(unknown.closest('[role="alert"]')).toBeTruthy();
+    expect(container.textContent).not.toMatch(/delete|cancelled/i);
+    expect(screen.getByTestId("totp-key")).toBeTruthy();
   });
 
   it("keeps acting on the server's answer after a lost answer, even if a later try got a wrong-code answer", async () => {

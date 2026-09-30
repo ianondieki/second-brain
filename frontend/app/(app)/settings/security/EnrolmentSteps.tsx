@@ -98,13 +98,6 @@ export function EnrolmentSteps({
   const [error, setError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusUnknown, setStatusUnknown] = useState(false);
-  // Set once a confirmation fails other than with a wrong code. Past the code check the server commits in one go
-  // (two-step sign-in on, recovery codes made, the "turned on" email queued), and a lost answer (offline, a reset
-  // connection), a 5xx or a proxy timeout can come after that commit. From then on, the page says setup was
-  // cancelled only when the server's answer to Cancel says two-step sign-in is off: "delete that entry" to someone
-  // whose two-step sign-in is on, with recovery codes they never saw, locks them out at the next sign-in. It stays
-  // set: a later wrong-code answer does not prove the earlier try failed.
-  const maybeOn = useRef(false);
 
   const current = codes ? 3 : codeFocused ? 2 : 1;
   // Steps 1 and 2 count as done only once the code is confirmed, not because the code field has focus.
@@ -149,7 +142,6 @@ export function EnrolmentSteps({
       document.getElementById("totp-code")?.focus();
       return;
     }
-    maybeOn.current = true;
     if (outcome.key === "no_pending_enrolment") {
       // No setup is waiting: it was replaced, it expired (15 minutes), or an earlier try whose answer was lost turned
       // two-step sign-in on. Cancelling tells which, and clears any key a newer setup left pending.
@@ -169,12 +161,13 @@ export function EnrolmentSteps({
   /**
    * Cancels at the server and acts on its answer (busy meanwhile, so neither Confirm nor Cancel acts): "on" goes to
    * the "on" screen with the codes-not-shown notice, "off" goes on with `whenOff`, and "unknown" keeps these steps
-   * with a hint to reload, focused. Before any confirmation could have committed (no try yet, or only wrong codes),
-   * "unknown" is "off": nothing was turned on, and the server drops a pending key after 15 minutes anyway.
+   * with a hint to reload, focused. "Unknown" never counts as off, even when this page sent no confirmation: setup
+   * may have been finished elsewhere (the same key on another device), and that confirmation ends this session, so
+   * Cancel here gets 401. "Delete that entry" would then remove the live entry (security review, P17-F).
    */
   async function cancelAtServer(whenOff: () => void) {
     const status = await cancelOnServer();
-    if (status === "unknown" && maybeOn.current) {
+    if (status === "unknown") {
       reveal(
         () => {
           setBusy(false);
