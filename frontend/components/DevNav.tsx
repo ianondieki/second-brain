@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ComponentType, SVGProps } from "react";
 
+import { DiscoverIcon } from "./discover-icons";
 import { EngagementsIcon } from "./tracker/icons";
 import { cn } from "./ui/cn";
 import { CompaniesIcon, HomeIcon, IdeasIcon } from "./ui/icons";
@@ -12,6 +13,7 @@ import { CompaniesIcon, HomeIcon, IdeasIcon } from "./ui/icons";
  */
 export const DEV_SECTIONS = [
   { key: "home", href: "/dev", Icon: HomeIcon },
+  { key: "discover", href: "/dev/discover", Icon: DiscoverIcon },
   { key: "ideas", href: "/dev/ideas", Icon: IdeasIcon },
   { key: "engagements", href: "/dev/engagements", Icon: EngagementsIcon },
   { key: "companies", href: "/dev/companies", Icon: CompaniesIcon },
@@ -44,7 +46,7 @@ export function DevNav({ current }: { current: DevSection }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  // Four tabs share 360 px: labels stay on one line, a size smaller below 380 px.
+                  // Five tabs share 360 px: labels stay on one line, a size smaller below 380 px.
                   "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-sm whitespace-nowrap no-underline max-[380px]:text-xs sm:px-2",
                   "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-base",
                   active
