@@ -220,11 +220,15 @@ export function AssistantPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The native dialog follows dialogOpen: showModal traps focus and makes the rest of the page inert.
+  // The native dialog follows dialogOpen: showModal traps focus and makes the rest of the page inert. Focus starts on
+  // "Not now", the choice that sends nothing (React never renders the autofocus attribute on the client).
   useEffect(() => {
     const node = dialog.current;
     if (!node) return;
-    if (dialogOpen && !node.open) node.showModal();
+    if (dialogOpen && !node.open) {
+      node.showModal();
+      node.querySelector<HTMLButtonElement>("[data-dialog-cancel]")?.focus();
+    }
     if (!dialogOpen && node.open) node.close();
   }, [dialogOpen]);
 
@@ -340,7 +344,7 @@ export function AssistantPanel({
         </p>
         {dialogProblem ? <Alert className="mt-4">{t(`problem.${dialogProblem}`)}</Alert> : null}
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" busy={granting} onClick={() => dialog.current?.close()} autoFocus>
+          <Button variant="secondary" busy={granting} onClick={() => dialog.current?.close()} data-dialog-cancel="">
             {t("dialog.cancel")}
           </Button>
           {/* Styled as the dialog's main button but not the screen's primary action (data-primary stays on the page's). */}
