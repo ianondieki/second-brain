@@ -65,16 +65,17 @@ not change or import the local companion above. Local setup: [`docs/runbooks/dev
 
 ### Run the demo (`make demo`)
 
-A seeded local copy of the platform for demos: two developers, four fixture organisations, published proposals with
-certificates, pitches and engagements at several stages. Nothing is paid for and nothing leaves the laptop except the
-certificate timestamps (below).
+A seeded local copy of the platform for demos: two developers, four fixture organisations, two staff accounts,
+published proposals with certificates, pitches and engagements at several stages, a scout, research cards, trending
+problems and staff queues. Nothing is paid for and nothing leaves the laptop except the certificate timestamps (below).
+Its sample plan prices are placeholders and its checkout is a simulation: see "Real, simulated or planned".
 
 **You need** Docker Desktop (Windows: the WSL 2 backend), Git and Python 3.9 or later (the same Python as the companion
 above); `make` is optional (below). Give Docker 4 GB of memory: on Windows with the WSL 2 backend, memory is set in
 `%UserProfile%\.wslconfig`, not in Docker Desktop (a file with the two lines `[wsl2]` and `memory=4GB`, then
 `wsl --shutdown` and start Docker Desktop again); on macOS, Docker Desktop → Settings → Resources. The demo's
-containers are capped at 2.75 GB in all and use about 420 MB once seeded (API 131 MB, worker 104 MB, S3 stand-in 66 MB,
-Postgres 65 MB, web 40 MB, Mailpit 11 MB; the seed step peaks at 153 MB and then exits; measured with `make demo-stats`).
+containers are capped at 2.75 GB in all (the limits in `infra/docker-compose.demo.yml`). TODO(orchestrator): memory
+(the measured use per container after a clean `make demo-reset`, from `make demo-stats`).
 
 **Start it** from the repository folder, in PowerShell or Git Bash:
 
@@ -108,12 +109,23 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 
 | Login | Who | What they can show |
 |---|---|---|
-| `amina@developers.example` | Amina Wanjiru, developer (D2) | My ideas with certificates and pitches; "Who has seen this" (a SACCO B reviewer opened one) |
-| `brian@developers.example` | Brian Otieno, developer (D1) | My ideas; a pitch still new at Telco A, two held until the organisations are verified |
+| `amina@developers.example` | Amina Wanjiru, developer (D2) | Home (what needs her, Recommended for you with the reasons, because she agreed to use her own activity) and Discover; My ideas with certificates and pitches; "Who has seen this" (a SACCO B reviewer opened one); the submission assistant in the editor; the SACCO B tracker; Plan & billing at the free plan's cap |
+| `brian@developers.example` | Brian Otieno, developer (D1) | My ideas; a pitch still new at Telco A, two held until the organisations are verified; Recommended for you from his liked niches only (he has not agreed to activity-based recommendations); Plan & billing, also at the cap |
 | `reviewer@telco-a.example` | Telco A (fixture), reviewer | the Inbox: Brian's new proposal; open it, accept the Evaluation NDA and read the full proposal |
-| `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox and Engagements: each seat sees the steps that are its to take (review, approve, sign, record a payment) |
+| `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox and Engagements: each seat sees the steps that are its to take (review, approve, sign, record a payment); the owner also sees the scout's matches (with why each matched) and the scout's settings |
 | `owner@sacco-b.example`, `signatory@sacco-b.example`, `reviewer@sacco-b.example`, `finance@sacco-b.example` | SACCO B (fixture), the same seats | the Inbox with two proposals in progress |
-| `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | the Inbox: proposals wait until it is E2 |
+| `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | the Inbox: proposals wait until it is E2; it has asked for E2, which is the claim in the staff console |
+| `admin@staff.example` | Platform staff, admin | the staff console: Research (seeded, approved problem cards; start a run), Moderation and Claims (read-only) |
+| `moderator@staff.example` | Platform staff, moderator | the staff console: Moderation only (open cases, decide one) |
+
+**The free plan's cap.** The free developer plan allows 3 published ideas at a time (`active_proposals` in
+`backend/config/plans.yaml`). Amina has three published ideas (her third is the one held for moderation) and Brian has
+three, so both are at the cap: publishing another one is refused with "Published ideas your plan allows: 3. Hide one to
+publish this one." and an "Upgrade your plan" link to Plan & billing. There, "Upgrade to Pro (monthly)" opens the
+simulated M-Pesa checkout. A plan bought there stays until `make demo-reset`. The published-ideas limit is the only
+cap the demo enforces on a developer; the plans page also lists "Recommendations with the reasons behind them" under
+Pro, but the code does not gate it, so Recommended for you shows its reasons on the free plan. The organisations are on
+the free organisation plan (Claimed: one weekly scout).
 
 `make demo-totp` prints the current code of every login; `make demo-totp EMAIL=reviewer@telco-a.example` prints one.
 A code is accepted once: if the sign-in was refused, wait for the next code (30 seconds).
