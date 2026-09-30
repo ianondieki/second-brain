@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { requireMe } from "@/lib/api/server";
+import { started } from "@/lib/api/started";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
@@ -61,8 +62,13 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   );
 
   // The list of ideas carries the title and status without reading the confidential details (that read is audited).
-  const idea = isProposalId(id) ? (await myIdeas()).find((item) => item.id === id) : undefined;
-  if (!idea) {
+  // The picker's page and the niche tree are read alongside it (owner-scoped reads without side effects: the API
+  // answers 404 for an idea that is not yours) and awaited only once the idea is found and can be pitched.
+  const valid = isProposalId(id);
+  const pickerRead = valid ? started(pickerPage(id, query)) : null;
+  const nichesRead = valid ? started(nicheTree()) : null;
+  const idea = valid ? (await myIdeas()).find((item) => item.id === id) : undefined;
+  if (!idea || !pickerRead || !nichesRead) {
     return shell(
       <Header>
         <EmptyState className="mt-8" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />
@@ -81,7 +87,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
     return header(<EmptyState className="mt-8" sentence={t(`blocked.${status}`)} action={t("back")} href={back} />);
   }
 
-  const [page, niches] = await Promise.all([pickerPage(idea.id, query), nicheTree()]);
+  const [page, niches] = await Promise.all([pickerRead, nichesRead]);
   if (page.kind === "notFound") return header(<EmptyState className="mt-8" sentence={t("notFound")} action={t("allIdeas")} href={BASE_PATH} />);
   if (page.kind === "staleCursor") {
     const first = pitchHref(idea.id, { ...query, cursor: undefined });
