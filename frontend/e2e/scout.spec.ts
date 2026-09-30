@@ -178,8 +178,10 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await shot(orgPage, info, "scout-matches");
 
     // 6. EM3 reaches the reviewer seat; its item link opens the match page.
-    const em3 = await waitForMessage(orgPage.request, org.person.email, /^Scout digest/);
-    const link = /https?:\/\/[^\s"<>]+\/org\/inbox\/matches\/[0-9a-f-]{36}\?org=[0-9a-f-]{36}/.exec(em3.text)?.[0];
+    const em3 = await waitForMessage(orgPage.request, org.person.email, /^Scout digest/, 60_000, dev.title);
+    // The item of this proposal (numbered "1. …", "2. …"; another test's proposal may share the digest).
+    const item = em3.text.split(/\n(?=\d+\. )/).find((block) => block.includes(dev.title)) ?? "";
+    const link = /https?:\/\/[^\s"<>]+\/org\/inbox\/matches\/[0-9a-f-]{36}\?org=[0-9a-f-]{36}/.exec(item)?.[0];
     expect(link, "EM3 links to the match page").toBeTruthy();
     expect(em3.text).toContain(dev.title);
     expect(em3.text).not.toMatch(NAME);

@@ -42,12 +42,17 @@ export interface MailMessage {
   html: string;
 }
 
-/** Waits for the newest message to `to` whose subject matches, and returns it (the stack's Mailpit only). */
+/**
+ * Waits for the newest message to `to` whose subject matches (and whose text contains `containing`, when given), and
+ * returns it (the stack's Mailpit only). `containing` picks one digest among several: with parallel workers another
+ * test's proposal can reach the same scout first.
+ */
 export async function waitForMessage(
   request: APIRequestContext,
   to: string,
   subject: RegExp,
   timeoutMs = 60_000,
+  containing?: string,
 ): Promise<MailMessage> {
   const deadline = Date.now() + timeoutMs;
   const wanted = to.toLowerCase();
@@ -63,6 +68,7 @@ export async function waitForMessage(
           Text?: string;
           HTML?: string;
         };
+        if (containing !== undefined && !Text.includes(containing)) continue;
         return { subject: Subject, text: Text, html: HTML };
       }
     }
