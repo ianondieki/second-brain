@@ -255,5 +255,21 @@ test("a suggestion reaches the idea only through 'Use this' and the editor's sav
   };
   expect(saved.draft.teaser).toMatchObject(suggestion);
   expect(asked).toBe(1);
+  // The owner's own words stay beside it as "Before"; the text is never shown next to itself.
+  await expect(panel.locator("[data-teaser='before']")).toContainText(title);
+  await expect(panel.locator("[data-teaser='now']")).toHaveCount(0);
   await checkAndShoot(page, info, "assistant-applied");
+
+  // "Undo" puts them back through the same save.
+  const saves = patches.length;
+  await panel.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(":focus")).toHaveText("Your title and summary are back as they were.");
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(title);
+  await expect(page.getByLabel("Summary")).toHaveValue(summary);
+  await waitForSave(page);
+  expect(patches.length).toBeGreaterThan(saves);
+  const undone = (await (await page.request.get(`/api/me/proposals/${id}`)).json()) as {
+    draft: { teaser: { title: string; summary: string } };
+  };
+  expect(undone.draft.teaser).toMatchObject({ title, summary });
 });
