@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
+import { formatDate, problemHref, safeHttpsUrl } from "@/components/problem/problem";
 import { standaloneLinkClass } from "@/components/ui/Button";
 
 import { ChipList, Chips, MoreSummary, TrendBadge } from "./Chips";
@@ -9,12 +10,9 @@ import {
   countryName,
   countyName,
   discoverHref,
-  formatSourceDate,
   moreWhy,
   problemAnchor,
-  problemHref,
   projectAnchor,
-  sourceUrl,
   startProposalHref,
   type CountyRef,
   type DiscoverQuery,
@@ -130,9 +128,9 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
 function Source({ source }: { source: DiscoverSource }) {
   const t = useTranslations("discover");
   const locale = useLocale();
-  const href = sourceUrl(source.url);
+  const href = safeHttpsUrl(source.url); // https only: any other scheme is never a link
   const name = source.publisher ?? t("sourceUnnamed");
-  const date = formatSourceDate(source.published_date, locale);
+  const date = source.published_date ? formatDate(locale, source.published_date) : null;
   return (
     <div className="flex flex-col gap-1">
       <p className="flex flex-wrap items-baseline gap-x-3">

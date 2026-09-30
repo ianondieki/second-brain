@@ -75,14 +75,6 @@ export function trendQuery({ niche, county }: DiscoverQuery): { niche?: string; 
   return { niche, county };
 }
 
-/**
- * The public problem card's address. The page itself is REQ-RES-01's (`feat/REQ-RES-01-fe`,
- * components/problem/problem.ts `problemHref`, the same address); once both are merged, this can import that one.
- */
-export function problemHref(problemId: string): string {
-  return `/problems/${encodeURIComponent(problemId)}`;
-}
-
 /** A new idea that already links this problem (the editor reads `?problem=`). */
 export function startProposalHref(problemId: string): string {
   return `/dev/ideas/new?problem=${encodeURIComponent(problemId)}`;
@@ -127,17 +119,6 @@ export function projectsById(projects: readonly TrendingProject[]): Map<string, 
   return new Map(projects.map((project) => [project.proposal.id, project]));
 }
 
-/** A cited source's address when it is a web page (http or https without credentials), else null. */
-export function sourceUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const web = parsed.protocol === "https:" || parsed.protocol === "http:";
-    return web && !parsed.username && !parsed.password ? parsed.href : null;
-  } catch {
-    return null;
-  }
-}
-
 /** A county code's name from the directory's list, or null (the caller then names the country). */
 export function countyName(code: string | null, counties: readonly CountyRef[]): string | null {
   if (!code) return null;
@@ -151,15 +132,6 @@ export function countryName(code: string, locale: string): string {
   } catch {
     return code;
   }
-}
-
-/** A source's date (a calendar date, "2026-09-28") in the reader's language, without shifting the day. */
-export function formatSourceDate(date: string | null, locale: string): string | null {
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const at = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(at.getTime())) return null;
-  // As written in Kenya for the page's language ("28 Sept 2026"), like the idea pages (ideas/dates.ts).
-  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "medium", timeZone: "UTC" }).format(at);
 }
 
 /** The niche tree flattened for a select or a checklist, parents before their children. */

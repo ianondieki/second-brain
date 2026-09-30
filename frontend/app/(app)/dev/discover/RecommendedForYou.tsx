@@ -3,11 +3,12 @@ import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/app/(app)/org/EmptyState";
 import { ConsiderIcon, NotNowIcon, PursueIcon } from "@/components/discover-icons";
+import { problemHref } from "@/components/problem/problem";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 
 import { ChipList, Chips, MoreSummary } from "./Chips";
-import { DISCOVER_PATH, NICHES_PATH, problemHref, PROFILING_HREF, startProposalHref } from "./discover";
+import { DISCOVER_PATH, NICHES_PATH, PROFILING_HREF, startProposalHref } from "./discover";
 import { titleLinkClass } from "./ProblemRow";
 import {
   DECISION_KEY,

@@ -6,16 +6,13 @@ import {
   countryName,
   countyName,
   discoverHref,
-  formatSourceDate,
   isColdStart,
   isNarrowed,
   moreWhy,
   nicheOptions,
   parseDiscover,
-  problemHref,
   projectsById,
   PROFILING_HREF,
-  sourceUrl,
   startProposalHref,
   trendQuery,
   type NicheNode,
@@ -55,9 +52,7 @@ describe("Discover's address", () => {
     expect(trendQuery({ view: "projects", niche: "health" })).toEqual({ niche: "health", county: undefined });
   });
 
-  it("links the problem card, a new proposal from the problem and the profiling setting", () => {
-    expect(problemHref("01a0f067-b61f-7121-8f83-4293f5a2c7cd")).toBe("/problems/01a0f067-b61f-7121-8f83-4293f5a2c7cd");
-    expect(problemHref("a/b")).toBe("/problems/a%2Fb");
+  it("links a new proposal from the problem and the profiling setting", () => {
     expect(startProposalHref("01a0f067-b61f-7121-8f83-4293f5a2c7cd")).toBe(
       "/dev/ideas/new?problem=01a0f067-b61f-7121-8f83-4293f5a2c7cd",
     );
@@ -88,19 +83,6 @@ describe("a card's chips", () => {
 });
 
 describe("sources and places", () => {
-  it("links only web addresses without credentials", () => {
-    expect(sourceUrl("https://www.standardmedia.co.ke/health/article")).toBe("https://www.standardmedia.co.ke/health/article");
-    expect(sourceUrl("javascript:alert(1)")).toBeNull();
-    expect(sourceUrl("https://user:pw@example.com/")).toBeNull();
-    expect(sourceUrl("not a url")).toBeNull();
-  });
-
-  it("dates a source by its calendar day, whatever the time zone", () => {
-    expect(formatSourceDate("2026-09-28", "en")).toBe("28 Sept 2026");
-    expect(formatSourceDate(null, "en")).toBeNull();
-    expect(formatSourceDate("28/09/2026", "en")).toBeNull();
-  });
-
   it("names the county when known, else the country", () => {
     const counties = [{ code: "KE-30", name: "Nairobi City" }];
     expect(countyName("KE-30", counties)).toBe("Nairobi City");

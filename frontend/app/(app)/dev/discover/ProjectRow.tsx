@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
+import { problemHref } from "@/components/problem/problem";
+
 import { ChipList, Chips, MoreSummary, TrendBadge } from "./Chips";
-import { cardChips, moreWhy, problemHref, projectAnchor, type TrendingProject } from "./discover";
+import { cardChips, moreWhy, projectAnchor, type TrendingProject } from "./discover";
 import { titleLinkClass } from "./ProblemRow";
 
 /**
