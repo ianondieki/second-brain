@@ -75,13 +75,15 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const t = await getTranslations("tracker");
   const locale = await getLocale();
   const finished = isFinished(detail.state) && detail.state !== "CLOSED";
-  // An ended or paused engagement has no stage group: its history says which stage it left.
-  const history =
-    tab === "history" || (finished || detail.stage_group === null) ? await engagementHistory(detail.id) : null;
+  // An ended or paused engagement has no stage group: its history says which stage it left. The history and, for an
+  // approver, the organisation's members are read together.
+  const [history, members] = await Promise.all([
+    tab === "history" || (finished || detail.stage_group === null) ? engagementHistory(detail.id) : null,
+    detail.actions.includes("approve") ? orgMembers(detail.org_id) : undefined,
+  ]);
   const steps = stepperSteps({ ...detail, left: stageLeft(detail.state, history?.events) });
   const href = `${basePath}/${encodeURIComponent(detail.id)}`;
   const items = actionItems(detail);
-  const members = detail.actions.includes("approve") ? await orgMembers(detail.org_id) : undefined;
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
   const line = counterpartLine(detail);
