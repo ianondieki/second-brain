@@ -64,7 +64,7 @@ async def browse_proposals(
     county: Annotated[list[CountyCode] | None, Query(description="ISO 3166-2:KE county code; repeat")] = None,
     maturity: Annotated[list[ProposalMaturity] | None, Query()] = None,
     ask: Annotated[list[ProposalAsk] | None, Query()] = None,
-    problem: Annotated[UUID | None, Query(description="A linked Problem")] = None,
+    problem_id: Annotated[UUID | None, Query(description="A linked Problem's id")] = None,
     cursor: Annotated[str | None, Query(max_length=500)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> search.BrowsePage:
@@ -79,7 +79,7 @@ async def browse_proposals(
         counties=_capped(county, "county"),
         maturities=_capped(maturity, "maturity"),
         asks=_capped(ask, "ask"),
-        problem_id=problem,
+        problem_id=problem_id,
     )
     return await search.browse(db, filters, cursor=after, limit=limit)
 

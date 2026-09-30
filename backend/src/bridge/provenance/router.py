@@ -36,7 +36,7 @@ from bridge.auth.deps import CurrentSession, Db, SettingsDep, client_ip
 from bridge.config import ConfigurationError
 from bridge.crypto.envelope import Purpose, Sealed, key_wrapper_from_settings, open_data_key, open_sealed
 from bridge.db import as_role
-from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import ProvenanceStatus
 from bridge.provenance import verify
 from bridge.provenance.certificate import load_certificate, render_pdf
@@ -167,6 +167,7 @@ async def timestamp_token(cert_id: CertId, request: Request, db: Db, settings: S
 
 @router.post(
     "/api/verify",
+    responses={413: {"model": ApiErrorBody, "description": "Larger than 10 MB"}},
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -285,7 +286,10 @@ _MANIFEST = text(
 @router.get(
     "/api/provenance/certificates/{cert_id}/manifest.json",
     response_class=Response,
-    responses={200: {"content": {"application/json": {}}, "description": "The registered RFC 8785 manifest"}},
+    responses={
+        200: {"content": {"application/json": {}}, "description": "The registered RFC 8785 manifest"},
+        503: {"model": ApiErrorBody, "description": "No key to open it on this server"},
+    },
 )
 async def manifest_json(cert_id: CertId, live: CurrentSession, db: Db, settings: SettingsDep) -> Response:
     """Your registered manifest, byte for byte: its SHA-256 is the certificate's content hash."""

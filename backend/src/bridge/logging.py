@@ -7,28 +7,76 @@ import os
 import re
 import sys
 from typing import Any
+from urllib.parse import unquote_plus
 
 import structlog
 
-# Keys that must never reach a log line, whatever the caller passes.
-REDACTED_KEYS = frozenset({"password", "token", "secret", "email", "code", "cookie", "authorization", "totp"})
+# Parts of a key whose value never reaches a log line, whatever the caller passes: secrets (passwords, tokens, keys,
+# codes, sessions) and personal data (emails, phones, names, addresses, free text, URLs that may carry a token).
+# P16-E1 added the personal-data parts; tests/unit/test_log_fields.py keeps every structlog call's fields reviewed.
+REDACTED_KEYS = frozenset(
+    {
+        "password",
+        "token",
+        "secret",
+        "email",
+        "code",
+        "cookie",
+        "authorization",
+        "totp",
+        "otp",
+        "recovery",
+        "pepper",
+        "session",
+        "csrf",
+        "credential",
+        "api_key",
+        "private_key",
+        "phone",
+        "msisdn",
+        "name",
+        "address",
+        "text",
+        "body",
+        "url",
+        "link",
+    }
+)
+
+# Whole keys the part match above would hide but that hold only counts (the LLM ledger's token counts). Matched
+# exactly, so no other key containing ``token`` passes (P16-E1 review MINOR). A config ``url`` stays redacted on
+# purpose: a configured URL can carry credentials, and ``variable`` names the setting.
+SAFE_KEYS = frozenset({"input_tokens", "output_tokens"})
 
 # Paths whose query string never reaches the access log: the OAuth callback's carries the authorization code, the
 # state and the provider's error text (REQ-AUTH-02). Structlog does not log requests; uvicorn's access log does.
 QUERYLESS_PATHS = ("/api/auth/oauth/",)
+# Query parameters that carry what people type (search words, which can be a name or an address): their values are
+# redacted on every path (P16-E1). A key is compared decoded, as the server reads it, so ``%71=`` is ``q=`` too.
+FREE_TEXT_PARAMETERS = frozenset({"q"})
+_QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
+
+
+def _redact_free_text(match: re.Match[str]) -> str:
+    if unquote_plus(match.group(2)) in FREE_TEXT_PARAMETERS:
+        return f"{match.group(1)}{match.group(2)}={_REDACTED}"
+    return match.group(0)
 
 
 class DropQueryStrings(logging.Filter):
-    """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``. uvicorn logs
-    ``'%s - "%s %s HTTP/%s" %d'`` with (client, method, path?query, HTTP version, status); records of any other
-    shape pass unchanged."""
+    """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``, and the values of
+    ``FREE_TEXT_PARAMETERS`` from every other. uvicorn logs ``'%s - "%s %s HTTP/%s" %d'`` with (client, method,
+    path?query, HTTP version, status); records of any other shape pass unchanged."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
         if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
-            path, separator, _query = args[2].partition("?")
+            path, separator, query = args[2].partition("?")
             if separator and path.startswith(QUERYLESS_PATHS):
                 record.args = (args[0], args[1], path, args[3], args[4])
+            elif separator:
+                redacted = _QUERY_PAIR.sub(_redact_free_text, query)
+                record.args = (args[0], args[1], f"{path}?{redacted}", args[3], args[4])
         return True
 
 
@@ -94,7 +142,8 @@ def install_job_log_redaction(worker_name: str | None = None) -> None:
 
 def _redact(_: object, __: str, event_dict: structlog.types.EventDict) -> structlog.types.EventDict:
     for key in list(event_dict):
-        if any(part in key.lower() for part in REDACTED_KEYS):
+        lowered = key.lower()
+        if lowered not in SAFE_KEYS and any(part in lowered for part in REDACTED_KEYS):
             event_dict[key] = "[redacted]"
     return event_dict
 

@@ -18,6 +18,7 @@ organisation (422; the database checks it too, and the digest re-checks at send 
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID
@@ -121,25 +122,40 @@ async def check_form(
             raise invalid("invalid_recipients", "Digest recipients must be reviewers of your organisation.")
 
 
-async def _niches(db: AsyncSession, ids: list[UUID]) -> list[NicheOut]:
+async def _niches(db: AsyncSession, ids: Iterable[UUID]) -> dict[UUID, NicheOut]:
     parent = aliased(Niche)
     rows = await db.execute(
         select(Niche.id, Niche.slug, Niche.name_en, parent.name_en)
         .outerjoin(parent, parent.id == Niche.parent_id)
-        .where(Niche.id.in_(ids))
+        .where(Niche.id.in_(set(ids)))
     )
-    found = {r[0]: NicheOut(id=r[0], slug=r[1], label=niche_label(r[2], r[3])) for r in rows.all()}
-    return [found[i] for i in ids if i in found]
+    return {r[0]: NicheOut(id=r[0], slug=r[1], label=niche_label(r[2], r[3])) for r in rows.all()}
 
 
 async def scout_out(db: AsyncSession, scout: ScoutAgent) -> ScoutOut:
-    run = await db.scalar(
-        select(AgentRun).where(AgentRun.scout_id == scout.id).order_by(AgentRun.started_at.desc()).limit(1)
+    [out] = await scouts_out(db, [scout])
+    return out
+
+
+async def scouts_out(db: AsyncSession, scouts: Sequence[ScoutAgent]) -> list[ScoutOut]:
+    """Each scout with its niches and its last run, one query for all their runs and one for all their niches
+    (P16-E1: the list sends as many statements for ten scouts as for one)."""
+    runs = await db.execute(
+        select(AgentRun)
+        .where(AgentRun.scout_id.in_([s.id for s in scouts]))
+        .order_by(AgentRun.scout_id, AgentRun.started_at.desc())
+        .distinct(AgentRun.scout_id)
     )
+    last = {run.scout_id: run for run in runs.scalars()}
+    niches = await _niches(db, (n for s in scouts for n in s.niches))
+    return [_scout_out(s, [niches[n] for n in s.niches if n in niches], last.get(s.id)) for s in scouts]
+
+
+def _scout_out(scout: ScoutAgent, niches: list[NicheOut], run: AgentRun | None) -> ScoutOut:
     return ScoutOut(
         id=scout.id,
         org_id=scout.org_id,
-        niches=await _niches(db, list(scout.niches)),
+        niches=niches,
         counties=list(scout.counties),
         include_keywords=list(scout.include_keywords),
         exclude_keywords=list(scout.exclude_keywords),
@@ -190,13 +206,17 @@ async def list_scouts(org: OrgMember, db: Db, settings: SettingsDep) -> ScoutLis
     """The organisation's scouts, what its plan allows and the budget band codes."""
     weights = get_weights()
     scouts = (
-        await db.execute(
-            select(ScoutAgent).where(ScoutAgent.org_id == org.org_id).order_by(ScoutAgent.created_at, ScoutAgent.id)
+        (
+            await db.execute(
+                select(ScoutAgent).where(ScoutAgent.org_id == org.org_id).order_by(ScoutAgent.created_at, ScoutAgent.id)
+            )
         )
-    ).scalars()
+        .scalars()
+        .all()
+    )
     ent = await entitlements.for_subject(db, settings, org_id=org.org_id)
     return ScoutList(
-        items=[await scout_out(db, s) for s in scouts],
+        items=await scouts_out(db, scouts),
         plan=plan_out(ent, weights),
         budget_bands=[BudgetBandOut(code=b.code, label=b.label) for b in weights.budget_bands],
     )

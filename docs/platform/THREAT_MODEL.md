@@ -262,6 +262,14 @@ Entry points: proposal text (Tier-1 fields, attachments), Problem Briefs, messag
 - **Secrets**: only sandbox/test values in `.env`; production values in SSM entered by the human (G4, Phase 8); rotation every 90 days.
 - **Feature flags** `FEATURE_TIER2_ENABLED` and `FEATURE_DEALS_ENABLED` default false in production until the legal gate (AC-SEC-2, AC-SEC-7).
 - **Client address behind the web tier** (P8, 2026-09-29): the Next.js server keeps a client-supplied `X-Forwarded-For` and forwards it (`frontend/lib/api/server.ts` `forwardHeaders`, and the `/api` rewrite), and the API trusts it from `TRUSTED_PROXIES`. So until an edge proxy (Caddy/Cloudflare, Phase 8) overwrites `X-Forwarded-For`, a client can choose its own throttle key on routes served through the web tier (for example the 30-a-minute `/verify` lookup). Assumption for any hosted release: the edge overwrites the header and `TRUSTED_PROXIES` lists only the edge; the Phase 8 start-up check (D-34 area) verifies it. Local prototype: accepted (nothing is hosted, D-36).
+- **Personal data and secrets in logs** (I; REQ-SEC-03, P16-E1): structlog's key filter (`bridge.logging._redact`)
+  redacts any key containing a secret or personal-data part (password, token, code, session, email, phone, name,
+  address, text, body, url, link, …), with an exact allow-list for the LLM token counts only; the access log redacts
+  the value of every free-text query parameter (`q`), comparing each key decoded as the server reads it, so `?%71=`
+  is caught too (security review MINOR, P16-E1 round 1); a 422 never quotes the refused value and a 500 body is fixed.
+  Residual: low; edge proxy logs (Phase 8) must apply the same rules. Tests: `unit/test_log_fields.py` (an AST audit
+  that fails on any unreviewed log field), `unit/test_logging.py::test_search_words_never_reach_the_access_log`,
+  `unit/test_error_shape.py`, `integration/test_error_bodies.py`.
 - **Assumptions**: Cloudflare and AWS account security (MFA, least privilege) are configured by the human; the records custodian and DPO named at G2 handle evidence and breaches; anchor orgs are concierge-onboarded (no self-serve E2 before G6).
 - **Out of scope for Release 1**: invisible watermarks (R2), WhatsApp channel (R2), GitHub App webhooks (R2), East Africa rails (R3). Their threats are re-modelled when scheduled.
 

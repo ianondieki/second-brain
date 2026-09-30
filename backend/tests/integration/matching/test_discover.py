@@ -253,6 +253,28 @@ async def test_last_seasons_scouts_are_not_actors(owner_engine: AsyncEngine, app
     await rising_but_not_trending(app_engine, world, problem)
 
 
+async def test_old_project_interest_is_not_an_actor(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """REQ-TREND-01 re-review MINOR 1 (the reviewer's G5; mutant Q3, the whole window's interest as the project's
+    actors): three organisations asked about a project 33 to 40 days ago (inside the 180-day window, outside the
+    30-day badge window) and nobody since. The interest still counts in its score, but its organisations are not
+    actors: not Trending, and no "Verified organisation interest" chip wherever the project shows."""
+    world = await build(owner_engine)
+    problem = await developer_problem(owner_engine, world.author, world.niche, age_days=120)
+    project = await proposal(owner_engine, world.niche, problem, age_days=100)
+    await signals(owner_engine, project, "org_interest", days_ago=[33.0, 36.0, 40.0], actors=3, label=f"{world.tag}-o")
+    fresh = await proposal(owner_engine, world.niche, problem, age_days=100)
+    await signals(owner_engine, fresh, "org_interest", days_ago=[0.5], actors=3, label=f"{world.tag}-f")
+    projects = (await board_as(app_engine, world.author)).projects
+    old = projects[project]
+    assert old.score > 0.0  # the old interest is evidence in the score
+    assert (old.actors, old.trending) == (0, False)
+    assert projects[fresh].actors == 3  # the same three organisations' interest this week makes them actors
+    body = await trending(app_engine, world, niche=world.slug("niche"))
+    shown = {p["proposal"]["id"]: p for p in body["projects"]}
+    assert "Verified organisation interest" not in shown.get(str(project), {"why": []})["why"]
+    assert "Verified organisation interest" in shown[str(fresh)]["why"]
+
+
 async def test_an_old_briefs_organisation_is_not_an_actor(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
     """Round-2 MAJOR 1: a Brief posted 170 days ago and two fresh proposals: no badge."""
     world = await build(owner_engine)
