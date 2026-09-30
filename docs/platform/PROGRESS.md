@@ -517,6 +517,42 @@ M2:
 - P13 assistant: handle LLMBudgetExceeded scope global with a fixed message (T2.2 security MINOR 3); demo_fallback = no suggestion.
 - P15 admin: if staff can decide claims, fix schema v2 round-6 MINORs 1–3 (seat-aware domain rule, first verification by non-owner, E2 attributes by non-owner) first; else keep the claims queue read-only.
 
+### M2 report (draft, 2026-09-30; final numbers and the quality scorecard come with Stage F)
+
+**Result so far.** Every M2 feature of `PLAN.md` §8 is merged into the integration branch and works on `make demo`:
+the scout agent (P10), the research agent (P11), trending problems and the ranker (P12), the submission assistant
+(P13), subscriptions with the simulated M-Pesa checkout (P14), the staff console's moderation, research-approval and
+read-only claims queues (P15), the auth follow-ups (P17), and P16's packaging, done in this session (session 3):
+
+- **One product, not a patchwork (Stage B).** An inventory of all 42 routes and 10 email kinds
+  (`docs/demo/ui-inventory.md`), then one design system on the shared layer (`docs/platform/design/p16-design-system.md`;
+  merge `238b884`): named tokens for the repeated colour mixes, one overlay shadow, and one component per pattern
+  (Badge, Callout/Alert, PageHeader, BackLink, Section, RowList/Row, DescriptionList, TabNav, EmptyState,
+  ConfirmDialog, Panel, LinkPending, one PortalNav), a static not-found page and a 307 for signed-out portal visits.
+  Then every screen rebuilt from it in two parallel cards: the organisation portal, the shared tracker and the staff
+  console (C2, `02a1953`), the developer portal, public pages, billing and settings (C1, `106f01f`). Zero axe violations
+  of any impact on every state the cards shot at 360 and 1440 px (strict check in the e2e specs of those screens), one
+  primary action and no horizontal scroll on every screen, every route ≤150 KB gzipped (the tightest:
+  `/settings/security` 149,985). Carried UX MINORs from P16-A, P15-F and P12-F are fixed (listed on the cards).
+- **A measured decision.** Route-level loading skeletons were built, measured (React holds a revealed fallback for about
+  0.3 s: +0.35 s LCP on Home, Discover and the tracker, and a 200 instead of the 307 for sessions owing the second
+  factor) and removed; in-app navigation shows a pending hint on the tapped link instead, and direct loads render in
+  one pass. Lighthouse mobile after the change: `/dev` LCP about 1.6 s, perf 96–100, accessibility 100.
+- **Test races fixed at the cause**, found by CI: axe measuring a button mid colour transition (`settled()` now waits
+  for finite animations), a scout digest shared by parallel workers, and a 409 focus race in the notification settings.
+- **Demo packaging (Stage C)**: in progress: the recorded walkthrough (`feat/P16-walkthrough`), README "Run the demo"
+  for M2 (`docs/P16-readme-demo`), the memory peak of a clean `make demo-reset` (being sampled).
+
+**Decisions made by the orchestrator this session** (recorded on the cards): no route skeletons (above); no code split
+may fail into a route's error boundary (a lazily loaded Sign out was reverted); the static not-found page reads no
+session; problem references carry `published_at`/`seeded_example` for published problems only.
+
+**Still to do (stages D–F):** vercel-react-best-practices over the frontend and Lighthouse on each portal's main
+pages; API consistency, N+1 checks, logs without personal data, integration tests per provider, backend coverage
+(≥85 %, ≥95 % on auth, tenancy, billing, provenance, engagements) and a coverage gate in `pr.yml`, Vitest for the shared
+components, the full e2e suite three times in CI mode; `/ecc-code-review --branch` since `fa5aeb6`; the final report
+and scorecard.
+
 ### M1 report (2026-09-29): the core flow works end to end on `make demo`
 
 **Result.** M1 (P0–P9) is merged into the integration branch and tagged `prototype-m1` at `fa5aeb6` (an annotated tag made in this session; this container's git access pushes branches but refuses tag pushes, so the tag is local here: push it from the laptop with `git fetch origin && git tag -a prototype-m1 fa5aeb6 -m "Prototype M1" && git push origin prototype-m1`). On a clean
