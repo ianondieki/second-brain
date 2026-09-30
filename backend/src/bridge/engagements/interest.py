@@ -5,9 +5,11 @@
 order: not a signatory (403 ``role_required``: a reviewer never expresses interest, AC-TRACK-8), no fresh second
 factor (403 ``step_up_required``, ADR-002), the organisation not E2 (403 ``org_not_e2``, AC-SCOUT-8) or suspended or
 delisted (403 ``org_unavailable``); a scout match that is not the organisation's or not of that proposal (404), a
-proposal that is not published and clear, or whose developer is a member of the organisation (the same 404: a
-distinct answer would tell an employer that an author is one of its members; the refusal is audited for staff only),
-an engagement for the pair already (409 ``engagement_exists``); a contact who is not an active
+proposal that is not published and clear, or whose developer is an active member of the organisation (the same 404,
+reached by the same statements: one read of the proposal with the membership, one system audit event on the global
+chain naming the condition, the organisation and the caller, one commit; a distinct answer, or a slower one, would
+tell an employer that an author is one of its members; staff alone read the global chain), an engagement for the
+pair already (409 ``engagement_exists``); a contact who is not an active
 member (422 ``invalid_contact``) or a contact-by date out of range (422 ``invalid_contact_by``). The database's
 policies (revision 0003) are the backstop: a signatory of an E2 organisation inserts ``ORG_INTEREST`` for the current
 registered version of a published, clear proposal, and its genesis event names the signatory. The engagement's
@@ -71,6 +73,16 @@ _PROPOSAL = text(
     "SELECT owner_id, current_version_id FROM proposals WHERE id = :id AND status = 'published'"
     " AND moderation_state = 'clear' AND current_version_id IS NOT NULL"
 )
+# Always one row: the owner and version are NULL unless the proposal is published and clear; ``own_member`` is true
+# when its developer is an active member of the organisation (read under the caller's RLS, as the scan's filter is).
+_PROPOSAL_FOR_ORG = text(
+    "SELECT p.owner_id, p.current_version_id, EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = :org"
+    " AND m.user_id = p.owner_id AND m.status = 'active') AS own_member"
+    " FROM (SELECT 1) AS one LEFT JOIN proposals p ON p.id = :id AND p.status = 'published'"
+    " AND p.moderation_state = 'clear' AND p.current_version_id IS NOT NULL"
+)
+REFUSED_UNAVAILABLE: Final = "proposal_unavailable"
+REFUSED_OWN_MEMBER: Final = "own_organisation"
 _EXISTING = text("SELECT id FROM engagements WHERE proposal_id = :proposal AND org_id = :org")
 _LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _LIVE = text(
@@ -128,11 +140,10 @@ async def express_interest(db: AsyncSession, settings: Settings, org: OrgContext
     ensure_step_up(org.live, settings)
     await _check_organisation(db, org.org_id)
     await _check_origin(db, org.org_id, body)
-    proposal = (await db.execute(_PROPOSAL, {"id": body.proposal_id})).one_or_none()
-    if proposal is None:
-        raise not_found("No published proposal has this id.")
-    if await membership_of(db, org.org_id, proposal.owner_id) is not None:
-        await _refuse_own_member(db, body.proposal_id)
+    proposal = (await db.execute(_PROPOSAL_FOR_ORG, {"id": body.proposal_id, "org": org.org_id})).one()
+    if proposal.owner_id is None or proposal.own_member:
+        condition = REFUSED_OWN_MEMBER if proposal.own_member else REFUSED_UNAVAILABLE
+        await _refuse(db, org, body.proposal_id, condition)
         raise not_found("No published proposal has this id.")
     if (await db.execute(_EXISTING, {"proposal": body.proposal_id, "org": org.org_id})).scalar_one_or_none():
         raise ApiError(409, "engagement_exists", "Your organisation already has an engagement for this proposal.")
@@ -189,10 +200,12 @@ async def express_interest(db: AsyncSession, settings: Settings, org: OrgContext
     return engagement.id
 
 
-async def _refuse_own_member(db: AsyncSession, proposal_id: UUID) -> None:
-    """Audit the refusal (the condition only) where no organisation member reads it: a system event on the global
-    chain (``audit_events`` shows an organisation's events to its owners and admins, and an event to its actor), so
-    the audit trail cannot become the oracle the 404 closes. Committed before the 404 is raised."""
+async def _refuse(db: AsyncSession, org: OrgContext, proposal_id: UUID, condition: str) -> None:
+    """Audit a 404 of the proposal (unavailable, or by one of the organisation's own members) where no organisation
+    member reads it: a system event on the global chain, with no actor and no organisation column (``audit_events``
+    shows an organisation's events to its owners and admins, and an event to its actor), so the audit trail cannot
+    become the oracle the 404 closes. The payload names the condition, the organisation and the caller for staff.
+    Both conditions write the same event and commit before the 404 is raised, so neither answer is slower."""
     await audit(
         db,
         "engagement.interest_refused",
@@ -200,7 +213,7 @@ async def _refuse_own_member(db: AsyncSession, proposal_id: UUID) -> None:
         actor_kind=AuditActor.SYSTEM,
         subject_type="proposal",
         subject_id=proposal_id,
-        payload={"condition": "own_organisation"},
+        payload={"condition": condition, "org_id": str(org.org_id), "user_id": str(org.live.user.id)},
     )
     await db.commit()
 

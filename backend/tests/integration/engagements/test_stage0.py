@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
@@ -229,23 +229,24 @@ async def test_the_developer_may_not_be_a_member(owner_engine: AsyncEngine, app_
         refused = await signatory.post(
             f"/api/orgs/{world.org.id}/interest", json=interest(world, proposal, None, today)
         )
+        unavailable_id = str(uuid4())
         unavailable = await signatory.post(
-            f"/api/orgs/{world.org.id}/interest", json=interest(world, uuid4(), None, today)
+            f"/api/orgs/{world.org.id}/interest", json=interest(world, UUID(unavailable_id), None, today)
         )
     assert (refused.status_code, refused.json()) == (unavailable.status_code, unavailable.json())
     assert refused.status_code == 404
-    [event] = await rows(
+    events = await rows(
         owner_engine,
-        "SELECT actor_user_id, org_id, actor_kind::text AS kind, payload FROM audit_events"
-        " WHERE action = 'engagement.interest_refused' AND subject_id = :p",
+        "SELECT chain_id, actor_user_id, org_id, actor_kind::text AS kind, payload FROM audit_events"
+        " WHERE action = 'engagement.interest_refused' AND subject_id IN (:p, :q) ORDER BY seq",
         p=proposal,
+        q=UUID(unavailable_id),
     )
-    assert (event.actor_user_id, event.org_id, event.kind, event.payload) == (
-        None,
-        None,
-        "system",
-        {"condition": "own_organisation"},
-    )
+    who = {"org_id": str(world.org.id), "user_id": str(world.org.signatory)}  # round-2 MINOR 4: staff see both
+    assert [(e.chain_id, e.actor_user_id, e.org_id, e.kind, e.payload) for e in events] == [
+        ("global", None, None, "system", {"condition": "own_organisation"} | who),
+        ("global", None, None, "system", {"condition": "proposal_unavailable"} | who),
+    ]
     for member in (world.org.signatory, world.org.owner):  # neither the actor nor the organisation's admins see it
         async with create_session_factory(app_engine)() as db:
             await bind_tenant(db, user_id=member, org_id=world.org.id)
@@ -253,6 +254,44 @@ async def test_the_developer_may_not_be_a_member(owner_engine: AsyncEngine, app_
                 text("SELECT count(*) FROM audit_events WHERE action = 'engagement.interest_refused'")
             )
         assert seen == 0
+
+
+async def test_both_404s_of_a_proposal_run_the_same_statements(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Round-2 review MINOR 1: the own-member 404 was about 3 ms slower than an unavailable proposal's (a membership
+    read, an audit INSERT and a COMMIT only on that branch). Now one read gives the proposal with the membership and
+    both refusals write the same audit event and commit, so the database does the same work for both answers."""
+    world = await build(owner_engine)
+    today = await db_today(owner_engine)
+    async with owner_engine.begin() as conn:
+        insider = await add_person(conn, "insider", world.org.domain)
+        await conn.execute(
+            text("INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{viewer}')"),
+            {"id": uuid4(), "o": world.org.id, "u": insider},
+        )
+    own = (await publish(owner_engine, replace(world, developer=insider, proposals={}), "own"))[0]
+    held = (await publish(owner_engine, world, "held", moderation_state="held"))[0]
+    statements: list[str] = []
+
+    def capture(_conn: Any, _cursor: Any, statement: str, *_: Any) -> None:
+        statements.append(statement)
+
+    url = f"/api/orgs/{world.org.id}/interest"
+    by_case: dict[str, list[str]] = {}
+    async with clients(app_engine, SETTINGS, world.org.signatory) as (signatory,):
+        await signatory.post(url, json=interest(world, uuid4(), None, today))  # warm: the same caches for each case
+        event.listen(app_engine.sync_engine, "before_cursor_execute", capture)
+        try:
+            for case, proposal in (("own", own), ("held", held), ("missing", uuid4())):
+                statements.clear()
+                response = await signatory.post(url, json=interest(world, proposal, None, today))
+                assert response.status_code == 404, case
+                by_case[case] = list(statements)
+        finally:
+            event.remove(app_engine.sync_engine, "before_cursor_execute", capture)
+    assert by_case["own"] == by_case["held"] == by_case["missing"]
+    assert any(s.startswith("INSERT INTO audit_events") for s in by_case["own"])  # each refusal is audited
 
 
 async def test_a_suspended_organisation_cannot_express_interest(
