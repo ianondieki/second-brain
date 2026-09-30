@@ -80,8 +80,14 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   const version = shownVersion(idea);
   const hasChanges = idea.current !== null && idea.draft !== null;
   const notice = noticeFor(status, hasChanges);
-  // Pitches and views exist only for a registered idea.
-  const [tags, views] = idea.current ? await Promise.all([ideaTags(idea.id), ideaViews(idea.id)]) : [null, null];
+  // Once the idea is known to be yours: its pitches and views (a registered idea only) and the county's name are read
+  // together, not one after the other.
+  const countyCode = version?.teaser.county_code;
+  const [tags, views, county] = await Promise.all([
+    idea.current ? ideaTags(idea.id) : null,
+    idea.current ? ideaViews(idea.id) : null,
+    countyCode ? countyName(countyCode) : null,
+  ]);
   const canPitch = status === "published" && tags !== null && pitchesLeft(tags.cap) !== 0;
   const p = await getTranslations("ideaPitches");
 
@@ -126,7 +132,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
       ) : null}
       {idea.current ? <WhoHasSeen views={views} /> : null}
 
-      {version ? <Teaser version={version} status={status} /> : null}
+      {version ? <Teaser version={version} status={status} county={county} /> : null}
       {version ? <Confidential version={version} /> : null}
       <Certificate idea={idea} />
 
@@ -160,7 +166,7 @@ const TEASER_HINT = {
   hidden: "teaserHintHidden",
 } as const satisfies Record<IdeaStatus, string>;
 
-async function Teaser({ version, status }: { version: Version; status: IdeaStatus }) {
+async function Teaser({ version, status, county }: { version: Version; status: IdeaStatus; county: string | null }) {
   const f = await getTranslations("ideaFields");
   const { teaser } = version;
   const empty = <span className="text-ink-soft">{f("notGiven")}</span>;
@@ -196,7 +202,7 @@ async function Teaser({ version, status }: { version: Version; status: IdeaStatu
         <Description label={f("problemStatement")}>{prose(teaser.problem_statement) ?? empty}</Description>
         <Description label={f("summary")}>{prose(teaser.summary) ?? empty}</Description>
         {teaser.impact_claims ? <Description label={f("impactClaims")}>{prose(teaser.impact_claims)}</Description> : null}
-        {teaser.county_code ? <Description label={f("county")}>{await countyName(teaser.county_code)}</Description> : null}
+        {county ? <Description label={f("county")}>{county}</Description> : null}
       </DescriptionList>
     </Section>
   );
