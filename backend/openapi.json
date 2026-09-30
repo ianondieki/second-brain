@@ -731,7 +731,7 @@
           },
           "sources": {
             "items": {
-              "$ref": "#/components/schemas/bridge__admin__research__SourceOut"
+              "$ref": "#/components/schemas/SourceOut"
             },
             "title": "Sources",
             "type": "array"
@@ -1836,6 +1836,74 @@
           "published_at"
         ],
         "title": "DiscoverProblem",
+        "type": "object"
+      },
+      "DiscoverSource": {
+        "properties": {
+          "published_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "publisher",
+          "source_type",
+          "published_date",
+          "retrieved_at",
+          "quote"
+        ],
+        "title": "DiscoverSource",
         "type": "object"
       },
       "DocumentOut": {
@@ -7194,6 +7262,86 @@
         "title": "SimulatedOutcome",
         "type": "string"
       },
+      "SourceOut": {
+        "properties": {
+          "excerpt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt Ref"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "publisher",
+          "source_type",
+          "published_date",
+          "retrieved_at",
+          "quote",
+          "excerpt_ref"
+        ],
+        "title": "SourceOut",
+        "type": "object"
+      },
       "SourcesOut": {
         "properties": {
           "allowlist": {
@@ -8069,7 +8217,7 @@
           "sources": {
             "description": "The newest cited sources",
             "items": {
-              "$ref": "#/components/schemas/bridge__matching__discover_schemas__SourceOut"
+              "$ref": "#/components/schemas/DiscoverSource"
             },
             "title": "Sources",
             "type": "array"
@@ -8653,154 +8801,6 @@
           "demo_fallback"
         ],
         "title": "RunOut",
-        "type": "object"
-      },
-      "bridge__admin__research__SourceOut": {
-        "properties": {
-          "excerpt_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Excerpt Ref"
-          },
-          "published_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published Date"
-          },
-          "publisher": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Publisher"
-          },
-          "quote": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quote"
-          },
-          "retrieved_at": {
-            "format": "date-time",
-            "title": "Retrieved At",
-            "type": "string"
-          },
-          "source_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Type"
-          },
-          "url": {
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url",
-          "publisher",
-          "source_type",
-          "published_date",
-          "retrieved_at",
-          "quote",
-          "excerpt_ref"
-        ],
-        "title": "SourceOut",
-        "type": "object"
-      },
-      "bridge__matching__discover_schemas__SourceOut": {
-        "properties": {
-          "published_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published Date"
-          },
-          "publisher": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Publisher"
-          },
-          "quote": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quote"
-          },
-          "retrieved_at": {
-            "format": "date-time",
-            "title": "Retrieved At",
-            "type": "string"
-          },
-          "source_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Type"
-          },
-          "url": {
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url",
-          "publisher",
-          "source_type",
-          "published_date",
-          "retrieved_at",
-          "quote"
-        ],
-        "title": "SourceOut",
         "type": "object"
       },
       "bridge__matching__schemas__RunOut": {

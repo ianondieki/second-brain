@@ -20,7 +20,7 @@ class DiscoverProblem(ProblemRef):
     published_at: datetime | None
 
 
-class SourceOut(BaseModel):
+class DiscoverSource(BaseModel):
     url: str
     publisher: str | None
     source_type: str | None
@@ -47,7 +47,7 @@ class TrendingProblem(BaseModel):
     problem: DiscoverProblem
     trend: TrendOut
     why: list[str] = Field(description="Why chips written in code, at most 3")
-    sources: list[SourceOut] = Field(description="The newest cited sources")
+    sources: list[DiscoverSource] = Field(description="The newest cited sources")
     proposal_count: int = Field(description="Published proposals that link this problem")
     project_ids: list[UUID] = Field(description="Trending projects (in `projects`) that solve this problem")
 

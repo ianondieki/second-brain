@@ -2622,7 +2622,7 @@ export interface components {
             /** Seeded Example */
             seeded_example: boolean;
             /** Sources */
-            sources: components["schemas"]["bridge__admin__research__SourceOut"][];
+            sources: components["schemas"]["SourceOut"][];
             /** Statement */
             statement: string;
             /** Title */
@@ -2977,6 +2977,24 @@ export interface components {
             statement: string;
             /** Title */
             title: string;
+        };
+        /** DiscoverSource */
+        DiscoverSource: {
+            /** Published Date */
+            published_date: string | null;
+            /** Publisher */
+            publisher: string | null;
+            /** Quote */
+            quote: string | null;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Source Type */
+            source_type: string | null;
+            /** Url */
+            url: string;
         };
         /** DocumentOut */
         DocumentOut: {
@@ -5039,6 +5057,26 @@ export interface components {
          * @enum {string}
          */
         SimulatedOutcome: "succeed" | "fail" | "cancel";
+        /** SourceOut */
+        SourceOut: {
+            /** Excerpt Ref */
+            excerpt_ref: string | null;
+            /** Published Date */
+            published_date: string | null;
+            /** Publisher */
+            publisher: string | null;
+            /** Quote */
+            quote: string | null;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Source Type */
+            source_type: string | null;
+            /** Url */
+            url: string;
+        };
         /** SourcesOut */
         SourcesOut: {
             /** Allowlist */
@@ -5365,7 +5403,7 @@ export interface components {
              * Sources
              * @description The newest cited sources
              */
-            sources: components["schemas"]["bridge__matching__discover_schemas__SourceOut"][];
+            sources: components["schemas"]["DiscoverSource"][];
             trend: components["schemas"]["TrendOut"];
             /**
              * Why
@@ -5579,44 +5617,6 @@ export interface components {
             status: components["schemas"]["ResearchRunStatus"];
             /** Stop Reason */
             stop_reason: string | null;
-        };
-        /** SourceOut */
-        bridge__admin__research__SourceOut: {
-            /** Excerpt Ref */
-            excerpt_ref: string | null;
-            /** Published Date */
-            published_date: string | null;
-            /** Publisher */
-            publisher: string | null;
-            /** Quote */
-            quote: string | null;
-            /**
-             * Retrieved At
-             * Format: date-time
-             */
-            retrieved_at: string;
-            /** Source Type */
-            source_type: string | null;
-            /** Url */
-            url: string;
-        };
-        /** SourceOut */
-        bridge__matching__discover_schemas__SourceOut: {
-            /** Published Date */
-            published_date: string | null;
-            /** Publisher */
-            publisher: string | null;
-            /** Quote */
-            quote: string | null;
-            /**
-             * Retrieved At
-             * Format: date-time
-             */
-            retrieved_at: string;
-            /** Source Type */
-            source_type: string | null;
-            /** Url */
-            url: string;
         };
         /** RunOut */
         bridge__matching__schemas__RunOut: {

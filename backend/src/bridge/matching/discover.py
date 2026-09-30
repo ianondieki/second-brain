@@ -30,9 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.directory.service import niche_label
 from bridge.matching.discover_schemas import (
     DiscoverProblem,
+    DiscoverSource,
     OpportunityGapOut,
     ProjectTrendOut,
-    SourceOut,
     TrendingOut,
     TrendingProblem,
     TrendingProject,
@@ -166,13 +166,13 @@ async def _board(db: AsyncSession, cfg: RankingConfig) -> tuple[Board, Niches]:
     return board(await load(db, cfg), cfg), await niches(db)
 
 
-async def _sources(db: AsyncSession, ids: list[UUID], per_problem: int) -> dict[UUID, list[SourceOut]]:
-    out: dict[UUID, list[SourceOut]] = defaultdict(list)
+async def _sources(db: AsyncSession, ids: list[UUID], per_problem: int) -> dict[UUID, list[DiscoverSource]]:
+    out: dict[UUID, list[DiscoverSource]] = defaultdict(list)
     if not ids or per_problem == 0:
         return out
     for row in (await db.execute(_CITATIONS, {"ids": ids})).all():
         if len(out[row.problem_id]) < per_problem:
-            out[row.problem_id].append(SourceOut(**{k: v for k, v in row._asdict().items() if k != "problem_id"}))
+            out[row.problem_id].append(DiscoverSource(**{k: v for k, v in row._asdict().items() if k != "problem_id"}))
     return out
 
 
