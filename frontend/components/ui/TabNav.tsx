@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "./cn";
+import { LinkPending } from "./LinkPending";
 
 export interface TabNavItem {
   key: string;
@@ -26,7 +27,8 @@ export interface TabNavProps {
 export function TabNav({ label, items, current, className }: TabNavProps) {
   return (
     <nav aria-label={label} className={cn("border-b border-line", className)}>
-      <ul className="-mb-px flex gap-1 overflow-x-auto">
+      {/* Tighter under 640 px, so the Discover, tracker and Inbox strips fit 360 px without scrolling. */}
+      <ul className="-mb-px flex gap-0 overflow-x-auto sm:gap-1">
         {items.map(({ key, label: text, href }) => {
           const active = key === current;
           return (
@@ -35,7 +37,7 @@ export function TabNav({ label, items, current, className }: TabNavProps) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-11 items-center border-b-2 px-3 whitespace-nowrap no-underline",
+                  "relative inline-flex min-h-11 items-center border-b-2 px-2 whitespace-nowrap no-underline sm:px-3",
                   "transition-colors duration-150 ease-out",
                   active
                     ? "border-jacaranda font-semibold text-jacaranda"
@@ -43,6 +45,7 @@ export function TabNav({ label, items, current, className }: TabNavProps) {
                 )}
               >
                 {text}
+                <LinkPending className="absolute bottom-1.5 left-1/2 -translate-x-1/2" />
               </Link>
             </li>
           );

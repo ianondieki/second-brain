@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { standaloneLinkClass } from "./Button";
 import { cn } from "./cn";
+import { LinkPending } from "./LinkPending";
 
 export interface BackLinkProps {
   href: string;
@@ -18,6 +19,7 @@ export function BackLink({ href, children, className, ...data }: BackLinkProps) 
     <p className={cn("-mt-2 mb-4", className)} {...data}>
       <Link href={href} className={standaloneLinkClass}>
         {children}
+        <LinkPending className="ml-2" />
       </Link>
     </p>
   );

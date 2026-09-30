@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Children, Fragment, isValidElement, type HTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "./cn";
+import { LinkPending } from "./LinkPending";
 
 export interface RowListProps extends HTMLAttributes<HTMLUListElement> {
   /** An ordered list (a ranking, a sequence) instead of a plain one. */
@@ -66,6 +67,7 @@ export function Row({ title, href, headingLevel = 3, meta, badges, figure, class
               className="underline decoration-line decoration-1 underline-offset-4 after:absolute after:inset-0 hover:decoration-jacaranda"
             >
               {title}
+              <LinkPending className="ml-2 align-middle" />
             </Link>
           ) : (
             title
