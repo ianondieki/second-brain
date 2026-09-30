@@ -382,19 +382,22 @@ from one design system (`docs/platform/design/p16-design-system.md`), with zero 
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
 gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Stage D is
 done** (`fc87608`: five read waterfalls fixed with fetch-order tests, the scout form back under 150 KB, Lighthouse
-mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E in flight**: E2
-`feat/P16-coverage-gate` **merged** `a94ab33` (card `tasks/P16-E2.md`: tenancy 99.26 %, total 98.07 %, 4066 backend
-tests; the coverage gate in `pr.yml`, ≥85 % total and ≥95 % on the five packages; one test per integration; 19 Vitest
-files). E1 `feat/P16-backend-consistency` (`93a34c4`, card `tasks/P16-E1.md`: one error shape, cursor paging, naming,
-N+1 fixes with query-count tests, log PII audit mapped to REQ-SEC-03, hermetic tests, moderation case by id, trend G5
-test) is in review (reviewer and security-reviewer); after review it merges the integration head (a trial merge with E2
-is conflict-free and green), then CI and CodeQL. E3 `feat/P16-demo-story-ci` (card `tasks/P16-E3.md`: the walkthrough
-as a `demo-story` CI job) is being built. **Then:** the full e2e suite three times in CI mode (dispatch `pr.yml` three
-times on the final head), `make check`, traceability, legacy suite; Stage F. The demo is in a used state: `make
-demo-reset` before recording or showing it. **Stage E backlog** (MINORs, on cards): `requirePendingMfa` return path for
-a signed-out person (P16-C1); `reminders/facts.py` loads engagements in a loop and could call `load_many` (P16-E1).
+mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E: all three branches merged; the flake check is running.** E2 `a94ab33` (the coverage gate in `pr.yml`,
+≥85 % total and ≥95 % on the five packages; tenancy 99.26 %, total 98.07 %; one test per integration; 19 Vitest
+files). E1 `2bb3d7b` (one error shape, cursor paging, `problem_id`, N+1 fixes with query-count tests, log PII audit
+mapped to REQ-SEC-03 with the reviewers' three MINORs fixed, hermetic tests, moderation case by id, trend G5 test;
+reviewer and security-reviewer PASS). E3 `5976870` (the walkthrough as the `demo-story` CI job, 7 min, in parallel
+with `e2e`; its first CI run found a real TOTP window race in the shared e2e helpers, fixed in `de1a909`). Integration
+head `60391be`: traceability 0 errors, copy-lint PASS, the legacy suite 307 tests OK (unchanged since `fa5aeb6`).
+**Flake check:** three `pr.yml` runs on `60391be` (the push run and two dispatches, in parallel); `pr.yml` runs the
+`make check` targets (backend with coverage, frontend, legacy, e2e, copy-lint) on an egress-blocked runner. **Then
+Stage F:** `/ecc-code-review --branch` since `fa5aeb6`, fixing critical and high findings through the gates, and the
+final M2 report with its scorecard. The container restarted once in this session (Docker is down: `make demo` or the
+dev stack need `dockerd` started again; the demo needs `make demo-reset` before showing it). **Backlog** (MINORs, on
+cards): `requirePendingMfa` return path for a signed-out person (P16-C1); `reminders/facts.py` loads engagements in a
+loop and could call `load_many` (P16-E1); the E1 and E3 round-2 MINORs.
 
-**Open branches** (2026-09-30, session 3): `feat/P16-backend-consistency`, `feat/P16-demo-story-ci`. Integration head `7f1b72a`.
+**Open branches** (2026-09-30, session 3): none. Integration head `60391be`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
