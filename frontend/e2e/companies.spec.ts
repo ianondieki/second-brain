@@ -61,7 +61,8 @@ test.describe("a signed-in developer", () => {
 
     // Filters sit in a disclosure; picking a county narrows to it.
     await page.getByText("Filters", { exact: true }).click();
-    await page.getByLabel("County").selectOption("KE-30"); // Nairobi City
+    // exact: each niche is a labelled section now, and "Public sector › County" is one of them (P16-C1).
+    await page.getByLabel("County", { exact: true }).selectOption("KE-30"); // Nairobi City
     await page.getByRole("button", { name: "Show companies" }).click();
     await expect(page).toHaveURL(/county=KE-30/, SERVER_STEP);
     await expect(page.getByText("Filters (1 chosen)")).toBeVisible();
