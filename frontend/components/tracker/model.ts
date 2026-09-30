@@ -1,4 +1,5 @@
 import type { components, paths } from "@/lib/api/schema";
+import { formatCalendarDate, nairobiParts } from "@/lib/format";
 
 // The tracker's view model (REQ-ENG-03; docs/spec/06 6.9 Rendering): what the screens draw from the API's engagement.
 // Nothing here decides who may act: the buttons come only from the API's `actions` for the caller, whose turn it is
@@ -382,35 +383,14 @@ export function toMinor(text: string): number | null {
   return minor > 0 ? minor : null;
 }
 
-/**
- * "23 Sep 2026": the day, the three-letter month and the year in the page's language (docs/spec/06 6.9's format). The
- * one date formatter of the tracker; en-KE on its own writes "Sept", so the month comes from the short month names
- * that use three letters (en-US for English).
- */
-function dayMonthYear(at: Date, locale: string, timeZone: string): string {
-  const month = new Intl.DateTimeFormat(locale === "en" ? "en-US" : `${locale}-KE`, { month: "short", timeZone }).format(at);
-  return new Intl.DateTimeFormat(`${locale}-KE`, { day: "numeric", month: "short", year: "numeric", timeZone })
-    .formatToParts(at)
-    .map((part) => (part.type === "month" ? month : part.value))
-    .join("");
-}
-
 /** A moment in Nairobi time, as its date and time parts ("23 Sep 2026", "14:05"); the message adds "EAT". */
 export function eatParts(iso: string, locale = "en"): { date: string; time: string } {
-  const at = new Date(iso);
-  const time = new Intl.DateTimeFormat(`${locale}-KE`, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: "Africa/Nairobi",
-  }).format(at);
-  return { date: dayMonthYear(at, locale, "Africa/Nairobi"), time };
+  return nairobiParts(locale, iso);
 }
 
 /** A calendar date from the API ("2026-10-02") as written in Kenya ("2 Oct 2026"); dates carry no time zone. */
 export function formatDate(day: string, locale = "en"): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return dayMonthYear(new Date(Date.UTC(y, m - 1, d)), locale, "UTC");
+  return formatCalendarDate(locale, day);
 }
 
 /** Today's date in Nairobi ("2026-09-29"), for date inputs. */

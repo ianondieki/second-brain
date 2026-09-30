@@ -108,7 +108,7 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     id: "01a0f015-0feb-76bd-8eec-21b72f9f10e8",
     title: "Drought losses squeeze grain farmers",
     source: "research_agent",
-    label: "Seeded example for the demo (not a live AI result), human-reviewed on 30 September 2026",
+    label: "Seeded example for the demo (not a live AI result), human-reviewed on 30 Sep 2026",
     niche: { id: "n", slug: "agriculture", label: "Agriculture" },
     statement: "Farmers need better ways to plan planting after dry spells.",
     published_at: "2026-09-30T02:11:47Z",
@@ -125,7 +125,7 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
   it("says a seeded card is a seeded example, never AI-drafted", async () => {
     render(await resolve(await ProblemCard({ problem })));
     expect(document.querySelector("[data-label]")?.textContent).toBe(
-      "Seeded example for the demo (not a live AI result), human-reviewed on 30 September 2026",
+      "Seeded example for the demo (not a live AI result), human-reviewed on 30 Sep 2026",
     );
     expect(screen.queryByText(/AI-drafted/)).toBeNull();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(problem.title);
@@ -135,6 +135,6 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
 
   it("labels a live research card AI-drafted with its review day", async () => {
     render(await resolve(await ProblemCard({ problem: { ...problem, seeded_example: false, ai_generated: true } })));
-    expect(document.querySelector("[data-label]")?.textContent).toBe("AI-drafted, human-reviewed on 30 September 2026");
+    expect(document.querySelector("[data-label]")?.textContent).toBe("AI-drafted, human-reviewed on 30 Sep 2026");
   });
 });
