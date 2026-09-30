@@ -62,7 +62,8 @@ describe("a scout match in the Inbox", () => {
   it("shows an unavailable match as unavailable: no teaser, no why, no handle", () => {
     renderWithIntl(
       <MatchRow
-        match={{ ...MATCH, available: false, teaser: null, why: null, owner_handle: null, why_source: "code" }}
+        // The API sends neither for an unavailable match; the row must not show them even if it did.
+        match={{ ...MATCH, available: false, teaser: null }}
         href="/x"
       />,
     );
@@ -74,5 +75,18 @@ describe("a scout match in the Inbox", () => {
     expect(row.textContent).not.toContain("Mentions sacco");
     expect(row.textContent).not.toContain("jacaranda-otter-17");
     expect(row.querySelector("[data-why-source]")).toBeNull();
+  });
+});
+
+describe("the organisation picker on Scout matches", () => {
+  it("keeps the tab when another organisation is chosen", async () => {
+    const { OrgPicker } = await import("../../OrgPicker");
+    const memberships = [
+      { org_id: "a", org_name: "Amani Foods", roles: ["admin" as const] },
+      { org_id: "b", org_name: "Baraka Bank", roles: ["admin" as const] },
+    ];
+    renderWithIntl(<OrgPicker memberships={memberships} current="a" action="/org/inbox" keep={{ tab: "matches" }} />);
+    const hidden = document.querySelector<HTMLInputElement>("form input[type=hidden][name=tab]");
+    expect(hidden?.value).toBe("matches");
   });
 });

@@ -11,6 +11,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getTeaser, orgContext } from "../../../data";
 import { EmptyState } from "../../../EmptyState";
+import { OrgRefusal } from "../../../OrgRefusal";
 import { engagementsHref, type Membership } from "../../../membership";
 import { interestReasonOf, matchesHref, type MatchDetail } from "../../../scout";
 import { getMatch, getMembers } from "../../../scout-data";
@@ -54,9 +55,8 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
         ) : (
           <EmptyState sentence={ti("noOrg")} action={ti("emptyAction")} href="/org" />
         );
-    } else if (found?.kind === "refused" && found.refusal === "mfa_required") {
-      const tp = await getTranslations("orgProposal");
-      body = <EmptyState sentence={ti("refusedMfaCode")} action={tp("action.enterCode")} href="/auth/mfa" primary />;
+    } else if (found?.kind === "refused") {
+      body = <OrgRefusal refusal={found.refusal} orgName={org.org_name} back={{ href: back, action: t("back") }} />;
     } else if (found?.kind === "ok") {
       body = <EmptyState sentence={t("unavailable")} action={t("back")} href={back} />;
     } else {
@@ -74,6 +74,7 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
   const match = found.value;
   const teaser = match.teaser!;
   const card = await getTeaser(match.proposal_id);
+  // The handle shows once: in the teaser's details when they load, else here under the title.
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
       <article className="max-w-3xl" data-match={match.id}>
@@ -84,7 +85,7 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
             {teaser.title ?? ti("untitled")}
           </h1>
           <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]">
-            {match.owner_handle ? (
+            {match.owner_handle && !card ? (
               <span className="block" data-owner-handle="">
                 {tm("by", { handle: match.owner_handle })}
               </span>
@@ -144,12 +145,17 @@ async function Interest({
         ) : (
           <div className="flex flex-col items-start gap-3" data-interest-reason={reason ?? ""}>
             {reason !== "engagement_exists" ? (
-              // docs/spec/06 6.8: the button shows, disabled, with the reason it cannot be used.
+              // docs/spec/06 6.8: the button shows, disabled, with the reason it cannot be used. aria-disabled keeps
+              // it focusable, so a keyboard or screen-reader user reaches it and hears the reason.
               <button
                 type="button"
-                disabled
+                aria-disabled="true"
                 aria-describedby="interest-reason"
-                className={buttonClass("secondary", "w-full cursor-not-allowed opacity-60 sm:w-auto")}
+                data-interest-disabled=""
+                className={buttonClass(
+                  "secondary",
+                  "w-full cursor-not-allowed border-line text-ink-soft hover:bg-transparent sm:w-auto",
+                )}
               >
                 {tx("button")}
               </button>

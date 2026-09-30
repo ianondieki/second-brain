@@ -86,9 +86,19 @@ export function ExpressInterest(props: ExpressInterestProps) {
   useEffect(() => {
     if (refusal) notice.current?.focus();
   }, [refusal]);
+  // Focus follows what changed (WCAG 2.4.3): a refusal takes it (also after a step-up), else the opened form's lead;
+  // Cancel gives it back to Express interest.
+  const returnFocus = useRef(false);
+  const shown = useRef<Mode>(mode);
   useEffect(() => {
-    if (mode === "form") heading.current?.focus();
-  }, [mode]);
+    const opened = mode !== shown.current;
+    shown.current = mode;
+    if (mode === "form" && opened && !refusal) heading.current?.focus();
+    if (mode === "idle" && returnFocus.current) {
+      returnFocus.current = false;
+      document.querySelector<HTMLElement>("[data-express-interest]")?.focus();
+    }
+  }, [mode, refusal]);
 
   function body(): Body {
     return {
@@ -172,7 +182,13 @@ export function ExpressInterest(props: ExpressInterestProps) {
     return (
       <div className="flex flex-col items-start gap-4">
         <Alert className="w-full">{t("membersFailed", { org: props.orgName })}</Alert>
-        <Button variant="secondary" onClick={() => setMode("idle")}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            returnFocus.current = true;
+            setMode("idle");
+          }}
+        >
           {t("cancel")}
         </Button>
       </div>
@@ -235,6 +251,7 @@ export function ExpressInterest(props: ExpressInterestProps) {
           variant="secondary"
           onClick={() => {
             setRefusal(null);
+            returnFocus.current = true;
             setMode("idle");
           }}
         >

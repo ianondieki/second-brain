@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
@@ -7,7 +7,7 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "../../EmptyState";
 import { inboxHref, type Membership } from "../../membership";
 import { OrgPicker } from "../../OrgPicker";
-import { ACTION_HREF, type Refusal } from "../../refusals";
+import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, matchHref, scoutHref, type Match, type Scout, type ScoutList } from "../../scout";
 import { getMatches, getScouts } from "../../scout-data";
 import { MatchRow } from "./MatchRow";
@@ -18,6 +18,7 @@ import { MatchRow } from "./MatchRow";
  */
 export async function ScoutMatches({ memberships, org }: { memberships: Membership[]; org: Membership }) {
   const t = await getTranslations("scoutMatches");
+  const ti = await getTranslations("inbox");
   const [scouts, matches] = await Promise.all([getScouts(org.org_id), getMatches(org.org_id)]);
   const refusal = scouts.kind === "refused" ? scouts.refusal : matches.kind === "refused" ? matches.refusal : null;
 
@@ -26,39 +27,18 @@ export async function ScoutMatches({ memberships, org }: { memberships: Membersh
       <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: org.org_name })}</p>
       {memberships.length > 1 ? (
         <div className="mt-6">
-          <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox" />
+          <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox" keep={{ tab: "matches" }} />
         </div>
       ) : null}
       <div className="mt-8">
         {refusal ? (
-          <Refused refusal={refusal} org={org} />
+          <OrgRefusal refusal={refusal} orgName={org.org_name} back={{ href: "/org", action: ti("emptyAction") }} />
         ) : scouts.kind === "ok" && matches.kind === "ok" ? (
           <Body list={scouts.value} matches={matches.value} memberships={memberships} org={org} />
         ) : null}
       </div>
     </>
   );
-}
-
-async function Refused({ refusal, org }: { refusal: Refusal; org: Membership }) {
-  const t = await getTranslations("inbox");
-  const tp = await getTranslations("orgProposal");
-  if (refusal === "mfa_enrolment_required") {
-    return (
-      <EmptyState
-        sentence={t("refusedMfaSetup", { org: org.org_name })}
-        action={tp("action.turnOnMfa")}
-        href={ACTION_HREF.turnOnMfa!}
-        primary
-      />
-    );
-  }
-  if (refusal === "mfa_required") {
-    return (
-      <EmptyState sentence={t("refusedMfaCode")} action={tp("action.enterCode")} href={ACTION_HREF.enterCode!} primary />
-    );
-  }
-  return <EmptyState sentence={t("refusedNotFound")} action={t("emptyAction")} href="/org" />;
 }
 
 async function Body({
@@ -137,6 +117,8 @@ async function Body({
 
 async function ScoutSummary({ scout, href }: { scout: Scout; href?: string }) {
   const t = await getTranslations("scoutMatches");
+  // Each "Change the scout" link names its scout by what it looks for (several scouts, several links).
+  const niches = new Intl.ListFormat(await getLocale(), { type: "conjunction" }).format(scout.niches.map((n) => n.label));
   return (
     <div className="flex flex-col gap-2 pb-2">
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
@@ -159,7 +141,7 @@ async function ScoutSummary({ scout, href }: { scout: Scout; href?: string }) {
       </dl>
       {href ? (
         <p>
-          <Link href={href} className={standaloneLinkClass}>
+          <Link href={href} className={standaloneLinkClass} aria-label={t("changeNamed", { niches })}>
             {t("change")}
           </Link>
         </p>

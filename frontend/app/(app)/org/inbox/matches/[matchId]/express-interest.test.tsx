@@ -95,6 +95,24 @@ describe("Express interest", () => {
     expect(push).toHaveBeenCalledWith("/org/engagements/eng-1");
   });
 
+  it("focuses the refusal that follows a step-up, and gives focus back to the button on Cancel", async () => {
+    const post = vi
+      .fn<Post>()
+      .mockResolvedValueOnce({ ok: false, refusal: "stepUp" })
+      .mockResolvedValueOnce({ ok: false, refusal: "org_not_e2" });
+    renderInterest(post);
+    await open();
+    await send();
+    const code = screen.getByLabelText("Authenticator code");
+    fireEvent.change(code, { target: { value: "654321" } });
+    await act(async () => fireEvent.submit(code.closest("form")!));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("alert")));
+    fireEvent.click(screen.getByRole("button", { name: en.expressInterest.cancel }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: en.expressInterest.button })),
+    );
+  });
+
   it.each<[InterestRefusal, string, boolean]>([
     ["role_required", en.expressInterest.refusal.role_required.replace("{org}", "Maziwa Buyers"), false],
     ["org_not_e2", en.expressInterest.refusal.org_not_e2.replace("{org}", "Maziwa Buyers"), false],
