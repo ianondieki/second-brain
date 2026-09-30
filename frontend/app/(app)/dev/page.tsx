@@ -14,6 +14,9 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
 import { requireMe } from "@/lib/api/server";
 import { homeFor, needsMfaSetup } from "@/lib/auth/routing";
 
+import { recommendations } from "./discover/data";
+import { RecommendedForYou } from "./discover/RecommendedForYou";
+import { recommendationsState } from "./discover/recommendations";
 import { homeGroups } from "./home";
 import { myIdeas } from "./ideas/data";
 import { IdeaRow } from "./ideas/IdeaRow";
@@ -33,7 +36,8 @@ const ENGAGEMENTS_PATH = "/dev/engagements";
  * Developer Home (docs/spec/07 item 1, prototype part): the engagements waiting on the developer, each linking to its
  * tracker, then the others; then their latest ideas. "New proposal" is the screen's one primary action (a button, not
  * a nav item); with no engagements yet, an empty state points to My ideas. The two-step sign-in status stays, since
- * signing and payments need it. Trending problems and the reminder summary come with P12 and P6's in-app route.
+ * signing and payments need it. "Recommended for you" (P12) follows what needs the developer; the reminder summary
+ * comes with P6's in-app route.
  */
 export default async function DeveloperHome() {
   const me = await requireMe();
@@ -41,7 +45,7 @@ export default async function DeveloperHome() {
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("devHome");
   const th = await getTranslations("home");
-  const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas()]);
+  const [engagements, ideas, recommended] = await Promise.all([myEngagements(), myIdeas(), recommendations()]);
   const { waiting, others } = homeGroups(engagements);
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
   const MfaIcon = mfa === "on" ? CheckIcon : mfa === "required" ? AlertIcon : InfoIcon;
@@ -85,6 +89,8 @@ export default async function DeveloperHome() {
             </ul>
           </section>
         ) : null}
+
+        <RecommendedForYou state={recommendationsState(recommended)} />
 
         {others.length > 0 ? (
           <section aria-labelledby="home-others" data-home="others">

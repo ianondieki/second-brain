@@ -78,6 +78,7 @@ from bridge.seed.demo.runtime import (
 )
 from bridge.seed.demo.scouts import SCOUTED, ensure_scout
 from bridge.seed.demo.subscriptions import seed_demo_subscriptions
+from bridge.seed.demo.trending import seed_trending
 
 __all__ = [
     "DemoKeysChanged",
@@ -138,6 +139,7 @@ async def seed_demo(
             for niche in seeded_niches():
                 card = seed_research_card(owner_engine, factory, actors, settings, STAFF_ADMIN, niche, report)
                 await step(f"research card {niche}", card)
+        await step("trending and liked niches", seed_trending(owner_engine, actors, niches, report))
         await step("free plans", _free_plans(owner_engine, settings))
         if SCOUTED.owner in report.users:
             await step(SCOUTED.key, ensure_proposal(owner_engine, actors, SCOUTED, niches, report))

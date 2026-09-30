@@ -46,6 +46,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "expressInterest",
   "tier2Share",
   "adminResearch",
+  "likedNiches",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

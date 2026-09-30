@@ -33,6 +33,7 @@ from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.logging import configure_logging
 from bridge.matching.matches import router as matches_router
+from bridge.matching.router import router as discover_router
 from bridge.matching.scouts import router as scouts_router
 from bridge.notifications.email import provider_from_settings
 from bridge.problems.router import router as problems_router
@@ -140,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(interest_router)
     app.include_router(scouts_router)
     app.include_router(matches_router)
+    app.include_router(discover_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)
