@@ -479,3 +479,21 @@ async def test_a_reviewer_whose_address_is_unverified_gets_no_digest(
     assert email.outbox == []
     [match] = await matches(owner_engine, scout)
     assert match.digest_sent_at is None
+
+
+async def test_an_e1_organisations_digest_reaches_its_verified_domain_reviewers(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """AC-SCOUT-8: an E1 organisation's scout runs and its digest reaches the listed reviewers at the verified domain
+    (its Express interest is 403 until E2: engagements/test_stage0.py)."""
+    world = await build(owner_engine, verification="e1")
+    org = world.org
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, org, [world.niche], recipients=[org.reviewer, org.reviewer_elsewhere])
+    scan_deps, email = deps(app_engine)
+    outcome = mine(await run_periodic(scan_deps, now=await clock_now(scan_deps.factory), force=True), scout)
+    assert (outcome.status, outcome.matched) == ("completed", 1)
+    assert outcome.digest is not None
+    assert outcome.digest.recipients == {org.reviewer: DeliveryStatus.SENT}
+    [message] = email.outbox
+    assert message.to.endswith(f"@{org.domain}")
