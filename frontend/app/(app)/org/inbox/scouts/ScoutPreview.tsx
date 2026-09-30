@@ -4,10 +4,11 @@ import type { Ref } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Badge } from "@/components/ui/Badge";
-import { Row, RowList } from "@/components/ui/RowList";
+// RowBase, not Row: these rows have no page, and RowBase's module leaves next/link out of the scout form's bundle.
+import { RowBase, RowList } from "@/components/ui/RowBase";
 
 import type { Preview } from "../../scout";
+import { FitBar } from "../matches/FitBar";
 
 /**
  * Preview matches (docs/spec/06 6.8; AC-SCOUT-5: the Preview equals the first digest): what these settings would have
@@ -38,7 +39,7 @@ export function ScoutPreview({ preview, headingRef }: { preview: Preview; headin
           </div>
           <RowList ordered aria-label={t("previewLabel")}>
             {preview.items.map((item) => (
-              <Row
+              <RowBase
                 key={item.proposal_id}
                 title={item.teaser.title ?? t("untitled")}
                 meta={
@@ -48,13 +49,16 @@ export function ScoutPreview({ preview, headingRef }: { preview: Preview; headin
                   </span>
                 }
                 badges={[
-                  <Badge key="fit" tone="accent" className="tabular-nums">
-                    {t("fit", { value: item.score })}
-                  </Badge>,
+                  <FitBar
+                    key="fit"
+                    value={item.score}
+                    short={t("fit", { value: item.score })}
+                    long={t("fitLong", { value: item.score })}
+                  />,
                 ]}
               >
                 <p className="max-w-[64ch] text-sm text-ink [overflow-wrap:anywhere]">{item.why}</p>
-              </Row>
+              </RowBase>
             ))}
           </RowList>
         </>

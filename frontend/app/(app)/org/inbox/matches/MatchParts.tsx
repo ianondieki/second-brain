@@ -3,26 +3,13 @@ import { useTranslations } from "next-intl";
 import { Section } from "@/components/ui/Section";
 
 import { whySourceOf, type Match } from "../../scout";
+import { FitBar } from "./FitBar";
 
-/**
- * The match's fit, 0 to 100: a short bar and the number (the bar is decoration; the words carry the meaning, and a
- * screen reader hears "Fit 82 out of 100"). `data-chip` counts it as one of the card's at most two chips.
- */
+/** The match's fit, 0 to 100, in the Scout matches' words (FitBar draws it). */
 export function FitMeter({ score }: { score: number }) {
   const t = useTranslations("scoutMatches");
   const value = Math.max(0, Math.min(100, Math.round(score)));
-  return (
-    <span data-chip="fit" className="inline-flex items-center gap-2 text-sm font-semibold text-jacaranda">
-      {/* Square ends: rounded-full is kept for the avatar and the one solid badge (the design plan's Radius). */}
-      <span aria-hidden="true" className="relative h-1.5 w-14 overflow-hidden bg-line">
-        <span className="absolute inset-y-0 left-0 bg-jacaranda" style={{ width: `${value}%` }} />
-      </span>
-      <span aria-hidden="true" className="tabular-nums">
-        {t("fit", { score: value })}
-      </span>
-      <span className="sr-only">{t("fitLong", { score: value })}</span>
-    </span>
-  );
+  return <FitBar value={value} short={t("fit", { score: value })} long={t("fitLong", { score: value })} />;
 }
 
 /**

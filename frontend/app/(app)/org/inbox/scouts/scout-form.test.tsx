@@ -165,6 +165,11 @@ describe("the scout form", () => {
     expect(preview.textContent).toContain("By jacaranda-otter-17");
     expect(preview.textContent).toContain("Matching proposals from the last 30 days: 1.");
     expect(document.activeElement?.id).toBe("preview-heading");
+    // Fix round 1: the fit is the same bar and words as the Scout matches' (FitBar), and a Preview row has no link.
+    const fit = preview.querySelector("[data-chip='fit']")!;
+    expect(fit.querySelector("[aria-hidden='true'] > span")).not.toBeNull(); // the bar
+    expect(fit.textContent).toMatch(/Fit \d+ out of 100/);
+    expect(preview.querySelectorAll("article a")).toHaveLength(0);
   });
 
   it("says at once that the plan lacks a chosen schedule, with the way to the plan that has it", () => {
