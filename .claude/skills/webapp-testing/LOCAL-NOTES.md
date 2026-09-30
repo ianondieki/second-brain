@@ -5,13 +5,20 @@ copies of anthropics/skills `skills/webapp-testing` at 8a1541c4a3ffa5a20a5a91de0
 change is that `scripts/with_server.py` is stored without the executable bit; run it as `python scripts/with_server.py`,
 as the skill already says. Provenance: `docs/platform/research/design-skills.md`.
 
+## Reference for approach only
+
+- **Python Playwright is not installed in this repo and must not be installed**: it would be a new dependency and a
+  network download (CLAUDE.md stop condition). This skill's Python scripts and examples are not run here; read them
+  only for the approach (reconnaissance, then action; screenshot, then selectors).
+- Screenshots and browser checks use the repo's TypeScript `@playwright/test` through `frontend/playwright.config.ts`,
+  following the patterns in `frontend/e2e/*.spec.ts`, against the local stack from `make dev`.
+
 ## Precedence
 
-- `CLAUDE.md` (Build workflow step 5: Playwright screenshots at 375px and 1440px) and `docs/spec/07` win over this
-  skill wherever they differ.
-- The repo's e2e conventions win: specs live in `frontend/e2e/*.spec.ts` (TypeScript `@playwright/test`), configured
-  by `frontend/playwright.config.ts` and run against the local stack from `make dev`. Use this skill's Python
-  scripts only for ad-hoc inspection and screenshots, never as a replacement for the e2e suite.
+- `CLAUDE.md` and `docs/spec/07` win over this skill wherever they differ.
+- Widths: screenshots at 375px and 1440px are the user's explicit instruction for UI work (P16). The automated page
+  checks (axe, primary action, horizontal scroll) run at 360px, per spec 04/07 and the `mobile-360` project in
+  `frontend/playwright.config.ts`.
 
 ## Waiting
 

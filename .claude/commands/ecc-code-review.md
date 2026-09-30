@@ -32,10 +32,11 @@ Uncommitted changes (default):
 git diff --name-only HEAD
 ```
 
-Committed changes on this branch (when `$ARGUMENTS` contains `--branch`), against the integration branch:
+Committed changes on this branch (when `$ARGUMENTS` contains `--branch`), against the remote integration branch
+(uses the last fetched `origin/` ref; this command does not fetch):
 
 ```bash
-git diff --name-only claude/eloquent-hypatia-aa3577...HEAD
+git diff --name-only origin/claude/eloquent-hypatia-aa3577...HEAD
 ```
 
 If no changed files, stop: "Nothing to review."
