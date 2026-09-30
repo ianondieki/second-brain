@@ -10,3 +10,5 @@ cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:jwt:163
 # P2 proposals tests: distinctive Tier-2 marker strings (SECRET_APPROACH, SECRET_PRICING) asserted never to leak; not secrets.
 19a3d106039dae7f3aa98bc429afce29abef7d9e:backend/tests/integration/proposals/helpers.py:generic-api-key:31
 19a3d106039dae7f3aa98bc429afce29abef7d9e:backend/tests/integration/proposals/helpers.py:generic-api-key:32
+# P16-E1 (feat/P16-backend-consistency): a made-up password in a test proving a 422 never quotes the refused value; not a secret.
+b6f22870b19c7944a88e4d5bab6e8f929e9d2ae3:backend/tests/unit/test_error_shape.py:generic-api-key:178
