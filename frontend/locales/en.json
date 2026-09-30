@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
+    "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead",
     "review": "[[COPY-REVIEW]] G2/G5",
@@ -733,7 +734,9 @@
     "title": "Staff console",
     "navLabel": "Staff console",
     "nav": {
-      "research": "Research"
+      "research": "Research",
+      "moderation": "Moderation",
+      "claims": "Claims"
     },
     "noSection": "Your staff role has no console section yet.",
     "noSectionAction": "Go to your home page"
@@ -864,6 +867,250 @@
       "openPublic": "Open the public card",
       "rejected": "Rejected. The card stays private.",
       "backToResearch": "Back to Research"
+    }
+  },
+  "adminModeration": {
+    "pageTitle": "Moderation",
+    "title": "Moderation",
+    "lead": "Proposals and problems the automatic check held or queued for a person to read. Work from the oldest.",
+    "notAllowed": "Moderation is for staff admins and moderators.",
+    "notAllowedAction": "Back to the console",
+    "tabsLabel": "Cases",
+    "tabs": {
+      "open": "Open",
+      "decided": "Decided"
+    },
+    "reviewOldest": "Review the oldest case",
+    "listOpen": "Open cases, oldest first",
+    "listDecided": "Decided cases, newest first",
+    "emptyOpen": "No cases are waiting for a decision.",
+    "emptyOpenAction": "See decided cases",
+    "emptyDecided": "No case has been decided yet.",
+    "emptyDecidedAction": "See open cases",
+    "kind": {
+      "proposal": "Proposal",
+      "problem": "Problem",
+      "org_claim": "Claim dispute",
+      "other": "Other case"
+    },
+    "untitled": {
+      "proposal": "Untitled proposal",
+      "problem": "Untitled problem",
+      "org_claim": "Competing claim on an organisation",
+      "other": "Case without a title"
+    },
+    "filed": "Filed {date}",
+    "source": {
+      "prescreen": "Filed by the automatic check",
+      "regex": "Filed by the automatic check",
+      "report": "Filed from a report",
+      "claim_dispute": "Filed when a second claim arrived",
+      "tier2_similarity": "Filed by the similarity check"
+    },
+    "visibility": {
+      "hidden": "Hidden until decided",
+      "public": "Public while checked",
+      "rejected": "Hidden: rejected",
+      "gone": "No longer exists"
+    },
+    "outcome": {
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "decidedBy": {
+      "approved": "Approved by {name} on {date}.",
+      "rejected": "Rejected by {name} on {date}."
+    },
+    "decidedOn": {
+      "approved": "Approved on {date}.",
+      "rejected": "Rejected on {date}."
+    },
+    "reason": {
+      "names_real_org_negative": "Speaks negatively of a named organisation",
+      "security_vulnerability": "Describes a security weakness",
+      "new_developer_problem": "New problem from a developer",
+      "new_version_of_moderated_proposal": "New version of a checked proposal",
+      "spam": "Looks like spam",
+      "defamation": "May be defamatory",
+      "false_affiliation": "Claims a link it may not have",
+      "third_party_personal_data": "Contains someone else's personal data",
+      "malicious_links": "Contains a suspicious link",
+      "other": "Another reason from the check"
+    },
+    "field": {
+      "title": "Title",
+      "problem_statement": "Problem statement",
+      "impact_claims": "Impact claims",
+      "summary": "Summary",
+      "statement": "Statement",
+      "other": "Other field"
+    },
+    "case": {
+      "pageTitle": "Moderation case",
+      "back": "Back to Moderation",
+      "gone": "This case is not in the queue.",
+      "goneAction": "Back to Moderation",
+      "reasonsHeading": "Why it is here",
+      "textHeading": "Text under review",
+      "textLead": "The public summary as it reads now, field by field. Confidential details are never shown here.",
+      "flagged": "Flagged",
+      "noText": "There is no text to show for this case.",
+      "decisionHeading": "Decision",
+      "leadHidden": "Approve to make it public, or reject to keep it hidden.",
+      "leadPublic": "Approve to keep it public, or reject to take it down."
+    },
+    "decision": {
+      "approve": "Approve",
+      "approving": "Approving…",
+      "reject": "Reject",
+      "rejecting": "Rejecting…",
+      "rejectConfirmProposal": "Reject this proposal? It stays hidden. A new version from its author is checked again.",
+      "rejectConfirmProblem": "Reject this problem? It is hidden from everyone and is not published.",
+      "rejectYes": "Yes, reject",
+      "cancel": "Cancel",
+      "approvedProposal": "Approved. The proposal is public now.",
+      "approvedProblem": "Approved. The problem is published.",
+      "rejected": "Rejected. It is hidden now.",
+      "changed": "The author published a new version while you were reviewing it. The text above is the new version: read it again, then decide.",
+      "next": "Review the next case",
+      "back": "Back to Moderation"
+    },
+    "blocked": {
+      "already_decided": "This case has already been decided.",
+      "unsupported_subject": "Cases of this kind are decided from their own queue, not here.",
+      "subject_gone": "What this case is about no longer exists, so there is nothing to decide.",
+      "own_content": "You wrote this, so another moderator has to decide it.",
+      "cannot_approve_vulnerability": "This text describes a security weakness, so it can never be made public. Reject it: its author can publish a corrected version, which is checked again."
+    },
+    "refusal": {
+      "already_decided": "Someone else decided this case a moment ago. Their decision is shown below.",
+      "not_found": "This case is no longer in the queue.",
+      "own_content": "This is your own content, so you cannot decide it.",
+      "subject_gone": "What this case is about no longer exists, so there is nothing to decide.",
+      "cannot_approve_vulnerability": "This text describes a security weakness, so it cannot be approved. Reject it instead.",
+      "unsupported_subject": "Cases of this kind are decided from their own queue, not here.",
+      "forbidden": "Your staff role cannot decide moderation cases.",
+      "generic": "That did not work. Check your connection and try again."
+    }
+  },
+  "adminClaims": {
+    "pageTitle": "Claims",
+    "title": "Claims",
+    "lead": "People asking to manage an organisation's page. Staff review a claim within {days, plural, one {# business day} other {# business days}}.",
+    "notAdmin": "Claims are for staff admins.",
+    "notAdminAction": "Back to the console",
+    "tabsLabel": "Claim views",
+    "tabs": {
+      "review": "Review",
+      "in_progress": "In progress",
+      "closed": "Closed"
+    },
+    "list": {
+      "review": "Claims waiting for review, oldest first",
+      "in_progress": "Claims waiting for the claimant, newest first",
+      "closed": "Closed claims, newest first"
+    },
+    "empty": {
+      "review": "No claims are waiting for review.",
+      "in_progress": "No claims are waiting for the claimant.",
+      "closed": "No claim has been closed yet."
+    },
+    "emptyAction": {
+      "review": "See claims in progress",
+      "in_progress": "See claims waiting for review",
+      "closed": "See claims waiting for review"
+    },
+    "unnamed": "Organisation {id}",
+    "unnamedNote": "Staff cannot see this organisation's name because it is not listed in the directory.",
+    "level": {
+      "e1": "Asks for E1 (domain verified)",
+      "e2": "Asks for E2 (registration documents)"
+    },
+    "status": {
+      "otp_sent": "Waiting for the email code",
+      "dns_pending": "Waiting for the DNS record",
+      "pending_review": "Waiting for review",
+      "disputed": "Disputed: a competing claim",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "sla": {
+      "due": "Due in {days, plural, one {# business day} other {# business days}}",
+      "today": "Due today",
+      "overdue": "Overdue",
+      "dueBy": "Due by the end of {date}."
+    },
+    "by": "By {name}",
+    "filed": "Filed {date}",
+    "detail": {
+      "pageTitle": "Claim",
+      "back": "Back to Claims",
+      "gone": "There is no such claim.",
+      "goneAction": "Back to Claims",
+      "readOnly": "Deciding claims is not part of this prototype, so this page is for reading only.",
+      "claimHeading": "Claim",
+      "level": "Asks for",
+      "status": "Status",
+      "filed": "Filed",
+      "updated": "Last change",
+      "closed": "Closed",
+      "reviewTime": "Review time",
+      "claimantHeading": "Claimant",
+      "name": "Name",
+      "email": "Address the code went to",
+      "domain": "Claimed domain",
+      "domainOfficial": "Official domain of the organisation",
+      "yes": "Yes",
+      "no": "No",
+      "checksHeading": "Checks",
+      "emailCode": "Email code",
+      "confirmedOn": "Confirmed on {date}",
+      "notConfirmed": "Not confirmed",
+      "codeUse": "Wrong attempts: {attempts}. Codes re-sent: {reissues}.",
+      "dns": "DNS record",
+      "foundOn": "Found on {date}",
+      "notFound": "Not found yet",
+      "evidenceHeading": "Evidence for E2",
+      "evidenceLead": "Personal and registration details: shown on this page only.",
+      "registrationNo": "Registration number",
+      "cr12Date": "CR12 dated",
+      "kraPin": "KRA PIN",
+      "sectorRegister": "Sector register",
+      "publicEntity": "Public entity",
+      "requested": "Requested",
+      "notRequested": "Not requested",
+      "documents": "Documents",
+      "noDocuments": "None uploaded",
+      "documentCount": "{count, plural, one {# uploaded} other {# uploaded}}",
+      "documentsNote": "Documents cannot be opened in this prototype.",
+      "notGiven": "Not given",
+      "orgHeading": "Organisation",
+      "kind": "Type",
+      "verification": "Verification",
+      "officialDomains": "Official domains",
+      "verifiedDomain": "Verified domain",
+      "none": "None",
+      "othersHeading": "Other open claims on this organisation",
+      "casesHeading": "Moderation cases about this claim",
+      "caseLine": "Filed {date}",
+      "decisionHeading": "Decision",
+      "reviewedBy": "Reviewed by",
+      "reason": "Reason given"
+    },
+    "verification": {
+      "unclaimed": "Unclaimed (E0)",
+      "pending": "Pending",
+      "e1": "Domain verified (E1)",
+      "e2": "Registration documents verified (E2)",
+      "rejected": "Rejected"
+    },
+    "caseStatus": {
+      "open": "Open",
+      "held": "Held",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "escalated": "Escalated"
     }
   },
   "problem": {

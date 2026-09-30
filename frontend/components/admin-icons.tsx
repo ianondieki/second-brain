@@ -14,3 +14,25 @@ export function ResearchIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Moderation: a shield with a tick (content checked before it goes out). */
+export function ModerationIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10 2.75 3.75 5.25v4.5c0 3.6 2.6 6.4 6.25 7.5 3.65-1.1 6.25-3.9 6.25-7.5v-4.5Z" />
+      <path d="m7.25 10 2 2 3.5-3.75" />
+    </Icon>
+  );
+}
+
+/** Claims: a building with a small badge (an organisation asking to be verified). */
+export function ClaimsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.25 16.75h9.5M4.75 16.75V5.25l5-2.5 1.5.75v13.25" />
+      <path d="M7.25 7.75h.01M7.25 10.75h.01M7.25 13.75h.01" strokeWidth="2.25" />
+      <circle cx="14.75" cy="12.75" r="2.75" />
+      <path d="m13.75 15.25-.5 2 1.5-.75 1.5.75-.5-2" />
+    </Icon>
+  );
+}

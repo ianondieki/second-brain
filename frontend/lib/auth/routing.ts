@@ -9,9 +9,9 @@ export type StaffRole = NonNullable<Me["user"]["staff_role"]>;
 
 /**
  * Staff roles that have a section in the staff console (components/AdminNav.tsx ADMIN_SECTIONS; its test keeps the
- * two in step). P15 adds "moderator" with Moderation.
+ * two in step): staff admins (Research, Moderation, Claims) and moderators (Moderation).
  */
-export const CONSOLE_ROLES: readonly StaffRole[] = ["admin"];
+export const CONSOLE_ROLES: readonly StaffRole[] = ["admin", "moderator"];
 
 /**
  * The portal home of a signed-in side. Staff use the developer portal like everyone else there (a staff member who

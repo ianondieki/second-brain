@@ -94,3 +94,154 @@ Open items (P15-B):
 
 - `admin/moderation.py:261`: nothing pins that `subject_gone` is checked before `case_changed`; the gone-case test should
   also send a stale non-null `subject_version_id` and expect `subject_gone`.
+
+## Prototype P15-F (M2 queue screens, 2026-09-30): built
+
+Branch `feat/REQ-ADM-01-fe` (from P15-B `05394b1`, with integration `c0a460a` merged for P11-F's `/admin` shell);
+frontend only, against the frozen `backend/openapi.json` (unchanged).
+
+| Area | Files |
+|---|---|
+| Navigation | `frontend/components/{AdminNav.tsx, AdminNav.test.tsx, admin-icons.tsx}` (Moderation: admin, moderator; Claims: admin), `frontend/lib/auth/routing.ts` (`CONSOLE_ROLES` admin, moderator; test in `validation.test.ts`), `app/(admin)/admin/page.tsx` (comment) |
+| Console shared | `app/(admin)/admin/{load.ts, ViewTabs.tsx, strings.ts}` (research's server reads moved to `load.ts` unchanged; step-up strings trimmed to `adminResearch.stepUp` + `refusal.generic`) |
+| Moderation | `app/(admin)/admin/moderation/{page.tsx, CaseRow.tsx, CaseDecision.tsx, moderation.ts, calls.ts, data.ts, strings.ts, cases/[id]/page.tsx}` + `moderation.test.ts`, `moderation-screens.test.tsx`, `case-page.test.tsx` |
+| Claims | `app/(admin)/admin/claims/{page.tsx, ClaimRow.tsx, claims.ts, data.ts, [id]/page.tsx}` + `claims.test.ts`, `claims-page.test.tsx` |
+| Strings | `frontend/locales/{en,sw}.json` (`admin.nav.moderation`, `admin.nav.claims`, `adminModeration.*`, `adminClaims.*` inserted after `adminResearch`; `_meta.reviewP15f` after `_meta.reviewP11f`), `lib/i18n/client-strings.ts` (`adminModeration`, mid-list) |
+| E2E | `frontend/e2e/moderation.spec.ts`, `frontend/e2e/support/moderation-scene.ts`, `e2e/support/totp.ts` (`base32Encode`, `demoTotpSecret`; `test/demo-totp.test.ts`), `e2e/support/research-scene.ts` (`newStaffAdmin({ role })`), `e2e/research.spec.ts` (console paths; an admin has a tab bar now) |
+
+**What it does.** A moderator's console home is Moderation (their one section, no tab bar on phones); a staff admin
+has Research, Moderation and Claims (bottom tabs under 1024 px); support keeps the no-section home. `/admin/moderation`:
+Open (oldest first) and Decided (newest decision first) as link tabs; "Review the oldest case" (the oldest case this
+moderator can decide) is the one primary action; each row has the subject kind, its title, the start of its public
+summary and at most two tags (visibility: hidden until decided, public while checked; or the outcome once decided; and
+the first reason). `/admin/moderation/cases/{id}` (found in the open list, then the decided one): the reasons as fixed
+sentences (routine ones with the info mark, flags with the warning mark), the Tier-1 text field by field in a panel
+where a flagged field carries a margin rule, a warning mark and the word "Flagged" (never colour alone), and the
+decision. Approve sends `subject_version_id`; Reject asks once more (the question group takes focus, Cancel returns it).
+A stale second factor shows P11-F's `StepUp` in place of the buttons, then repeats the decision. `case_changed`
+refreshes the page (the new version's text and choices) and the status line explains; `already_decided` refreshes to
+show who decided; `not_found`, `own_content`, `unsupported_subject` and `forbidden` leave only "Back to Moderation";
+`cannot_approve_vulnerability` leaves only Reject. The status line (`role="status"`) is always in the tree, is the same
+node across refreshes and step-ups (the client component is keyed), and takes focus on every change. After a decision:
+"Review the next case" (primary) and the way back. A case whose `blocked` leaves no action shows its fixed sentence and
+no buttons. `/admin/claims` (staff admin): Review, In progress and Closed; one tag per claim (the review SLA as a mark
+and words: "Due in N business days", "Due today", "Overdue" with the warning mark; else the status), what it asks for,
+claimant, domain, date; no registration number, KRA PIN or address. `/admin/claims/{id}`: one sentence that deciding
+claims is not in the prototype, the claim, claimant (address), checks, the E2 evidence (registration number, CR12 date,
+KRA PIN, sector register, public entity, document count; "shown on this page only"), the organisation, other open
+claims and moderation cases; no buttons. An organisation staff cannot read is "Organisation <id>" (short id in the list,
+whole id on the page) with a plain note.
+
+**Tests.** Vitest: `moderation.test.ts` (views, kinds, titles, reasons and tones, fields, visibility, outcomes, every
+refusal mapped without the API's words, a 404 always "not found"), `moderation-screens.test.tsx` (approve with focus on
+the status line and the next case, problem wording, Reject asked twice with focus, `case_changed` refresh then the new
+version sent with the same status node, step-up then repeat, step-up cancel focus, `already_decided`, four back-only
+refusals, vulnerability reject-only, generic, blocked without actions), `case-page.test.tsx` (server-rendered case page:
+flagged field by mark and word, unknown reason, blocked, decided, gone, step-up, support; queue: two tags, the primary
+action skips a case the moderator cannot decide, empty state, decided view), `claims.test.ts`, `claims-page.test.tsx`
+(SLA mark and words, no personal data in the list, unnamed organisation, statuses, empty views, moderator refused,
+step-up; detail evidence, read-only sentence, no buttons, gone), `AdminNav.test.tsx`, `validation.test.ts`,
+`demo-totp.test.ts`. Playwright `moderation.spec.ts` (both projects; `checkScreen` on every screen): walkthrough step 6
+on the demo seed (desktop: the demo moderator sees held P6 with its reason, the flagged problem statement, approves it,
+the teaser goes from 404 to 200 for a developer, and the decided view names who approved; 360 px: the demo admin opens
+Moderation from the tab bar and approves P6's new problem); a staff admin reads County C's claim (SLA mark and words, no
+address in the list, the read-only sentence, no buttons, the Closed view); own scene: a moderator is refused Claims,
+Reject is asked twice with focus, a new version plus a stale second factor gives the code form, then the "new version"
+status with the new text, then approval publishes; vulnerability content offers Reject only and stays hidden.
+`research.spec.ts`: the unknown-address check covers the four new paths. The whole suite (128 tests, both projects) passed on an
+isolated stack with a fresh demo seed. JS (gzipped, `npm run budget`, signed in): `/admin/moderation` 144.0 KB, the case
+page 146.7 KB, `/admin/claims` and a claim 144.0 KB, `/admin/research` 145.5 KB (budget 150 KB; the case page is 150.4
+KB with response headers, D-28).
+
+**Open items (P15-F).**
+
+1. **Blocked cases with an action.** The brief asked for "no actions" when a case has `blocked`; the API gives
+   `cannot_approve_vulnerability` with `actions: ["reject"]` (REQ-PROP-02: vulnerability content is rejected, never
+   approved), so that case shows its fixed sentence and Reject only. Every other `blocked` shows the sentence and no
+   buttons.
+2. **Demo cases are single-use** (superseded in the fix round below: each run now puts its item back). Each demo case can be decided once and each demo login can sign in from one project
+   at a time (the API refuses a reused TOTP code), so the walkthrough approves P6 on desktop (demo moderator) and P6's
+   new problem at 360 px (demo admin); the claims test uses its own staff admin. A rerun, or a CI retry after the
+   approval, needs a freshly seeded demo; `expectDemoQueues` (beforeAll) says so when the seed is missing.
+3. **No single-case route.** The case page reads the open list, then the decided list (200 each);
+   a decided case past the decided list's end reads as "not in the queue". A `GET /api/admin/moderation/cases/{id}`
+   would remove both reads.
+4. **Step-up strings are P11-F's** (`adminResearch.stepUp.*`, sent trimmed); a console-wide namespace would be cleaner
+   when the Research strings next move.
+5. **Claims SLA and names** inherit P15-B open items 1 and 2 (unlisted organisations by id; the SLA counts from
+   `created_at`).
+6. **Copy.** All new strings are `[[COPY-REVIEW]]` (`_meta.reviewP15f`); Swahili is a draft (`[[SW-REVIEW]]`).
+   `adminModeration.reason.*` names the pre-screen's codes; the Haiku classes (spam, defamation, …) are ready for when
+   it plugs in.
+7. **Commit size.** `3201d8b` (moderation screens with their tests, +1137) and `18f7be2` (both locale files, +492) are
+   over about 300 lines.
+8. **`impeccable`** is not installed here; the polish pass was by hand against docs/spec/07 with screenshots at 375 and
+   1440 px.
+
+### P15-F fix round 1 (reviewer: 3 MAJORs, 2 MINORs; ux-reviewer: 1 MAJOR)
+
+Integration merged first (`a9c7cd9`: P15-B `a5386ad`, P16-A `b5c344f`; the card's conflict kept both sections).
+
+- **MAJOR 1, `subject_gone`** (`e25db0d`). The decision route's 409 `subject_gone` is a refusal of its own
+  (`adminModeration.refusal.subject_gone`, en and sw, `[[COPY-REVIEW]]`): only "Back to Moderation" remains and the page
+  is fetched again (`REFRESH_AFTER`: `already_decided`, `subject_gone`, `cannot_approve_vulnerability`).
+  `refusal.own_content` no longer says "or it no longer exists". Tests: `refusalOf`/`refusalNext` cases, the screen's
+  back-only table with the refresh asserted.
+- **MAJOR 2, the repeated decision** (`a4a4c1a`). A stale second factor on Reject repeats Reject
+  (`toHaveBeenNthCalledWith(1|2, CASE_ID, "reject", VERSION)`); the Approve test pins its second call. The mutant
+  `onConfirmed={() => run("approve")}` is killed.
+- **MAJOR 3, the walkthrough's order and retries** (`48f3eb0`). Each project puts back only the demo item it decides
+  (`reopenDemoItem`, owner SQL: desktop P6 held, 360 px P6's problem clear and published; its case open with
+  `decided_by`/`decided_at` cleared) in `beforeEach`, then `expectDemoQueues(item)` checks that case is unresolved; the
+  360 run asserts only on its own problem case. A rerun also exposed that a retry in a new worker reused a demo TOTP
+  window the API had accepted: demo staff codes now start after `users.totp_last_counter` (owner read). Both projects
+  pass in either order and twice in a row (`--repeat-each 2`) with `--workers=1` only: two repeats of one project in
+  parallel workers would share its demo item and demo login (a CI retry runs after the failed attempt, so it is not
+  affected).
+- **UX MAJOR, the decided header** (`0be13f2`). A decided case's header shows the outcome (Approved/Rejected, mark and
+  word) instead of the visibility tag of a case being checked; vitest (and a mutant) and the E2E check the refreshed
+  header.
+- **MINORs** (`3409800`). `calls.test.ts` (path, CSRF, body `{decision, subject_version_id}`, null version, refusal by
+  code, thrown fetch → generic); `data.test.ts` (no next case when the only other open case has `actions: []`, the
+  oldest decidable other case, decided and unknown cases).
+
+Checks: eslint, typecheck, vitest (74 files, 962 tests), `api:check`, copy lint, traceability; Playwright
+`moderation.spec.ts` and `research.spec.ts` (16 tests, both projects) on an isolated stack, removed afterwards.
+
+Left open: the demo reset writes the proposal's `moderation_state` and the cases as the database owner (test data
+only); a re-approval of P6 writes another `proposal_published` signal and queues another `scouts.on_new` run, harmless
+on a test stack.
+
+### P15-F fix round 2 (reviewer CHANGES_REQUIRED on 67d8249: one MAJOR, three MINORs)
+
+Integration merged first (`449764c`: P12-B `ac032f3`, P12-F `3c5c710`; no conflict).
+
+- **MAJOR, the demo reset's scope.** `DEMO_SUBJECT` finds P6 and its problem by title only among rows whose
+  `proposals.owner_id` / `problems.created_by` is a `users.demo_account` (set by the demo seed, never by the
+  application), so a real person's proposal or problem with the same title is never read or changed. `demoItemId`
+  fails unless exactly one such row exists; `reopenDemoItem` updates that id (again only while its owner is a demo
+  account) and its case in one statement and fails unless exactly one subject and one case changed (`"1,1"`). The
+  walkthrough reads P6's id the same way.
+- **MINOR 1.** The reset and `expectDemoQueues(item)` run at the start of the walkthrough test only; the claims test no
+  longer depends on them (its `beforeAll` checks the demo staff and County C's claim).
+- **MINOR 2.** The problem's reset also clears `problems.moderator_id`.
+- **MINOR 3.** The `--repeat-each 2` claim above is scoped to `--workers=1`.
+
+Checks: eslint, typecheck, vitest (79 files, 1018 tests), `api:check`, copy lint, traceability; Playwright
+`moderation.spec.ts` and `research.spec.ts` (16 tests, both projects) on a fresh isolated demo stack, removed
+afterwards; the walkthrough twice with `--workers=1`; with P6's owner's `demo_account` turned off the walkthrough fails
+at "exactly one demo proposal" and changes nothing.
+
+## Review MINORs at merge (P15-F: reviewer PASS on 4f0ae1f, ux-reviewer PASS on 67d8249; carried)
+1. `e2e/support/moderation-scene.ts:119`: the "1,1" check runs after psql autocommits, so a mismatch leaves the demo
+   rows changed; wrap it in a transaction that raises inside SQL.
+2. `CaseDecision.tsx:179-186`: a decided case says "Approved" three times (header chip, Decision chip, the line); drop
+   the Decision chip.
+3. `cases/[id]/page.tsx:146-151`: after `subject_gone` the "Text under review" section is empty filler; omit it when
+   gone, and word the heading neutrally once decided.
+4. `CaseDecision.tsx:189-190`: the `back(true)` branch lacks `flex flex-col items-start`, so "Back to Moderation"
+   stretches to 576 px at 1440.
+5. `REFRESH_AFTER` lacks `not_found`: after a 404 the header keeps "Hidden until decided" and the approve/reject lead;
+   hide the server lead whenever a refusal shows.
+6. `CaseRow.tsx:48`, `ClaimRow.tsx:41`: row titles are `<h3>` under the `<h1>` (axe moderate `heading-order`).
+7. The shared AccountMenu shows "Plan & billing" to staff-only accounts (predates P16-A).

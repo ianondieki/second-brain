@@ -60,7 +60,15 @@ async function expectUnknownAddress(page: Page, paths: string[]) {
   }
 }
 
-const CONSOLE_PATHS = ["/admin", "/admin/research", "/admin/research/candidates/01a0ee62-f783-733e-9321-9f34ec389ac2"];
+const CONSOLE_PATHS = [
+  "/admin",
+  "/admin/research",
+  "/admin/research/candidates/01a0ee62-f783-733e-9321-9f34ec389ac2",
+  "/admin/moderation",
+  "/admin/moderation/cases/01a0ee62-f783-733e-9321-9f34ec389ac2",
+  "/admin/claims",
+  "/admin/claims/01a0ee62-f783-733e-9321-9f34ec389ac2",
+];
 
 test("the staff console answers signed-out visitors and people who are not staff like an unknown address", async ({
   page,
@@ -97,13 +105,11 @@ test.describe("a staff admin", () => {
     // Signing in lands on the staff console, which opens Research.
     await signIn(page, staff);
     await expect(page).toHaveURL(/\/admin\/research$/, SERVER_STEP);
+    // A staff admin has Research, Moderation and Claims: the rail from 1024 px, bottom tabs on a phone (P15).
     const nav = page.getByRole("navigation", { name: "Staff console" });
-    if (info.project.name === "desktop") {
-      expect(await nav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
-      await expect(nav.getByRole("link", { name: "Research" })).toHaveAttribute("aria-current", "page");
-    } else {
-      await expect(nav).toBeHidden(); // one section: no tab bar on a phone
-    }
+    await expect(nav).toBeVisible();
+    expect(await nav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
+    await expect(nav.getByRole("link", { name: "Research" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: "Research", level: 1 })).toBeVisible();
     await checkScreen(page);
 

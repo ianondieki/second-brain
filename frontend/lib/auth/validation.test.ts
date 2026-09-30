@@ -66,7 +66,8 @@ describe("routing helpers", () => {
     const off = { required: true, enrolled: false, verified: false };
     expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "admin" } })).toBe("/admin");
     expect(homeOf({ side: "staff", mfa: off, user: { staff_role: "admin" } })).toBe("/dev");
-    expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "moderator" } })).toBe("/dev");
+    expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "moderator" } })).toBe("/admin");
+    expect(homeOf({ side: "staff", mfa: off, user: { staff_role: "moderator" } })).toBe("/dev");
     expect(homeOf({ side: "staff", mfa: on, user: { staff_role: "support" } })).toBe("/dev");
     expect(homeOf({ side: "org", mfa: on, user: { staff_role: null } })).toBe("/org");
     expect(homeOf({ side: "developer", mfa: on })).toBe("/dev");
