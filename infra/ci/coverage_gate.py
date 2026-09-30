@@ -7,8 +7,8 @@ backend/pyproject.toml measures ``bridge`` with branch coverage). Every figure i
 coverage reports ``percent_covered``: (covered lines + covered branches) / (statements + branches). The total must be at
 least 85 %, and each of the five security packages (``bridge.auth``, ``bridge.tenancy``, ``bridge.billing``,
 ``bridge.provenance``, ``bridge.engagements``) at least 95 %, compared exactly (a figure is never rounded up to pass).
-It fails closed: a report without branch data, a summary without its counts, or no measured file of one of the five
-packages fails the gate.
+It fails closed: a report without branch data, a summary without its counts or covering more than it counts, or a
+package with no measured file (or only files with nothing to measure) fails the gate.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ PACKAGES = ("auth", "tenancy", "billing", "provenance", "engagements")
 ROOT_PACKAGE = "bridge"
 WORST_FILES = 5  # the files listed under a package below its minimum, lowest first
 COUNTS = ("covered_lines", "num_statements", "covered_branches", "num_branches")
+TOTALS = "the totals"
 
 
 class ReportError(Exception):
@@ -55,15 +56,25 @@ class Figure:
         return f"{math.floor(self.ratio * 100) / 100:.2f} %"
 
 
-def figure_of(summary: Any) -> Figure:
+def figure_of(summary: Any, where: str) -> Figure:
+    """The counts of one summary (a file's, or the totals, named by ``where``); a count that is missing, negative or
+    larger than what it counts out of (a report that would pass at 500 %) makes the report unreadable."""
     if not isinstance(summary, Mapping):
-        raise ReportError("a summary is not an object")
+        raise ReportError(f"the summary of {where} is not an object")
     counts: dict[str, int] = {}
     for key in COUNTS:
         value = summary.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise ReportError(f"a summary has no count {key!r} (was the report made with branch = true?)")
+            raise ReportError(f"{where} has no count {key!r} (was the report made with branch = true?)")
         counts[key] = value
+    verb = "count" if where == TOTALS else "counts"
+    for covered, total, what in (
+        ("covered_lines", "num_statements", "lines"),
+        ("covered_branches", "num_branches", "branches"),
+    ):
+        if counts[covered] > counts[total]:
+            of = "statements" if what == "lines" else "branches"
+            raise ReportError(f"{where} {verb} more covered {what} than {of} ({counts[covered]} of {counts[total]})")
     return Figure(
         counts["covered_lines"] + counts["covered_branches"], counts["num_statements"] + counts["num_branches"]
     )
@@ -93,12 +104,13 @@ def evaluate(report: Any) -> Verdict:
         raise ReportError("the report has no branch data ([tool.coverage.run] branch = true)")
     if not isinstance(files, Mapping):
         raise ReportError("the report lists no files")
-    total = figure_of(report.get("totals"))
+    total = figure_of(report.get("totals"), TOTALS)
     by_package: dict[str, dict[str, Figure]] = {name: {} for name in PACKAGES}
     for path, entry in files.items():
         package = package_of(str(path))
         if package in by_package:
-            by_package[package][str(path)] = figure_of(entry.get("summary") if isinstance(entry, Mapping) else None)
+            summary = entry.get("summary") if isinstance(entry, Mapping) else None
+            by_package[package][str(path)] = figure_of(summary, str(path))
 
     lines = ["Coverage gate: statements and branches combined (REQ-FND-01, docs/spec/08)"]
     failures: list[str] = []
@@ -108,11 +120,15 @@ def evaluate(report: Any) -> Verdict:
         failures.append(f"total {total.shown()} is below {TOTAL_MINIMUM} %")
     for package in PACKAGES:
         measured = by_package[package]
-        if not measured:
-            lines.append(f"  {package:<12} {'-':>9}  minimum {PACKAGE_MINIMUM} %  NOT MEASURED")
-            failures.append(f"no file of {ROOT_PACKAGE}.{package} was measured")
-            continue
         figure = sum(measured.values(), Figure(0, 0))
+        if figure.measured == 0:  # no file, or files with no statement or branch between them: never 100 %
+            lines.append(f"  {package:<12} {'-':>9}  minimum {PACKAGE_MINIMUM} %  NOT MEASURED")
+            failures.append(
+                f"the measured files of {ROOT_PACKAGE}.{package} hold no statement or branch"
+                if measured
+                else f"no file of {ROOT_PACKAGE}.{package} was measured"
+            )
+            continue
         ok = figure.meets(PACKAGE_MINIMUM)
         lines.append(f"  {package:<12} {figure.shown():>9}  minimum {PACKAGE_MINIMUM} %  {'ok' if ok else 'BELOW'}")
         if not ok:

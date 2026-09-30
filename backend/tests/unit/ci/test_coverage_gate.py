@@ -144,6 +144,21 @@ def test_a_package_that_was_not_measured_fails_closed(tmp_path: Path) -> None:
     assert "::error title=Coverage below the gate::no file of bridge.engagements was measured" in result.stdout
 
 
+@pytest.mark.parametrize("files", [1, 3], ids=["one-empty-module", "three-empty-modules"])
+def test_a_package_whose_files_hold_nothing_to_measure_fails_closed(tmp_path: Path, files: int) -> None:
+    """Measured files with no statement and no branch between them (only empty ``__init__.py`` modules left, say) are
+    not a package at 100 %: nothing of it was measured."""
+    report_files = {path: data for path, data in healthy().items() if "/provenance/" not in path}
+    for n in range(files):
+        report_files[f"src/bridge/provenance/sub{n}/__init__.py"] = summary((0, 0))
+    result = gate(tmp_path, report(report_files))
+    assert result.returncode == 1
+    assert figures(result.stdout)["provenance"] == "- NOT MEASURED"
+    expected = "the measured files of bridge.provenance hold no statement or branch"
+    assert f"::error title=Coverage below the gate::{expected}" in result.stdout
+    assert result.stdout.count("::error") == 1
+
+
 def test_files_are_grouped_by_the_package_under_bridge_on_any_path(tmp_path: Path) -> None:
     """Subpackages count for their package; ``bridge``'s own modules and other trees count for none; Windows paths
     and a checkout directory that is itself called bridge are read the same."""
@@ -159,6 +174,8 @@ def test_files_are_grouped_by_the_package_under_bridge_on_any_path(tmp_path: Pat
 
 # ------------------------------------------------------------------------------------------------ fail closed
 
+HEALTHY_TOTALS = {"totals": report(healthy())["totals"]}  # valid totals, to isolate a bad file's summary
+
 
 @pytest.mark.parametrize(
     ("content", "reason"),
@@ -169,8 +186,35 @@ def test_files_are_grouped_by_the_package_under_bridge_on_any_path(tmp_path: Pat
         ({"meta": {"branch_coverage": True}, "totals": summary((1, 1))}, "lists no files"),
         (report(healthy()) | {"totals": {"covered_lines": 1}}, "no count"),
         (report(healthy()) | {"files": {"src/bridge/auth/x.py": {"summary": {"covered_lines": "9"}}}}, "no count"),
+        (
+            report(healthy() | {"src/bridge/auth/router.py": summary((500, 100))}) | HEALTHY_TOTALS,  # 500 %
+            "src/bridge/auth/router.py counts more covered lines than statements (500 of 100)",
+        ),
+        (
+            report(healthy() | {"src/bridge/billing/rules.py": summary((10, 10), branches=(9, 4))}) | HEALTHY_TOTALS,
+            "src/bridge/billing/rules.py counts more covered branches than branches (9 of 4)",
+        ),
+        (
+            report(healthy()) | {"totals": summary((3000, 1600))},  # every file in range, the totals inflated
+            "the totals count more covered lines than statements (3000 of 1600)",
+        ),
+        (
+            report(healthy()) | {"totals": summary((1485, 1600), branches=(5, 0))},
+            "the totals count more covered branches than branches (5 of 0)",
+        ),
     ],
-    ids=["no-branches", "not-json", "not-an-object", "no-files", "no-totals", "bad-file-summary"],
+    ids=[
+        "no-branches",
+        "not-json",
+        "not-an-object",
+        "no-files",
+        "no-totals",
+        "bad-file-summary",
+        "inflated-file-lines",
+        "inflated-file-branches",
+        "inflated-total-lines",
+        "inflated-total-branches",
+    ],
 )
 def test_an_unreadable_report_fails_the_gate(tmp_path: Path, content: dict[str, Any] | str, reason: str) -> None:
     result = gate(tmp_path, content)
