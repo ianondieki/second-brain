@@ -16,6 +16,7 @@ import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
 import {
   actionItems,
+  counterpartLine,
   DOCUMENT_KINDS,
   documentKinds,
   DUAL_ENDORSEMENT_STATES,
@@ -30,6 +31,7 @@ import {
   withQuery,
 } from "./model";
 import { Stepper } from "./Stepper";
+import { Tier2Section } from "./Tier2Section";
 import { DueText } from "./When";
 import { WhoseTurn } from "./WhoseTurn";
 
@@ -77,6 +79,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const members = detail.actions.includes("approve") ? await orgMembers(detail.org_id) : undefined;
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
+  const line = counterpartLine(detail);
 
   return (
     <ClientStrings strings={await clientStrings(["trackerActions"])}>
@@ -86,10 +89,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         </Link>
       </p>
       <h1 className="max-w-3xl text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{detail.proposal_title}</h1>
-      <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]">
-        {detail.my_party === "developer"
-          ? t("withOrg", { org: detail.org_name })
-          : t("fromDeveloper", { name: detail.developer_name })}
+      <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]" data-counterpart={line.key}>
+        {t(line.key, line.values)}
       </p>
 
       <div className="mt-6 max-w-3xl">
@@ -121,6 +122,10 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             myUserId={me.user.id}
             recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
           />
+      </div>
+
+      <div className="mt-8 max-w-3xl empty:hidden">
+        <Tier2Section detail={detail} enrolled={me.mfa.enrolled} query={query} />
       </div>
 
       <nav aria-label={t("tabs.label")} className="mt-10 max-w-3xl border-b border-line">

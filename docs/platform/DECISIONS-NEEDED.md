@@ -176,6 +176,41 @@ Items marked **G0** must be decided before `G0: APPROVED` in `GATES.md`.
 - Blocks: nothing in the prototype.
 - Decision:
 
+### D-47 · What the `profiling` consent covers: liked niches and county, or only activity (P12; REQ-PERS-01)
+- Why: the `profiling` consent text reads "Use my niches and activity to recommend problems and proposals, with an
+  explanation for each." (default off). P12-B ranks "Recommended for you" on the liked niches and county the developer
+  entered for that purpose without the consent, and reads activity (f1, f9: history, behaviour) only with it. The
+  wording and the behaviour disagree.
+- Options: (a) liked niches and county are declared preferences, used without the consent; the consent covers
+  activity only, and its text becomes "Use my activity on Bridge to recommend…" (a new consent text version, part of
+  the D-39 wording review); (b) keep the text; without the consent, recommendations are not personalised at all
+  (generic trending only).
+- Recommended default: (a). It is what the prototype does now; the text change waits for the D-39 review.
+- Blocks: nothing in the prototype.
+- Decision:
+
+### D-48 · Staff accounts and portal accounts: one account or separate (P11-F; spec 03 roles, spec 07 item 1)
+- Why: `/api/auth/me` reports `side: "staff"` for any account with a staff role, so a staff member who is also a
+  developer or an organisation member cannot use `/org` (and the web's home logic has to guess). P11-F now sends staff to
+  `/admin` only when their role has a console section and two-step sign-in is on, and never redirects them away from
+  a portal, but the API's side stays single.
+- Options: (a) staff accounts are separate accounts (staff never hold a developer profile or a membership; the admin
+  tools refuse to grant a staff role to such an account); (b) one account may be both: `/api/auth/me` returns every
+  side, and spec 07's portal switcher chooses.
+- Recommended default: (a) for the prototype and launch (smaller blast radius for staff sessions, simpler audit);
+  revisit with the portal switcher.
+- Blocks: nothing in the prototype (the demo's staff accounts are staff only).
+- Decision:
+
+### D-49 · The support contact shown on `/help` and in emails (P16; spec 07 help)
+- Why: every email footer links to `/help`, whose "Contact support" section needs a real channel. The prototype shows
+  "Support contact to be set." (`[[COPY-REVIEW]]`); no address, phone or form exists.
+- Options: (a) a support email address on the product domain; (b) a form that files a support case (needs a small API);
+  (c) both, with the form preferred when signed in.
+- Recommended default: (a) for launch, once the domain and mailbox exist (G2); the placeholder stays until then.
+- Blocks: launch (R1); nothing in the prototype.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |

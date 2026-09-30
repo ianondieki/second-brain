@@ -9,6 +9,7 @@ Bash), macOS and Linux. Python 3.9+ standard library only; needs Docker (Docker 
     python infra/demo/demo.py logins      # the demo logins and the shared demo password
     python infra/demo/demo.py clock [--days N] [--hours N]  # make demo-clock: show or move the dev/test clock
     python infra/demo/demo.py reminders   # make demo-reminders: send today's reminders now (Mailpit)
+    python infra/demo/demo.py scouts      # make demo-scouts: run the due scouts now (their digests in Mailpit)
     python infra/demo/demo.py stats       # make demo-stats: memory per container (docker stats)
     python infra/demo/demo.py logs        # make demo-logs
     python infra/demo/demo.py e2e-env     # frontend/.env.e2e: the Playwright variables for this stack
@@ -143,6 +144,7 @@ def banner() -> None:
     print()
     run(compose("exec", "-T", "api", "python", "-m", "bridge.demo", "logins"), check=False)
     print("Move the app's clock (deadlines): make demo-clock DAYS=3; send today's reminders now: make demo-reminders")
+    print("Run the due scouts now (Telco A's weekly scout is due again a week after the seed): make demo-scouts")
 
 
 def cmd_up(_: argparse.Namespace) -> int:
@@ -182,6 +184,14 @@ def cmd_reminders(_: argparse.Namespace) -> int:
     """One pass of the developer nudge (EM7) and the organisation digest at the shared clock's time, as the worker's
     jobs run them, without waiting for 07:30/08:30 EAT (python -m bridge.reminders refuses production)."""
     command = compose("exec", "-T", "worker", "python", "-m", "bridge.reminders", "run", "--now")
+    return run(command, check=False).returncode
+
+
+def cmd_scouts(_: argparse.Namespace) -> int:
+    """One pass of the scouts (``scouts.scan``) at the shared clock's time, as the worker's job runs it, without
+    waiting for 07:00 EAT: each due daily or weekly scout scans once and sends its digest (Mailpit). A weekly scout
+    runs once per ISO week (move the clock with demo-clock). python -m bridge.matching refuses production."""
+    command = compose("exec", "-T", "worker", "python", "-m", "bridge.matching", "run", "--now")
     return run(command, check=False).returncode
 
 
@@ -256,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     clock.add_argument("--hours", type=int, default=0)
     clock.set_defaults(func=cmd_clock)
     commands.add_parser("reminders", help="send today's reminders now").set_defaults(func=cmd_reminders)
+    commands.add_parser("scouts", help="run the due scouts now").set_defaults(func=cmd_scouts)
     commands.add_parser("logs", help="follow the demo's logs").set_defaults(func=cmd_logs)
     commands.add_parser("stats", help="memory and CPU per demo container").set_defaults(func=cmd_stats)
     commands.add_parser("e2e-env", help="Playwright variables for this stack").set_defaults(func=cmd_e2e_env)

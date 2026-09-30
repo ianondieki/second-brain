@@ -52,6 +52,7 @@ async def test_the_nudge_is_sent_once_per_day(owner_engine: AsyncEngine) -> None
         assert len(w.email.outbox) == 1
         assert await w.deliveries(dev) == BOTH_SENT
         assert await w.in_app(dev) == [("em7", "Your daily update")]
+        assert await w.in_app_links(dev) == ["/dev/engagements"]  # the developer's own portal
         (message,) = w.email.outbox
         assert message.subject == "Your day on Bridge (30 Mar 2027): 1 needs you, 1 at risk"
         assert "Milestone 1 “Pilot for one county” is due 31 Mar 2027" in message.text

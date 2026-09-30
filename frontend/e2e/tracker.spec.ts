@@ -133,7 +133,14 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(orgPage).toHaveURL(/\/org\/engagements$/, SERVER_STEP);
     await expect(orgNav.getByRole("link", { name: "Engagements" })).toHaveAttribute("aria-current", "page");
     const orgRow = orgPage.locator("[data-group='needs'] article").filter({ hasText: dev.title });
-    await expect(orgRow).toContainText("From Achieng Otieno");
+    // Until INTEREST_CONFIRMED the organisation sees the pseudonymous handle, never the name (docs/spec/06 6.1; the
+    // P10 backend's review fix, tasks/REQ-SCOUT-02.md MAJOR 1).
+    await expect(orgRow).toContainText("From ");
+    await expect(orgRow).not.toContainText("Achieng Otieno");
+    // Nor any piece of it: the handle is random since the REQ-AUTH-01 fix (it was the name slugged,
+    // "achieng-otieno-2b2356"): "dev-" and eight Crockford base32 characters.
+    await expect(orgRow).not.toContainText(/achieng|otieno/i);
+    await expect(orgRow).toContainText(/From dev-[0-9a-hjkmnp-tv-z]{8}/);
     await expect(orgRow.locator("[data-chip='turn']")).toHaveText("Our turn");
     await checkScreen(orgPage);
     await shot(orgPage, info, "org-list");

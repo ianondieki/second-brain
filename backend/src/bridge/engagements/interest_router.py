@@ -2,7 +2,8 @@
 
 - ``POST /api/orgs/{org_id}/interest``: a signatory of the (E2) organisation, with a fresh second factor, expresses
   interest in a proposal from a scout match or the Browse repo, naming the contact (201: the engagement as they now
-  see it). A non-member gets 404, a reviewer or any other role 403.
+  see it). A non-member gets 404, a reviewer or any other role 403; every member's attempt is throttled first (429
+  ``too_many_attempts``: ``interest.throttle_interest``).
 - ``GET /api/engagements/{id}/share-tier2``: either party reads whether the full proposal is shared.
 - ``POST /api/engagements/{id}/share-tier2``: the developer shares it with the organisation (a manual Tier-2 grant,
   source ``org_interest``; idempotent), with a fresh second factor; the organisation's people are told in-app.
@@ -12,9 +13,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from bridge.auth.deps import Db, SettingsDep
+from bridge.auth.deps import Db, SettingsDep, client_ip
 from bridge.engagements import history
-from bridge.engagements.interest import express_interest, share_state, share_tier2, tell_organisation
+from bridge.engagements.interest import (
+    express_interest,
+    share_state,
+    share_tier2,
+    tell_organisation,
+    throttle_interest,
+)
 from bridge.engagements.models import Engagement
 from bridge.engagements.router import PartyDep
 from bridge.engagements.schemas import EngagementDetail, InterestBody, Tier2ShareOut
@@ -26,8 +33,11 @@ router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
 
 
 @router.post("/api/orgs/{org_id}/interest", status_code=201)
-async def post_interest(body: InterestBody, org: OrgMember, db: Db, settings: SettingsDep) -> EngagementDetail:
+async def post_interest(
+    request: Request, body: InterestBody, org: OrgMember, db: Db, settings: SettingsDep
+) -> EngagementDetail:
     """Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer."""
+    await throttle_interest(db, settings, org, client_ip(request))
     engagement_id = await express_interest(db, settings, org, body)
     await db.commit()
     party = await resolve_party(db, org.live, engagement_id)

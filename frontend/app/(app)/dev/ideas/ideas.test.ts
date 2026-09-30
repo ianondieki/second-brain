@@ -241,6 +241,14 @@ describe("API refusals", () => {
     expect(publishRefusal(402, { detail: { code: "plan_limit", message: "", limit: 3 } }).limit).toBe(3);
   });
 
+  it("keeps the next plan up of a 402, and none at the top of the ladder (REQ-BIL-08)", () => {
+    const upgrade = { plan: "dev_pro_monthly", url: "/billing/upgrade?plan=dev_pro_monthly" };
+    expect(publishRefusal(402, { detail: { code: "plan_limit", message: "", limit: 3, upgrade } }).upgrade).toBe(
+      "dev_pro_monthly",
+    );
+    expect(publishRefusal(402, { detail: { code: "plan_limit", message: "", upgrade: null } }).upgrade).toBeUndefined();
+  });
+
   it("lists what publishing needs (422 cannot_publish) by field", () => {
     const body = {
       detail: {

@@ -235,7 +235,8 @@ keywords (`pipeline.excluded`, behind the SQL filter of P1) and the feedback aut
 ## Open questions and follow-ups
 
 1. security-reviewer round on `bridge/engagements/interest.py`, the N17 change in `notify.py` and `bridge/tenancy/signals.py`.
-2. Item 7 and `make demo-scouts` on a separate branch after this one merges (deviation 5).
+2. Item 7 and `make demo-scouts` on a separate branch after this one merges (deviation 5): done on
+   `feat/REQ-SCOUT-02-followup` (below).
 3. Held-then-approved proposals for periodic scouts (deviation 3): restore before Phase 4. Budget band (deviation 2):
    after prototype (`REQUIREMENTS.md` §7).
 4. on_new scouts' sweep (deviation 6) and widening the model's ±5 bound after REQ-SCOUT-06 (deviation 7).
@@ -258,3 +259,208 @@ keywords (`pipeline.excluded`, behind the SQL filter of P1) and the feedback aut
    F05, unreachable today).
 6. **The History hash confirms a candidate developer id** (`history.py:379`). It adds nothing beyond the stable handle
    today. Record it in THREAT_MODEL next to handle linkability.
+
+## Follow-up branch (`feat/REQ-SCOUT-02-followup`, from integration `59fcba6`, 2026-09-30)
+
+Agent: impl-backend. The round-2 MINORs above and deviation 5's demo items. No Alembic revision: the `audit_events`
+payload has no validator (`app_event_payload_is_valid` checks `engagement_events` only), so the own-member event takes
+`org_id` and `user_id` as they are. `python -m bridge.openapi --check`: no drift (no route signature or docstring
+changed), so `openapi.json` and `schema.d.ts` are untouched.
+
+| Item | Change | Commit |
+|---|---|---|
+| MINOR 1 (timing) | `interest._PROPOSAL_FOR_ORG` reads the proposal and the membership in one statement (always one row); both 404s (unavailable, own member) write the same system event on the global chain and commit, so they run the same statements | `a0f0c40` |
+| MINOR 1 (volume) | `interest.throttle_interest`, first in the route after the member check: the `login_attempts` ledger (`auth/throttle.py`, HMAC keys, purpose `org_interest`), 10 attempts a minute per account from one IP or any, 100 per client IP (`throttle.PER_IP_ANY_ACCOUNT`); each attempt committed before any check; then 429 `too_many_attempts` (the web app's existing wording) | `66f81c6` |
+| MINOR 2 | `matches._MATCHES`: a proposal whose developer is an active member of the organisation reads as unavailable (no teaser, why or rules; `proposal_unavailable`) in the list and on the page, as the interest route answers 404; a removed membership makes it available again | `d97e953` |
+| MINORs 3, 6, 1 (wording) | `THREAT_MODEL.md` §5: "no oracle" reworded (membership is only not answered directly: Browse against the 404; Preview and scans leave out own members' proposals, a prototype residual; no timing test); handle linkability and the History hash confirming a candidate developer id | `e9d70f9` |
+| MINOR 4 | the event's payload is `{"condition", "org_id", "user_id"}` (the caller), for both conditions | `a0f0c40` |
+| MINOR 5 | tests for `floor=scout.min_fit`, `granted_at = app_clock_now()` on insert and activation, `history._endorsement` with a hidden id | `6980cb1` |
+| Deviation 5 (item 7) | `bridge/seed/demo/scouts.py`, registered after the free plans: Brian's untagged `P5` ("Road works alerts for buried fibre routes", telecoms, KE-30) published through the API; Telco A's owner creates one weekly scout (telecoms, `fibre` and `road works`, the reviewer seat as recipient) through the scouts API; its first scan runs in process as the job runs one scout (`scan.due` unbound, `scan.scan` bound to the acting member; rules only, no model call): one match (90), EM3 to the reviewer, Express interest allowed for the signatory. P9's re-seed rule: the step runs only while Telco A never had a scout (no `scout.created` event on its chain) | `ca9d052` |
+| `make demo-scouts` | `python infra/demo/demo.py scouts` runs `python -m bridge.matching run --now` in the worker; Makefile help, banner, two README lines | `aee9d53` |
+
+**Changed from deviation 5's plan (orchestrator's brief for this branch):** one scout, for Telco A only (not one per E2
+fixture), and Telco A stays on its free plan (`org_claimed`: one weekly scout, a top-3 digest), not `org_growth`:
+P14's demo seed gives nothing paid by default, and the walkthrough can show the org-side 402 on a second scout.
+
+**Tests added:** `integration/engagements/test_stage0.py::test_both_404s_of_a_proposal_run_the_same_statements`,
+`::test_express_interest_is_throttled_per_account_and_per_ip` (and `::test_the_developer_may_not_be_a_member` now
+checks both events and their payload); `integration/matching/test_matches_api.py::test_a_match_whose_author_joined_the_organisation_is_unavailable`;
+`integration/matching/test_scan.py::test_the_model_never_moves_a_match_under_the_scouts_min_fit`;
+`integration/engagements/test_share_tier2.py::test_a_share_is_granted_at_the_shared_clocks_time` (the test clock three
+days ahead for the test, then put back); `unit/engagements/test_endorsement_hiding.py` (2);
+`integration/demo/test_demo_seed.py::test_telco_a_has_a_scout_whose_first_scan_matched_the_untagged_proposal` (and
+the published-proposals test now counts `P5`); `integration/demo/test_demo_seed_used.py::test_a_scout_people_deleted_is_not_made_again`;
+`unit/ci/test_demo_compose.py::test_demo_scouts_runs_one_scout_pass_in_the_worker`.
+
+### Mutation proofs (follow-up)
+
+A scratch runner replaced one exact string, ran the named tests and restored the file byte for byte (checked after
+each; `git status` clean of the mutated file).
+
+| Proof | Guard broken | Test (red) |
+|---|---|---|
+| U1 | the pre-follow-up `interest.py` (own-member path only: its own membership read and audit, no organisation or caller) | `test_stage0.py::test_both_404s_of_a_proposal_run_the_same_statements`, `::test_the_developer_may_not_be_a_member` |
+| T1 | the route's throttle call removed | `test_stage0.py::test_express_interest_is_throttled_per_account_and_per_ip` |
+| T2 | the attempt recorded but not committed (refusals roll it back) | the same |
+| T3 | the per-IP limit raised out of reach | the same |
+| A1 | matches: the own-member condition off | `test_matches_api.py::test_a_match_whose_author_joined_the_organisation_is_unavailable` |
+| A2 | matches: the membership's status ignored | the same (the removed membership) |
+| F09 | scan: `floor=scout.min_fit` dropped | `test_scan.py::test_the_model_never_moves_a_match_under_the_scouts_min_fit` |
+| F17a, F17b | share: `granted_at = now()` on insert; on activation | `test_share_tier2.py::test_a_share_is_granted_at_the_shared_clocks_time` |
+| F04a, F04b | `_endorsement`: never hides; hides every endorser | `unit/engagements/test_endorsement_hiding.py` |
+| D1 | demo: the "ever had a scout" guard removed | `test_demo_seed.py::test_running_the_demo_seed_again_changes_nothing`, `test_demo_seed_used.py::test_a_later_run_tops_up_but_never_drives_an_engagement_it_did_not_just_open`, `::test_the_seed_step_exits_0_and_changes_nothing_people_did_in_the_app`, `::test_a_scout_people_deleted_is_not_made_again` (a re-seed tries a second scout) |
+| D2 | demo: the first scan skipped | `test_demo_seed.py::test_telco_a_has_a_scout_whose_first_scan_matched_the_untagged_proposal` |
+| D3 | demo: the guard reads today's scouts instead of the `scout.created` event | `test_demo_seed_used.py::test_a_scout_people_deleted_is_not_made_again` |
+| D4 | demo: the step not registered | `test_demo_seed.py::test_telco_a_has_a_scout_whose_first_scan_matched_the_untagged_proposal` |
+| L1, L2 | launcher without `--now`; the Makefile target calling `reminders` | `unit/ci/test_demo_compose.py::test_demo_scouts_runs_one_scout_pass_in_the_worker` |
+
+All 17 killed.
+
+### Open items (follow-up)
+
+1. The EM3 digest (`digest.py`) still lists an undigested match whose author has since joined the organisation (the
+   scan leaves own members out, so only a match found before the author joined and not yet digested); its page then
+   reads unavailable. One more condition in the digest's read would align it.
+2. The THREAT_MODEL §5 residuals (Browse against the 404; Preview and scans leaving out own members' proposals; no
+   timing test): revisit before Phase 4, for example Preview and scans listing such a proposal as unavailable.
+3. The throttle's limits are constants in `interest.py` (no setting, no daily cap).
+4. Demo: `P5` is Brian's third active proposal, the free plan's cap (3), so his next publish answers 402 (useful for
+   walkthrough step 2); the README's "What is seeded" still says four proposals (P16's section).
+5. The demo commands were tested in process and with the launcher's recorded commands, not against a running
+   `make demo` stack; the seed's first scan calls no model, while `make demo-scouts` uses the configured LLM.
+
+### Follow-up review MINORs (2026-09-30; reviewer PASS, security-reviewer PASS on ff86d26)
+
+1. **The EM3 digest ignores the own-member rule** (`matching/digest.py:145-155`, `_UNDIGESTED`): an undigested match
+   whose author joined the organisation since is still emailed. Fix in progress on `fix/REQ-AUTH-01-random-handle`.
+2. **Throttle burst** (`engagements/interest.py:146`): the count and the record have no lock between them, so parallel
+   requests pass the limit. Take `pg_advisory_xact_lock` on the account digest before `blocked()`, as `first_use` does.
+3. **Per-IP bucket** (`interest.py:74`): one member behind a shared NAT can spend the 100/min IP budget for everyone
+   on that IP. Record in THREAT_MODEL §5; consider keying per (IP, org).
+4. **README demo logins** (`README.md:112-113`): Brian's row should mention P5 and the free-plan cap, the reviewer's row
+   the Scout matches tab and the EM3 digest (P16).
+
+## P10-F: the screens (frontend half; branch `feat/REQ-SCOUT-02-fe`, from integration `a5043eb`)
+
+Agent: impl-frontend. Reviews: reviewer, ux-reviewer. The backend (`openapi.json`, `schema.d.ts`) is unchanged.
+
+**Organisation.** Inbox gets two tabs, Sent to you and Scout matches (`/org/inbox?tab=matches`, the EM3 "N more"
+link): the Scout Agent in a few words (niches, schedule, Active or Paused, Change the scout for owners and admins),
+then the matches newest first, each with its fit, the developer's `owner_handle`, niche and why with who wrote it (the
+EM3 labels, the demo-fallback one included); an unavailable match shows "No longer available" with no teaser, why or
+handle. Without a scout the tab is its empty state, Set up Scout Agent (members who are not owners or admins get one
+sentence and a link to Sent to you). `/org/inbox/scouts/new` and `/org/inbox/scouts/{id}`: the plan's scout cap, the
+not-yet-verified note (AC-SCOUT-8), then the form (niches by parent, keywords to look for and to leave out, counties,
+how far along, lowest fit, schedule with "Needs a higher plan" on the plan's missing frequencies, digest language,
+reviewer seats as recipients); Save is the one primary action, Preview (with the on_new note, worded from locales when
+the API's `note` is set) and Pause/Resume are secondary; a 402 says the plan does not include it and links through
+`upgradeHref(plan, {org, next})`. `/org/inbox/matches/{id}?org=` (the EM3 item link, checked in the e2e): fit, title,
+handle, niche, why, the public teaser, then Express interest (contact person, channel, contact-by date; a stale second
+factor asks for a fresh code inline with the tracker's `StepUp`, then the POST runs once more; the tracker opens), or a
+disabled button with the reason as a fixed sentence (`org_not_e2`, `org_unavailable`, `role_required`,
+`proposal_unavailable`; `engagement_exists` links to the tracker).
+
+**Developer.** Accept and decline interest were already on the tracker (P5/P8: `accept_interest` with step-up,
+`decline_interest` with a confirmation); nothing was added there. New: on an org-origin engagement a Full proposal
+section (`components/tracker/Tier2Section.tsx`, `ShareTier2.tsx`): Share the full proposal, a confirmation in the
+approved logging phrasing, the tracker's `StepUp` when the API asks (it gained a `primary` prop so a second primary
+button never appears), then "You shared the full proposal with {org} on {date}". The organisation's tracker then shows
+Open the full proposal, which opens the proposal page with the Evaluation NDA.
+
+**Pseudonymity.** Match shapes carry no developer id or name; the screens render `owner_handle` only. The org
+tracker labels `developer_name` as a pseudonym while `developer_named` is false (`tracker.fromHandle`) and never reads
+`developer_id`. The e2e checks the developer's display name is absent from the matches, the match page, EM3 and the
+stage-0 tracker, and present from INTEREST_CONFIRMED.
+
+**Files.** `app/(app)/org/{scout,scout-data}.ts`, `org/inbox/InboxTabs.tsx`, `org/inbox/matches/*`,
+`org/inbox/scouts/*`, `components/tracker/{share.ts,ShareTier2.tsx,Tier2Section.tsx}`; small edits to
+`org/inbox/page.tsx` (tabs), `EngagementScreen.tsx` (the section, the handle label), `StepUp.tsx` (`primary`),
+`tracker/data.ts` (the share read), `lib/i18n/client-strings.ts` (three namespaces at the end), the locales (new
+namespaces after `orgProposal`, `tracker.fromHandle`, `_meta.reviewP10f`; [[COPY-REVIEW]], draft Swahili
+[[SW-REVIEW]]). `lib/billing/upgrade.ts` and its test are a byte-for-byte copy of P14-F's (`3fd9615`), so the two
+adds merge cleanly; if P14-F changes the file before merging, take P14-F's.
+
+**Tests.** vitest: `org/scout.test.ts` (links, keywords, draft, checks, body, refusal wording), `scouts/scout-form.test.tsx`,
+`matches/[matchId]/express-interest.test.tsx`, `matches/match-row.test.tsx`, `components/tracker/share.test.tsx`
+(595 frontend tests pass). Playwright `e2e/scout.spec.ts` (with `support/scout-scene.ts`; owner-DB access asserted in
+`beforeAll`): the walkthrough above end to end, on_new scout via the simulated checkout upgrade, the match from the
+worker's `scouts.on_new`, EM3, a reviewer's disabled button, interest with step-up, N17, accept with step-up, EM2 (its
+"not shared yet" sentence), share with step-up, the org opens the full proposal under the NDA; axe, one primary and
+no horizontal scroll on every screen at 360 and 1440 px. `e2e/tracker.spec.ts` now expects the handle, not the name,
+on the org list at SUBMITTED (it failed on integration since the P10 MAJOR 1 fix). JS: `/org/inbox?tab=matches`
+140,096 B, `/org/inbox/scouts/new` 145,979 B, a signatory's match page 146,435 B (budget 150,000).
+
+### P10-F open items
+
+1. **The handle gives the name away (backend).** `auth/service.py` `_handle_from` builds `owner_handle` from the
+   display name ("Achieng Otieno" → `achieng-otieno-2b2356`), so the organisation effectively sees the developer's
+   name before INTEREST_CONFIRMED on every Tier-1 surface (matches, EM3, the tracker). No screen can hide it. Fix in
+   the backend: a random handle (words + digits) at signup and a migration for existing handles. Security-relevant.
+2. The in-app notice of a share links to `/engagements/{id}` (`interest.py` `tell_organisation`), which is not a route:
+   `/org/engagements/{id}` is. No bell renders in-app notices yet.
+3. Not built: match feedback (👍/👎, the API exists), deleting a scout, the budget band field (deviation 2: proposals
+   carry no budget; a saved band is left as it is), Browse repo (origin `org_browse`).
+4. The org picker on the Scout matches tab submits to Sent to you (a GET form carries only `org`).
+5. The tracker route's JS with the share section was not measured (it loads only on org-origin engagements).
+6. The impeccable skill is not installed in this environment; polish was done by hand from the 375/1440 screenshots.
+
+### P10-F fix round (reviewer and ux-reviewer CHANGES_REQUIRED on `22c96f8`)
+
+| Item | Change |
+|---|---|
+| Merge prep | `e2e/tracker.spec.ts` now reads exactly as integration's `e63a182` (`"From "` plus no "Achieng Otieno"); `_meta.reviewP10f` kept |
+| MAJOR 1 stale ids | `pruneDraft`: an edited scout's niches, counties and reviewers the form no longer offers are dropped from the draft, with a one-line note (`scoutForm.dropped`); tests in `scout.test.ts` and `scout-form.test.tsx` |
+| MAJOR 2 handle label | `tracker.fromHandle`: "From {name}, the developer's handle. You see their name once contact is agreed." `counterpartLine` (model.ts) picks the line; `tier2-section.test.tsx` renders EngagementScreen for both `developer_named` values |
+| MAJOR 3 share is final | `tier2Share.confirm` ends "You cannot take this back."; Share the full proposal is always secondary (its step-up too) |
+| MAJOR 4 two-step empty states | `org/OrgRefusal.tsx` (the Inbox's Turn on two-step sign-in / Enter your code, primary) on the Matches tab, the scout screen and the match page |
+| MAJOR 5 plan and draft | Choosing a schedule the plan lacks shows `scoutForm.planNote` and the checkout link of the next plan up that sells it (`planFor` over `GET /api/plans?side=org`) at once; the unsaved draft is kept in `sessionStorage` (`bridge.scoutDraft:{org}:{scout or new}`, try/catch, shape-checked on read, pruned) across the round trip and cleared after a save |
+| MINORs | Org picker keeps `tab=matches`; the disabled Express interest is `aria-disabled`, focusable, described by the reason, E2 in plain words; focus goes to a refusal after a step-up and back to the button on Cancel; after a share, focus moves to the refreshed `#share-status` line; StepUp's code id from `useId`, its not-enrolled sentence neutral; dates as the tracker writes them (`formatDay` → `eatParts`); plain demo-fallback label; `scoutPage.cap` an ICU plural; each Change the scout link named by its niches; the handle once on the match page; the scout's status beside Pause/Resume |
+| Tests | Tier2Section (org not shared, org shared, developer shared, ended, pitched), StepUp inside the share with zero `[data-primary]`, the unavailable match fixture carrying a handle and a why, the kept draft, the plan note, the picker, the focus moves (via `test/server-tree.ts`, which awaits async server components for jsdom) |
+| e2e | `scout.spec.ts`: no piece of the developer's name, any case, on the org's matches, match page, EM3 or stage-0 tracker; no handle format asserted; new steps: member-only empty state, inline plan note, kept draft across the checkout link, pause and resume, `checkScreen` on each step-up state and the share done (focus checked); fixture handles are `dev-7k2m9qxp` |
+
+**The name checks fail on this branch's own backend, as they should.** With `a5043eb`'s slug handles the spec stops
+at `scout.spec.ts:176` (`By achieng-otieno-efb2fe` on the Matches tab). Run against `fix/REQ-AUTH-01-random-handle`'s
+backend (a detached scratch worktree, no merge) the whole spec passes on both projects (4 passed) and the full suite
+has 88 passed, 2 failed (`verify.spec.ts`, which needs the demo seed's `E2E_VERIFY_CERT_ID`).
+
+**JS (gzipped, budget 150,000 B)** on this branch: `/org/inbox?tab=matches` 140,096; `/org/inbox/scouts/new` 147,053;
+a signatory's match page 146,862; the tracker with the share section (`/dev/engagements/{id}` and
+`/org/engagements/{id}` on an org-interest engagement) 146,569. Integration's AccountMenu adds 1,243 B per signed-in
+route (integration's `/org/inbox` 141,339 against this branch's 140,096, both built here without merging), so after
+merge about 148,296, 148,105 and 147,812: under budget with under 2 KB to spare. Screenshots of the round:
+`scratchpad/p10f/shots2/` (375 and 1440 px).
+
+P10-F open items 1 (by `fix/REQ-AUTH-01-random-handle`), 4 (the picker keeps the tab) and 5 (the tracker route
+measured) are addressed; items 2, 3 and 6 stand.
+
+### P10-F fix round 2 (ux-reviewer PASS; reviewer CHANGES_REQUIRED on `3765021`)
+
+- **MAJOR, recipients wiped when the members read fails:** `ScoutScreen` now passes `reviewers: null` when
+  `GET …/members` fails (not `[]`); `pruneDraft` leaves recipients untouched when they are unknown; the form says
+  "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved." and a save sends the
+  saved recipients unchanged. Tests: `scout-form.test.tsx` (a failed read with a saved recipient: no dropped note, the
+  PATCH keeps it) and `scout.test.ts`.
+- **Kept draft:** the key is `bridge.scoutDraft:{user}:{org}:{scout or new}`, so another account on the tab never
+  sees it; the draft comes back only on `?restore=1`, which the checkout's `next` carries (`scoutHref(…, {restore})`),
+  and is discarded otherwise, so an earlier unsaved edit never silently replaces the saved settings. Tests for a
+  restored draft with stale ids (pruned and noted), the discard, and per-person keys.
+- **`tier2Share.confirm`** ends "Views already made cannot be undone." ([[COPY-REVIEW]]; withdrawing before an
+  agreement revokes Tier-2 access, so "You cannot take this back" overstated it).
+- **`OrgRefusal`**: render tests for its three branches (`org/org-refusal.test.tsx`).
+- **e2e:** the inline upgrade link's `next` is `/org/inbox/scouts/new?restore=1`; `scout.spec.ts` 4 passed (360 and
+  1440 px) against the `fix/REQ-AUTH-01-random-handle` backend (scratch worktree, no merge); `tracker.spec.ts` and
+  `org-inbox.spec.ts` 16 passed.
+- **JS budget (gzipped, 150,000 B):** measured on this branch `/org/inbox/scouts/new` 147,124 (+71 this round),
+  `/org/inbox?tab=matches` 140,096; from round 1, a signatory's match page 146,862 and the tracker with the share
+  section 146,569. With integration's AccountMenu (+1,243 B per signed-in route, measured) about 148,367, 141,339,
+  148,105 and 147,812: the scout form keeps about 1.6 KB of headroom, the tightest route of the four. Any further
+  client code on these routes should be split (lazy) or measured first.
+
+### P10-F review round 3 MINORs (2026-09-30; reviewer PASS on 0315b13, ux-reviewer PASS on 3765021)
+
+1. `ScoutScreen.tsx:111-114`: the members→reviewers mapping and the `restore` parse have no vitest (mutations S2, S13
+   survived); move them into a tested function in `scout.ts`.
+2. `ScoutForm.tsx:112-116`: without `restore=1` the discard runs whenever `offered` changes, so a `router.refresh()`
+   after Pause/Resume, or Back from a cancelled checkout, drops the kept draft; run the discard once on mount.
+3. `e2e/scout.spec.ts:113` opens `?restore=1` itself; follow the simulated checkout's Continue link once instead.
+4. JS headroom after the merge: `/org/inbox/scouts/new` about 148,367 B of 150,000.

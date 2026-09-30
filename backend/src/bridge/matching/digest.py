@@ -9,11 +9,13 @@ opening one changes nothing (the matches API has no side effect on GET).
 
 ``send`` runs after a scan committed, with the scout's acting member and organisation bound:
 
-1. the scout's undigested matches (``digest_sent_at`` NULL) whose proposal is still published and clear, read through
-   ``current_version_id`` (Tier 1 only), chosen and ordered exactly as Preview orders them: the rules' deterministic
-   score (``rule_breakdown.deterministic``), then the earlier publication, then the proposal id. The model never
-   changes which matches are listed (AC-SCOUT-5: the Preview equals the first digest); the final score is shown as a
-   figure only;
+1. the scout's undigested matches (``digest_sent_at`` NULL) whose proposal is still published and clear and whose
+   developer is not an active member of the organisation (a match found before the author joined: the matches API
+   shows it as unavailable and the interest route answers 404; it stays undigested until it is available again),
+   read through ``current_version_id`` (Tier 1 only), chosen and ordered exactly as Preview orders them: the rules'
+   deterministic score (``rule_breakdown.deterministic``), then the earlier publication, then the proposal id. The
+   model never changes which matches are listed (AC-SCOUT-5: the Preview equals the first digest); the final score is
+   shown as a figure only;
 2. the recipients re-checked at send time (AC-SCOUT-7, AC-SCOUT-8): each still an active member holding reviewer, an
    active user with a verified email address at the organisation's verified domain, of an E1 or E2 organisation that
    is not suspended; a removed recipient gets nothing;
@@ -147,6 +149,8 @@ _UNDIGESTED = text(
     " v.title, v.maturity, r.name AS county_name, v.county_code, n.name_en AS niche_name, pn.name_en AS parent_name"
     " FROM agent_matches m"
     " JOIN proposals p ON p.id = m.proposal_id AND p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND NOT EXISTS (SELECT 1 FROM memberships om WHERE om.org_id = m.org_id AND om.user_id = p.owner_id"
+    " AND om.status = 'active')"
     " JOIN proposal_versions v ON v.id = p.current_version_id"
     " LEFT JOIN niches n ON n.id = v.niche_id LEFT JOIN niches pn ON pn.id = n.parent_id"
     " LEFT JOIN regions r ON r.code = v.county_code"

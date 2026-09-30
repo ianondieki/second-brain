@@ -80,6 +80,12 @@ class World:
         )
         return [(row[0], row[1]) for row in rows]
 
+    async def in_app_links(self, user: UUID) -> list[str]:
+        rows = await self.owner_rows(
+            "SELECT link FROM in_app_notifications WHERE user_id = :u ORDER BY created_at", u=user
+        )
+        return [str(row[0]) for row in rows]
+
 
 async def consent(conn: AsyncConnection, user: UUID, *, granted: bool = True) -> None:
     """A ``reminders`` consent decision of ``user`` (as the owner)."""

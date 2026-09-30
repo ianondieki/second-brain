@@ -13,7 +13,7 @@ DEMO = $(DEMO_PY) infra/demo/demo.py
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
         check-legacy check-copy check-e2e test-integration e2e budget \
         demo demo-down demo-reset demo-totp demo-logins demo-logs demo-stats demo-clock \
-        demo-reminders
+        demo-reminders demo-scouts
 
 help:
 	@echo "dev             start the seeded local stack (Postgres+pgvector, Mailpit, S3 stand-in, api, worker, web)"
@@ -33,6 +33,7 @@ help:
 	@echo "demo-logins     the demo logins;  demo-stats  memory per demo container;  demo-logs  follow its logs"
 	@echo "demo-clock      show the demo's dev/test clock, or move it: make demo-clock DAYS=3 (HOURS=5)"
 	@echo "demo-reminders  send today's developer nudges and organisation digests now (they land in Mailpit)"
+	@echo "demo-scouts     run the due scouts now on the demo's clock (their digests land in Mailpit)"
 
 dev:
 	$(COMPOSE) up -d --build --wait
@@ -102,6 +103,9 @@ demo-clock:
 
 demo-reminders:
 	$(DEMO) reminders
+
+demo-scouts:
+	$(DEMO) scouts
 
 # docs/spec/07 item 5: at most 150,000 bytes of gzipped JS per route (frontend/scripts/js-budget.mjs). Measures the
 # default routes; BUDGET_BASE_URL and BUDGET_COOKIE (frontend/.env.example) come from the shell.

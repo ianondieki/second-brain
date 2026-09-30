@@ -422,3 +422,15 @@ export function nairobiToday(now: Date = new Date()): string {
 export function shortHash(hex: string): string {
   return (hex.slice(0, 12).match(/.{1,4}/g) ?? []).join(" ");
 }
+
+/**
+ * The line under the tracker's title: the organisation, for the developer; for the organisation, the developer's
+ * name, or while `developer_named` is false (before INTEREST_CONFIRMED) their handle, said to be a handle
+ * (docs/spec/06 6.1). The API sends the handle in `developer_name` then; `developer_id` is never read.
+ */
+export function counterpartLine(
+  detail: Pick<Detail, "my_party" | "org_name" | "developer_name" | "developer_named">,
+): { key: "withOrg" | "fromDeveloper" | "fromHandle"; values: { org?: string; name?: string } } {
+  if (detail.my_party === "developer") return { key: "withOrg", values: { org: detail.org_name } };
+  return { key: detail.developer_named ? "fromDeveloper" : "fromHandle", values: { name: detail.developer_name } };
+}

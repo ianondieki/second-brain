@@ -138,6 +138,13 @@ describe("a refused Pitch", () => {
     });
   });
 
+  it("keeps the next plan up of a 402 (REQ-BIL-08)", () => {
+    const upgrade = { plan: "dev_pro_monthly", url: "/billing/upgrade?plan=dev_pro_monthly" };
+    expect(pitchRefusal(402, error("plan_limit", { limit: 5, used: 5, upgrade })).upgrade).toBe("dev_pro_monthly");
+    expect(pitchRefusal(402, error("plan_limit", { upgrade })).upgrade).toBe("dev_pro_monthly");
+    expect(pitchRefusal(402, error("plan_limit", { limit: 5, used: 5, upgrade: null })).upgrade).toBeUndefined();
+  });
+
   it("names each organisation of a 409 with its reason, in the order asked", () => {
     const refusal = pitchRefusal(
       409,

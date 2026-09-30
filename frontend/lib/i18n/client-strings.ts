@@ -18,6 +18,8 @@ export const PLACEHOLDER_NAMES = [
   "name",
   "number",
   "org",
+  "plan",
+  "price",
   "step",
   "title",
   "total",
@@ -29,6 +31,7 @@ export const PLACEHOLDER_NAMES = [
 export const CLIENT_STRING_NAMESPACES = [
   "shell",
   "errorPage",
+  "checkout",
   "ideaEditor",
   "ideaFields",
   "ideaAssistant",
@@ -37,6 +40,10 @@ export const CLIENT_STRING_NAMESPACES = [
   "tagWithdraw",
   "orgProposal",
   "trackerActions",
+  "scoutForm",
+  "expressInterest",
+  "tier2Share",
+  "adminResearch",
   "likedNiches",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];

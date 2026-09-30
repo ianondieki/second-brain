@@ -201,7 +201,12 @@ test("after a lost setup answer, Cancel shows 'on', and new recovery codes repla
   await expect.poll(() => mailSays(page.request, email, "New recovery codes were created."), SERVER_STEP).toBe(true);
 
   // At the next sign-in, an old code is refused and a new one works.
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign out sits in the account menu on signed-in screens (P14-F, REQ-BIL-08).
+  const account = page.getByRole("button", { name: "Account" });
+  const signOut = page.getByRole("button", { name: "Sign out" });
+  await expect(account.or(signOut).first()).toBeVisible(SERVER_STEP);
+  if (await account.isVisible()) await account.click();
+  await signOut.click();
   await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
   await page.locator('form[data-hydrated="true"]').first().waitFor(SERVER_STEP);
   await page.getByLabel("Email address").fill(email);

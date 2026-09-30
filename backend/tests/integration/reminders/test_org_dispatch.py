@@ -58,6 +58,7 @@ async def test_opted_in_members_get_one_weekly_digest_per_iso_week(owner_engine:
         )
         assert [tuple(row) for row in periods] == [(date(2027, 3, 29), p.org), (date(2027, 4, 5), p.org)]
         assert [kind for kind, _ in await w.in_app(p.signatory)] == ["em7_org", "em7_org"]
+        assert await w.in_app_links(p.signatory) == [f"/org/engagements?org={p.org}"] * 2  # this organisation's list
 
 
 async def test_a_daily_plan_sends_the_digest_each_day(owner_engine: AsyncEngine) -> None:

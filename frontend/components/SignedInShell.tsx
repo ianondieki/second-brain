@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "./ui/cn";
-import { SignOutButton } from "./SignOutButton";
+import { AccountMenu } from "./AccountMenu";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -13,12 +13,15 @@ export interface SignedInShellProps {
   wide?: boolean;
 }
 
-/** Signed-in screens: top bar with Sign out, the portal navigation when given, and one column of content. */
+/**
+ * Signed-in screens: top bar with the account menu (Plan & billing, Sign out), the portal navigation when given, and
+ * one column of content.
+ */
 export function SignedInShell({ homeHref, children, nav, wide = false }: SignedInShellProps) {
   return (
     <>
       <TopBar homeHref={homeHref}>
-        <SignOutButton />
+        <AccountMenu />
       </TopBar>
       <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
         {nav}

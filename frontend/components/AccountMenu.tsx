@@ -1,0 +1,112 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { useEffect, useId, useRef, useState } from "react";
+
+import { billingHref } from "@/lib/billing/upgrade";
+
+import { useStrings } from "./ClientStrings";
+import { SignOutButton } from "./SignOutButton";
+import { cn } from "./ui/cn";
+import { Icon, type IconProps } from "./ui/status-icons";
+
+function PersonIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10" cy="7" r="3.25" />
+      <path d="M3.75 16.75c.9-2.9 3.3-4.5 6.25-4.5s5.35 1.6 6.25 4.5" />
+    </Icon>
+  );
+}
+
+function ChevronIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m5.75 8 4.25 4.25L14.25 8" />
+    </Icon>
+  );
+}
+
+const itemClass =
+  "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-jacaranda-wash";
+
+/**
+ * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, then Sign out. A disclosure button with a list
+ * of links (not an ARIA menu): Escape closes it and returns focus to the button, as does a press outside it. Plain
+ * links, so the top bar ships no router code (this is on every signed-in page, docs/spec/07 item 5).
+ */
+export function AccountMenu() {
+  const t = useStrings("shell");
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // Organisation screens carry the organisation as ?org= (members of several): Plan & billing keeps it.
+  const billing = billingHref(useSearchParams().get("org") ?? undefined);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    }
+    function onPointer(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onFocus(event: FocusEvent) {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("focusin", onFocus);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("focusin", onFocus);
+    };
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative" data-account-menu="">
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((was) => !was)}
+        className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-ink hover:bg-jacaranda-wash"
+      >
+        <span className="flex size-8 items-center justify-center rounded-full bg-jacaranda-wash text-jacaranda">
+          <PersonIcon className="size-5" />
+        </span>
+        {/* Under 640 px the avatar carries the name alone, so the working name keeps one line. */}
+        <span className="sr-only sm:not-sr-only">{t("account")}</span>
+        <ChevronIcon className={cn("size-4 text-ink-soft transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+      </button>
+      <div
+        id={panelId}
+        hidden={!open}
+        className="absolute top-full right-0 z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-control border border-line bg-field p-2"
+      >
+        <ul className="flex flex-col">
+          <li>
+            <a href={billing} className={itemClass}>
+              {t("billing")}
+            </a>
+          </li>
+        </ul>
+        {/* Sign out reads as a menu item like the links above it; its failure notice stays under it. */}
+        <div
+          className={
+            "mt-1 flex border-t border-line pt-1 [&>div]:w-full [&>div]:items-stretch [&>div>p]:px-3 [&>div>p]:text-left " +
+            "[&_button]:w-full [&_button]:justify-start [&_button]:rounded-control [&_button]:px-3 [&_button]:text-ink " +
+            "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-jacaranda-wash [&_button:hover]:text-ink"
+          }
+        >
+          <SignOutButton />
+        </div>
+      </div>
+    </div>
+  );
+}
