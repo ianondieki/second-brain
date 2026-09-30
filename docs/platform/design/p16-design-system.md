@@ -129,3 +129,31 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
 - *Elevation.* Kept to one level, for things that float over the page; the page itself stays flat.
 - *Motion.* No new motion. The bridge line drawing once stays the only authored moment; state changes (menu open,
   tab change) are instant or ≤150 ms colour transitions; reduced motion is respected globally.
+
+## How to use (built in P16 part B)
+
+Import from `frontend/components/ui/` (or `frontend/components/` for the navigation and route states). Compose these;
+do not re-create their classes on a screen. Tokens are Tailwind utilities (`bg-accent-strong`, `hover:bg-wash-soft`,
+`bg-error-wash`, `bg-ok-wash`, `border-error-line`, `border-ok-line`, `border-accent-line`, `backdrop:bg-scrim`,
+`shadow-overlay`); never write their `color-mix` inline (`app/globals.test.ts` fails the build if one reappears).
+
+| Component | Import | Use it for |
+|---|---|---|
+| `Button`, `ButtonLink` (variants `primary`, `secondary`, `danger`, `link`) | `@/components/ui/Button`, `@/components/ui/ButtonLink` | actions; `danger` for delete, withdraw, decline (outlined, never filled, never `data-primary`) |
+| `PageHeader`, `BackLink` | `@/components/ui/PageHeader`, `@/components/ui/BackLink` | a page's back link, h1, one-sentence lead and the primary action's slot |
+| `Section` | `@/components/ui/Section` | a titled part of a page: h2, optional description, optional secondary `link` |
+| `RowList`, `Row` | `@/components/ui/RowList` | lists of things; `Row` takes `title`, `href` (stretched link), `meta`, `badges` (a tuple of at most two: `tsc` refuses a third), `figure` |
+| `DescriptionList`, `Description` | `@/components/ui/DescriptionList` | label/value facts; `figures` for amounts and dates, `dense` inside a row |
+| `Badge` | `@/components/ui/Badge` | a status: `tone` (`accent`, `ok`, `error`, `neutral`), `icon`, words; `solid` only for the one "Your turn"/"Needs you" marker; `data-chip`/`data-badge` pass through |
+| `Callout` | `@/components/ui/Callout` | a static notice (no live role): `tone` (`info`, `ok`, `error`, `neutral`), optional `title`; replaces every coloured left rule |
+| `Alert` | `@/components/ui/Alert` | a notice that appears because something happened (announced); same tones as `Callout` |
+| `TabNav` | `@/components/ui/TabNav` | views of one page as link tabs (`label` required, `items`, `current`) |
+| `PortalNav` (behind `DevNav`, `OrgNav`, `AdminNav`) | `@/components/PortalNav` | a portal's sections; use the three wrappers on screens |
+| `EmptyState` (`EmptyStateFrame` for a button action in a client form step) | `@/components/ui/EmptyState`, `@/components/ui/EmptyStateFrame` | empty and closed states: one sentence, one action (`primary` when it is the screen's one action; `rule={false}` under a tab strip) |
+| `PageSkeleton`, `DevLoading`, `OrgLoading`, `AccountLoading`, `AdminLoading` | `@/components/ui/PageSkeleton`, `@/components/RouteLoading` | a new route segment's `loading.tsx` (a one-line file: see `app/(app)/dev/loading.tsx`) |
+| `NotFoundScreen` | `@/components/NotFoundScreen` | `not-found.tsx` files (root, `(app)`, `(public)`) |
+| `ConfirmDialog`, `openConfirm` | `@/components/ui/ConfirmDialog` | destructive or irreversible steps only; the confirm button names the action; open with `openConfirm(ref.current)` |
+| `Panel` | `@/components/ui/Panel` | the one `rounded-panel` box of a screen (`variant="field"` or `"wash"`) |
+
+`DataTable` is not built: no screen has a `<table>` yet (rows that compare columns: billing invoices, milestones);
+add it with its first use.
