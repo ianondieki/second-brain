@@ -34,6 +34,10 @@ from bridge.matching.trending import Trend, nairobi_day
 
 RECOMMENDABLE: Final = frozenset({"research_agent", "org_brief"})
 Decision = Literal["pursue", "consider", "not_now"]
+# [[COPY-REVIEW]] "Trending" only where Discover says Trending (z, score and recent actors over the floors); a card
+# whose z-score is high without the actors is "Rising".
+TRENDING_WORDS: Final = "Trending in its niche"
+RISING_WORDS: Final = "Rising in its niche"
 DECISION_LABELS: Final[Mapping[Decision, str]] = {"pursue": "Pursue", "consider": "Consider", "not_now": "Not now"}
 _WORD: Final = re.compile(r"[a-z0-9]+")
 # Words too common in problem statements to say anything about fit.
@@ -188,7 +192,7 @@ def pursuit(card: Card, feats: Mapping[str, Feature], value: int, cfg: RankerCon
         return "not_now", ["The evidence behind this problem is still thin"]
     if value >= p.pursue_min_score and confidence >= p.pursue_min_confidence and (pull or rising) and not crowded:
         reasons = ["Organisations are looking for this"] if pull else []
-        reasons += ["Trending in its niche"] if rising else []
+        reasons += [trend_words(card)] if rising else []
         return "pursue", [*reasons, f"{fit_label(value, cfg)} for you"]
     reasons = [] if pull or rising else ["No organisation demand yet"]
     reasons += [f"Crowded: {proposals} proposals already"] if crowded else []
@@ -197,11 +201,22 @@ def pursuit(card: Card, feats: Mapping[str, Feature], value: int, cfg: RankerCon
     return "consider", reasons or ["Worth a closer look"]
 
 
+def trend_words(card: Card) -> str:
+    """Discover's word for the card: Trending only when Discover shows it Trending."""
+    return TRENDING_WORDS if card.trend.trending else RISING_WORDS
+
+
 def why_chips(
-    card: Card, feats: Mapping[str, Feature], cfg: RankerConfig, trend: TrendConfig, dev: Developer
+    card: Card,
+    feats: Mapping[str, Feature],
+    cfg: RankerConfig,
+    trend: TrendConfig,
+    dev: Developer,
+    exclude: frozenset[str] = frozenset(),
 ) -> list[str]:
     """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips). f1's chip names its
-    source: the developer's past proposals when a shared keyword comes from one, else their profile."""
+    source: the developer's past proposals when a shared keyword comes from one, else their profile. A chip that
+    repeats one of the pursuit reasons (``exclude``) gives its place to the next."""
     card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
     fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
     v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
@@ -217,7 +232,7 @@ def why_chips(
             "In your county" if card.fact.county_code else "Nationwide",
             v["region_match"] > 0,
         ),
-        "trend": ("Trending in its niche", (card.trend.z or 0.0) >= trend.z_trending),
+        "trend": (trend_words(card), card.trend.trending or (card.trend.z or 0.0) >= trend.z_trending),
         "evidence_confidence": (
             "Posted by a verified organisation" if brief else "Backed by cited sources",
             v["evidence_confidence"] >= cfg.pursuit.pursue_min_confidence,
@@ -232,7 +247,7 @@ def why_chips(
         ),
         "freshness": ("New this week", (feats["freshness"].raw or 0.0) <= cfg.new_card_days),
     }
-    held = [(feats[n].weight * v[n], n) for n, (_, ok) in candidates.items() if ok]
+    held = [(feats[n].weight * v[n], n) for n, (text, ok) in candidates.items() if ok and text not in exclude]
     held.sort(key=lambda item: (-item[0], item[1]))
     chips = [candidates[n][0] for _, n in held[: cfg.why_chips]]
     return chips or ["Verified organisation brief" if brief else "Research card with cited sources"]
@@ -295,7 +310,7 @@ def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendC
                 features=feats,
                 decision=decision,
                 reasons=tuple(reasons),
-                why=tuple(why_chips(card, feats, cfg, trend, dev)),
+                why=tuple(why_chips(card, feats, cfg, trend, dev, frozenset(reasons))),
                 why_not=why_not(card, feats, dev, cfg),
             )
         )
