@@ -13,7 +13,8 @@
     "reviewP8e": "[[COPY-REVIEW]] P8 part 5 (REQ-ENG-03, REQ-UX-01): nav.engagements, tracker.*, trackerActions.*, devHome.*, ideaPitches.tracker; trackerActions.decline.attest is attestation wording held as a draft under D-39 item 7 (DECISIONS-NEEDED; the API stores only a boolean) [[SW-REVIEW]] draft Swahili",
     "reviewP12f": "[[COPY-REVIEW]] P12-F (REQ-TREND-02, REQ-PERS-01, REQ-PERS-03): nav.discover, discover.*, recommendations.*, likedNiches.*; the Why chips, badges, pursuit reasons and Why-not lines come from the API in English (written in code, bridge/matching); likedNiches.profiling.lead describes the ranker's behaviour under D-47 (open), and the consent wording itself comes from the API verbatim (backend config/consents.yaml, D-39) [[SW-REVIEW]] draft Swahili",
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages [[SW-REVIEW]] draft Swahili",
-    "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili"
+    "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
+    "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): common.loading (the loading state's hidden sentence), notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili"
   },
   "app": {
     "name": "Bridge",
@@ -2227,5 +2228,14 @@
       "enterCode": "Weka msimbo wako",
       "turnOnMfa": "Washa kuingia kwa hatua mbili"
     }
+  },
+  "common": {
+    "loading": "Inapakia ukurasa huu…"
+  },
+  "notFound": {
+    "title": "Ukurasa haupatikani",
+    "body": "Hakuna ukurasa kwenye anwani hii.",
+    "home": "Nenda kwenye ukurasa wa mwanzo",
+    "homeSignedIn": "Nenda kwenye ukurasa wako wa mwanzo"
   }
 }
