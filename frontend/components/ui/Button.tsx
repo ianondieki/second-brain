@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, MouseEvent } from "react";
 
 import { cn } from "./cn";
 
-export type ButtonVariant = "primary" | "secondary" | "link";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "link";
 
 const base =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-control text-base font-semibold " +
@@ -14,6 +14,9 @@ const variants: Record<ButtonVariant, string> = {
     "w-full px-6 sm:w-auto bg-jacaranda text-on-accent hover:bg-accent-strong " +
     "aria-disabled:bg-accent-strong",
   secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-jacaranda-wash",
+  // Destructive or ending steps (delete, withdraw, decline): error-coloured words and border, never filled, and never
+  // the screen's primary action. Status is still carried by the words, not the colour.
+  danger: "px-5 border border-error bg-transparent text-error hover:bg-error-wash",
   link:
     "min-h-11 min-w-11 px-0 font-medium text-jacaranda underline decoration-1 hover:decoration-2 " +
     "hover:text-accent-strong " +

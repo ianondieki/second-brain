@@ -12,13 +12,11 @@ import { cn } from "@/components/ui/cn";
 import { removeIdea } from "../calls";
 import { BASE_PATH } from "../ideas";
 
-// Destructive buttons, written out rather than layered on the secondary variant: without class merging, two
-// background or border utilities on one element resolve by stylesheet order, not by the order written.
-const DANGER_BASE =
+// The dialog's confirm button, filled in the error colour (the trigger is Button's danger variant).
+const DANGER_SOLID =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-control border px-5 text-base font-semibold " +
-  "transition-colors duration-150 ease-out aria-disabled:cursor-progress";
-const DANGER_OUTLINE = `${DANGER_BASE} border-error bg-transparent text-error hover:bg-[color-mix(in_oklab,var(--error)_7%,var(--paper))]`;
-const DANGER_SOLID = `${DANGER_BASE} border-error bg-error text-on-accent hover:bg-[color-mix(in_oklab,var(--error)_84%,var(--ink))]`;
+  "transition-colors duration-150 ease-out aria-disabled:cursor-progress " +
+  "border-error bg-error text-on-accent hover:bg-[color-mix(in_oklab,var(--error)_84%,var(--ink))]";
 
 export interface DeleteIdeaProps {
   id: string;
@@ -56,9 +54,9 @@ export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteId
 
   return (
     <>
-      <button type="button" className={DANGER_OUTLINE} onClick={() => dialog.current?.showModal()} aria-haspopup="dialog">
+      <Button variant="danger" onClick={() => dialog.current?.showModal()} aria-haspopup="dialog">
         {t("open")}
-      </button>
+      </Button>
       <dialog
         ref={dialog}
         aria-labelledby={titleId}

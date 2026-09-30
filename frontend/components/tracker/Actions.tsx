@@ -6,7 +6,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
@@ -24,13 +23,6 @@ import { StepUp } from "./StepUp";
 // The forms load when one opens (docs/spec/07 item 5: the tracker stays within the JS budget); they never render on
 // the server, so React.lazy adds no layout shift.
 const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
-
-// Ending steps (withdraw, decline) are outlined in the error colour; written out rather than layered on a variant, as
-// in DeleteIdea, so two border or background utilities never compete.
-const ENDING =
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control border border-error bg-transparent px-5 " +
-  "text-base font-semibold text-error transition-colors duration-150 ease-out aria-disabled:cursor-progress " +
-  "hover:bg-[color-mix(in_oklab,var(--error)_7%,var(--paper))]";
 
 export interface ActionsProps {
   engagementId: string;
@@ -168,17 +160,18 @@ export function Actions(props: ActionsProps) {
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {props.items.map((item) => (
               <li key={`${item.command}-${item.milestone?.id ?? ""}`}>
+                {/* Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled. */}
                 {isEndingCommand(item.command) ? (
-                  <button
-                    type="button"
-                    className={cn(ENDING, "w-full sm:w-auto")}
-                    aria-disabled={busy || undefined}
-                    onClick={() => !busy && press(item)}
+                  <Button
+                    variant="danger"
+                    busy={busy}
+                    className="w-full sm:w-auto"
+                    onClick={() => press(item)}
                     data-command={item.command}
                     data-action-key={keyOf(item)}
                   >
                     {label(item)}
-                  </button>
+                  </Button>
                 ) : (
                   <Button
                     variant={item.primary ? "primary" : "secondary"}
@@ -203,14 +196,14 @@ export function Actions(props: ActionsProps) {
           <p className="max-w-[60ch] text-ink">{t(`confirm.${endingKey(mode.item.command)}`, { name: props.counterpart })}</p>
           {message}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              className={cn(ENDING, "w-full sm:w-auto")}
-              aria-disabled={busy || undefined}
-              onClick={() => !busy && void run(mode.item, requestFor(mode.item))}
+            <Button
+              variant="danger"
+              busy={busy}
+              className="w-full sm:w-auto"
+              onClick={() => void run(mode.item, requestFor(mode.item))}
             >
               {busy ? t("busy") : label(mode.item)}
-            </button>
+            </Button>
             <Button variant="secondary" onClick={cancel}>
               {t("cancel")}
             </Button>
