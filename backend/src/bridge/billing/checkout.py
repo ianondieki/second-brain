@@ -172,7 +172,7 @@ async def start(
         .all()
     )
     for payment in pending:
-        await refresh(db, provider, payment)
+        await refresh(db, provider, payment, actor_id=actor_id)
         if payment.status is PaymentStatus.PENDING:
             await db.commit()  # keep whatever the refreshes settled meanwhile
             if payment.plan_id == plan.id:
