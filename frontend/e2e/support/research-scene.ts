@@ -60,14 +60,14 @@ async function signUp(request: APIRequestContext, email: string, name: string): 
 }
 
 /**
- * A new staff admin with two-step sign-in on, set up in a browser context of its own (so the test's page signs in
- * through the login screen, as a person would). Returns the person, whose `code()` gives fresh codes. With
- * `totp: false` two-step sign-in stays off (the API does not admit such staff to the console).
+ * A new staff admin (or, with `role`, a moderator) with two-step sign-in on, set up in a browser context of its own
+ * (so the test's page signs in through the login screen, as a person would). Returns the person, whose `code()` gives
+ * fresh codes. With `totp: false` two-step sign-in stays off (the API does not admit such staff to the console).
  */
 export async function newStaffAdmin(
   browser: Browser,
   baseURL: string,
-  { totp = true }: { totp?: boolean } = {},
+  { totp = true, role = "admin" }: { totp?: boolean; role?: "admin" | "moderator" } = {},
 ): Promise<Person> {
   const context = await browser.newContext({ baseURL });
   try {
@@ -76,9 +76,9 @@ export async function newStaffAdmin(
     const name = "Wanjiku Staff";
     await signUp(request, email, name);
     const updated = ownerSql(
-      "UPDATE users SET staff_role = 'admin', demo_account = true WHERE email = :'email'" +
+      "UPDATE users SET staff_role = CAST(:'role' AS staff_role), demo_account = true WHERE email = :'email'" +
         " AND email LIKE '%@staff-e2e.example.com' RETURNING id;",
-      { email },
+      { email, role },
     );
     expect(updated, "the staff admin").toMatch(/^[0-9a-f-]{36}$/);
     if (!totp) return new Person(email, name, "");

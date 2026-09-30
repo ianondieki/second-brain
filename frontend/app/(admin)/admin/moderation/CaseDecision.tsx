@@ -9,6 +9,7 @@ import { Chip } from "@/components/tracker/Chip";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import type { confirmStepUp } from "../research/calls";
 import { StepUp } from "../research/StepUp";
@@ -80,6 +81,7 @@ export function CaseDecision({
 }: CaseDecisionProps) {
   const t = useStrings("adminModeration");
   const router = useRouter();
+  const hydrated = useHydrated();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [done, setDone] = useState<Choice | null>(null);
@@ -259,7 +261,7 @@ export function CaseDecision({
   // The status line is a plain block, empty and without height when there is nothing to say: never display:none or
   // display:contents, which can drop a live region from the accessibility tree.
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-hydrated={hydrated ? "true" : "false"}>
       {region}
       {body}
     </div>

@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 // RFC 6238 TOTP (HMAC-SHA1, 30 s steps) computed in the test from the key shown on screen, as an authenticator
 // app would. Test-only: the product never computes codes in the browser.
@@ -22,6 +22,33 @@ export function base32Decode(input: string): Buffer {
     }
   }
   return Buffer.from(bytes);
+}
+
+/** RFC 4648 base32 without padding (the demo accounts' keys are written this way). */
+export function base32Encode(bytes: Uint8Array): string {
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const byte of bytes) {
+    value = ((value << 8) | byte) & 0xffff;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += BASE32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+/**
+ * A demo account's public TOTP key (backend bridge/seed/demo/data.py `totp_secret`, dev and test only): base32 of the
+ * first 20 bytes of SHA-256 over a fixed label and the address.
+ */
+export function demoTotpSecret(email: string): string {
+  return base32Encode(
+    createHash("sha256").update(`bridge-demo-totp-v1|${email.trim().toLowerCase()}`).digest().subarray(0, 20),
+  );
 }
 
 export interface TotpOptions {
