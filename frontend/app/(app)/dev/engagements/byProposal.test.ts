@@ -19,7 +19,7 @@ function row(id: string, proposal: string, turn: Summary["whose_turn"], state: S
 
 describe("byProposal", () => {
   it("groups by proposal in the API's order, one row per organisation", () => {
-    const groups = byProposal([row("a", "p1", ["organisation"]), row("b", "p2", ["organisation"]), row("c", "p1", ["organisation"])]);
+    const groups = byProposal([row("a", "p1", ["org"]), row("b", "p2", ["org"]), row("c", "p1", ["org"])]);
     expect(groups.map((g) => [g.proposalId, g.title, g.items.map((i) => i.id)])).toEqual([
       ["p1", "Idea p1", ["a", "c"]],
       ["p2", "Idea p2", ["b"]],
@@ -29,8 +29,8 @@ describe("byProposal", () => {
 
   it("puts proposals and rows that wait on the developer first", () => {
     const groups = byProposal([
-      row("a", "p1", ["organisation"]),
-      row("b", "p2", ["organisation"]),
+      row("a", "p1", ["org"]),
+      row("b", "p2", ["org"]),
       row("c", "p2", ["developer"]),
       row("d", "p1", ["developer"], "WITHDRAWN"),
     ]);
