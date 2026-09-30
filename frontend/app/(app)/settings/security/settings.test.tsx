@@ -2,7 +2,6 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { components } from "@/lib/api/schema";
 import { renderWithIntl } from "@/test/intl";
 
 import { PasswordSettings } from "./PasswordSettings";
@@ -10,11 +9,15 @@ import { PasswordStateProvider } from "./PasswordState";
 import { issuerOf, SecuritySettings } from "./SecuritySettings";
 import { StepUpForm } from "./StepUpForm";
 
-const mocks = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn(), push: vi.fn() }));
+const mocks = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn(), del: vi.fn(), push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/api/client", () => ({
-  api: { POST: (...args: unknown[]) => mocks.post(...args), GET: (...args: unknown[]) => mocks.get(...args) },
+  api: {
+    POST: (...args: unknown[]) => mocks.post(...args),
+    GET: (...args: unknown[]) => mocks.get(...args),
+    DELETE: (...args: unknown[]) => mocks.del(...args),
+  },
 }));
 
 function answer(status: number, code?: string) {
@@ -33,37 +36,28 @@ const ENROLMENT = {
 };
 const RECOVERY_CODES = Array.from({ length: 10 }, (_, i) => `code-${i}`);
 
-/** GET /api/auth/me for a signed-in org owner, with two-step sign-in on or off on the server. */
-function me(enrolled: boolean): components["schemas"]["MeResponse"] {
-  return {
-    user: {
-      id: "00000000-0000-4000-8000-000000000001",
-      email: "a@example.com",
-      display_name: "Amani",
-      email_verified: true,
-      locale: "en",
-      password_set: true,
-      staff_role: null,
-      totp_enabled: enrolled,
-    },
-    memberships: [],
-    mfa: { enrolled, required: true, verified: enrolled },
-    side: "org",
-  };
-}
+/** "Cancel setup" (DELETE /api/auth/totp/enrol) answers that two-step sign-in is on: a confirmation committed first. */
+const CANCEL_FINDS_ON = () => answer(409, "totp_already_enabled");
+/** ...that it is off: the pending key was cleared (204), or nothing was pending (409 no_pending_enrolment). */
+const CANCEL_FINDS_OFF: Array<[string, () => unknown]> = [
+  ["204", () => answer(204)],
+  ["409 no_pending_enrolment", () => answer(409, "no_pending_enrolment")],
+];
+const CANCEL = "DELETE /api/auth/totp/enrol";
 
 /**
  * Answers each API path with the given result (a promise that never settles keeps the call pending, an Error makes
- * it throw as fetch does offline); POSTs to other paths with 204. An unlisted GET fails, so no test depends on a
- * status check it did not set up.
+ * it throw as fetch does offline); DELETEs are keyed "DELETE <path>". POSTs and DELETEs to other paths get 204. An
+ * unlisted GET fails, so no test depends on a read it did not set up.
  */
 function answerWith(answers: Record<string, unknown>) {
-  const reply = (path: string, otherwise: unknown) => {
-    const result = answers[path] ?? otherwise;
+  const reply = (key: string, otherwise: unknown) => {
+    const result = answers[key] ?? otherwise;
     return result instanceof Error ? Promise.reject(result) : result;
   };
   mocks.post.mockImplementation((path: string) => reply(path, answer(204)));
   mocks.get.mockImplementation((path: string) => reply(path, answer(500)));
+  mocks.del.mockImplementation((path: string) => reply(`DELETE ${path}`, answer(204)));
 }
 
 function page(passwordSet: boolean, children: ReactNode) {
@@ -98,6 +92,12 @@ const twoStep = (
   <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" productName="Bridge" />
 );
 
+/** Presses "Cancel setup" and waits until the server's answer took the page back to the start. */
+async function cancelSetup() {
+  fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+  await screen.findByRole("button", { name: "Turn on two-step sign-in" });
+}
+
 /** Starts setup with the password on file and waits for the key (the page must ask for the password). */
 async function startSetup() {
   fireEvent.change(screen.getByLabelText(ENROL_FIELD, { selector: "input" }), { target: { value: "jacaranda" } });
@@ -108,6 +108,8 @@ async function startSetup() {
 beforeEach(() => {
   mocks.post.mockReset();
   mocks.get.mockReset();
+  mocks.del.mockReset();
+  mocks.del.mockResolvedValue(answer(204));
   mocks.push.mockReset();
 });
 afterEach(cleanup);
@@ -218,7 +220,10 @@ describe("the Password section during two-step setup", () => {
     expect(passwordSection()).toBeNull();
     expect(document.getElementById("password")!.hidden).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    await cancelSetup();
+    // The server's pending key is cleared, not left to expire (follow-up 7).
+    expect(mocks.del).toHaveBeenCalledTimes(1);
+    expect(mocks.del.mock.calls[0][0]).toBe("/api/auth/totp/enrol");
     expect(passwordSection()).not.toBeNull();
     expect(screen.queryByTestId("totp-key")).toBeNull();
     expect(screen.getByLabelText<HTMLInputElement>("New password", { selector: "input" }).value).toBe(
@@ -235,7 +240,7 @@ describe("the Password section during two-step setup", () => {
     answerWith({ "/api/auth/totp/enrol": ok(ENROLMENT) });
     const { container } = page(true, twoStep);
     await startSetup();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    await cancelSetup();
     expect(screen.getByRole("status").textContent).toBe(CANCELLED);
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
 
@@ -250,7 +255,7 @@ describe("the Password section during two-step setup", () => {
     answerWith({ "/api/auth/totp/enrol": ok(renamed) });
     page(true, twoStep);
     await startSetup();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    await cancelSetup();
     expect(screen.getByRole("status").textContent).toBe(
       "Setup cancelled. If you added Kiungo to your authenticator app, delete that entry.",
     );
@@ -261,7 +266,7 @@ describe("the Password section during two-step setup", () => {
     answerWith({ "/api/auth/totp/enrol": ok(unnamed) });
     page(true, <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" productName="Daraja" />);
     await startSetup();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    await cancelSetup();
     expect(screen.getByRole("status").textContent).toBe(
       "Setup cancelled. If you added Daraja to your authenticator app, delete that entry.",
     );
@@ -272,7 +277,7 @@ describe("the Password section during two-step setup", () => {
     page(false, twoStep);
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
     await screen.findByTestId("totp-key");
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    await cancelSetup();
     const notice = noticeReading(CANCELLED);
     await waitFor(() => expect(document.activeElement).toBe(notice));
     expect(nextInTabOrder(notice!)).toBe(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
@@ -322,7 +327,8 @@ describe("the Password section during two-step setup", () => {
     answerWith({
       "/api/auth/totp/enrol": ok(ENROLMENT),
       "/api/auth/totp/confirm": answer(409, "no_pending_enrolment"),
-      "/api/auth/me": ok(me(false)), // and two-step sign-in is not on (see the lost-answer tests below)
+      // Setup was open for over 15 minutes: the server cleared the key, and two-step sign-in is off.
+      [CANCEL]: answer(409, "no_pending_enrolment"),
     });
     securityPage();
     await startSetup();
@@ -359,11 +365,11 @@ describe("a confirmation whose answer never arrived (the server may have turned 
   // Past the code check, the server commits in one go: two-step sign-in on, recovery codes made, the "turned on"
   // email queued. A lost answer (offline, a reset connection), a 5xx or a proxy timeout can come after that commit.
   // "Delete that entry" would then leave the person without a second factor or recovery codes: locked out at the
-  // next sign-in. So before cancelling, the page asks GET /api/auth/me.
-  const NOT_SHOWN = "Your recovery codes could not be shown. Keep the Bridge entry in your authenticator app: you need its codes to log in.";
-  const NOT_SHOWN_TURN_OFF =
+  // next sign-in. So Cancel acts on the answer of DELETE /api/auth/totp/enrol, which waits for a confirmation still
+  // in progress and answers 409 totp_already_enabled when it committed (follow-up 7).
+  const NOT_SHOWN =
     "Your recovery codes could not be shown. Keep the Bridge entry in your authenticator app: you need its codes " +
-    "to log in. To get recovery codes, turn two-step sign-in off, then set it up again.";
+    "to log in. Then get new recovery codes below.";
   // A reload that finds it on says only "Two-step sign-in is on.", so this notice says now that in that case the
   // recovery codes were not shown and the app entry is the way in.
   const UNKNOWN =
@@ -380,11 +386,11 @@ describe("a confirmation whose answer never arrived (the server may have turned 
   const confirmButton = () => screen.getByRole("button", { name: "Confirm code" });
 
   /** Setup started, a code sent, and the confirmation settled (the button reads "Confirm code" again, not busy). */
-  async function confirmFails(confirm: unknown, meAnswer?: unknown, ui = twoStep) {
+  async function confirmFails(confirm: unknown, cancelAnswer?: unknown, ui = twoStep) {
     answerWith({
       "/api/auth/totp/enrol": ok(ENROLMENT),
       "/api/auth/totp/confirm": confirm,
-      ...(meAnswer === undefined ? {} : { "/api/auth/me": meAnswer }),
+      ...(cancelAnswer === undefined ? {} : { [CANCEL]: cancelAnswer }),
     });
     const view = page(true, ui);
     await startSetup();
@@ -396,14 +402,15 @@ describe("a confirmation whose answer never arrived (the server may have turned 
   }
 
   it.each(LOST)("turns to 'on' with no delete advice when Cancel finds it on (%s)", async (_, failure) => {
-    const { container } = await confirmFails(failure(), ok(me(true)));
+    const { container } = await confirmFails(failure(), CANCEL_FINDS_ON());
     fireEvent.click(cancelButton());
 
     expect(await screen.findByText("Two-step sign-in is on.")).toBeTruthy();
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-    expect(mocks.get.mock.calls[0][0]).toBe("/api/auth/me");
+    expect(mocks.del).toHaveBeenCalledTimes(1);
+    expect(mocks.del.mock.calls[0][0]).toBe("/api/auth/totp/enrol");
+    expect(mocks.get).not.toHaveBeenCalled(); // the DELETE's answer decides, not a separate read of /me
     const notice = screen.getByRole("alert");
-    expect(notice.textContent).toBe(NOT_SHOWN); // the role keeps it on: no advice to turn it off
+    expect(notice.textContent).toBe(NOT_SHOWN);
     expect(container.textContent).not.toMatch(/delete|cancelled/i);
     expect(screen.queryByTestId("totp-key")).toBeNull();
     expect(container.querySelectorAll("[data-primary]").length).toBeLessThanOrEqual(1);
@@ -411,30 +418,35 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     await waitFor(() => expect(document.activeElement).toBe(notice));
   });
 
-  it("points to new recovery codes (turn off, set up again) when the role lets the person turn it off", async () => {
+  it("points to new recovery codes, not to turning it off, when the role allows turning it off", async () => {
     const optional = (
       <SecuritySettings enrolled={false} required={false} homeHref="/dev" email="a@example.com" productName="Bridge" />
     );
-    await confirmFails(new TypeError("Failed to fetch"), ok(me(true)), optional);
+    const { container } = await confirmFails(new TypeError("Failed to fetch"), CANCEL_FINDS_ON(), optional);
     fireEvent.click(cancelButton());
-    expect((await screen.findByRole("alert")).textContent).toBe(NOT_SHOWN_TURN_OFF);
+    expect((await screen.findByRole("alert")).textContent).toBe(NOT_SHOWN);
+    expect(container.textContent).not.toMatch(/turn two-step sign-in off/i);
     expect(screen.getByRole("button", { name: "Turn off two-step sign-in" })).toBeTruthy();
   });
 
-  it.each(LOST)("cancels with the delete advice once the server says it is off (%s)", async (_, failure) => {
-    await confirmFails(failure(), ok(me(false)));
-    fireEvent.click(cancelButton());
-    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(CANCELLED));
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId("totp-key")).toBeNull();
-  });
+  it.each(LOST.flatMap(([lost, failure]) => CANCEL_FINDS_OFF.map(([off, said]) => [`${lost}, ${off}`, failure, said])))(
+    "cancels with the delete advice once the server says it is off (%s)",
+    async (_, failure, said) => {
+      await confirmFails((failure as () => unknown)(), (said as () => unknown)());
+      fireEvent.click(cancelButton());
+      await waitFor(() => expect(screen.getByRole("status").textContent).toBe(CANCELLED));
+      expect(mocks.del).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId("totp-key")).toBeNull();
+    },
+  );
 
   it.each([
     ["no connection", () => new TypeError("Failed to fetch")],
     ["503", () => answer(503)],
     ["the session ended", () => answer(401, "unauthenticated")],
-  ])("never advises deleting the entry when the status check fails (%s): reload to see", async (_, checkFails) => {
-    const { container } = await confirmFails(new TypeError("Failed to fetch"), checkFails());
+    ["a changed session", () => answer(403, "csrf_failed")],
+  ])("never advises deleting the entry when Cancel gets no clear answer (%s): reload to see", async (_, fails) => {
+    const { container } = await confirmFails(new TypeError("Failed to fetch"), fails());
     fireEvent.click(cancelButton());
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(UNKNOWN));
@@ -442,48 +454,56 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     expect(screen.getByTestId("totp-key")).toBeTruthy(); // still on the setup steps: nothing was cancelled
 
     // Cancel asks again; this time the server answers, and it was on.
-    mocks.get.mockResolvedValue(ok(me(true)));
+    mocks.del.mockResolvedValue(CANCEL_FINDS_ON());
     fireEvent.click(cancelButton());
     expect(await screen.findByText("Two-step sign-in is on.")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe(NOT_SHOWN);
   });
 
-  it("cancels at once, without asking the server, after only a wrong code (nothing was turned on)", async () => {
+  it("cancels at the server after only a wrong code, and says so even without an answer (nothing was on)", async () => {
     await confirmFails(answer(401, "invalid_code"));
-    fireEvent.click(cancelButton());
+    await cancelSetup();
     expect(screen.getByRole("status").textContent).toBe(CANCELLED);
-    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.del).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    // The key it could not clear is refused after 15 minutes; only wrong codes were sent, so nothing was turned on.
+    await confirmFails(answer(401, "invalid_code"), new TypeError("Failed to fetch"));
+    await cancelSetup();
+    expect(screen.getByRole("status").textContent).toBe(CANCELLED);
+    expect(screen.queryByText(UNKNOWN)).toBeNull();
   });
 
-  it("keeps asking the server after a lost answer, even if a later try got a wrong-code answer", async () => {
-    await confirmFails(new TypeError("Failed to fetch"), ok(me(false)));
+  it("keeps acting on the server's answer after a lost answer, even if a later try got a wrong-code answer", async () => {
+    await confirmFails(new TypeError("Failed to fetch"), answer(503));
     mocks.post.mockResolvedValue(answer(401, "invalid_code"));
     fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "654321" } });
     fireEvent.click(confirmButton());
     await screen.findByText("That code did not work. Enter the newest code from your authenticator app.");
     fireEvent.click(cancelButton());
-    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(CANCELLED));
-    expect(mocks.get).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(UNKNOWN));
+    expect(screen.getByTestId("totp-key")).toBeTruthy();
   });
 
   it("shows it on when a retried code finds no pending setup because the lost answer had turned it on", async () => {
-    await confirmFails(new TypeError("Failed to fetch"), ok(me(true)));
+    await confirmFails(new TypeError("Failed to fetch"), CANCEL_FINDS_ON());
     mocks.post.mockResolvedValue(answer(409, "no_pending_enrolment"));
     fireEvent.click(confirmButton());
     expect(await screen.findByText("Two-step sign-in is on.")).toBeTruthy();
+    expect(mocks.del).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("alert").textContent).toBe(NOT_SHOWN);
     expect(screen.queryByText("Start the setup again to get a new key.")).toBeNull();
   });
 
-  it("stays on the setup steps, without the delete advice, when no pending setup is found and the check fails", async () => {
+  it("stays on the setup steps, without the delete advice, when no pending setup is found and Cancel fails", async () => {
     const { container } = await confirmFails(answer(409, "no_pending_enrolment"), answer(503));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(UNKNOWN));
     expect(screen.getByTestId("totp-key")).toBeTruthy();
     expect(container.textContent).not.toMatch(/delete|cancelled/i);
   });
 
-  it("says it cannot tell when the status check has no answer in 10 s; Confirm and Cancel then work", async () => {
-    // AbortSignal.timeout under the test's control; the check's GET fails, as fetch does, once its signal aborts.
+  it("says it cannot tell when Cancel has no answer in 10 s; Confirm and Cancel then work", async () => {
+    // AbortSignal.timeout under the test's control; the DELETE fails, as fetch does, once its signal aborts.
     const timeouts: Array<{ ms: number; controller: AbortController }> = [];
     const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
       const controller = new AbortController();
@@ -492,7 +512,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     });
     try {
       await confirmFails(new TypeError("Failed to fetch"));
-      mocks.get.mockImplementation(
+      mocks.del.mockImplementation(
         (_path: string, init?: { signal?: AbortSignal }) =>
           new Promise((_resolve, reject) => {
             init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
@@ -501,7 +521,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
       fireEvent.click(cancelButton());
       await waitFor(() => expect(cancelButton().getAttribute("aria-disabled")).toBe("true"));
       expect(timeouts.map(({ ms }) => ms)).toEqual([10_000]);
-      expect(mocks.get.mock.calls[0][1]?.signal).toBe(timeouts[0].controller.signal);
+      expect(mocks.del.mock.calls[0][1]?.signal).toBe(timeouts[0].controller.signal);
       expect(screen.queryByText(UNKNOWN)).toBeNull(); // still asking
 
       timeouts[0].controller.abort(new DOMException("signal timed out", "TimeoutError"));
@@ -516,10 +536,10 @@ describe("a confirmation whose answer never arrived (the server may have turned 
       await screen.findByText("That code did not work. Enter the newest code from your authenticator app.");
       expect(mocks.post).toHaveBeenLastCalledWith("/api/auth/totp/confirm", { body: { code: "123456" } });
       // ...and Cancel asks the server again (the earlier lost answer still counts), which now answers "off".
-      mocks.get.mockResolvedValue(ok(me(false)));
+      mocks.del.mockResolvedValue(answer(204));
       fireEvent.click(cancelButton());
       await waitFor(() => expect(screen.getByRole("status").textContent).toBe(CANCELLED));
-      expect(mocks.get).toHaveBeenCalledTimes(2);
+      expect(mocks.del).toHaveBeenCalledTimes(2);
     } finally {
       timeout.mockRestore();
     }
@@ -532,14 +552,14 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     afterEach(() => vi.unstubAllGlobals());
 
     it("lands on the notice when two-step sign-in turned out to be on", async () => {
-      await confirmFails(new TypeError("Failed to fetch"), ok(me(true)));
+      await confirmFails(new TypeError("Failed to fetch"), CANCEL_FINDS_ON());
       fireEvent.click(cancelButton());
       await screen.findByText("Two-step sign-in is on.");
       expect(document.activeElement).toBe(screen.getByRole("alert"));
     });
 
     it("lands on the cancelled notice, one Tab before where setup starts again, when it turned out off", async () => {
-      await confirmFails(new TypeError("Failed to fetch"), ok(me(false)));
+      await confirmFails(new TypeError("Failed to fetch"), answer(204));
       fireEvent.click(cancelButton());
       const field = await screen.findByLabelText(ENROL_FIELD, { selector: "input" });
       const notice = noticeReading(CANCELLED);
@@ -548,14 +568,14 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     });
 
     // The notices below show above the setup steps: at 360 px, more than a screen above Confirm and Cancel.
-    it("lands on the 'could not check' notice when the check after Cancel fails", async () => {
+    it("lands on the 'could not check' notice when Cancel gets no clear answer", async () => {
       await confirmFails(new TypeError("Failed to fetch"), answer(503));
       fireEvent.click(cancelButton());
       const unknown = await screen.findByText(UNKNOWN);
       expect(document.activeElement).toBe(unknown.closest('[role="alert"]'));
     });
 
-    it("lands on the 'could not check' notice when a retry finds no setup waiting and the check fails", async () => {
+    it("lands on the 'could not check' notice when a retry finds no setup waiting and Cancel fails", async () => {
       await confirmFails(new TypeError("Failed to fetch"), answer(503));
       mocks.post.mockResolvedValue(answer(409, "no_pending_enrolment"));
       fireEvent.click(confirmButton());
@@ -571,7 +591,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     });
   });
 
-  it("ignores Confirm and Cancel while it asks the server", async () => {
+  it("ignores Confirm and Cancel while it waits for Cancel's answer", async () => {
     await confirmFails(new TypeError("Failed to fetch"), new Promise(() => {}));
     fireEvent.click(cancelButton());
     await waitFor(() => expect(cancelButton().getAttribute("aria-disabled")).toBe("true"));
@@ -581,7 +601,7 @@ describe("a confirmation whose answer never arrived (the server may have turned 
     fireEvent.click(busyConfirm);
     fireEvent.click(cancelButton());
     expect(mocks.post).toHaveBeenCalledTimes(2); // enrol and the one confirmation
-    expect(mocks.get).toHaveBeenCalledTimes(1);
+    expect(mocks.del).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("totp-key")).toBeTruthy();
   });
 });

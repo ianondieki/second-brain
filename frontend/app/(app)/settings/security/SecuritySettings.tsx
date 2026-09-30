@@ -99,9 +99,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
 
   /**
    * Two-step sign-in is on at the server, but the answer with the recovery codes was lost: the "on" screen, with focus
-   * on the notice that says to keep the app entry. No route shows or replaces the codes yet (a step-up-protected one
-   * that issues new codes is follow-up 8 in docs/platform/tasks/REQ-AUTH-01.md), so the notice says how to get new
-   * ones only where the role allows turning two-step sign-in off.
+   * on the notice that says to keep the app entry and to get new recovery codes.
    */
   function onWithoutCodes(product: string) {
     reveal(
@@ -181,9 +179,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
           {t("on")}
         </p>
         {notice?.key === "codesNotShown" ? (
-          <Alert ref={noticeRef}>
-            {t(required ? "codesNotShown" : "codesNotShownTurnOff", { product: notice.product })}
-          </Alert>
+          <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
         ) : null}
         {required ? (
           <p className="text-ink-soft">{t("mandatory")}</p>

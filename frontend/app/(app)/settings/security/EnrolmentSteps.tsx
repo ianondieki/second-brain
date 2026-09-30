@@ -17,6 +17,7 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
+import { cancelStatus, type TwoStepStatus } from "./outcomes";
 import { reveal } from "./reveal";
 import { Steps } from "./Steps";
 
@@ -29,12 +30,13 @@ type Notice = "keyCopied" | "codesCopied" | "copyFailed" | null;
 const STATUS_CHECK_MS = 10_000;
 
 /**
- * Whether two-step sign-in is on at the server (GET /api/auth/me), or null when that cannot be told: offline, an
- * error, the session ended, or no answer in time.
+ * Cancels the setup at the server (DELETE /api/auth/totp/enrol clears the pending key) and says what that answer
+ * shows: two-step sign-in "off", "on" (a confirmation committed first, its answer lost), or "unknown" (offline, an
+ * error, the session ended, or no answer in time). The route waits for a confirmation still in progress, so its
+ * answer is final where GET /api/auth/me could read "off" just before a lost confirmation commits.
  */
-async function enrolledOnServer(): Promise<boolean | null> {
-  const outcome = await settle(api.GET("/api/auth/me", { signal: AbortSignal.timeout(STATUS_CHECK_MS) }));
-  return outcome.ok ? outcome.data.mfa.enrolled : null;
+async function cancelOnServer(): Promise<TwoStepStatus> {
+  return cancelStatus(await settle(api.DELETE("/api/auth/totp/enrol", { signal: AbortSignal.timeout(STATUS_CHECK_MS) })));
 }
 
 /** "ABCDEFGHIJKL" -> ["ABCD", "EFGH", "IJKL"]: easier to type into an authenticator app by hand. */
@@ -65,9 +67,12 @@ export interface EnrolmentStepsProps {
   homeHref: string;
   /** The name the authenticator app lists the entry under (the setup key's issuer, else the product name). */
   entryName: string;
-  /** The server lost the pending enrolment (no_pending_enrolment) and two-step sign-in is off: back to the start. */
+  /**
+   * The server has no pending setup (no_pending_enrolment: replaced, or begun over 15 minutes ago) and two-step
+   * sign-in is off: back to the start.
+   */
   onRestart: (error: ErrorKey) => void;
-  /** "Cancel setup", with two-step sign-in known to be off: back to the start. */
+  /** "Cancel setup", with the server's pending key cleared and two-step sign-in known to be off: back to the start. */
   onCancel: () => void;
   /** Two-step sign-in is on at the server, but the answer with the recovery codes never arrived. */
   onEnrolled: () => void;
@@ -103,10 +108,10 @@ export function EnrolmentSteps({
   const [statusUnknown, setStatusUnknown] = useState(false);
   // Set once a confirmation fails other than with a wrong code. Past the code check the server commits in one go
   // (two-step sign-in on, recovery codes made, the "turned on" email queued), and a lost answer (offline, a reset
-  // connection), a 5xx or a proxy timeout can come after that commit. From then on, the page asks the server before
-  // it says setup was cancelled: "delete that entry" to someone whose two-step sign-in is on, with recovery codes
-  // they never saw, locks them out at the next sign-in. It stays set: a later wrong-code answer does not prove the
-  // earlier try failed.
+  // connection), a 5xx or a proxy timeout can come after that commit. From then on, the page says setup was
+  // cancelled only when the server's answer to Cancel says two-step sign-in is off: "delete that entry" to someone
+  // whose two-step sign-in is on, with recovery codes they never saw, locks them out at the next sign-in. It stays
+  // set: a later wrong-code answer does not prove the earlier try failed.
   const maybeOn = useRef(false);
 
   const current = codes ? 3 : codeFocused ? 2 : 1;
@@ -154,8 +159,9 @@ export function EnrolmentSteps({
     }
     maybeOn.current = true;
     if (outcome.key === "no_pending_enrolment") {
-      // No setup is waiting: it was replaced, or an earlier try whose answer was lost turned two-step sign-in on.
-      await askServer(() => onRestart("no_pending_enrolment"));
+      // No setup is waiting: it was replaced, it expired (15 minutes), or an earlier try whose answer was lost turned
+      // two-step sign-in on. Cancelling tells which, and clears any key a newer setup left pending.
+      await cancelAtServer(() => onRestart("no_pending_enrolment"));
       return;
     }
     // The error shows above the steps, out of sight from the Confirm button at 360 px: focus brings it into view.
@@ -169,12 +175,14 @@ export function EnrolmentSteps({
   }
 
   /**
-   * Asks the server whether two-step sign-in is on (busy meanwhile, so neither Confirm nor Cancel acts): on goes to
-   * the "on" screen, off goes on with `whenOff`, and no answer keeps these steps with a hint to reload, focused.
+   * Cancels at the server and acts on its answer (busy meanwhile, so neither Confirm nor Cancel acts): "on" goes to
+   * the "on" screen with the codes-not-shown notice, "off" goes on with `whenOff`, and "unknown" keeps these steps
+   * with a hint to reload, focused. Before any confirmation could have committed (no try yet, or only wrong codes),
+   * "unknown" is "off": nothing was turned on, and the server drops a pending key after 15 minutes anyway.
    */
-  async function askServer(whenOff: () => void) {
-    const enrolled = await enrolledOnServer();
-    if (enrolled === null) {
+  async function cancelAtServer(whenOff: () => void) {
+    const status = await cancelOnServer();
+    if (status === "unknown" && maybeOn.current) {
       reveal(
         () => {
           setBusy(false);
@@ -185,20 +193,16 @@ export function EnrolmentSteps({
       return;
     }
     setBusy(false);
-    if (enrolled) onEnrolled();
+    if (status === "on") onEnrolled();
     else whenOff();
   }
 
   async function cancel() {
     if (busy) return;
-    if (!maybeOn.current) {
-      onCancel(); // only wrong codes so far, or no try: nothing was turned on
-      return;
-    }
     setBusy(true);
     setError(null);
     setStatusUnknown(false);
-    await askServer(onCancel);
+    await cancelAtServer(onCancel);
   }
 
   const noticeLine = (
