@@ -83,7 +83,8 @@ test.describe("a developer on the Free plan", () => {
     await expect(page.locator("[data-plan='dev_student']")).toContainText("Not available to buy here yet");
     await expect(page.locator("[data-primary]")).toHaveText("Upgrade to Pro (monthly)");
     await expect(page.locator("[data-primary]")).toHaveAttribute("href", "/billing/upgrade?plan=dev_pro_monthly");
-    await expect(page.getByRole("link", { name: "Choose Pro (yearly)" })).toBeVisible();
+    // Named like the page it opens, as the monthly plan's (P16-C1 fix round 1).
+    await expect(page.getByRole("link", { name: "Upgrade to Pro (yearly)" })).toBeVisible();
     await checkScreen(page, { strict: true });
   });
 
