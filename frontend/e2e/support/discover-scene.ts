@@ -32,7 +32,7 @@ export async function seededTrend(request: APIRequestContext): Promise<Trend> {
   return { problemId: found!.problem.id, title: found!.problem.title };
 }
 
-/** The public problem card behind a link, through the API (the page is REQ-RES-01's, `feat/REQ-RES-01-fe`). */
+/** The public problem card behind a link, through the API (the page itself is REQ-RES-01's /problems/{id}). */
 export async function publishedProblemTitle(request: APIRequestContext, problemId: string): Promise<string> {
   const response = await request.get(`/api/problems/${encodeURIComponent(problemId)}`);
   expect(response.status(), await response.text()).toBe(200);

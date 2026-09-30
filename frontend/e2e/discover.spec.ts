@@ -158,6 +158,8 @@ test.describe("a new developer", () => {
     await expect(page).toHaveURL(/\/problems\/[0-9a-f-]{36}$/, SERVER_STEP);
     const problemId = new URL(page.url()).pathname.split("/").pop()!;
     expect(await publishedProblemTitle(page.request, problemId)).toBe(title);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title, SERVER_STEP);
+    await checkWidths(page, info);
   });
 
   test("starts a proposal from a Discover problem with the problem already linked", async ({ page }) => {
@@ -172,6 +174,19 @@ test.describe("a new developer", () => {
     await expect(linked).toBeVisible(SERVER_STEP);
     await expect(linked.getByRole("listitem")).toHaveCount(1);
     await expect(linked.getByRole("button", { name: `Remove ${title}` })).toBeVisible();
+  });
+
+  test("an unknown problem in ?problem= links nothing and saves nothing before typing", async ({ page }) => {
+    const posts: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() !== "GET" && request.url().includes("/api/me/proposals")) posts.push(request.url());
+    });
+    await page.goto("/dev/ideas/new?problem=01a0f067-0000-7000-8000-000000000000");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible(SERVER_STEP);
+    await expect(page.getByRole("radio", { name: /Link a listed problem/ })).not.toBeChecked();
+    await expect(page.getByRole("region", { name: /Linked problems/ })).toHaveCount(0);
+    await page.waitForTimeout(2_000); // longer than the editor's autosave delay (1.2 s)
+    expect(posts).toEqual([]);
   });
 
   test("an empty filtered list is one sentence and one action", async ({ page }, info) => {
