@@ -7,13 +7,18 @@ import type { ReactNode } from "react";
 import { DevNav } from "@/components/DevNav";
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
-import { Alert, type AlertTone } from "@/components/ui/Alert";
+import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { cn } from "@/components/ui/cn";
-import { CheckIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
+import { Callout, type CalloutTone } from "@/components/ui/Callout";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BackLink } from "@/components/ui/BackLink";
+import { CheckIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
@@ -65,8 +70,8 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   if (!idea) {
     return (
       <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-        <EmptyState className="mt-6" sentence={t("notFound")} action={t("back")} href={BASE_PATH} />
+        <PageHeader title={t("title")} />
+        <EmptyState className="mt-8" sentence={t("notFound")} action={t("back")} href={BASE_PATH} />
       </SignedInShell>
     );
   }
@@ -82,26 +87,25 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-      <BackLink href={BASE_PATH}>{t("back")}</BackLink>
-      <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
-        {version?.teaser.title?.trim() || t("untitled")}
-      </h1>
-      <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
-        <IdeaStatusBadge status={status} />
-        {idea.current ? (
-          <span className="text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
-        ) : null}
-      </p>
+      <PageHeader back={{ href: BASE_PATH, label: t("back") }} title={version?.teaser.title?.trim() || t("untitled")}>
+        <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+          <IdeaStatusBadge status={status} />
+          {idea.current ? (
+            <span className="text-sm text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
+          ) : null}
+        </p>
+      </PageHeader>
 
       {justPublished && idea.current?.cert_id ? (
         <Alert tone="ok" className="mt-6">
           {t("published", { certId: idea.current.cert_id })}
         </Alert>
       ) : null}
+      {/* The idea's standing is part of the page from the start: a static Callout, not an announced Alert. */}
       {notice ? (
-        <Alert tone={notice.tone} className="mt-6">
-          {t(notice.key)}
-        </Alert>
+        <Callout tone={notice.tone} className="mt-6">
+          <p>{t(notice.key)}</p>
+        </Callout>
       ) : null}
 
       {status !== "hidden" ? (
@@ -127,11 +131,11 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
       <Certificate idea={idea} />
 
       {status !== "hidden" ? (
-        <section className="mt-12 border-t border-line pt-6">
+        <div className="mt-12">
           <ClientStrings strings={await clientStrings(["ideaDelete"])}>
             <DeleteIdea id={idea.id} registered={idea.current !== null} />
           </ClientStrings>
-        </section>
+        </div>
       ) : null}
     </SignedInShell>
   );
@@ -139,7 +143,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
 
 type NoticeKey = "heldNotice" | "rejectedNotice" | "hiddenNotice" | "changesNotice" | "draftNotice";
 
-function noticeFor(status: IdeaStatus, hasChanges: boolean): { key: NoticeKey; tone: AlertTone } | null {
+function noticeFor(status: IdeaStatus, hasChanges: boolean): { key: NoticeKey; tone: CalloutTone } | null {
   if (status === "held") return { key: "heldNotice", tone: "info" };
   if (status === "rejected") return { key: "rejectedNotice", tone: "error" };
   if (status === "hidden") return { key: "hiddenNotice", tone: "info" };
@@ -161,43 +165,40 @@ async function Teaser({ version, status }: { version: Version; status: IdeaStatu
   const { teaser } = version;
   const empty = <span className="text-ink-soft">{f("notGiven")}</span>;
   return (
-    <section aria-labelledby="teaser-heading" className="mt-10">
-      <h2 id="teaser-heading" className="text-lg text-ink">
-        {f("teaserTitle")}
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">{f(TEASER_HINT[status])}</p>
-      <dl className="mt-4 grid gap-x-8 gap-y-4 border-t border-line pt-5 sm:grid-cols-[minmax(9rem,auto)_1fr]">
-        <Row label={f("niche")}>{teaser.niche?.label ?? empty}</Row>
-        <Row label={f("maturity")}>{teaser.maturity ? f(`maturityValue.${MATURITY_KEY[teaser.maturity]}`) : empty}</Row>
-        <Row label={f("ask")}>{teaser.ask ? f(`askValue.${teaser.ask}`) : empty}</Row>
-        <Row label={f("problems")}>
+    <Section title={f("teaserTitle")} headingId="teaser-heading" description={f(TEASER_HINT[status])} className="mt-12">
+      <DescriptionList>
+        <Description label={f("niche")}>{teaser.niche?.label ?? empty}</Description>
+        <Description label={f("maturity")}>{teaser.maturity ? f(`maturityValue.${MATURITY_KEY[teaser.maturity]}`) : empty}</Description>
+        <Description label={f("ask")}>{teaser.ask ? f(`askValue.${teaser.ask}`) : empty}</Description>
+        <Description label={f("problems")}>
           {version.problems.length > 0 || version.new_problem ? (
             <ul className="flex flex-col gap-1">
               {version.problems.map((problem) => (
-                <li key={problem.id}>
-                  {problem.title}
-                  {problem.source === "developer" ? (
-                    <span className="ml-2 text-sm text-ink-soft">{f("developerReported")}</span>
-                  ) : null}
+                <li key={problem.id} className="flex flex-col">
+                  <span>{problem.title}</span>
+                  {/* Its provenance, as Discover and the problem page word it. */}
+                  <span className="text-sm text-ink-soft">
+                    <ProblemLabelText problem={problem} />
+                  </span>
                 </li>
               ))}
               {version.new_problem ? (
-                <li>
-                  {version.new_problem.title}
-                  <span className="ml-2 text-sm text-ink-soft">{f("developerReported")}</span>
+                <li className="flex flex-col">
+                  <span>{version.new_problem.title}</span>
+                  <span className="text-sm text-ink-soft">{f("developerReported")}</span>
                 </li>
               ) : null}
             </ul>
           ) : (
             empty
           )}
-        </Row>
-        <Row label={f("problemStatement")}>{prose(teaser.problem_statement) ?? empty}</Row>
-        <Row label={f("summary")}>{prose(teaser.summary) ?? empty}</Row>
-        {teaser.impact_claims ? <Row label={f("impactClaims")}>{prose(teaser.impact_claims)}</Row> : null}
-        {teaser.county_code ? <Row label={f("county")}>{await countyName(teaser.county_code)}</Row> : null}
-      </dl>
-    </section>
+        </Description>
+        <Description label={f("problemStatement")}>{prose(teaser.problem_statement) ?? empty}</Description>
+        <Description label={f("summary")}>{prose(teaser.summary) ?? empty}</Description>
+        {teaser.impact_claims ? <Description label={f("impactClaims")}>{prose(teaser.impact_claims)}</Description> : null}
+        {teaser.county_code ? <Description label={f("county")}>{await countyName(teaser.county_code)}</Description> : null}
+      </DescriptionList>
+    </Section>
   );
 }
 
@@ -208,52 +209,59 @@ async function Confidential({ version }: { version: Version }) {
   const written = (["approach", "architecture", "pricing", "notes"] as const).filter((key) => confidential[key]);
   const nothing = written.length === 0 && confidential.links.length === 0 && confidential.attachments.length === 0;
   return (
-    <section aria-labelledby="details-heading" className="mt-10 border-l-4 border-jacaranda pl-4 sm:pl-6">
-      <h2 id="details-heading" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg text-ink">
-        {f("confidentialTitle")}
-        <span className="inline-flex items-center gap-1 text-sm font-semibold tracking-normal text-jacaranda">
-          <LockIcon className="size-4" />
-          {f("confidentialBadge")}
-        </span>
-      </h2>
-      <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{f("confidentialNotice")}</p>
-      {nothing ? (
-        <p className="mt-4 text-ink-soft">{t("noDetails")}</p>
-      ) : (
-        <dl className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-[minmax(9rem,auto)_1fr]">
-          {written.map((key) => (
-            <Row key={key} label={f(key)}>
-              {prose(confidential[key])}
-            </Row>
-          ))}
-          {confidential.links.length > 0 ? (
-            <Row label={f("links")}>
-              <ul className="flex flex-col gap-1">
-                {confidential.links.map((link) => (
-                  <li key={link} className="[overflow-wrap:anywhere]">
-                    {link}
-                  </li>
-                ))}
-              </ul>
-            </Row>
-          ) : null}
-          {confidential.attachments.length > 0 ? (
-            <Row label={f("files")}>
-              <ul className="flex flex-col gap-1">
-                {confidential.attachments.map((file) => (
-                  <li key={file.id} className="[overflow-wrap:anywhere]">
-                    {file.file_name}
-                    {file.size_bytes !== null ? (
-                      <span className="ml-2 text-sm text-ink-soft">{f(fileSizeParts(file.size_bytes).key, { value: fileSizeParts(file.size_bytes).value })}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </Row>
-          ) : null}
-        </dl>
-      )}
-    </section>
+    // The screen's one Panel: the full details are set apart as the part only the owner (and, after the NDA, verified
+    // viewers) can read; its lock Badge says so in words (no coloured left rule).
+    <Panel as="div" className="mt-12">
+      <Section
+        title={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {f("confidentialTitle")}
+            <Badge tone="neutral" icon={<LockIcon />}>
+              {f("confidentialBadge")}
+            </Badge>
+          </span>
+        }
+        headingId="details-heading"
+        description={f("confidentialNotice")}
+      >
+        {nothing ? (
+          <p className="text-ink-soft">{t("noDetails")}</p>
+        ) : (
+          <DescriptionList>
+            {written.map((key) => (
+              <Description key={key} label={f(key)}>
+                {prose(confidential[key])}
+              </Description>
+            ))}
+            {confidential.links.length > 0 ? (
+              <Description label={f("links")}>
+                <ul className="flex flex-col gap-1">
+                  {confidential.links.map((link) => (
+                    <li key={link} className="[overflow-wrap:anywhere]">
+                      {link}
+                    </li>
+                  ))}
+                </ul>
+              </Description>
+            ) : null}
+            {confidential.attachments.length > 0 ? (
+              <Description label={f("files")}>
+                <ul className="flex flex-col gap-1">
+                  {confidential.attachments.map((file) => (
+                    <li key={file.id} className="[overflow-wrap:anywhere]">
+                      {file.file_name}
+                      {file.size_bytes !== null ? (
+                        <span className="ml-2 text-sm text-ink-soft">{f(fileSizeParts(file.size_bytes).key, { value: fileSizeParts(file.size_bytes).value })}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </Description>
+            ) : null}
+          </DescriptionList>
+        )}
+      </Section>
+    </Panel>
   );
 }
 
@@ -264,29 +272,24 @@ async function Certificate({ idea }: { idea: MyProposal }) {
   const certId = current?.cert_id;
   const stamped = current?.provenance?.status === "timestamped";
   return (
-    <section aria-labelledby="certificate-heading" className="mt-10">
-      <h2 id="certificate-heading" className="text-lg text-ink">
-        {t("certificateTitle")}
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">{t("certificateLead")}</p>
+    <Section title={t("certificateTitle")} headingId="certificate-heading" description={t("certificateLead")} className="mt-12">
       {current && certId ? (
         <>
-          <dl className="mt-4 grid gap-x-8 gap-y-4 border-t border-line pt-5 sm:grid-cols-[minmax(9rem,auto)_1fr]">
-            <Row label={t("certificateId")}>
+          <DescriptionList figures>
+            <Description label={t("certificateId")}>
               <span className="font-semibold tracking-[0.06em] tabular-nums [overflow-wrap:anywhere]">{certId}</span>
-            </Row>
+            </Description>
             {current.registered_at ? (
-              <Row label={t("registered")}>
+              <Description label={t("registered")}>
                 {t("registeredAt", { time: formatMoment(locale, current.registered_at) })}
-              </Row>
+              </Description>
             ) : null}
-            <Row label={t("evidenceStatus")}>
-              <span className={cn("inline-flex items-center gap-1.5 font-medium", stamped ? "text-ok" : "text-ink")}>
-                {stamped ? <CheckIcon className="size-5 shrink-0" /> : <ClockIcon className="size-5 shrink-0" />}
+            <Description label={t("evidenceStatus")}>
+              <Badge tone={stamped ? "ok" : "neutral"} icon={stamped ? <CheckIcon /> : <ClockIcon />}>
                 {stamped ? t("timestamped") : t("timestampPending")}
-              </span>
-            </Row>
-          </dl>
+              </Badge>
+            </Description>
+          </DescriptionList>
           <ul className="mt-4 flex flex-col">
             <li>
               <Link href={`/verify/${encodeURIComponent(certId)}`} className={standaloneLinkClass}>
@@ -310,22 +313,13 @@ async function Certificate({ idea }: { idea: MyProposal }) {
           </ul>
         </>
       ) : (
-        <p className="mt-4 border-t border-line pt-5 text-ink-soft">{t("noCertificate")}</p>
+        <p className="text-ink-soft">{t("noCertificate")}</p>
       )}
-    </section>
+    </Section>
   );
 }
 
 /** Text the owner wrote, with their line breaks kept. */
 function prose(text: string | null | undefined): ReactNode {
   return text ? <span className="whitespace-pre-line [overflow-wrap:anywhere]">{text}</span> : null;
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 sm:contents">
-      <dt className="text-sm font-medium text-ink-soft sm:pt-0.5">{label}</dt>
-      <dd className="min-w-0 text-ink">{children}</dd>
-    </div>
-  );
 }

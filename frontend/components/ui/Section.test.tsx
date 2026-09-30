@@ -45,4 +45,14 @@ describe("Section", () => {
     rerender(<Section title="History" headingLevel={3} />);
     expect(screen.getByRole("heading", { level: 3 }).id).not.toBe("");
   });
+
+  it("can take focus at its heading when a change ends there, without a ring (P16-C1)", () => {
+    render(<Section title="Pitches" headingId="pitches-heading" focusable />);
+    const heading = screen.getByRole("heading", { level: 2, name: "Pitches" });
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+    expect(heading.className).toContain("focus:outline-none");
+    cleanup();
+    render(<Section title="Pitches" />);
+    expect(screen.getByRole("heading").hasAttribute("tabindex")).toBe(false);
+  });
 });

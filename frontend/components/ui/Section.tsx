@@ -13,6 +13,8 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
   description?: ReactNode;
   /** A secondary link at the end of the heading row ("See all"). */
   link?: { href: string; label: ReactNode };
+  /** The heading takes focus when a change ends there (tabIndex -1, no ring: it is not a control), as PageHeader's. */
+  focusable?: boolean;
   children?: ReactNode;
 }
 
@@ -27,6 +29,7 @@ export function Section({
   headingLevel = 2,
   description,
   link,
+  focusable = false,
   className,
   children,
   ...rest
@@ -37,7 +40,11 @@ export function Section({
   return (
     <section aria-labelledby={id} className={className} {...rest}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6">
-        <Heading id={id} className={cn("text-ink", headingLevel === 3 ? "text-base" : "text-lg")}>
+        <Heading
+          id={id}
+          tabIndex={focusable ? -1 : undefined}
+          className={cn("text-ink", headingLevel === 3 ? "text-base" : "text-lg", focusable && "focus:outline-none")}
+        >
           {title}
         </Heading>
         {link ? (
