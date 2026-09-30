@@ -6,6 +6,8 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
@@ -40,11 +42,6 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
   const back = org ? matchesHref(memberships, org.org_id) : "/org/inbox?tab=matches";
   const found = org ? await getMatch(org.org_id, matchId) : null;
 
-  const backLink = (
-    <Link href={back} className={standaloneLinkClass}>
-      {t("back")}
-    </Link>
-  );
 
   if (!org || !found || found.kind === "refused" || !found.value.available || !found.value.teaser) {
     let body;
@@ -64,8 +61,7 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
     }
     return (
       <SignedInShell homeHref={`/org${orgParam}`} nav={nav}>
-        {backLink}
-        <h1 className="mt-4 text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
+        <PageHeader back={{ href: back, label: t("back") }} title={t("pageTitle")} />
         <div className="mt-6">{body}</div>
       </SignedInShell>
     );
@@ -77,25 +73,29 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
   // The handle shows once: in the teaser's details when they load, else here under the title.
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
-      <article className="max-w-3xl" data-match={match.id}>
-        {backLink}
-        <header className="mt-4">
-          <FitMeter score={match.score} />
-          <h1 className="mt-2 text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
-            {teaser.title ?? ti("untitled")}
-          </h1>
-          <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]">
-            {match.owner_handle && !card ? (
-              <span className="block" data-owner-handle="">
-                {tm("by", { handle: match.owner_handle })}
-              </span>
-            ) : null}
-            {match.niche ? <span className="block">{match.niche.label}</span> : null}
+      <article className="flex max-w-3xl flex-col gap-10" data-match={match.id}>
+        <PageHeader
+          back={{ href: back, label: t("back") }}
+          title={teaser.title ?? ti("untitled")}
+          lead={
+            match.owner_handle || match.niche ? (
+              <>
+                {match.owner_handle && !card ? (
+                  <span className="block" data-owner-handle="">
+                    {tm("by", { handle: match.owner_handle })}
+                  </span>
+                ) : null}
+                {match.niche ? <span className="block">{match.niche.label}</span> : null}
+              </>
+            ) : undefined
+          }
+        >
+          {/* The fit under the title, not a label above it. */}
+          <p className="mt-3">
+            <FitMeter score={match.score} />
           </p>
-        </header>
-        <div className="mt-6">
-          <Why match={match} heading />
-        </div>
+        </PageHeader>
+        <Why match={match} heading />
         {card ? <TeaserDetails card={card} /> : null}
         <Interest match={match} memberships={memberships} org={org} query={orgParam} />
       </article>
@@ -123,12 +123,8 @@ async function Interest({
   const me = reason === null ? await requireMe() : null;
   const members = reason === null ? await getMembers(org.org_id) : null;
   return (
-    <section aria-labelledby="interest-heading" className="mt-10 border-t border-line pt-6" data-interest="">
-      <h2 id="interest-heading" className="text-lg text-ink">
-        {t("interestTitle")}
-      </h2>
-      <p className="mt-2 max-w-[62ch] text-ink-soft">{t("interestLead")}</p>
-      <div className="mt-4">
+    <Section title={t("interestTitle")} headingId="interest-heading" description={t("interestLead")} data-interest="">
+      <div>
         {reason === null && me ? (
           <ClientStrings strings={await clientStrings(["expressInterest", "trackerActions"])}>
             <ExpressInterest
@@ -171,6 +167,6 @@ async function Interest({
           </div>
         )}
       </div>
-    </section>
+    </Section>
   );
 }

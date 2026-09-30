@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Chip } from "@/components/tracker/Chip";
+import { Row } from "@/components/ui/RowList";
 
 import { formatDay } from "../../format";
 import type { Match } from "../../scout";
@@ -17,42 +17,38 @@ export function MatchRow({ match, href }: { match: Match; href: string }) {
   const locale = useLocale();
   const available = match.available && match.teaser !== null;
   const title = available ? (match.teaser?.title ?? t("unavailableTitle")) : t("unavailableTitle");
+  const found = <time dateTime={match.created_at}>{t("found", { date: formatDay(locale, match.created_at) })}</time>;
   return (
-    <article
-      className="flex min-w-0 flex-col gap-2 border-t border-line py-5"
+    <Row
       data-match={match.id}
       data-available={available ? "true" : "false"}
+      headingLevel={2}
+      title={title}
+      href={href}
+      meta={
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          {available && match.owner_handle ? <span>{t("by", { handle: match.owner_handle })}</span> : null}
+          {available ? <span>{match.niche?.label ?? t("nicheNotGiven")}</span> : null}
+          {found}
+        </span>
+      }
+      badges={[
+        available ? (
+          <FitMeter key="fit" score={match.score} />
+        ) : (
+          <Chip key="gone" kind="ended">
+            {t("unavailable")}
+          </Chip>
+        ),
+      ]}
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        {available ? <FitMeter score={match.score} /> : <Chip kind="ended">{t("unavailable")}</Chip>}
-        <p className="text-sm text-ink-soft">
-          <time dateTime={match.created_at}>{t("found", { date: formatDay(locale, match.created_at) })}</time>
-        </p>
-      </div>
-      <h2 className="text-lg leading-snug">
-        <Link
-          href={href}
-          className={
-            "-my-2 inline-flex min-h-11 items-center py-2 font-semibold [overflow-wrap:anywhere] text-ink " +
-            "underline decoration-transparent decoration-1 underline-offset-[0.2em] hover:decoration-jacaranda"
-          }
-        >
-          {title}
-        </Link>
-      </h2>
       {available ? (
-        <>
-          <p className="text-sm text-ink-soft [overflow-wrap:anywhere]">
-            {match.owner_handle ? <span className="block">{t("by", { handle: match.owner_handle })}</span> : null}
-            <span className="block">{match.niche?.label ?? t("nicheNotGiven")}</span>
-          </p>
-          <div className="mt-1">
-            <Why match={match} />
-          </div>
-        </>
+        <div className="mt-1">
+          <Why match={match} />
+        </div>
       ) : (
         <p className="text-sm text-ink-soft">{t("unavailableNote")}</p>
       )}
-    </article>
+    </Row>
   );
 }

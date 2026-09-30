@@ -1,5 +1,7 @@
 import { useTranslations } from "next-intl";
 
+import { Section } from "@/components/ui/Section";
+
 import { whySourceOf, type Match } from "../../scout";
 
 /**
@@ -11,8 +13,9 @@ export function FitMeter({ score }: { score: number }) {
   const value = Math.max(0, Math.min(100, Math.round(score)));
   return (
     <span data-chip="fit" className="inline-flex items-center gap-2 text-sm font-semibold text-jacaranda">
-      <span aria-hidden="true" className="relative h-1.5 w-14 overflow-hidden rounded-full bg-line">
-        <span className="absolute inset-y-0 left-0 rounded-full bg-jacaranda" style={{ width: `${value}%` }} />
+      {/* Square ends: rounded-full is kept for the avatar and the one solid badge (the design plan's Radius). */}
+      <span aria-hidden="true" className="relative h-1.5 w-14 overflow-hidden bg-line">
+        <span className="absolute inset-y-0 left-0 bg-jacaranda" style={{ width: `${value}%` }} />
       </span>
       <span aria-hidden="true" className="tabular-nums">
         {t("fit", { score: value })}
@@ -25,18 +28,30 @@ export function FitMeter({ score }: { score: number }) {
 /**
  * "Why this matches" as the scout wrote it, with who wrote it (the EM3 digest's labels): the model from the teaser,
  * the scout's rules, or the rules because the model answered with a demo fallback. The text is shown as text only.
+ * On the match's page (`heading`) it is a Section; in a row, its name is for screen readers only. No coloured rule:
+ * the words and who wrote them carry it.
  */
 export function Why({ match, heading }: { match: Pick<Match, "why" | "why_source" | "demo_fallback">; heading?: boolean }) {
   const t = useTranslations("scoutMatches");
   if (!match.why) return null;
   const source = whySourceOf(match);
-  return (
-    <div className="max-w-[64ch] border-l-2 border-jacaranda pl-3" data-why-source={source}>
-      {heading ? <h2 className="text-lg text-ink">{t("why")}</h2> : <p className="sr-only">{t("why")}</p>}
-      <p className={heading ? "mt-1 text-ink [overflow-wrap:anywhere]" : "text-ink [overflow-wrap:anywhere]"}>
-        {match.why}
-      </p>
+  const body = (
+    <>
+      <p className="text-ink [overflow-wrap:anywhere]">{match.why}</p>
       <p className="mt-1 text-sm text-ink-soft">{t(`whySource.${source}`)}</p>
+    </>
+  );
+  if (heading) {
+    return (
+      <Section title={t("why")} headingId="why-heading" className="max-w-[64ch]" data-why-source={source}>
+        {body}
+      </Section>
+    );
+  }
+  return (
+    <div className="max-w-[64ch]" data-why-source={source}>
+      <p className="sr-only">{t("why")}</p>
+      {body}
     </div>
   );
 }
