@@ -2238,5 +2238,10 @@
     "label": "Mipangilio",
     "security": "Usalama",
     "notifications": "Arifa"
+  },
+  "devEngagements": {
+    "organisations": "{count, plural, one {Imewasilishwa kwa shirika #} other {Imewasilishwa kwa mashirika #}}",
+    "openIdea": "Fungua wazo",
+    "rowsLabel": "Mashirika ya {title}"
   }
 }

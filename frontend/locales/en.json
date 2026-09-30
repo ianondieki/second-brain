@@ -2238,5 +2238,10 @@
     "label": "Settings",
     "security": "Security",
     "notifications": "Notifications"
+  },
+  "devEngagements": {
+    "organisations": "{count, plural, one {Pitched to # organisation} other {Pitched to # organisations}}",
+    "openIdea": "Open the idea",
+    "rowsLabel": "Organisations for {title}"
   }
 }
