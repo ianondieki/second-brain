@@ -1298,7 +1298,7 @@
     "paySimulated": "Start the simulated payment",
     "starting": "Starting…",
     "phoneTitle": "Check your phone",
-    "phoneLead": "Enter your M-Pesa PIN in the prompt on your phone to pay {price}.",
+    "phoneLead": "Enter your M-Pesa PIN in the prompt on your phone to pay KES {price}.",
     "phoneLeadSimulated": "This is a simulation, so no prompt arrives: the answer comes by itself in a few seconds.",
     "waiting": "Waiting for the payment to be confirmed…",
     "checking": "Checking the payment…",

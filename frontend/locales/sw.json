@@ -1298,7 +1298,7 @@
     "paySimulated": "Anza malipo ya kuigiza",
     "starting": "Inaanza…",
     "phoneTitle": "Angalia simu yako",
-    "phoneLead": "Weka PIN yako ya M-Pesa kwenye ujumbe ulio kwenye simu yako ili kulipa {price}.",
+    "phoneLead": "Weka PIN yako ya M-Pesa kwenye ujumbe ulio kwenye simu yako ili kulipa KES {price}.",
     "phoneLeadSimulated": "Huu ni uigizaji, kwa hivyo hakuna ujumbe utakaofika: jibu linakuja lenyewe baada ya sekunde chache.",
     "waiting": "Inasubiri malipo yathibitishwe…",
     "checking": "Inakagua malipo…",
