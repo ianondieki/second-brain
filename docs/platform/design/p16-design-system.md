@@ -99,7 +99,7 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
 | Tabs | `TabNav` | links with `aria-current="page"`, 44 px targets, 2 px jacaranda underline on the current tab, scrolls sideways inside itself at 360 px. |
 | Portal nav | `PortalNav` | one implementation behind `DevNav`, `OrgNav`, `AdminNav`. |
 | Empty states | `EmptyState` | `data-empty-state`, exactly one sentence and one action link (AC-UX-5). |
-| Loading | `loading.tsx` per route group + `PageSkeleton` | server component, no client JS; static wash blocks (no shimmer), `role="status"` with a visually hidden "Loading" sentence. |
+| Loading | no route-level `loading.tsx`; `LinkPending` in navigation links; the in-page `<Suspense>` status sentences | Pages render in one server pass. A route skeleton was built and measured in P16 part B, then removed: React holds a revealed Suspense fallback for at least ~300 ms and the API answers well inside that, so Lighthouse mobile LCP went from 1.6–1.7 s to 2.4 s on `/dev`, 1.7 to 2.4 s on `/dev/discover` and 1.6 to 2.3 s on the tracker, and the MFA-pending redirect became a 200. In-app navigation shows `LinkPending` (a fixed-size accent bar whose opacity follows `useLinkStatus`, after 100 ms, pulse only without reduced motion, `aria-hidden`) on the tapped nav item, tab, row title or back link. A route-level skeleton comes back only for a page measured to wait well over ~300 ms on its data. |
 | Errors | route-group `error.tsx` (`ErrorScreen`) + inline `Alert` for refused actions | errors say what happened and what to do; no apologies. |
 | Success / "toasts" | inline `Alert tone="ok"` in a live region next to the action that caused it | no floating toasts (low bandwidth, screen readers, focus). |
 | Confirmations | `ConfirmDialog` (native `<dialog>`, `--shadow-overlay`, `--scrim`) | only for destructive or irreversible actions (withdraw, decline, cancel plan, reject); names the action on its button ("Withdraw pitch", not "OK"); Escape and the second button cancel; focus returns to the trigger. |
@@ -115,7 +115,7 @@ Left-aligned throughout; numbers in tables right-aligned with tabular figures.
    callout, focus. Never decoration.
 4. **The one memorable thing stays where it is**: the bridge line on the landing page and the tracker stepper with its
    whose-turn callout. Everything else is quiet.
-5. **Every screen has four states**: loading (route skeleton), empty (one sentence, one action), error (what happened,
+5. **Every screen has four states**: loading (the tapped link's pending hint; no route skeleton, see Loading), empty (one sentence, one action), error (what happened,
    what to do), success (inline confirmation). A screen without one of them is unfinished.
 
 ## Review against the brief (second pass)
@@ -150,8 +150,8 @@ do not re-create their classes on a screen. Tokens are Tailwind utilities (`bg-a
 | `TabNav` | `@/components/ui/TabNav` | views of one page as link tabs (`label` required, `items`, `current`) |
 | `PortalNav` (behind `DevNav`, `OrgNav`, `AdminNav`) | `@/components/PortalNav` | a portal's sections; use the three wrappers on screens |
 | `EmptyState` (`EmptyStateFrame` for a button action in a client form step) | `@/components/ui/EmptyState`, `@/components/ui/EmptyStateFrame` | empty and closed states: one sentence, one action (`primary` when it is the screen's one action; `rule={false}` under a tab strip) |
-| `PageSkeleton`, `DevLoading`, `OrgLoading`, `AccountLoading`, `AdminLoading` | `@/components/ui/PageSkeleton`, `@/components/RouteLoading` | a new route segment's `loading.tsx` (a one-line file: see `app/(app)/dev/loading.tsx`) |
-| `NotFoundScreen` | `@/components/NotFoundScreen` | `not-found.tsx` files (root, `(app)`, `(public)`) |
+| `LinkPending` | `@/components/ui/LinkPending` | inside a `next/link` whose destination may take a moment (already in `PortalNav`, `TabNav`, `Row` titles and `BackLink`); no `loading.tsx` |
+| `NotFoundScreen` | `@/components/NotFoundScreen` | the one root `app/not-found.tsx`: static (no session read, no client component, plain links), since Next.js embeds it in every page's payload |
 | `ConfirmDialog`, `openConfirm` | `@/components/ui/ConfirmDialog` | destructive or irreversible steps only; the confirm button names the action; open with `openConfirm(ref.current)` |
 | `Panel` | `@/components/ui/Panel` | the one `rounded-panel` box of a screen (`variant="field"` or `"wash"`) |
 
