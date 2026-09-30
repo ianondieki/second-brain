@@ -382,17 +382,19 @@ from one design system (`docs/platform/design/p16-design-system.md`), with zero 
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
 gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Stage D is
 done** (`fc87608`: five read waterfalls fixed with fetch-order tests, the scout form back under 150 KB, Lighthouse
-mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E in flight**: E1
-`feat/P16-backend-consistency` (card `tasks/P16-E1.md`: one error shape, one pagination style, naming, N+1 query-count
-tests, log PII audit, hermetic tests, moderation case by id, trend G5 test) and E2 `feat/P16-coverage-gate` (card
-`tasks/P16-E2.md`: tenancy to ≥95 %, the coverage gate in `pr.yml`, one test per integration, Vitest gaps). Backend
-baseline (CI-equivalent, no `backend/.env`): 4017 tests, 97.92 % total; tenancy 89.01 %. **Then:** the full e2e suite
-three times in CI mode, `make check`, traceability, legacy suite; Stage F. The demo is in a used state after the reviewer's walkthrough run: `make
-demo-reset` before recording or showing it. **Stage E backlog**:
-the moderation case page finds a case only in the 200-row queue list (fetch by id or page); `trend_facts.py:275` test
-G5 (REQ-TREND-01 re-review MINOR 1); `requirePendingMfa` return path for a signed-out person (P16-C1).
+mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E in flight**: E2
+`feat/P16-coverage-gate` **merged** `a94ab33` (card `tasks/P16-E2.md`: tenancy 99.26 %, total 98.07 %, 4066 backend
+tests; the coverage gate in `pr.yml`, ≥85 % total and ≥95 % on the five packages; one test per integration; 19 Vitest
+files). E1 `feat/P16-backend-consistency` (`93a34c4`, card `tasks/P16-E1.md`: one error shape, cursor paging, naming,
+N+1 fixes with query-count tests, log PII audit mapped to REQ-SEC-03, hermetic tests, moderation case by id, trend G5
+test) is in review (reviewer and security-reviewer); after review it merges the integration head (a trial merge with E2
+is conflict-free and green), then CI and CodeQL. E3 `feat/P16-demo-story-ci` (card `tasks/P16-E3.md`: the walkthrough
+as a `demo-story` CI job) is being built. **Then:** the full e2e suite three times in CI mode (dispatch `pr.yml` three
+times on the final head), `make check`, traceability, legacy suite; Stage F. The demo is in a used state: `make
+demo-reset` before recording or showing it. **Stage E backlog** (MINORs, on cards): `requirePendingMfa` return path for
+a signed-out person (P16-C1); `reminders/facts.py` loads engagements in a loop and could call `load_many` (P16-E1).
 
-**Open branches** (2026-09-30, session 3): `feat/P16-backend-consistency`, `feat/P16-coverage-gate`. Integration head `4d71dc5`.
+**Open branches** (2026-09-30, session 3): `feat/P16-backend-consistency`, `feat/P16-demo-story-ci`. Integration head `7f1b72a`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
