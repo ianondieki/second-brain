@@ -26,7 +26,6 @@ from bridge.reminders.health import EngagementFact, Health, Reason, ReasonCode
 
 S, M = EngagementState, MilestoneState
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
-TRACKER_PATH: Final = "/engagements"
 SETTINGS_PATH: Final = "/settings/notifications"
 HELP_PATH: Final = "/help"
 PLACE: Final = "Nairobi, Kenya"
