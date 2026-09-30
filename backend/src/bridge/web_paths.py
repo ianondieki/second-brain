@@ -20,8 +20,8 @@ ORG_ENGAGEMENTS: Final = "/org/engagements"
 
 def engagement_path(party: EngagementParty, engagement_id: UUID) -> str:
     """One engagement's tracker in ``party``'s portal."""
-    base = DEV_ENGAGEMENTS if party is EngagementParty.DEVELOPER else ORG_ENGAGEMENTS
-    return f"{base}/{engagement_id}"
+    portal = DEV_ENGAGEMENTS if party is EngagementParty.DEVELOPER else ORG_ENGAGEMENTS
+    return f"{portal}/{engagement_id}"
 
 
 def org_engagements_path(org_id: UUID) -> str:
