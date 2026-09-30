@@ -98,8 +98,12 @@ test.describe("a staff admin", () => {
     await signIn(page, staff);
     await expect(page).toHaveURL(/\/admin\/research$/, SERVER_STEP);
     const nav = page.getByRole("navigation", { name: "Staff console" });
-    expect(await nav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
-    await expect(nav.getByRole("link", { name: "Research" })).toHaveAttribute("aria-current", "page");
+    if (info.project.name === "desktop") {
+      expect(await nav.getByRole("link").count()).toBeLessThanOrEqual(5); // AC-UX-1
+      await expect(nav.getByRole("link", { name: "Research" })).toHaveAttribute("aria-current", "page");
+    } else {
+      await expect(nav).toBeHidden(); // one section: no tab bar on a phone
+    }
     await expect(page.getByRole("heading", { name: "Research", level: 1 })).toBeVisible();
     await checkScreen(page);
 
