@@ -1,6 +1,6 @@
 import { api } from "@/lib/api/client";
 
-import { scoutRefusalOf, type Preview, type Scout, type ScoutBody, type ScoutRefusal } from "../../scout";
+import { scoutRefusalOf, type Preview, type Scout, type ScoutBody, type ScoutRefusal } from "../../scout-draft";
 
 // The scout form's calls from the browser (same-origin /api; the typed client adds the CSRF header). Each settles into
 // its value or a refusal the form words from locales, with the next plan up for a 402.
