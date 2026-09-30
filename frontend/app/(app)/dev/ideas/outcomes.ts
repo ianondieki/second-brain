@@ -43,6 +43,8 @@ export interface Refusal<P extends string> {
   fields: FieldIssue[];
   /** The plan's cap on published ideas (402 `plan_limit`), when the API gave it. */
   limit?: number;
+  /** 402 `plan_limit`: the next plan up (lib/billing/upgrade.ts), absent at the top of the ladder. */
+  upgrade?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

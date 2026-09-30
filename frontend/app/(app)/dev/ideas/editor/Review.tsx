@@ -1,16 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { upgradeHref } from "@/lib/billing/upgrade";
 
 import type { Calls } from "../calls";
 import {
+  editHref,
   FIELD_STEP,
   ideaHref,
   linkLines,
@@ -59,7 +62,7 @@ type Publishing =
   | { kind: "idle" }
   | { kind: "busy" }
   | { kind: "checklist" }
-  | { kind: "failed"; problem: PublishProblem; limit?: number };
+  | { kind: "failed"; problem: PublishProblem; limit?: number; upgrade?: string };
 
 /**
  * Step 3, loaded when it opens: the public teaser as others will see it, a count of the confidential details, what
@@ -130,7 +133,9 @@ export function Review(props: ReviewProps) {
       if (fresh.ok) setText(fresh.value);
       setConfirmed({});
     }
-    setPublishing({ kind: "failed", problem: outcome.problem, limit: outcome.limit });
+    // A plan limit links to the next plan up and back to this step once it is paid for (REQ-BIL-08).
+    const upgrade = outcome.upgrade ? upgradeHref(outcome.upgrade, { next: editHref(proposalId, 3) }) : undefined;
+    setPublishing({ kind: "failed", problem: outcome.problem, limit: outcome.limit, upgrade });
   }
 
   return (
@@ -206,11 +211,18 @@ export function Review(props: ReviewProps) {
       ) : null}
       {publishing.kind === "failed" ? (
         <Alert ref={alert}>
-          {publishing.problem === "planLimit"
-            ? publishing.limit !== undefined
-              ? t("problem.planLimit", { limit: publishing.limit })
-              : t("problem.planLimitUnknown")
-            : t(`problem.${publishing.problem}`)}
+          <p>
+            {publishing.problem === "planLimit"
+              ? publishing.limit !== undefined
+                ? t("problem.planLimit", { limit: publishing.limit })
+                : t("problem.planLimitUnknown")
+              : t(`problem.${publishing.problem}`)}
+          </p>
+          {publishing.problem === "planLimit" && publishing.upgrade ? (
+            <Link href={publishing.upgrade} className={standaloneLinkClass}>
+              {t("problem.planLimitUpgrade")}
+            </Link>
+          ) : null}
         </Alert>
       ) : null}
 

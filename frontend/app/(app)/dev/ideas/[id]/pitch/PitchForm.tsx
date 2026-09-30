@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { ClockIcon, SendIcon } from "@/components/ui/status-icons";
+import { upgradeHref } from "@/lib/billing/upgrade";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { pitch as pitchCall } from "./calls";
@@ -397,6 +398,10 @@ function Refused({
     action = <a href={pitchHref(proposalId)} className={standaloneLinkClass}>{t("reload")}</a>;
   } else if (problem === "notPublic" || problem === "notFound") {
     action = <Link href={ideaHref} className={standaloneLinkClass}>{t("back")}</Link>;
+  } else if ((problem === "planLimit" || problem === "planLimitUnknown") && refusal?.upgrade) {
+    // The next plan up, and back to this picker once it is paid for (REQ-BIL-08).
+    const href = upgradeHref(refusal.upgrade, { next: pitchHref(proposalId) });
+    action = <Link href={href} className={standaloneLinkClass}>{t("problem.planLimitUpgrade")}</Link>;
   }
   return (
     <Alert tone={problem === "chooseOne" ? "info" : "error"} ref={alertRef}>

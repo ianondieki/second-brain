@@ -378,6 +378,22 @@ describe("a refused pitch", () => {
   });
 });
 
+describe("a plan limit (REQ-BIL-08)", () => {
+  it.each([
+    [{ problem: "planLimit", limit: 5, used: 5, upgrade: "dev_pro_monthly" }],
+    [{ problem: "planLimitUnknown", upgrade: "dev_pro_monthly" }],
+  ] as const)("%o links to the next plan up and back to this picker", async (refusal) => {
+    const pitchImpl = await pitchWith({ ok: false, conflicts: [], ...refusal } as PitchOutcome);
+    renderForm({ initialSelected: [SAFCELL], pitchImpl });
+    await clickPitch();
+    const links = within(screen.getByRole("alert")).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual(["Upgrade your plan"]);
+    expect(links[0].getAttribute("href")).toBe(
+      `/billing/upgrade?plan=dev_pro_monthly&next=${encodeURIComponent(`/dev/ideas/${PROPOSAL}/pitch`)}`,
+    );
+  });
+});
+
 describe("after a pitch", () => {
   const RESULT: PitchResult = {
     tags: [

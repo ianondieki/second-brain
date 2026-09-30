@@ -1,4 +1,5 @@
 import { apiErrorCode } from "@/lib/api/error-code";
+import { upgradePlanOf } from "@/lib/billing/upgrade";
 
 import { common, detail, fieldsRefusal, type PublishProblem, type Refusal, type UploadProblem } from "./outcomes";
 
@@ -12,7 +13,8 @@ export function publishRefusal(status: number, body: unknown): Refusal<PublishPr
   if (status === 403 && code === "d1_required") return { problem: "d1Required", fields: [] };
   if (status === 402) {
     const limit = detail(body).limit;
-    return { problem: "planLimit", fields: [], limit: typeof limit === "number" ? limit : undefined };
+    const upgrade = upgradePlanOf(body) ?? undefined;
+    return { problem: "planLimit", fields: [], limit: typeof limit === "number" ? limit : undefined, upgrade };
   }
   if (status === 409 && code === "attestation_text_outdated") return { problem: "attestationsChanged", fields: [] };
   if (status === 409 && code === "nothing_to_publish") return { problem: "nothingToPublish", fields: [] };
