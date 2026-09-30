@@ -61,7 +61,7 @@ describe("a Discover problem", () => {
     const source = within(more).getByRole("link", { name: "Communications Authority of Kenya" });
     expect(source.getAttribute("href")).toBe("https://www.ca.go.ke/report");
     expect(source.getAttribute("rel")).toContain("noopener");
-    expect(within(more).getByText("Published 28 Sept 2026")).toBeTruthy();
+    expect(within(more).getByText(/^Published 28 Sept? 2026$/)).toBeTruthy(); // "Sept" or "Sep" (P16-A)
     expect(within(more).getByRole("link", { name: "Fuel-level alerts for off-grid tower sites" }).getAttribute("href")).toBe(
       `/dev/discover?view=projects&niche=ict#project-${PROJECT_ID}`,
     );

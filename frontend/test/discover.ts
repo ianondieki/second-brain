@@ -88,8 +88,8 @@ export function trendingProject(overrides: Partial<TrendingProject> = {}): Trend
       label: "Developer-reported",
       niche: TELECOMS,
     },
-    trend: { trending: true, new_this_week: true, badge: "Trending in ICT › Networks & Telecommunications" },
-    why: ["Verified organisations expressed interest", "Solves a trending problem", "New this week"],
+    trend: { trending: true, new_this_week: true, badge: "Trending in ICT › Networks & Telecommunications: verified organisations asking" },
+    why: ["Verified organisation interest", "Solves a trending problem", "New this week"],
     ...overrides,
   };
 }
