@@ -4,6 +4,8 @@ import type { Ref } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Row, RowList } from "@/components/ui/RowList";
 
 import type { Preview } from "../../scout";
 
@@ -34,21 +36,27 @@ export function ScoutPreview({ preview, headingRef }: { preview: Preview; headin
             </p>
             {preview.total > preview.digest_size ? <p>{t("previewDigest", { max: preview.digest_size })}</p> : null}
           </div>
-          <ol aria-label={t("previewLabel")} className="flex flex-col">
+          <RowList ordered aria-label={t("previewLabel")}>
             {preview.items.map((item) => (
-              <li key={item.proposal_id} className="flex min-w-0 flex-col gap-1 border-t border-line py-4">
-                <p className="text-sm font-semibold text-jacaranda tabular-nums">{t("fit", { value: item.score })}</p>
-                <p className="font-semibold [overflow-wrap:anywhere] text-ink">{item.teaser.title ?? t("untitled")}</p>
-                <p className="text-sm text-ink-soft [overflow-wrap:anywhere]">
-                  {item.owner_handle ? <span className="block">{t("by", { name: item.owner_handle })}</span> : null}
-                  {item.teaser.niche ? <span className="block">{item.teaser.niche.label}</span> : null}
-                </p>
-                <p className="max-w-[64ch] border-l-2 border-line pl-3 text-sm text-ink [overflow-wrap:anywhere]">
-                  {item.why}
-                </p>
-              </li>
+              <Row
+                key={item.proposal_id}
+                title={item.teaser.title ?? t("untitled")}
+                meta={
+                  <span className="flex flex-wrap gap-x-4 gap-y-1">
+                    {item.owner_handle ? <span>{t("by", { name: item.owner_handle })}</span> : null}
+                    {item.teaser.niche ? <span>{item.teaser.niche.label}</span> : null}
+                  </span>
+                }
+                badges={[
+                  <Badge key="fit" tone="accent" className="tabular-nums">
+                    {t("fit", { value: item.score })}
+                  </Badge>,
+                ]}
+              >
+                <p className="max-w-[64ch] text-sm text-ink [overflow-wrap:anywhere]">{item.why}</p>
+              </Row>
             ))}
-          </ol>
+          </RowList>
         </>
       )}
     </section>
