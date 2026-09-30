@@ -76,7 +76,8 @@ export function Row({
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <article
-      className={cn("relative grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 border-t border-line py-5", className)}
+      // The figure's column (and its 24 px gap) only when there is a figure: without one the title keeps the full width.
+      className={cn("relative grid border-t border-line py-5", figure && "grid-cols-[minmax(0,1fr)_auto] gap-x-6", className)}
       {...rest}
     >
       <div className="flex min-w-0 flex-col gap-1.5">
