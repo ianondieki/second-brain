@@ -35,3 +35,38 @@ export function pathOf(link: string): string {
   const url = new URL(link);
   return `${url.pathname}${url.search}${url.hash}`;
 }
+
+export interface MailMessage {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** Waits for the newest message to `to` whose subject matches, and returns it (the stack's Mailpit only). */
+export async function waitForMessage(
+  request: APIRequestContext,
+  to: string,
+  subject: RegExp,
+  timeoutMs = 60_000,
+): Promise<MailMessage> {
+  const deadline = Date.now() + timeoutMs;
+  const wanted = to.toLowerCase();
+  while (Date.now() < deadline) {
+    const list = await request.get(`${MAILPIT}/api/v1/messages?limit=200`);
+    if (list.ok()) {
+      const { messages = [] } = (await list.json()) as { messages?: Array<Summary & { Subject?: string }> };
+      for (const summary of messages) {
+        if (!summary.To?.some((r) => r.Address.toLowerCase() === wanted) || !subject.test(summary.Subject ?? "")) continue;
+        const message = await request.get(`${MAILPIT}/api/v1/message/${summary.ID}`);
+        const { Subject = "", Text = "", HTML = "" } = (await message.json()) as {
+          Subject?: string;
+          Text?: string;
+          HTML?: string;
+        };
+        return { subject: Subject, text: Text, html: HTML };
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`No message matching ${subject} reached ${to} within ${timeoutMs} ms (Mailpit at ${MAILPIT})`);
+}

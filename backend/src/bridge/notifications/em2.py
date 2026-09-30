@@ -21,7 +21,8 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from bridge.engagements.calendar import NAIROBI
-from bridge.models.enums import ContactChannel
+from bridge.models.enums import ContactChannel, EngagementParty
+from bridge.web_paths import engagement_path
 
 KIND: Final = "em2"
 CHANNEL_LABELS: Final = {
@@ -118,7 +119,7 @@ def render(facts: Em2Facts) -> Rendered:
         "registered_at_eat": eat_time(facts.registered_at),
         "tier2_status": tier2_status(company, facts.viewers, shared=facts.shared),
         "public_entity": facts.public_entity,
-        "tracker_url": f"{base}/engagements/{facts.engagement_id}",
+        "tracker_url": base + engagement_path(EngagementParty.DEVELOPER, facts.engagement_id),
         "notifications_url": f"{base}/settings/notifications",
         "help_url": f"{base}/help",
         "engagement_ref": str(facts.engagement_id),

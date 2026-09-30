@@ -25,7 +25,6 @@ from bridge.reminders.health import EngagementFact, Health, ReasonCode, assess, 
 from bridge.reminders.render import (
     HEALTH_LABELS,
     STAGE_LABELS,
-    TRACKER_PATH,
     Email,
     eat_date,
     name,
@@ -38,6 +37,7 @@ from bridge.reminders.render import (
     sections,
 )
 from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
+from bridge.web_paths import org_engagements_path
 
 KIND: Final = "em7_org"
 Cadence = Literal["daily", "weekly"]
@@ -204,7 +204,7 @@ def email(digest: Digest) -> Email:
         ),
         next_step=None,
         cta_label=CTA,
-        cta_path=TRACKER_PATH,
+        cta_path=org_engagements_path(digest.org_id),  # this organisation's engagements list
         footer=f"You get this {digest.cadence} digest for {org} because you turned reminders on.",
     )
 

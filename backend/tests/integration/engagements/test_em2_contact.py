@@ -73,7 +73,7 @@ async def test_em2_is_sent_once_with_the_spec_copy(owner_engine: AsyncEngine, ap
         assert eat(today) in part
         assert await cert_id(owner_engine, world) in part
         assert "Your full proposal has not been shared yet." in part
-        assert f"/engagements/{engagement}" in part
+        assert f"/dev/engagements/{engagement}" in part  # the developer's own tracker
         assert "Public bodies may need to run a competitive process" not in part
     assert message.text.count("Open your tracker") == 1
     assert (message.html or "").count("<a href") == 3  # one CTA, and the footer's two links

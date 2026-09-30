@@ -7,6 +7,7 @@ can_view_tier2 opens for a reviewer who meets every other condition."""
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -31,6 +32,7 @@ from tests.integration.matching.scout_world import ScoutWorld, build, publish, r
 from tests.integration.proposals.tier2_scene import accept_nda, accept_terms, new_template
 
 SETTINGS = deals_on()
+FRONTEND_APP = Path(__file__).resolve().parents[4] / "frontend" / "app" / "(app)"
 
 
 async def interested(owner_engine: AsyncEngine, app_engine: AsyncEngine, world: ScoutWorld) -> tuple[UUID, UUID]:
@@ -262,7 +264,7 @@ async def test_the_share_notice_skips_former_members_and_never_raises(
     told = await rows(
         owner_engine,
         "SELECT user_id FROM in_app_notifications WHERE kind = 'engagement.tier2_shared' AND link = :l",
-        l=f"/engagements/{engagement}",
+        l=f"/org/engagements/{engagement}",
     )
     assert [t.user_id for t in told] == [world.org.signatory]
     await tell_organisation(factory, uuid4(), world.developer, grant)  # no such engagement: nothing, no error
@@ -271,3 +273,23 @@ async def test_the_share_notice_skips_former_members_and_never_raises(
         raise RuntimeError("no database")
 
     await tell_organisation(broken, engagement, world.developer, grant)  # type: ignore[arg-type]
+
+
+async def test_the_share_notice_opens_the_organisations_tracker(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """P10-F open item 2: the in-app notice of a share linked to /engagements/{id}, which is no page of the web app;
+    each of the organisation's people told gets the organisation's tracker, /org/engagements/{id}."""
+    world = await build(owner_engine)
+    _, engagement = await interested(owner_engine, app_engine, world)
+    async with clients(app_engine, SETTINGS, world.developer) as (dev,):
+        assert (await dev.post(f"/api/engagements/{engagement}/share-tier2")).status_code == 200
+    notices = await rows(
+        owner_engine,
+        "SELECT user_id, link FROM in_app_notifications WHERE kind = 'engagement.tier2_shared' AND org_id = :o",
+        o=world.org.id,
+    )
+    assert sorted((n.user_id, n.link) for n in notices) == sorted(
+        (person, f"/org/engagements/{engagement}") for person in (world.org.signatory, world.org.owner)
+    )
+    assert (FRONTEND_APP / "org" / "engagements" / "[id]" / "page.tsx").is_file()  # the route the link opens

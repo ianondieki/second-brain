@@ -65,10 +65,10 @@ from bridge.reminders import nudge as developer
 from bridge.reminders import org_digest
 from bridge.reminders.facts import clock_now, developer_facts, load_holidays, org_facts
 from bridge.reminders.health import Health, nairobi_today
-from bridge.reminders.render import TRACKER_PATH
 from bridge.reminders.thresholds import ReminderPolicy, get_reminder_policy
 from bridge.reminders.wording import word_nudge
 from bridge.tenancy.models import Membership
+from bridge.web_paths import DEV_ENGAGEMENTS, org_engagements_path
 
 EMAIL, IN_APP = NotificationChannel.EMAIL, NotificationChannel.IN_APP
 Status = Literal["sent", "already", "quiet", "not_opted_in", "error"]
@@ -318,7 +318,7 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
             kind=kind,
             title=developer.IN_APP_TITLE,
             body=developer.in_app_body(composed),
-            link=TRACKER_PATH,
+            link=DEV_ENGAGEMENTS,
             dedupe_key=in_key,
             local_date=today,
         )
@@ -415,7 +415,7 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
             kind=kind,
             title=org_digest.subject(digest)[:200],
             body=f"{digest.summary}.",
-            link=TRACKER_PATH,
+            link=org_engagements_path(org_id),
             dedupe_key=in_key,
             local_date=period,
         )

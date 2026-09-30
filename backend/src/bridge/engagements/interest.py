@@ -57,6 +57,7 @@ from bridge.logging import get_logger
 from bridge.models.enums import (
     AuditActor,
     EngagementOrigin,
+    EngagementParty,
     EngagementState,
     GrantSource,
     OrgRole,
@@ -67,6 +68,7 @@ from bridge.notifications.in_app import post_in_app
 from bridge.tenancy import signals
 from bridge.tenancy.deps import OrgContext
 from bridge.tenancy.service import membership_of
+from bridge.web_paths import engagement_path
 
 S = EngagementState
 THROTTLE_PURPOSE: Final = "org_interest"
@@ -344,7 +346,7 @@ async def tell_organisation(
                     kind="engagement.tier2_shared",
                     title=SHARED_TITLE,
                     body=body,
-                    link=f"/engagements/{engagement_id}",
+                    link=engagement_path(EngagementParty.ORG, engagement_id),
                     dedupe_key=f"tier2share:{grant_id}:{user_id}",
                 )
                 await db.commit()

@@ -339,3 +339,128 @@ All 17 killed.
    on that IP. Record in THREAT_MODEL §5; consider keying per (IP, org).
 4. **README demo logins** (`README.md:112-113`): Brian's row should mention P5 and the free-plan cap, the reviewer's row
    the Scout matches tab and the EM3 digest (P16).
+
+## P10-F: the screens (frontend half; branch `feat/REQ-SCOUT-02-fe`, from integration `a5043eb`)
+
+Agent: impl-frontend. Reviews: reviewer, ux-reviewer. The backend (`openapi.json`, `schema.d.ts`) is unchanged.
+
+**Organisation.** Inbox gets two tabs, Sent to you and Scout matches (`/org/inbox?tab=matches`, the EM3 "N more"
+link): the Scout Agent in a few words (niches, schedule, Active or Paused, Change the scout for owners and admins),
+then the matches newest first, each with its fit, the developer's `owner_handle`, niche and why with who wrote it (the
+EM3 labels, the demo-fallback one included); an unavailable match shows "No longer available" with no teaser, why or
+handle. Without a scout the tab is its empty state, Set up Scout Agent (members who are not owners or admins get one
+sentence and a link to Sent to you). `/org/inbox/scouts/new` and `/org/inbox/scouts/{id}`: the plan's scout cap, the
+not-yet-verified note (AC-SCOUT-8), then the form (niches by parent, keywords to look for and to leave out, counties,
+how far along, lowest fit, schedule with "Needs a higher plan" on the plan's missing frequencies, digest language,
+reviewer seats as recipients); Save is the one primary action, Preview (with the on_new note, worded from locales when
+the API's `note` is set) and Pause/Resume are secondary; a 402 says the plan does not include it and links through
+`upgradeHref(plan, {org, next})`. `/org/inbox/matches/{id}?org=` (the EM3 item link, checked in the e2e): fit, title,
+handle, niche, why, the public teaser, then Express interest (contact person, channel, contact-by date; a stale second
+factor asks for a fresh code inline with the tracker's `StepUp`, then the POST runs once more; the tracker opens), or a
+disabled button with the reason as a fixed sentence (`org_not_e2`, `org_unavailable`, `role_required`,
+`proposal_unavailable`; `engagement_exists` links to the tracker).
+
+**Developer.** Accept and decline interest were already on the tracker (P5/P8: `accept_interest` with step-up,
+`decline_interest` with a confirmation); nothing was added there. New: on an org-origin engagement a Full proposal
+section (`components/tracker/Tier2Section.tsx`, `ShareTier2.tsx`): Share the full proposal, a confirmation in the
+approved logging phrasing, the tracker's `StepUp` when the API asks (it gained a `primary` prop so a second primary
+button never appears), then "You shared the full proposal with {org} on {date}". The organisation's tracker then shows
+Open the full proposal, which opens the proposal page with the Evaluation NDA.
+
+**Pseudonymity.** Match shapes carry no developer id or name; the screens render `owner_handle` only. The org
+tracker labels `developer_name` as a pseudonym while `developer_named` is false (`tracker.fromHandle`) and never reads
+`developer_id`. The e2e checks the developer's display name is absent from the matches, the match page, EM3 and the
+stage-0 tracker, and present from INTEREST_CONFIRMED.
+
+**Files.** `app/(app)/org/{scout,scout-data}.ts`, `org/inbox/InboxTabs.tsx`, `org/inbox/matches/*`,
+`org/inbox/scouts/*`, `components/tracker/{share.ts,ShareTier2.tsx,Tier2Section.tsx}`; small edits to
+`org/inbox/page.tsx` (tabs), `EngagementScreen.tsx` (the section, the handle label), `StepUp.tsx` (`primary`),
+`tracker/data.ts` (the share read), `lib/i18n/client-strings.ts` (three namespaces at the end), the locales (new
+namespaces after `orgProposal`, `tracker.fromHandle`, `_meta.reviewP10f`; [[COPY-REVIEW]], draft Swahili
+[[SW-REVIEW]]). `lib/billing/upgrade.ts` and its test are a byte-for-byte copy of P14-F's (`3fd9615`), so the two
+adds merge cleanly; if P14-F changes the file before merging, take P14-F's.
+
+**Tests.** vitest: `org/scout.test.ts` (links, keywords, draft, checks, body, refusal wording), `scouts/scout-form.test.tsx`,
+`matches/[matchId]/express-interest.test.tsx`, `matches/match-row.test.tsx`, `components/tracker/share.test.tsx`
+(595 frontend tests pass). Playwright `e2e/scout.spec.ts` (with `support/scout-scene.ts`; owner-DB access asserted in
+`beforeAll`): the walkthrough above end to end, on_new scout via the simulated checkout upgrade, the match from the
+worker's `scouts.on_new`, EM3, a reviewer's disabled button, interest with step-up, N17, accept with step-up, EM2 (its
+"not shared yet" sentence), share with step-up, the org opens the full proposal under the NDA; axe, one primary and
+no horizontal scroll on every screen at 360 and 1440 px. `e2e/tracker.spec.ts` now expects the handle, not the name,
+on the org list at SUBMITTED (it failed on integration since the P10 MAJOR 1 fix). JS: `/org/inbox?tab=matches`
+140,096 B, `/org/inbox/scouts/new` 145,979 B, a signatory's match page 146,435 B (budget 150,000).
+
+### P10-F open items
+
+1. **The handle gives the name away (backend).** `auth/service.py` `_handle_from` builds `owner_handle` from the
+   display name ("Achieng Otieno" → `achieng-otieno-2b2356`), so the organisation effectively sees the developer's
+   name before INTEREST_CONFIRMED on every Tier-1 surface (matches, EM3, the tracker). No screen can hide it. Fix in
+   the backend: a random handle (words + digits) at signup and a migration for existing handles. Security-relevant.
+2. The in-app notice of a share links to `/engagements/{id}` (`interest.py` `tell_organisation`), which is not a route:
+   `/org/engagements/{id}` is. No bell renders in-app notices yet.
+3. Not built: match feedback (👍/👎, the API exists), deleting a scout, the budget band field (deviation 2: proposals
+   carry no budget; a saved band is left as it is), Browse repo (origin `org_browse`).
+4. The org picker on the Scout matches tab submits to Sent to you (a GET form carries only `org`).
+5. The tracker route's JS with the share section was not measured (it loads only on org-origin engagements).
+6. The impeccable skill is not installed in this environment; polish was done by hand from the 375/1440 screenshots.
+
+### P10-F fix round (reviewer and ux-reviewer CHANGES_REQUIRED on `22c96f8`)
+
+| Item | Change |
+|---|---|
+| Merge prep | `e2e/tracker.spec.ts` now reads exactly as integration's `e63a182` (`"From "` plus no "Achieng Otieno"); `_meta.reviewP10f` kept |
+| MAJOR 1 stale ids | `pruneDraft`: an edited scout's niches, counties and reviewers the form no longer offers are dropped from the draft, with a one-line note (`scoutForm.dropped`); tests in `scout.test.ts` and `scout-form.test.tsx` |
+| MAJOR 2 handle label | `tracker.fromHandle`: "From {name}, the developer's handle. You see their name once contact is agreed." `counterpartLine` (model.ts) picks the line; `tier2-section.test.tsx` renders EngagementScreen for both `developer_named` values |
+| MAJOR 3 share is final | `tier2Share.confirm` ends "You cannot take this back."; Share the full proposal is always secondary (its step-up too) |
+| MAJOR 4 two-step empty states | `org/OrgRefusal.tsx` (the Inbox's Turn on two-step sign-in / Enter your code, primary) on the Matches tab, the scout screen and the match page |
+| MAJOR 5 plan and draft | Choosing a schedule the plan lacks shows `scoutForm.planNote` and the checkout link of the next plan up that sells it (`planFor` over `GET /api/plans?side=org`) at once; the unsaved draft is kept in `sessionStorage` (`bridge.scoutDraft:{org}:{scout or new}`, try/catch, shape-checked on read, pruned) across the round trip and cleared after a save |
+| MINORs | Org picker keeps `tab=matches`; the disabled Express interest is `aria-disabled`, focusable, described by the reason, E2 in plain words; focus goes to a refusal after a step-up and back to the button on Cancel; after a share, focus moves to the refreshed `#share-status` line; StepUp's code id from `useId`, its not-enrolled sentence neutral; dates as the tracker writes them (`formatDay` → `eatParts`); plain demo-fallback label; `scoutPage.cap` an ICU plural; each Change the scout link named by its niches; the handle once on the match page; the scout's status beside Pause/Resume |
+| Tests | Tier2Section (org not shared, org shared, developer shared, ended, pitched), StepUp inside the share with zero `[data-primary]`, the unavailable match fixture carrying a handle and a why, the kept draft, the plan note, the picker, the focus moves (via `test/server-tree.ts`, which awaits async server components for jsdom) |
+| e2e | `scout.spec.ts`: no piece of the developer's name, any case, on the org's matches, match page, EM3 or stage-0 tracker; no handle format asserted; new steps: member-only empty state, inline plan note, kept draft across the checkout link, pause and resume, `checkScreen` on each step-up state and the share done (focus checked); fixture handles are `dev-7k2m9qxp` |
+
+**The name checks fail on this branch's own backend, as they should.** With `a5043eb`'s slug handles the spec stops
+at `scout.spec.ts:176` (`By achieng-otieno-efb2fe` on the Matches tab). Run against `fix/REQ-AUTH-01-random-handle`'s
+backend (a detached scratch worktree, no merge) the whole spec passes on both projects (4 passed) and the full suite
+has 88 passed, 2 failed (`verify.spec.ts`, which needs the demo seed's `E2E_VERIFY_CERT_ID`).
+
+**JS (gzipped, budget 150,000 B)** on this branch: `/org/inbox?tab=matches` 140,096; `/org/inbox/scouts/new` 147,053;
+a signatory's match page 146,862; the tracker with the share section (`/dev/engagements/{id}` and
+`/org/engagements/{id}` on an org-interest engagement) 146,569. Integration's AccountMenu adds 1,243 B per signed-in
+route (integration's `/org/inbox` 141,339 against this branch's 140,096, both built here without merging), so after
+merge about 148,296, 148,105 and 147,812: under budget with under 2 KB to spare. Screenshots of the round:
+`scratchpad/p10f/shots2/` (375 and 1440 px).
+
+P10-F open items 1 (by `fix/REQ-AUTH-01-random-handle`), 4 (the picker keeps the tab) and 5 (the tracker route
+measured) are addressed; items 2, 3 and 6 stand.
+
+### P10-F fix round 2 (ux-reviewer PASS; reviewer CHANGES_REQUIRED on `3765021`)
+
+- **MAJOR, recipients wiped when the members read fails:** `ScoutScreen` now passes `reviewers: null` when
+  `GET …/members` fails (not `[]`); `pruneDraft` leaves recipients untouched when they are unknown; the form says
+  "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved." and a save sends the
+  saved recipients unchanged. Tests: `scout-form.test.tsx` (a failed read with a saved recipient: no dropped note, the
+  PATCH keeps it) and `scout.test.ts`.
+- **Kept draft:** the key is `bridge.scoutDraft:{user}:{org}:{scout or new}`, so another account on the tab never
+  sees it; the draft comes back only on `?restore=1`, which the checkout's `next` carries (`scoutHref(…, {restore})`),
+  and is discarded otherwise, so an earlier unsaved edit never silently replaces the saved settings. Tests for a
+  restored draft with stale ids (pruned and noted), the discard, and per-person keys.
+- **`tier2Share.confirm`** ends "Views already made cannot be undone." ([[COPY-REVIEW]]; withdrawing before an
+  agreement revokes Tier-2 access, so "You cannot take this back" overstated it).
+- **`OrgRefusal`**: render tests for its three branches (`org/org-refusal.test.tsx`).
+- **e2e:** the inline upgrade link's `next` is `/org/inbox/scouts/new?restore=1`; `scout.spec.ts` 4 passed (360 and
+  1440 px) against the `fix/REQ-AUTH-01-random-handle` backend (scratch worktree, no merge); `tracker.spec.ts` and
+  `org-inbox.spec.ts` 16 passed.
+- **JS budget (gzipped, 150,000 B):** measured on this branch `/org/inbox/scouts/new` 147,124 (+71 this round),
+  `/org/inbox?tab=matches` 140,096; from round 1, a signatory's match page 146,862 and the tracker with the share
+  section 146,569. With integration's AccountMenu (+1,243 B per signed-in route, measured) about 148,367, 141,339,
+  148,105 and 147,812: the scout form keeps about 1.6 KB of headroom, the tightest route of the four. Any further
+  client code on these routes should be split (lazy) or measured first.
+
+### P10-F review round 3 MINORs (2026-09-30; reviewer PASS on 0315b13, ux-reviewer PASS on 3765021)
+
+1. `ScoutScreen.tsx:111-114`: the members→reviewers mapping and the `restore` parse have no vitest (mutations S2, S13
+   survived); move them into a tested function in `scout.ts`.
+2. `ScoutForm.tsx:112-116`: without `restore=1` the discard runs whenever `offered` changes, so a `router.refresh()`
+   after Pause/Resume, or Back from a cancelled checkout, drops the kept draft; run the discard once on mount.
+3. `e2e/scout.spec.ts:113` opens `?restore=1` itself; follow the simulated checkout's Continue link once instead.
+4. JS headroom after the merge: `/org/inbox/scouts/new` about 148,367 B of 150,000.

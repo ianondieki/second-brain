@@ -14,15 +14,21 @@ export function OrgPicker({
   memberships,
   current,
   action,
+  keep = {},
 }: {
   memberships: Membership[];
   current: string;
   action: string;
+  /** Other query values the choice keeps (for example the Inbox tab), sent as hidden fields. */
+  keep?: Record<string, string>;
 }) {
   const t = useTranslations("inbox");
   if (memberships.length < 2) return null;
   return (
     <form method="get" action={action} className="flex flex-wrap items-end gap-3">
+      {Object.entries(keep).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-sm">
         <label htmlFor="org-picker" className="font-semibold text-ink">
           {t("pickerLabel")}

@@ -234,3 +234,11 @@ def test_links_are_platform_paths_only() -> None:
     for path in ("https://evil.example", "//evil.example", "engagements"):
         with pytest.raises(ValueError, match="platform path"):
             platform_url(BASE_URL, path)
+
+
+def test_the_email_opens_the_developers_own_engagements() -> None:
+    """There is no shared /engagements page: the CTA opens the developer's portal."""
+    nudge = compose_nudge(facts(engagement(S.ORG_INTEREST)), NO_HOLIDAYS)
+    message = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL)
+    assert f"Open your tracker: {BASE_URL}/dev/engagements\n" in message.text
+    assert f'href="{BASE_URL}/dev/engagements"' in (message.html or "")
