@@ -137,6 +137,27 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     await screen.findByText("Approved. The proposal is public now.");
     expect(confirmImpl).toHaveBeenCalledWith("123456");
     expect(decideImpl).toHaveBeenCalledTimes(2);
+    expect(decideImpl).toHaveBeenNthCalledWith(2, CASE_ID, "approve", VERSION);
+  });
+
+  it("repeats a rejection, not an approval, after a stale second factor", async () => {
+    const rejected: DecisionOutcome = {
+      ok: true,
+      data: { id: CASE_ID, status: "rejected", subject_state: "rejected" },
+    };
+    const outcomes = [refused({ kind: "stepUp" }), rejected];
+    const decideImpl = vi.fn<typeof decideCase>(async () => outcomes.shift()!);
+    const confirmImpl = vi.fn(async () => ({ ok: true as const }));
+    renderWithIntl(<CaseDecision {...props} decideImpl={decideImpl} confirmImpl={confirmImpl} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, reject" }));
+    const code = await screen.findByLabelText("Code from your app");
+    fireEvent.change(code, { target: { value: "654321" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await screen.findByText("Rejected. It is hidden now.");
+    expect(decideImpl).toHaveBeenCalledTimes(2);
+    expect(decideImpl).toHaveBeenNthCalledWith(1, CASE_ID, "reject", VERSION);
+    expect(decideImpl).toHaveBeenNthCalledWith(2, CASE_ID, "reject", VERSION);
   });
 
   it("returns focus to the chosen button when the step-up is cancelled", async () => {
