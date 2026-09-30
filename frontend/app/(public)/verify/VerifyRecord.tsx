@@ -7,7 +7,9 @@ import { cn } from "@/components/ui/cn";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { Section } from "@/components/ui/Section";
 
-import { formatKenyan, KEYS_HREF, NAIROBI, tokenHref, type CertificateCheck } from "./certificate";
+import { formatMomentSeconds } from "@/lib/format";
+
+import { KEYS_HREF, NAIROBI, tokenHref, type CertificateCheck } from "./certificate";
 import { Fingerprint } from "./Fingerprint";
 
 /**
@@ -20,7 +22,7 @@ export function VerifyRecord({ record }: { record: CertificateCheck }) {
   const t = useTranslations("verify");
   const locale = useLocale();
   const done = record.status === "timestamped";
-  const when = record.timestamp ? new Date(record.timestamp) : null;
+  const at = record.timestamp;
 
   return (
     <div>
@@ -38,16 +40,16 @@ export function VerifyRecord({ record }: { record: CertificateCheck }) {
 
         <DescriptionList figures className="mt-6">
           <Description label={t("time")}>
-            {when ? (
+            {at ? (
               <>
-                <time dateTime={record.timestamp ?? undefined} className="block text-ink">
+                <time dateTime={at} className="block text-ink">
                   {t("timeEat", {
-                    time: formatKenyan(locale, when, { dateStyle: "long", timeStyle: "medium", timeZone: NAIROBI }),
+                    time: formatMomentSeconds(locale, at, NAIROBI),
                   })}
                 </time>
                 <span className="block text-sm text-ink-soft">
                   {t("timeUtc", {
-                    time: formatKenyan(locale, when, { dateStyle: "medium", timeStyle: "medium", timeZone: "UTC" }),
+                    time: formatMomentSeconds(locale, at, "UTC"),
                   })}
                 </span>
               </>
