@@ -122,24 +122,32 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 `backend/config/plans.yaml`). Amina has three published ideas (her third is the one held for moderation) and Brian has
 three, so both are at the cap: publishing another one is refused with "Published ideas your plan allows: 3. Hide one to
 publish this one." and an "Upgrade your plan" link to Plan & billing. There, "Upgrade to Pro (monthly)" opens the
-simulated M-Pesa checkout. A plan bought there stays until `make demo-reset`. The published-ideas limit is the only
-cap the demo enforces on a developer; the plans page also lists "Recommendations with the reasons behind them" under
+simulated M-Pesa checkout. A plan bought there stays until `make demo-reset`. The plan's other developer cap
+that the demo enforces is five pitches per idea; the plans page also lists "Recommendations with the reasons behind them" under
 Pro, but the code does not gate it, so Recommended for you shows its reasons on the free plan. The organisations are on
 the free organisation plan (Claimed: one weekly scout).
 
 `make demo-totp` prints the current code of every login; `make demo-totp EMAIL=reviewer@telco-a.example` prints one.
 A code is accepted once: if the sign-in was refused, wait for the next code (30 seconds).
 
-**What is seeded.** Four proposals, each with its public teaser, confidential part and certificate: Amina's "Repayment
+**What is seeded.** Six proposals, each with its public teaser, confidential part and certificate: Amina's "Repayment
 nudges for SACCO members" (in negotiation with SACCO B, whose reviewer has opened it) and "Fuel-level alerts for
 off-grid tower sites" (closed with Telco A: NDA, agreement, two milestones, sign-off and a recorded payment); Brian's
 "Cashless market-fee collection for counties" (submitted to Telco A, held for County Government of C and NGO D) and
-"USSD repayment reminders for feature phones" (approved to proceed by SACCO B). NGO D (fixture) is an E0 listing with
+"USSD repayment reminders for feature phones" (approved to proceed by SACCO B). Two more exist for M2: Brian's
+"Road works alerts for buried fibre routes", pitched to nobody so that Telco A's scout can match it, and Amina's "Clear
+loan-fee statements for SACCO members", which the moderation rules hold (its text names SACCO B negatively), so its
+teaser is private until the moderator decides. Also seeded: Telco A's weekly scout and its first match; an approved
+research card for each niche that has saved source excerpts; liked niches for both developers and the activity that
+Discover's trends are computed from (see "Real, simulated or planned"); the free plan for every developer and
+organisation; the moderation cases; and County Government of C's claim for E2. NGO D (fixture) is an E0 listing with
 no members. The provisional directory of public organisations (E0) is loaded too. Each side's **Engagements** screen
 shows the tracker: the five stage groups, whose turn it is and the next step, both parties' endorsements, the
 agreement and milestones, and the History. Every step from Submitted to Closed can be taken in the browser by the
 party whose turn it is; signatures, endorsements and payments ask for a fresh TOTP code when the last one is older
-than 12 hours.
+than 12 hours. An organisation sees a developer by a random handle (`dev-` and eight characters, never derived from
+the name or address), not by name, until the engagement reaches Interest confirmed; the developer cannot choose or edit
+it.
 
 **Time and reminders.** `make demo-clock DAYS=3` moves the app's clock forward (deadlines, due dates and reminders
 follow it; it never moves back until `make demo-reset`). `make demo-reminders` sends the day's developer nudges and the
@@ -170,7 +178,8 @@ the seeded demo accounts' data is sent to a free provider.
 
 **Stop, reset, check.** `make demo-down` stops the demo and keeps its data; `make demo-reset` wipes only the demo's
 data (its own `bridge-demo` project and volumes, whatever `COMPOSE_PROJECT_NAME` says; the dev stack is untouched) and
-starts it fresh. Starting again after using the demo keeps what you did: the seed only adds what is missing and leaves
+starts it fresh. Run it once after updating from an older checkout: a demo seeded before the random-handle fix still
+has developers' handles made from their names, and only `make demo-reset` replaces them. Starting again after using the demo keeps what you did: the seed only adds what is missing and leaves
 any engagement someone moved on, any changed password and any deleted idea as it is (its log says which). If the
 very first `make demo` was interrupted (the laptop slept, or Docker ran out of memory), run `make demo-reset`: the seed
 never resumes an engagement it did not just open, so a half-driven one stays where it stopped. `make
