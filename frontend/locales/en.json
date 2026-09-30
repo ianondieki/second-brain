@@ -191,6 +191,7 @@
     "newCodesStepUp": "To get new codes, enter the current code from your authenticator app.",
     "newCodesStepUpSubmit": "Confirm and get new codes",
     "newCodesReady": "Your new recovery codes are ready. Your old codes no longer work.",
+    "newCodesUnknown": "We could not tell whether new codes were made. If they were, your old codes no longer work: get new recovery codes again.",
     "back": "Back to home"
   },
   "password": {

@@ -191,6 +191,7 @@
     "newCodesStepUp": "Ili kupata misimbo mipya, weka msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji.",
     "newCodesStepUpSubmit": "Thibitisha na upate misimbo mipya",
     "newCodesReady": "Misimbo yako mipya ya kurejesha iko tayari. Misimbo yako ya zamani haifanyi kazi tena.",
+    "newCodesUnknown": "Hatukuweza kujua ikiwa misimbo mipya iliundwa. Ikiwa iliundwa, misimbo yako ya zamani haifanyi kazi tena: pata misimbo mipya ya kurejesha tena.",
     "back": "Rudi mwanzo"
   },
   "password": {

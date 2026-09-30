@@ -64,6 +64,26 @@ function onScreen({ passwordSet = true, required = true }: { passwordSet?: boole
   return renderWithIntl(<PasswordStateProvider initial={passwordSet}>{ui}</PasswordStateProvider>);
 }
 
+/**
+ * Whether any React component above `node` keeps `value` in its state (the hooks' memoizedState chain). The form
+ * that took the password unmounts only when "I have saved my codes" is pressed, so this is how a test sees that the
+ * password is not held while the codes are on screen. Reads React's fiber, a test-only dependency on its internals.
+ */
+function stateHolds(node: Element, value: string): boolean {
+  const key = Object.keys(node).find((k) => k.startsWith("__reactFiber$"));
+  type Fiber = { return: Fiber | null; memoizedState: unknown };
+  type Hook = { memoizedState: unknown; next: Hook | null };
+  let fiber = key ? ((node as unknown as Record<string, Fiber>)[key] ?? null) : null;
+  expect(fiber, "a React fiber on the node").not.toBeNull();
+  for (; fiber; fiber = fiber.return) {
+    let hook = fiber.memoizedState as Hook | null;
+    for (let n = 0; hook && typeof hook === "object" && "next" in hook && n < 100; n++, hook = hook.next) {
+      if (hook.memoizedState === value) return true;
+    }
+  }
+  return false;
+}
+
 const opener = () => screen.getByRole("button", { name: "Get new recovery codes" });
 const passwordSection = () => screen.queryByRole("region", { name: "Password" });
 const renewCalls = () => mocks.post.mock.calls.filter(([path]) => path === RENEW);
@@ -165,8 +185,11 @@ describe("getting new recovery codes with a password on file", () => {
     const { container } = onScreen();
     await submitWith("jacaranda");
     const ready = await screen.findByText(READY);
-    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: "jacaranda" } }]]);
+    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: "jacaranda" }, signal: expect.any(AbortSignal) }]]);
     expect(document.activeElement).toBe(ready.closest('[role="status"]'));
+    // The password is dropped once the codes are made: not in the page, and not kept in the form's state.
+    for (const input of document.querySelectorAll("input")) expect(input.value).not.toBe("jacaranda");
+    expect(stateHolds(ready, "jacaranda")).toBe(false);
     const list = screen.getByTestId("recovery-codes");
     expect([...list.querySelectorAll("li")].map((li) => li.textContent)).toEqual(CODES);
     expect(screen.getByRole("button", { name: "Copy codes" })).toBeTruthy();
@@ -196,11 +219,8 @@ describe("getting new recovery codes with a password on file", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm and get new codes" }));
 
     await screen.findByText(READY);
-    expect(mocks.post.mock.calls).toEqual([
-      [RENEW, { body: { current_password: "jacaranda" } }],
-      ["/api/auth/step-up", { body: { code: "123456" } }],
-      [RENEW, { body: { current_password: "jacaranda" } }],
-    ]);
+    const sent = { body: { current_password: "jacaranda" }, signal: expect.any(AbortSignal) };
+    expect(mocks.post.mock.calls).toEqual([[RENEW, sent], ["/api/auth/step-up", { body: { code: "123456" } }], [RENEW, sent]]);
   });
 
   it("can be cancelled at the code step, back to the button, with nothing replaced", async () => {
@@ -236,12 +256,58 @@ describe("getting new recovery codes with a password on file", () => {
     expect(passwordSection()).not.toBeNull();
   });
 
+  const UNKNOWN =
+    "We could not tell whether new codes were made. If they were, your old codes no longer work: get new recovery " +
+    "codes again.";
+
+  it.each([
+    ["no connection", () => new TypeError("Failed to fetch")],
+    ["500", () => answer(500)],
+    ["504 proxy timeout", () => answer(504)],
+    ["a code this page does not know", () => answer(409, "a_code_this_page_does_not_know")],
+    ["a success without codes", () => ok({ recovery_codes: [] })],
+  ])("says the old codes may no longer work when the answer is lost or unreadable (%s)", async (_, lost) => {
+    answers({ [RENEW]: [lost()] });
+    onScreen();
+    await submitWith("jacaranda");
+    const notice = await screen.findByText(UNKNOWN);
+    expect(document.activeElement).toBe(notice.closest('[role="alert"]'));
+    expect(document.body.textContent).not.toContain(SERVER_TEXT);
+    expect(screen.queryByText("Something went wrong. Try again in a moment.")).toBeNull();
+    // The form stays, the password kept, so getting codes again is one press.
+    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("jacaranda");
+  });
+
+  it("gives up after 10 s without an answer and says the old codes may no longer work", async () => {
+    const timeouts: Array<{ ms: number; controller: AbortController }> = [];
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      const controller = new AbortController();
+      timeouts.push({ ms, controller });
+      return controller.signal;
+    });
+    try {
+      mocks.post.mockImplementation(
+        (_path: string, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          }),
+      );
+      onScreen();
+      await submitWith("jacaranda");
+      await screen.findByRole("button", { name: "Getting codes…" });
+      expect(timeouts.map(({ ms }) => ms)).toEqual([10_000]);
+      expect(mocks.post.mock.calls[0][1]?.signal).toBe(timeouts[0].controller.signal);
+      timeouts[0].controller.abort(new DOMException("signal timed out", "TimeoutError"));
+      expect(await screen.findByText(UNKNOWN)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Get new recovery codes" }).getAttribute("aria-disabled")).toBeNull();
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it.each([
     [answer(429, "too_many_attempts"), "Too many attempts. Wait a minute, then try again."],
     [answer(403, "csrf_failed"), "Your session changed. Reload the page, then try again."],
-    [answer(500), "Something went wrong. Try again in a moment."],
-    [answer(409, "a_code_this_page_does_not_know"), "Something went wrong. Try again in a moment."],
-    [new TypeError("Failed to fetch"), "We could not reach the server. Check your connection, then try again."],
   ])("keeps the form with a fixed message for other refusals (%#)", async (refusal, message) => {
     answers({ [RENEW]: [refusal] });
     onScreen();
@@ -297,7 +363,7 @@ describe("getting new recovery codes without a password on file", () => {
     await waitFor(() => expect(document.activeElement).toBe(submit));
     fireEvent.click(submit);
     await screen.findByText(READY);
-    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: null } }]]);
+    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: null }, signal: expect.any(AbortSignal) }]]);
   });
 
   it("shows the password field once the API asks for one", async () => {

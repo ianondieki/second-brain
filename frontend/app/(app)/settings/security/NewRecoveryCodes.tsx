@@ -23,6 +23,9 @@ import { reveal } from "./reveal";
 
 type Stage = { name: "confirm" } | { name: "stepUp" } | { name: "codes"; codes: string[] };
 
+/** How long the request waits for an answer before saying it cannot tell whether the codes were replaced. */
+const RENEW_TIMEOUT_MS = 10_000;
+
 export interface NewRecoveryCodesProps {
   /** The account's email: the hidden username beside the password field, for password managers. */
   email: string;
@@ -49,6 +52,8 @@ export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: N
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [error, setError] = useState<ErrorKey | null>(null);
+  // No answer, or one that cannot be read: the codes may have been replaced (fixed notice, not an errors.* key).
+  const [unknown, setUnknown] = useState(false);
   const [busy, setBusy] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef<HTMLDivElement>(null);
@@ -64,9 +69,15 @@ export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: N
   async function request() {
     setBusy(true);
     setError(null);
+    setUnknown(false);
     setPasswordError(undefined);
     const step = renewalStep(
-      await settle(api.POST("/api/auth/totp/recovery-codes", { body: { current_password: password || null } })),
+      await settle(
+        api.POST("/api/auth/totp/recovery-codes", {
+          body: { current_password: password || null },
+          signal: AbortSignal.timeout(RENEW_TIMEOUT_MS),
+        }),
+      ),
     );
     switch (step.kind) {
       case "codes":
@@ -100,6 +111,16 @@ export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: N
       case "off":
         setBusy(false);
         onTwoStepOff();
+        return;
+      case "unknown":
+        reveal(
+          () => {
+            setBusy(false);
+            setStage({ name: "confirm" });
+            setUnknown(true);
+          },
+          () => errorRef.current,
+        );
         return;
       case "error":
         // Back to the form, the password kept: the step-up (if any) is done, so sending again is enough.
@@ -164,6 +185,7 @@ export function NewRecoveryCodes({ email, onClose, onReplaced, onTwoStepOff }: N
 
   return (
     <Form onSubmit={submit} className="flex w-full flex-col items-start gap-5">
+      {unknown ? <Alert ref={errorRef}>{t("newCodesUnknown")}</Alert> : null}
       <ErrorNotice error={error} email={email} alertRef={errorRef} />
       <p id="renew-warning" className="text-ink">
         {t("newCodesWarning")}

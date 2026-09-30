@@ -41,12 +41,19 @@ describe("renewalStep (POST /api/auth/totp/recovery-codes, follow-up 8)", () => 
     });
   });
 
-  it("never shows an empty list: a success without codes is an error to retry", () => {
-    expect(renewalStep({ ok: true, status: 200, data: { recovery_codes: [] } })).toEqual({
-      kind: "error",
-      key: "generic",
-    });
-    expect(renewalStep({ ok: true, status: 200, data: undefined as never })).toEqual({ kind: "error", key: "generic" });
+  it("never shows an empty list: a success without codes may have replaced the old ones", () => {
+    expect(renewalStep({ ok: true, status: 200, data: { recovery_codes: [] } })).toEqual({ kind: "unknown" });
+    expect(renewalStep({ ok: true, status: 200, data: undefined as never })).toEqual({ kind: "unknown" });
+  });
+
+  it.each<[number, ErrorKey]>([
+    [0, "network"], // no answer, or the 10 s timeout
+    [500, "generic"],
+    [502, "generic"],
+    [504, "generic"],
+    [409, "generic"], // a code this page does not know
+  ])("cannot tell whether the codes were replaced (%i %s)", (status, key) => {
+    expect(renewalStep(refused(status, key))).toEqual({ kind: "unknown" });
   });
 
   it("asks for a fresh authenticator code on 403 step_up_required", () => {
@@ -67,8 +74,6 @@ describe("renewalStep (POST /api/auth/totp/recovery-codes, follow-up 8)", () => 
     [401, "unauthenticated"],
     [401, "mfa_required"],
     [403, "recent_sign_in_required"],
-    [0, "network"],
-    [500, "generic"],
     [422, "validation"],
   ])("keeps the form with the fixed message for anything else (%i %s)", (status, key) => {
     expect(renewalStep(refused(status, key))).toEqual({ kind: "error", key });
