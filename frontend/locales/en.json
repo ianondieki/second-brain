@@ -2,7 +2,7 @@
   "_meta": {
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "review": "[[COPY-REVIEW]] G2/G5",
-    "reviewP14": "[[COPY-REVIEW]] P14 (REQ-BIL-08): shell.account, shell.billing, billing.*, checkout.*, ideaEditor.problem.planLimitUpgrade, pitch.problem.planLimitUpgrade (fix round: checkout.simulatedTitle, checkout.canLeave, checkout.stepDone, checkout.outcomeLegend and checkout.outcome.* reworded); billing.samplePrices is the D-44 recommended-default label and checkout.simulatedTag the D-36 label (DECISIONS-NEEDED D-44 open); plan names and prices come from the API (backend/config/plans.yaml, placeholders until G3)",
+    "reviewP14": "[[COPY-REVIEW]] P14 (REQ-BIL-08): shell.account, shell.billing, billing.*, checkout.*, ideaEditor.problem.planLimitUpgrade, pitch.problem.planLimitUpgrade (fix round: checkout.simulatedTitle, checkout.canLeave, checkout.stepDone, billing.refused.freePlan, checkout.outcomeLegend and checkout.outcome.* reworded); billing.samplePrices is the D-44 recommended-default label and checkout.simulatedTag the D-36 label (DECISIONS-NEEDED D-44 open); plan names and prices come from the API (backend/config/plans.yaml, placeholders until G3)",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
     "reviewP8d": "[[COPY-REVIEW]] P8 part 4 (REQ-PROP-03, REQ-PROV-03, REQ-DIR-04): pitch.* (review round 1: lead, maxReachedPlan, maxReachedBatch, chosenTitle, gone), tagWithdraw.*, ideaPitches.*, ideaViews.*; pitch.heldUnclaimed and ideaPitches.heldUnclaimed are the docs/spec/06 6.2 held-tag sentence verbatim; ideaViews.note uses the docs/spec/04 4.2 approved logging phrasing",
@@ -1266,6 +1266,7 @@
       "mfaSetup": "Turn on two-step sign-in to manage the plan for {org}.",
       "unknownPlan": "This plan is not on the list.",
       "notSold": "{plan} cannot be bought here yet.",
+      "freePlan": "The {plan} plan costs nothing, so there is nothing to buy.",
       "alreadyOn": "You are already on {plan}."
     },
     "action": {

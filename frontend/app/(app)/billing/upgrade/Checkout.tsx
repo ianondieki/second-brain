@@ -171,7 +171,12 @@ export function Checkout(props: CheckoutProps) {
           )}
         </section>
       ) : phase.kind === "lost" ? (
-        <section aria-labelledby="checkout-step" className="flex flex-col gap-4" data-phase="lost">
+        <section
+          aria-labelledby="checkout-step"
+          className="flex flex-col gap-4"
+          data-phase="lost"
+          data-checkout-blocked={isOwnAction(phase.problem) ? undefined : ""}
+        >
           <h2 id="checkout-step" {...headingProps}>
             {waitingTitle}
           </h2>
@@ -244,7 +249,13 @@ function Confirm({
   const { problem } = props;
   const blocked = problem !== undefined && !canRetryStart(problem);
   return (
-    <section aria-labelledby="checkout-step" className="flex flex-col gap-6" data-phase="confirm">
+    <section
+      aria-labelledby="checkout-step"
+      className="flex flex-col gap-6"
+      data-phase="confirm"
+      // A refusal that carries its own way back: the page's back link steps aside (upgrade/page.tsx).
+      data-checkout-blocked={blocked && !isOwnAction(problem) ? "" : undefined}
+    >
       <div className="border-y border-line py-5">
         <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-sm font-medium text-ink-soft focus:outline-none">
           {t("youPay")}
@@ -300,6 +311,11 @@ function Confirm({
       )}
     </section>
   );
+}
+
+/** Refusals whose action is not the way back to Plan & billing (sign in, the second factor). */
+function isOwnAction(problem: StartProblem | "notFound" | undefined): boolean {
+  return problem === "signedOut" || problem === "mfaRequired" || problem === "mfaSetup";
 }
 
 /** The one action a refusal offers, when there is one. */

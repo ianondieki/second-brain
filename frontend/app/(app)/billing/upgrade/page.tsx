@@ -45,13 +45,17 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   const orgId = subject.kind === "org" ? subject.membership.org_id : undefined;
   const back = billingHref(orgId);
 
-  const shell = (title: string, children: ReactNode, tag?: ReactNode) => (
+  // The back link is left out where the body is an empty state (its one action is the way on), and hidden by CSS
+  // while the checkout shows a refusal that carries its own action ([data-checkout-blocked]).
+  const shell = (title: string, children: ReactNode, tag?: ReactNode, withBack = true) => (
     <SignedInShell homeHref={home}>
-      <p className="-mt-2 mb-4">
-        <Link href={back} className={standaloneLinkClass}>
-          {tc("back")}
-        </Link>
-      </p>
+      {withBack ? (
+        <p className="-mt-2 mb-4 [main:has([data-checkout-blocked])_&]:hidden" data-page-back="">
+          <Link href={back} className={standaloneLinkClass}>
+            {tc("back")}
+          </Link>
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{title}</h1>
         {tag}
@@ -68,6 +72,8 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
       <div className="mt-8">
         <EmptyState sentence={sentence} action={action} href={href} primary={primary} />
       </div>,
+      undefined,
+      false,
     );
 
   if (subject.kind === "notMember") return empty(t("refused.notMember"), t("action.billing"), "/billing");
@@ -80,7 +86,6 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   const catalogue = isPlanCode(code) ? await getPlans(sideOf(subject)) : null;
   const plan = catalogue?.plans.find((p) => p.code === code);
   if (!catalogue || !plan) return empty(t("refused.unknownPlan"), t("action.allPlans"), back);
-  if (!plan.purchasable) return empty(t("refused.notSold", { plan: plan.name }), t("action.allPlans"), back);
 
   const checkoutId = one(search.checkout);
   const resuming = isOrgId(checkoutId); // the same UUID pattern
@@ -95,6 +100,11 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
     }
     if (current.code === plan.code) return empty(t("refused.alreadyOn", { plan: plan.name }), tc("backToBilling"), back);
   }
+  // A free plan is never bought; the others that are not sold here (custom, approval, eligibility) say so.
+  if (!plan.purchasable && plan.is_default) {
+    return empty(t("refused.freePlan", { plan: plan.name }), t("action.allPlans"), back);
+  }
+  if (!plan.purchasable) return empty(t("refused.notSold", { plan: plan.name }), t("action.allPlans"), back);
 
   const [price, lines] = await Promise.all([priceText(plan), lineTexts(plan)]);
   const simulatedTag = catalogue.simulated_checkout ? (

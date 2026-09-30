@@ -166,6 +166,7 @@ test.describe("a developer on the Free plan", () => {
   test("gets one sentence and one action for a plan that cannot be bought here", async ({ page }) => {
     await signUpDeveloper(page, "Chebet Rotich");
     for (const [path, sentence] of [
+      ["/billing/upgrade?plan=dev_free", "The Free plan costs nothing, so there is nothing to buy."],
       ["/billing/upgrade?plan=dev_student", "Student cannot be bought here yet."],
       ["/billing/upgrade?plan=org_starter", "This plan is not on the list."],
       ["/billing/upgrade?plan=..%2Fadmin", "This plan is not on the list."],
@@ -173,6 +174,8 @@ test.describe("a developer on the Free plan", () => {
       await page.goto(path);
       await expect(page.locator("[data-empty-state] p"), path).toHaveText(sentence);
       await expect(page.locator("[data-empty-state] a"), path).toHaveText("See all plans");
+      // The empty state's action is the one way on: no page back link beside it.
+      await expect(page.getByRole("link", { name: "Back to Plan & billing" }), path).toHaveCount(0);
     }
     await checkScreen(page);
   });

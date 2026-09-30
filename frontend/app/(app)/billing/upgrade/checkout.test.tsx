@@ -265,6 +265,8 @@ describe("refused starts", () => {
     expect(links[0].textContent).toBe(action);
     expect(links[0].getAttribute("href")).toBe(href);
     expect(primaries()).toHaveLength(0);
+    // A refusal whose action is the way back hides the page's own back link (no second way back on screen).
+    expect(document.querySelector("[data-checkout-blocked]") !== null).toBe(href === "/billing");
   });
 
   it("offers the same button again when trying again can help", async () => {
