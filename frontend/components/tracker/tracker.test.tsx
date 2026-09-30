@@ -1,4 +1,5 @@
 import { cleanup, screen, within } from "@testing-library/react";
+import { documentLinkClass } from "./document-link";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { detail, history, inImplementation } from "@/test/engagement";
@@ -278,5 +279,17 @@ describe("the contact person", () => {
     );
     expect(screen.getByText("Signatory")).toBeTruthy();
     expect(screen.getByText("WhatsApp")).toBeTruthy();
+  });
+});
+
+describe("the Documents tab's links (fix round 1)", () => {
+  it("shows the current document in ink without an underline, the others as links", () => {
+    const current = documentLinkClass(true).split(" ");
+    expect(current).toEqual(expect.arrayContaining(["text-ink", "no-underline", "min-h-11"]));
+    expect(current).not.toContain("text-jacaranda");
+    expect(current).not.toContain("underline");
+    const other = documentLinkClass(false).split(" ");
+    expect(other).toEqual(expect.arrayContaining(["text-jacaranda", "underline", "min-h-11"]));
+    expect(other).not.toContain("text-ink");
   });
 });

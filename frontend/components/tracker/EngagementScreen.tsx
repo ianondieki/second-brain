@@ -3,17 +3,17 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { Badge } from "@/components/ui/Badge";
-import { standaloneLinkClass } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
+import { LinkPending } from "@/components/ui/LinkPending";
 import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
+import { documentLinkClass } from "./document-link";
 import { ContactReveal } from "./ContactReveal";
 import { engagementDocument, engagementHistory, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
@@ -206,9 +206,10 @@ async function DocumentsTab({
             <Link
               href={withQuery(href, query, { tab: "documents", doc: kind })}
               aria-current={kind === shown ? "page" : undefined}
-              className={cn(standaloneLinkClass, kind === shown && "text-ink no-underline")}
+              className={documentLinkClass(kind === shown)}
             >
               {t(`document.${kind}`)}
+              <LinkPending className="ml-2" />
             </Link>
           </li>
         ))}
