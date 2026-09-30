@@ -285,6 +285,9 @@ async def test_a_tampered_source_fails_the_publish_checks(
         ("statement", "Smaller operators say Safari\u200bcom keeps most mobile money.", "control_character"),
         ("statement", "Smaller operators say M\u2011Pesa keeps most mobile money.", "named_org_without_official"),
         ("statement", "The market leader earned Sh89m from mobile money.", "unsupported_number"),  # MAJOR 1
+        ("statement", "Smaller operators say Safari\u034fcom keeps most money.", "control_character"),  # round 2
+        ("statement", "Smaller operators say S\u0430faricom keeps most money.", "non_latin_text"),  # round 2
+        ("statement", "Farmers lost Sh90-million to smaller operators.", "unsupported_number"),  # round 2
     ],
 )
 async def test_approval_re_reads_the_text_for_hidden_names_scales_and_format_characters(

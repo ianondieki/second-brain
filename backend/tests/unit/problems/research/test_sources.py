@@ -117,6 +117,9 @@ def test_url_host_is_the_lower_case_ascii_host_or_nothing() -> None:
         ({"source_type": "rumour"}, "source_type must be one of"),
         ({"quote": "word " * 61}, "at most 60 words"),
         ({"quote": "a quote with a \x00 null"}, "without control codes"),
+        ({"quote": "a quote naming Safari\u034fcom"}, "without control codes"),  # default-ignorable (MINOR 1)
+        ({"quote": "a quote naming Safari\u2800com"}, "without control codes"),  # braille blank
+        ({"quote": "a quote naming Safari\ufe0fcom"}, "without control codes"),  # variation selector
         ({"quote": "   "}, "quote must be non-empty"),
         ({"published_date": "2026-13-01"}, "published_date must be an ISO date"),
         ({"retrieved_at": "2026-01-01"}, "retrieved before it was published"),

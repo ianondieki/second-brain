@@ -341,6 +341,13 @@ def test_d45_detection_is_whole_word_any_case_and_any_dash() -> None:
         "Safari\u200bcom",  # zero-width space
         "Safari\u00adcom",  # soft hyphen
         "Safari\u200dcom",  # zero-width joiner
+        "Safari\u034fcom",  # combining grapheme joiner (Mn, default-ignorable)
+        "Safari\ufe0fcom",  # variation selector
+        "Safari\u115fcom",  # Hangul choseong filler (Lo)
+        "Safari\u1160com",  # Hangul jungseong filler
+        "Safari\u3164com",  # Hangul filler
+        "Safari\u2800com",  # braille pattern blank
+        "Safari\U000e0041com",  # a tag character
     ],
 )
 def test_d45_a_hidden_name_is_still_found(hidden: str) -> None:
@@ -349,7 +356,9 @@ def test_d45_a_hidden_name_is_still_found(hidden: str) -> None:
     draft = dataclasses.replace(TELECOM, statement=f"{hidden} agents keep most customers.", named_orgs=())
     verdict = check(draft)
     assert isinstance(verdict, Discarded), verdict  # never accepted with the name unchecked
-    invisible = any(ord(c) in (0x200B, 0x00AD, 0x200D) for c in hidden)
+    invisible = any(
+        ord(c) in (0x200B, 0x00AD, 0x200D, 0x034F, 0xFE0F, 0x115F, 0x1160, 0x3164, 0x2800, 0xE0041) for c in hidden
+    )
     assert verdict.reason == ("control_character" if invisible else "named_org_without_official")
 
 
@@ -361,6 +370,26 @@ def test_a_bidi_or_format_character_in_any_field_is_refused(bidi: str) -> None:
         changes: dict[str, Any] = {field: value}
         assert check(dataclasses.replace(TELECOM, **changes)) == Discarded("control_character"), field
     assert check(dataclasses.replace(TELECOM, named_orgs=(f"Acme{bidi}",))) == Discarded("control_character")
+
+
+@pytest.mark.parametrize(
+    "lookalike",
+    [
+        "S\u0430faricom",  # Cyrillic a
+        "Safari\u0441om",  # Cyrillic es
+        "\u0405afaricom",  # Cyrillic dze
+        "Saf\u03b1ricom",  # Greek alpha
+        "Airtel \u0661\u0662",  # Arabic-Indic digits
+    ],
+)
+def test_a_look_alike_from_another_script_is_refused(lookalike: str) -> None:
+    """P11 re-review MINOR 1: "S\u0430faricom" (U+0430) is not "Safaricom" to the detection, so letters outside the
+    Latin script (and non-ASCII digits, combining marks) are refused in a card's title, statement and group."""
+    for field in ("title", "statement", "affected_group"):
+        changes: dict[str, Any] = {field: f"{lookalike} agents keep most customers"}
+        assert check(dataclasses.replace(TELECOM, **changes)) == Discarded("non_latin_text"), field
+    latin = dataclasses.replace(TELECOM, statement="Caf\u00e9 owners and na\u00efve \u00fcsers pay KSh 2,000.")
+    assert checks.clean_text(latin.title, latin.statement, "", ()) != "non_latin_text"  # Latin accents pass
 
 
 def test_nfkc_never_creates_a_control_or_format_character() -> None:

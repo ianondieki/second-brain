@@ -40,7 +40,6 @@ approval decides on what the card says now, not on what the run once saw.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -49,7 +48,7 @@ from typing import Final
 
 from bridge.problems.research.policy import ResearchPolicy
 from bridge.problems.research.sources import Allowlist, Excerpt, freshness_score
-from bridge.problems.research.text import collapse, has_control, normalise, word_count
+from bridge.problems.research.text import collapse, has_control, invisible, non_latin, normalise, word_count
 
 MAX_TITLE_CHARS: Final = 90
 MAX_STATEMENT_WORDS: Final = 120
@@ -271,6 +270,8 @@ def clean_text(title: str, statement: str, affected_group: str, named_orgs: Iter
     text = CardText(collapse(title), collapse(statement), collapse(affected_group), names)
     if any(has_control(value) for value in (*text.fields, *text.named_orgs)):
         return "control_character"
+    if any(non_latin(value) for value in text.fields):
+        return "non_latin_text"
     if (
         not text.title
         or len(text.title) > MAX_TITLE_CHARS
@@ -366,7 +367,7 @@ def named_organisations(fields: Iterable[str], declared: Iterable[str], allowlis
     """The organisations a card names: the allowlist's found in its NFKC text (whole words, any case, any dash) and
     the ones the model declared, each once (case-insensitively), in that order. Matching is deliberately broad: a
     false match discards a draft or asks for the checklist, a missed one would publish a name unchecked (D-45)."""
-    text = "".join(c for c in normalise("\n".join(fields)) if unicodedata.category(c) != "Cf")  # no hiding
+    text = "".join(c for c in normalise("\n".join(fields)) if not invisible(c))  # nothing invisible hides a name
     found = [org.name for org in allowlist.named() if any(_alias_pattern(a).search(text) for a in org.aliases)]
     names: dict[str, str] = {}
     for name in (*found, *declared):
