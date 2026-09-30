@@ -274,6 +274,12 @@ describe("the queue", () => {
       expect(row.querySelector("h3")).toBeNull();
     }
     expect(within(rows[1]).getByText("Problem").closest("[data-chip]")).toBeNull();
+    // Fix round 1: the kind is plain meta text (not a badge), and the first row draws no second hairline under the tabs.
+    expect(within(rows[1]).getByText("Problem").className).toBe("font-medium text-ink");
+    expect(screen.getByRole("list", { name: "Open cases, oldest first" }).className).toContain(
+      "[&>li:first-child>article]:border-t-0",
+    );
+    for (const row of rows) expect(row.querySelector("h2 a[data-case-link]")).not.toBeNull();
     expect(within(rows[0]).getByText("Proposal")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open" }).getAttribute("aria-current")).toBe("page");
   });

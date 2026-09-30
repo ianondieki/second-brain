@@ -25,7 +25,7 @@ import {
  * One card waiting for review, a Row: its title (the way into the review, an h3 under "Waiting for review"), at most
  * two badges (docs/spec/07 item 2): how it was drafted, and whether it names an organisation (D-45); its niche,
  * confidence, sources and draft date as the meta line; then the start of its statement. The whole row is the link's
- * target (a stretched link), so `data-review-link` marks the row's box.
+ * target (a stretched link); `data-review-link` marks that link.
  */
 export async function CandidateRow({ candidate, niches }: { candidate: Candidate; niches: readonly AdminNiche[] }) {
   const t = await getTranslations("adminResearch");
@@ -51,7 +51,7 @@ export async function CandidateRow({ candidate, niches }: { candidate: Candidate
   return (
     <Row
       data-candidate={candidate.id}
-      data-review-link=""
+      linkData={{ "data-review-link": "" }}
       title={candidate.title}
       href={reviewHref(candidate.id)}
       meta={

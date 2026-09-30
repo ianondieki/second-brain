@@ -66,7 +66,7 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <RowList ordered aria-label={t(`list.${view}`)}>
+          <RowList ordered rule={false} aria-label={t(`list.${view}`)}>
             {items.map((claim) => (
               <ClaimRow key={claim.id} claim={claim} />
             ))}

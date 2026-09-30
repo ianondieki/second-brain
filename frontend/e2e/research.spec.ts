@@ -10,8 +10,8 @@ import {
   savedExcerpts,
   type SavedExcerpt,
 } from "./support/research-scene";
-import { checkScreen, expectEmptyState, expectSeparateTargets } from "./support/screen";
-import { checkScreenStrict } from "./support/strict-screen";
+import { checkScreen, expectEmptyState } from "./support/screen";
+import { checkScreenStrict, expectSeparateTapTargets } from "./support/strict-screen";
 import { PASSWORD, type Person } from "./support/tracker-scene";
 
 // REQ-RES-01 and REQ-RES-02 (prototype part; M2 walkthrough step 3): a staff admin signs in, starts a research run,
@@ -160,7 +160,7 @@ test.describe("a staff admin", () => {
     await expect(card).toContainText("AI-drafted");
     await expect(card).toContainText("Names an organisation");
     expect(await card.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
-    await expectSeparateTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
+    await expectSeparateTapTargets(page.locator("[data-review-link]")); // WCAG 2.2 target size
     await checkScreenStrict(page);
     await card.getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/research/candidates/${problemId}$`), SERVER_STEP);

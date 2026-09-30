@@ -40,7 +40,7 @@ export async function ClaimRow({ claim }: { claim: Claim }) {
   return (
     <Row
       data-claim={claim.id}
-      data-claim-link=""
+      linkData={{ "data-claim-link": "" }}
       headingLevel={2}
       title={name ?? t("unnamed", { id: shortId(claim.org.id) })}
       href={claimHref(claim.id)}

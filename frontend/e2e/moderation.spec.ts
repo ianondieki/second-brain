@@ -20,8 +20,7 @@ import {
   vulnerabilityTeaser,
 } from "./support/moderation-scene";
 import { newDeveloper, newStaffAdmin, OWNER_DATABASE_URL } from "./support/research-scene";
-import { expectSeparateTargets } from "./support/screen";
-import { checkScreenStrict } from "./support/strict-screen";
+import { checkScreenStrict, expectSeparateTapTargets } from "./support/strict-screen";
 import { PASSWORD } from "./support/tracker-scene";
 
 // REQ-MOD-01, REQ-ADM-01 and the REQ-DIR-03 claims queue (M2 walkthrough step 6, P15): staff open the moderation
@@ -104,7 +103,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     for (const row of await page.locator("[data-case]").all()) {
       expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
     }
-    await expectSeparateTargets(page.locator("[data-case-link]"));
+    await expectSeparateTapTargets(page.locator("[data-case-link]"));
     await checkScreenStrict(page);
     if (desktop) expect(await teaserStatus(developer.request, p6)).toBe(404); // held: nobody else can read it
 

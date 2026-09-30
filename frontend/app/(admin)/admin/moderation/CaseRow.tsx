@@ -31,10 +31,10 @@ export async function decidedLine(item: Case): Promise<string | null> {
 
 /**
  * One case in the queue (REQ-MOD-01), a Row: its title (the way into the case, an h2 under the page's h1), the meta
- * line (what it is about as a neutral badge, then when it was filed or who decided it), at most two status badges
+ * line (what it is about, then when it was filed or who decided it), at most two status badges
  * (docs/spec/07 item 2): whether the subject can be seen now (or, once decided, the outcome) and the first reason it
- * was filed; then the start of its public summary. The whole row is the link's target (a stretched link), so
- * `data-case-link` marks the row's box.
+ * was filed; then the start of its public summary. The whole row is the link's target (a stretched link);
+ * `data-case-link` marks that link.
  */
 export async function CaseRow({ item }: { item: Case }) {
   const t = await getTranslations("adminModeration");
@@ -69,13 +69,14 @@ export async function CaseRow({ item }: { item: Case }) {
   return (
     <Row
       data-case={item.id}
-      data-case-link=""
+      linkData={{ "data-case-link": "" }}
       headingLevel={2}
       title={title}
       href={caseHref(item.id)}
       meta={
         <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <Badge tone="neutral">{t(`kind.${kind}`)}</Badge>
+          {/* Plain meta text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
+          <span className="font-medium text-ink">{t(`kind.${kind}`)}</span>
           <span>{decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}</span>
         </span>
       }

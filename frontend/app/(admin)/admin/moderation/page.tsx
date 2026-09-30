@@ -69,7 +69,7 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <RowList ordered aria-label={view === "open" ? t("listOpen") : t("listDecided")}>
+          <RowList ordered rule={false} aria-label={view === "open" ? t("listOpen") : t("listDecided")}>
             {items.map((item) => (
               <CaseRow key={item.id} item={item} />
             ))}
