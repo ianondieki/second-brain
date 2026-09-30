@@ -208,25 +208,47 @@ primary action. `security.codesNotShown` points at it for every role. `security.
 Screenshots (`E2E_SHOTS_DIR`, 375 and 1440 px): `p17f-cancelled`, `p17f-codes-not-shown`, `p17f-renew-form`,
 `p17f-renew-step-up`, `p17f-renew-codes`.
 
+**Fix round 1 (reviews: reviewer PASS, ux-reviewer PASS, security-reviewer CHANGES_REQUIRED):**
+- **MAJOR (security), fixed.** Cancel no longer reads an unclear answer as "off" when this tab sent no
+  confirmation. Setup begun in a laptop tab and confirmed on the phone with the same key revokes the laptop's
+  session. Cancel there got 401 and advised deleting the live entry. Now every "unknown" keeps the setup steps with
+  the status-unknown notice, and the `maybeOn` ref is gone. This reverses the old open item 1. Tests: the wrong-code
+  case expects the notice when there is no answer, and a new case covers 401 after a confirmation elsewhere.
+- **Back-forward cache, fixed.** `RecoveryCodeList` replaces the codes with one line (`security.codesCleared`). It
+  does so synchronously on `pagehide`, and again on a `pageshow` from the cache, at setup and for new codes. Unit
+  tests cover all four events and the end of setup. An E2E test checks that Back after a full navigation shows no
+  code. With these `no-store` pages, Chromium 1243 reloads on Back rather than restoring from the cache, so only the
+  unit tests prove the clearing itself.
+- **New codes: timeout, lost answer and password, fixed.**
+  - `POST /api/auth/totp/recovery-codes` now has a 10 s timeout.
+  - No answer, a timeout, a 5xx, an unknown code or a success without codes is `renewalStep` "unknown". It shows a
+    fixed notice (`security.newCodesUnknown`) that the old codes may no longer work.
+  - A test shows the password is held neither in the page nor in React state once the codes show. It reads React's
+    fiber, test only. Removing the success-path clear now fails that test.
+- **ux, fixed.**
+  - The form's import starts in `openRenewal`, with a "Loading…" `role="status"` fallback.
+  - `StepUpForm` takes a `variant` and a `describedBy`. In this flow, "Confirm and get new codes" is primary and is
+    read with the warning, which now also shows at the code step. Turning off keeps a secondary button.
+  - Copy and Download are full width below `sm`.
+- **Copy nits, fixed.** `codesNotShown` says "sign in", and `recoveryLead` ends "Your old codes will stop working."
+- **`THREAT_MODEL.md` §1.** The three rows take the security-reviewer's wording. Where that wording predates this
+  round, it is brought up to date:
+  - Row B drops the "if the deviation is kept" clause.
+  - Row C adds the timeout and the lost-answer notice, and says the codes leave the page on `pagehide`.
+  - Row C's test column says a success without codes reads "unknown".
+  - A new I row: "Recovery codes restored from the back-forward cache after a full navigation away".
+
 **Open items (P17-F):**
-1. **Cancel with an unclear answer, when nothing can be on.** Before any confirmation could have committed (no try
-   yet, or only wrong codes), an unclear DELETE answer (offline, 5xx, session ended) shows "cancelled", not the
-   status-unknown notice. Two-step sign-in cannot be on, and the server refuses the key after 15 minutes. This
-   departs from the literal "anything else keeps the setup steps"; reviewer to confirm.
-2. **A DELETE after the confirmation's `no_pending_enrolment` can clear another tab's setup.** That DELETE also clears
+1. **A DELETE after the confirmation's `no_pending_enrolment` can clear another tab's setup.** That DELETE also clears
    a key a newer setup in another tab left pending; that tab's confirmation then starts again. Safe, but visible.
-3. **`THREAT_MODEL.md` rows can now be narrowed.** Three §1 rows ("A pending TOTP secret lingers", "Cancel setup reads
-   'off' before a lost confirmation commits", "Recovery codes never seen after a lost confirmation") still say "until
-   the web client ...". Their test columns should name `recovery-codes.test.tsx`, `outcomes.test.ts` and
-   `e2e/two-step.spec.ts`. The "roles that may turn two-step sign-in off are told to turn it off" clause is now
-   stale. Left to the orchestrator or security-reviewer, after review.
-4. **The JS budget is close.** Signed in, local production build: `/settings/security` loads 148,601 of 150,000
+   Recorded in the threat model's row A.
+2. **The JS budget is close.** Signed in, local production build: `/settings/security` loads 148,622 of 150,000
    bytes of gzipped JS. The new form loads on demand; the section and button are in the first load.
-5. **Copy.** New copy is `[[COPY-REVIEW]]` (`_meta.reviewP17f`); the Swahili is a draft (`[[SW-REVIEW]]`).
-   `mfa.recoveryLead` now reads "Enter one of the recovery codes you saved." because codes no longer come only from
-   setup.
-6. **Shared files.** `lib/api/errors.ts` gains one known code (`totp_not_enabled`). This may overlap with parallel
+3. **Copy.** New copy is `[[COPY-REVIEW]]` (`_meta.reviewP17f`); the Swahili is a draft (`[[SW-REVIEW]]`).
+   `mfa.recoveryLead` now reads "Enter one of the recovery codes you saved."
+4. **Shared files.** `lib/api/errors.ts` gains one known code (`totp_not_enabled`). This may overlap with parallel
    edits to that list.
-7. **Skill not installed.** The `impeccable` skill is not installed here, so the polish pass was a manual review of
-   the screenshots against docs/spec/07. At 375 px, "Copy codes" and "Download codes" wrap onto two lines, as at
-   setup (no change made).
+5. **Skill not installed.** The `impeccable` skill is not installed here, so the polish pass was a manual review of
+   the screenshots against docs/spec/07.
+6. **One test reads React internals.** The password-in-state test reads React's fiber, so a React upgrade that
+   renames `__reactFiber$` fails it loudly rather than passing silently.
