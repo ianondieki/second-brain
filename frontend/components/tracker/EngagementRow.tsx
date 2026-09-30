@@ -10,18 +10,36 @@ import { DueText } from "./When";
 /**
  * One engagement in a list (a Row): the idea's title as the link to its tracker, the other party, and at most two
  * chips (docs/spec/07 item 2): where it stands (the stage's label with its mark) and, when it waits on the viewer's
- * side, the solid "Your turn" badge. The countdown follows as plain text.
+ * side, the solid "Your turn" badge. The countdown follows as plain text. `titleBy="organisation"` (the developer's
+ * Engagements page, already grouped under each proposal's heading): the organisation is the row's title and the
+ * proposal is not repeated.
  */
-export function EngagementRow({ item, mine, href }: { item: Summary; mine: Party; href: string }) {
+export function EngagementRow({
+  item,
+  mine,
+  href,
+  titleBy = "proposal",
+}: {
+  item: Summary;
+  mine: Party;
+  href: string;
+  titleBy?: "proposal" | "organisation";
+}) {
   const t = useTranslations("tracker");
   const turn = awaitsMe(item, mine);
   const stage = <Chip kind={stageChip(item)}>{item.stage_label}</Chip>;
   return (
     <Row
       data-engagement={item.id}
-      title={item.proposal_title}
+      title={titleBy === "organisation" ? item.org_name : item.proposal_title}
       href={href}
-      meta={mine === "developer" ? t("withOrg", { org: item.org_name }) : t("fromDeveloper", { name: item.developer_name })}
+      meta={
+        titleBy === "organisation"
+          ? undefined
+          : mine === "developer"
+            ? t("withOrg", { org: item.org_name })
+            : t("fromDeveloper", { name: item.developer_name })
+      }
       badges={
         turn
           ? [

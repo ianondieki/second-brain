@@ -55,6 +55,7 @@ export default async function DeveloperEngagementsPage() {
                       key={item.id}
                       item={item}
                       mine="developer"
+                      titleBy="organisation"
                       href={`/dev/engagements/${encodeURIComponent(item.id)}`}
                     />
                   ))}

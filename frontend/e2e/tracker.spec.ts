@@ -107,13 +107,17 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await nav.getByRole("link", { name: "Engagements" }).click();
     await expect(devPage).toHaveURL(/\/dev\/engagements$/, SERVER_STEP);
     await expect(nav.getByRole("link", { name: "Engagements" })).toHaveAttribute("aria-current", "page");
-    const row = devPage.locator("main article").filter({ hasText: dev.title });
-    await expect(row).toContainText(`With ${org.orgName}`);
+    // Grouped by proposal (docs/spec/07 item 1): the idea is the group's heading, each row an organisation (P16-C1).
+    const group = devPage.locator("main section[data-proposal]").filter({
+      has: devPage.getByRole("heading", { level: 2, name: dev.title }),
+    });
+    const row = group.locator("article").filter({ hasText: org.orgName });
+    await expect(row.getByRole("heading", { level: 3 })).toHaveText(org.orgName);
     expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
     await checkScreen(devPage);
     await shot(devPage, info, "dev-list");
 
-    await row.getByRole("link", { name: dev.title }).click();
+    await row.getByRole("link", { name: org.orgName }).click();
     await expect(devPage).toHaveURL(new RegExp(`${devTracker}$`), SERVER_STEP);
     await expect(await banner(devPage)).toContainText(`Awaiting: ${org.orgName}`);
     await expect(await banner(devPage)).toContainText(`Next step for ${org.orgName}: Start the review`);
