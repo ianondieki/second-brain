@@ -10,12 +10,15 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
+from bridge.engagements import interest as interest_module
 from bridge.matching.scan import clock_now, run_periodic
 from bridge.notifications.email import FakeEmailProvider
+from tests.integration.api import make_client, sign_in_as
 from tests.integration.engagements.api_world import (
     Tracker,
     clients,
@@ -292,6 +295,43 @@ async def test_both_404s_of_a_proposal_run_the_same_statements(
             event.remove(app_engine.sync_engine, "before_cursor_execute", capture)
     assert by_case["own"] == by_case["held"] == by_case["missing"]
     assert any(s.startswith("INSERT INTO audit_events") for s in by_case["own"])  # each refusal is audited
+
+
+async def test_express_interest_is_throttled_per_account_and_per_ip(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round-2 review MINOR 1: ten attempts a minute per account, from one IP or several, and a per-IP limit for every
+    account; refused attempts count (each here is a 404), and a throttled one writes nothing."""
+    world = await build(owner_engine)
+    today = await db_today(owner_engine)
+    url = f"/api/orgs/{world.org.id}/interest"
+    first_ip, second_ip = (f"10.{n}.{uuid4().int % 250}.{uuid4().int % 250}" for n in (71, 72))  # no other test's
+    monkeypatch.setattr(interest_module, "INTEREST_IP_PER_MINUTE", 14)
+    async with (
+        make_client(app_engine, SETTINGS, ip=first_ip) as first,
+        make_client(app_engine, SETTINGS, ip=second_ip) as second,
+        make_client(app_engine, SETTINGS, ip=first_ip) as owner,
+    ):
+        for client in (first, second):
+            await sign_in_as(client, app_engine, world.org.signatory, mfa_verified=True)
+        await sign_in_as(owner, app_engine, world.org.owner, mfa_verified=True)
+        for client in [first] * 5 + [second] * 5:
+            refused = await client.post(url, json=interest(world, uuid4(), None, today))
+            assert refused.status_code == 404
+        for client in (first, second):  # the account's tenth attempt was its last this minute, from any IP
+            limited = await client.post(url, json=interest(world, uuid4(), None, today))
+            assert (limited.status_code, limited.json()["detail"]["code"]) == (429, "too_many_attempts")
+        for _ in range(14 - 5):  # another account from the first IP, up to the IP's limit
+            assert (await owner.post(url, json=interest(world, uuid4(), None, today))).status_code == 403
+        limited = await owner.post(url, json=interest(world, uuid4(), None, today))
+        assert (limited.status_code, limited.json()["detail"]["code"]) == (429, "too_many_attempts")
+    refusals = await rows(
+        owner_engine,
+        "SELECT count(*) AS n FROM audit_events WHERE action = 'engagement.interest_refused'"
+        " AND payload->>'org_id' = :o",
+        o=str(world.org.id),
+    )
+    assert refusals[0].n == 10  # the throttled attempts never reached the checks
 
 
 async def test_a_suspended_organisation_cannot_express_interest(

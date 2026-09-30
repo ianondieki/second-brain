@@ -15,6 +15,9 @@ policies (revision 0003) are the backstop: a signatory of an E2 organisation ins
 registered version of a published, clear proposal, and its genesis event names the signatory. The engagement's
 deadline is the stage's (policy.yaml, 5 business days). The developer is told (N17, in-app and email) by the
 genesis event's notification job; an ``org_interest`` signal and an audit event are written in the same transaction.
+Every attempt is throttled first (``throttle_interest``, the ``login_attempts`` ledger of ``bridge.auth.throttle``):
+``INTEREST_PER_MINUTE`` a minute per account from any IP and ``INTEREST_IP_PER_MINUTE`` per client IP from any account,
+refusals included, then 429 ``too_many_attempts``; the attempt is committed before any check, so a refusal still counts.
 
 ``share_tier2`` is the developer's manual grant (docs/spec/06 6.9 stage 0: "Tier 2 by manual grant"): only the
 engagement's developer, with a fresh second factor, on an organisation-origin engagement that has not ended, for a
@@ -36,6 +39,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.audit.service import record as audit
+from bridge.auth import throttle
 from bridge.auth.deps import ensure_step_up
 from bridge.config import Settings
 from bridge.db import bind_tenant
@@ -65,6 +69,9 @@ from bridge.tenancy.deps import OrgContext
 from bridge.tenancy.service import membership_of
 
 S = EngagementState
+THROTTLE_PURPOSE: Final = "org_interest"
+INTEREST_PER_MINUTE: Final = 10  # attempts a minute by one account, from one IP or any
+INTEREST_IP_PER_MINUTE: Final = throttle.PER_IP_ANY_ACCOUNT  # from one client IP, any account (a shared office NAT)
 INTEREST_ORIGINS: Final = frozenset({EngagementOrigin.ORG_AGENT_MATCH, EngagementOrigin.ORG_BROWSE})
 TIER2: Final = 2
 _ORG = text("SELECT verification, suspended_at, delisted_at FROM organizations WHERE id = :org")
@@ -131,6 +138,17 @@ async def _check_origin(db: AsyncSession, org_id: UUID, body: InterestBody) -> N
             raise not_found("No scout match of your organisation for this proposal.")
     elif body.match_id is not None:
         raise ApiError(422, "unexpected_match", "A scout match goes with the origin org_agent_match only.")
+
+
+async def throttle_interest(db: AsyncSession, settings: Settings, org: OrgContext, ip: str) -> None:
+    """Count one attempt and commit it, or answer 429 ``too_many_attempts`` (round-2 review MINOR 1: the route had no
+    throttle, so its answers could be asked for at any rate). Keys are HMAC digests of the account and the IP."""
+    keys = throttle.keys(settings.secret_key.get_secret_value(), THROTTLE_PURPOSE, str(org.live.user.id), ip)
+    limit = INTEREST_PER_MINUTE
+    if await throttle.blocked(db, keys, pair_limit=limit, account_limit=limit, ip_limit=INTEREST_IP_PER_MINUTE):
+        raise ApiError(429, "too_many_attempts", "Too many attempts. Wait a minute and try again.")
+    throttle.record(db, keys, succeeded=True)
+    await db.commit()
 
 
 async def express_interest(db: AsyncSession, settings: Settings, org: OrgContext, body: InterestBody) -> UUID:
