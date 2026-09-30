@@ -73,14 +73,16 @@ def _called(node: ast.Call) -> str:
 
 def _public_true_calls(path: Path) -> list[int]:
     """Lines of ``InputField(...)`` calls (or ``replace(...)``/``dataclasses.replace(...)``, which could set it on a
-    copy) that pass ``public=`` anything but ``False``."""
+    copy) that pass ``public=`` anything but ``False``, or any ``**`` mapping (which could carry it unseen).
+    ``public`` is keyword-only, so it cannot be passed positionally."""
     lines = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if (
             isinstance(node, ast.Call)
             and _called(node) in {"InputField", "replace"}
             and any(
-                kw.arg == "public" and not (isinstance(kw.value, ast.Constant) and kw.value.value is False)
+                kw.arg is None  # **kwargs could carry public=True unseen
+                or (kw.arg == "public" and not (isinstance(kw.value, ast.Constant) and kw.value.value is False))
                 for kw in node.keywords
             )
         ):
@@ -129,3 +131,10 @@ async def test_each_excerpt_is_framed_in_its_own_block_and_the_call_is_recorded(
 def test_input_fields_refuse_a_public_tier_2_field() -> None:
     with pytest.raises(ValueError, match="never public"):
         InputField("excerpt.x", "text", tier=Tier.TIER2, owner_id=uuid7(), public=True)
+
+
+def test_public_is_keyword_only() -> None:
+    """P11 review minor (b): a positional ``public`` would dodge the AST guard above."""
+    with pytest.raises(TypeError):
+        InputField("excerpt.x", "text", Tier.TIER1, None, None, True)  # type: ignore[call-arg]
+    assert InputField("excerpt.x", "text", public=True).public is True
