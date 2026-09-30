@@ -217,3 +217,24 @@ test("after a lost setup answer, Cancel shows 'on', and new recovery codes repla
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
 });
+
+test("recovery codes do not come back on Back after a full navigation away (back-forward cache)", async ({ page }) => {
+  const email = await signUpOwner(page);
+  const person = new Person(email, "Achieng Otieno", await startSetup(page));
+  await page.getByLabel("Code from your app").fill(await person.code());
+  await page.getByRole("button", { name: "Confirm code" }).click();
+  const list = page.getByTestId("recovery-codes");
+  await expect(list.getByRole("listitem")).toHaveCount(10, SERVER_STEP);
+  const first = (await list.getByRole("listitem").first().innerText()).trim();
+
+  await page.goto("/org"); // a full navigation, not the app's own link
+  await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings\/security$/, SERVER_STEP);
+  // Restored from the cache (the list replaced by one line) or loaded again ("on"): either way no code is on screen.
+  await expect(page.getByText("Two-step sign-in is on.").or(page.getByTestId("recovery-codes-cleared"))).toBeVisible(
+    SERVER_STEP,
+  );
+  await expect(page.getByTestId("recovery-codes")).toHaveCount(0);
+  await expect(page.getByText(first)).toHaveCount(0);
+});
