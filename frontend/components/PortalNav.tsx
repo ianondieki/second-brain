@@ -49,7 +49,9 @@ export function PortalNav({ label, items, current, query = "", heading }: Portal
         {items.map(({ key, href, label: text, Icon }) => {
           const active = key === current;
           return (
-            <li key={key} className="min-w-0 flex-1 lg:flex-none">
+            // flex-auto, not flex-1: tabs share the width from their labels' own widths, so a long label in bold
+            // ("Engagements" when current) gets the room it needs at 360 px instead of running into its neighbour.
+            <li key={key} className="min-w-0 flex-auto lg:flex-none">
               <Link
                 href={`${href}${query}`}
                 aria-current={active ? "page" : undefined}
