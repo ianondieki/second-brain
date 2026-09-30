@@ -4,6 +4,7 @@
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
     "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes* (incl. newCodesUnknown), security.gettingCodes, security.loading, security.cancelNewCodes, security.codesCleared, errors.totp_not_enabled, mfa.recoveryLead [[SW-REVIEW]] draft Swahili",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
+    "reviewP16a": "[[COPY-REVIEW]] P16-A (REQ-CON-01, REQ-NOT-03, REQ-UX-01): shell.notifications, shell.help, notificationSettings.*, help.*; help.confidential.tier2 uses the docs/spec/04 4.2 approved access and logging phrasing and help.confidential.record the approved evidence phrasing; help.support.body is a placeholder until a support contact is set (no address or phone); the consent wording on the notification settings comes from the API verbatim (backend/config/consents.yaml) [[SW-REVIEW]] draft Swahili",
     "reviewP14": "[[COPY-REVIEW]] P14 (REQ-BIL-08): shell.account, shell.billing, billing.*, checkout.*, ideaEditor.problem.planLimitUpgrade, pitch.problem.planLimitUpgrade (fix round: checkout.simulatedTitle, checkout.canLeave, checkout.stepDone, billing.refused.freePlan, checkout.outcomeLegend and checkout.outcome.* reworded); billing.samplePrices is the D-44 recommended-default label and checkout.simulatedTag the D-36 label (DECISIONS-NEEDED D-44 open); plan names and prices come from the API (backend/config/plans.yaml, placeholders until G3) [[SW-REVIEW]] draft Swahili",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
@@ -26,6 +27,8 @@
     "signOutFailed": "Kutoka hakukukamilika, kwa hivyo huenda bado umeingia.",
     "signOutRetry": "Jaribu kutoka tena",
     "account": "Akaunti",
+    "notifications": "Arifa",
+    "help": "Msaada",
     "billing": "Mpango na malipo"
   },
   "panel": {
@@ -227,6 +230,58 @@
   "legal": {
     "termsTitle": "Masharti ya huduma",
     "termsBody": "[[LEGAL-PLACEHOLDER:tos]]"
+  },
+  "notificationSettings": {
+    "pageTitle": "Arifa",
+    "lead": "Barua pepe kuhusu hatua katika mapendekezo na ushirikiano wako, kama idhini au sahihi, hutumwa kila mara. Chagua ujumbe mwingine unaotaka kupokea.",
+    "channel": {
+      "email": "Barua pepe",
+      "whatsapp": "WhatsApp"
+    },
+    "notYet": "Ujumbe wa WhatsApp bado haupatikani, kwa hivyo huwezi kuwasha hili.",
+    "save": "Hifadhi chaguo",
+    "saving": "Inahifadhi…",
+    "saved": "Chaguo zako zimehifadhiwa.",
+    "empty": "Bado hakuna chaguo za arifa za kufanya.",
+    "refused": {
+      "changed": "Maneno ya chaguo hizi yalibadilika baada ya kufungua ukurasa huu, kwa hivyo hakuna kilichohifadhiwa.",
+      "signedOut": "Umetoka, kwa hivyo hakuna kilichohifadhiwa.",
+      "rateLimited": "Hakuna kilichohifadhiwa kwa sababu ya kuhifadhi mara nyingi kwa muda mfupi; subiri dakika moja kisha uhifadhi tena.",
+      "network": "Hakuna kilichohifadhiwa kwa sababu muunganisho ulikatika; uangalie kisha uhifadhi tena.",
+      "failed": "Hakuna kilichohifadhiwa; jaribu tena baada ya muda mfupi."
+    },
+    "action": {
+      "reload": "Pakia ukurasa upya",
+      "logIn": "Ingia",
+      "home": "Nenda kwenye ukurasa wako wa mwanzo"
+    }
+  },
+  "help": {
+    "pageTitle": "Msaada",
+    "lead": "Majibu mafupi kuhusu kuwasilisha wazo, kinachobaki siri, vikumbusho na msaada.",
+    "logIn": "Ingia",
+    "pitching": {
+      "title": "Jinsi kuwasilisha wazo kunavyofanya kazi",
+      "parts": "Unaandika wazo kwa sehemu mbili: muhtasari wa umma na maelezo kamili, ambayo yanabaki siri.",
+      "pitch": "Likishachapishwa, unaliwasilisha kwa kampuni kutoka kwenye saraka. Kampuni iliyothibitishwa hulipata mara moja; kampuni ambayo bado haijathibitishwa hulipata tu ikijiunga na kuthibitishwa.",
+      "interest": "Kampuni pia zinaweza kupata muhtasari wako kupitia skauti wao. Kampuni inayotaka kuendelea huonyesha nia, na ukikubali, nyote mnafuata kifuatiliaji kimoja."
+    },
+    "confidential": {
+      "title": "Kinachobaki siri",
+      "tier1": "Kiwango cha 1 ni muhtasari wa umma: kichwa, tatizo na muhtasari wake. Kila aliyeingia anaweza kuuona, kwa hivyo hauwezi kuwa na maelezo ya mawasiliano wala viungo.",
+      "tier2": "Kiwango cha 2 ni maelezo kamili: huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kwa ufikiaji wa dharura unaorekodiwa na ambao mmiliki hujulishwa, na kila utazamaji hurekodiwa na kuwekewa alama ya mtazamaji.",
+      "record": "Kuchapisha kunakupa ushahidi wenye muhuri wa muda wa ulichowasilisha na lini, na ukurasa wa wazo lako unaonyesha waliofungua maelezo kamili."
+    },
+    "reminders": {
+      "title": "Vikumbusho",
+      "daily": "Ukiwasha vikumbusho vya barua pepe, unapata si zaidi ya barua pepe moja kwa siku kuhusu ushirikiano wako: kinachokusubiri, unachosubiri na kilichochelewa. Wanachama wa shirika hupata muhtasari wa maendeleo ya ushirikiano wao.",
+      "always": "Barua pepe kuhusu hatua katika ushirikiano, kama idhini au sahihi, hutumwa kila mara.",
+      "manage": "Chagua barua pepe zako katika <link>Arifa</link>."
+    },
+    "support": {
+      "title": "Wasiliana na msaada",
+      "body": "Mawasiliano ya msaada bado hayajawekwa."
+    }
   },
   "errors": {
     "invalid_email": "Weka anwani ya barua pepe kama jina@mfano.com.",
