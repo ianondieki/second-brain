@@ -77,8 +77,11 @@ above); `make` is optional (below). Give Docker 4 GB of memory: on Windows with 
 heaviest), close other applications and run `make demo` (or `python infra/demo/demo.py up`) again: it builds and starts
 whatever is missing, and Docker reuses the image layers that were already built. Run `make demo-reset` instead if the
 seed step was the one interrupted (below). The demo's
-containers are capped at 2.75 GB in all (the limits in `infra/docker-compose.demo.yml`). TODO(orchestrator): memory
-(the measured use per container after a clean `make demo-reset`, from `make demo-stats`).
+containers are capped at 2.75 GB in all (the limits in `infra/docker-compose.demo.yml`). Measured on 2026-09-30 with
+`make demo-stats` sampled every few seconds across two clean `make demo-reset` runs and two recorded walkthroughs: the
+highest total at any moment was 662 MB, and after the walkthrough the demo settles at about 600 MB (API 160 MB, worker
+146 MB, Postgres 137 MB, S3 stand-in 71 MB, web 58 MB, Mailpit 28 MB); the seed step peaks at 210 MB and then exits.
+Even every container at its own highest reading at once (1.04 GB) leaves room in Docker Desktop's 4 GB.
 
 **Start it** from the repository folder, in PowerShell or Git Bash:
 
