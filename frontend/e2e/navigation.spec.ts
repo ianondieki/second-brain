@@ -42,7 +42,10 @@ test("a tapped section shows its pending hint until the next page arrives", asyn
   );
   await discover.click();
   await expect(hint).toHaveAttribute("data-link-pending", "true");
-  await expect(hint).toHaveCSS("opacity", "1");
+  // Shown: it fades in, then pulses between full and half opacity (without reduced motion).
+  await expect
+    .poll(async () => Number(await hint.evaluate((el) => getComputedStyle(el).opacity)))
+    .toBeGreaterThanOrEqual(0.45);
   release();
   await expect(page).toHaveURL(/\/dev\/discover$/, { timeout: 20_000 });
   await expect(discover).toHaveAttribute("aria-current", "page");
