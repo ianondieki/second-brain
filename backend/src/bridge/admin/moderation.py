@@ -16,11 +16,19 @@ A decision is about what the moderator reviewed: a proposal case carries the pro
 published another version in the meantime (it joins the open case), the decision answers 409 ``case_changed`` and
 changes nothing; the version is compared again after the subject's row is locked by the moderation function, so a
 version published concurrently cannot slip through. Problems have no versions: their cases carry null.
-Claims, research approval and reports arrive with P15.
+
+The queue (P15) shows what a moderator needs to decide: the subject's current Tier-1 text field by field (never Tier
+2), the fields the pre-screen flagged, and the decisions the decision route accepts from this moderator now
+(``actions``) with the code it answers otherwise (``blocked``: ``already_decided``, ``unsupported_subject`` for a case
+decided from its own queue, ``subject_gone``, ``own_content``, ``cannot_approve_vulnerability``). Plain code works these
+out as the decision does; the database still decides (``app_moderate_*``). Unresolved cases come oldest first; decided
+ones newest decision first, with who decided. At most 200 either way. Claims are read in their own queue
+(``bridge.admin.claims``); research approval is ``bridge.admin.research``; reports arrive after the prototype.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Final, Literal
 from uuid import UUID
@@ -39,6 +47,16 @@ from bridge.proposals.service import signal
 
 UNRESOLVED: Final = ("open", "held", "escalated")
 Decision = Literal["approve", "reject"]
+# Why a case cannot be decided (the decision route's refusal code; subject_gone: the subject no longer exists).
+Blocked = Literal[
+    "already_decided", "unsupported_subject", "subject_gone", "own_content", "cannot_approve_vulnerability"
+]
+# The Tier-1 fields of each subject this queue decides, in reading order: what the queue shows and what a decision
+# screens again for a vulnerability.
+TIER1_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
+    "proposal": ("title", "problem_statement", "impact_claims", "summary"),
+    "problem": ("title", "statement"),
+}
 
 
 class CasePreview(BaseModel):
@@ -46,6 +64,16 @@ class CasePreview(BaseModel):
 
     title: str | None
     text: str | None
+
+
+class CaseField(BaseModel):
+    name: str = Field(description="A Tier-1 field: title, problem_statement, impact_claims, summary, statement")
+    text: str
+
+
+class StaffRef(BaseModel):
+    id: UUID
+    display_name: str
 
 
 class CaseOut(BaseModel):
@@ -59,6 +87,12 @@ class CaseOut(BaseModel):
     subject_state: ModerationState | None
     subject_version_id: UUID | None = Field(description="The proposal version the preview shows; null for problems")
     preview: CasePreview
+    fields: list[CaseField] = Field(description="The subject's current Tier-1 text, field by field (never Tier 2)")
+    flagged_fields: list[str] = Field(description="The Tier-1 fields the pre-screen flagged when it filed the case")
+    actions: list[Decision] = Field(description="The decisions the decision route accepts from you now")
+    blocked: Blocked | None = Field(description="Why a decision is refused (the route's code); null when both are open")
+    decided_at: datetime | None
+    decided_by: StaffRef | None
 
 
 class CaseList(BaseModel):
@@ -78,36 +112,99 @@ class DecisionOut(BaseModel):
     subject_state: ModerationState
 
 
-_CASES = text(
-    "SELECT m.id, m.subject_type, m.subject_id, m.reasons, m.source, m.status, m.created_at,"
-    " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, coalesce(p.title, pr.title) AS title,"
-    " coalesce(p.summary, pr.statement) AS body, p.current_version_id AS subject_version_id"
+_CASES_SELECT: Final = (
+    "SELECT m.id, m.subject_type, m.subject_id, m.reasons, m.source, m.status, m.created_at, m.classifier,"
+    " m.decided_at, m.decided_by, d.display_name AS decider_name, (p.id IS NOT NULL OR pr.id IS NOT NULL) AS found,"
+    " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, p.current_version_id AS subject_version_id,"
+    " coalesce(p.owner_id = :staff, pr.created_by = :staff, false) AS own,"
+    " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement"
     " FROM moderation_cases m"
     " LEFT JOIN proposals p ON m.subject_type = 'proposal' AND p.id = m.subject_id"
     " LEFT JOIN problems pr ON m.subject_type = 'problem' AND pr.id = m.subject_id"
-    " WHERE (m.status IN ('open', 'held', 'escalated')) = :unresolved ORDER BY m.created_at, m.id LIMIT 200"
+    " LEFT JOIN users d ON d.id = m.decided_by"
+)
+_OPEN_CASES = text(
+    _CASES_SELECT + " WHERE m.status IN ('open', 'held', 'escalated') ORDER BY m.created_at, m.id LIMIT 200"
+)
+_DECIDED_CASES = text(
+    _CASES_SELECT + " WHERE m.status NOT IN ('open', 'held', 'escalated')"
+    " ORDER BY m.decided_at DESC NULLS LAST, m.created_at DESC, m.id DESC LIMIT 200"
 )
 
 
-async def list_cases(db: AsyncSession, *, unresolved: bool) -> CaseList:
-    rows = (await db.execute(_CASES, {"unresolved": unresolved})).all()
-    return CaseList(
-        items=[
-            CaseOut(
-                id=r.id,
-                subject_type=r.subject_type,
-                subject_id=r.subject_id,
-                reasons=list(r.reasons),
-                source=r.source,
-                status=r.status,
-                created_at=r.created_at,
-                subject_state=r.subject_state,
-                subject_version_id=r.subject_version_id,
-                preview=CasePreview(title=r.title, text=r.body),
-            )
-            for r in rows
-        ]
+def decision_options(
+    *, unresolved: bool, subject_type: str, found: bool, own: bool, vulnerable: bool
+) -> tuple[list[Decision], Blocked | None]:
+    """The decisions the decision route accepts for a case, and the code it answers when it refuses them."""
+    if not unresolved:
+        return [], "already_decided"
+    if subject_type not in TIER1_FIELDS:
+        return [], "unsupported_subject"
+    if not found:
+        return [], "subject_gone"
+    if own:  # app_moderate_proposal / app_moderate_problem never let staff decide on their own content
+        return [], "own_content"
+    if vulnerable:  # REQ-PROP-02: vulnerability content is never made public
+        return ["reject"], "cannot_approve_vulnerability"
+    return ["approve", "reject"], None
+
+
+def flagged_fields(classifier: Any) -> list[str]:
+    """The Tier-1 field names in the pre-screen's output (one screen's ``fields``, or each of ``merge``'s
+    ``screens``), in order and once each; anything else is ignored."""
+    if not isinstance(classifier, Mapping):
+        return []
+    screens = classifier.get("screens")
+    names: dict[str, None] = {}
+    for screen in screens if isinstance(screens, list) else [classifier]:
+        found = screen.get("fields") if isinstance(screen, Mapping) else None
+        for name in found if isinstance(found, list) else []:
+            if isinstance(name, str) and name:
+                names.setdefault(name, None)
+    return list(names)
+
+
+async def screens_as_vulnerability(fields: Mapping[str, str]) -> bool:
+    """Whether Tier-1 text screens as a security vulnerability (``RulesPreScreen``, as when it was published)."""
+    return SECURITY_VULNERABILITY in (await RulesPreScreen().screen(ScreenInput(fields))).reasons
+
+
+async def _case_out(row: Any, *, unresolved: bool) -> CaseOut:
+    names = TIER1_FIELDS.get(row.subject_type, ())
+    values = row._asdict()
+    fields = {name: values[name] for name in names if values.get(name)}
+    decidable = unresolved and row.found and not row.own and row.subject_type in TIER1_FIELDS
+    actions, blocked = decision_options(
+        unresolved=unresolved,
+        subject_type=row.subject_type,
+        found=row.found,
+        own=row.own,
+        vulnerable=decidable and await screens_as_vulnerability(fields),
     )
+    return CaseOut(
+        id=row.id,
+        subject_type=row.subject_type,
+        subject_id=row.subject_id,
+        reasons=list(row.reasons),
+        source=row.source,
+        status=row.status,
+        created_at=row.created_at,
+        subject_state=row.subject_state,
+        subject_version_id=row.subject_version_id,
+        preview=CasePreview(title=row.title, text=row.summary or row.statement),
+        fields=[CaseField(name=name, text=value) for name, value in fields.items()],
+        flagged_fields=flagged_fields(row.classifier),
+        actions=actions,
+        blocked=blocked,
+        decided_at=row.decided_at,
+        decided_by=None if row.decided_by is None else StaffRef(id=row.decided_by, display_name=row.decider_name),
+    )
+
+
+async def list_cases(db: AsyncSession, *, unresolved: bool, staff_id: UUID) -> CaseList:
+    """The queue as ``staff_id`` sees it: unresolved cases oldest first, or decided ones newest decision first."""
+    rows = (await db.execute(_OPEN_CASES if unresolved else _DECIDED_CASES, {"staff": staff_id})).all()
+    return CaseList(items=[await _case_out(row, unresolved=unresolved) for row in rows])
 
 
 _CASE = text("SELECT id, subject_type, subject_id, status FROM moderation_cases WHERE id = :id FOR UPDATE")
@@ -123,6 +220,7 @@ _CLOSE = text(
 )
 
 
+# The TIER1_FIELDS of each subject (a unit test keeps the two in step).
 _CURRENT_TEXT = {
     "proposal": text("SELECT title, problem_statement, impact_claims, summary FROM proposals WHERE id = :id"),
     "problem": text("SELECT title, statement FROM problems WHERE id = :id"),
@@ -134,8 +232,7 @@ async def _shows_a_vulnerability(db: AsyncSession, subject_type: str, subject_id
     row = (await db.execute(_CURRENT_TEXT[subject_type], {"id": subject_id})).one_or_none()
     if row is None:
         return False
-    fields = {name: value for name, value in row._asdict().items() if value}
-    return SECURITY_VULNERABILITY in (await RulesPreScreen().screen(ScreenInput(fields))).reasons
+    return await screens_as_vulnerability({name: value for name, value in row._asdict().items() if value})
 
 
 def _refusal(exc: DBAPIError) -> ApiError | None:

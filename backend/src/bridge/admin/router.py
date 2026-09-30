@@ -7,10 +7,14 @@
   active top-level niche); the new niche is selectable in the directory at once. Audited as
   ``directory.niche_added`` with ids only.
 - ``GET /moderation/cases``: the moderation queue, unresolved cases first-in first-out (``?decided=true`` for the
-  decided ones), each with a Tier-1 preview of its proposal or problem (staff admin or moderator; REQ-MOD-01).
+  decided ones, newest decision first), each with its proposal's or problem's Tier-1 text, the flagged fields and the
+  decisions open to the caller (staff admin or moderator; REQ-MOD-01, ``bridge.admin.moderation``).
 - ``POST /moderation/cases/{case_id}/decision``: approve or reject the version reviewed (``subject_version_id``;
   409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``; audited as
   ``moderation.case_decided``.
+
+Other queues are sub-routers of their own: ``bridge.admin.research`` (``/research/*``, P11) and ``bridge.admin.claims``
+(``/claims``, read only, P15).
 """
 
 from __future__ import annotations
@@ -147,7 +151,7 @@ async def admin_add_niche(body: NicheCreate, staff: StaffAdmin, db: Db) -> Admin
 async def moderation_queue(
     staff: StaffModerator, db: Db, decided: Annotated[bool, Query(description="Decided cases instead")] = False
 ) -> moderation.CaseList:
-    return await moderation.list_cases(db, unresolved=not decided)
+    return await moderation.list_cases(db, unresolved=not decided, staff_id=staff.live.user.id)
 
 
 @router.post("/moderation/cases/{case_id}/decision")
