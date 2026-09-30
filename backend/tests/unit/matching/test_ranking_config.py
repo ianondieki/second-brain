@@ -31,7 +31,7 @@ def test_the_real_file_loads_with_the_spec_values() -> None:
     }
     assert dict(t.projects.weights) == {"org_interest": 12}
     assert (t.baseline_days, t.min_actors, t.young_share, t.young_days) == (90, 3, 0.5, 7)
-    assert r.weights["semantic_fit"] == 0.25 and r.weights["crowding"] == -0.07  # docs/spec/06 6.7
+    assert (r.weights["semantic_fit"], r.weights["crowding"]) == (0.25, -0.07)  # docs/spec/06 6.7
     assert round(sum(v for v in r.weights.values() if v > 0), 6) == 1.0
     assert (r.mmr_lambda, r.top_n, r.per_niche_cap, r.exploration_slots) == (0.7, 10, 3, 1)
     assert (r.label_strong, r.label_good) == (80, 60)
