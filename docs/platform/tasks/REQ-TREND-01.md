@@ -45,9 +45,15 @@ publication facts come from `proposals.published_at` and the problem links, read
   and 7 days; ages in whole Africa/Nairobi days; facts older than the window count for nothing.
 - z-score per niche: every item of the niche scored at weekly points over 90 days (an item from its publication or
   its first dated event, whichever is earlier), mean and population sd (floor 0.5). Fewer than 3 non-zero baseline
-  scores: no z-score (cold start). Trending = z >= 1.0, score >= 1.0, >= 3 distinct actors (proposal owners,
-  source publishers, the Brief's organisation, the scouting organisations). New this week = published in the last
-  7 Nairobi days.
+  scores: no z-score (cold start). Trending = z >= 1.0, score >= 1.0, >= 3 distinct actors. New this week =
+  published in the last 7 Nairobi days (6 days old is new, 7 is not).
+- Actors (fix round, review MAJOR) are only the people and organisations behind recent activity: developers with a
+  proposal against the problem in the 30-day badge window, publishers of sources dated in that window, the Brief's
+  organisation, and the scouting organisations (the definer's count over the window, from 3). Chosen over dropping
+  publishers entirely: fresh independent coverage by three publishers is a real crowd for a research card, while a
+  year-old or two-month-old source is evidence for the score, not a person acting now. A card with three sources 35
+  to 37 days old and one new proposal has one actor and no badge
+  (`test_discover.py::test_old_sources_are_evidence_not_actors`).
 - Anti-gaming: see "Anti-gaming coverage" below.
 
 **Discover** (`discover.py`):
@@ -60,8 +66,11 @@ publication facts come from `proposals.published_at` and the problem links, read
 - Trending Projects: Trending (organisation interest) or New this week, each with the visible problem it solves
   (the one trending most); a proposal whose problems are all hidden is not listed. Their badge is `Trending in
   <niche>` and their chips never count organisations; their score and z are not returned (a score counts them).
-- Opportunity Gap: problems with a z-score and a positive score, ranked by z; the top `ceil(10 %)`; of those, the
-  ones with fewer than 3 published proposals.
+- Opportunity Gap (fix round, review MINOR 1: a z floor, not a platform-wide decile): the problems in the filter's
+  scope that have a z-score and a positive score, ranked by z; the top `ceil(10 %)` of that scope; of those, the ones
+  whose z reaches the Trending floor (1.0) and that have fewer than 3 published proposals. With a niche filter the
+  decile is the niche's; the floor keeps a quiet scope's top tenth, which is no trend, out. A platform-wide decile
+  was not chosen: a small niche would never reach it, against spec 6.6's "so small niches can trend".
 - Filters: `niche` (slug; a parent includes its children; unknown: empty) and `county` (exact code). Baselines are
   the platform's whatever the filter.
 
@@ -93,8 +102,11 @@ followed niches untouched; RLS keeps each user to their own rows. 404 without a 
 through `PUT /api/me/niches`; Amina's profiling consent through `PUT /api/me/consents` (Brian keeps the default);
 simulated `scout_match` / `org_interest` signals written by the owner role from pseudonyms of no account (the demo
 has two E2 fixtures; trends need three organisations): weekly history, then a burst for P2 and P1 this week. Signal
-ids are uuid5 of the Nairobi ISO week, proposal, kind, organisation and day: a second run in the same week inserts
-nothing, a later week tops the demo up. Choices made in the app (niches set, consent decided) are kept.
+ids are uuid5 of the signal's Nairobi date, proposal, kind and organisation, and its time is that date's 00:05 plus
+a few minutes (never after the run): a run on the same day inserts nothing, a later run adds only the dates earlier
+runs did not cover, so there is never more than one signal per proposal, kind, organisation and date
+(`unit/demo/test_demo_trending.py`, two runs a week apart). Choices made in the app (niches set, consent decided) are
+kept.
 
 ## API for P12-F
 
@@ -116,7 +128,9 @@ All require a session; errors are the usual `{detail: {code, message}}`.
   liked_niches: NicheOut[], items: Recommendation[]}`; `Recommendation`: `{problem: DiscoverProblem, position, score
   (0-100), label ("Strong fit" | "Good fit" | "Stretch"), exploring, pursuit {decision ("pursue" | "consider" |
   "not_now"), label ("Pursue" | "Consider" | "Not now"), reasons: string[] (≥1)}, why: string[] (≥1), why_not,
-  trend: TrendOut, features: {semantic_fit … freshness: {raw, value, weight, applies}}}`. 404 without a developer
+  trend: TrendOut, features: FeaturesOut}`; `FeaturesOut` has exactly the ten named fields `semantic_fit,
+  niche_match, region_match, skill_coverage, trend, evidence_confidence, market_pull, crowding, track_record,
+  freshness`, each a `FeatureOut {raw, value, weight, applies}`. 404 without a developer
   profile. An empty `items` is the empty state (no cards yet).
 - `GET /api/me/niches` → `{liked: NicheOut[], min: 3, max: 5}`; `PUT /api/me/niches` body `{liked: uuid[]}` (ids
   from `GET /api/directory/niches`) → the same; 422 `liked_niches_count` or `unknown_niche` (with `niches`); 404
@@ -169,7 +183,14 @@ import; f9 from the platform is built, its pair-2 test is REQ-PERS-02's).
 2. **Self-boost through an organisation the developer belongs to.** A developer who is a member of an organisation
    can express that organisation's interest in their own proposal. The definer would have to drop an org-side signal
    whose actor digest equals the proposal owner's digest (the salt never leaves the database).
-3. From the 0005 re-check, still open: snap `p_since`/`p_now` to Nairobi day boundaries inside the definer (the
+3. **The definer's plan on a table without statistics.** Measured on a fresh database: 5k events 6.5 s, 20k events
+   116 s, 50k events about 150 s for the first `app_trend_aggregates` call; after `ANALYZE signal_events`, 0.2 s at
+   50k. The planner takes a just-loaded table as empty and picks a nested plan. Autovacuum's analyse fixes it in
+   normal growth, but a restore, a bulk import or a fresh replica would serve Discover slowly until then. For
+   0006: look at the plan (an index serving the definer's grouping, e.g. on `(kind, item_id, ts)`, or a plan that
+   does not depend on the estimate). **Runbook note** (for the deploy/restore runbook when it is written): run
+   `ANALYZE signal_events` (or `ANALYZE` of the database) right after a restore or bulk load.
+4. From the 0005 re-check, still open: snap `p_since`/`p_now` to Nairobi day boundaries inside the definer (the
    routes already pass day-boundary `since` values), a `published_date` floor, abandoning a stuck research run.
    Nothing here needs `budget_band` on proposals.
 
@@ -187,14 +208,10 @@ import; f9 from the platform is built, its pair-2 test is REQ-PERS-02's).
 
 ## Open items
 
-1. **Definer performance without statistics.** On a freshly bulk-loaded `signal_events` (50k rows, no ANALYZE) the
-   first `app_trend_aggregates` call took about 150 s; after `ANALYZE signal_events`, 0.2 s. Autovacuum analyses a
-   table that grows like this, and the perf test runs ANALYZE the way it would. db-migrations may want to look at the
-   definer's plan (an index serving its grouping) in 0006.
-2. **Consent wording vs. behaviour.** The `profiling` text reads "Use my niches and activity to recommend …", while the
-   ranker uses liked niches and county without it (as the task asked: "without it, rank on liked niches and public
-   facts only"). Either the wording changes (a new consent text version, `[[COPY-REVIEW]]`) or niches and county
-   also wait for the consent. Decision for the orchestrator.
+1. **Definer performance without statistics**: moved to "Needs a revision" item 3 (with the runbook note). The perf
+   test runs ANALYZE the way autovacuum would.
+2. **Consent wording vs. behaviour**: recorded as **D-47** on integration (default (a): niches and county are
+   declared preferences used without the consent; the text changes to activity only with the D-39 review).
 3. Liked niches must be 3 to 5 (REQ-PERS-03): there is no way to clear them; the P12-F picker should say so.
 4. The trend of a problem is computed from the whole platform, so a request reads every visible problem and proposal
    and every aggregate row; fine for the prototype (0.9 s at 50k events), a stored recompute at Phase 5.
@@ -211,14 +228,36 @@ decile (`test_opportunity_gap.py`), M8 crowded never Pursue, M9 consent gating o
 (`test_turning_profiling_off_removes_f1_and_f9`), M11 recommendable sources (AC-PERS-7 test), M12 a count in the
 project badge (the Discover test), M13 county filter, M14 liked-niches count, M15 cold start without a baseline.
 
-## Checks (head of the branch)
+## Fix round 1 (reviewer CHANGES_REQUIRED on 4a590f1)
 
-- `ruff check .`, `ruff format --check .` (535 files), `mypy` (strict, 537 files): clean.
-- `python -m bridge.openapi --check`: clean after regeneration; `frontend/lib/api/schema.d.ts` regenerated with
-  openapi-typescript 7.13.0 (the same version reproduces the base branch's file byte for byte). No existing schema
-  name changed (the first cut's `SourceOut` clashed with the admin research one and was renamed `DiscoverSource`).
-- Backend suite: 3917 passed (13 min). New: 131 unit tests in `tests/unit/matching` (45 new), 13 integration tests,
-  1 perf test (own database), 1 demo-seed test.
+| Finding | Change | Commit | Test |
+|---|---|---|---|
+| MAJOR: old publishers counted toward the 3-actor floor | actors only behind recent activity (see "Trends" above; publishers kept, but only for sources in the 30-day window; developers likewise) | `cf0c05f` | `test_discover.py::test_old_sources_are_evidence_not_actors` (fails on the old rule) |
+| MINOR 1: gap decile | a z floor at the Trending floor; decile stays the scope's (see "Discover") | `19e70ce` | `test_opportunity_gap.py` (exactly 3 proposals is out; a quiet niche has no gap) |
+| MINOR 2: surviving mutants | tests for: no history read without consent; `< 3` at exactly 3; once per developer and day at the board; the scouts' daily maximum across a problem's proposals; a held problem's link; the county filter on projects; the 7-day New boundary | `19e70ce`, `8440349` | review mutants R1-R7 below, all killed |
+| MINOR 3: config fail closed | kinds must equal the known set (a missing kind is refused, never a silent zero); `baseline_step_days <= baseline_days`; `type(version) is int` | `7e24534` | `test_ranking_config.py` (4 new refusals) |
+| MINOR 4: chip source | f1's chip is "Close to your past proposals" when a shared keyword comes from one, else "Close to your profile" `[[COPY-REVIEW]]` | `9e453fc` | `test_ranker.py::test_the_fit_chip_names_where_the_shared_words_come_from` |
+| MINOR 5: demo accumulation | signals keyed and timed by their Nairobi date | `29aa2a5` | `unit/demo/test_demo_trending.py` (two runs a week apart) |
+| MINOR 6: cold definer plan | "Needs a revision" item 3, with the restore runbook note | this card | |
+| MINOR 7: per-day inference | accepted residual, `THREAT_MODEL.md` §2 (new row after the P10 signal row); scores not rounded | `THREAT_MODEL` commit | |
+| MINOR 8: types | `Recommendation.features: FeaturesOut` (ten named fields), `PursuitOut.label: "Pursue" \| "Consider" \| "Not now"`; regenerated with `make api-types` (7.13.0) | `6ef7c5c` | recommendation tests; `openapi --check` |
+| MINOR 9: merge conflict | the demo seed's trending test moved before the research section; `git merge-tree` against integration `7812693` reports no conflict | `d0d66d4` | |
+
+Review mutants (scratch script, not committed): R1 once per developer and day at the board, R2 the scouts' maximum
+across linked proposals, R3 a held problem's link, R4 the county filter on projects, R5 the 7-day boundary, R6 no
+history read without consent, R7 old publishers as actors: 7 killed, 0 survived; plus the gap's `<= 3` and no-floor
+mutants: killed.
+
+## Checks (head of the branch, after fix round 1)
+
+- `ruff check .`, `ruff format --check .` (536 files), `mypy` (strict, 538 files): clean.
+- `python -m bridge.openapi --check`: clean; `openapi.json` and `schema.d.ts` regenerated with `make api-types`
+  (openapi-typescript 7.13.0). Against the base branch no existing schema is removed or changed; added:
+  `DiscoverProblem, DiscoverSource, FeatureOut, FeaturesOut, LikedNichesIn, LikedNichesOut, OpportunityGapOut,
+  ProjectTrendOut, PursuitOut, Recommendation, RecommendationsOut, TrendOut, TrendingOut, TrendingProblem,
+  TrendingProject`.
+- Backend suite: 3931 passed (13 min 43 s).
+- `git merge-tree` against integration `7812693`: no conflict.
 - `scripts/copy_lint.py`: PASS. `docs/platform/checks/check_traceability.py`: PASS (0 errors, 7 warnings, as before).
 - AC-TREND-3: 50,000 events, each request twice: slowest 0.91 s (trending 0.45/0.61, gap 0.41/0.70, recommendations
   0.44/0.91); identical answers.
