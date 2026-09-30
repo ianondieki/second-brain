@@ -78,6 +78,17 @@ test.describe("a D1 developer with a published idea", () => {
       // The picker: the directory by niche with badges, the cap, one primary action.
       await page.locator("[data-primary]").click();
       await expect(page).toHaveURL(new RegExp(`/dev/ideas/${idea.id}/pitch$`), SERVER_STEP);
+      // At 360 x 640, before any scrolling, the whole Pitch button clears the tab bar (P16-C1 fix round 1).
+      const size = page.viewportSize()!;
+      await page.setViewportSize({ width: 360, height: 640 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const clear = await page.evaluate(() => {
+        const tabs = document.querySelector("nav[data-tab-bar]")!.getBoundingClientRect();
+        const pitch = document.querySelector("[data-action-bar] button")!.getBoundingClientRect();
+        return { pitchBottom: pitch.bottom, tabsTop: tabs.top };
+      });
+      expect(clear.pitchBottom).toBeLessThanOrEqual(clear.tabsTop);
+      await page.setViewportSize(size);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pitch to companies");
       await expect(page.locator("[data-cap]")).toHaveText(/^\d+ of \d+ pitches left for this idea on your plan\.$|no limit/);
       await expect(page.locator("[data-primary]")).toHaveText("Pitch");

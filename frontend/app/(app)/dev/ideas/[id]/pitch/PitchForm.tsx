@@ -192,14 +192,15 @@ export function PitchForm({
     onToggle: toggle,
   });
   return (
-    <>
+    // The form starts at the lead, not at the search field: a sticky element stays inside its containing block, so a
+    // form that began lower held the Pitch bar under the tab bar at 360 x 640 (P16-C1 fix round 1, ux item 11).
+    <form method="get" onSubmit={submit}>
       <p className="mt-3 max-w-[62ch] text-ink-soft">{t("lead", { max })}</p>
       <p className="mt-3 text-ink" data-cap="">
         {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: capNow.limit ?? 0 })}
       </p>
-      <form method="get" onSubmit={submit} className="mt-6">
         {/* Nothing changes the list while a Pitch is under way. */}
-        <fieldset disabled={busy} className="m-0 max-w-3xl min-w-0 border-0 p-0">
+        <fieldset disabled={busy} className="m-0 mt-6 max-w-3xl min-w-0 border-0 p-0">
           <div role="search">{filters}</div>
           {narrowed ? (
             <p className="mt-2">
@@ -273,7 +274,8 @@ export function PitchForm({
         <div
           data-action-bar=""
           className={cn(
-            "sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[5] -mx-4 mt-8 border-t border-line bg-paper",
+            // Above the tab bar: its 56 px tabs, its 1 px top border and the safe area.
+            "sticky bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] z-[5] -mx-4 mt-8 border-t border-line bg-paper",
             "px-4 pt-3 pb-4 sm:-mx-6 sm:px-6 lg:bottom-0 lg:mx-0 lg:px-0",
           )}
         >
@@ -294,8 +296,7 @@ export function PitchForm({
             </Button>
           </div>
         </div>
-      </form>
-    </>
+    </form>
   );
 }
 
