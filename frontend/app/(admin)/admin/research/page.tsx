@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
 import { ClientStrings } from "@/components/ClientStrings";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
@@ -29,14 +33,7 @@ const RUNS_SHOWN = 5;
 export default async function ResearchPage() {
   const { role } = await staffContext();
   const t = await getTranslations("adminResearch");
-  const header = (
-    <header>
-      <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-        {t("title")}
-      </h1>
-      <p className="mt-2 max-w-[60ch] text-ink-soft">{t("lead")}</p>
-    </header>
-  );
+  const header = <PageHeader title={t("title")} lead={t("lead")} focusable />;
 
   const refused = (sentence: string, action: string, href: string) => (
     <AdminShell role={role} current="research">
@@ -74,7 +71,8 @@ export default async function ResearchPage() {
       <div className="flex max-w-3xl flex-col gap-12">
         {header}
 
-        <section aria-labelledby="start-run" className="rounded-panel bg-jacaranda-wash px-4 py-6 sm:px-6">
+        {/* The screen's one panel: where its one primary action lives. */}
+        <Panel as="section" variant="wash" aria-labelledby="start-run">
           <h2 id="start-run" className="text-lg text-ink">
             {t("start.heading")}
           </h2>
@@ -87,36 +85,28 @@ export default async function ResearchPage() {
               <p className="text-ink">{t("start.noNiches")}</p>
             )}
           </div>
-        </section>
+        </Panel>
 
-        <section aria-labelledby="queue">
-          <h2 id="queue" className="text-lg text-ink">
-            {t("queue.heading")}
-          </h2>
-          <div className="mt-4">
-            {candidates.length > 0 ? (
-              <ol aria-labelledby="queue" className="flex flex-col">
-                {candidates.map((candidate) => (
-                  <CandidateRow key={candidate.id} candidate={candidate} niches={niches} />
-                ))}
-              </ol>
-            ) : (
-              <EmptyState sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
-            )}
-          </div>
-        </section>
+        <Section title={t("queue.heading")} headingId="queue">
+          {candidates.length > 0 ? (
+            <RowList ordered aria-labelledby="queue">
+              {candidates.map((candidate) => (
+                <CandidateRow key={candidate.id} candidate={candidate} niches={niches} />
+              ))}
+            </RowList>
+          ) : (
+            <EmptyState sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
+          )}
+        </Section>
 
         {runs.length > 0 ? (
-          <section aria-labelledby="runs">
-            <h2 id="runs" className="text-lg text-ink">
-              {t("runs.heading")}
-            </h2>
-            <ol aria-label={t("runs.listLabel")} className="mt-4 flex flex-col">
+          <Section title={t("runs.heading")} headingId="runs">
+            <RowList ordered aria-label={t("runs.listLabel")}>
               {runs.slice(0, RUNS_SHOWN).map((run) => (
                 <RunRow key={run.id} run={run} niches={niches} />
               ))}
-            </ol>
-          </section>
+            </RowList>
+          </Section>
         ) : null}
 
         {sources.excerpts.length > 0 ? (

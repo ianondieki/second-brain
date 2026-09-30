@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { formatConfidence, formatDate, formatMoment, safeHttpsUrl } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
+import { Badge } from "@/components/ui/Badge";
 import { CheckIcon, ClockIcon, ClosedIcon, CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
+import { Row } from "@/components/ui/RowList";
 
 import {
   nicheLabel,
@@ -21,73 +22,83 @@ import {
 // The research page's lists (REQ-RES-01): the cards waiting for review, the recent runs and the saved excerpts.
 
 /**
- * One card waiting for review: its title (the way into the review), the start of its statement, its niche,
- * confidence, sources and draft date, and at most two tags (docs/spec/07 item 2): how it was drafted, and whether it
- * names an organisation (D-45).
+ * One card waiting for review, a Row: its title (the way into the review, an h3 under "Waiting for review"), at most
+ * two badges (docs/spec/07 item 2): how it was drafted, and whether it names an organisation (D-45); its niche,
+ * confidence, sources and draft date as the meta line; then the start of its statement. The whole row is the link's
+ * target (a stretched link), so `data-review-link` marks the row's box.
  */
 export async function CandidateRow({ candidate, niches }: { candidate: Candidate; niches: readonly AdminNiche[] }) {
   const t = await getTranslations("adminResearch");
   const locale = await getLocale();
   const confidence = formatConfidence(locale, candidate.confidence);
   const niche = nicheLabel(candidate.niche, niches);
+  const drafted = (
+    <Badge
+      key="drafted"
+      data-chip="drafted"
+      tone="accent"
+      icon={candidate.seeded_example ? <InfoIcon /> : <PencilIcon />}
+    >
+      {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
+    </Badge>
+  );
+  const orgs =
+    candidate.named_orgs.length > 0 ? (
+      <Badge key="orgs" data-chip="orgs" tone="neutral" icon={<CompaniesIcon />}>
+        {t("queue.namesOrgs")}
+      </Badge>
+    ) : null;
   return (
-    <li data-candidate={candidate.id} className="border-t border-line py-5 first:border-t-0 first:pt-0">
-      <h3 className="text-lg text-ink">
-        <Link
-          href={reviewHref(candidate.id)}
-          data-review-link=""
-          className="inline-flex min-h-11 items-center font-semibold [overflow-wrap:anywhere] text-ink underline decoration-line decoration-1 underline-offset-4 hover:text-jacaranda hover:decoration-jacaranda"
-        >
-          {candidate.title}
-        </Link>
-      </h3>
-      <p className="mt-1 line-clamp-2 max-w-[65ch] [overflow-wrap:anywhere] text-ink-soft">{candidate.statement}</p>
-      <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
-        <li data-chip="drafted" className="inline-flex items-center gap-1.5 font-semibold text-jacaranda">
-          {candidate.seeded_example ? <InfoIcon className="size-4" /> : <PencilIcon className="size-4" />}
-          {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
-        </li>
-        {candidate.named_orgs.length > 0 ? (
-          <li data-chip="orgs" className="inline-flex items-center gap-1.5 font-semibold text-ink">
-            <CompaniesIcon className="size-4" />
-            {t("queue.namesOrgs")}
-          </li>
-        ) : null}
-        {niche ? <li>{niche}</li> : null}
-        {confidence ? <li>{t("queue.confidence", { value: confidence })}</li> : null}
-        <li>{t("queue.sources", { count: candidate.sources.length })}</li>
-        <li>{t("queue.drafted", { date: formatMoment(locale, candidate.created_at) })}</li>
-      </ul>
-    </li>
+    <Row
+      data-candidate={candidate.id}
+      data-review-link=""
+      title={candidate.title}
+      href={reviewHref(candidate.id)}
+      meta={
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          {niche ? <span>{niche}</span> : null}
+          {confidence ? <span>{t("queue.confidence", { value: confidence })}</span> : null}
+          <span>{t("queue.sources", { count: candidate.sources.length })}</span>
+          <span>{t("queue.drafted", { date: formatMoment(locale, candidate.created_at) })}</span>
+        </span>
+      }
+      badges={orgs ? [drafted, orgs] : [drafted]}
+    >
+      <p className="line-clamp-2 max-w-[65ch] [overflow-wrap:anywhere] text-ink-soft">{candidate.statement}</p>
+    </Row>
   );
 }
 
-/** One run: niche, when it started, its status (mark, word, colour) and what came of it. */
+/** One run, a Row: niche, when it started, its status (mark, word, colour) and what came of it. */
 export async function RunRow({ run, niches }: { run: Run; niches: readonly AdminNiche[] }) {
   const t = await getTranslations("adminResearch");
   const locale = await getLocale();
   const outcome = runOutcome(run);
   return (
-    <li data-run={run.id} className="flex flex-col gap-1 border-t border-line py-4 first:border-t-0 first:pt-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="font-semibold text-ink">{nicheLabel(run.niche, niches)}</span>
-        <Chip kind={RUN_CHIP[run.status]}>{t(`runs.status.${run.status}`)}</Chip>
-      </div>
-      <p className="text-sm text-ink-soft">{t("runs.started", { date: formatMoment(locale, run.created_at) })}</p>
+    <Row
+      data-run={run.id}
+      title={nicheLabel(run.niche, niches)}
+      meta={t("runs.started", { date: formatMoment(locale, run.created_at) })}
+      badges={[
+        <Chip key="status" kind={RUN_CHIP[run.status]}>
+          {t(`runs.status.${run.status}`)}
+        </Chip>,
+      ]}
+    >
       <p className="max-w-[60ch] text-ink">
         {outcome.key === "cards"
           ? t("runs.cards", { count: outcome.count, total: outcome.total })
           : t(`runs.${outcome.key}`)}
       </p>
-    </li>
+    </Row>
   );
 }
 
-/** Freshness as a mark, a word and a colour (docs/spec/07 item 6: never colour alone). */
+/** Freshness as a Badge: a mark, a word and a tone (docs/spec/07 item 6: never colour alone). */
 const FRESHNESS = {
-  fresh: { tone: "text-ok", Icon: CheckIcon },
-  stale: { tone: "text-ink", Icon: ClockIcon },
-  archived: { tone: "text-ink-soft", Icon: ClosedIcon },
+  fresh: { tone: "ok", Icon: CheckIcon },
+  stale: { tone: "neutral", Icon: ClockIcon },
+  archived: { tone: "neutral", Icon: ClosedIcon },
 } as const;
 
 /**
@@ -106,7 +117,7 @@ export async function SavedExcerpts({
   const t = await getTranslations("adminResearch");
   const locale = await getLocale();
   return (
-    <details className="group border-t border-line pt-6">
+    <details className="group">
       <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-ink marker:content-none">
         <svg
           aria-hidden="true"
@@ -167,9 +178,8 @@ function ExcerptLink({ url, children }: { url: string; children: ReactNode }) {
 function FreshnessMark({ freshness, label }: { freshness: Excerpt["freshness"]; label: string }) {
   const { tone, Icon } = FRESHNESS[freshness];
   return (
-    <span data-freshness={freshness} className={`inline-flex items-center gap-1 font-semibold ${tone}`}>
-      <Icon className="size-4 shrink-0" />
+    <Badge data-freshness={freshness} tone={tone} icon={<Icon />}>
       {label}
-    </span>
+    </Badge>
   );
 }
