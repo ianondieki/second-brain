@@ -2,13 +2,10 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
- * The page has finished streaming: a route's loading state (loading.tsx, `[data-skeleton]`) is shown first and React
- * reveals the page in its place a moment after it arrived (it holds finished content hidden for up to about 300 ms so
- * that reveals do not flicker), and the page's <title> streams in with its metadata. Until then the document holds
- * both trees, the hidden page included, and possibly no title yet, so a check that reads the page waits for this.
+ * The page has settled: after an in-app navigation the new page's <title> arrives with its streamed metadata, a moment
+ * after its content, so a check that reads the whole document (axe's document-title) waits for it.
  */
 export async function settled(page: Page) {
-  await expect(page.locator("[data-skeleton]")).toHaveCount(0);
   await expect(page).toHaveTitle(/\S/);
 }
 

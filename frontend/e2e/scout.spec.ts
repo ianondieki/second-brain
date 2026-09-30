@@ -265,7 +265,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
 
     // 10. The organisation now sees the developer's name, and opens the full proposal under the NDA.
     await orgPage.goto(`/org/engagements/${engagementId}`);
-    await settled(orgPage); // the loading state gives way to the page (one <main> again)
+    await settled(orgPage);
     await expect(orgPage.locator("main")).toContainText(`From ${dev.name}`);
     const shared = orgPage.locator("[data-tier2-share='shared']");
     await expect(shared).toContainText(`The developer shared the full proposal with ${org.orgName}`);

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
-import { ShellFrame } from "./ShellFrame";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -19,16 +19,24 @@ export interface SignedInShellProps {
  */
 export function SignedInShell({ homeHref, children, nav, wide = false }: SignedInShellProps) {
   return (
-    <ShellFrame
-      topBar={
-        <TopBar homeHref={homeHref}>
-          <AccountMenu />
-        </TopBar>
-      }
-      nav={nav}
-      wide={wide}
-    >
-      {children}
-    </ShellFrame>
+    <>
+      <TopBar homeHref={homeHref}>
+        <AccountMenu />
+      </TopBar>
+      <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
+        {nav}
+        <main
+          id="main"
+          tabIndex={-1}
+          className={cn(
+            "w-full min-w-0 flex-1 px-4 pt-8 focus:outline-none sm:px-6 lg:px-0 lg:pt-16",
+            // Room for the fixed tab bar (56 px + the safe area) under 1024 px.
+            nav ? "pb-28 lg:pb-16" : "pb-16",
+          )}
+        >
+          <div className={wide ? undefined : "max-w-xl"}>{children}</div>
+        </main>
+      </div>
+    </>
   );
 }

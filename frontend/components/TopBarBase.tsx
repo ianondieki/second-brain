@@ -5,7 +5,7 @@ import type { AnchorComponent } from "./anchor";
 
 export interface TopBarBaseProps {
   homeHref?: string;
-  /** next/link on pages (TopBar), a plain "a" in the route loading states. */
+  /** next/link on pages (TopBar), a plain "a" on the static not-found screen. */
   Anchor: AnchorComponent;
   children?: ReactNode;
 }
