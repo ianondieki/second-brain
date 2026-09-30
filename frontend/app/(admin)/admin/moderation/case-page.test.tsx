@@ -244,6 +244,15 @@ describe("the queue", () => {
     expect(within(rows[1]).getByText("Public while checked")).toBeTruthy();
     expect(within(rows[1]).getByText("New problem from a developer")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Open cases, oldest first" })).toBeTruthy();
+    // P15-F MINOR 6 and the P16 tour: each row's title is an h2 under the page's h1 (axe heading-order), with nothing
+    // above it; what the case is about is a neutral badge in the meta line, not one of the row's two status badges.
+    for (const row of rows) {
+      const title = row.querySelector("h2")!;
+      expect(title.previousElementSibling).toBeNull();
+      expect(row.querySelector("h3")).toBeNull();
+    }
+    expect(within(rows[1]).getByText("Problem").closest("[data-chip]")).toBeNull();
+    expect(within(rows[0]).getByText("Proposal")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open" }).getAttribute("aria-current")).toBe("page");
   });
 

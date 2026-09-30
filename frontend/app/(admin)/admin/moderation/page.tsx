@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
-import { buttonClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { RowList } from "@/components/ui/RowList";
 
 import { AdminShell } from "../AdminShell";
 import { PageStepUp } from "../research/PageStepUp";
@@ -34,18 +35,11 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
   const { role } = await staffContext();
   const view = moderationView(first((await searchParams).view));
   const t = await getTranslations("adminModeration");
-  const header = (
-    <header>
-      <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-        {t("title")}
-      </h1>
-      <p className="mt-2 max-w-[60ch] text-ink-soft">{t("lead")}</p>
-    </header>
-  );
-  const shell = (children: React.ReactNode) => (
+  // The header's action slot holds "Review the oldest case", the screen's one primary action, when there is one.
+  const shell = (children: React.ReactNode, action?: React.ReactNode) => (
     <AdminShell role={role} current="moderation" wide>
       <div className="flex max-w-3xl flex-col gap-8">
-        {header}
+        <PageHeader title={t("title")} lead={t("lead")} focusable action={action} />
         {children}
       </div>
     </AdminShell>
@@ -73,28 +67,24 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
   return shell(
     <div>
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
-      <div className="mt-6 flex flex-col gap-6">
-        {oldest ? (
-          <Link
-            href={caseHref(oldest.id)}
-            data-primary=""
-            className={buttonClass("primary", "self-start no-underline")}
-          >
-            {t("reviewOldest")}
-          </Link>
-        ) : null}
+      <div className="mt-6">
         {items.length > 0 ? (
-          <ol aria-label={view === "open" ? t("listOpen") : t("listDecided")} className="flex flex-col">
+          <RowList ordered aria-label={view === "open" ? t("listOpen") : t("listDecided")}>
             {items.map((item) => (
               <CaseRow key={item.id} item={item} />
             ))}
-          </ol>
+          </RowList>
         ) : view === "open" ? (
-          <EmptyState sentence={t("emptyOpen")} action={t("emptyOpenAction")} href={viewHref("decided")} />
+          <EmptyState rule={false} sentence={t("emptyOpen")} action={t("emptyOpenAction")} href={viewHref("decided")} />
         ) : (
-          <EmptyState sentence={t("emptyDecided")} action={t("emptyDecidedAction")} href={viewHref("open")} />
+          <EmptyState rule={false} sentence={t("emptyDecided")} action={t("emptyDecidedAction")} href={viewHref("open")} />
         )}
       </div>
     </div>,
+    oldest ? (
+      <ButtonLink href={caseHref(oldest.id)} variant="primary">
+        {t("reviewOldest")}
+      </ButtonLink>
+    ) : undefined,
   );
 }
