@@ -382,22 +382,25 @@ from one design system (`docs/platform/design/p16-design-system.md`), with zero 
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
 gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Stage D is
 done** (`fc87608`: five read waterfalls fixed with fetch-order tests, the scout form back under 150 KB, Lighthouse
-mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E: all three branches merged; the flake check is running.** E2 `a94ab33` (the coverage gate in `pr.yml`,
-≥85 % total and ≥95 % on the five packages; tenancy 99.26 %, total 98.07 %; one test per integration; 19 Vitest
-files). E1 `2bb3d7b` (one error shape, cursor paging, `problem_id`, N+1 fixes with query-count tests, log PII audit
-mapped to REQ-SEC-03 with the reviewers' three MINORs fixed, hermetic tests, moderation case by id, trend G5 test;
-reviewer and security-reviewer PASS). E3 `5976870` (the walkthrough as the `demo-story` CI job, 7 min, in parallel
-with `e2e`; its first CI run found a real TOTP window race in the shared e2e helpers, fixed in `de1a909`). Integration
-head `60391be`: traceability 0 errors, copy-lint PASS, the legacy suite 307 tests OK (unchanged since `fa5aeb6`).
-**Flake check:** three `pr.yml` runs on `60391be` (the push run and two dispatches, in parallel); `pr.yml` runs the
-`make check` targets (backend with coverage, frontend, legacy, e2e, copy-lint) on an egress-blocked runner. **Then
-Stage F:** `/ecc-code-review --branch` since `fa5aeb6`, fixing critical and high findings through the gates, and the
-final M2 report with its scorecard. The container restarted once in this session (Docker is down: `make demo` or the
-dev stack need `dockerd` started again; the demo needs `make demo-reset` before showing it). **Backlog** (MINORs, on
-cards): `requirePendingMfa` return path for a signed-out person (P16-C1); `reminders/facts.py` loads engagements in a
-loop and could call `load_many` (P16-E1); the E1 and E3 round-2 MINORs.
+mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E is done** (integration head `866aec2`). E2 `a94ab33` (the coverage gate in `pr.yml`: ≥85 % total and
+≥95 % on the five packages; one test per integration; 19 Vitest files). E1 `2bb3d7b` (one error shape, cursor
+paging, `problem_id`, N+1 fixes with query-count tests, log PII audit mapped to REQ-SEC-03, hermetic tests,
+moderation case by id, trend G5 test; reviewer and security-reviewer PASS). E3 `5976870` (the walkthrough as the
+`demo-story` CI job, in parallel with `e2e`; its first CI run found a TOTP window race in the shared e2e helpers,
+fixed in `de1a909`). **Flake check:** the first run on `60391be` failed one backend trend test at 00:15 Nairobi time
+(the trend test world wrote "0.1 days ago" as an instant, which fell on yesterday's Nairobi day in the first 2.4
+hours after Nairobi midnight); fixed at its cause in `866aec2` (reviewer PASS; the full backend suite passed locally
+from 00:37 to 00:49 Nairobi time). Then three `pr.yml` runs in a row on `866aec2`, all green: 36783883366,
+36786626567, 36789164038 (runs on one ref cancel each other, so they ran one after another). Run 3: backend 4147
+tests, coverage 98.10 % total (auth 99.53, tenancy 99.26, billing 97.85, provenance 98.84, engagements 98.41);
+Vitest 131 files, 1248 tests; Playwright 162/162; demo story 1/1; legacy suite 307 (Linux, skip list) and Windows
+full; traceability 0 errors; copy-lint PASS. **Now Stage F:** `/ecc-code-review` over M2 (`fa5aeb6..866aec2`),
+fixing critical and high findings through the gates, then the final M2 report and scorecard. The container
+restarted once (the demo stack is stopped: `make demo-reset` before showing it). **Backlog** (MINORs, on cards):
+`requirePendingMfa` return path for a signed-out person (P16-C1); `reminders/facts.py` could call `load_many`
+(P16-E1); the E1 and E3 round-2 MINORs.
 
-**Open branches** (2026-09-30, session 3): none. Integration head `60391be`.
+**Open branches** (2026-09-30, session 3): none. Integration head `866aec2`.
 
 **Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
 `impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
