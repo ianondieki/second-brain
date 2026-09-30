@@ -5,7 +5,8 @@ import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } fro
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { RadioGroup } from "@/components/ui/RadioGroup";
 import { CheckIcon, ClockIcon } from "@/components/ui/status-icons";
@@ -211,7 +212,7 @@ function Steps({ current }: { current: 1 | 2 | 3 }) {
               step === current
                 ? "border-jacaranda font-semibold text-ink"
                 : done
-                  ? "border-[color-mix(in_oklab,var(--jacaranda)_45%,var(--paper))] font-medium text-ink"
+                  ? "border-accent-line font-medium text-ink"
                   : "border-line font-medium text-ink-soft",
             )}
           >
@@ -256,14 +257,15 @@ function Confirm({
       // A refusal that carries its own way back: the page's back link steps aside (upgrade/page.tsx).
       data-checkout-blocked={blocked && !isOwnAction(problem) ? "" : undefined}
     >
-      <div className="border-y border-line py-5">
-        <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-sm font-medium text-ink-soft focus:outline-none">
+      {/* The step's heading names what it shows, then the price: no small label over a big number. */}
+      <div>
+        <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-lg text-ink focus:outline-none">
           {t("youPay")}
         </h2>
-        <p className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink tabular-nums" data-price="">
+        <p className="mt-1 text-xl font-semibold text-ink tabular-nums" data-price="">
           {props.price}
         </p>
-        {props.sample ? <div className="mt-3">{props.sample}</div> : null}
+        {props.sample ? <div className="mt-2">{props.sample}</div> : null}
       </div>
 
       {props.lines.length > 0 ? (
@@ -303,7 +305,7 @@ function Confirm({
       ) : null}
 
       {blocked ? null : (
-        <div className="border-t border-line pt-6">
+        <div className="pt-2">
           <Button variant="primary" busy={props.busy} onClick={props.onStart}>
             {props.busy ? t("starting") : props.simulated ? t("paySimulated") : t("pay")}
           </Button>
@@ -357,9 +359,9 @@ function Result({
           {checkout.plan_active ? t("succeeded", { plan: checkout.plan_name }) : t("succeededNotActive")}
         </Alert>
         <div>
-          <Link href={next ?? props.billingHref} data-primary="" className={buttonClass("primary", "no-underline")}>
+          <ButtonLink href={next ?? props.billingHref} variant="primary" className="no-underline">
             {next ? t("continue") : t("seeYourPlan")}
-          </Link>
+          </ButtonLink>
         </div>
       </section>
     );

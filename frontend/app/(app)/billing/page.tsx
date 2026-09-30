@@ -4,7 +4,9 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { SignedInShell } from "@/components/SignedInShell";
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { standaloneLinkClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { requireMe } from "@/lib/api/server";
@@ -12,6 +14,9 @@ import { homeFor } from "@/lib/auth/routing";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
+
 import { getCurrentPlan, getPlans } from "./data";
 import { SamplePrices } from "./SamplePrices";
 import { billingSubject, priceKind, rowAction, sameLinesAs, sideOf, type Plan, type RowAction } from "./plans";
@@ -36,9 +41,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
 
   const shell = (lead: ReactNode, children: ReactNode) => (
     <SignedInShell homeHref={home}>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("pageTitle")}</h1>
-      {lead}
-      <div className="mt-8">{children}</div>
+      <PageHeader title={t("pageTitle")}>{lead}</PageHeader>
+      <div className="mt-10">{children}</div>
     </SignedInShell>
   );
 
@@ -56,7 +60,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   const orgId = subject.kind === "org" ? subject.membership.org_id : undefined;
   const forOrg =
     subject.kind === "org" ? (
-      <p className="mt-1 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
+      <p className="mt-2 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
     ) : null;
   const [catalogue, current] = await Promise.all([getPlans(sideOf(subject)), getCurrentPlan(subject)]);
 
@@ -88,14 +92,12 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
         {t("current", { plan: currentName })}
       </p>
     </>,
-    <section aria-labelledby="plans-title">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line pb-3">
-        <h2 id="plans-title" className="text-lg text-ink">
-          {t("plansTitle")}
-        </h2>
-        {catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : null}
-      </div>
-      <ol className="mt-6 flex flex-col" data-ladder="">
+    <Section
+      title={t("plansTitle")}
+      headingId="plans-title"
+      description={catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : undefined}
+    >
+      <ol className="mt-2 flex flex-col" data-ladder="">
         {plans.map((plan, index) => (
           <PlanRow
             key={plan.code}
@@ -107,7 +109,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
           />
         ))}
       </ol>
-    </section>,
+    </Section>,
   );
 }
 
@@ -166,10 +168,12 @@ async function PlanRow({
             <p className={cn("tabular-nums", kind === "notSold" ? "text-sm text-ink-soft" : "text-ink")}>{price}</p>
           )}
         </div>
+        {/* "You are here": the one place the accent marks a status on this page. */}
         {current ? (
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-jacaranda" data-your-plan="">
-            <CheckIcon className="size-4 shrink-0" />
-            {t("yourPlan")}
+          <p className="mt-0.5">
+            <Badge tone="accent" icon={<CheckIcon />} data-your-plan="">
+              {t("yourPlan")}
+            </Badge>
           </p>
         ) : null}
         {lines.length > 0 ? (
@@ -183,9 +187,9 @@ async function PlanRow({
           </ul>
         ) : null}
         {action === "upgrade" ? (
-          <Link href={href} data-primary="" className={buttonClass("primary", "mt-4 no-underline")}>
+          <ButtonLink href={href} variant="primary" className="mt-4 no-underline">
             {t("upgradeTo", { plan: plan.name })}
-          </Link>
+          </ButtonLink>
         ) : action === "choose" ? (
           <Link href={href} className={cn(standaloneLinkClass, "mt-2")}>
             {t("choose", { plan: plan.name })}

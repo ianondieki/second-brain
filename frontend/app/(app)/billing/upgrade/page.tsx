@@ -10,7 +10,9 @@ import { homeFor } from "@/lib/auth/routing";
 import { billingHref, isOrgId, isPlanCode, safeNext } from "@/lib/billing/upgrade";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
+import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { BackLink } from "@/components/ui/BackLink";
 import { getCurrentPlan, getPlans, planName } from "../data";
 import { billingSubject, sideOf } from "../plans";
@@ -53,22 +55,19 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
           {tc("back")}
         </BackLink>
       ) : null}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">{title}</h1>
-        {tag}
-      </div>
-      {subject.kind === "org" ? (
-        <p className="mt-1 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
-      ) : null}
+      <PageHeader
+        title={title}
+        lead={subject.kind === "org" ? t("forOrg", { org: subject.membership.org_name }) : undefined}
+      >
+        {tag ? <p className="mt-3">{tag}</p> : null}
+      </PageHeader>
       {children}
     </SignedInShell>
   );
   const empty = (sentence: string, action: string, href: string, primary = false) =>
     shell(
       t("pageTitle"),
-      <div className="mt-8">
-        <EmptyState sentence={sentence} action={action} href={href} primary={primary} />
-      </div>,
+      <EmptyState sentence={sentence} action={action} href={href} primary={primary} className="mt-8" />,
       undefined,
       false,
     );
@@ -104,14 +103,11 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   if (!plan.purchasable) return empty(t("refused.notSold", { plan: plan.name }), t("action.allPlans"), back);
 
   const [price, lines] = await Promise.all([priceText(plan), lineTexts(plan)]);
+  // "Simulated" is a fact, said in words as a neutral Badge (p16-design-system.md, review against the brief).
   const simulatedTag = catalogue.simulated_checkout ? (
-    <p
-      data-simulated=""
-      className="inline-flex items-center gap-1.5 rounded-control bg-jacaranda-wash px-2.5 py-1 text-sm font-semibold text-jacaranda"
-    >
-      <InfoIcon className="size-4 shrink-0" />
+    <Badge data-simulated="" tone="neutral" icon={<InfoIcon />}>
       {tc("simulatedTag")}
-    </p>
+    </Badge>
   ) : null;
   return shell(
     tc("pageTitle", { plan: plan.name }),
