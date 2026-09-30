@@ -346,7 +346,7 @@ changed in round 2 (`openapi --check` clean without regeneration); only the badg
 
 ### Open items
 
-1. **Problem card route.** `/problems/{id}` is REQ-RES-01's (`feat/REQ-RES-01-fe`), not on this base: the link is
+1. **Problem card route (resolved in the fix round).** `/problems/{id}` is REQ-RES-01's (`feat/REQ-RES-01-fe`), not on this base: the link is
    built by `discover.ts` `problemHref` (the same address as that branch's `components/problem/problem.ts`); after
    both merge, import that one and add a heading assertion after "opens a problem card" in `discover.spec.ts` (the
    test now checks the address and the card through `GET /api/problems/{id}`). On this base the missing route's
@@ -378,3 +378,29 @@ changed in round 2 (`openapi --check` clean without regeneration); only the badg
 - Full Playwright suite against a production build and the `2c233a0` backend with the demo seed: 104 passed, 2
   failed (`tracker.spec.ts` "From Achieng Otieno", failing on base `84e0af0` too and fixed on integration by
   `e63a182`).
+
+### P12-F fix round (reviewer and ux-reviewer CHANGES_REQUIRED on d2bc7d4)
+
+Integration `7877c1e` merged in (`6329582`; locales and client-strings resolved as a union), then P12-B fix round 2
+`710e3e2` (`825e202`).
+
+| Finding | Change | Test |
+|---|---|---|
+| UX MAJOR 1: provenance | each Discover problem and Home recommendation shows `problem.label` in its meta line (`data-label`) | `discover-fixes.test.tsx` provenance |
+| UX MAJOR 2: projects cold start | `isColdStart` on projects ("New this week" and its own lead); mixed lead "Rising fastest first, then new this week; each one beside the problem it solves" `[[COPY-REVIEW]]` | honest trends: projects list |
+| UX MAJOR 3: Trending/Rising | `honestChips` drops a chip or reason starting "Trending" when `trend.trending` is false (cards, reasons, Why) | honest trends (problem, recommendation) |
+| Reviewer MAJOR 1: Home on failure | `recommendations()` null on 500, 404, timeout, offline; redirect only on 401 | `data.test.ts`; unavailable render |
+| Reviewer MAJOR 2: `setProfiling` | call-layer tests with a fake client: body, 200 list, 409, offline; `saveNiches` too | `niches/calls.test.ts` |
+| Reviewer MAJOR 3: `?problem=` | `linkableProblem` never fetches a non-uuid; null on 404, 422, 5xx, timeout; redirect only on 401 | `data.test.ts`; e2e "an unknown problem in ?problem= links nothing and saves nothing before typing" |
+| MINORs | project row asserts the problem link's name; markup in chips, badge, sources and Why-not renders as text (no `<img>`); only plain https sources are links (integration's `safeHttpsUrl`); Swahili pursuit chip; consent shows what the API recorded; noSources by `problem.source`; picker count error takes focus; reasons not repeated under "Why it fits"; profiling button `aria-describedby` its title; DevNav labels may wrap below 380 px | `discover-fixes.test.tsx`, `discover-screens.test.tsx` |
+| After the merge | own `problemHref`, `sourceUrl`, `formatSourceDate` deleted: `@/components/problem/problem` (`problemHref`, `safeHttpsUrl`, `formatDate`); e2e asserts the problem page's h1 | `discover.spec.ts` |
+
+Checks: eslint, typecheck, vitest 916/916, `api:check`, `bridge.openapi --check`, copy lint, traceability PASS.
+Playwright, full suite, production build, isolated stack on this branch's backend (P12-B `710e3e2` + integration):
+130 passed. `npm run budget` (the real script; `/problems/{id}` now exists): `/dev`, `/dev/discover` (3 views),
+`/dev/companies` 141.3 KB; `/dev/discover/niches` 144.1 KB (budget 150; AccountMenu included).
+
+Still open: the label is the API's English string (`DiscoverProblem` has no `seeded_example`, so integration's
+`problemLabel` cannot be used; once P16-A writes "30 Sep 2026" on the problem page, Discover still shows the API's
+"30 September 2026"): P12-B could add `seeded_example` to `DiscoverProblem`/`ProblemRef`. Swahili DevNav at 360 px is
+a G5 check. Open items 2-4 above stand.
