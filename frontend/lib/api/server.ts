@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import createClient from "openapi-fetch";
+import { cache } from "react";
 
 import { signupConsents, type ShownConsents } from "@/lib/auth/consents";
 import { homeOf, isPending, type Me } from "@/lib/auth/routing";
@@ -44,8 +45,12 @@ export async function forwardHeaders({ session = true }: { session?: boolean } =
   return out;
 }
 
-/** The signed-in person for this request, or null when there is no live session. Forwards only the session cookie. */
-export async function getMe(): Promise<Me | null> {
+/**
+ * The signed-in person for this request, or null when there is no live session. Forwards only the session cookie.
+ * Cached per request (React.cache, never across requests): a page, its layout and the parts they render share one
+ * GET /api/auth/me (requireMe, getSignedIn and staffContext all read it here).
+ */
+export const getMe = cache(async function getMe(): Promise<Me | null> {
   const cookie = await sessionCookie();
   if (!cookie) return null;
   // Bounded: a hung API must end in the route's error page, not a page that never renders.
@@ -56,7 +61,7 @@ export async function getMe(): Promise<Me | null> {
   if (response.status === 401) return null;
   if (!data) throw new Error(`GET /api/auth/me answered ${response.status}`);
   return data;
-}
+});
 
 /**
  * The person when fully signed in (second factor given), else null: signed out, still owing the second factor, or the
