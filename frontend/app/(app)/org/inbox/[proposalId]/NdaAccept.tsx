@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
@@ -11,6 +10,7 @@ import { Form, SubmitButton } from "@/components/ui/Form";
 import { api } from "@/lib/api/client";
 
 import { ACTION_HREF, ownerPreviewHref, REFUSAL_ACTION, refusalOf, type Refusal } from "../../refusals";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface NdaAcceptProps {
   orgId: string;
@@ -85,9 +85,9 @@ export function NdaAccept({
               {t("action.ownerPreview")}
             </a>
           ) : action && href ? (
-            <Link href={href} className={standaloneLinkClass}>
+            <StandaloneLink href={href}>
               {t(`action.${action}`)}
-            </Link>
+            </StandaloneLink>
           ) : action ? (
             <Button
               variant="link"

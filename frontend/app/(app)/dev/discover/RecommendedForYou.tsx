@@ -5,7 +5,7 @@ import { ConsiderIcon, NotNowIcon, PursueIcon } from "@/components/discover-icon
 import { problemHref } from "@/components/problem/problem";
 import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
+import { textLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
@@ -20,6 +20,7 @@ import {
   type Recommendation,
   type RecommendationsState,
 } from "./recommendations";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 // Status as icon + words + tone (docs/platform/design/p16-design-system.md, Status): "Pursue" in the success tone, the
 // others neutral; the accent stays for "act here".
@@ -64,9 +65,9 @@ export function RecommendedForYou({ state }: { state: RecommendationsState }) {
               <RecommendationRow key={item.problem.id} item={item} />
             ))}
           </RowList>
-          <Link href={DISCOVER_PATH} className={standaloneLinkClass}>
+          <StandaloneLink href={DISCOVER_PATH}>
             {t("more")}
-          </Link>
+          </StandaloneLink>
         </>
       ) : state.kind === "noNiches" ? (
         <EmptyState sentence={t("noNiches")} action={t("noNichesAction")} href={NICHES_PATH} />
@@ -141,9 +142,9 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
             </section>
           ) : null}
           <p>
-            <Link href={startProposalHref(item.problem.id)} className={standaloneLinkClass}>
+            <StandaloneLink href={startProposalHref(item.problem.id)}>
               {t("start")}
-            </Link>
+            </StandaloneLink>
           </p>
         </div>
       </details>

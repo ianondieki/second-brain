@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { buttonClass, primaryMark, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass, primaryMark } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -15,6 +14,7 @@ import {
   type FilterOptions,
   type NicheNode,
 } from "./filters";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface DirectoryFiltersProps {
   filters: Filters;
@@ -106,9 +106,9 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
 
       {showClear && isNarrowed(filters) ? (
         <p>
-          <Link href={BASE_PATH} className={standaloneLinkClass}>
+          <StandaloneLink href={BASE_PATH}>
             {t("clear")}
-          </Link>
+          </StandaloneLink>
         </p>
       ) : null}
     </form>

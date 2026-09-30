@@ -14,6 +14,7 @@ import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, matchHref, scoutHref, type Match, type Scout, type ScoutList } from "../../scout";
 import { getMatches, getScouts } from "../../scout-data";
 import { MatchRow } from "./MatchRow";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
  * Inbox › Scout matches (REQ-SCOUT-02; docs/spec/07 item 1): the organisation's Scout Agent in a few words, then the
@@ -89,9 +90,9 @@ async function Body({
         </ul>
         {admin && room ? (
           <p className="mt-1">
-            <Link href={scoutHref(memberships, org.org_id)} className={standaloneLinkClass}>
+            <StandaloneLink href={scoutHref(memberships, org.org_id)}>
               {t("add")}
-            </Link>
+            </StandaloneLink>
           </p>
         ) : null}
       </Panel>

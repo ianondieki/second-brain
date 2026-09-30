@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { directoryOptions } from "@/app/(app)/dev/companies/directory";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -15,6 +13,7 @@ import { opportunityGap, trending } from "./data";
 import { NICHES_PATH, parseDiscover } from "./discover";
 import { DiscoverFilters, ViewSwitch } from "./DiscoverControls";
 import { DiscoverList } from "./DiscoverList";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("discover");
@@ -52,9 +51,9 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
           title={t("title")}
           lead={t("lead")}
           action={
-            <Link href={NICHES_PATH} className={standaloneLinkClass}>
+            <StandaloneLink href={NICHES_PATH}>
               {t("yourNiches")}
-            </Link>
+            </StandaloneLink>
           }
         />
       </div>

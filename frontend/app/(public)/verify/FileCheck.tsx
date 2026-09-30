@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Callout } from "@/components/ui/Callout";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Field } from "@/components/ui/Field";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -14,6 +12,7 @@ import { Form, SubmitButton } from "@/components/ui/Form";
 import type { UploadCheck } from "./certificate";
 import { Fingerprint } from "./Fingerprint";
 import { checkFile, fileProblem, type FileProblem } from "./upload";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 type State =
   | { kind: "idle" }
@@ -114,9 +113,9 @@ function Result({ result, certId }: { result: UploadCheck; certId?: string }) {
       <p className="mt-2 text-sm font-medium text-ink-soft">{t("yourHash")}</p>
       <Fingerprint hex={result.content_hash} />
       {matched && found && !certId ? (
-        <Link href={`/verify/${encodeURIComponent(found)}`} className={standaloneLinkClass}>
+        <StandaloneLink href={`/verify/${encodeURIComponent(found)}`}>
           {t("view", { certId: found })}
-        </Link>
+        </StandaloneLink>
       ) : null}
     </Callout>
   );

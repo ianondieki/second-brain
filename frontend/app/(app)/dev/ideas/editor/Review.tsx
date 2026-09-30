@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -8,7 +7,7 @@ import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Callout } from "@/components/ui/Callout";
-import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
@@ -27,6 +26,7 @@ import {
 } from "../ideas";
 import type { PublishProblem, SaveProblem } from "../outcomes";
 import { useIssueMessage } from "./issues";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /** A niche's label ("ICT › Networks & Telecoms") by id, for showing a chosen niche. */
 export function nicheLabel(niches: readonly NicheNode[], id: string): string | undefined {
@@ -221,9 +221,9 @@ export function Review(props: ReviewProps) {
               : t(`problem.${publishing.problem}`)}
           </p>
           {publishing.problem === "planLimit" && publishing.upgrade ? (
-            <Link href={publishing.upgrade} className={standaloneLinkClass}>
+            <StandaloneLink href={publishing.upgrade}>
               {t("problem.planLimitUpgrade")}
-            </Link>
+            </StandaloneLink>
           ) : null}
         </Alert>
       ) : null}

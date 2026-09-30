@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TabNav } from "@/components/ui/TabNav";
@@ -15,6 +14,7 @@ import {
   type DiscoverQuery,
   type NicheNode,
 } from "./discover";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
  * Discover's three lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
@@ -93,9 +93,9 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
         </div>
         {showClear && isNarrowed(query) ? (
           <p className="mt-2">
-            <Link href={discoverHref({ view: query.view })} className={standaloneLinkClass}>
+            <StandaloneLink href={discoverHref({ view: query.view })}>
               {t("clear")}
-            </Link>
+            </StandaloneLink>
           </p>
         ) : null}
       </details>

@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { RadioGroup } from "@/components/ui/RadioGroup";
@@ -25,6 +24,7 @@ import {
   type SimulatedOutcome,
   type StartProblem,
 } from "./machine";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface CheckoutProps {
   plan: { code: string; name: string };
@@ -324,9 +324,9 @@ function isOwnAction(problem: StartProblem | "notFound" | undefined): boolean {
 function ProblemAction({ problem, billingHref }: { problem: StartProblem | "notFound"; billingHref: string }) {
   const t = useStrings("checkout");
   const link = (href: string, label: string) => (
-    <Link href={href} className={standaloneLinkClass}>
+    <StandaloneLink href={href}>
       {label}
-    </Link>
+    </StandaloneLink>
   );
   if (problem === "signedOut") return link("/login", t("action.logIn"));
   if (problem === "mfaRequired") return link("/auth/mfa", t("action.enterCode"));

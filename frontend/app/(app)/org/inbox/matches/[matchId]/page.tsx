@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
@@ -20,6 +19,7 @@ import { getMatch, getMembers } from "../../../scout-data";
 import { TeaserDetails } from "../../[proposalId]/TeaserDetails";
 import { FitMeter, Why } from "../MatchParts";
 import { ExpressInterest } from "./ExpressInterest";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("scoutMatch");
@@ -163,9 +163,9 @@ async function Interest({
               {t(`reason.${reason ?? "other"}`, { org: org.org_name })}
             </p>
             {tracker ? (
-              <Link href={tracker} className={standaloneLinkClass}>
+              <StandaloneLink href={tracker}>
                 {t("openTracker")}
-              </Link>
+              </StandaloneLink>
             ) : null}
           </div>
         )}

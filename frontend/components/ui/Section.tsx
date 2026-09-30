@@ -3,6 +3,7 @@ import { useId, type HTMLAttributes, type ReactNode } from "react";
 
 import { standaloneLinkClass } from "./Button";
 import { cn } from "./cn";
+import { LinkPending } from "./LinkPending";
 
 export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title: ReactNode;
@@ -48,8 +49,9 @@ export function Section({
           {title}
         </Heading>
         {link ? (
-          <Link href={link.href} className={standaloneLinkClass}>
+          <Link href={link.href} className={cn(standaloneLinkClass, "relative")}>
             {link.label}
+            <LinkPending className="absolute bottom-0.5 left-0" />
           </Link>
         ) : null}
       </div>

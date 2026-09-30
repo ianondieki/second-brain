@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -40,6 +39,7 @@ import { ideaTags, ideaViews } from "./pitch/data";
 import { pitchesLeft, pitchHref } from "./pitch/picker";
 import { Pitches } from "./Pitches";
 import { WhoHasSeen } from "./WhoHasSeen";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
   const t = await getTranslations("ideas");
@@ -292,9 +292,9 @@ async function Certificate({ idea }: { idea: MyProposal }) {
           </DescriptionList>
           <ul className="mt-4 flex flex-col">
             <li>
-              <Link href={`/verify/${encodeURIComponent(certId)}`} className={standaloneLinkClass}>
+              <StandaloneLink href={`/verify/${encodeURIComponent(certId)}`}>
                 {t("verifyLink")}
-              </Link>
+              </StandaloneLink>
             </li>
             <li>
               {stamped ? (

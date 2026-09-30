@@ -25,6 +25,7 @@ import {
   type TagCap,
 } from "./picker";
 import type { PitchProblem, PitchRefusal } from "./refusals";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
  * One organisation as the picker lists it. `about` (type, county, badge) and `outcome` (sent now, or saved until it
@@ -395,11 +396,11 @@ function Refused({
   } else if (problem === "orgsGone" || problem === "changed") {
     action = <a href={pitchHref(proposalId)} className={standaloneLinkClass}>{t("reload")}</a>;
   } else if (problem === "notPublic" || problem === "notFound") {
-    action = <Link href={ideaHref} className={standaloneLinkClass}>{t("back")}</Link>;
+    action = <StandaloneLink href={ideaHref}>{t("back")}</StandaloneLink>;
   } else if ((problem === "planLimit" || problem === "planLimitUnknown") && refusal?.upgrade) {
     // The next plan up, and back to this picker once it is paid for (REQ-BIL-08).
     const href = upgradeHref(refusal.upgrade, { next: pitchHref(proposalId) });
-    action = <Link href={href} className={standaloneLinkClass}>{t("problem.planLimitUpgrade")}</Link>;
+    action = <StandaloneLink href={href}>{t("problem.planLimitUpgrade")}</StandaloneLink>;
   }
   return (
     <Alert tone={problem === "chooseOne" ? "info" : "error"} ref={alertRef}>

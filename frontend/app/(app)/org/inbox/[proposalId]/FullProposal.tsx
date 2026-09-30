@@ -13,6 +13,7 @@ import { formatMoment } from "../../format";
 import { ACTION_HREF, ownerPreviewHref, REFUSAL_ACTION, type Refusal } from "../../refusals";
 import { NdaAccept } from "./NdaAccept";
 import { StepUp } from "./StepUp";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface FullProposalProps {
   orgId: string;
@@ -58,9 +59,9 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
           data-tier2-frame=""
         />
         <p className="text-sm text-ink-soft">{t("frameNote")}</p>
-        <Link href={hrefs.here} className={standaloneLinkClass}>
+        <StandaloneLink href={hrefs.here}>
           {t("close")}
-        </Link>
+        </StandaloneLink>
       </div>
     );
   }

@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ComponentType, SVGProps } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ClockIcon, ClosedIcon, SendIcon } from "@/components/ui/icons";
 import { Row, RowList } from "@/components/ui/RowList";
@@ -15,6 +13,7 @@ import { formatDay } from "../dates";
 import type { IdeaStatus } from "../status";
 import { canWithdraw, heldKey, pitchesLeft, pitchHref, tagState, type MyTags, type TagOut, type TagState } from "./pitch/picker";
 import { WithdrawTag } from "./WithdrawTag";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export const PITCHES_HEADING = "pitches-heading";
 
@@ -112,9 +111,9 @@ function PitchRow({ tag, ideaId, locale, t }: { tag: TagOut; ideaId: string; loc
       {held ? <p className="max-w-[62ch] text-sm text-ink">{t(held, { name })}</p> : null}
       {tag.engagement_id ? (
         <p>
-          <Link href={`/dev/engagements/${encodeURIComponent(tag.engagement_id)}`} className={standaloneLinkClass}>
+          <StandaloneLink href={`/dev/engagements/${encodeURIComponent(tag.engagement_id)}`}>
             {t("tracker")}
-          </Link>
+          </StandaloneLink>
         </p>
       ) : null}
       {canWithdraw(tag) ? (

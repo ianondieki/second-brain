@@ -22,6 +22,7 @@ import {
   type TrendingProblem,
   type TrendingProject,
 } from "./discover";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export interface ProblemRowProps {
   item: TrendingProblem;
@@ -119,9 +120,9 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
       </details>
 
       <p>
-        <Link href={startProposalHref(problem.id)} className={standaloneLinkClass}>
+        <StandaloneLink href={startProposalHref(problem.id)}>
           {t("start")}
-        </Link>
+        </StandaloneLink>
       </p>
     </Row>
   );

@@ -12,6 +12,7 @@ import { FileCheck } from "../FileCheck";
 import { lookupCertificate } from "../lookup";
 import { VerifyShell } from "../VerifyShell";
 import { VerifyRecord } from "../VerifyRecord";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /** The path segment as typed; a stray "%" that does not decode is kept as is (it then fails the id pattern). */
 function segment(value: string): string {
@@ -58,9 +59,9 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
         </p>
         <div className="mt-3">
           {again && certId ? (
-            <Link href={`/verify/${certId}`} className={standaloneLinkClass}>
+            <StandaloneLink href={`/verify/${certId}`}>
               {t("retry")}
-            </Link>
+            </StandaloneLink>
           ) : (
             <Link href="/verify" className={standaloneLinkClass}>
               {t("another")}

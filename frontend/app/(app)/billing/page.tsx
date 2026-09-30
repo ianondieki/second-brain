@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { SignedInShell } from "@/components/SignedInShell";
 import { Badge } from "@/components/ui/Badge";
-import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon } from "@/components/ui/status-icons";
@@ -21,6 +19,7 @@ import { getCurrentPlan, getPlans } from "./data";
 import { SamplePrices } from "./SamplePrices";
 import { billingSubject, priceKind, rowAction, sameLinesAs, sideOf, type Plan, type RowAction } from "./plans";
 import { lineTexts, priceText } from "./text";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("billing");
@@ -191,9 +190,9 @@ async function PlanRow({
             {t("upgradeTo", { plan: plan.name })}
           </ButtonLink>
         ) : action === "choose" ? (
-          <Link href={href} className={cn(standaloneLinkClass, "mt-2")}>
+          <StandaloneLink href={href} className="mt-2">
             {t("choose", { plan: plan.name })}
-          </Link>
+          </StandaloneLink>
         ) : null}
       </div>
     </li>
