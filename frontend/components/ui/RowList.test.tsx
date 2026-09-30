@@ -40,6 +40,32 @@ describe("RowList and Row", () => {
     expect(screen.getByText("Agriculture › Dairy").className).toContain("text-ink-soft");
   });
 
+  it("keeps the title alone as the link when the row holds its own controls, and names the title", () => {
+    render(
+      <RowList>
+        <Row title="Tower sites go down" href="/problems/1" stretch={false} titleId="p1-title">
+          <a href="/dev/ideas/new?problem=1">Start a proposal</a>
+        </Row>
+      </RowList>,
+    );
+    const link = screen.getByRole("link", { name: "Tower sites go down" });
+    expect(link.className).not.toContain("after:absolute");
+    expect(link.className).toContain("min-h-11");
+    expect(screen.getByRole("heading", { level: 3 }).id).toBe("p1-title");
+    expect(screen.getByRole("link", { name: "Start a proposal" })).toBeTruthy();
+  });
+
+  it("puts the pending hint on the row's top hairline, where it takes no room from the title", () => {
+    render(
+      <RowList>
+        <Row title="Cold chain" href="/dev/ideas/1" />
+      </RowList>,
+    );
+    const hint = screen.getByRole("link", { name: "Cold chain" }).querySelector("[data-link-pending]")!;
+    expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["absolute", "-top-px", "left-0"]));
+    expect(hint.className).not.toContain("ml-2");
+  });
+
   it("is ordered when asked", () => {
     render(
       <RowList ordered>

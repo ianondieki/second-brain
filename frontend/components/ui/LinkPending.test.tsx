@@ -16,7 +16,7 @@ describe("LinkPending", () => {
     const hint = container.firstElementChild!;
     expect(hint.getAttribute("aria-hidden")).toBe("true");
     expect(hint.getAttribute("data-link-pending")).toBe("false");
-    expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["opacity-0", "h-0.5", "w-3"]));
+    expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["opacity-0", "h-[3px]", "w-6"]));
     expect(hint.className).not.toContain("animate-pulse");
   });
 
@@ -29,6 +29,6 @@ describe("LinkPending", () => {
     expect(classes).toEqual(expect.arrayContaining(["opacity-100", "bg-jacaranda", "motion-safe:animate-pulse"]));
     expect(classes).not.toContain("opacity-0");
     // Same box in both states: no layout shift.
-    expect(classes).toEqual(expect.arrayContaining(["h-0.5", "w-3"]));
+    expect(classes).toEqual(expect.arrayContaining(["h-[3px]", "w-6"]));
   });
 });

@@ -36,6 +36,13 @@ export interface RowProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title: ReactNode;
   /** The row's page: the whole row is the link's target (a stretched link), the title is its name. */
   href?: string;
+  /**
+   * Stretch the title's link over the row (default). Off for a row that holds its own controls (a disclosure, a
+   * second link), which a stretched link would cover: then only the title is the link.
+   */
+  stretch?: boolean;
+  /** The title's id (for an aria-labelledby elsewhere). */
+  titleId?: string;
   headingLevel?: 2 | 3;
   /** One line of plain facts under the title (who, where, when). */
   meta?: ReactNode;
@@ -52,7 +59,19 @@ export interface RowProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
  * above and below, a hairline above. With `href` the title is a link stretched over the row, so the whole row is the
  * target.
  */
-export function Row({ title, href, headingLevel = 3, meta, badges, figure, className, children, ...rest }: RowProps) {
+export function Row({
+  title,
+  href,
+  stretch = true,
+  titleId,
+  headingLevel = 3,
+  meta,
+  badges,
+  figure,
+  className,
+  children,
+  ...rest
+}: RowProps) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <article
@@ -60,14 +79,19 @@ export function Row({ title, href, headingLevel = 3, meta, badges, figure, class
       {...rest}
     >
       <div className="flex min-w-0 flex-col gap-1.5">
-        <Heading className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
+        <Heading id={titleId} className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
           {href ? (
             <Link
               href={href}
-              className="underline decoration-line decoration-1 underline-offset-4 after:absolute after:inset-0 hover:decoration-jacaranda"
+              className={cn(
+                "underline decoration-line decoration-1 underline-offset-4 hover:decoration-jacaranda",
+                // Stretched, the row is the target; alone, the title keeps a 44 px band (docs/spec/07 item 6).
+                stretch ? "after:absolute after:inset-0" : "-my-2.5 inline-flex min-h-11 items-center",
+              )}
             >
               {title}
-              <LinkPending className="ml-2 align-middle" />
+              {/* On the row's top hairline, not after the title: it takes no room, so titles wrap where they would. */}
+              <LinkPending className="absolute -top-px left-0" />
             </Link>
           ) : (
             title
