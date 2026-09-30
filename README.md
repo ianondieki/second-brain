@@ -73,7 +73,10 @@ Its sample plan prices are placeholders and its checkout is a simulation: see "R
 **You need** Docker Desktop (Windows: the WSL 2 backend), Git and Python 3.9 or later (the same Python as the companion
 above); `make` is optional (below). Give Docker 4 GB of memory: on Windows with the WSL 2 backend, memory is set in
 `%UserProfile%\.wslconfig`, not in Docker Desktop (a file with the two lines `[wsl2]` and `memory=4GB`, then
-`wsl --shutdown` and start Docker Desktop again); on macOS, Docker Desktop → Settings → Resources. The demo's
+`wsl --shutdown` and start Docker Desktop again); on macOS, Docker Desktop → Settings → Resources. If a build is killed for lack of memory (the first build is the
+heaviest), close other applications and run `make demo` (or `python infra/demo/demo.py up`) again: it builds and starts
+whatever is missing, and Docker reuses the image layers that were already built. Run `make demo-reset` instead if the
+seed step was the one interrupted (below). The demo's
 containers are capped at 2.75 GB in all (the limits in `infra/docker-compose.demo.yml`). TODO(orchestrator): memory
 (the measured use per container after a clean `make demo-reset`, from `make demo-stats`).
 
@@ -190,12 +193,39 @@ production); they appear in Mailpit. The worker also sends them on its own after
 `make demo-scouts` runs the due scouts now; the seed ran Telco A's weekly scout once (its match is in the Inbox and
 Mailpit), so it is due again after `make demo-clock DAYS=7`.
 
+**What `make demo` runs.** `infra/docker-compose.dev.yml` with `infra/docker-compose.demo.yml` on top, as the project
+`bridge-demo`. ClamAV is not started (the demo scanner is a fake), and embeddings use the fake embedder.
+
+```mermaid
+flowchart LR
+    Browser["Browser"] -->|":3000"| Web["web: Next.js"]
+    Browser -->|":8025"| Mailpit["Mailpit: SMTP and inbox"]
+    Web -->|"/api"| API["api: FastAPI"]
+    API --> PG[("Postgres 16 + pgvector")]
+    API --> S3[("S3 stand-in: SeaweedFS")]
+    API -->|SMTP| Mailpit
+    Worker["worker: procrastinate jobs<br/>provenance registration, reminders,<br/>scouts, research, notifications"] --> PG
+    Worker --> S3
+    Worker -->|SMTP| Mailpit
+    Migrate["migrate: runs once at start<br/>migrations, buckets, demo seed"] --> PG
+    Migrate --> S3
+    Worker -->|timestamps| TSA["Timestamp authority:<br/>DigiCert, FreeTSA fallback"]
+    API -.->|optional| LLM["LLM providers:<br/>free OpenAI-compatible or Anthropic<br/>(the fake by default)"]
+    Worker -.->|optional| LLM
+```
+
+With the default settings, the two boxes outside the laptop (the timestamp authority and, only if you configure one, an
+LLM provider) are the only network calls; everything else stays in the containers.
+
 **LLM providers (optional).** Without any, every AI feature answers with a fixed fake reply labelled "demo fallback".
 To use a free OpenAI-compatible provider or Anthropic, set these in `backend/.env` (names only here; never commit
 values) and run `make demo` again: `LLM_PROVIDER`, `LLM_PROTOTYPE_TOTAL_CAP_USD`, `LLM_FREE_<N>_BASE_URL`,
 `LLM_FREE_<N>_API_KEY`, `LLM_FREE_<N>_MODEL`, `LLM_FREE_<N>_DAILY_REQUESTS`, `LLM_FREE_<N>_RESPONSE_FORMAT` (N = 1 to
-3), `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`, `LLM_GLOBAL_DAILY_CAP_USD`. `backend/.env.example` explains each one. Only
-the seeded demo accounts' data is sent to a free provider.
+3), `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`, `LLM_GLOBAL_DAILY_CAP_USD`, and `LLM_MODELS_FILE` (a path to another task and
+price registry; leave it unset). `backend/.env.example` explains each one. Only the seeded demo accounts' data is sent to
+a free provider. Four features call a model when one is set: the scout's "why this matches" sentence, the research
+agent's drafts, the submission assistant and the choice of opening and order in the developer's daily nudge (the model
+writes no free text there); each answers with a fixed, labelled or rules-based result when none is.
 
 **Real, simulated or planned**
 
