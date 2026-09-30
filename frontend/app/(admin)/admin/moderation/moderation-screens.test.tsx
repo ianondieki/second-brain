@@ -204,8 +204,11 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     const back = screen.getByRole("link", { name: "Back to Moderation" });
     expect(back.hasAttribute("data-primary")).toBe(true);
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
-    // A subject that is gone changes the page itself (its tag, its choices): it is fetched again.
-    expect(router.refresh).toHaveBeenCalledTimes(code === "subject_gone" ? 1 : 0);
+    // A subject that is gone, or a case no longer in the queue, changes the page itself (its tag, its choices): it
+    // is fetched again (P15-F MINOR 5: not_found too).
+    expect(router.refresh).toHaveBeenCalledTimes(code === "subject_gone" || code === "not_found" ? 1 : 0);
+    // The primary way back keeps its own width (P15-F MINOR 4): its column aligns items to the start.
+    expect(back.parentElement!.className).toContain("items-start");
   });
 
   it("leaves only Reject, as the primary action, when the text screens as a vulnerability", async () => {
@@ -245,5 +248,39 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.getByRole("button", { name: "Reject" }).hasAttribute("data-primary")).toBe(true);
+  });
+
+  it("shows the server's lead with the choices and hides it as soon as a refusal shows (P15-F MINOR 5)", async () => {
+    const lead = "Approve to make it public, or reject to keep it hidden.";
+    const decideImpl = vi.fn<typeof decideCase>(async () => refused({ kind: "refusal", code: "not_found" }));
+    renderWithIntl(<CaseDecision {...props} lead={lead} decideImpl={decideImpl} />);
+    expect(screen.getByText(lead)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText("This case is no longer in the queue.");
+    expect(screen.queryByText(lead)).toBeNull();
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the lead once the decision is made", async () => {
+    const lead = "Approve to make it public, or reject to keep it hidden.";
+    const decideImpl = vi.fn<typeof decideCase>(async () => approved);
+    renderWithIntl(<CaseDecision {...props} lead={lead} decideImpl={decideImpl} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText("Approved. The proposal is public now.");
+    expect(screen.queryByText(lead)).toBeNull();
+  });
+
+  it("says a decided case's outcome once: who decided it and when, without a second tag (P15-F MINOR 2)", () => {
+    const { container } = renderWithIntl(
+      <CaseDecision
+        {...props}
+        actions={[]}
+        blocked="already_decided"
+        decided={{ outcome: "approved", line: "Approved by Staff Admin (demo) on 30 Sept 2026, 10:00." }}
+      />,
+    );
+    const decided = container.querySelector('[data-decided="approved"]')!;
+    expect(decided.textContent).toBe("Approved by Staff Admin (demo) on 30 Sept 2026, 10:00.");
+    expect(container.querySelectorAll("[data-chip]")).toHaveLength(0);
   });
 });

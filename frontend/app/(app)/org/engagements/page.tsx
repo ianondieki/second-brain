@@ -8,6 +8,7 @@ import { EngagementList } from "@/components/tracker/EngagementList";
 
 import { orgContext } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 
@@ -29,7 +30,7 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="engagements" query={query} />} wide>
       <div className="max-w-3xl">
-        <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+        <PageHeader title={t("title")} lead={org ? t("orgLead") : undefined} />
         {org ? (
           <Body memberships={memberships} org={org} query={query} />
         ) : (
@@ -64,7 +65,6 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
   }
   return (
     <>
-      <p className="mt-2 max-w-[62ch] text-ink-soft">{t("orgLead")}</p>
       {memberships.length > 1 ? (
         <div className="mt-6">
           <OrgPicker memberships={memberships} current={org.org_id} action={ENGAGEMENTS_PATH} />

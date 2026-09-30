@@ -9,6 +9,11 @@ import { Citations } from "@/components/problem/Citations";
 import { formatConfidence, formatMoment, problemHref } from "@/components/problem/problem";
 import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { BackLink } from "@/components/ui/BackLink";
+import { Badge } from "@/components/ui/Badge";
+import { Description, DescriptionList } from "@/components/ui/DescriptionList";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { Section } from "@/components/ui/Section";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { AdminShell } from "../../../AdminShell";
@@ -44,9 +49,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
   const empty = (sentence: string, action: string, href: string) =>
     shell(
       <>
-        <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-          {t("review.pageTitle")}
-        </h1>
+        <PageHeader title={t("review.pageTitle")} focusable />
         <div className="mt-6">
           <EmptyState sentence={sentence} action={action} href={href} />
         </div>
@@ -61,9 +64,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
   if (loaded.kind === "stepUp") {
     return shell(
       <>
-        <h1 tabIndex={-1} className="text-xl text-ink focus:outline-none lg:text-2xl">
-          {t("review.pageTitle")}
-        </h1>
+        <PageHeader title={t("review.pageTitle")} focusable />
         <div className="mt-6">
           <ClientStrings strings={strings}>
             <PageStepUp />
@@ -83,44 +84,35 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
   const named = candidate.named_orgs.length > 0;
 
   return shell(
-    <article aria-labelledby="card-title" className="flex flex-col gap-10">
-      <header className="flex flex-col gap-3">
-        <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-jacaranda">
-          {candidate.seeded_example ? <InfoIcon className="size-4" /> : <PencilIcon className="size-4" />}
-          {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
+    <article aria-labelledby="card-title" className="flex flex-col gap-12">
+      <PageHeader titleId="card-title" focusable title={candidate.title}>
+        {/* How it was drafted, under the title (not a label above it). */}
+        <p className="mt-3">
+          <Badge tone="accent" icon={candidate.seeded_example ? <InfoIcon /> : <PencilIcon />}>
+            {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
+          </Badge>
         </p>
-        <h1 id="card-title" tabIndex={-1} className="text-xl [overflow-wrap:anywhere] text-ink focus:outline-none lg:text-2xl">
-          {candidate.title}
-        </h1>
-        <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] text-ink">{candidate.statement}</p>
-        <dl className="mt-3 grid gap-x-8 gap-y-3 border-t border-line pt-5 sm:grid-cols-[minmax(9rem,auto)_1fr]">
-          <Row label={t("review.affected")}>{candidate.affected_group || "–"}</Row>
-          {niche ? <Row label={t("review.niche")}>{niche}</Row> : null}
-          <Row label={t("review.region")}>
+        <p className="mt-4 max-w-[65ch] text-lg [overflow-wrap:anywhere] text-ink">{candidate.statement}</p>
+        <DescriptionList className="mt-6">
+          <Description label={t("review.affected")}>{candidate.affected_group || "–"}</Description>
+          {niche ? <Description label={t("review.niche")}>{niche}</Description> : null}
+          <Description label={t("review.region")}>
             {candidate.county_code ? tp("regionCounty", { county: candidate.county_code, country: region }) : region}
-          </Row>
+          </Description>
           {confidence ? (
-            <Row label={t("review.confidence")}>{t("review.confidenceValue", { value: confidence })}</Row>
+            <Description label={t("review.confidence")}>{t("review.confidenceValue", { value: confidence })}</Description>
           ) : null}
-          <Row label={t("review.drafted")}>{formatMoment(locale, candidate.created_at)}</Row>
-        </dl>
-      </header>
+          <Description label={t("review.drafted")}>{formatMoment(locale, candidate.created_at)}</Description>
+        </DescriptionList>
+      </PageHeader>
 
-      <section aria-labelledby="sources" className="flex flex-col gap-4">
-        <div>
-          <h2 id="sources" className="text-lg text-ink">
-            {t("review.sourcesHeading")}
-          </h2>
-          <p className="mt-1 max-w-[60ch] text-ink-soft">{t("review.sourcesLead")}</p>
-        </div>
+      <Section title={t("review.sourcesHeading")} headingId="sources" description={t("review.sourcesLead")}>
         <Citations sources={candidate.sources} labelledBy="sources" />
-      </section>
+      </Section>
 
       {named ? (
-        <section
-          aria-labelledby="checklist"
-          className="flex flex-col gap-4 rounded-panel border border-line bg-field px-4 py-5 sm:px-6"
-        >
+        // The screen's one panel: what must be checked before a card naming an organisation is published.
+        <Panel as="section" aria-labelledby="checklist" className="flex flex-col gap-4">
           <h2 id="checklist" className="inline-flex items-center gap-2 text-lg text-ink">
             <CompaniesIcon className="size-5 shrink-0" />
             {t("review.checklistHeading")}
@@ -141,16 +133,10 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
               <li key={item}>{item}</li>
             ))}
           </ul>
-        </section>
+        </Panel>
       ) : null}
 
-      <section aria-labelledby="decision" className="flex flex-col gap-4 border-t border-line pt-6">
-        <div>
-          <h2 id="decision" className="text-lg text-ink">
-            {t("review.decisionHeading")}
-          </h2>
-          <p className="mt-1 max-w-[60ch] text-ink-soft">{t("review.decisionLead")}</p>
-        </div>
+      <Section title={t("review.decisionHeading")} headingId="decision" description={t("review.decisionLead")}>
         <ClientStrings strings={strings}>
           <Decision
             problemId={candidate.id}
@@ -160,16 +146,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
             researchHref={RESEARCH_PATH}
           />
         </ClientStrings>
-      </section>
+      </Section>
     </article>,
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 sm:contents">
-      <dt className="text-sm font-medium text-ink-soft sm:pt-0.5">{label}</dt>
-      <dd className="min-w-0 [overflow-wrap:anywhere] text-ink">{children}</dd>
-    </div>
   );
 }

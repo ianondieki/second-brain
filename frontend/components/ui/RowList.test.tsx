@@ -2,6 +2,10 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Badge } from "./Badge";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { RowBase } from "./RowBase";
 import { Row, RowList } from "./RowList";
 
 afterEach(cleanup);
@@ -85,5 +89,37 @@ describe("RowList and Row", () => {
       />
     );
     expect(three).toBeTruthy();
+  });
+
+  it("drops the first row's hairline under a tab strip (rule={false}), keeping the ones between rows", () => {
+    render(
+      <RowList aria-label="Cases" rule={false}>
+        <Row title="One" />
+        <Row title="Two" />
+      </RowList>,
+    );
+    expect(screen.getByRole("list", { name: "Cases" }).className).toContain("[&>li:first-child>article]:border-t-0");
+  });
+
+  it("puts linkData on the title's link, the row's real tap target", () => {
+    render(
+      <RowList>
+        <Row title="A case" href="/admin/moderation/cases/1" linkData={{ "data-case-link": "" }} data-case="1" />
+      </RowList>,
+    );
+    const link = screen.getByRole("link", { name: "A case" });
+    expect(link.hasAttribute("data-case-link")).toBe(true);
+    expect(link.closest("article")!.hasAttribute("data-case-link")).toBe(false);
+  });
+
+  it("renders a row without a page from RowBase, a module that does not import next/link or LinkPending", () => {
+    render(
+      <RowList>
+        <RowBase title="Preview item" meta="By dev-1" />
+      </RowList>,
+    );
+    expect(screen.getByRole("heading", { level: 3, name: "Preview item" })).toBeTruthy();
+    const source = readFileSync(join(__dirname, "RowBase.tsx"), "utf-8");
+    expect(source).not.toMatch(/from "next\/link"|LinkPending"/);
   });
 });

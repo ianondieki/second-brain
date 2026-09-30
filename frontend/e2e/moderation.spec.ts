@@ -20,7 +20,7 @@ import {
   vulnerabilityTeaser,
 } from "./support/moderation-scene";
 import { newDeveloper, newStaffAdmin, OWNER_DATABASE_URL } from "./support/research-scene";
-import { checkScreen, expectSeparateTargets } from "./support/screen";
+import { checkScreenStrict, expectSeparateTapTargets } from "./support/strict-screen";
 import { PASSWORD } from "./support/tracker-scene";
 
 // REQ-MOD-01, REQ-ADM-01 and the REQ-DIR-03 claims queue (M2 walkthrough step 6, P15): staff open the moderation
@@ -84,6 +84,10 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     }
     await expect(page.getByRole("heading", { name: "Moderation", level: 1 })).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("Review the oldest case");
+    // A staff-only account has no plan: its account menu has no Plan & billing (P15-F MINOR 7).
+    // (The menu's links are in the page while it is closed, hidden.)
+    await expect(page.locator('[data-account-menu] a[href="/help"]')).toHaveCount(1);
+    await expect(page.locator('[data-account-menu] a[href^="/billing"]')).toHaveCount(0);
 
     // This run's item waits with the reason it was filed (P6 held and hidden; its problem public while checked). The
     // other project's item is not asserted: it may be decided at any moment. Every row has at most two tags.
@@ -99,8 +103,8 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     for (const row of await page.locator("[data-case]").all()) {
       expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2); // AC-UX-1
     }
-    await expectSeparateTargets(page.locator("[data-case-link]"));
-    await checkScreen(page);
+    await expectSeparateTapTargets(page.locator("[data-case-link]"));
+    await checkScreenStrict(page);
     if (desktop) expect(await teaserStatus(developer.request, p6)).toBe(404); // held: nobody else can read it
 
     await row.getByRole("link", { name: title }).click();
@@ -115,7 +119,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
       await expect(page.locator('[data-field="summary"]')).toBeVisible();
     }
     await expect(page.locator("[data-primary]")).toHaveText("Approve");
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await hydrated(page);
     await page.getByRole("button", { name: "Approve" }).click();
@@ -126,7 +130,9 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     // The refreshed header says what is true now.
     await expect(page.locator('[data-header-tag="outcome"]')).toHaveText("Approved", SERVER_STEP);
     await expect(page.locator('[data-header-tag="visibility"]')).toHaveCount(0);
-    await checkScreen(page);
+    // "Approved" once: the header's tag; the decision says who and when (P15-F MINOR 2).
+    await expect(page.locator("main [data-chip]").filter({ hasText: /^Approved$/ })).toHaveCount(1, SERVER_STEP);
+    await checkScreenStrict(page);
 
     if (desktop) expect(await teaserStatus(developer.request, p6)).toBe(200); // published
     await developer.close();
@@ -136,7 +142,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     const decided = page.locator("[data-case]").filter({ hasText: title });
     await expect(decided).toContainText("Approved");
     await expect(decided).toContainText(`Approved by ${desktop ? DEMO_MODERATOR.name : DEMO_ADMIN.name} on`);
-    await checkScreen(page);
+    await checkScreenStrict(page);
   });
 
   test("a staff admin reads the claims queue with the demo claim, and cannot decide it", async ({
@@ -161,7 +167,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     await expect(row).not.toContainText("owner@county-c.example");
     await expect(page.locator("main button")).toHaveCount(0);
     await expect(page.locator("[data-primary]")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await row.getByRole("link", { name: DEMO_CLAIM_ORG }).click();
     await expect(page).toHaveURL(/\/admin\/claims\/[0-9a-f-]{36}$/, SERVER_STEP);
@@ -172,7 +178,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     await expect(page.getByRole("heading", { name: "Evidence for E2" })).toBeVisible();
     await expect(page.getByText("owner@county-c.example")).toBeVisible();
     await expect(page.locator("main button")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // The other views, each its own address.
     await page.getByRole("link", { name: "Back to Claims" }).click();
@@ -181,7 +187,7 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     await expect(
       page.getByRole("navigation", { name: "Claim views" }).getByRole("link", { name: "Closed" }),
     ).toHaveAttribute("aria-current", "page");
-    await checkScreen(page);
+    await checkScreenStrict(page);
   });
 });
 
@@ -208,7 +214,7 @@ test.describe("a moderator", () => {
     // Claims are the staff admin's.
     await page.goto("/admin/claims");
     await expect(page.locator("[data-empty-state] p")).toHaveText("Claims are for staff admins.");
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await page.goto(`/admin/moderation/cases/${caseId}`);
     await expect(page.getByRole("heading", { name: author.teaser.title, level: 1 })).toBeVisible();
@@ -221,7 +227,7 @@ test.describe("a moderator", () => {
       name: "Reject this proposal? It stays hidden. A new version from its author is checked again.",
     });
     await expect(question).toBeFocused();
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeFocused();
 
@@ -234,7 +240,7 @@ test.describe("a moderator", () => {
     await page.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator('[data-refusal="step_up_required"]')).toBeVisible(SERVER_STEP);
     await expect(page.getByLabel("Code from your app")).toBeFocused();
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await page.getByLabel("Code from your app").fill(await moderator.code());
     await page.getByRole("button", { name: "Confirm" }).click();
     const changed = page.getByRole("status").filter({ hasText: "The author published a new version" });
@@ -242,7 +248,7 @@ test.describe("a moderator", () => {
     await expect(changed).toBeFocused();
     await expect(page.locator('[data-field="problem_statement"] dd')).toHaveText(statement, SERVER_STEP);
     await expect(page.getByText("case_changed")).toHaveCount(0); // never the API's words
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // Approving the version now shown publishes it.
     expect(await teaserStatus(author.request, author.proposalId)).toBe(404);
@@ -251,7 +257,7 @@ test.describe("a moderator", () => {
       SERVER_STEP,
     );
     expect(await teaserStatus(author.request, author.proposalId)).toBe(200);
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await author.context.close();
   });
 
@@ -267,14 +273,14 @@ test.describe("a moderator", () => {
     await expect(page.locator('[data-blocked="cannot_approve_vulnerability"]')).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
     await expect(page.locator("[data-primary]")).toHaveText("Reject");
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await hydrated(page);
     await page.getByRole("button", { name: "Reject", exact: true }).click();
     await page.getByRole("button", { name: "Yes, reject" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Rejected. It is hidden now." })).toBeVisible(SERVER_STEP);
     expect(await teaserStatus(author.request, author.proposalId)).toBe(404);
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await author.context.close();
   });
 });

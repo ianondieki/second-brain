@@ -1,10 +1,11 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { use, useEffect, useId, useRef, useState } from "react";
 
 import { billingHref } from "@/lib/billing/upgrade";
 
+import { MenuOptions } from "./AccountMenuScope";
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "./ui/cn";
@@ -42,6 +43,7 @@ const itemClass =
  */
 export function AccountMenu() {
   const t = useStrings("shell");
+  const { billing: showBilling } = use(MenuOptions);
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -95,11 +97,13 @@ export function AccountMenu() {
         className="absolute top-full right-0 z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-control border border-line bg-field p-2 shadow-overlay"
       >
         <ul className="flex flex-col">
-          <li>
-            <a href={billing} className={itemClass}>
-              {t("billing")}
-            </a>
-          </li>
+          {showBilling ? (
+            <li>
+              <a href={billing} className={itemClass}>
+                {t("billing")}
+              </a>
+            </li>
+          ) : null}
           <li>
             <a href={NOTIFICATIONS_HREF} className={itemClass}>
               {t("notifications")}
