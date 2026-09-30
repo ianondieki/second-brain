@@ -65,6 +65,16 @@ export function caseReasons(reasons: readonly string[]): Reason[] {
   return [...new Set(keys)];
 }
 
+/**
+ * Routine reasons (every developer problem is queued; a new version of a checked proposal is filed again) read as
+ * information; the rest are flags and read as warnings. Both carry a mark and words.
+ */
+const ROUTINE: readonly Reason[] = ["new_developer_problem", "new_version_of_moderated_proposal"];
+
+export function reasonTone(reason: Reason): "info" | "flag" {
+  return ROUTINE.includes(reason) ? "info" : "flag";
+}
+
 /** The Tier-1 fields the queue shows (bridge/admin/moderation.py TIER1_FIELDS); anything else is "other". */
 export const FIELDS = ["title", "problem_statement", "impact_claims", "summary", "statement"] as const;
 export type FieldName = (typeof FIELDS)[number] | "other";

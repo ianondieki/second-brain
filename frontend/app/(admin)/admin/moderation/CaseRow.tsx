@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
-import { AlertIcon } from "@/components/ui/icons";
+import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 
 import {
   caseHref,
@@ -11,6 +11,7 @@ import {
   caseReasons,
   caseTitle,
   outcome,
+  reasonTone,
   visibility,
   VISIBILITY_CHIP,
   type Case,
@@ -68,7 +69,11 @@ export async function CaseRow({ item }: { item: Case }) {
         ) : null}
         {reason && !result ? (
           <li data-chip="reason" className="inline-flex items-center gap-1.5 font-semibold text-ink">
-            <AlertIcon className="size-4 shrink-0" />
+            {reasonTone(reason) === "flag" ? (
+              <AlertIcon className="size-4 shrink-0 text-error" />
+            ) : (
+              <InfoIcon className="size-4 shrink-0 text-jacaranda" />
+            )}
             {t(`reason.${reason}`)}
           </li>
         ) : null}

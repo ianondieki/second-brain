@@ -10,7 +10,7 @@ import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { AlertIcon } from "@/components/ui/icons";
+import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 
 import { AdminShell } from "../../../AdminShell";
 import { PageStepUp } from "../../../research/PageStepUp";
@@ -27,6 +27,7 @@ import {
   fieldKey,
   MODERATION_PATH,
   outcome,
+  reasonTone,
   visibility,
   VISIBILITY_CHIP,
   type Case,
@@ -124,7 +125,11 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
         <ul className="flex flex-col gap-2" data-reasons="">
           {caseReasons(item.reasons).map((reason) => (
             <li key={reason} className="flex items-start gap-2 text-ink">
-              <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
+              {reasonTone(reason) === "flag" ? (
+                <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
+              ) : (
+                <InfoIcon className="mt-0.5 size-5 shrink-0 text-jacaranda" />
+              )}
               <span>{t(`reason.${reason}`)}</span>
             </li>
           ))}
@@ -187,7 +192,7 @@ async function CaseText({
   const t = await getTranslations("adminModeration");
   if (item.fields.length === 0) return <p className="text-ink">{empty}</p>;
   return (
-    <dl className="flex flex-col gap-5 rounded-panel border border-line bg-field px-4 py-5 sm:px-6">
+    <dl className="flex flex-col gap-5 rounded-panel border border-line bg-field px-3 py-4 sm:px-6 sm:py-5">
       {item.fields.map((field) => {
         const marked = flagged.has(field.name);
         return (
@@ -195,7 +200,7 @@ async function CaseText({
             key={field.name}
             data-field={field.name}
             data-flagged={marked ? "" : undefined}
-            className={cn("border-l-[3px] pl-4", marked ? "border-error" : "border-transparent")}
+            className={cn("border-l-[3px] pl-3 sm:pl-4", marked ? "border-error" : "border-transparent")}
           >
             <dt className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-ink-soft">
               <span>{t(`field.${fieldKey(field.name)}`)}</span>

@@ -11,6 +11,7 @@ import {
   moderationView,
   outcome,
   REASONS,
+  reasonTone,
   FIELDS,
   refusalNext,
   refusalOf,
@@ -59,6 +60,14 @@ describe("what a case is about", () => {
     ]);
     const sentences = en.adminModeration.reason as Record<string, string>;
     for (const reason of [...REASONS, "other"]) expect(sentences[reason], reason).toBeTruthy();
+  });
+
+  it("reads routine reasons as information and the rest as flags", () => {
+    expect(reasonTone("new_developer_problem")).toBe("info");
+    expect(reasonTone("new_version_of_moderated_proposal")).toBe("info");
+    expect(reasonTone("names_real_org_negative")).toBe("flag");
+    expect(reasonTone("security_vulnerability")).toBe("flag");
+    expect(reasonTone("other")).toBe("flag");
   });
 
   it("labels the Tier-1 fields and nothing else", () => {

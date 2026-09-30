@@ -234,9 +234,7 @@ function Section({ id, heading, lead, children }: { id: string; heading: string;
         </h2>
         {lead ? <p className="mt-1 max-w-[60ch] text-sm text-ink-soft">{lead}</p> : null}
       </div>
-      <dl className="grid gap-x-8 gap-y-3 border-t border-line pt-4 sm:grid-cols-[minmax(10rem,auto)_1fr]">
-        {children}
-      </dl>
+      <dl className="grid gap-x-8 gap-y-3 border-t border-line pt-4 sm:grid-cols-[14rem_1fr]">{children}</dl>
     </section>
   );
 }
