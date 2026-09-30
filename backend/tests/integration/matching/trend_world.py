@@ -81,7 +81,7 @@ async def research_card(
     status: str = "published",
 ) -> UUID:
     """An approved research card (a ``candidate`` when ``status`` says so) with one official source per entry of
-    ``source_days`` (each a distinct publisher, dated that many days ago)."""
+    ``source_days`` (each a distinct publisher, dated that many days ago, on the Nairobi day)."""
     card = uuid7()
     async with owner_engine.begin() as conn:
         await run(
@@ -101,7 +101,8 @@ async def research_card(
                 conn,
                 "INSERT INTO problem_sources (id, problem_id, url, publisher, source_type, published_date,"
                 " retrieved_at, quote) VALUES (:id, :p, :url, :publisher, 'official',"
-                f" CAST({NOW} - make_interval(secs => :secs) AS date), {NOW}, 'A quoted line')",
+                f" CAST(({NOW} - make_interval(secs => :secs)) AT TIME ZONE 'Africa/Nairobi' AS date), {NOW},"
+                " 'A quoted line')",
                 id=uuid7(),
                 p=card,
                 url=f"https://agency{n}.go.ke/report",
