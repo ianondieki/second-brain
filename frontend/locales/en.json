@@ -2240,7 +2240,7 @@
     "notifications": "Notifications"
   },
   "devEngagements": {
-    "organisations": "{count, plural, one {Pitched to # organisation} other {Pitched to # organisations}}",
+    "organisations": "Pitched to {count, plural, one {# organisation} other {# organisations}}",
     "openIdea": "Open the idea",
     "rowsLabel": "Organisations for {title}"
   }

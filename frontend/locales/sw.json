@@ -2240,7 +2240,7 @@
     "notifications": "Arifa"
   },
   "devEngagements": {
-    "organisations": "{count, plural, one {Imewasilishwa kwa shirika #} other {Imewasilishwa kwa mashirika #}}",
+    "organisations": "Mashirika yaliyopokea: {count}",
     "openIdea": "Fungua wazo",
     "rowsLabel": "Mashirika ya {title}"
   }
