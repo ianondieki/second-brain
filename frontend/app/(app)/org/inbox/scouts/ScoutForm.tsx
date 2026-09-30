@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
+import { Chip } from "@/components/tracker/Chip";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -16,13 +17,18 @@ import { upgradeHref } from "@/lib/billing/upgrade";
 import {
   bodyOf,
   checkDraft,
+  draftKey,
   draftOf,
   FREQUENCIES,
   MATURITIES,
   MAX_KEYWORD_CHARS,
   MAX_KEYWORDS,
   MAX_NICHES,
+  parseDraft,
+  pruneDraft,
   type DraftErrors,
+  type Frequency,
+  type Offered,
   type Preview,
   type Scout,
   type ScoutDraft,
@@ -54,6 +60,8 @@ export interface ScoutFormProps {
   doneHref: string;
   /** This screen, for the checkout's way back after an upgrade. */
   hereHref: string;
+  /** The plan to buy for each schedule the current plan lacks (null: none sells it). */
+  upgradeFor: Partial<Record<Frequency, string | null>>;
   calls?: ScoutCalls;
 }
 
@@ -70,7 +78,21 @@ export function ScoutForm(props: ScoutFormProps) {
   const tf = useStrings("ideaFields");
   const router = useRouter();
   const calls = props.calls ?? scoutCalls;
-  const [draft, setDraft] = useState<ScoutDraft>(() => draftOf(props.scout, props.plan));
+  const key = draftKey(props.orgId, props.scout?.id);
+  // What the form offers now: a saved scout's niche, county or reviewer that is gone is dropped from the draft, so a
+  // save never sends it back to a 422 (P10-F review MAJOR 1).
+  const offered = useMemo<Offered>(
+    () => ({
+      niches: new Set(props.niches.flatMap((n) => [n.id, ...n.children.map((c) => c.id)])),
+      counties: new Set(props.counties.map((c) => c.id)),
+      recipients: new Set(props.reviewers.map((r) => r.id)),
+    }),
+    [props.niches, props.counties, props.reviewers],
+  );
+  const [initial] = useState(() => pruneDraft(draftOf(props.scout, props.plan), offered));
+  const [draft, setDraft] = useState<ScoutDraft>(initial.draft);
+  const [dropped, setDropped] = useState(initial.dropped);
+  const [restored, setRestored] = useState(false);
   const [errors, setErrors] = useState<DraftErrors>({});
   const [busy, setBusy] = useState<Busy>(null);
   const [refused, setRefused] = useState<Refused | null>(null);
@@ -81,13 +103,27 @@ export function ScoutForm(props: ScoutFormProps) {
   useEffect(() => {
     if (refused) notice.current?.focus();
   }, [refused]);
+  // An unsaved draft comes back after the checkout round trip (this tab's sessionStorage; read after hydration).
+  useEffect(() => {
+    const kept = readKept(key);
+    if (!kept) return;
+    const pruned = pruneDraft(kept, offered);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restored once, from storage the server cannot read
+    setDraft(pruned.draft);
+    setDropped((current) => current || pruned.dropped);
+    setRestored(true);
+  }, [key, offered]);
   useEffect(() => {
     if (preview) previewHeading.current?.focus();
   }, [preview]);
 
-  function change<K extends keyof ScoutDraft>(key: K, value: ScoutDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
-    if (key in errors) setErrors((current) => ({ ...current, [key]: undefined }));
+  function change<K extends keyof ScoutDraft>(field: K, value: ScoutDraft[K]) {
+    setDraft((current) => {
+      const next = { ...current, [field]: value };
+      keep(key, next);
+      return next;
+    });
+    if (field in errors) setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
   /** The draft's problems, shown by their fields; focus goes to the first. False when there are none. */
@@ -120,6 +156,7 @@ export function ScoutForm(props: ScoutFormProps) {
       props.scout ? calls.update(props.orgId, props.scout.id, body) : calls.create(props.orgId, body),
     );
     if (saved) {
+      forget(key);
       setBusy("save"); // stays busy until the matches replace this screen
       router.push(props.doneHref);
     }
@@ -146,11 +183,23 @@ export function ScoutForm(props: ScoutFormProps) {
   };
 
   const upgrade = refused?.refusal === "planLimit" && refused.upgradePlan ? refused.upgradePlan : null;
+  const missing = !props.plan.frequencies.includes(draft.frequency);
+  const planUpgrade = missing ? (props.upgradeFor[draft.frequency] ?? null) : null;
   return (
     <Form onSubmit={save} className="flex flex-col gap-8" aria-busy={busy ? true : undefined} data-scout-form="">
       {props.scout?.paused ? (
         <Alert tone="info" className="w-full">
           {t("pausedNote")}
+        </Alert>
+      ) : null}
+      {restored ? (
+        <Alert tone="info" className="w-full">
+          <p data-restored="">{t("restored")}</p>
+        </Alert>
+      ) : null}
+      {dropped ? (
+        <Alert tone="info" className="w-full">
+          <p data-dropped="">{t("dropped")}</p>
         </Alert>
       ) : null}
 
@@ -224,6 +273,21 @@ export function ScoutForm(props: ScoutFormProps) {
           hint: props.plan.frequencies.includes(f) ? undefined : t("notOnPlan"),
         }))}
       />
+      {missing ? (
+        // Said as soon as the schedule is chosen, with the way to the plan that has it (the draft is kept meanwhile).
+        <div className="-mt-4 flex flex-col items-start gap-1" data-plan-note="">
+          <p className="text-sm text-ink">{t("planNote")}</p>
+          {planUpgrade ? (
+            <Link
+              href={upgradeHref(planUpgrade, { org: props.orgId, next: props.hereHref })}
+              className={standaloneLinkClass}
+              data-upgrade=""
+            >
+              {t("upgrade")}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       <SelectField
         id="scout-language"
@@ -275,9 +339,22 @@ export function ScoutForm(props: ScoutFormProps) {
           {busy === "preview" ? t("previewing") : t("preview")}
         </Button>
         {props.scout ? (
-          <Button variant="link" busy={busy !== null} onClick={() => void togglePause()} className="sm:ml-auto">
-            {props.scout.paused ? t("resume") : t("pause")}
-          </Button>
+          <div className="flex items-center gap-4 sm:ml-auto">
+            <span id="scout-status" className="inline-flex items-center gap-1.5 text-sm">
+              <span className="text-ink-soft">{t("statusLabel")}</span>
+              <Chip kind={props.scout.paused ? "onHold" : "current"}>
+                {props.scout.paused ? t("statusPaused") : t("statusActive")}
+              </Chip>
+            </span>
+            <Button
+              variant="link"
+              busy={busy !== null}
+              onClick={() => void togglePause()}
+              aria-describedby="scout-status"
+            >
+              {props.scout.paused ? t("resume") : t("pause")}
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -288,4 +365,29 @@ export function ScoutForm(props: ScoutFormProps) {
 
 function refusalText(t: ReturnType<typeof useStrings<"scoutForm">>, refusal: ScoutRefusal, org: string): string {
   return t(`refusal.${refusal}`, { org });
+}
+
+/** The kept draft of this form, or null (storage off, full or holding something else). */
+function readKept(key: string): ScoutDraft | null {
+  try {
+    return parseDraft(window.sessionStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function keep(key: string, draft: ScoutDraft) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    // Storage off or full: the form still works, the draft is only not kept across the checkout.
+  }
+}
+
+function forget(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Nothing kept.
+  }
 }

@@ -247,3 +247,94 @@ export function interestRefusalOf(status: number, error: unknown): InterestRefus
   if (status === 404) return "proposal_unavailable";
   return "generic";
 }
+
+// ------------------------------------------------------------------------------------------------ an edited scout
+
+/** What the form can offer now: active niches (parents and children), the counties, the organisation's reviewers. */
+export interface Offered {
+  niches: ReadonlySet<string>;
+  counties: ReadonlySet<string>;
+  recipients: ReadonlySet<string>;
+}
+
+/**
+ * A saved scout's choices the form no longer offers (a niche made inactive, a reviewer who left or lost the role)
+ * are dropped from the draft, so a save never sends them back to a 422. `dropped` says whether the note shows.
+ */
+export function pruneDraft(draft: ScoutDraft, offered: Offered): { draft: ScoutDraft; dropped: boolean } {
+  const niches = draft.niches.filter((id) => offered.niches.has(id));
+  const counties = draft.counties.filter((code) => offered.counties.has(code));
+  const recipients = draft.recipients.filter((id) => offered.recipients.has(id));
+  const dropped =
+    niches.length !== draft.niches.length ||
+    counties.length !== draft.counties.length ||
+    recipients.length !== draft.recipients.length;
+  return { draft: { ...draft, niches, counties, recipients }, dropped };
+}
+
+// ------------------------------------------------------------------------------------------------ plans
+
+export interface PlanOption {
+  code: string;
+  purchasable: boolean;
+  upgrade_to: string | null;
+  limits: Record<string, unknown>;
+}
+
+function frequenciesOf(plan: PlanOption): readonly string[] {
+  const value = plan.limits.scout_frequencies;
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+/**
+ * The plan to buy for a schedule the current plan lacks: up the current plan's upgrade ladder, the first plan that
+ * sells it (a checkout can buy it) and includes the frequency; else the first such plan of the side; else null.
+ */
+export function planFor(plans: readonly PlanOption[], current: string, frequency: Frequency): string | null {
+  const byCode = new Map(plans.map((p) => [p.code, p]));
+  const fits = (p: PlanOption | undefined) => p !== undefined && p.purchasable && frequenciesOf(p).includes(frequency);
+  const seen = new Set<string>();
+  for (let code = byCode.get(current)?.upgrade_to; code && !seen.has(code); code = byCode.get(code)?.upgrade_to) {
+    seen.add(code);
+    if (fits(byCode.get(code))) return code;
+  }
+  return plans.find((p) => fits(p))?.code ?? null;
+}
+
+// ------------------------------------------------------------------------------------------------ a kept draft
+
+/** Where an unsaved draft waits during the checkout round trip (this tab only), per organisation and scout. */
+export function draftKey(orgId: string, scoutId?: string): string {
+  return `bridge.scoutDraft:${orgId}:${scoutId ?? "new"}`;
+}
+
+const TEXT = (v: unknown): v is string => typeof v === "string" && v.length <= 2000;
+const LIST = (v: unknown): v is string[] => Array.isArray(v) && v.length <= 60 && v.every((x) => TEXT(x));
+
+/** A stored draft read back, or null when it is missing or not a draft's shape (never trusted beyond the form). */
+export function parseDraft(raw: string | null): ScoutDraft | null {
+  if (!raw) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof value !== "object" || value === null) return null;
+  const d = value as Record<string, unknown>;
+  if (!LIST(d.niches) || !LIST(d.counties) || !LIST(d.recipients) || !LIST(d.maturity)) return null;
+  if (!TEXT(d.include) || !TEXT(d.exclude) || !TEXT(d.minFit)) return null;
+  if (!(FREQUENCIES as readonly unknown[]).includes(d.frequency) || (d.language !== "en" && d.language !== "sw")) return null;
+  if (!d.maturity.every((m) => (MATURITIES as readonly string[]).includes(m))) return null;
+  return {
+    niches: d.niches,
+    counties: d.counties,
+    include: d.include,
+    exclude: d.exclude,
+    maturity: d.maturity as Maturity[],
+    minFit: d.minFit,
+    frequency: d.frequency as Frequency,
+    language: d.language,
+    recipients: d.recipients,
+  };
+}

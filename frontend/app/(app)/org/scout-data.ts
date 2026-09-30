@@ -115,3 +115,13 @@ export async function getVerification(orgId: string): Promise<OrgVerification | 
   if (response.status === 401) redirect("/login");
   return data?.verification ?? null;
 }
+
+/** The organisation plans (limits, upgrade ladder), or an empty list when they could not be read. */
+export async function getOrgPlans(): Promise<components["schemas"]["PlanOut"][]> {
+  const { data, response } = await serverApi().GET("/api/plans", {
+    params: { query: { side: "org" } },
+    ...(await options()),
+  });
+  if (response.status === 401) redirect("/login");
+  return data?.plans ?? [];
+}

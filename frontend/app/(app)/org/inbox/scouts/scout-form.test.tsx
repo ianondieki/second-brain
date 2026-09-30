@@ -19,6 +19,7 @@ afterEach(() => {
   cleanup();
   push.mockReset();
   refresh.mockReset();
+  window.sessionStorage.clear();
 });
 
 const ORG = "0192a7c4-5b1e-7c3d-8e9f-0a1b2c3d4e5f";
@@ -64,6 +65,8 @@ function calls(overrides: Partial<ScoutCalls> = {}): ScoutCalls {
   };
 }
 
+const KEY = `bridge.scoutDraft:${ORG}:new`;
+
 function renderForm(scoutCalls: ScoutCalls, scout?: Scout) {
   return renderWithIntl(
     <ScoutForm
@@ -76,6 +79,7 @@ function renderForm(scoutCalls: ScoutCalls, scout?: Scout) {
       reviewers={[{ id: REVIEWER, label: "Rita Wanjiru" }]}
       doneHref="/org/inbox?tab=matches"
       hereHref="/org/inbox/scouts/new"
+      upgradeFor={{ daily: "org_growth", on_new: "org_growth" }}
       calls={scoutCalls}
     />,
   );
@@ -154,7 +158,89 @@ describe("the scout form", () => {
     expect(document.activeElement?.id).toBe("preview-heading");
   });
 
-  it("pauses a saved scout and refreshes", async () => {
+  it("says at once that the plan lacks a chosen schedule, with the way to the plan that has it", () => {
+    renderForm(calls());
+    expect(document.querySelector("[data-plan-note]")).toBeNull();
+    fireEvent.click(screen.getByLabelText(/As soon as a proposal is published/));
+    const note = document.querySelector("[data-plan-note]")!;
+    expect(note.textContent).toContain(en.scoutForm.planNote);
+    expect(within(note as HTMLElement).getByRole("link", { name: en.scoutForm.upgrade }).getAttribute("href")).toBe(
+      `/billing/upgrade?plan=org_growth&org=${ORG}&next=%2Forg%2Finbox%2Fscouts%2Fnew`,
+    );
+    fireEvent.click(screen.getByLabelText(/Every week/));
+    expect(document.querySelector("[data-plan-note]")).toBeNull();
+  });
+
+  it("keeps the unsaved draft across the checkout round trip, and forgets it once saved", async () => {
+    const first = renderForm(calls());
+    fireEvent.click(screen.getByLabelText("Microfinance & SACCOs"));
+    fireEvent.click(screen.getByLabelText(/As soon as a proposal is published/));
+    expect(JSON.parse(window.sessionStorage.getItem(KEY)!).frequency).toBe("on_new");
+    first.unmount();
+
+    const api = calls();
+    renderForm(api); // back from the checkout
+    expect(screen.getByText(en.scoutForm.restored)).toBeTruthy();
+    expect((screen.getByLabelText("Microfinance & SACCOs") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/As soon as a proposal is published/) as HTMLInputElement).checked).toBe(true);
+    await submit();
+    expect(api.create).toHaveBeenCalledWith(ORG, expect.objectContaining({ niches: [CHILD], frequency: "on_new" }));
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("ignores a kept draft that is not a draft", () => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ niches: "x", frequency: "hourly" }));
+    renderForm(calls());
+    expect(screen.queryByText(en.scoutForm.restored)).toBeNull();
+    expect((screen.getByLabelText(/Every week/) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("drops a saved scout's niche and reviewer the form no longer offers, says so, and saves without them", async () => {
+    const api = calls();
+    const scout = {
+      id: "s1",
+      niches: [
+        { id: CHILD, slug: "x", label: "x" },
+        { id: "0192a7c4-0000-7000-8000-0000000000dd", slug: "gone", label: "Gone" },
+      ],
+      counties: ["KE-47", "KE-99"],
+      include_keywords: [],
+      exclude_keywords: [],
+      maturity: [],
+      min_fit: 60,
+      frequency: "weekly",
+      language: "en",
+      recipients: [REVIEWER, "0192a7c4-0000-7000-8000-0000000000c9"],
+      paused: false,
+    } as unknown as Scout;
+    renderForm(api, scout);
+    expect(screen.getByText(en.scoutForm.dropped)).toBeTruthy();
+    await submit();
+    expect(api.update).toHaveBeenCalledWith(
+      ORG,
+      "s1",
+      expect.objectContaining({ niches: [CHILD], counties: ["KE-47"], recipients: [REVIEWER] }),
+    );
+  });
+
+  it("shows no note for a saved scout whose choices are all still offered", () => {
+    renderForm(calls(), {
+      id: "s1",
+      niches: [{ id: CHILD, slug: "x", label: "x" }],
+      counties: [],
+      include_keywords: [],
+      exclude_keywords: [],
+      maturity: [],
+      min_fit: 60,
+      frequency: "weekly",
+      language: "en",
+      recipients: [REVIEWER],
+      paused: false,
+    } as unknown as Scout);
+    expect(screen.queryByText(en.scoutForm.dropped)).toBeNull();
+  });
+
+  it("pauses a saved scout and refreshes, its status beside the control", async () => {
     const api = calls();
     const scout = {
       id: "s1",
@@ -170,7 +256,11 @@ describe("the scout form", () => {
       paused: false,
     } as unknown as Scout;
     renderForm(api, scout);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: en.scoutForm.pause })));
+    const pause = screen.getByRole("button", { name: en.scoutForm.pause });
+    expect(document.getElementById(pause.getAttribute("aria-describedby")!)!.textContent).toContain(
+      en.scoutForm.statusActive,
+    );
+    await act(async () => fireEvent.click(pause));
     expect(api.update).toHaveBeenCalledWith(ORG, "s1", { paused: true });
     expect(refresh).toHaveBeenCalled();
   });

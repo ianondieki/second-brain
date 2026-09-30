@@ -10,8 +10,17 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { orgContext } from "../../data";
 import { EmptyState } from "../../EmptyState";
-import { configuresScouts, matchesHref, scoutHref, type ScoutPlan } from "../../scout";
-import { getCounties, getMembers, getNicheTree, getScout, getScouts, getVerification } from "../../scout-data";
+import { OrgRefusal } from "../../OrgRefusal";
+import { configuresScouts, FREQUENCIES, matchesHref, planFor, scoutHref, type Frequency, type ScoutPlan } from "../../scout";
+import {
+  getCounties,
+  getMembers,
+  getNicheTree,
+  getOrgPlans,
+  getScout,
+  getScouts,
+  getVerification,
+} from "../../scout-data";
 import { ScoutForm } from "./ScoutForm";
 
 /**
@@ -60,21 +69,22 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
     );
   }
 
-  const [list, scout, niches, counties, members, verification] = await Promise.all([
+  const [list, scout, niches, counties, members, verification, plans] = await Promise.all([
     getScouts(org.org_id),
     scoutId ? getScout(org.org_id, scoutId) : Promise.resolve(undefined),
     getNicheTree(),
     getCounties(),
     getMembers(org.org_id),
     getVerification(org.org_id),
+    getOrgPlans(),
   ]);
   if (list.kind === "refused" || scout === null || scout?.kind === "refused") {
-    const mfa = list.kind === "refused" && list.refusal === "mfa_required";
+    const refused = list.kind === "refused" ? list.refusal : scout?.kind === "refused" ? scout.refusal : null;
     return frame(
       title,
       <div className="mt-6">
-        {mfa ? (
-          <EmptyState sentence={ti("refusedMfaCode")} action={ti("emptyAction")} href="/auth/mfa" />
+        {refused ? (
+          <OrgRefusal refusal={refused} orgName={org.org_name} back={{ href: back, action: t("back") }} />
         ) : (
           <EmptyState sentence={t("notFound")} action={t("back")} href={back} />
         )}
@@ -83,6 +93,10 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
   }
 
   const plan: ScoutPlan = list.value.plan;
+  // The plan to buy for each schedule this plan lacks, so the form can say so as soon as one is chosen.
+  const upgradeFor: Partial<Record<Frequency, string | null>> = Object.fromEntries(
+    FREQUENCIES.filter((f) => !plan.frequencies.includes(f)).map((f) => [f, planFor(plans, plan.plan, f)]),
+  );
   const reviewers = (members ?? [])
     .filter((m) => m.roles.includes("reviewer"))
     .map((m) => ({ id: m.user_id, label: m.display_name }));
@@ -115,6 +129,7 @@ export async function ScoutScreen({ scoutId, org: requested }: { scoutId?: strin
             reviewers={reviewers}
             doneHref={back}
             hereHref={scoutHref(memberships, org.org_id, scoutId)}
+            upgradeFor={upgradeFor}
           />
         </ClientStrings>
       </div>

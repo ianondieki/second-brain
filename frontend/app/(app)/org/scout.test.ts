@@ -11,7 +11,10 @@ import {
   interestRefusalOf,
   matchesHref,
   matchHref,
+  parseDraft,
   parseKeywords,
+  planFor,
+  pruneDraft,
   scoutHref,
   scoutRefusalOf,
   whySourceOf,
@@ -220,5 +223,60 @@ describe("a match on the screen", () => {
     ]) {
       expect(scoutRefusals[key], key).toBeTruthy();
     }
+  });
+});
+
+describe("an edited scout's stale choices", () => {
+  const offered = { niches: new Set([NICHE]), counties: new Set(["KE-47"]), recipients: new Set([REVIEWER]) };
+  const base = { ...draftOf(undefined, PLAN), niches: [NICHE], counties: ["KE-47"], recipients: [REVIEWER] };
+
+  it("are dropped, and said to be", () => {
+    const stale = { ...base, niches: [NICHE, "gone"], counties: ["KE-47", "KE-99"], recipients: ["left", REVIEWER] };
+    expect(pruneDraft(stale, offered)).toEqual({ draft: base, dropped: true });
+  });
+
+  it("leave a current draft as it is", () => {
+    expect(pruneDraft(base, offered)).toEqual({ draft: base, dropped: false });
+  });
+});
+
+describe("the plan that has a schedule", () => {
+  const plan = (code: string, frequencies: string[], upgrade_to: string | null, purchasable = true) => ({
+    code,
+    purchasable,
+    upgrade_to,
+    limits: { scout_frequencies: frequencies },
+  });
+  const PLANS = [
+    plan("org_claimed", ["weekly"], "org_starter", false),
+    plan("org_starter", ["weekly"], "org_growth"),
+    plan("org_growth", ["daily", "weekly", "on_new"], "org_enterprise"),
+    plan("org_enterprise", ["daily", "weekly", "on_new"], null, false),
+  ];
+
+  it("is the first up the ladder that sells it", () => {
+    expect(planFor(PLANS, "org_claimed", "on_new")).toBe("org_growth");
+    expect(planFor(PLANS, "org_starter", "daily")).toBe("org_growth");
+  });
+
+  it("falls back to the first plan that sells it, else none", () => {
+    expect(planFor(PLANS, "unknown", "on_new")).toBe("org_growth");
+    expect(planFor(PLANS.map((p) => ({ ...p, purchasable: false })), "org_claimed", "on_new")).toBeNull();
+    const loop = [plan("a", ["weekly"], "b"), plan("b", ["weekly"], "a")];
+    expect(planFor(loop, "a", "daily")).toBeNull();
+  });
+});
+
+describe("a kept draft", () => {
+  it("comes back only in a draft's shape", () => {
+    const draft = { ...draftOf(undefined, PLAN), niches: [NICHE], include: "sacco" };
+    expect(parseDraft(JSON.stringify(draft))).toEqual(draft);
+    expect(parseDraft(null)).toBeNull();
+    expect(parseDraft("{not json")).toBeNull();
+    expect(parseDraft(JSON.stringify({ ...draft, frequency: "hourly" }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ ...draft, language: "fr" }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ ...draft, maturity: ["ancient"] }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ ...draft, niches: [1] }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ ...draft, minFit: 60 }))).toBeNull();
   });
 });
