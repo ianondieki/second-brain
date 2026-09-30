@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { checkScreen, expectEmptyState } from "./support/screen";
+import { expectEmptyState } from "./support/screen";
+import { checkScreenStrict } from "./support/strict-screen";
 import {
   listedOrgId,
   makeViewer,
@@ -51,7 +52,7 @@ test.describe("an organisation member", () => {
       `Proposals reach ${member.orgName} once its verification is finished.`,
       "Back to home",
     );
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // An organisation the member does not belong to is never swapped for their own one.
     await page.goto("/org/inbox?org=01a0ee62-0000-7000-8000-0000000000ff");
@@ -70,7 +71,7 @@ test.describe("an organisation member", () => {
       "Back to home",
     );
     await expect(page.getByText(held.title)).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
   });
 
   test("opens a pitched proposal: teaser, Evaluation NDA, then the marked full proposal", async ({
@@ -85,7 +86,7 @@ test.describe("an organisation member", () => {
     await page.goto("/org");
     await expect(page.getByText(`Newest: ${pitched.title}, sent`)).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("Open the Inbox");
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // Newest first, Tier 1 only, at most two chips per card.
     await page.goto("/org/inbox");
@@ -96,7 +97,7 @@ test.describe("an organisation member", () => {
     await expect(rows.nth(0).locator("[data-chip]")).toHaveText("New");
     for (const row of await rows.all()) expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
     await expect(page.getByText("Solar chillers with a shared booking queue")).toHaveCount(0); // no Tier 2 here
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await page.getByRole("link", { name: pitched.title }).click();
     await expect(page).toHaveURL(new RegExp(`/org/inbox/${pitched.proposalId}$`), SERVER_STEP);
@@ -117,7 +118,7 @@ test.describe("an organisation member", () => {
     await expect(page.locator("[data-logging-notice]")).toHaveText(nda.logging_notice.text);
     await expect(page.locator("[data-primary]")).toHaveText("Accept and view");
     await expect(page.locator("[data-tier2-frame]")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     await page.getByRole("button", { name: "Accept and view" }).click();
     await expect(page).toHaveURL(new RegExp(`/org/inbox/${pitched.proposalId}\\?view=full$`), SERVER_STEP);
@@ -134,7 +135,7 @@ test.describe("an organisation member", () => {
       `Full proposal: ${pitched.title}, marked for you`,
     );
     // The marked page runs no script, so axe cannot run inside it: the frame is left out (its title is checked above).
-    await checkScreen(page, { exclude: ["[data-tier2-frame]"] });
+    await checkScreenStrict(page, { exclude: ["[data-tier2-frame]"] });
 
     // Accepted once: coming back does not open (and log) the full proposal until asked.
     await page.getByRole("link", { name: "Close full proposal" }).click();
@@ -142,7 +143,7 @@ test.describe("an organisation member", () => {
     await expect(page.getByText(`You accepted version ${nda.version} of the Evaluation NDA on`)).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("View full proposal");
     await expect(page.locator("[data-tier2-frame]")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
   });
 
   test("gets one plain sentence for each reason the full proposal stays closed", async ({ page, browser, baseURL }) => {
@@ -159,7 +160,7 @@ test.describe("an organisation member", () => {
     );
     await expect(refusal.getByRole("link")).toHaveText("Back to the Inbox");
     await expect(page.locator("[data-primary]")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // A role that may not open full proposals: its own sentence, no action of the member's own.
     const pitched = await pitchFromNewDeveloper(browser, baseURL!, [member.orgId]);
@@ -170,11 +171,11 @@ test.describe("an organisation member", () => {
       `Opening full proposals needs the reviewer, signatory or admin role. An admin of ${member.orgName} can give it to you.`,
     );
     await expect(refusal.getByRole("link")).toHaveCount(0);
-    await checkScreen(page);
+    await checkScreenStrict(page);
 
     // No such proposal: one sentence and one action, nothing confirmed.
     await page.goto("/org/inbox/01a0ee62-0000-7000-8000-000000000000");
     await expectEmptyState(page, `This proposal is not in the Inbox of ${member.orgName}.`, "Back to the Inbox");
-    await checkScreen(page);
+    await checkScreenStrict(page);
   });
 });

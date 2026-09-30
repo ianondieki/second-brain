@@ -12,7 +12,8 @@ import {
   signUpScoutOrg,
   upgradeOrg,
 } from "./support/scout-scene";
-import { checkScreen, expectEmptyState, settled } from "./support/screen";
+import { expectEmptyState, settled } from "./support/screen";
+import { checkScreenStrict } from "./support/strict-screen";
 import { tag } from "./support/tracker-scene";
 
 // REQ-SCOUT-02 frontend (P10-F), the M2 walkthrough's step 1 (docs/platform/prototype-m2-plan.md §3), with
@@ -73,7 +74,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       `Set up your Scout Agent and it brings proposals that fit ${org.orgName} here.`,
       "Set up Scout Agent",
     );
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-empty");
     // A member who does not configure scouts gets the member's empty state instead.
     setRoles(org, "{reviewer}");
@@ -83,7 +84,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       `${org.orgName} has no Scout Agent yet; an owner or admin can set one up.`,
       "See proposals sent to you",
     );
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-empty-member");
     setRoles(org, "{owner,admin,signatory,reviewer}");
     await orgPage.reload();
@@ -105,7 +106,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       "href",
       new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew%3Frestore%3D1$`),
     );
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-form");
     // The unsaved draft survives the checkout round trip (kept in this tab); the way back carries restore=1.
     await inlineUpgrade.click();
@@ -123,7 +124,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       "href",
       new RegExp(`^/billing/upgrade\\?plan=[a-z_]+&org=${org.orgId}&next=%2Forg%2Finbox%2Fscouts%2Fnew%3Frestore%3D1$`),
     );
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
 
     // 3. Upgraded (simulated M-Pesa), Preview says an on_new scout sends new proposals only; then Save.
     await upgradeOrg(orgPage.request, org.orgId, "org_growth");
@@ -132,7 +133,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       "Shows what the last 30 days would have matched; this scout sends new proposals only.",
       SERVER_STEP,
     );
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-preview");
     await orgPage.getByRole("button", { name: "Save scout" }).click();
     await expect(orgPage).toHaveURL(/\/org\/inbox\?tab=matches$/, SERVER_STEP);
@@ -152,7 +153,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       SERVER_STEP,
     );
     await expect(orgPage.locator("#scout-status")).toContainText("Paused");
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-paused");
     await orgPage.getByRole("button", { name: "Resume the scout" }).click();
     await expect(orgPage.locator("#scout-status")).toContainText("Active", SERVER_STEP);
@@ -174,7 +175,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(row.locator("[data-why-source]")).toBeVisible();
     expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
     await expect(orgPage.locator("main")).not.toContainText(NAME);
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-matches");
 
     // 6. EM3 reaches the reviewer seat; its item link opens the match page.
@@ -193,7 +194,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       `Only a signatory of ${org.orgName} can express interest.`,
     );
     await expect(orgPage.getByRole("button", { name: "Express interest" })).toBeDisabled();
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     setRoles(org, "{owner,admin,signatory,reviewer}");
 
     // 7. The signatory expresses interest; the second factor is 13 hours old, so a fresh code is asked for.
@@ -201,17 +202,17 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(orgPage.getByRole("heading", { level: 1 })).toHaveText(dev.title);
     await expect(orgPage.locator("main")).not.toContainText(NAME);
     await expect(orgPage.locator("[data-primary]")).toHaveText("Express interest");
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-match");
     org.person.staleSecondFactor();
     await orgPage.getByRole("button", { name: "Express interest" }).click();
     await expect(orgPage.locator("form[data-interest-form][data-hydrated='true']")).toBeVisible();
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-interest-form");
     await orgPage.getByRole("button", { name: "Send interest" }).click();
     const orgCode = orgPage.getByLabel("Authenticator code");
     await expect(orgCode).toBeVisible(SERVER_STEP);
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-interest-stepup");
     await orgCode.fill(await org.person.code());
     await orgPage.getByRole("button", { name: "Confirm and continue" }).click();
@@ -219,7 +220,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     const engagementId = new URL(orgPage.url()).pathname.split("/").pop()!;
     await expect(orgPage.locator("main")).toContainText("the developer's handle. You see their name once contact is agreed.");
     await expect(orgPage.locator("main")).not.toContainText(NAME);
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-org-stage0");
 
     // 8. N17 tells the developer; they accept with a fresh code (INTEREST_CONFIRMED) and EM2 is sent.
@@ -228,11 +229,11 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await page.goto(`/dev/engagements/${engagementId}`);
     const actions = page.locator("[data-actions]");
     await expect(actions.getByRole("button", { name: "Accept the interest" })).toBeVisible();
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await shot(page, info, "scout-dev-stage0");
     await actions.getByRole("button", { name: "Accept the interest" }).click();
     await expect(actions.getByLabel("Authenticator code")).toBeVisible();
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await actions.getByLabel("Authenticator code").fill(await dev.person.code());
     await actions.getByRole("button", { name: "Confirm and continue" }).click();
     await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
@@ -249,11 +250,11 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(share.locator("[data-share-confirm]")).toContainText(
       "every view is logged and watermarked to the viewer",
     );
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await shot(page, info, "scout-dev-share");
     await share.getByRole("button", { name: "Share the full proposal" }).click();
     await expect(share.getByLabel("Authenticator code")).toBeVisible(SERVER_STEP);
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await shot(page, info, "scout-dev-share-stepup");
     await share.getByLabel("Authenticator code").fill(await dev.person.code());
     await share.getByRole("button", { name: "Confirm and continue" }).click();
@@ -262,7 +263,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
       SERVER_STEP,
     );
     await expect(page.locator("#share-status")).toBeFocused();
-    await checkScreen(page);
+    await checkScreenStrict(page);
     await shot(page, info, "scout-dev-shared");
 
     // 10. The organisation now sees the developer's name, and opens the full proposal under the NDA.
@@ -271,7 +272,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(orgPage.locator("main")).toContainText(`From ${dev.name}`);
     const shared = orgPage.locator("[data-tier2-share='shared']");
     await expect(shared).toContainText(`The developer shared the full proposal with ${org.orgName}`);
-    await checkScreen(orgPage);
+    await checkScreenStrict(orgPage);
     await shot(orgPage, info, "scout-org-shared");
     await shared.getByRole("link", { name: "Open the full proposal" }).click();
     await expect(orgPage).toHaveURL(new RegExp(`/org/inbox/${dev.proposalId}$`), SERVER_STEP);
@@ -279,7 +280,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     const frame = orgPage.frameLocator("[data-tier2-frame]");
     await expect(frame.getByRole("heading", { level: 1 })).toHaveText(dev.title, SERVER_STEP);
     await expect(frame.getByText("Solar chillers with a shared booking queue and per-litre billing.")).toBeVisible();
-    await checkScreen(orgPage, { exclude: ["[data-tier2-frame]"] });
+    await checkScreenStrict(orgPage, { exclude: ["[data-tier2-frame]"] });
   } finally {
     await orgContext.close();
   }
