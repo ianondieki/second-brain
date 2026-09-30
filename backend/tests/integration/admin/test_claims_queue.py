@@ -28,7 +28,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bridge.engagements.calendar import add_business_days, local_date
+from bridge.engagements.calendar import add_business_days, business_days_between, local_date
 from bridge.ids import uuid7
 from tests.integration import world as w
 from tests.integration.api import make_client, sign_in_as
@@ -314,6 +314,39 @@ async def test_the_review_queue_lists_claims_awaiting_staff_oldest_first_with_th
         assert "email_address" not in item  # the detail's only
         assert "otp_hash" not in item
         assert "dns_token" not in item
+
+
+async def test_the_review_sla_skips_kenyan_holidays_only(
+    claims: ClaimsWorld, as_user: Client, owner_engine: AsyncEngine
+) -> None:
+    """B was submitted on Tuesday 2026-03-03: due Thursday, or Friday once Wednesday is a Kenyan holiday. A holiday of
+    another country (here the Friday) moves nothing. The rows are this test's own and are removed afterwards."""
+    name = f"P15 test holiday {claims.tag}"
+    count = "SELECT count(*) FROM holidays"
+    [before] = await _rows(owner_engine, count)
+    async with owner_engine.begin() as conn:
+        for country, day in (("KE", date(2026, 3, 4)), ("UG", date(2026, 3, 6))):
+            await conn.execute(
+                text(
+                    "INSERT INTO holidays (id, country, holiday_on, observed_on, name)"
+                    " VALUES (:id, :country, :day, :day, :name)"
+                ),
+                {"id": uuid7(), "country": country, "day": day, "name": name},
+            )
+    try:
+        admin = await as_user(claims.admin)
+        [listed] = [item for item in (await admin.get(BASE)).json()["items"] if item["id"] == str(claims.b)]
+        detail = (await admin.get(f"{BASE}/{claims.b}")).json()
+    finally:
+        async with owner_engine.begin() as conn:
+            await conn.execute(text("DELETE FROM holidays WHERE name = :name"), {"name": name})
+    assert await _rows(owner_engine, count) == [before]
+    assert (listed["sla"]["due_on"], listed["sla"]["overdue"]) == ("2026-03-06", True)
+    assert detail["sla"] == listed["sla"]
+    now, holidays = await _now_and_holidays(owner_engine)
+    today = local_date(now)
+    # Late by the Kenyan business days since the due day (the seeded holidays of the months since are not counted).
+    assert listed["sla"]["business_days_left"] == -business_days_between(date(2026, 3, 6), today, holidays)
 
 
 async def test_the_other_views_list_claims_in_progress_and_closed(claims: ClaimsWorld, as_user: Client) -> None:
