@@ -94,6 +94,7 @@ _ACTIVATE = text(
 # [[COPY-REVIEW]] the organisation's in-app notice when the developer shares the full proposal.
 SHARED_TITLE: Final = "Full proposal shared"
 SHARED_BODY: Final = 'The developer shared the full proposal "{title}" with your organisation. Open it under NDA.'
+SHARED_LINK: Final = "/org/engagements/{engagement}"  # the organisation's tracker (frontend app/(app)/org/engagements)
 log = get_logger(__name__)
 
 
@@ -313,7 +314,7 @@ async def tell_organisation(
                     kind="engagement.tier2_shared",
                     title=SHARED_TITLE,
                     body=body,
-                    link=f"/engagements/{engagement_id}",
+                    link=SHARED_LINK.format(engagement=engagement_id),
                     dedupe_key=f"tier2share:{grant_id}:{user_id}",
                 )
                 await db.commit()
