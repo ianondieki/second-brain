@@ -162,3 +162,71 @@ of follow-up 8; the session-only signup rule; the security review round 1 fixes 
 pending label and unopenable envelopes, the recovery-codes proof and daily notice, `record_decisions`); and the paths
 the new tests reach. Next: the security-reviewer's check of the round 1 fixes, then the frontend halves
 (impl-frontend) with ux-reviewer.
+
+## P17-F: frontend halves of follow-ups 7 and 8 (2026-09-30, `feat/REQ-AUTH-07-fe`)
+
+**Follow-up 7, Cancel setup.** "Cancel setup" always sends `DELETE /api/auth/totp/enrol` (CSRF-checked, 10 s
+timeout) and acts on its answer, never on GET /api/auth/me: 204 or 409 `no_pending_enrolment` go to the "cancelled"
+notice; 409 `totp_already_enabled` goes to the "on" screen with the codes-not-shown notice; anything else keeps the
+setup steps with the status-unknown notice. A confirmation answering 409 `no_pending_enrolment` (replaced, or open
+over 15 minutes) settles the same way: back to the start when the DELETE says off. The mapping is
+`cancelStatus` in `frontend/app/(app)/settings/security/outcomes.ts`. The lost-answer tests now mock the DELETE instead
+of GET /me.
+
+**Follow-up 8, new recovery codes.** The "on" screen has a "Recovery codes" section. Its "Get new recovery codes"
+button opens a form that loads on demand (`NewRecoveryCodes.tsx`). The form warns that the old codes stop working,
+asks for the current password when the account has one, then sends `POST /api/auth/totp/recovery-codes`:
+- 403 `step_up_required` shows the code form (`POST /api/auth/step-up`), then sends again with the password already
+  typed.
+- 403 `current_password_required` asks for the password again (the field is emptied and focused, and it also appears
+  for an account the page thought had no password).
+- 409 `totp_not_enabled` goes back to the start with `errors.totp_not_enabled`.
+- Any other refusal keeps the form with its `errors.*` message. Unknown codes read `generic`; the API's own
+  `message` is never shown.
+
+The ten codes are shown once (`RecoveryCodeList.tsx`, shared with setup), with copy, download and "Your new recovery
+codes are ready. Your old codes no longer work." "I have saved my codes" returns focus to the button. While the form
+is open, turning off and the Password section step aside. After a lost setup answer, the button is the screen's one
+primary action. `security.codesNotShown` points at it for every role. `security.codesNotShownTurnOff` and the
+`onWithoutCodes` comment are gone. The mapping is `renewalStep` in `outcomes.ts`.
+
+**Tests.**
+- Vitest: `outcomes.test.ts` covers every answer of both routes. `recovery-codes.test.tsx` covers the section and the
+  primary rule; the password (empty, wrong, absent); step-up and retry; `totp_not_enabled`; fixed messages for
+  throttling, CSRF, 5xx, unknown codes and no connection, where the API's text never appears; busy presses; and copy
+  and download. `settings.test.tsx` has the lost-answer cases on the DELETE. Five mutations of the new code were each
+  caught.
+- Playwright: `frontend/e2e/two-step.spec.ts` runs in mobile-360 and desktop:
+  - Cancel clears `totp_pending_enc`, and a code from the cancelled key gets 409 `no_pending_enrolment`.
+  - A confirmation whose answer is cut off leads, on Cancel, to "on" with the notice.
+  - With a 13-hour-old second factor: password, then a fresh code, then ten new codes; the notice email reaches
+    Mailpit; at the next sign-in an old code is refused and a new one signs in.
+  - axe, one primary action and no horizontal scroll on each screen, at the project width and at 375 px. A `beforeAll`
+    expect requires `E2E_DATABASE_OWNER_URL`.
+- `auth.spec.ts` and `smoke.spec.ts` stay green on the same stack.
+
+Screenshots (`E2E_SHOTS_DIR`, 375 and 1440 px): `p17f-cancelled`, `p17f-codes-not-shown`, `p17f-renew-form`,
+`p17f-renew-step-up`, `p17f-renew-codes`.
+
+**Open items (P17-F):**
+1. **Cancel with an unclear answer, when nothing can be on.** Before any confirmation could have committed (no try
+   yet, or only wrong codes), an unclear DELETE answer (offline, 5xx, session ended) shows "cancelled", not the
+   status-unknown notice. Two-step sign-in cannot be on, and the server refuses the key after 15 minutes. This
+   departs from the literal "anything else keeps the setup steps"; reviewer to confirm.
+2. **A DELETE after the confirmation's `no_pending_enrolment` can clear another tab's setup.** That DELETE also clears
+   a key a newer setup in another tab left pending; that tab's confirmation then starts again. Safe, but visible.
+3. **`THREAT_MODEL.md` rows can now be narrowed.** Three §1 rows ("A pending TOTP secret lingers", "Cancel setup reads
+   'off' before a lost confirmation commits", "Recovery codes never seen after a lost confirmation") still say "until
+   the web client ...". Their test columns should name `recovery-codes.test.tsx`, `outcomes.test.ts` and
+   `e2e/two-step.spec.ts`. The "roles that may turn two-step sign-in off are told to turn it off" clause is now
+   stale. Left to the orchestrator or security-reviewer, after review.
+4. **The JS budget is close.** Signed in, local production build: `/settings/security` loads 148,601 of 150,000
+   bytes of gzipped JS. The new form loads on demand; the section and button are in the first load.
+5. **Copy.** New copy is `[[COPY-REVIEW]]` (`_meta.reviewP17f`); the Swahili is a draft (`[[SW-REVIEW]]`).
+   `mfa.recoveryLead` now reads "Enter one of the recovery codes you saved." because codes no longer come only from
+   setup.
+6. **Shared files.** `lib/api/errors.ts` gains one known code (`totp_not_enabled`). This may overlap with parallel
+   edits to that list.
+7. **Skill not installed.** The `impeccable` skill is not installed here, so the polish pass was a manual review of
+   the screenshots against docs/spec/07. At 375 px, "Copy codes" and "Download codes" wrap onto two lines, as at
+   setup (no change made).
