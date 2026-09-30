@@ -137,7 +137,9 @@ export function refusalOf(status: number, error: unknown): Refusal {
 }
 
 /** The message key (under adminResearch) of a refusal that is shown as a sentence. */
-export function refusalKey(refusal: Exclude<Refusal, { kind: "stepUp" }>): string {
+export function refusalKey(
+  refusal: Exclude<Refusal, { kind: "stepUp" }>,
+): `publish.${PublishReason}` | `refusal.${RefusalCode}` {
   return refusal.kind === "publish" ? `publish.${refusal.reason}` : `refusal.${refusal.code}`;
 }
 
