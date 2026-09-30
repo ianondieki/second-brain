@@ -191,9 +191,11 @@ NGO_D = DemoOrg(
 )
 ORGS: Final = (TELCO_A, SACCO_B, COUNTY_C, NGO_D)
 
-# The staff admin who starts research runs and approves research cards (P11); P15 adds a moderator here.
+# The staff admin who starts research runs and approves research cards (P11) and reads the claims queue (P15), and
+# the staff moderator who decides the moderation queue (P15; bridge.seed.demo.queues seeds an item in each queue).
 STAFF_ADMIN = DemoStaff("admin@staff.example", "Staff Admin (demo)", StaffRole.ADMIN)
-STAFF: Final = (STAFF_ADMIN,)
+STAFF_MODERATOR = DemoStaff("moderator@staff.example", "Staff Moderator (demo)", StaffRole.MODERATOR)
+STAFF: Final = (STAFF_ADMIN, STAFF_MODERATOR)
 
 P1 = DemoProposal(
     key="P1",

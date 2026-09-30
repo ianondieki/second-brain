@@ -764,6 +764,25 @@
         "title": "CandidateOut",
         "type": "object"
       },
+      "CaseField": {
+        "properties": {
+          "name": {
+            "description": "A Tier-1 field: title, problem_statement, impact_claims, summary, statement",
+            "title": "Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "text"
+        ],
+        "title": "CaseField",
+        "type": "object"
+      },
       "CaseList": {
         "properties": {
           "items": {
@@ -782,10 +801,79 @@
       },
       "CaseOut": {
         "properties": {
+          "actions": {
+            "description": "The decisions the decision route accepts from you now",
+            "items": {
+              "enum": [
+                "approve",
+                "reject"
+              ],
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "blocked": {
+            "anyOf": [
+              {
+                "enum": [
+                  "already_decided",
+                  "unsupported_subject",
+                  "subject_gone",
+                  "own_content",
+                  "cannot_approve_vulnerability"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a decision is refused (the route's code); null when both are open",
+            "title": "Blocked"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fields": {
+            "description": "The subject's current Tier-1 text, field by field (never Tier 2)",
+            "items": {
+              "$ref": "#/components/schemas/CaseField"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "flagged_fields": {
+            "description": "The Tier-1 fields the pre-screen flagged when it filed the case",
+            "items": {
+              "type": "string"
+            },
+            "title": "Flagged Fields",
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -851,7 +939,13 @@
           "created_at",
           "subject_state",
           "subject_version_id",
-          "preview"
+          "preview",
+          "fields",
+          "flagged_fields",
+          "actions",
+          "blocked",
+          "decided_at",
+          "decided_by"
         ],
         "title": "CaseOut",
         "type": "object"
@@ -1184,6 +1278,541 @@
         ],
         "title": "CitationOut",
         "type": "object"
+      },
+      "ClaimCaseOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ModerationSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModerationCaseStatus"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "status",
+          "created_at"
+        ],
+        "title": "ClaimCaseOut",
+        "type": "object"
+      },
+      "ClaimDetailOut": {
+        "properties": {
+          "cases": {
+            "description": "Moderation cases about this claim, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/ClaimCaseOut"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "claimant": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "cr12_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cr12 Date"
+          },
+          "created_at": {
+            "description": "When the claim was submitted (the review SLA counts from here)",
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "dispute_case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The open claim_dispute moderation case of a disputed claim",
+            "title": "Dispute Case Id"
+          },
+          "dns_verified": {
+            "description": "The DNS TXT record was found",
+            "title": "Dns Verified",
+            "type": "boolean"
+          },
+          "dns_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dns Verified At"
+          },
+          "document_count": {
+            "description": "Uploaded evidence documents (no download in the prototype)",
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "domain_is_official": {
+            "description": "The claimed domain is one of the official domains",
+            "title": "Domain Is Official",
+            "type": "boolean"
+          },
+          "email_address": {
+            "description": "The domain address the code went to",
+            "title": "Email Address",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kra_pin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kra Pin"
+          },
+          "level": {
+            "$ref": "#/components/schemas/ClaimLevel"
+          },
+          "official_domains": {
+            "description": "The organisation's official domains (listed from registers)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Official Domains",
+            "type": "array"
+          },
+          "org": {
+            "$ref": "#/components/schemas/ClaimOrgOut"
+          },
+          "other_claims": {
+            "description": "The organisation's other open claims, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/OtherClaimOut"
+            },
+            "title": "Other Claims",
+            "type": "array"
+          },
+          "otp_attempts": {
+            "title": "Otp Attempts",
+            "type": "integer"
+          },
+          "otp_reissues": {
+            "title": "Otp Reissues",
+            "type": "integer"
+          },
+          "otp_verified": {
+            "description": "The domain-email code was confirmed",
+            "title": "Otp Verified",
+            "type": "boolean"
+          },
+          "otp_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otp Verified At"
+          },
+          "public_entity_requested": {
+            "title": "Public Entity Requested",
+            "type": "boolean"
+          },
+          "registration_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration No"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sector_register": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector Register"
+          },
+          "sla": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimSla"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review SLA of a claim awaiting review; null otherwise"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verified_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Domain"
+          }
+        },
+        "required": [
+          "id",
+          "org",
+          "claimant",
+          "domain",
+          "level",
+          "status",
+          "created_at",
+          "updated_at",
+          "decided_at",
+          "otp_verified",
+          "dns_verified",
+          "sla",
+          "dispute_case_id",
+          "email_address",
+          "otp_verified_at",
+          "dns_verified_at",
+          "otp_attempts",
+          "otp_reissues",
+          "registration_no",
+          "cr12_date",
+          "kra_pin",
+          "sector_register",
+          "public_entity_requested",
+          "document_count",
+          "official_domains",
+          "verified_domain",
+          "domain_is_official",
+          "reviewed_by",
+          "decision_reason",
+          "other_claims",
+          "cases"
+        ],
+        "title": "ClaimDetailOut",
+        "type": "object"
+      },
+      "ClaimLevel": {
+        "enum": [
+          "e1",
+          "e2"
+        ],
+        "title": "ClaimLevel",
+        "type": "string"
+      },
+      "ClaimList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "review_sla_bd": {
+            "title": "Review Sla Bd",
+            "type": "integer"
+          },
+          "view": {
+            "enum": [
+              "review",
+              "in_progress",
+              "closed"
+            ],
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "review_sla_bd",
+          "items"
+        ],
+        "title": "ClaimList",
+        "type": "object"
+      },
+      "ClaimOrgOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when staff cannot read the organisation (it is not listed)",
+            "title": "Legal Name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgVerification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "legal_name",
+          "slug",
+          "kind",
+          "verification"
+        ],
+        "title": "ClaimOrgOut",
+        "type": "object"
+      },
+      "ClaimOut": {
+        "properties": {
+          "claimant": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "created_at": {
+            "description": "When the claim was submitted (the review SLA counts from here)",
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "dispute_case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The open claim_dispute moderation case of a disputed claim",
+            "title": "Dispute Case Id"
+          },
+          "dns_verified": {
+            "description": "The DNS TXT record was found",
+            "title": "Dns Verified",
+            "type": "boolean"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/ClaimLevel"
+          },
+          "org": {
+            "$ref": "#/components/schemas/ClaimOrgOut"
+          },
+          "otp_verified": {
+            "description": "The domain-email code was confirmed",
+            "title": "Otp Verified",
+            "type": "boolean"
+          },
+          "sla": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimSla"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review SLA of a claim awaiting review; null otherwise"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "org",
+          "claimant",
+          "domain",
+          "level",
+          "status",
+          "created_at",
+          "updated_at",
+          "decided_at",
+          "otp_verified",
+          "dns_verified",
+          "sla",
+          "dispute_case_id"
+        ],
+        "title": "ClaimOut",
+        "type": "object"
+      },
+      "ClaimSla": {
+        "properties": {
+          "business_days_left": {
+            "description": "Kenyan business days from today to the due day; negative once late",
+            "title": "Business Days Left",
+            "type": "integer"
+          },
+          "due_on": {
+            "description": "The last day of the review window (Nairobi); due by its end",
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "due_on",
+          "business_days_left",
+          "overdue"
+        ],
+        "title": "ClaimSla",
+        "type": "object"
+      },
+      "ClaimStatus": {
+        "enum": [
+          "otp_sent",
+          "dns_pending",
+          "pending_review",
+          "approved",
+          "rejected",
+          "disputed",
+          "withdrawn"
+        ],
+        "title": "ClaimStatus",
+        "type": "string"
       },
       "CodeRequest": {
         "additionalProperties": false,
@@ -4715,6 +5344,43 @@
         "title": "OrgVerification",
         "type": "string"
       },
+      "OtherClaimOut": {
+        "properties": {
+          "claimant": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/ClaimLevel"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimStatus"
+          }
+        },
+        "required": [
+          "id",
+          "claimant",
+          "domain",
+          "level",
+          "status",
+          "created_at"
+        ],
+        "title": "OtherClaimOut",
+        "type": "object"
+      },
       "PaymentBody": {
         "properties": {
           "amount_kes_minor": {
@@ -4899,6 +5565,25 @@
           "party"
         ],
         "title": "PendingOut",
+        "type": "object"
+      },
+      "PersonOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "PersonOut",
         "type": "object"
       },
       "PhoneCodeConfirm": {
@@ -6939,6 +7624,25 @@
         "title": "StaffMeOut",
         "type": "object"
       },
+      "StaffRef": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "StaffRef",
+        "type": "object"
+      },
       "StaffRole": {
         "enum": [
           "admin",
@@ -8369,6 +9073,239 @@
         "summary": "Provenance Keys",
         "tags": [
           "provenance"
+        ]
+      }
+    },
+    "/api/admin/claims": {
+      "get": {
+        "operationId": "list_claims_api_admin_claims_get",
+        "parameters": [
+          {
+            "description": "review (default), in_progress or closed",
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "review",
+              "description": "review (default), in_progress or closed",
+              "enum": [
+                "review",
+                "in_progress",
+                "closed"
+              ],
+              "title": "View",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Claims",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/claims/{claim_id}": {
+      "get": {
+        "operationId": "get_claim_api_admin_claims__claim_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Claim Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Claim",
+        "tags": [
+          "admin"
         ]
       }
     },

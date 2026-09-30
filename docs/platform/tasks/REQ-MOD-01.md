@@ -35,3 +35,9 @@ The AC-PROP-5 queue clause and AC-PROP-6 (`integration/admin/test_moderation_que
   defamation, false affiliation, third-party personal data, malicious links), high-confidence spam holds.
 - The admin moderation screens (F4, P15), reports (report button), assignment and escalation, claims and research
   queues (P15), Tier-2 moderation with the `tier2_llm_moderation` consent.
+
+## Prototype P15-B (2026-09-30): the queue for the screens
+
+The queue items carry what a moderator needs to decide (the Tier-1 text field by field, the flagged fields, the open
+decisions and the refusal code otherwise, who decided and when); decided cases are newest first. The demo seeds a
+staff moderator and a held proposal. Details and open items: `REQ-ADM-01.md`, "Prototype P15-B".

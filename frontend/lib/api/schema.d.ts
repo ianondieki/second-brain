@@ -24,6 +24,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Claims */
+        get: operations["list_claims_api_admin_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/claims/{claim_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Claim */
+        get: operations["get_claim_api_admin_claims__claim_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/me": {
         parameters: {
             query?: never;
@@ -2544,6 +2578,16 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** CaseField */
+        CaseField: {
+            /**
+             * Name
+             * @description A Tier-1 field: title, problem_statement, impact_claims, summary, statement
+             */
+            name: string;
+            /** Text */
+            text: string;
+        };
         /** CaseList */
         CaseList: {
             /** Items */
@@ -2552,10 +2596,33 @@ export interface components {
         /** CaseOut */
         CaseOut: {
             /**
+             * Actions
+             * @description The decisions the decision route accepts from you now
+             */
+            actions: ("approve" | "reject")[];
+            /**
+             * Blocked
+             * @description Why a decision is refused (the route's code); null when both are open
+             */
+            blocked: ("already_decided" | "unsupported_subject" | "subject_gone" | "own_content" | "cannot_approve_vulnerability") | null;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            decided_by: components["schemas"]["StaffRef"] | null;
+            /**
+             * Fields
+             * @description The subject's current Tier-1 text, field by field (never Tier 2)
+             */
+            fields: components["schemas"]["CaseField"][];
+            /**
+             * Flagged Fields
+             * @description The Tier-1 fields the pre-screen flagged when it filed the case
+             */
+            flagged_fields: string[];
             /**
              * Id
              * Format: uuid
@@ -2676,6 +2743,217 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** ClaimCaseOut */
+        ClaimCaseOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            source: components["schemas"]["ModerationSource"];
+            status: components["schemas"]["ModerationCaseStatus"];
+        };
+        /** ClaimDetailOut */
+        ClaimDetailOut: {
+            /**
+             * Cases
+             * @description Moderation cases about this claim, oldest first
+             */
+            cases: components["schemas"]["ClaimCaseOut"][];
+            claimant: components["schemas"]["PersonOut"];
+            /** Cr12 Date */
+            cr12_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the claim was submitted (the review SLA counts from here)
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decision Reason */
+            decision_reason: string | null;
+            /**
+             * Dispute Case Id
+             * @description The open claim_dispute moderation case of a disputed claim
+             */
+            dispute_case_id: string | null;
+            /**
+             * Dns Verified
+             * @description The DNS TXT record was found
+             */
+            dns_verified: boolean;
+            /** Dns Verified At */
+            dns_verified_at: string | null;
+            /**
+             * Document Count
+             * @description Uploaded evidence documents (no download in the prototype)
+             */
+            document_count: number;
+            /** Domain */
+            domain: string;
+            /**
+             * Domain Is Official
+             * @description The claimed domain is one of the official domains
+             */
+            domain_is_official: boolean;
+            /**
+             * Email Address
+             * @description The domain address the code went to
+             */
+            email_address: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kra Pin */
+            kra_pin: string | null;
+            level: components["schemas"]["ClaimLevel"];
+            /**
+             * Official Domains
+             * @description The organisation's official domains (listed from registers)
+             */
+            official_domains: string[];
+            org: components["schemas"]["ClaimOrgOut"];
+            /**
+             * Other Claims
+             * @description The organisation's other open claims, oldest first
+             */
+            other_claims: components["schemas"]["OtherClaimOut"][];
+            /** Otp Attempts */
+            otp_attempts: number;
+            /** Otp Reissues */
+            otp_reissues: number;
+            /**
+             * Otp Verified
+             * @description The domain-email code was confirmed
+             */
+            otp_verified: boolean;
+            /** Otp Verified At */
+            otp_verified_at: string | null;
+            /** Public Entity Requested */
+            public_entity_requested: boolean;
+            /** Registration No */
+            registration_no: string | null;
+            reviewed_by: components["schemas"]["PersonOut"] | null;
+            /** Sector Register */
+            sector_register: string | null;
+            /** @description The review SLA of a claim awaiting review; null otherwise */
+            sla: components["schemas"]["ClaimSla"] | null;
+            status: components["schemas"]["ClaimStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Verified Domain */
+            verified_domain: string | null;
+        };
+        /**
+         * ClaimLevel
+         * @enum {string}
+         */
+        ClaimLevel: "e1" | "e2";
+        /** ClaimList */
+        ClaimList: {
+            /** Items */
+            items: components["schemas"]["ClaimOut"][];
+            /** Review Sla Bd */
+            review_sla_bd: number;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "review" | "in_progress" | "closed";
+        };
+        /** ClaimOrgOut */
+        ClaimOrgOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["OrgKind"] | null;
+            /**
+             * Legal Name
+             * @description Null when staff cannot read the organisation (it is not listed)
+             */
+            legal_name: string | null;
+            /** Slug */
+            slug: string | null;
+            verification: components["schemas"]["OrgVerification"] | null;
+        };
+        /** ClaimOut */
+        ClaimOut: {
+            claimant: components["schemas"]["PersonOut"];
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the claim was submitted (the review SLA counts from here)
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Dispute Case Id
+             * @description The open claim_dispute moderation case of a disputed claim
+             */
+            dispute_case_id: string | null;
+            /**
+             * Dns Verified
+             * @description The DNS TXT record was found
+             */
+            dns_verified: boolean;
+            /** Domain */
+            domain: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            level: components["schemas"]["ClaimLevel"];
+            org: components["schemas"]["ClaimOrgOut"];
+            /**
+             * Otp Verified
+             * @description The domain-email code was confirmed
+             */
+            otp_verified: boolean;
+            /** @description The review SLA of a claim awaiting review; null otherwise */
+            sla: components["schemas"]["ClaimSla"] | null;
+            status: components["schemas"]["ClaimStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ClaimSla */
+        ClaimSla: {
+            /**
+             * Business Days Left
+             * @description Kenyan business days from today to the due day; negative once late
+             */
+            business_days_left: number;
+            /**
+             * Due On
+             * Format: date
+             * @description The last day of the review window (Nairobi); due by its end
+             */
+            due_on: string;
+            /** Overdue */
+            overdue: boolean;
+        };
+        /**
+         * ClaimStatus
+         * @enum {string}
+         */
+        ClaimStatus: "otp_sent" | "dns_pending" | "pending_review" | "approved" | "rejected" | "disputed" | "withdrawn";
         /** CodeRequest */
         CodeRequest: {
             /** Code */
@@ -4017,6 +4295,24 @@ export interface components {
          * @enum {string}
          */
         OrgVerification: "unclaimed" | "pending" | "e1" | "e2" | "rejected";
+        /** OtherClaimOut */
+        OtherClaimOut: {
+            claimant: components["schemas"]["PersonOut"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Domain */
+            domain: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            level: components["schemas"]["ClaimLevel"];
+            status: components["schemas"]["ClaimStatus"];
+        };
         /** PaymentBody */
         PaymentBody: {
             /** Amount Kes Minor */
@@ -4088,6 +4384,16 @@ export interface components {
         PendingOut: {
             command: components["schemas"]["Command"];
             party: components["schemas"]["EngagementParty"];
+        };
+        /** PersonOut */
+        PersonOut: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** PhoneCodeConfirm */
         PhoneCodeConfirm: {
@@ -4845,6 +5151,16 @@ export interface components {
         StaffMeOut: {
             role: components["schemas"]["StaffRole"];
         };
+        /** StaffRef */
+        StaffRef: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /**
          * StaffRole
          * @enum {string}
@@ -5348,6 +5664,195 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProvenanceKeys"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_claims_api_admin_claims_get: {
+        parameters: {
+            query?: {
+                /** @description review (default), in_progress or closed */
+                view?: "review" | "in_progress" | "closed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_claim_api_admin_claims__claim_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                claim_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimDetailOut"];
                 };
             };
             /** @description Bad Request */
