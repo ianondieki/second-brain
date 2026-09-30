@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from tests.integration.engagements.api_world import clients
-from tests.integration.matching.trend_world import build, developer_problem, proposal, signals
+from tests.integration.matching.trend_world import board_as, build, developer_problem, proposal, signals
 
 SETTINGS = get_settings()
 
@@ -39,6 +39,11 @@ async def test_only_top_decile_problems_with_fewer_than_three_proposals(
     assert items[0]["proposal_count"] == 1
     assert items[0]["trend"]["trending"] is True
     assert elsewhere.json()["items"] == []
+    board = await board_as(app_engine, world.author)  # what kept the crowded problem out: its count alone
+    z = board.problems[crowded].z
+    assert z is not None
+    assert z >= 1.0
+    assert board.signals[crowded].proposals == 3
 
 
 async def test_a_quiet_niche_has_no_opportunity_gap(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:

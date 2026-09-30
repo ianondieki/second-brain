@@ -47,9 +47,12 @@ publication facts come from `proposals.published_at` and the problem links, read
   its first dated event, whichever is earlier), mean and population sd (floor 0.5). Fewer than 3 non-zero baseline
   scores: no z-score (cold start). Trending = z >= 1.0, score >= 1.0, >= 3 distinct actors. New this week =
   published in the last 7 Nairobi days (6 days old is new, 7 is not).
-- Actors (fix round, review MAJOR) are only the people and organisations behind recent activity: developers with a
-  proposal against the problem in the 30-day badge window, publishers of sources dated in that window, the Brief's
-  organisation, and the scouting organisations (the definer's count over the window, from 3). Chosen over dropping
+- Actors (fix rounds 1 and 2) are only the people and organisations behind recent activity, all in the 30-day badge
+  window: developers with a proposal against the problem, publishers of sources dated in it, the Brief's
+  organisation when the Brief was posted in it, and the organisations whose scouts matched a linked proposal in it
+  (a second `app_trend_aggregates` call whose `since` is the window's first Nairobi day; the definer still counts
+  organisations only from 3, and the "N companies scouting" chip quotes that recent count). A project's actors are
+  the organisations that expressed interest in the window. Scores still use the whole 180-day window. Chosen over dropping
   publishers entirely: fresh independent coverage by three publishers is a real crowd for a research card, while a
   year-old or two-month-old source is evidence for the score, not a person acting now. A card with three sources 35
   to 37 days old and one new proposal has one actor and no badge
@@ -248,7 +251,27 @@ across linked proposals, R3 a held problem's link, R4 the county filter on proje
 history read without consent, R7 old publishers as actors: 7 killed, 0 survived; plus the gap's `<= 3` and no-floor
 mutants: killed.
 
-## Checks (head of the branch, after fix round 1)
+## Fix round 2 (reviewer and P12-F ux-reviewer, on 2c233a0)
+
+| Finding | Change | Commit | Test |
+|---|---|---|---|
+| MAJOR 1: scouting organisations counted over 180 days; a Brief's organisation at any age | recent aggregates from a second definer call from the badge window's first Nairobi day (scouts, and project interest); the Brief's organisation only when posted in the window | `e1f7810` | `test_discover.py::test_last_seasons_scouts_are_not_actors` (scouts 150-160 days ago + 1 fresh proposal), `::test_an_old_briefs_organisation_is_not_an_actor` (Brief 170 days ago + 2 fresh proposals); each asserts z >= 1 and score >= 1 but no badge, and fails on the old rule |
+| MAJOR 2 (ux): Home said "Trending" from z alone | "Trending in its niche" only when `card.trend.trending` (Discover's rule), else "Rising in its niche" `[[COPY-REVIEW]]`, in chips and pursuit reasons; a pursuit reason is never repeated as a Why chip (the next chip takes its place) | `c87bad6` | `test_ranker.py::test_trending_wording_only_where_discover_says_trending` (z 2.714, not trending) |
+| MINOR: owner recency | test only (the gate was right, R2 survived) | `e1f7810` | `test_discover.py::test_old_proposal_owners_are_not_actors` |
+| MINOR: proposal keywords | assert the proposal's words are in `proposal_keywords` and a headline-only word is not | `c85a1d1` | `test_without_the_consent_no_history_is_read` |
+| MINOR: crowded gap problem | assert its z >= 1.0 and exactly 3 proposals (through the board as the reader sees it) | `c85a1d1` | `test_opportunity_gap.py` |
+| MINOR (ux): project badge and chip | badge `Trending in <niche>: verified organisations asking`; chip `Verified organisation interest` (one or several, never a count) `[[COPY-REVIEW]]` | `6cffb58` | `test_discover.py` |
+
+Mutants: the three old actor rules (scouts over the window, a Brief at any age, owners outside the badge window) and
+the two ranker ones (Trending from z alone, a reason repeated as a chip) each fail their tests. No API schema
+changed in round 2 (`openapi --check` clean without regeneration); only the badge, chip and reason texts did.
+
+## Checks after fix round 2
+
+- ruff, ruff format --check (536 files), mypy strict (538 files): clean; `openapi --check`: clean (no schema change).
+- Backend suite: 3935 passed (17 min).
+
+## Checks (after fix round 1)
 
 - `ruff check .`, `ruff format --check .` (536 files), `mypy` (strict, 538 files): clean.
 - `python -m bridge.openapi --check`: clean; `openapi.json` and `schema.d.ts` regenerated with `make api-types`

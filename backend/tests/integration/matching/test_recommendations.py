@@ -171,5 +171,7 @@ async def test_without_the_consent_no_history_is_read(
     assert (await developer.put("/api/me/consents", json=decision)).status_code == 200
     on = await context()
     assert on.personalised
-    assert {"grain", "drought", "planning"} <= on.keywords
+    assert {"grain", "drought", "planning", "tools"} <= on.keywords
+    assert {"drought", "planning", "grain"} <= on.proposal_keywords  # the proposal's title
+    assert "tools" not in on.proposal_keywords  # a headline word only
     assert dict(on.track) == {world.niche: (1, 0)}

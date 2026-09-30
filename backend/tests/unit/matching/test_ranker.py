@@ -136,8 +136,10 @@ def test_a_strong_pulled_card_is_pursue_with_its_reasons() -> None:
     [row] = rank([card(orgs=4, z=2.0, confidence="0.9", age_days=2)], dev(), R, T, NOW)
     assert row.decision == "pursue"
     assert row.reasons[0] == "Organisations are looking for this"
-    # The top 3 positive contributions: niche 0.15, trend 0.10 x 0.83, county 0.08; market pull 0.10 x 0.67 is 4th.
-    assert row.why == ("In a niche you like", "Trending in its niche", "In your county")
+    assert "Trending in its niche" in row.reasons
+    # The top positive contributions: niche 0.15, trend 0.10 x 0.83 (already a pursuit reason, so not repeated as a
+    # chip), county 0.08, confidence 0.08 x 0.9; market pull 0.10 x 0.67 comes next.
+    assert row.why == ("In a niche you like", "In your county", "Backed by cited sources")
     [row] = rank([card(orgs=4, z=2.0, confidence="0.7", county="KE-01")], dev(), R, T, NOW)  # pull now 3rd
     assert "4 companies scouting" in row.why
 
@@ -217,3 +219,19 @@ def test_the_fit_chip_names_where_the_shared_words_come_from() -> None:
     assert "Close to your past proposals" not in row.why
     [row] = rank([card(niche=ELSEWHERE, county=None)], from_proposals, R, T, NOW)
     assert "Close to your past proposals" in row.why
+
+
+def test_trending_wording_only_where_discover_says_trending() -> None:
+    """Round-2 MAJOR 2: a high z-score without Discover's actor or score floors is "Rising", never "Trending", in the
+    chips and the pursuit reasons alike; and no reason is repeated as a chip."""
+    high = card(z=2.714, orgs=4, confidence="0.9", age_days=2)
+    rising = replace(high, trend=replace(high.trend, trending=False))
+    for c, words, other in ((rising, "Rising in its niche", "Trending"), (high, "Trending in its niche", "Rising")):
+        [row] = rank([c], dev(), R, T, NOW)
+        assert words in (*row.why, *row.reasons)
+        assert not any(other in text for text in (*row.why, *row.reasons))
+        assert not set(row.why) & set(row.reasons)
+    quiet = replace(rising, signals=replace(rising.signals, orgs_scouting=None))
+    [row] = rank([quiet], dev(), R, T, NOW)
+    assert "Rising in its niche" in (*row.why, *row.reasons)
+    assert all("Trending" not in text for text in (*row.why, *row.reasons))
