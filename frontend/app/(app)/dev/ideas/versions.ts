@@ -1,4 +1,4 @@
-import type { EditorState, MyProposal, Version } from "./ideas";
+import type { EditorState, MyProposal, ProblemRef, Version } from "./ideas";
 
 // Loading a version into the editor happens on the server (EditorScreen); kept out of the editor's bundle.
 
@@ -51,4 +51,12 @@ export function stateFromVersion(version: Version | null): EditorState {
     notes: confidential.notes ?? "",
     links: confidential.links.join("\n"),
   };
+}
+
+/**
+ * A new idea's fields with one published problem already linked (Discover's "Start a proposal from this problem"): the
+ * problem is picked and its niche, when it has one, is the idea's. Nothing is saved until the developer types.
+ */
+export function stateWithProblem(problem: ProblemRef): EditorState {
+  return { ...EMPTY_STATE, nicheId: problem.niche?.id ?? "", problemMode: "pick", problems: [problem] };
 }

@@ -10,6 +10,7 @@ import {
   type MyProposalItem,
   type NicheNode,
   type ProblemCard,
+  type ProblemRef,
 } from "./ideas";
 import { isProposalId } from "./routes";
 
@@ -75,6 +76,21 @@ export async function editorOptions(): Promise<EditorOptions> {
     attestations: attestations.data,
     problems: problems.data.items,
   };
+}
+
+/**
+ * A published problem a new idea can link, as the editor holds linked problems, or null when the id is not one (a
+ * candidate, a rejected card and an unknown id all answer 404).
+ */
+export async function linkableProblem(problemId: string): Promise<ProblemRef | null> {
+  if (!isProposalId(problemId)) return null; // the same uuid shape
+  const { data, response } = await serverApi().GET("/api/problems/{problem_id}", {
+    params: { path: { problem_id: problemId } },
+    ...(await options()),
+  });
+  if (data) return { id: data.id, title: data.title, source: data.source, label: data.label, niche: data.niche };
+  if (response.status === 404 || response.status === 422) return null;
+  return failed("GET /api/problems/{problem_id}", response.status);
 }
 
 /** A county's name by its code (KE-30 → Nairobi City), or the code when the list cannot be read. */
