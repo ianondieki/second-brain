@@ -3,7 +3,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/Badge";
 import { Row } from "@/components/ui/RowList";
 
-import { Chip } from "./Chip";
+import { Chip, ChipMark } from "./Chip";
 import { awaitsMe, isFinished, stageChip, type Party, type Summary } from "./model";
 import { DueText } from "./When";
 
@@ -26,7 +26,8 @@ export function EngagementRow({ item, mine, href }: { item: Summary; mine: Party
         turn
           ? [
               stage,
-              <Badge key="turn" tone="accent" solid data-chip="turn">
+              // Icon + words + colour (docs/spec/07 item 6): the "current" mark in the badge's own colour.
+              <Badge key="turn" tone="accent" solid data-chip="turn" icon={<ChipMark kind="current" />}>
                 {mine === "developer" ? t("yourTurn") : t("ourTurn")}
               </Badge>,
             ]

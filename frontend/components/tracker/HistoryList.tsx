@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/Badge";
+import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
@@ -57,24 +58,23 @@ export function HistoryList({ history }: { history: History }) {
         </Badge>
       }
     >
-      <ol className="flex flex-col">
+      <RowList ordered>
         {events.map((event) => (
-          <li key={event.id} data-event={event.command} className="border-t border-line py-3">
-            <p className="font-semibold text-ink">
-              {EVENT_KEYS.has(event.command) ? t(`event.${event.command as Command | "create"}`) : t("event.other")}
-            </p>
-            <p className="mt-0.5 text-sm text-ink">
-              {t("history.actor", {
-                name: event.actor_name ?? t("endorsements.platform"),
-                role: t(`role.${event.actor_role}`),
-              })}
-            </p>
-            <p className="mt-0.5 text-sm text-ink-soft">
+          <Row
+            key={event.id}
+            data-event={event.command}
+            title={EVENT_KEYS.has(event.command) ? t(`event.${event.command as Command | "create"}`) : t("event.other")}
+            meta={t("history.actor", {
+              name: event.actor_name ?? t("endorsements.platform"),
+              role: t(`role.${event.actor_role}`),
+            })}
+          >
+            <p className="text-sm text-ink-soft">
               <Eat iso={event.created_at} />
             </p>
-          </li>
+          </Row>
         ))}
-      </ol>
+      </RowList>
     </Section>
   );
 }

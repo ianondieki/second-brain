@@ -162,6 +162,14 @@ describe("the deal's records", () => {
     expect(document.querySelector("[data-milestone-row='2']")!.textContent).toContain("KES 1,000,000");
   });
 
+  it("draws no rule under the Agreement heading: the rule belongs to lists (P16-B ux-review)", () => {
+    renderWithIntl(<Agreements detail={inImplementation()} />);
+    const latest = document.querySelector("[data-agreement]")!;
+    expect(latest.className).not.toContain("border-t");
+    // The label column is the one DescriptionList of the design system (the same width as Contact person's).
+    expect(latest.querySelector("dl")!.className).toContain("sm:grid-cols-[minmax(9rem,11rem)_minmax(0,1fr)]");
+  });
+
   it("lists signatures with signer, party, method and fingerprint", () => {
     renderWithIntl(
       <Signatures
@@ -247,6 +255,8 @@ describe("a row in the Engagements list", () => {
     expect(screen.getByText("With Telco A (fixture)")).toBeTruthy();
     const chips = container.querySelectorAll("[data-chip]");
     expect([...chips].map((c) => c.textContent)).toEqual(["Proposal submitted", "Your turn"]);
+    // P16-B ux-review: the solid "Your turn" badge carries a mark as well as words and colour (docs/spec/07 item 6).
+    expect(container.querySelector("[data-chip='turn'] svg[aria-hidden='true']")).not.toBeNull();
   });
 
   it("shows the developer's name to the organisation and no turn chip when it waits on the other side", () => {

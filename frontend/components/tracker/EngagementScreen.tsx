@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { Badge } from "@/components/ui/Badge";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -213,18 +214,12 @@ async function DocumentsTab({
         ))}
       </ul>
       {text ? (
-        <article data-document={text.kind} className="mt-4 border-t border-line pt-4">
+        <article data-document={text.kind} className="mt-6">
           <h3 className="font-semibold text-ink">{t(`document.${text.kind}`)}</h3>
-          <p
-            className={cn(
-              "mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium",
-              text.intact ? "text-ok" : "text-error",
-            )}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              {text.intact ? <CheckIcon className="size-4" /> : <AlertIcon className="size-4" />}
+          <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <Badge tone={text.intact ? "ok" : "error"} icon={text.intact ? <CheckIcon /> : <AlertIcon />}>
               {text.intact ? t("documents.intact") : t("documents.changed")}
-            </span>
+            </Badge>
             <span className="text-ink-soft tabular-nums">{t("fingerprint", { hash: shortHash(text.sha256) })}</span>
           </p>
           <div
