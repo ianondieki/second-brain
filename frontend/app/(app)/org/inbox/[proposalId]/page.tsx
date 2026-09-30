@@ -62,9 +62,12 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
       <article className="flex max-w-3xl flex-col gap-10">
-        <PageHeader back={back} title={title} lead={card.teaser.niche?.label}>
-          <p className="mt-4 max-w-[62ch] text-sm text-ink-soft">{t("teaserNote")}</p>
-        </PageHeader>
+        {/* One flex item: the back link sits on the title, not a column gap away. */}
+        <div>
+          <PageHeader back={back} title={title} lead={card.teaser.niche?.label}>
+            <p className="mt-4 max-w-[62ch] text-sm text-ink-soft">{t("teaserNote")}</p>
+          </PageHeader>
+        </div>
         <TeaserDetails card={card} />
         <ClientStrings strings={await clientStrings(["orgProposal"])}>
           <FullProposal

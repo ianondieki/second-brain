@@ -181,7 +181,7 @@ async function CaseText({
   const t = await getTranslations("adminModeration");
   if (item.fields.length === 0) return <p className="text-ink">{empty}</p>;
   return (
-    <dl className="flex flex-col gap-3">
+    <dl className={cn("flex flex-col", flagged.size > 0 ? "gap-3" : "gap-5")}>
       {item.fields.map((field) => {
         const marked = flagged.has(field.name);
         return (
@@ -189,7 +189,11 @@ async function CaseText({
             key={field.name}
             data-field={field.name}
             data-flagged={marked ? "" : undefined}
-            className={cn("rounded-control border px-4 py-3", marked ? "border-error-line bg-error-wash" : "border-transparent")}
+            className={cn(
+              // Inset only when a field is flagged, so every field's text starts on the same line as the flagged one's.
+              flagged.size > 0 && "rounded-control border px-4 py-3",
+              marked ? "border-error-line bg-error-wash" : "border-transparent",
+            )}
           >
             <dt className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-ink-soft">
               <span>{t(`field.${fieldKey(field.name)}`)}</span>

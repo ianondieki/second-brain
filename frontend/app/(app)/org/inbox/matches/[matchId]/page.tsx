@@ -74,27 +74,30 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
       <article className="flex max-w-3xl flex-col gap-10" data-match={match.id}>
-        <PageHeader
-          back={{ href: back, label: t("back") }}
-          title={teaser.title ?? ti("untitled")}
-          lead={
-            match.owner_handle || match.niche ? (
-              <>
-                {match.owner_handle && !card ? (
-                  <span className="block" data-owner-handle="">
-                    {tm("by", { handle: match.owner_handle })}
-                  </span>
-                ) : null}
-                {match.niche ? <span className="block">{match.niche.label}</span> : null}
-              </>
-            ) : undefined
-          }
-        >
-          {/* The fit under the title, not a label above it. */}
-          <p className="mt-3">
-            <FitMeter score={match.score} />
-          </p>
-        </PageHeader>
+        {/* One flex item: the back link sits on the title, not a column gap away. */}
+        <div>
+          <PageHeader
+            back={{ href: back, label: t("back") }}
+            title={teaser.title ?? ti("untitled")}
+            lead={
+              match.owner_handle || match.niche ? (
+                <>
+                  {match.owner_handle && !card ? (
+                    <span className="block" data-owner-handle="">
+                      {tm("by", { handle: match.owner_handle })}
+                    </span>
+                  ) : null}
+                  {match.niche ? <span className="block">{match.niche.label}</span> : null}
+                </>
+              ) : undefined
+            }
+          >
+            {/* The fit under the title, not a label above it. */}
+            <p className="mt-3">
+              <FitMeter score={match.score} />
+            </p>
+          </PageHeader>
+        </div>
         <Why match={match} heading />
         {card ? <TeaserDetails card={card} /> : null}
         <Interest match={match} memberships={memberships} org={org} query={orgParam} />
