@@ -119,6 +119,8 @@ class ProblemRef(BaseModel):
         " for a published research card (a demo seed card says it is a seeded example)"
     )
     niche: NicheOut | None
+    seeded_example: bool = Field(description="A demo seed card made from a fixed answer, never a live AI result")
+    published_at: datetime | None = Field(description="When the problem was published (null while it is not)")
 
 
 class TeaserOut(BaseModel):

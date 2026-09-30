@@ -109,12 +109,21 @@ def problem_out(p: ProblemFact, tree: Niches) -> DiscoverProblem:
         country=p.country,
         county_code=p.county_code,
         published_at=p.published_at,
+        seeded_example=p.seeded_example,
     )
 
 
 def problem_ref(p: ProblemFact, tree: Niches) -> ProblemRef:
     out = problem_out(p, tree)
-    return ProblemRef(id=out.id, title=out.title, source=out.source, label=out.label, niche=out.niche)
+    return ProblemRef(
+        id=out.id,
+        title=out.title,
+        source=out.source,
+        label=out.label,
+        niche=out.niche,
+        seeded_example=out.seeded_example,
+        published_at=out.published_at,
+    )
 
 
 def _facts_quoted(s: ProblemSignals) -> list[str]:

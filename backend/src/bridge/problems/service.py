@@ -109,6 +109,8 @@ def _ref(row: Any) -> ProblemRef:
         source=source,
         label=label_for(ProblemSource(source), ProblemStatus(status), published_at, bool(seeded)),
         niche=niche_out(niche_id, slug, name, parent_name),
+        seeded_example=bool(seeded),
+        published_at=published_at,
     )
 
 

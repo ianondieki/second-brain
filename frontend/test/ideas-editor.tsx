@@ -55,6 +55,7 @@ export const PROBLEM: ProblemCard = {
   niche: null,
   statement: "Co-ops lose a fifth of the evening milk.",
   published_at: "2026-09-28T09:00:00Z",
+  seeded_example: false,
 };
 
 export const READY: EditorState = {
@@ -66,7 +67,9 @@ export const READY: EditorState = {
   problemStatement: "Milk spoils.",
   summary: "Solar chillers.",
   problemMode: "pick",
-  problems: [{ id: PROBLEM.id, title: PROBLEM.title, source: "developer", label: null, niche: null }],
+  problems: [
+    { id: PROBLEM.id, title: PROBLEM.title, source: "developer", label: null, niche: null, seeded_example: false, published_at: null },
+  ],
 };
 
 export const SAVED = { id: "p1", draft: { confidential: { attachments: [] } } } as unknown as MyProposal;

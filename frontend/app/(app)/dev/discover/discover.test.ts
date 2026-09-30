@@ -120,6 +120,8 @@ describe("niches and projects", () => {
       source: "developer" as const,
       label: "Developer-reported",
       niche: { id: "c1", slug: "networks-telecommunications", label: "ICT › Networks & Telecommunications" },
+      seeded_example: false,
+      published_at: null,
     };
     const state = stateWithProblem(problem);
     expect(state.problemMode).toBe("pick");

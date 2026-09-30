@@ -32,7 +32,6 @@ COUNTY = r"^[A-Z]{2}-[A-Z0-9]{1,5}$"
 
 class ProblemCard(ProblemRef):
     statement: str
-    published_at: datetime | None
 
 
 class ProblemPage(BaseModel):
@@ -53,7 +52,6 @@ class ProblemDetail(ProblemCard):
     country: str
     county_code: str | None
     ai_generated: bool = Field(description="A model drafted the card (false for a demo seed card, written in code)")
-    seeded_example: bool = Field(description="A demo seed card made from a fixed answer, never a live AI result")
     confidence: Decimal | None
     named_orgs: list[str]
     citations: list[CitationOut]
@@ -80,10 +78,7 @@ async def list_problems(
         county=county,
     )
     return ProblemPage(
-        items=[
-            ProblemCard(**ref.model_dump(), statement=statement, published_at=published_at)
-            for ref, statement, published_at in rows
-        ]
+        items=[ProblemCard(**ref.model_dump(), statement=statement) for ref, statement, _published_at in rows]
     )
 
 
@@ -96,12 +91,10 @@ async def get_problem(problem_id: UUID, live: CurrentSession, db: Db) -> Problem
     return ProblemDetail(
         **ref.model_dump(),
         statement=row.statement,
-        published_at=row.published_at,
         affected_group=row.affected_group,
         country=row.country,
         county_code=row.county_code,
         ai_generated=row.ai_generated and not row.seeded_example,  # a seeded card was written by hand
-        seeded_example=bool(row.seeded_example),
         confidence=row.confidence,
         named_orgs=list(row.named_orgs or ()),
         citations=[
