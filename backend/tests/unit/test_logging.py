@@ -108,10 +108,14 @@ async def test_a_real_uvicorn_server_logs_oauth_paths_without_their_query(access
         ("/api/proposals?niche=solar&q=jane%40example.com", "/api/proposals?niche=solar&q=[redacted]"),
         ("/api/problems?q=", "/api/problems?q=[redacted]"),
         ("/api/problems?faq=kept&q=x&aq=kept", "/api/problems?faq=kept&q=[redacted]&aq=kept"),
+        # The server decodes a key before reading it, so an encoded ``q`` is the same search (security review MINOR).
+        ("/api/problems?%71=Wanjiku", "/api/problems?%71=[redacted]"),
+        ("/api/problems?limit=5&%71=Wanjiku+Kamau&x=a=b", "/api/problems?limit=5&%71=[redacted]&x=a=b"),
+        ("/api/problems?q=a=Wanjiku", "/api/problems?q=[redacted]"),
     ],
 )
 def test_search_words_never_reach_the_access_log(access_log: io.StringIO, path: str, logged: str) -> None:
-    """P16-E1 item 6 (REQ-SEC-04): what people type in a search box can be a name or an address; the value of ``q``
+    """P16-E1 item 6 (REQ-SEC-03): what people type in a search box can be a name or an address; the value of ``q``
     is redacted on every path, other parameters stay."""
     configure_logging()
     log_request(path)

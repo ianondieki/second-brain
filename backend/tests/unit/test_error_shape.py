@@ -164,7 +164,7 @@ async def test_the_failure_is_still_raised_after_the_answer() -> None:
 
 
 async def test_a_validation_error_never_echoes_what_was_sent() -> None:
-    """REQ-SEC-04 (P16-E1 item 6): FastAPI's 422 quotes each invalid value (``input``); a password, a code or free
+    """REQ-SEC-03 (P16-E1 item 6): FastAPI's 422 quotes each invalid value (``input``); a password, a code or free
     text sent back in a response reaches browser tools, proxies and error trackers. The 422 keeps loc, msg and type."""
     app = create_app(get_settings())
     probe = APIRouter(prefix="/api/p16-e1", responses=ERROR_RESPONSES)

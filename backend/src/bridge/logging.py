@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from typing import Any
+from urllib.parse import unquote_plus
 
 import structlog
 
@@ -42,13 +43,24 @@ REDACTED_KEYS = frozenset(
     }
 )
 
+# Whole keys the part match above would hide but that hold only counts (the LLM ledger's token counts). Matched
+# exactly, so no other key containing ``token`` passes (P16-E1 review MINOR). A config ``url`` stays redacted on
+# purpose: a configured URL can carry credentials, and ``variable`` names the setting.
+SAFE_KEYS = frozenset({"input_tokens", "output_tokens"})
+
 # Paths whose query string never reaches the access log: the OAuth callback's carries the authorization code, the
 # state and the provider's error text (REQ-AUTH-02). Structlog does not log requests; uvicorn's access log does.
 QUERYLESS_PATHS = ("/api/auth/oauth/",)
 # Query parameters that carry what people type (search words, which can be a name or an address): their values are
-# redacted on every path (P16-E1).
-FREE_TEXT_PARAMETERS = ("q",)
-_FREE_TEXT_VALUE = re.compile(r"(^|&)(" + "|".join(FREE_TEXT_PARAMETERS) + r")=[^&]*")
+# redacted on every path (P16-E1). A key is compared decoded, as the server reads it, so ``%71=`` is ``q=`` too.
+FREE_TEXT_PARAMETERS = frozenset({"q"})
+_QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
+
+
+def _redact_free_text(match: re.Match[str]) -> str:
+    if unquote_plus(match.group(2)) in FREE_TEXT_PARAMETERS:
+        return f"{match.group(1)}{match.group(2)}={_REDACTED}"
+    return match.group(0)
 
 
 class DropQueryStrings(logging.Filter):
@@ -63,7 +75,7 @@ class DropQueryStrings(logging.Filter):
             if separator and path.startswith(QUERYLESS_PATHS):
                 record.args = (args[0], args[1], path, args[3], args[4])
             elif separator:
-                redacted = _FREE_TEXT_VALUE.sub(lambda match: f"{match.group(1)}{match.group(2)}={_REDACTED}", query)
+                redacted = _QUERY_PAIR.sub(_redact_free_text, query)
                 record.args = (args[0], args[1], f"{path}?{redacted}", args[3], args[4])
         return True
 
@@ -130,7 +142,8 @@ def install_job_log_redaction(worker_name: str | None = None) -> None:
 
 def _redact(_: object, __: str, event_dict: structlog.types.EventDict) -> structlog.types.EventDict:
     for key in list(event_dict):
-        if any(part in key.lower() for part in REDACTED_KEYS):
+        lowered = key.lower()
+        if lowered not in SAFE_KEYS and any(part in lowered for part in REDACTED_KEYS):
             event_dict[key] = "[redacted]"
     return event_dict
 

@@ -1,4 +1,4 @@
-"""REQ-SEC-04 (P16-E1 item 6): logs carry no personal data or secrets. The audit as a test: every structlog call in
+"""REQ-SEC-03 (P16-E1 item 6): logs carry no personal data or secrets. The audit as a test: every structlog call in
 ``bridge`` names a constant event and only fields that were reviewed (ids, counts, codes, types, times and config
 names) or that the key filter redacts, so a new field that could carry an address, a phone number, a name, free text,
 a token or a URL fails here until it is reviewed. The key filter itself redacts the personal-data keys."""
@@ -15,18 +15,18 @@ from bridge import logging as bridge_logging
 SRC = Path(bridge_logging.__file__).resolve().parent
 LEVELS = frozenset({"debug", "info", "warning", "warn", "error", "exception", "critical", "msg"})
 # Reviewed fields (P16-E1): ids and hashes of rows, counts, enum values and machine codes, exception type names,
-# times, money, model and task names, and config names. Never a person's data or a secret.
+# times, money, token counts, model and task names, and config names. Never a person's data or a secret.
 SAFE_FIELDS = frozenset(
     {
-        "anchored", "attempt", "attempts", "batch_id", "batches", "budget_seconds", "candidates", "cap_usd",
-        "category", "chain_id", "chains", "columns", "constraint", "cost_usd", "count", "custom_id", "day",
-        "deferred", "delivery_id", "delivery_ids", "demo_fallback", "detail", "discarded", "engagement_id",
-        "error", "error_type", "event_id", "failed", "failed_today", "free_slots", "heads", "items", "key_id",
-        "kind", "latency_ms", "matched", "model", "prices_verified", "proposal_id", "provider", "provider_status",
-        "published", "purpose", "reason", "recipients", "rejected", "rows", "run_id", "scanned", "scout_id", "seq",
-        "snapshot_at", "source", "spent_usd", "sqlstate", "stage", "status", "step", "stop_reason", "table",
-        "task", "today", "trace_id", "transient", "tsa_time", "user_id", "variable", "verification_id", "version",
-        "will_retry_on",
+        "anchored", "attempt", "attempts", "batch_id", "batches", "budget_seconds", "candidates", "cap_usd", "category",
+        "chain_id", "chains", "columns", "constraint", "cost_usd", "count", "custom_id", "day", "deferred",
+        "delivery_id", "delivery_ids", "demo_fallback", "detail", "discarded", "engagement_id", "error", "error_type",
+        "event_id", "failed", "failed_today", "free_slots", "heads", "input_tokens", "items", "key_id", "kind",
+        "latency_ms", "matched", "model", "output_tokens", "prices_verified", "proposal_id", "provider",
+        "provider_status", "published", "purpose", "reason", "recipients", "rejected", "rows", "run_id", "scanned",
+        "scout_id", "seq", "snapshot_at", "source", "spent_usd", "sqlstate", "stage", "status", "step", "stop_reason",
+        "table", "task", "today", "trace_id", "transient", "tsa_time", "user_id", "variable", "verification_id",
+        "version", "will_retry_on",
     }
 )  # fmt: skip
 # ``error`` is an exception's type name, or a provider's reply with every address redacted and its length capped
@@ -129,3 +129,16 @@ def test_the_key_filter_redacts_personal_data_and_secrets(field: str) -> None:
 def test_reviewed_fields_pass_the_key_filter_unchanged() -> None:
     kept = {field for field in SAFE_FIELDS if not _redacted(field)}
     assert kept == SAFE_FIELDS
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens", "INPUT_TOKENS"])
+def test_token_counts_stay_readable(field: str) -> None:
+    """Review MINOR (P16-E1 round 1): the LLM ledger's token counts are counts, allowed by their whole key."""
+    assert not _redacted(field)
+
+
+@pytest.mark.parametrize("field", ["tokens", "input_token", "input_tokens_raw", "refresh_tokens", "tsa_url", "url"])
+def test_only_the_exact_count_keys_pass(field: str) -> None:
+    """The allow-list matches whole keys only: a key that merely contains an allowed one is still redacted, and a
+    configured URL stays redacted (it can carry credentials)."""
+    assert _redacted(field)

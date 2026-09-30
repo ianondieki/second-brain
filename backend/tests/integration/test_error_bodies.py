@@ -1,4 +1,4 @@
-"""REQ-SEC-04, REQ-FND-01 (P16-E1 items 1 and 6) on the real routes: a refused sign-in never echoes the password, the
+"""REQ-SEC-03, REQ-FND-01 (P16-E1 items 1 and 6) on the real routes: a refused sign-in never echoes the password, the
 address or the link token it was sent (FastAPI's 422 quotes each invalid value), and an unknown path answers like
 a hidden resource."""
 

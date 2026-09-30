@@ -6,7 +6,7 @@ One shape for every error the API answers (REQ-FND-01, P16-E1): ``{"detail": {"c
 documented exception. ``install`` makes the framework's own refusals (an unknown path, a method a path does not take,
 a body it cannot parse) and an unexpected failure (500) answer in the same shape: an unknown path's 404 is then the
 same body as a hidden resource's, so nothing tells the two apart. The 422 never quotes the value it refused (a
-password, a code, free text; REQ-SEC-04).
+password, a code, free text; REQ-SEC-03).
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ async def http_error(request: Request, exc: Exception) -> Response:
 
 
 # What a request-validation error keeps: where, what and why. Pydantic's ``input`` echoes the value sent (a password,
-# a code, free text) and ``ctx``/``url`` add nothing a client uses (REQ-SEC-04, P16-E1).
+# a code, free text) and ``ctx``/``url`` add nothing a client uses (REQ-SEC-03, P16-E1).
 VALIDATION_KEYS: Final = ("loc", "msg", "type")
 
 
