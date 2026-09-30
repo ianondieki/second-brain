@@ -15,6 +15,7 @@ import { AlertIcon } from "@/components/ui/icons";
 import { AdminShell } from "../../../AdminShell";
 import { PageStepUp } from "../../../research/PageStepUp";
 import { staffContext } from "../../../staff";
+import { stepUpStrings } from "../../../strings";
 import { CaseDecision } from "../../CaseDecision";
 import { decidedLine } from "../../CaseRow";
 import { getCase } from "../../data";
@@ -30,7 +31,7 @@ import {
   VISIBILITY_CHIP,
   type Case,
 } from "../../moderation";
-import { caseStrings, stepUpStrings } from "../../strings";
+import { caseStrings } from "../../strings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminModeration");
@@ -69,7 +70,8 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
     );
   const notAllowed = () =>
     plain(<EmptyState sentence={t("notAllowed")} action={t("notAllowedAction")} href="/admin" />);
-  const gone = () => plain(<EmptyState sentence={t("case.gone")} action={t("case.goneAction")} href={MODERATION_PATH} />);
+  const gone = () =>
+    plain(<EmptyState sentence={t("case.gone")} action={t("case.goneAction")} href={MODERATION_PATH} />);
   if (!ROLES.has(role)) return notAllowed();
   if (!isUuid(id)) return gone();
 

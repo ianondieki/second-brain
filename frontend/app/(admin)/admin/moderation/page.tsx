@@ -10,11 +10,11 @@ import { buttonClass } from "@/components/ui/Button";
 import { AdminShell } from "../AdminShell";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
+import { stepUpStrings } from "../strings";
 import { ViewTabs } from "../ViewTabs";
 import { CaseRow } from "./CaseRow";
 import { getQueue } from "./data";
 import { caseHref, moderationView, viewHref } from "./moderation";
-import { stepUpStrings } from "./strings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminModeration");
@@ -75,7 +75,11 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6 flex flex-col gap-6">
         {oldest ? (
-          <Link href={caseHref(oldest.id)} data-primary="" className={buttonClass("primary", "self-start no-underline")}>
+          <Link
+            href={caseHref(oldest.id)}
+            data-primary=""
+            className={buttonClass("primary", "self-start no-underline")}
+          >
             {t("reviewOldest")}
           </Link>
         ) : null}

@@ -211,7 +211,11 @@ describe("the queue", () => {
     const { container } = await queue();
     const empty = container.querySelector("[data-empty-state]")!;
     expect(empty.querySelector("p")!.textContent).toBe("No cases are waiting for a decision.");
-    expect(within(empty as HTMLElement).getAllByRole("link").map((a) => a.textContent)).toEqual(["See decided cases"]);
+    expect(
+      within(empty as HTMLElement)
+        .getAllByRole("link")
+        .map((a) => a.textContent),
+    ).toEqual(["See decided cases"]);
   });
 
   it("lists decided cases with their outcome and who decided them", async () => {

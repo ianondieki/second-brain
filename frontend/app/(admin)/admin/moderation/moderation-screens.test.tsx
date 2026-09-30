@@ -126,9 +126,7 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     const outcomes = [refused({ kind: "stepUp" }), approved];
     const decideImpl = vi.fn<typeof decideCase>(async () => outcomes.shift()!);
     const confirmImpl = vi.fn(async () => ({ ok: true as const }));
-    const { container } = renderWithIntl(
-      <CaseDecision {...props} decideImpl={decideImpl} confirmImpl={confirmImpl} />,
-    );
+    const { container } = renderWithIntl(<CaseDecision {...props} decideImpl={decideImpl} confirmImpl={confirmImpl} />);
     const status = region(container);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     const code = await screen.findByLabelText("Code from your app");

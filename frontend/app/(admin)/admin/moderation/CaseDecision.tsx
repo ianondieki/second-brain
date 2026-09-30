@@ -170,9 +170,7 @@ export function CaseDecision({
     body = (
       <div className="flex flex-col items-start gap-3">
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink" data-decided={decided.outcome}>
-          <Chip kind={decided.outcome === "approved" ? "completed" : "ended"}>
-            {t(`outcome.${decided.outcome}`)}
-          </Chip>
+          <Chip kind={decided.outcome === "approved" ? "completed" : "ended"}>{t(`outcome.${decided.outcome}`)}</Chip>
           <span>{decided.line}</span>
         </p>
         {back(false)}
@@ -268,15 +266,7 @@ export function CaseDecision({
   );
 }
 
-function NoticeLine({
-  tone,
-  text,
-  ...rest
-}: {
-  tone: keyof typeof TONE;
-  text: string;
-  "data-blocked"?: string;
-}) {
+function NoticeLine({ tone, text, ...rest }: { tone: keyof typeof TONE; text: string; "data-blocked"?: string }) {
   const { Icon, className } = TONE[tone];
   return (
     <p className="flex max-w-[65ch] items-start gap-2 text-ink" {...rest}>
