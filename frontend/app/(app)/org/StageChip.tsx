@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
+import { badgeBase } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 
 import type { InboxItem } from "./data";
@@ -27,11 +28,8 @@ export function StageChip({
   const t = useTranslations("inbox");
   const state: State = engagement?.state ?? "SUBMITTED";
   const tone = state === "SUBMITTED" ? "new" : ENDED.has(state) ? "ended" : "open";
-  const look = cn(
-    "inline-flex items-center gap-1.5 text-sm font-semibold",
-    tone === "ended" ? "text-ink-soft" : "text-jacaranda",
-    className,
-  );
+  // The Badge's shape and tones (components/ui/Badge.tsx): accent while open, neutral once ended.
+  const look = cn(badgeBase, tone === "ended" ? "text-ink-soft" : "text-jacaranda", className);
   const content = (
     <>
       <svg aria-hidden="true" focusable="false" width="10" height="10" viewBox="0 0 10 10" className="shrink-0">
@@ -53,7 +51,11 @@ export function StageChip({
         href={href}
         data-chip="stage"
         data-engagement={engagement.id}
-        className={cn(look, "-my-2 min-h-11 py-2 underline decoration-1 underline-offset-[0.2em] hover:decoration-2")}
+        // relative: above the row's stretched title link, so the chip opens the tracker, not the proposal.
+        className={cn(
+          look,
+          "relative -my-2 min-h-11 py-2 underline decoration-1 underline-offset-[0.2em] hover:decoration-2",
+        )}
       >
         {content}
       </Link>

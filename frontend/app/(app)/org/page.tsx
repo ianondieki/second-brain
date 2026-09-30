@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { HomeSummary } from "@/components/HomeSummary";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { buttonClass } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Section } from "@/components/ui/Section";
 import { needsMfaSetup } from "@/lib/auth/routing";
 
 import { getInbox, orgContext } from "./data";
@@ -72,18 +72,13 @@ async function InboxSummary({ memberships, org }: { memberships: Membership[]; o
     }
   }
   return (
-    <section aria-labelledby="home-inbox" className="mt-10 flex flex-col items-start gap-3 border-t border-line pt-6">
-      <h2 id="home-inbox" className="text-lg text-ink">
-        {t("inboxTitle")}
-      </h2>
-      {sentence ? <p className="max-w-[60ch] [overflow-wrap:anywhere] text-ink">{sentence}</p> : null}
-      <Link
-        href={inboxHref(memberships, org.org_id)}
-        data-primary=""
-        className={buttonClass("primary", "no-underline")}
-      >
-        {t("open")}
-      </Link>
-    </section>
+    <Section title={t("inboxTitle")} headingId="home-inbox" className="mt-12">
+      <div className="flex flex-col items-start gap-4">
+        {sentence ? <p className="max-w-[60ch] [overflow-wrap:anywhere] text-ink">{sentence}</p> : null}
+        <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
+          {t("open")}
+        </ButtonLink>
+      </div>
+    </Section>
   );
 }
