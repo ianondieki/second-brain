@@ -271,7 +271,15 @@ describe("the problem picker", () => {
     expect(screen.getByText("Developer-reported")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: `Link ${PROBLEM.title}` }));
     expect(props.onLinked).toHaveBeenCalledWith([
-      { id: PROBLEM.id, title: PROBLEM.title, source: "developer", label: "Developer-reported", niche: null },
+      {
+        id: PROBLEM.id,
+        title: PROBLEM.title,
+        source: "developer",
+        label: "Developer-reported",
+        niche: null,
+        seeded_example: false,
+        published_at: PROBLEM.published_at,
+      },
     ]);
   });
 
