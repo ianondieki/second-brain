@@ -128,8 +128,9 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 `backend/config/plans.yaml`). Amina has three published ideas (her third is the one held for moderation) and Brian has
 three, so both are at the cap: publishing another one is refused with "Published ideas your plan allows: 3. Hide one to
 publish this one." and an "Upgrade your plan" link to Plan & billing. There, "Upgrade to Pro (monthly)" opens the
-simulated M-Pesa checkout. A plan bought there stays until `make demo-reset`. The plan's other developer cap
-that the demo enforces is five pitches per idea; the plans page also lists "Recommendations with the reasons behind them" under
+simulated M-Pesa checkout. A plan bought there stays until `make demo-reset`. The demo also enforces five pitches per
+idea on the free plan and, when a paid LLM provider is set, a monthly LLM budget per account (USD 0.50 on Free); the
+plans page also lists "Recommendations with the reasons behind them" under
 Pro, but the code does not gate it, so Recommended for you shows its reasons on the free plan. The organisations are on
 the free organisation plan (Claimed: one weekly scout).
 
@@ -210,8 +211,9 @@ flowchart LR
     Worker["worker: procrastinate jobs<br/>provenance registration, reminders,<br/>scouts, research, notifications"] --> PG
     Worker --> S3
     Worker -->|SMTP| Mailpit
-    Migrate["migrate: runs once at start<br/>migrations, buckets, demo seed"] --> PG
+    Migrate["migrate: runs once at start<br/>migrations, buckets, signing key, demo seed"] --> PG
     Migrate --> S3
+    Migrate -->|"SMTP (the seed's first scout digest)"| Mailpit
     Worker -->|timestamps| TSA["Timestamp authority:<br/>DigiCert, FreeTSA fallback"]
     API -.->|optional| LLM["LLM providers:<br/>free OpenAI-compatible or Anthropic<br/>(the fake by default)"]
     Worker -.->|optional| LLM
@@ -245,7 +247,7 @@ writes no free text there); each answers with a fixed, labelled or rules-based r
 | Scout (Telco A's weekly scout, Scout matches, Express interest) | real: the matching rules over the niche, keywords and fit score, run by the worker; embeddings are the fake embedder. The "why this matches" sentence comes from an LLM when one is set; otherwise the match shows the rules' "Matched on" line, or the labelled "demo fallback" text |
 | Research cards (Staff console → Research) | the cards you see were written by hand in the seed from saved public excerpts and pushed through the real checks and staff approval; they are labelled "Seeded example for the demo (not a live AI result)". A run you start reads only the saved excerpts (nothing is fetched); with a provider an LLM drafts cards that staff must approve, without one the run ends flagged "demo fallback" with no card |
 | Discover's trending numbers | **simulated**: the seed writes the activity the counts are computed from, namely "scout matched" and "organisation interested" events from simulated organisations (no account) for four of the seeded proposals, steady for ten weeks and a burst this week for two of them, because a trend needs at least 3 distinct organisations and the demo has two verified ones. The trend arithmetic, the "why" chips and the sources are real. Real scout matches and interest add to the counts |
-| Recommended for you | real ranking over the seeded data, from the liked niches and county the seed set for each developer (and, for Amina only, her activity, because the seed records her consent) |
+| Recommended for you | real ranking over the seeded data, from the liked niches the seed set for each developer (the seed sets no developer county, so no county boost appears) and, for Amina only, her activity, because the seed records her consent |
 | Submission assistant | an LLM suggests a clearer teaser when a provider is set, after your consent for that sign-in session; without one it answers "no suggestion", labelled "demo fallback". Only demo accounts' text goes to a free provider |
 | Plans and Plan & billing | the plans and limits are read from `backend/config/plans.yaml`; the prices are placeholders shown as "Sample prices, not final" and are not a price list |
 | M-Pesa checkout ("Upgrade") | **simulated** by a fake payment provider (`PAYMENT_PROVIDER=fake`; the answer comes after `FAKE_PAYMENT_DELAY_SECONDS`, 4 by default): no phone prompt, no money moves, and the screen says so |
