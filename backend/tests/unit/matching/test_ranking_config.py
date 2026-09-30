@@ -47,8 +47,12 @@ BROKEN: list[tuple[Callable[[dict[str, Any]], object], str]] = [
     (lambda d: d["trending"].update(min_actors=2), "from 3 to 100"),  # never below the definer's floor
     (lambda d: d["trending"].update(window_days=401), "from 1 to 400"),
     (lambda d: d["trending"].update(baseline_days=200), "inside window_days"),
-    (lambda d: d["trending"]["problems"]["weights"].update(developer_save=1), "must name only"),
-    (lambda d: d["trending"]["projects"]["weights"].update(verified_view=3), "must name only"),
+    (lambda d: d["trending"]["problems"]["weights"].update(developer_save=1), "must name exactly"),
+    (lambda d: d["trending"]["projects"]["weights"].update(verified_view=3), "must name exactly"),
+    (lambda d: d["trending"]["problems"]["weights"].pop("scout_match"), "must name exactly"),  # no silent zero
+    (lambda d: d["trending"].update(baseline_days=14, baseline_step_days=21), "must not exceed baseline_days"),
+    (lambda d: d.update(version=True), "version 1"),
+    (lambda d: d.update(version=1.0), "version 1"),
     (lambda d: d["trending"]["problems"].update(half_life_days=0), "from 1 to 365"),
     (lambda d: d["trending"].update(young_share=1.5), "from 0 to 1"),
     (lambda d: d["discover"]["opportunity_gap"].update(decile=0), "from 0.01 to 1"),
