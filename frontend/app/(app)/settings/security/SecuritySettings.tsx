@@ -15,7 +15,7 @@ import { api } from "@/lib/api/client";
 import type { ErrorKey } from "@/lib/api/errors";
 
 import { ErrorNotice } from "./ErrorNotice";
-import { EnrolmentSteps, loadEnrolmentSteps, StepUpForm } from "./lazy";
+import { EnrolmentSteps, loadEnrolmentSteps, NewRecoveryCodes, StepUpForm } from "./lazy";
 import { usePasswordState } from "./PasswordState";
 import { reveal } from "./reveal";
 import { Steps } from "./Steps";
@@ -65,16 +65,41 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [stepUp, setStepUp] = useState(false);
+  // "Get new recovery codes" is open (its form, step-up or the new codes) in place of the button that opens it.
+  const [renewing, setRenewing] = useState(false);
   // What just happened (one notice at a time) and an API error: each takes focus when it appears after an action.
   const noticeRef = useRef<HTMLDivElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   // Without a password, enrolment needs a fresh sign-in instead; the flag is shared with the Password section.
   const { hasPassword, markPasswordSet, setEnrolling } = usePasswordState();
 
-  /** The setup steps hide the Password section; it comes back when they end (cancelled, restarted or left). */
+  /**
+   * The setup steps hide the Password section; it comes back when they end (cancelled, restarted or left). New
+   * recovery codes, a task of the "on" screen, end whenever the screen changes.
+   */
   function show(next: Phase) {
     setPhase(next);
+    setRenewing(false);
     setEnrolling(next.name === "setup");
+  }
+
+  /** Opens "Get new recovery codes": one task at a time, so turning off and the Password section step aside. */
+  function openRenewal() {
+    setError(null);
+    setStepUp(false);
+    setRenewing(true);
+    setEnrolling(true);
+  }
+
+  /** Cancelled, or the new codes saved: back to the button that opened it, with focus on it. */
+  function closeRenewal() {
+    reveal(
+      () => {
+        setRenewing(false);
+        setEnrolling(false);
+      },
+      () => document.getElementById("new-codes"),
+    );
   }
 
   /**
@@ -181,7 +206,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
         {notice?.key === "codesNotShown" ? (
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
         ) : null}
-        {required ? (
+        {renewing ? null : required ? (
           <p className="text-ink-soft">{t("mandatory")}</p>
         ) : stepUp ? (
           <Suspense fallback={null}>
@@ -192,6 +217,36 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             {busy ? t("turningOff") : t("turnOff")}
           </Button>
         )}
+        <section
+          aria-labelledby="recovery-heading"
+          className="flex w-full flex-col items-start gap-4 border-t border-line pt-6"
+        >
+          <h3 id="recovery-heading" className="text-base text-ink">
+            {t("recoveryTitle")}
+          </h3>
+          {renewing ? (
+            <Suspense fallback={null}>
+              <NewRecoveryCodes
+                email={email}
+                onClose={closeRenewal}
+                onReplaced={() => setNotice(null)}
+                onTwoStepOff={() => backToStart("totp_not_enabled", null)}
+              />
+            </Suspense>
+          ) : (
+            <>
+              <p className="text-ink-soft">{t("recoveryLead")}</p>
+              <Button
+                id="new-codes"
+                // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
+                variant={notice?.key === "codesNotShown" ? "primary" : "secondary"}
+                onClick={openRenewal}
+              >
+                {t("newCodes")}
+              </Button>
+            </>
+          )}
+        </section>
         <Link href={homeHref} className={textLinkClass}>
           {t("back")}
         </Link>

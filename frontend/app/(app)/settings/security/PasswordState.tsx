@@ -7,7 +7,7 @@ interface PasswordState {
   hasPassword: boolean;
   /** Called when a password is saved here, or when the API answers current_password_required. Never reverts. */
   markPasswordSet: () => void;
-  /** Two-step setup (steps 1-3) is on screen: the Password section steps aside until it ends. */
+  /** Two-step setup (steps 1-3) or new recovery codes are on screen: the Password section steps aside until they end. */
   enrolling: boolean;
   setEnrolling: (enrolling: boolean) => void;
 }

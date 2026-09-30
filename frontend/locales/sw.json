@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
+    "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes*, security.gettingCodes, security.cancelNewCodes, errors.totp_not_enabled, mfa.recoveryLead [[SW-REVIEW]] draft Swahili",
     "review": "[[COPY-REVIEW]] G2/G5 [[SW-REVIEW]] draft Swahili: native-speaker review before it goes live at G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim [[SW-REVIEW]] draft Swahili",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing [[SW-REVIEW]] draft Swahili",
@@ -130,7 +131,7 @@
   "mfa": {
     "title": "Weka msimbo wako",
     "lead": "Fungua programu yako ya uthibitishaji na uweke msimbo wa sasa wa tarakimu 6.",
-    "recoveryLead": "Weka mojawapo ya misimbo ya kurejesha uliyohifadhi ulipowasha kuingia kwa hatua mbili.",
+    "recoveryLead": "Weka mojawapo ya misimbo ya kurejesha uliyohifadhi.",
     "code": "Msimbo wa tarakimu 6",
     "recovery": "Msimbo wa kurejesha",
     "recoveryHint": "Kila msimbo unafanana na k7mq-x2pd na hufanya kazi mara moja.",
@@ -180,6 +181,15 @@
     "turningOff": "Inazima…",
     "stepUp": "Ili kukizima, weka msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji.",
     "stepUpSubmit": "Thibitisha na uzime",
+    "recoveryTitle": "Misimbo ya kurejesha",
+    "recoveryLead": "Ikiwa umepoteza misimbo yako ya kurejesha, au hukuwahi kuiona, pata mipya. Misimbo yako ya zamani itaacha kufanya kazi.",
+    "newCodes": "Pata misimbo mipya ya kurejesha",
+    "newCodesWarning": "Misimbo yako ya zamani ya kurejesha itaacha kufanya kazi mara tu mipya itakapoundwa.",
+    "gettingCodes": "Inapata misimbo…",
+    "cancelNewCodes": "Ghairi",
+    "newCodesStepUp": "Ili kupata misimbo mipya, weka msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji.",
+    "newCodesStepUpSubmit": "Thibitisha na upate misimbo mipya",
+    "newCodesReady": "Misimbo yako mipya ya kurejesha iko tayari. Misimbo yako ya zamani haifanyi kazi tena.",
     "back": "Rudi mwanzo"
   },
   "password": {

@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP8c": "[[COPY-REVIEW]] P8 part 3 (REQ-PROP-03, REQ-REPO-01, REQ-SEC-01): nav.organisation, nav.inbox, home.orgLead, home.orgLeadNoName, orgHome.*, inbox.*, orgProposal.*; stage labels reuse ideaFields.maturityValue.*; orgProposal.viewNote uses the docs/spec/04 4.2 approved logging phrasing; the NDA text and the viewer-logging notice come from the API verbatim; orgProposal.ndaLead is legal wording held under D-39 (DECISIONS-NEEDED) until the advocate's review",
+    "reviewP17f": "[[COPY-REVIEW]] P17-F (REQ-AUTH-01 follow-ups 7-8): security.codesNotShown, security.recoveryTitle, security.recoveryLead, security.newCodes*, security.gettingCodes, security.cancelNewCodes, errors.totp_not_enabled, mfa.recoveryLead",
     "review": "[[COPY-REVIEW]] G2/G5",
     "reviewP8": "[[COPY-REVIEW]] P8 (REQ-PROV-02, REQ-DIR-01): nav.*, companies.*, verify.*, verifyFile.*; verify.evidence is the docs/spec/06 6.4 certificate footer verbatim",
     "reviewP8b": "[[COPY-REVIEW]] P8 part 2 (REQ-PROP-01): nav.ideas, ideaFields.*, ideas.*, ideaDelete.*, ideaEditor.*; confidentialNotice uses the docs/spec/04 4.2 approved phrasing",
@@ -130,7 +131,7 @@
   "mfa": {
     "title": "Enter your code",
     "lead": "Open your authenticator app and enter the current 6‑digit code.",
-    "recoveryLead": "Enter one of the recovery codes you saved when you turned on two-step sign-in.",
+    "recoveryLead": "Enter one of the recovery codes you saved.",
     "code": "6-digit code",
     "recovery": "Recovery code",
     "recoveryHint": "Each code looks like k7mq-x2pd and works once.",
@@ -180,6 +181,15 @@
     "turningOff": "Turning off…",
     "stepUp": "To turn it off, enter the current code from your authenticator app.",
     "stepUpSubmit": "Confirm and turn off",
+    "recoveryTitle": "Recovery codes",
+    "recoveryLead": "If you have lost your recovery codes, or never saw them, get new ones. Your old codes then stop working.",
+    "newCodes": "Get new recovery codes",
+    "newCodesWarning": "Your old recovery codes stop working as soon as the new ones are made.",
+    "gettingCodes": "Getting codes…",
+    "cancelNewCodes": "Cancel",
+    "newCodesStepUp": "To get new codes, enter the current code from your authenticator app.",
+    "newCodesStepUpSubmit": "Confirm and get new codes",
+    "newCodesReady": "Your new recovery codes are ready. Your old codes no longer work.",
     "back": "Back to home"
   },
   "password": {
