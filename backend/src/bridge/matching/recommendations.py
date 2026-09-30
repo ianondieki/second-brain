@@ -58,13 +58,15 @@ async def developer(db: AsyncSession, user_id: UUID, cfg: RankingConfig) -> Deve
         return base
     r = cfg.ranker
     texts = [profile.headline or "", profile.bio or ""]
+    proposal_texts = []
     for row in (await db.execute(_RECENT, {"user": user_id, "n": r.recent_proposals})).all():
-        texts += [row.title or "", row.problem_statement or "", row.summary or ""]
+        proposal_texts += [row.title or "", row.problem_statement or "", row.summary or ""]
     started = {row.niche_id: int(row.n) for row in (await db.execute(_STARTED, {"user": user_id})).all()}
     done = {row.niche_id: int(row.n) for row in (await db.execute(_DONE, {"user": user_id})).all()}
     track = {niche: (count, min(done.get(niche, 0), count)) for niche, count in started.items()}
-    words = frozenset(keywords(" ".join(texts), r.min_keyword_length))
-    return Developer(liked_ids, parents, profile.county_code, True, words, track)
+    from_proposals = frozenset(keywords(" ".join(proposal_texts), r.min_keyword_length))
+    words = frozenset(keywords(" ".join(texts), r.min_keyword_length)) | from_proposals
+    return Developer(liked_ids, parents, profile.county_code, True, words, track, from_proposals)
 
 
 async def recommendations(db: AsyncSession, cfg: RankingConfig, user_id: UUID) -> RecommendationsOut:
