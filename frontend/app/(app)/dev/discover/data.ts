@@ -40,19 +40,20 @@ export async function opportunityGap(query: DiscoverQuery): Promise<OpportunityG
 }
 
 /**
- * "Recommended for you", or null when they cannot be shown (no developer profile, or the ranker failed): Home still
- * renders, and says so, rather than failing as a whole.
+ * "Recommended for you", or null when they cannot be shown (no developer profile, a failing ranker, no answer in
+ * time, the network): Home still renders, and says so, rather than failing as a whole. Only a lost session (401)
+ * leaves Home, to sign in again.
  */
 export async function recommendations(): Promise<Recommendations | null> {
+  let answer;
   try {
-    const { data, response } = await serverApi().GET("/api/me/recommendations", await options());
-    if (data) return data;
-    if (response.status === 401) redirect("/login");
+    answer = await serverApi().GET("/api/me/recommendations", await options());
+  } catch {
     return null;
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") return null;
-    throw error; // includes Next's redirect signal
   }
+  if (answer.data) return answer.data;
+  if (answer.response.status === 401) redirect("/login");
+  return null;
 }
 
 /** The developer's liked niches with the allowed range; null without a developer profile. */
