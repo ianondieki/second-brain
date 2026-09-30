@@ -49,6 +49,13 @@ const REJECT_ID = "case-reject";
 const CONFIRM_ID = "case-reject-confirm";
 const QUESTION_ID = "case-reject-question";
 
+/** Refusals after which the case itself is different from the page: it is fetched again. */
+const REFRESH_AFTER: ReadonlySet<RefusalCode> = new Set([
+  "already_decided",
+  "subject_gone",
+  "cannot_approve_vulnerability",
+]);
+
 function focusSoon(id: string) {
   requestAnimationFrame(() => document.getElementById(id)?.focus());
 }
@@ -131,7 +138,8 @@ export function CaseDecision({
     say({ tone: "error", key: `refusal.${refusal.code}` });
     const next = refusalNext(refusal.code);
     if (next) setAfter(next);
-    if (refusal.code === "already_decided" || refusal.code === "cannot_approve_vulnerability") router.refresh();
+    // The page's own state changed with the refusal: fetch it again (the decision, the header's tag, the choices).
+    if (REFRESH_AFTER.has(refusal.code)) router.refresh();
   }
 
   const region = (

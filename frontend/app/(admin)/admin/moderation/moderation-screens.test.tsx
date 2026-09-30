@@ -170,7 +170,8 @@ describe("CaseDecision (REQ-MOD-01)", () => {
 
   it.each([
     ["not_found", "This case is no longer in the queue."],
-    ["own_content", "This is your own content, or it no longer exists, so you cannot decide it."],
+    ["own_content", "This is your own content, so you cannot decide it."],
+    ["subject_gone", "What this case is about no longer exists, so there is nothing to decide."],
     ["unsupported_subject", "Cases of this kind are decided from their own queue, not here."],
     ["forbidden", "Your staff role cannot decide moderation cases."],
   ] as const)("leaves only the way back after %s", async (code, sentence) => {
@@ -182,6 +183,8 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     const back = screen.getByRole("link", { name: "Back to Moderation" });
     expect(back.hasAttribute("data-primary")).toBe(true);
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
+    // A subject that is gone changes the page itself (its tag, its choices): it is fetched again.
+    expect(router.refresh).toHaveBeenCalledTimes(code === "subject_gone" ? 1 : 0);
   });
 
   it("leaves only Reject, as the primary action, when the text screens as a vulnerability", async () => {

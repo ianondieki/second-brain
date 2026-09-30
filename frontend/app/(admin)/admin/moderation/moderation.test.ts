@@ -107,6 +107,7 @@ describe("decision refusals", () => {
     });
     expect(refusalOf(409, error("unsupported_subject"))).toEqual({ kind: "refusal", code: "unsupported_subject" });
     expect(refusalOf(403, error("own_content"))).toEqual({ kind: "refusal", code: "own_content" });
+    expect(refusalOf(409, error("subject_gone"))).toEqual({ kind: "refusal", code: "subject_gone" });
     expect(refusalOf(403, error("forbidden"))).toEqual({ kind: "refusal", code: "forbidden" });
     expect(refusalOf(403, undefined)).toEqual({ kind: "refusal", code: "forbidden" });
     expect(refusalOf(422, { detail: [{ loc: ["body", "decision"] }] })).toEqual({ kind: "refusal", code: "generic" });
@@ -122,6 +123,7 @@ describe("decision refusals", () => {
     expect(refusalNext("already_decided")).toBe("back");
     expect(refusalNext("not_found")).toBe("back");
     expect(refusalNext("own_content")).toBe("back");
+    expect(refusalNext("subject_gone")).toBe("back");
     expect(refusalNext("unsupported_subject")).toBe("back");
     expect(refusalNext("forbidden")).toBe("back");
     expect(refusalNext("cannot_approve_vulnerability")).toBe("rejectOnly");
@@ -134,6 +136,7 @@ describe("decision refusals", () => {
       "already_decided",
       "not_found",
       "own_content",
+      "subject_gone",
       "cannot_approve_vulnerability",
       "unsupported_subject",
       "forbidden",

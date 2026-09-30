@@ -116,6 +116,7 @@ const REFUSALS = [
   "already_decided",
   "not_found",
   "own_content",
+  "subject_gone",
   "cannot_approve_vulnerability",
   "unsupported_subject",
   "forbidden",

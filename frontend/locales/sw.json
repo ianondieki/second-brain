@@ -983,7 +983,8 @@
     "refusal": {
       "already_decided": "Mtu mwingine ameamua kesi hii sasa hivi. Uamuzi wake umeonyeshwa hapa chini.",
       "not_found": "Kesi hii haiko tena kwenye foleni.",
-      "own_content": "Haya ni maudhui yako mwenyewe, au hayapo tena, kwa hivyo huwezi kuyaamua.",
+      "own_content": "Haya ni maudhui yako mwenyewe, kwa hivyo huwezi kuyaamua.",
+      "subject_gone": "Kinachohusu kesi hii hakipo tena, kwa hivyo hakuna cha kuamua.",
       "cannot_approve_vulnerability": "Maandishi haya yanaeleza udhaifu wa usalama, kwa hivyo hayawezi kuidhinishwa. Yakatae badala yake.",
       "unsupported_subject": "Kesi za aina hii huamuliwa kutoka kwenye foleni yake, si hapa.",
       "forbidden": "Jukumu lako la wafanyakazi haliwezi kuamua kesi za udhibiti.",
