@@ -88,10 +88,10 @@ def nairobi_day(moment: datetime) -> date:
     return moment.astimezone(NAIROBI).date()
 
 
-def once_per_actor_and_day(rows: Iterable[tuple[Hashable, Hashable, date]]) -> dict[tuple[Hashable, date], int]:
+def once_per_actor_and_day[A: Hashable, I: Hashable](rows: Iterable[tuple[A, I, date]]) -> dict[tuple[I, date], int]:
     """``(actor, item, day)`` facts -> events per ``(item, day)``, each actor counted once per item and day."""
     seen = {(actor, item, day) for actor, item, day in rows}
-    counts: dict[tuple[Hashable, date], int] = defaultdict(int)
+    counts: dict[tuple[I, date], int] = defaultdict(int)
     for _actor, item, day in seen:
         counts[(item, day)] += 1
     return dict(counts)
