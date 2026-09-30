@@ -13,6 +13,7 @@ import {
 } from "./support/pitch-scene";
 import { checkScreen } from "./support/screen";
 import { makeD1 } from "./support/verification";
+import { loginReturningTo } from "./support/login";
 
 // REQ-PROP-03 (F2 picker, AC-PROP-1/a from the developer's side), REQ-DIR-04 (held tags, AC-DIR-1's sentence),
 // REQ-PROV-03 and REQ-REPO-03 ("Who has seen this") against the compose stack, in both projects (360 px and desktop):
@@ -25,7 +26,7 @@ const E0_SENTENCE = (name: string) =>
 
 test("signed-out visits to the picker go to the login page", async ({ page }) => {
   await page.goto("/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3/pitch");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(loginReturningTo("/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3/pitch"));
 });
 
 /** Searches the picker by name and ticks the organisation's row. */

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { signUpDeveloper } from "./support/accounts";
 import { checkScreen, expectEmptyState } from "./support/screen";
+import { loginReturningTo } from "./support/login";
 
 // REQ-DIR-01 (F1): Developer › Companies against the compose stack with the provisional directory seeded
 // (`python -m bridge.seed`, dev and test only), in both projects (360 px and desktop).
@@ -14,7 +15,7 @@ const rows = (page: Page) => page.locator("main article");
 test("signed-out visits to the directory go to the login page", async ({ page }) => {
   for (const path of ["/dev/companies", "/dev/companies/01a0ecd8-2e13-71dd-809a-2e817be8fcf3"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path));
   }
 });
 

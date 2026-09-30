@@ -4,7 +4,9 @@ import { signUpDeveloper } from "./support/accounts";
 import { pathOf, waitForMessage } from "./support/mailpit";
 import { apiPost, e2OrgMember, OWNER_DATABASE_URL, publishIdea, runTag } from "./support/pitch-scene";
 import { checkScreen } from "./support/screen";
+import { logInWithPassword, PASSWORD, twoStepDeveloper } from "./support/two-step-account";
 import { makeD1 } from "./support/verification";
+import { loginReturningTo } from "./support/login";
 
 // P16 (REQ-CON-01, REQ-NOT-03, REQ-UX-01): the two pages every email footer links to, "Manage notifications"
 // (/settings/notifications) and "Help" (/help), opened from an email and from the avatar menu; a consent saved on the
@@ -48,7 +50,24 @@ test("a visitor can read help, and the notification settings ask them to log in"
   await checkScreen(page);
 
   await page.locator("[data-help-section='reminders']").getByRole("link", { name: "Notifications" }).click();
-  await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
+  await expect(page).toHaveURL(loginReturningTo("/settings/notifications"), SERVER_STEP);
+});
+
+// P16-A open item 2 (P16-C1): a signed-out reader opening "Manage notifications" from an email signs in, through the
+// second factor, and lands back on the settings, not on their home.
+test("a signed-out reader signs in, both steps, and lands back on the notification settings", async ({ page }) => {
+  const person = await twoStepDeveloper(page, "Wairimu Kamau");
+  await page.goto("/settings/notifications");
+  await expect(page).toHaveURL(loginReturningTo("/settings/notifications"), SERVER_STEP);
+  await checkScreen(page, { strict: true });
+  await logInWithPassword(page, person, PASSWORD);
+  await expect(page).toHaveURL(/\/auth\/mfa\?next=%2Fsettings%2Fnotifications$/, SERVER_STEP);
+  await checkScreen(page, { strict: true });
+  await page.locator('form[data-hydrated="true"]').first().waitFor(SERVER_STEP);
+  await page.getByLabel("6-digit code").fill(await person.code());
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/notifications$/, SERVER_STEP);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications");
 });
 
 test.describe("a signed-in developer", () => {
@@ -96,7 +115,7 @@ test.describe("a signed-in developer", () => {
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
     await page.goto("/settings/notifications");
-    await expect(page).toHaveURL(/\/login$/, SERVER_STEP);
+    await expect(page).toHaveURL(loginReturningTo("/settings/notifications"), SERVER_STEP);
   });
 
   test("gets one fixed sentence when the wording changed while the page was open (409)", async ({ page }) => {

@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { signUpDeveloper } from "./support/accounts";
 import { checkWidths, publishedProblemTitle, seededTrend, shot } from "./support/discover-scene";
 import { expectEmptyState } from "./support/screen";
+import { loginReturningTo } from "./support/login";
 
 // REQ-TREND-02, REQ-PERS-01, REQ-PERS-03 (P12-F): the M2 walkthrough's step 4 against the compose stack with the demo
 // seed (as the CI e2e job runs it): a new developer picks liked niches, sees Discover with trending problems, their
@@ -37,7 +38,7 @@ async function expectLabelled(cards: Locator) {
 test("signed-out visits to Discover and the niches page go to the login page", async ({ page }) => {
   for (const path of ["/dev/discover", "/dev/discover?view=gap", "/dev/discover/niches"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path));
   }
 });
 

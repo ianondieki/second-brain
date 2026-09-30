@@ -1,19 +1,17 @@
 import { expect, test } from "@playwright/test";
 
 import { signUpDeveloper } from "./support/accounts";
-import { DEMO_PASSWORD } from "./support/moderation-scene";
+import { logInWithPassword, PASSWORD, twoStepDeveloper } from "./support/two-step-account";
 
 // P16-B fix round 1 (REQ-UX-02, REQ-UX-03): no route-level loading states. A signed-in page renders in one server pass,
 // so a session still owing its second factor gets a real 307 to /auth/mfa; in-app navigation shows a small hint on the
 // tapped link (LinkPending) while the next page is on its way.
 
 test("a session still owing its second factor gets a 307 to the second-factor page", async ({ page, baseURL }) => {
-  // Every demo account has two-step sign-in: the password alone leaves the session pending.
+  // Its own two-step account (P16-B review MINOR 1): the password alone leaves the session pending.
+  const person = await twoStepDeveloper(page);
   await page.goto("/login");
-  await page.locator('form[data-hydrated="true"]').first().waitFor({ timeout: 20_000 });
-  await page.getByLabel("Email address").fill("amina@developers.example");
-  await page.getByLabel("Password", { exact: true }).fill(DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await logInWithPassword(page, person, PASSWORD);
   await expect(page).toHaveURL(/\/auth\/mfa$/, { timeout: 20_000 });
   const response = await page.request.get("/dev", { maxRedirects: 0 });
   expect(response.status()).toBe(307);
@@ -62,4 +60,16 @@ test("the Discover view tabs fit the width without scrolling sideways", async ({
     clientWidth: el.clientWidth,
   }));
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
+
+// P16-C1 (P16-B ux-review): after a client navigation, focus is on the new page's title, not on <body>.
+test("after a tapped section loads, focus is on its page title", async ({ page }) => {
+  await signUpDeveloper(page, "Chebet Rono");
+  await page.getByRole("navigation", { name: "Developer" }).getByRole("link", { name: "My ideas" }).click();
+  await expect(page).toHaveURL(/\/dev\/ideas$/, { timeout: 20_000 });
+  const title = page.getByRole("heading", { level: 1 });
+  await expect(title).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(title).not.toBeFocused();
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
 });

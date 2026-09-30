@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { signUpDeveloper } from "./support/accounts";
 import { checkScreen, expectEmptyState } from "./support/screen";
 import { makeD1, OWNER_DATABASE_URL } from "./support/verification";
+import { loginReturningTo } from "./support/login";
 
 // REQ-PROP-01 (F2) and REQ-PROV-02: Developer › My ideas against the compose stack, in both projects (360 px and
 // desktop): the list, the three-step editor with autosave, the Tier-1 sanitiser shown inline, attachments (the fake
@@ -42,7 +43,7 @@ async function fillStepOne(page: Page, title: string) {
 test("signed-out visits to My ideas go to the login page", async ({ page }) => {
   for (const path of ["/dev/ideas", "/dev/ideas/new", "/dev/ideas/01a0ecd8-2e13-71dd-809a-2e817be8fcf3"]) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/login$/);
+    await expect(page, path).toHaveURL(loginReturningTo(path));
   }
 });
 

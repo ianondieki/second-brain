@@ -22,9 +22,10 @@ export async function settled(page: Page) {
  * (AC-UX-4), at most one primary action (AC-UX-2), and no horizontal scroll (AC-UX-1, at 360 px in mobile-360).
  * `exclude`: selectors axe leaves out, for frames that run no script (axe cannot run inside them and would wait for
  * each one), such as the API's marked Tier-2 page in its sandbox. The caller checks what axe then skips (for a frame,
- * its title).
+ * its title). `strict`: no axe violation of any impact at all (minor and moderate too), the P16 polish's rule for the
+ * screens it finished (docs/platform/tasks/P16-C1.md, item 7).
  */
-export async function checkScreen(page: Page, { exclude = [] }: { exclude?: string[] } = {}) {
+export async function checkScreen(page: Page, { exclude = [], strict = false }: { exclude?: string[]; strict?: boolean } = {}) {
   await settled(page);
   let axe = new AxeBuilder({ page }).withTags([
     "wcag2a",
@@ -36,11 +37,13 @@ export async function checkScreen(page: Page, { exclude = [] }: { exclude?: stri
   ]);
   for (const selector of exclude) axe = axe.exclude(selector);
   const results = await axe.analyze();
-  const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  const failing = strict
+    ? results.violations
+    : results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(
-    serious,
+    failing,
     JSON.stringify(
-      serious.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })),
+      failing.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })),
       null,
       2,
     ),
