@@ -6587,10 +6587,23 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
           }
         },
         "required": [
-          "items"
+          "items",
+          "next_cursor"
         ],
         "title": "ProblemPage",
         "type": "object"
@@ -24789,15 +24802,22 @@
             }
           },
           {
+            "description": "The previous page's next_cursor; omit it for the first",
             "in": "query",
-            "name": "offset",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 0,
-              "maximum": 10000,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
             }
           }
         ],

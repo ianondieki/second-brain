@@ -29,6 +29,7 @@ from bridge.directory.models import Niche
 from bridge.directory.service import niche_label
 from bridge.ids import uuid7
 from bridge.models.enums import ModerationState, ProblemSource, ProblemStatus
+from bridge.pagination import MomentCursor
 from bridge.problems.models import Problem, ProblemCitation
 from bridge.proposals.models import ProposalProblem
 from bridge.proposals.schemas import NicheOut, ProblemRef
@@ -135,12 +136,13 @@ async def list_published(
     niche: str | None,
     q: str | None,
     limit: int,
-    offset: int,
+    after: MomentCursor | None = None,
     country: str | None = None,
     county: str | None = None,
 ) -> list[tuple[ProblemRef, str, datetime | None]]:
-    """Published, clear problems (picker), newest first: (reference, statement, published_at). ``country`` and
-    ``county`` match the problem's own region exactly (AC-RES-4)."""
+    """Published, clear problems (picker), newest first (an unknown publication day last), after the ``after`` row
+    (``bridge.pagination``): (reference, statement, published_at). ``country`` and ``county`` match the problem's own
+    region exactly (AC-RES-4)."""
     stmt = _with_niche(select(*_COLUMNS, Problem.statement)).where(_published_and_clear())
     if niche is not None:
         stmt = stmt.where(or_(Niche.slug == niche, _Parent.slug == niche))
@@ -151,7 +153,17 @@ async def list_published(
     if q is not None:
         pattern = f"%{_escape_like(q)}%"
         stmt = stmt.where(or_(Problem.title.ilike(pattern, escape="\\"), Problem.statement.ilike(pattern, escape="\\")))
-    stmt = stmt.order_by(Problem.published_at.desc().nulls_last(), Problem.id.desc()).limit(limit).offset(offset)
+    if after is not None and after.at is None:
+        stmt = stmt.where(Problem.published_at.is_(None), Problem.id < after.id)
+    elif after is not None:
+        stmt = stmt.where(
+            or_(
+                Problem.published_at.is_(None),
+                Problem.published_at < after.at,
+                and_(Problem.published_at == after.at, Problem.id < after.id),
+            )
+        )
+    stmt = stmt.order_by(Problem.published_at.desc().nulls_last(), Problem.id.desc()).limit(limit)
     return [(_ref(row[:_REF_WIDTH]), row[_REF_WIDTH], row.published_at) for row in (await db.execute(stmt)).all()]
 
 

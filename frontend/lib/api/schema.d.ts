@@ -4887,6 +4887,11 @@ export interface components {
         ProblemPage: {
             /** Items */
             items: components["schemas"]["ProblemCard"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
         };
         /** ProblemRef */
         ProblemRef: {
@@ -18147,7 +18152,8 @@ export interface operations {
                 county?: string | null;
                 q?: string | null;
                 limit?: number;
-                offset?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
