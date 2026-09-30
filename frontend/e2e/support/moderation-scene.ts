@@ -35,7 +35,8 @@ export class DemoStaff extends Person {
       }),
     );
     const now = Math.floor(Date.now() / 30_000);
-    const counter = Math.max(this.last + 1, stored + 1, now - 1);
+    // Never the window before the current one (see Person.code in tracker-scene).
+    const counter = Math.max(this.last + 1, stored + 1, now);
     if (counter > now + 1) await new Promise((r) => setTimeout(r, (counter - now - 1) * 30_000 + 1_000));
     this.last = counter;
     return totp(this.secret, { time: counter * 30_000 });
