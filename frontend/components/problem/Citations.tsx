@@ -24,7 +24,7 @@ export async function Citations({ sources, labelledBy }: { sources: readonly Cit
               <span className="font-semibold [overflow-wrap:anywhere] text-ink">{publisher}</span>
               <span className="inline-flex items-center gap-1 text-sm font-medium text-ink-soft">
                 {type === "official" ? <CheckIcon className="size-4 text-ok" /> : null}
-                {t("sourceType", { type })}
+                {t(`sourceType.${type}`)}
               </span>
               <span className="text-sm text-ink-soft">
                 {source.published_date

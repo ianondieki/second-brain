@@ -75,10 +75,11 @@ export function safeHttpsUrl(url: string): string | null {
 }
 
 /** The source types the card names in words (docs/spec/06 6.5 quality tiers, plus a verified organisation's brief). */
-const SOURCE_TYPES = new Set(["official", "filing", "news", "ngo", "blog", "social", "verified_org"]);
+const SOURCE_TYPES = ["official", "filing", "news", "ngo", "blog", "social", "verified_org"] as const;
+export type SourceType = (typeof SOURCE_TYPES)[number] | "other";
 
-export function sourceType(value: string | null | undefined): string {
-  return value && SOURCE_TYPES.has(value) ? value : "other";
+export function sourceType(value: string | null | undefined): SourceType {
+  return (SOURCE_TYPES as readonly string[]).includes(value ?? "") ? (value as SourceType) : "other";
 }
 
 /** The problem page's address (P12-F links here from Discover). */

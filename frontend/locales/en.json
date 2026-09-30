@@ -1467,7 +1467,16 @@
     "namedOrgs": "Organisations named",
     "sourcesHeading": "Sources",
     "sourcesCount": "{count, plural, one {# source, quoted as published} other {# sources, quoted as published}}",
-    "sourceType": "{type, select, official {Official} filing {Filing} news {News} ngo {NGO} blog {Blog} social {Social media} verified_org {Verified organisation} other {Source}}",
+    "sourceType": {
+      "official": "Official",
+      "filing": "Filing",
+      "news": "News",
+      "ngo": "NGO",
+      "blog": "Blog",
+      "social": "Social media",
+      "verified_org": "Verified organisation",
+      "other": "Source"
+    },
     "publishedOn": "Published {date}",
     "noDate": "No publication date",
     "unknownPublisher": "Unnamed publisher",
