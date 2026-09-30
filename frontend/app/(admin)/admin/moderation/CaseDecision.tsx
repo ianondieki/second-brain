@@ -8,6 +8,7 @@ import { useStrings } from "@/components/ClientStrings";
 import { Button, buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
+import { LinkPending } from "@/components/ui/LinkPending";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -168,6 +169,8 @@ export function CaseDecision({
         className={primary ? buttonClass("primary", "no-underline") : standaloneLinkClass}
       >
         {t("decision.back")}
+        {/* In-app navigation feedback, as on every back link (docs/platform/design/p16-design-system.md, Loading). */}
+        <LinkPending className="ml-2" />
       </Link>
     </div>
   );

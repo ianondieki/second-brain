@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 
 import { badgeBase } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
+import { LinkPending } from "@/components/ui/LinkPending";
 
 import type { InboxItem } from "./data";
 import { stageKey } from "./labels";
@@ -58,6 +59,7 @@ export function StageChip({
         )}
       >
         {content}
+        <LinkPending className="ml-1" />
       </Link>
     );
   }
