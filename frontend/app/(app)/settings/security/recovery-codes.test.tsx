@@ -311,6 +311,51 @@ describe("getting new recovery codes without a password on file", () => {
 });
 
 describe("RecoveryCodeList", () => {
+  const CLEARED =
+    "Your recovery codes are no longer shown on this page. If you did not save them, get new recovery codes.";
+
+  it.each([
+    ["pagehide (the page is about to enter the back-forward cache)", () => new PageTransitionEvent("pagehide", { persisted: true })],
+    ["pagehide (the page unloads)", () => new PageTransitionEvent("pagehide", { persisted: false })],
+    ["pageshow from the back-forward cache", () => new PageTransitionEvent("pageshow", { persisted: true })],
+  ])("removes the codes from the page on %s", (_, event) => {
+    const { container } = renderWithIntl(<RecoveryCodeList codes={CODES} />);
+    window.dispatchEvent(event());
+    // At once (flushSync), since a page is frozen for the cache right after its pagehide handlers.
+    expect(screen.queryByTestId("recovery-codes")).toBeNull();
+    for (const code of CODES) expect(container.textContent).not.toContain(code);
+    expect(screen.getByText(CLEARED)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Copy codes" })).toBeNull();
+  });
+
+  it("keeps the codes on a first pageshow (not from the cache)", () => {
+    renderWithIntl(<RecoveryCodeList codes={CODES} />);
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false }));
+    expect(screen.getByTestId("recovery-codes")).toBeTruthy();
+  });
+
+  it("clears the codes at the end of setup too", async () => {
+    mocks.post.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/api/auth/totp/confirm"
+          ? NEW_CODES
+          : ok({ secret: "JBSWY3DPEHPK3PXP", otpauth_uri: "otpauth://totp/x?issuer=Bridge" }),
+      ),
+    );
+    renderWithIntl(
+      <PasswordStateProvider initial={false}>
+        <SecuritySettings enrolled={false} required homeHref="/org" email="a@example.com" productName="Bridge" />
+      </PasswordStateProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
+    fireEvent.change(await screen.findByLabelText("Code from your app"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
+    await screen.findByTestId("recovery-codes");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    expect(screen.queryByTestId("recovery-codes")).toBeNull();
+    expect(screen.getByText(CLEARED)).toBeTruthy();
+  });
+
   it("copies the codes one per line", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });

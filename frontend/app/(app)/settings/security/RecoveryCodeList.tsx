@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -19,10 +20,36 @@ function download(codes: string[]) {
 /**
  * Ten recovery codes, shown once: at the end of setup and after "Get new recovery codes". The codes live only in
  * the component's props (never stored in the browser); copy and download are the ways to keep them.
+ *
+ * Leaving the page removes them from it: the back-forward cache keeps a page as it was at `pagehide`, so Back (or
+ * someone else at the same browser) would otherwise bring them back after a full navigation away. The list is
+ * cleared synchronously in `pagehide`, before the page is frozen, and again on a `pageshow` from the cache.
  */
 export function RecoveryCodeList({ codes }: { codes: string[] }) {
   const t = useTranslations("security");
   const [notice, setNotice] = useState<"codesCopied" | "copyFailed" | null>(null);
+  const [cleared, setCleared] = useState(false);
+
+  useEffect(() => {
+    const clear = () => flushSync(() => setCleared(true));
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) clear();
+    };
+    window.addEventListener("pagehide", clear);
+    window.addEventListener("pageshow", restored);
+    return () => {
+      window.removeEventListener("pagehide", clear);
+      window.removeEventListener("pageshow", restored);
+    };
+  }, []);
+
+  if (cleared) {
+    return (
+      <p data-testid="recovery-codes-cleared" className="text-ink-soft">
+        {t("codesCleared")}
+      </p>
+    );
+  }
 
   async function copy() {
     try {
@@ -54,11 +81,11 @@ export function RecoveryCodeList({ codes }: { codes: string[] }) {
           ))}
         </ul>
       </div>
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={copy}>
+      <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+        <Button variant="secondary" className="w-full sm:w-auto" onClick={copy}>
           {t("copyCodes")}
         </Button>
-        <Button variant="secondary" onClick={() => download(codes)}>
+        <Button variant="secondary" className="w-full sm:w-auto" onClick={() => download(codes)}>
           {t("download")}
         </Button>
       </div>

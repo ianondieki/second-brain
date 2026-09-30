@@ -168,6 +168,7 @@
     "codesLabel": "Your recovery codes",
     "copyCodes": "Copy codes",
     "codesCopied": "Codes copied.",
+    "codesCleared": "Your recovery codes are no longer shown on this page. If you did not save them, get new recovery codes.",
     "download": "Download codes",
     "copyFailed": "Copying did not work. Select the text and copy it instead.",
     "done": "I have saved my codes",
