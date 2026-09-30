@@ -48,7 +48,8 @@ describe("startRefusal", () => {
     [422, error("plan_not_available"), "notAvailable"],
     [422, error("plan_wrong_side"), "notAvailable"],
     [403, error("not_a_developer"), "notDeveloper"],
-    [403, error("forbidden"), "forbidden"],
+    [403, error("forbidden"), "failed"],
+    [403, error("csrf_failed"), "failed"],
     [403, error("mfa_enrolment_required"), "mfaSetup"],
     [401, error("mfa_required"), "mfaRequired"],
     [401, error("unauthenticated"), "signedOut"],
@@ -61,6 +62,12 @@ describe("startRefusal", () => {
     [500, "Internal Server Error", "failed"],
   ])("maps %i %j to %s", (status, body, problem) => {
     expect(startRefusal(status, body).problem).toBe(problem);
+  });
+
+  it("says who pays only for an organisation's checkout", () => {
+    expect(startRefusal(403, error("forbidden"), { forOrg: true }).problem).toBe("forbidden");
+    expect(startRefusal(403, error("csrf_failed"), { forOrg: true }).problem).toBe("failed");
+    expect(canRetryStart(startRefusal(403, error("csrf_failed")).problem)).toBe(true);
   });
 
   it("keeps the id of the other plan's checkout in progress", () => {
@@ -163,9 +170,15 @@ describe("the checkout phases", () => {
     expect(started({ status: "succeeded", plan_active: true }).kind).toBe("succeeded");
   });
 
-  it("ignores an answer for another checkout", () => {
-    const phase = started();
-    expect(reduce(phase, { type: "polled", checkout: checkout({ id: OTHER, status: "succeeded" }) })).toBe(phase);
+  it("counts an answer about another checkout as a failed read, never as its outcome", () => {
+    let phase = started();
+    phase = reduce(phase, { type: "polled", checkout: checkout({ id: OTHER, status: "succeeded" }) });
+    expect(phase).toMatchObject({ kind: "pending", id: ID, attempt: 1, errors: 1 });
+    expect(MAX_POLL_ERRORS).toBe(4);
+    for (let i = 1; i < MAX_POLL_ERRORS; i++) {
+      phase = reduce(phase, { type: "polled", checkout: checkout({ id: OTHER }) });
+    }
+    expect(phase).toMatchObject({ kind: "stalled", id: ID });
   });
 
   it("shows a refused start on the confirm step, where it can be tried again", () => {

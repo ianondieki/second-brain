@@ -45,8 +45,15 @@ function common(status: number, code: string | undefined): StartProblem | null {
   return null;
 }
 
-/** A refused start, as the screen words it. */
-export function startRefusal(status: number, body: unknown): StartRefusal {
+/**
+ * A refused start, as the screen words it. `forOrg`: the checkout was for an organisation, so a 403 `forbidden` means
+ * the person does not pay for it; any other 403 (a CSRF failure, a developer's `forbidden`) is a passing "failed".
+ */
+export function startRefusal(
+  status: number,
+  body: unknown,
+  { forOrg = false }: { forOrg?: boolean } = {},
+): StartRefusal {
   const code = apiErrorCode(body);
   const shared = common(status, code);
   if (shared) return { problem: shared };
@@ -57,7 +64,7 @@ export function startRefusal(status: number, body: unknown): StartRefusal {
   }
   if (status === 422 && (code === "plan_not_available" || code === "plan_wrong_side")) return { problem: "notAvailable" };
   if (status === 403 && code === "not_a_developer") return { problem: "notDeveloper" };
-  if (status === 403) return { problem: "forbidden" };
+  if (status === 403 && code === "forbidden" && forOrg) return { problem: "forbidden" };
   if (status === 404) return { problem: "notFound" };
   if (status === 503) return { problem: "notConfigured" };
   if (status === 502) return { problem: "providerError" };
@@ -170,7 +177,10 @@ export function reduce(phase: Phase, event: Event): Phase {
       }
       return { kind: "confirm", refusal: event.refusal };
     case "polled":
-      if (phase.kind !== "pending" || event.checkout.id !== phase.id) return phase;
+      if (phase.kind !== "pending") return phase;
+      // An answer about another checkout is no answer: count it as a failed read, so polling goes on (and stops in
+      // time) instead of waiting on a phase that never changes.
+      if (event.checkout.id !== phase.id) return reduce(phase, { type: "pollFailed", problem: "transient" });
       return answered(event.checkout, phase);
     case "pollFailed":
       if (phase.kind !== "pending") return phase;

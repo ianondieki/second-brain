@@ -38,7 +38,10 @@ export async function startCheckout(request: StartRequest, client: ApiClient = a
     }),
   );
   if (result.ok && result.body) return { ok: true, checkout: result.body as Checkout };
-  return { ok: false, refusal: startRefusal(result.ok ? 500 : result.status, result.body) };
+  return {
+    ok: false,
+    refusal: startRefusal(result.ok ? 500 : result.status, result.body, { forOrg: Boolean(request.orgId) }),
+  };
 }
 
 /** GET /api/billing/checkouts/{id}: the API asks the provider, settles a final answer and activates a success. */

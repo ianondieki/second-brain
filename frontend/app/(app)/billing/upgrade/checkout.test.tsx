@@ -201,6 +201,19 @@ describe("the simulated checkout", () => {
     expect(link.hasAttribute("data-primary")).toBe(true);
   });
 
+  it("offers the way back only once the plan is active", async () => {
+    const calls = fakeCalls({ ok: true, checkout: checkout({ status: "succeeded", plan_active: false }) }, []);
+    renderCheckout(calls, { nextHref: "/dev/ideas/x/edit?step=3" });
+    fireEvent.click(screen.getByRole("button", { name: "Start the simulated payment" }));
+    await advance(0);
+    expect(phase()).toBe("succeeded");
+    expect(screen.getByRole("status").textContent).toBe(
+      "The payment is confirmed. Your plan changes in a moment: reload this page to see it.",
+    );
+    expect(screen.queryByRole("link", { name: "Continue where you left off" })).toBeNull();
+    expect(screen.getByRole("link", { name: "See your plan" }).getAttribute("href")).toBe("/billing");
+  });
+
   it("stops when the checkout is not the person's", async () => {
     const calls = fakeCalls({ ok: true, checkout: checkout() }, [{ ok: false, problem: "notFound" }]);
     renderCheckout(calls);
