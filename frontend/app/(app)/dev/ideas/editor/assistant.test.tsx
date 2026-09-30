@@ -282,7 +282,9 @@ describe("a suggestion", () => {
     );
     const chips = [...document.querySelectorAll("#assistant-panel [data-chip]")].map((chip) => chip.textContent);
     expect(chips).toEqual(["Demo fallback"]);
-    expect(screen.getByText("No model answered, so there is no suggestion. This is the demo fallback.")).toBeTruthy();
+    expect(screen.getByText("This demo has no AI model connected, so there is no suggestion.")).toBeTruthy();
+    // No teaser: the heading is neutral ("Suggestion" only heads a suggested teaser).
+    expect(screen.getByRole("heading", { level: 4 }).textContent).toBe("Writing assistant's answer");
     expect(screen.queryByRole("button", { name: "Use this" })).toBeNull();
     expect(document.body.textContent).not.toContain(SERVER_MESSAGE);
   });
@@ -408,7 +410,14 @@ describe("turning it off", () => {
     expect(document.querySelector("[data-teaser]")).toBeNull(); // its last answer goes with it
     expect(document.querySelectorAll("#assistant-panel [data-chip]")).toHaveLength(0);
 
-    await press("Ask again");
+    // Asking again now means turning it on: the footer says so, and the dialog shows the wording first.
+    const footerAsk = within(document.getElementById("assistant-panel")!).getAllByRole("button", {
+      name: "Turn on and ask",
+    })[0];
+    expect(screen.queryByRole("button", { name: "Ask again" })).toBeNull();
+    await act(async () => {
+      fireEvent.click(footerAsk);
+    });
     expect(fake.consentState).toHaveBeenCalledTimes(2);
     expect(dialog().open).toBe(true);
     expect(fake.suggest).toHaveBeenCalledTimes(1);

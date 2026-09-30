@@ -819,6 +819,7 @@
   },
   "ideaAssistant": {
     "heading": "Suggestion",
+    "headingAnswer": "Writing assistant's answer",
     "close": "Close",
     "working": "Asking the writing assistant. This can take a few seconds.",
     "aiDrafted": "AI-drafted",
@@ -841,7 +842,7 @@
     "status": {
       "no_suggestion": "There is no suggestion to show for this teaser. Suggestions that copy wording from your full details are held back.",
       "hints_only": "No new title or summary this time, but some details might sit better elsewhere.",
-      "demo_fallback": "No model answered, so there is no suggestion. This is the demo fallback.",
+      "demo_fallback": "This demo has no AI model connected, so there is no suggestion.",
       "injection_suspected": "Part of your idea reads like instructions to the assistant, so it made no suggestion. Check the text, then ask again.",
       "unavailable": "The writing assistant could not answer just now. Try again later."
     },

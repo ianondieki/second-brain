@@ -819,6 +819,7 @@
   },
   "ideaAssistant": {
     "heading": "Pendekezo",
+    "headingAnswer": "Jibu la msaidizi wa uandishi",
     "close": "Funga",
     "working": "Tunamuuliza msaidizi wa uandishi. Hili linaweza kuchukua sekunde chache.",
     "aiDrafted": "Imeandikwa na AI",
@@ -841,7 +842,7 @@
     "status": {
       "no_suggestion": "Hakuna pendekezo la kuonyesha kwa muhtasari huu. Mapendekezo yanayonakili maneno kutoka maelezo yako kamili hayaonyeshwi.",
       "hints_only": "Hakuna kichwa wala muhtasari mpya safari hii, lakini baadhi ya maelezo yanaweza kufaa mahali pengine.",
-      "demo_fallback": "Hakuna modeli iliyojibu, kwa hivyo hakuna pendekezo. Huu ni mbadala wa onyesho.",
+      "demo_fallback": "Onyesho hili halina modeli ya AI iliyounganishwa, kwa hivyo hakuna pendekezo.",
       "injection_suspected": "Sehemu ya wazo lako inasomeka kama maagizo kwa msaidizi, kwa hivyo haukutoa pendekezo. Kagua maandishi, kisha uulize tena.",
       "unavailable": "Msaidizi wa uandishi haukuweza kujibu sasa hivi. Jaribu tena baadaye."
     },

@@ -245,7 +245,7 @@ export function AssistantPanel({
     <div id="assistant-panel" className="flex flex-col gap-5 rounded-panel border border-line bg-field p-4 text-ink sm:p-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h4 ref={heading} tabIndex={-1} className="font-semibold focus:outline-none">
-          {t("heading")}
+          {t(teaser ? "heading" : "headingAnswer")}
         </h4>
         {answer?.ai_drafted && chip(t("aiDrafted"))}
         {answer?.demo_fallback && chip(t("demoFallback"), true)}
@@ -303,7 +303,8 @@ export function AssistantPanel({
 
       {!working && (answer || problem || notice) && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-4">
-          <Button onClick={() => void ask()}>{t("askAgain")}</Button>
+          {/* Turned off: asking again means turning it on (the dialog shows the wording first). */}
+          <Button onClick={() => void ask()}>{t(consent?.granted === false ? "dialog.confirm" : "askAgain")}</Button>
           {consent?.granted && (
             <Button variant="link" className="text-left" busy={turningOff} onClick={() => void turnOff()}>
               {t(turningOff ? "turningOff" : "turnOff")}

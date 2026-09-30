@@ -123,12 +123,12 @@ test("the owner turns the assistant on for this sign-in, sees a labelled answer 
   await page.getByRole("button", { name: OPEN }).click();
   await dialog.getByRole("button", { name: "Turn on and ask" }).click();
   await expect(dialog).toBeHidden(SERVER_STEP);
-  await expect(panel.getByText("No model answered, so there is no suggestion. This is the demo fallback.")).toBeVisible(
+  await expect(panel.getByText("This demo has no AI model connected, so there is no suggestion.")).toBeVisible(
     SERVER_STEP,
   );
   await expect(panel.locator("[data-chip]")).toHaveText(["Demo fallback"]);
   await expect(panel.getByRole("button", { name: "Use this" })).toHaveCount(0);
-  await expect(panel.getByRole("heading", { name: "Suggestion" })).toBeFocused();
+  await expect(panel.getByRole("heading", { name: "Writing assistant's answer" })).toBeFocused();
   expect(consentRows(email)).toEqual([`true|session|${wording.version}`]);
   const granted = auditPayloads(email, "consent.changed").filter((p) => "tier2_llm_assistant" in p);
   expect(granted).toEqual([
@@ -168,7 +168,8 @@ test("the owner turns the assistant on for this sign-in, sees a labelled answer 
   expect(consentRows(email)).toEqual([`true|session|${wording.version}`, `false|session|${wording.version}`]);
   await checkAndShoot(page, info, "assistant-off");
 
-  await panel.getByRole("button", { name: "Ask again" }).click();
+  await expect(panel.getByRole("button", { name: "Ask again" })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Turn on and ask" }).click(); // off: asking again means turning it on
   await expect(dialog).toBeVisible(SERVER_STEP);
   await dialog.getByRole("button", { name: "Not now" }).click();
   await expect(page.getByRole("button", { name: OPEN })).toBeFocused();
