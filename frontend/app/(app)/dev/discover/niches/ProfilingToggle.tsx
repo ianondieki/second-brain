@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
+import { Section } from "@/components/ui/Section";
 import { CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 
 import { setProfiling } from "./calls";
@@ -45,28 +46,24 @@ export function ProfilingToggle({ consent, setImpl = setProfiling }: ProfilingTo
   }
 
   return (
-    <section id="profiling" aria-labelledby="profiling-title" className="flex flex-col items-start gap-3 border-t border-line pt-6">
-      <h2 id="profiling-title" className="text-lg text-ink">
-        {t("profiling.title")}
-      </h2>
-      <p className="max-w-[62ch] text-ink-soft">{t("profiling.lead")}</p>
-      <figure className="flex flex-col gap-1">
-        <figcaption className="text-sm text-ink-soft">{t("profiling.wording")}</figcaption>
-        <blockquote className="max-w-[62ch] border-l-2 border-line pl-3 text-ink">{consent.text}</blockquote>
-      </figure>
-      <p
-        role="status"
-        data-profiling={granted ? "on" : "off"}
-        className={cn("flex items-start gap-2 font-medium", granted ? "text-ok" : "text-ink")}
-      >
-        <Icon className="mt-0.5 size-5 shrink-0" />
-        <span>{granted ? t("profiling.on") : t("profiling.off")}</span>
-      </p>
-      {problem ? <Alert ref={alert}>{t(`profiling.problem.${problem}`)}</Alert> : null}
-      {/* "Turn on" alone says little out of context: the section title describes it. */}
-      <Button variant="secondary" busy={busy} onClick={flip} aria-describedby="profiling-title">
-        {busy ? t("profiling.saving") : granted ? t("profiling.turnOff") : t("profiling.turnOn")}
-      </Button>
-    </section>
+    <Section id="profiling" title={t("profiling.title")} headingId="profiling-title" description={t("profiling.lead")}>
+      <div className="flex flex-col items-start gap-3">
+        <figure className="flex flex-col gap-1">
+          <figcaption className="text-sm text-ink-soft">{t("profiling.wording")}</figcaption>
+          {/* The consent's wording verbatim, set off by a neutral hairline like every quoted source. */}
+          <blockquote className="max-w-[62ch] border-l border-line pl-3 text-ink">{consent.text}</blockquote>
+        </figure>
+        <p role="status" data-profiling={granted ? "on" : "off"}>
+          <Badge tone={granted ? "ok" : "neutral"} icon={<Icon />}>
+            {granted ? t("profiling.on") : t("profiling.off")}
+          </Badge>
+        </p>
+        {problem ? <Alert ref={alert}>{t(`profiling.problem.${problem}`)}</Alert> : null}
+        {/* "Turn on" alone says little out of context: the section title describes it. */}
+        <Button variant="secondary" busy={busy} onClick={flip} aria-describedby="profiling-title">
+          {busy ? t("profiling.saving") : granted ? t("profiling.turnOff") : t("profiling.turnOn")}
+        </Button>
+      </div>
+    </Section>
   );
 }

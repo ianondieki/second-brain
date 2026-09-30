@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -32,9 +33,8 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/dev/co
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />} wide>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-      <p className="mt-2 max-w-[62ch] text-ink-soft">{t("lead")}</p>
-      <div className="mt-6 max-w-3xl">
+      <PageHeader title={t("title")} lead={t("lead")} />
+      <div className="mt-8 max-w-3xl">
         <DirectoryFilters filters={filters} niches={niches} options={filterOptions} showClear={hasResults} />
       </div>
       <div className="mt-8">

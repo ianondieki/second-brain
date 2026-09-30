@@ -7,6 +7,7 @@ import { directoryOptions } from "@/app/(app)/dev/companies/directory";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -45,16 +46,19 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>
-      <div className="flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0">
-          <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
-          <p className="mt-2 max-w-[62ch] text-ink-soft">{t("lead")}</p>
-        </div>
-        <Link href={NICHES_PATH} className={`${standaloneLinkClass} shrink-0 sm:mt-1`}>
-          {t("yourNiches")}
-        </Link>
+      <div className="max-w-3xl">
+        {/* No primary action: Discover's work is on the rows. "Your niches" is a secondary link in the action slot. */}
+        <PageHeader
+          title={t("title")}
+          lead={t("lead")}
+          action={
+            <Link href={NICHES_PATH} className={standaloneLinkClass}>
+              {t("yourNiches")}
+            </Link>
+          }
+        />
       </div>
-      <div className="mt-6 flex max-w-3xl flex-col gap-3">
+      <div className="mt-8 flex max-w-3xl flex-col gap-3">
         <ViewSwitch query={query} />
         <DiscoverFilters query={query} niches={niches} counties={filterOptions.counties} showClear={!empty} />
       </div>

@@ -4,10 +4,10 @@ import { getTranslations } from "next-intl/server";
 
 import { directoryOptions } from "@/app/(app)/dev/companies/directory";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -47,14 +47,17 @@ export default async function LikedNichesPage() {
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />}>
-      <BackLink href={DISCOVER_PATH}>{t("back")}</BackLink>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("title")}</h1>
+      <PageHeader
+        back={{ href: DISCOVER_PATH, label: t("back") }}
+        title={t("title")}
+        lead={liked ? t("lead", { count: liked.min, max: liked.max }) : undefined}
+      >
+        {liked ? <p className="mt-1 text-sm text-ink-soft">{t("keep", { count: liked.min })}</p> : null}
+      </PageHeader>
       {liked ? (
         <>
-          <p className="mt-2 text-ink-soft">{t("lead", { count: liked.min, max: liked.max })}</p>
-          <p className="mt-1 text-sm text-ink-soft">{t("keep", { count: liked.min })}</p>
           <ClientStrings strings={strings}>
-            <div className="mt-8">
+            <div className="mt-10">
               <NichePicker niches={options} initial={liked.liked.map((niche) => niche.id)} min={liked.min} max={liked.max} />
             </div>
             {consent ? (
@@ -65,9 +68,7 @@ export default async function LikedNichesPage() {
           </ClientStrings>
         </>
       ) : (
-        <div className="mt-6">
-          <EmptyState sentence={t("problem.noProfile")} action={t("back")} href={DISCOVER_PATH} />
-        </div>
+        <EmptyState sentence={t("problem.noProfile")} action={t("back")} href={DISCOVER_PATH} className="mt-8" />
       )}
     </SignedInShell>
   );

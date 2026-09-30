@@ -185,7 +185,7 @@ describe("DirectoryResults", () => {
   it("groups organisations under niche headings, the unsorted ones last, with at most two chips each", () => {
     const { container } = renderWithIntl(<DirectoryResults kind="page" page={PAGE} filters={{}} />);
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(["ICTNetworks & Telecoms", "Not yet sorted by niche"]);
+    expect(headings).toEqual(["ICT › Networks & Telecoms", "Not yet sorted by niche"]); // one line, no label above
     const rows = container.querySelectorAll("article");
     expect(rows).toHaveLength(4);
     for (const row of rows) expect(row.querySelectorAll("[data-badge]").length).toBeLessThanOrEqual(2);

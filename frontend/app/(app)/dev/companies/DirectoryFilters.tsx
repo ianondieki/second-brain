@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
+import { buttonClass, primaryMark, standaloneLinkClass } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -49,7 +49,8 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
             enterKeyHint="search"
           />
         </div>
-        <button type="submit" data-primary="" className={buttonClass("primary", "shrink-0")}>
+        {/* A plain GET form on a server page: the Button component's click handler cannot cross to the browser. */}
+        <button type="submit" className={buttonClass("primary", "shrink-0")} {...primaryMark("primary")}>
           {t("submit")}
         </button>
       </div>
