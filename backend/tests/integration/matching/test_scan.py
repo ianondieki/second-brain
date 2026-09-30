@@ -113,6 +113,22 @@ async def test_the_model_explains_the_top_n_and_the_rest_keep_the_rules(
     assert len(llm.requests) == 1
 
 
+async def test_the_model_never_moves_a_match_under_the_scouts_min_fit(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Round-2 review MINOR 5 (F09): the rules scored 90 and the model answered 0, which the 5-point bound would make
+    85; the scan passes the scout's ``min_fit`` (88) as the floor, so the rules' selection keeps its threshold."""
+    world = await build(owner_engine)
+    await publish(owner_engine, world, "one")
+    scout = await add_scout(owner_engine, world.org, [world.niche], min_fit=88)
+    llm = FakeLLMClient([ScoutFit(injection_suspected=False, fit=0, rationale="Hardly a fit.")])
+    await weekly(app_engine, llm=llm)
+    [match] = await matches(owner_engine, scout)
+    breakdown = match.rule_breakdown
+    assert (breakdown["deterministic"], breakdown["model_fit"], breakdown["why_source"]) == (90, 0, "model")
+    assert (match.score, breakdown["final"]) == (88, 88)
+
+
 async def test_without_a_model_the_deterministic_score_and_the_code_line_stay(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
