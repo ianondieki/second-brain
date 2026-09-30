@@ -16,8 +16,6 @@ export interface ShareTier2Props {
   orgName: string;
   /** Two-step sign-in is on (the step-up needs a code). */
   enrolled: boolean;
-  /** The screen's one primary action is free (the tracker has no awaited step for the developer). */
-  primary: boolean;
   shareImpl?: (engagementId: string) => Promise<ShareOutcome>;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -28,13 +26,12 @@ type Mode = "idle" | "confirm" | "stepUp" | "done";
  * "Share the full proposal" on an engagement an organisation opened (REQ-ENG-04): the developer confirms, gives a
  * fresh authenticator code when the API asks for one (403 step_up_required; the tracker's StepUp), and the full
  * proposal is granted to that organisation, who still opens it only under the Evaluation NDA. The confirmation
- * says so in the approved logging phrasing (docs/spec/04 4.2).
+ * says so in the approved logging phrasing (docs/spec/04 4.2) and that it cannot be taken back.
  */
 export function ShareTier2({
   engagementId,
   orgName,
   enrolled,
-  primary,
   shareImpl = shareTier2,
   confirmImpl,
 }: ShareTier2Props) {
@@ -45,7 +42,8 @@ export function ShareTier2({
   const [refusal, setRefusal] = useState<Exclude<ShareRefusal, "stepUp"> | null>(null);
   const notice = useRef<HTMLDivElement>(null);
   const question = useRef<HTMLParagraphElement>(null);
-  const variant = primary ? "primary" : "secondary";
+  // Never the screen's primary action: sharing the full proposal cannot be taken back (P10-F ux review).
+  const variant = "secondary";
 
   useEffect(() => {
     if (refusal || mode === "done") notice.current?.focus();
@@ -63,6 +61,7 @@ export function ShareTier2({
     if (outcome.ok) {
       setMode("done");
       router.refresh();
+      focusWhenShown("share-status");
       return;
     }
     if (outcome.refusal === "stepUp" && !retried) {
@@ -125,7 +124,7 @@ export function ShareTier2({
         <div className="w-full">
           <StepUp
             enrolled={enrolled}
-            primary={primary}
+            primary={false}
             onCancel={cancel}
             onConfirmed={() => share(true)}
             confirmImpl={confirmImpl}
@@ -134,4 +133,17 @@ export function ShareTier2({
       ) : null}
     </section>
   );
+}
+
+/**
+ * Once the refreshed page replaces this form with the server's "You shared ..." line, focus moves to it (WCAG 2.4.3),
+ * so the confirmation is announced where the control was. Gives up after a few seconds.
+ */
+function focusWhenShown(id: string) {
+  const started = Date.now();
+  const timer = setInterval(() => {
+    const target = document.getElementById(id);
+    if (target) target.focus();
+    if (target || Date.now() - started > 5000) clearInterval(timer);
+  }, 100);
 }

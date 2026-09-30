@@ -30,14 +30,13 @@ const SHARED: ShareOutcome = {
   },
 };
 
-function renderShare(shareImpl: (id: string) => Promise<ShareOutcome>, primary = true) {
+function renderShare(shareImpl: (id: string) => Promise<ShareOutcome>) {
   const confirmImpl = vi.fn(async () => ({ ok: true as const }));
   renderWithIntl(
     <ShareTier2
       engagementId="e1"
       orgName="Maziwa Buyers"
       enrolled
-      primary={primary}
       shareImpl={shareImpl}
       confirmImpl={confirmImpl}
     />,
@@ -73,6 +72,7 @@ describe("Share the full proposal", () => {
     const question = document.querySelector("[data-share-confirm]")!;
     expect(question.textContent).toContain("every view is logged and watermarked to the viewer");
     expect(question.textContent).toContain("Maziwa Buyers");
+    expect(question.textContent).toContain("You cannot take this back.");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" })));
     expect(shareImpl).toHaveBeenCalledWith("e1");
     expect(screen.getByRole("status").textContent).toBe(
@@ -105,8 +105,31 @@ describe("Share the full proposal", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("is a secondary button while the tracker has another primary action", () => {
-    renderShare(async () => SHARED, false);
+  it("is never the screen's primary action, its confirmation and step-up included", async () => {
+    renderShare(async () => ({ ok: false, refusal: "stepUp" }));
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" }));
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" })));
+    expect(screen.getByLabelText("Authenticator code")).toBeTruthy();
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+  });
+
+  it("moves focus to the refreshed page's share line once it appears", async () => {
+    vi.useFakeTimers();
+    try {
+      renderShare(async () => SHARED);
+      fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" }));
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share the full proposal" })));
+      const line = document.createElement("p");
+      line.id = "share-status";
+      line.tabIndex = -1;
+      document.body.append(line);
+      await act(async () => vi.advanceTimersByTime(250));
+      expect(document.activeElement).toBe(line);
+      line.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

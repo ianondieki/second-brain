@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -29,6 +29,8 @@ export interface StepUpProps {
  */
 export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmStepUp, primary = true }: StepUpProps) {
   const t = useStrings("trackerActions");
+  // Its own id: the step-up appears on the tracker and on the scout match page, never twice with one id.
+  const codeId = `${useId()}-step-up-code`;
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | undefined>();
   const [failed, setFailed] = useState(false);
@@ -38,11 +40,11 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    document.getElementById("tracker-step-up-code")?.focus();
+    document.getElementById(codeId)?.focus();
     return () => {
       mounted.current = false;
     };
-  }, []);
+  }, [codeId]);
 
   if (!enrolled) {
     return (
@@ -63,7 +65,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
     if (busy) return;
     if (code.length !== 6) {
       setCodeError(t("stepUp.invalid"));
-      document.getElementById("tracker-step-up-code")?.focus();
+      document.getElementById(codeId)?.focus();
       return;
     }
     setBusy(true);
@@ -75,7 +77,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
       setCode("");
       if (outcome.invalidCode) {
         setCodeError(t("stepUp.invalid"));
-        document.getElementById("tracker-step-up-code")?.focus();
+        document.getElementById(codeId)?.focus();
       } else {
         setFailed(true);
       }
@@ -93,7 +95,7 @@ export function StepUp({ enrolled, onConfirmed, onCancel, confirmImpl = confirmS
       {failed ? <Alert className="w-full">{t("refusal.generic")}</Alert> : null}
       <p className="max-w-[60ch] text-ink">{t("stepUp.body")}</p>
       <OtpInput
-        id="tracker-step-up-code"
+        id={codeId}
         name="code"
         label={t("stepUp.code")}
         value={code}

@@ -6,33 +6,24 @@ import { standaloneLinkClass } from "@/components/ui/Button";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { tier2ShareState } from "./data";
-import { isFinished, type Detail } from "./model";
+import { eatParts, isFinished, type Detail } from "./model";
 import { SHARE_ORIGINS } from "./share";
 import { ShareTier2 } from "./ShareTier2";
 
-/** A day in Nairobi ("30 Sept 2026"), as the organisation screens write it. */
-function day(locale: string, iso: string): string {
-  return new Intl.DateTimeFormat(`${locale}-KE`, { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(
-    new Date(iso),
-  );
-}
-
 /**
  * The full proposal on an engagement an organisation opened (REQ-ENG-04; docs/spec/06 6.9 stage 0, "Tier 2 by manual
- * grant"). The developer shares it by hand (ShareTier2), or sees when they did; the organisation, once it is shared,
+ * grant"). The developer shares it by hand (ShareTier2, never the screen's primary action: the disclosure cannot be taken
+ * back), or sees when they did; the organisation, once it is shared,
  * gets the way to open it, under the Evaluation NDA on the proposal's page. Nothing for a pitched engagement (its
  * disclosure policy applies) or before the developer shares.
  */
 export async function Tier2Section({
   detail,
   enrolled,
-  primary,
   query,
 }: {
   detail: Detail;
   enrolled: boolean;
-  /** No other primary action on the screen. */
-  primary: boolean;
   /** "?org=<id>" for a member of several organisations. */
   query: string;
 }) {
@@ -41,7 +32,7 @@ export async function Tier2Section({
   if (!share) return null;
   const t = await getTranslations("tier2Share");
   const locale = await getLocale();
-  const when = share.shared_at ? day(locale, share.shared_at) : "";
+  const when = share.shared_at ? eatParts(share.shared_at, locale).date : "";
 
   if (detail.my_party === "org") {
     if (!share.shared) return null;
@@ -68,14 +59,17 @@ export async function Tier2Section({
         <h2 id="share-heading" className="text-lg text-ink">
           {t("title")}
         </h2>
-        <p className="max-w-[60ch] text-ink">{t("shared", { org: detail.org_name, date: when })}</p>
+        {/* ShareTier2 moves focus here once the refreshed page shows the share (a stable id). */}
+        <p id="share-status" tabIndex={-1} className="max-w-[60ch] text-ink focus:outline-none">
+          {t("shared", { org: detail.org_name, date: when })}
+        </p>
       </section>
     );
   }
   if (isFinished(detail.state)) return null;
   return (
     <ClientStrings strings={await clientStrings(["tier2Share"])}>
-      <ShareTier2 engagementId={detail.id} orgName={detail.org_name} enrolled={enrolled} primary={primary} />
+      <ShareTier2 engagementId={detail.id} orgName={detail.org_name} enrolled={enrolled} />
     </ClientStrings>
   );
 }
