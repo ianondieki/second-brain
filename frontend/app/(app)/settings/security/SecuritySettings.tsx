@@ -209,7 +209,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
         ) : null}
         {renewing ? null : required ? (
-          <p className="text-ink-soft">{t("mandatory")}</p>
+          <p className="text-sm text-ink-soft">{t("mandatory")}</p>
         ) : stepUp ? (
           <Suspense fallback={null}>
             <StepUpForm onConfirmed={turnOff} busyLabel={t("turningOff")} />
@@ -236,7 +236,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
               </Suspense>
             ) : (
               <>
-                <p className="text-ink-soft">{t("recoveryLead")}</p>
+                <p className="text-sm text-ink-soft">{t("recoveryLead")}</p>
                 <Button
                   id="new-codes"
                   // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
