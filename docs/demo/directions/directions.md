@@ -1,5 +1,9 @@
 # Brand and visual directions (P18 step 1; owner decision D-52)
 
+> **Decided 2026-10-01:** the owner chose the name **Wazo** and direction **C** with B's lattice as the single signature.
+> Only direction C's screenshots (`c/`), mark and wordmark are kept here as the record; the rest was removed. The system
+> as built is in `docs/platform/design/p18-design-system.md`.
+
 The product works and is accessible but looks like a plain form. This page compares three complete visual directions
 on the same real screens, proposes five product names, and recommends one of each. Nothing here is merged into a
 product screen: everything renders in the development-only `/design-lab` route (`frontend/app/(lab)/design-lab`,

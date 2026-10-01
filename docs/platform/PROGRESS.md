@@ -393,19 +393,21 @@ stopped since a container restart: `make demo-reset` before showing it.
 
 **Open branches** (2026-10-01, session 3): none. Integration head `83e4ed9`.
 
-**Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** Step 1 is delivered on
-`claude/fervent-mccarthy-0zyqn2` (not merged: the owner chooses first): five name candidates, three visual directions
-(A Confident fintech, B Warm Nairobi, C Editorial trust) as full token sets with light and dark mode, self-hosted
-OFL fonts, marks and wordmarks, rendered on the product's own components in the development-only `/design-lab`
-(`frontend/app/(lab)/design-lab`; `*.lab.tsx` routes exist only under `next dev` or `DESIGN_LAB=1`, proven by
-`next.config.test.ts`), 108 screenshots in `docs/demo/directions/` (9 screens × 3 directions × light/dark × 375/1440)
-and the comparison with the recommendation in `docs/demo/directions/directions.md` (C with B's lattice; name Wazo).
-Product code touched: the idea page's private `Certificate` section moved to its own file (pure move) so the lab
-renders it; `next.config.ts` gained `pageExtensions`. **Resume at step 2** once the owner answers: delete the unchosen
-fonts and directions, rename `--jacaranda` to `--accent`, build the token sheet and the shared components, then step
-3 in demo-story order (the brief is in the owner's message of 2026-10-01 and summarised in D-52). Linux setup this
-session: `npm ci` only (no Docker, no backend: the lab needs neither); Chromium at `/opt/pw-browsers/chromium` for
-`frontend/scripts/design-lab-shots.mjs`.
+**Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
+(not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
+`/design-lab`, 108 screenshots and the recommendation (`docs/demo/directions/directions.md`). The owner chose
+**Wazo**, direction C with B's lattice, C's dark mode. Step 2 delivered: the design system
+(`docs/platform/design/p18-design-system.md`: tokens with dark mode, self-hosted fonts, `--accent` rename, brand,
+Lattice, Avatar, StatTile, ProgressBar, Card, Illustration, ThemeToggle, CertificateSheet) and the four showpiece
+screens (landing, Developer Home, tracker, certificate) with screenshots in `docs/demo/screenshots/p18/`; the lab now
+previews the product's own screens on fixtures (`/design-lab/<screen>`). Checks: typecheck, eslint, vitest (1274),
+`next build`; the e2e suite was not run (no compose stack in this container; the selectors it uses were kept).
+**Resume at step 3** once the owner has reviewed the four screens: the remaining screens in demo-story order
+(`tasks/P18-design-directions.md` lists them), haptics, the tour, the branded emails (also the backend's
+`product_name` default), then step 4's pitch assets. Linux setup this session: `npm ci` only (no Docker, no backend:
+the lab needs neither); Chromium at `/opt/pw-browsers/chromium` for `frontend/scripts/design-lab-shots.mjs`; when a
+`next dev` ran before `npm run typecheck` or `next build`, the stale `.next/dev/types` can disagree with the lab's
+stubs: delete that folder first.
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for

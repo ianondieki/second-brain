@@ -24,3 +24,30 @@ name and a direction (or a mix) before step 2.
 - Rename `--jacaranda` → `--accent` (and the Tailwind colour names) across components; add `--flourish`,
   `--shadow-card`, `--font-display`, motion tokens to `globals.css` with the dark-mode set.
 - The certificate sheet and the branded email become product components and a Jinja template (`em7.html.j2`).
+
+## Step 2 (2026-10-01): the design system and the four showpiece screens
+
+Owner's choice: name **Wazo**; direction C with B's lattice as the one signature; C's dark mode. Delivered on the same
+branch (`docs/platform/design/p18-design-system.md` is the system's record):
+
+- Tokens, dark mode (system + remembered choice, applied before paint), self-hosted fonts in `app/fonts/`, motion,
+  print rules; `--jacaranda` renamed `--accent` across the frontend.
+- Brand: `components/brand/` (mark, wordmark, seal); the top bar shows the wordmark and a "Prototype" badge; every
+  product string that named "Bridge" now says "Wazo" (frontend; the backend's `product_name` default and the EM7
+  subject are for the emails round).
+- New components: Lattice, Avatar, StatTile, Sparkline, ProgressBar, Card/CardGrid, Illustration (in every empty
+  state), ThemeToggle, NeedsYouCard, EngagementCard, IdeaCard, CertificateSheet, PrintButton, HeroComposition.
+- Screens: landing (new layout), Developer Home (`HomeContent`), the tracker, the certificate sheet.
+- The lab (`/design-lab/<screen>`) now previews the product's own screens on fixtures for the chosen direction only;
+  the unchosen fonts, directions and their screenshots were deleted (`docs/demo/directions/c/` stays as the record).
+- Screenshots: `docs/demo/screenshots/p18/` (landing, home, tracker, certificate × light/dark × 375/1440, plus the
+  proposal and checkout screens untouched for comparison).
+- Tests added: `lib/theme.test.ts`, `components/ThemeToggle.test.tsx`, `components/ui/Avatar.test.tsx`,
+  `components/ui/StatTile.test.tsx` (tile, sparkline, progress bar), `homeStats` in `app/(app)/dev/home.test.ts`;
+  updated: `globals.test.ts` (two shadows, dark-mode parity), the top bar tests, `next.config.test.ts`.
+- Checks: `npm run typecheck`, `npx eslint .`, `npx vitest run` (1274 tests), `next build` (production build, the
+  lab answers 404). Not run here: the Playwright e2e suite (needs the compose stack); the selectors it uses on Home
+  and the tracker were kept (`[data-primary]`, `[data-home='others'] article [data-chip]`, `[data-whose-turn]`, the
+  "Stages" list, `[data-actions]`).
+
+Waiting on the owner's review of the four screens before the roll-out to the remaining screens.
