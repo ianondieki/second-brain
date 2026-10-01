@@ -56,7 +56,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="developer" initialDone={tourDoneFromCookies(await cookies())} />
+        <FirstLoginTour side="developer" initialDone={tourDoneFromCookies(await cookies(), "developer")} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader

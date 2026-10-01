@@ -57,7 +57,7 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="org" initialDone={tourDoneFromCookies(await cookies())} />
+        <FirstLoginTour side="org" initialDone={tourDoneFromCookies(await cookies(), "org")} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader

@@ -85,15 +85,11 @@
   color-scheme: light;
 }
 
-/* While the first-login tour floats bottom-right (from 640 px), the page keeps its height free at the end and
-   focus scrolling stops above it, so no focused control ends up under the panel (WCAG 2.4.11). */
-@media (min-width: 40rem) {
-  html[data-tour-open] {
-    scroll-padding-bottom: 22rem;
-  }
-  html[data-tour-open] body {
-    padding-bottom: 22rem;
-  }
+/* A first-login tour the server rendered but this browser's storage remembers as done (the cookie had lapsed):
+   hidden before paint by the inline script in app/layout.tsx, so hydration removes it with nothing to shift. */
+html[data-tour-seen~="developer"] [data-tour-side="developer"],
+html[data-tour-seen~="org"] [data-tour-side="org"] {
+  display: none;
 }
 
 /* Dark mode: its own steps, not a flip; the accent and status colours are lightened to keep AA on the dark paper. */

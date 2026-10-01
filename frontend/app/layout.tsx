@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { RouteFocus } from "@/components/RouteFocus";
+import { TOUR_INIT_SCRIPT } from "@/components/tour/tour-store";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
@@ -40,8 +41,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {PRELOADED_FONTS.map((href) => (
           <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         ))}
-        {/* The remembered appearance, before the first paint (lib/theme.ts); nothing else runs here. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Before the first paint: the remembered appearance (lib/theme.ts) and a stale first-login tour hidden
+            (components/tour/tour-store.ts); nothing else runs here. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT + TOUR_INIT_SCRIPT }} />
       </head>
       <body className="flex min-h-full flex-col bg-paper text-ink">
         {/* Sign out and the error screen read server-formatted strings: no next-intl runtime in the browser. */}

@@ -8,14 +8,15 @@ import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
 import { FirstLoginTour } from "./FirstLoginTour";
-import { finishTour, resetTour, tourDoneFromCookies, TOUR_COOKIE, TOUR_STORAGE_KEY } from "./tour-store";
+import { finishTour, resetTour, tourCookie, tourDoneFromCookies, tourStorageKey, TOUR_INIT_SCRIPT } from "./tour-store";
 
 // The first-login tour (D-52; docs/spec/07): three steps, skippable from the first, remembered in this browser.
 
 afterEach(cleanup);
 beforeEach(() => {
   window.localStorage.clear();
-  resetTour();
+  resetTour("developer");
+  resetTour("org");
 });
 
 describe("FirstLoginTour", () => {
@@ -28,17 +29,31 @@ describe("FirstLoginTour", () => {
       );
     expect(html(false)).toContain('role="dialog"');
     expect(html(true)).not.toContain('role="dialog"');
-    expect(tourDoneFromCookies({ get: (name) => (name === TOUR_COOKIE ? { value: "done" } : undefined) })).toBe(true);
-    expect(tourDoneFromCookies({ get: () => undefined })).toBe(false);
+    expect(tourDoneFromCookies({ get: (name) => (name === tourCookie("developer") ? { value: "done" } : undefined) }, "developer")).toBe(true);
+    expect(tourDoneFromCookies({ get: (name) => (name === tourCookie("developer") ? { value: "done" } : undefined) }, "org")).toBe(false);
+    expect(tourDoneFromCookies({ get: () => undefined }, "developer")).toBe(false);
   });
 
   it("writes the cookie again when storage remembers the tour but the cookie has lapsed", () => {
-    finishTour();
-    document.cookie = `${TOUR_COOKIE}=; path=/; max-age=0`;
-    expect(document.cookie).not.toContain("wazo-tour=done");
+    finishTour("developer");
+    document.cookie = `${tourCookie("developer")}=; path=/; max-age=0`;
+    expect(document.cookie).not.toContain("wazo-tour-developer=done");
     renderWithIntl(<FirstLoginTour side="developer" />);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.cookie).toContain("wazo-tour=done");
+    expect(document.cookie).toContain("wazo-tour-developer=done");
+  });
+
+  it("stays away when only the cookie remembers it, and the inline script hides a stale one before paint", () => {
+    window.localStorage.clear();
+    document.cookie = `${tourCookie("org")}=done; path=/`;
+    renderWithIntl(<FirstLoginTour side="org" />);
+    expect(screen.queryByRole("dialog")).toBeNull(); // the client reads the cookie too: no tour appears after hydration
+    document.cookie = `${tourCookie("org")}=; path=/; max-age=0`;
+    window.localStorage.setItem(tourStorageKey("developer"), "done");
+    document.documentElement.removeAttribute("data-tour-seen");
+    new Function(TOUR_INIT_SCRIPT)();
+    expect(document.documentElement.getAttribute("data-tour-seen")).toBe("developer");
+    document.documentElement.removeAttribute("data-tour-seen");
   });
 
   it("shows the first of three steps as a non-modal dialog with Skip and Next", () => {
@@ -60,21 +75,19 @@ describe("FirstLoginTour", () => {
     expect(screen.queryByRole("button", { name: "Skip tour" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
-    expect(document.cookie).toContain("wazo-tour=done"); // what the server reads on the next visit
+    expect(window.localStorage.getItem(tourStorageKey("developer"))).toBe("done");
+    expect(document.cookie).toContain("wazo-tour-developer=done"); // what the server reads on the next visit
   });
 
   it("closes on Escape pressed inside it (not elsewhere) and hands focus to the page title", () => {
     document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="menu">Account</button><div id="host"></div></main>';
     renderWithIntl(<FirstLoginTour side="developer" />, { container: document.getElementById("host")! });
-    expect(document.documentElement.hasAttribute("data-tour-open")).toBe(true);
     fireEvent.keyDown(document.getElementById("menu")!, { key: "Escape" }); // the account menu's Escape, not the tour's
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.keyDown(screen.getByRole("button", { name: "Next" }), { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
+    expect(window.localStorage.getItem(tourStorageKey("developer"))).toBe("done");
     expect(document.activeElement).toBe(document.querySelector("h1"));
-    expect(document.documentElement.hasAttribute("data-tour-open")).toBe(false);
     document.body.innerHTML = "";
   });
 

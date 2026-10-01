@@ -115,7 +115,7 @@ const SHOTS: Shot[] = [
       await page.locator("main article").first().getByRole("link").first().click();
       await page.locator("[data-tier2-state]").waitFor();
     } },
-  { name: "org-proposal-full", path: "/org/inbox", who: "org", prepare: async (page) => {
+  { name: "org-proposal-full", path: "/org/inbox", who: "org", viewportOnly: true, prepare: async (page) => {
       await page.locator("main article").first().getByRole("link").first().click();
       await page.locator("[data-tier2-state]").waitFor();
       const accept = page.getByRole("button", { name: "Accept and view" });
@@ -323,12 +323,17 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
         });
         // The tour is remembered as done (the storage key the client reads, the cookie the server reads) unless the
         // shot is the tour's own.
-        if (!shot.tour) await context.addCookies([{ name: "wazo-tour", value: "done", url: test.info().project.use.baseURL as string }]);
+        if (!shot.tour) {
+          const url = test.info().project.use.baseURL as string;
+          await context.addCookies(["developer", "org"].map((side) => ({ name: `wazo-tour-${side}`, value: "done", url })));
+        }
         await context.addInitScript(
           ({ choice, tour }) => {
             window.localStorage.setItem("wazo-theme", choice);
-            if (tour) window.localStorage.removeItem("wazo-tour:v1");
-            else window.localStorage.setItem("wazo-tour:v1", "done");
+            for (const side of ["developer", "org"]) {
+              if (tour) window.localStorage.removeItem(`wazo-tour:v1:${side}`);
+              else window.localStorage.setItem(`wazo-tour:v1:${side}`, "done");
+            }
           },
           { choice: theme, tour: shot.tour === true },
         );

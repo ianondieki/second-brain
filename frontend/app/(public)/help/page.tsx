@@ -78,7 +78,7 @@ export default async function HelpPage() {
           {hasTour ? (
             <Section title={tTour("title")} headingId="help-tour" className="mt-12" data-help-section="tour">
               <ClientStrings strings={await clientStrings(["tour"])}>
-                <ShowTourAgain />
+                <ShowTourAgain side={person.home === "/org" ? "org" : "developer"} />
               </ClientStrings>
             </Section>
           ) : null}

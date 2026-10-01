@@ -8,9 +8,9 @@ import { cn } from "@/components/ui/cn";
 import { Illustration, type IllustrationKind } from "@/components/ui/Illustration";
 import { focusPageTitle } from "@/lib/focus";
 
-import { finishTour, rememberTourCookie, subscribeTour, tourCookieSet, tourDone } from "./tour-store";
+import { finishTour, rememberTourCookie, subscribeTour, tourCookieSet, tourDone, type TourSide } from "./tour-store";
 
-export type TourSide = "developer" | "org";
+export type { TourSide };
 
 type StepKey = "devHome" | "devIdeas" | "devTracker" | "orgInbox" | "orgNda" | "orgTracker";
 
@@ -29,18 +29,16 @@ const STEPS: Record<TourSide, ReadonlyArray<{ key: StepKey; art: IllustrationKin
 
 /**
  * The first-login tour (D-52; docs/spec/07: at most three steps, skippable from the first), never a modal: the page
- * stays usable. On phones it sits in the page's flow above the title, so it covers nothing it points at and no focused
- * control; from 640 px it floats bottom-right above the tab bar, and the page keeps that much room at its end
- * (globals.css, `html[data-tour-open]`) so a focused control can always scroll clear of it. Each step is a drawing, a
- * title and one sentence; "Skip tour", "Done" or Escape pressed inside it remembers it in this browser (tour-store.ts:
- * in storage and in a cookie the server reads, so the page arrives with or without the tour and never shifts) and
- * hands focus back to the page's title. Its forward button is styled as the primary action but carries no
- * data-primary: the page keeps its own.
+ * stays usable. It sits in the page's flow above the title at every width, so it covers nothing it points at and no
+ * focused control, and it arrives with the page (tour-store.ts: a cookie the server reads, storage the client reads,
+ * an inline script that hides a stale one before paint), so nothing shifts. Each step is a drawing, a title and one
+ * sentence; "Skip tour", "Done" or Escape pressed inside it remembers it in this browser and hands focus back to the
+ * page's title. Its forward button is a secondary button: the page keeps its one primary action.
  */
 export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; initialDone?: boolean }) {
   const t = useStrings("tour");
-  // The server's answer comes from the cookie (tour-store.ts): the page arrives with the tour or without it, whole.
-  const done = useSyncExternalStore(subscribeTour, tourDone, () => initialDone);
+  // The server's answer comes from the cookie: the page arrives with the tour or without it, whole.
+  const done = useSyncExternalStore(subscribeTour, () => tourDone(side), () => initialDone);
   const [index, setIndex] = useState(0);
   const titleId = useId();
   const bodyId = useId();
@@ -49,25 +47,19 @@ export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; i
   // Storage remembers for as long as the person comes back, a cookie set from a page lapses sooner (Safari caps it at
   // seven days): when storage says done and the cookie is gone, write it again, so the next visit renders no tour.
   useEffect(() => {
-    if (done && !tourCookieSet()) rememberTourCookie();
-  }, [done]);
+    if (done && !tourCookieSet(side)) rememberTourCookie(side);
+  }, [done, side]);
 
-  // While open: Escape from inside it closes it (not an Escape meant for the account menu or a dialog), and the
-  // document reserves its room at the page's end from 640 px.
+  // While open: Escape from inside it closes it (not an Escape meant for the account menu or a dialog).
   useEffect(() => {
     if (done) return;
-    const root = document.documentElement;
-    root.setAttribute("data-tour-open", "");
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (event.target instanceof Node && panel.current?.contains(event.target)) close();
+      if (event.target instanceof Node && panel.current?.contains(event.target)) close(side);
     };
     document.addEventListener("keydown", onKey);
-    return () => {
-      root.removeAttribute("data-tour-open");
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [done]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [done, side]);
 
   if (done) return null;
   const steps = STEPS[side];
@@ -80,11 +72,8 @@ export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; i
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       data-tour={step.key}
-      className={cn(
-        "tour-enter z-20 rounded-panel border border-line bg-field p-5 text-ink shadow-overlay",
-        // Above the fixed tab bar until the rail takes over at 1024 px.
-        "mb-8 sm:fixed sm:right-6 sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:mb-0 sm:w-80 lg:bottom-8",
-      )}
+      data-tour-side={side}
+      className="tour-enter mb-8 rounded-panel border border-line bg-field p-5 text-ink shadow-overlay sm:max-w-xl"
     >
       <Illustration kind={step.art} className="max-w-40 text-ink" />
       <p className="mt-3 text-xs font-medium text-ink-soft tabular-nums">{t("stepOf", { current: index + 1, total: steps.length })}</p>
@@ -102,14 +91,14 @@ export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; i
         </ol>
         <div className="flex items-center gap-2">
           {last ? null : (
-            <button type="button" onClick={close} className={buttonClass("link", "whitespace-nowrap px-2")}>
+            <button type="button" onClick={() => close(side)} className={buttonClass("link", "shrink-0 whitespace-nowrap px-2")}>
               {t("skip")}
             </button>
           )}
           <button
             type="button"
-            onClick={() => (last ? close() : setIndex(index + 1))}
-            className={buttonClass("primary", "min-h-11 w-auto whitespace-nowrap px-4")}
+            onClick={() => (last ? close(side) : setIndex(index + 1))}
+            className={buttonClass("secondary", "min-h-11 w-auto shrink-0 whitespace-nowrap px-4")}
           >
             {last ? t("done") : t("next")}
           </button>
@@ -120,7 +109,7 @@ export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; i
 }
 
 /** Skip, Done or Escape: remembered, then focus goes to the page's title rather than to <body>. */
-function close() {
-  finishTour();
+function close(side: TourSide) {
+  finishTour(side);
   focusPageTitle();
 }
