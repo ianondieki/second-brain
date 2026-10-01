@@ -18,9 +18,10 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Final
 
-from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
+from jinja2 import ChoiceLoader, Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
+from bridge.notifications.brand import PRODUCT_DEFAULT
 from bridge.proposals.sanitise import PHONES
 from bridge.reminders.health import EngagementFact, Health, Reason, ReasonCode
 
@@ -63,7 +64,10 @@ _DOMAIN = re.compile(r"(?<![\w@.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a
 _SPACE = re.compile(r"\s+")
 _TAG = re.compile(r"</?[a-z!][^<>]*>", re.I)
 _ENV: Final = Environment(
-    loader=PackageLoader("bridge.reminders", "templates"),
+    # The branded frame (_brand.html.j2, _macros.html.j2) lives with the notification templates.
+    loader=ChoiceLoader(
+        [PackageLoader("bridge.reminders", "templates"), PackageLoader("bridge.notifications", "templates")]
+    ),
     autoescape=select_autoescape(("html", "j2")),
     undefined=StrictUndefined,
     trim_blocks=True,
@@ -150,9 +154,10 @@ def render_text(email: Email, base_url: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_html(email: Email, base_url: str) -> str:
+def render_html(email: Email, base_url: str, product: str = PRODUCT_DEFAULT) -> str:
     return _ENV.get_template("em7.html.j2").render(
         email=email,
+        product=product,
         cta_url=platform_url(base_url, email.cta_path),
         settings_url=platform_url(base_url, SETTINGS_PATH),
         help_url=platform_url(base_url, HELP_PATH),

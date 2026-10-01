@@ -1,0 +1,8 @@
+{# Shared pieces of the branded emails (D-52): the one accent button and a quiet label. Table-free and gradient-free,
+   so every mail client draws the same. #}
+{% macro button(href, label, cta) -%}
+<a data-cta="{{ cta }}" href="{{ href }}" style="display:inline-block;background:#1f5e49;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-size:15px;font-weight:600">{{ label }}</a>
+{%- endmacro %}
+{% macro label(text) -%}
+<p style="margin:20px 0 6px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#5c5a53">{{ text }}</p>
+{%- endmacro %}

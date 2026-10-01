@@ -39,7 +39,11 @@ async def deliver(
             async with factory() as db:
                 await bind_tenant(db, user_id=item.user_id)
                 message = EmailMessage(
-                    to=item.address, subject=item.wording.subject, text=item.wording.text, html=None, tag=item.kind
+                    to=item.address,
+                    subject=item.wording.subject,
+                    text=item.wording.text,
+                    html=item.wording.html,
+                    tag=item.kind,
                 )
                 await send_email(
                     db, provider, message=message, kind=item.kind, user_id=item.user_id, dedupe_key=item.dedupe_key
