@@ -5,7 +5,7 @@ import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import loadConfig from "next/dist/server/config";
 import { describe, expect, it } from "vitest";
 
-import nextConfig from "./next.config";
+import nextConfig, { PAGE_EXTENSIONS } from "./next.config";
 import { HEADER_RULES } from "./security-headers";
 
 // security-headers.test.ts proves the header rules are right when sources match in exact case; these tests prove the
@@ -20,6 +20,14 @@ describe("next.config.ts", () => {
     const rewrites = await nextConfig.rewrites?.();
     const sources = (Array.isArray(rewrites) ? rewrites : []).map((rule) => rule.source);
     expect(sources).toEqual(["/api/:path*", "/.well-known/provenance-keys.json"]);
+  });
+
+  // The design lab (app/(lab)/design-lab, P18) is development only: its `*.lab.tsx` files are routes for `next dev`,
+  // and a production build takes the `*.stub.tsx` 404 stand-ins at the same addresses instead, which keeps the lab's
+  // fixtures and fonts out of the image. vitest runs with NODE_ENV "test", where the lab is off as in production.
+  it("resolves the design lab's stubs, not its pages, outside development", () => {
+    expect(PAGE_EXTENSIONS).toEqual(["stub.tsx", "tsx", "ts", "jsx", "js"]);
+    expect(nextConfig.pageExtensions).toEqual(PAGE_EXTENSIONS);
   });
 
   it("sends exactly the header rules of security-headers.ts", async () => {
