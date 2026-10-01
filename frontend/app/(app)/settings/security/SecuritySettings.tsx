@@ -236,7 +236,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
               </Suspense>
             ) : (
               <>
-                <p className="text-sm text-ink-soft">{t("recoveryLead")}</p>
+                <p className="max-w-[60ch] text-sm text-ink-soft">{t("recoveryLead")}</p>
                 <Button
                   id="new-codes"
                   // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
