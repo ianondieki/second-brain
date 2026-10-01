@@ -123,7 +123,7 @@ class Settings(BaseSettings):
     # Email (ADR-004): Mailpit over SMTP in dev, CI and staging; Postmark only in production (after G7, sender-domain
     # DNS); fake in unit tests. bridge.notifications.email.provider_from_settings enforces this.
     email_provider: Literal["smtp", "postmark", "fake"] = "smtp"
-    email_from: str = "Bridge <no-reply@bridge.localhost>"
+    email_from: str = "Wazo <no-reply@bridge.localhost>"
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     postmark_server_token: SecretStr | None = None

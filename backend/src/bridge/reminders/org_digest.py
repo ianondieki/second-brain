@@ -20,6 +20,7 @@ from typing import Final, Literal
 from uuid import UUID
 
 from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
+from bridge.notifications.brand import PRODUCT_DEFAULT
 from bridge.notifications.email import EmailMessage
 from bridge.reminders.health import EngagementFact, Health, ReasonCode, assess, quiet_since
 from bridge.reminders.render import (
@@ -209,12 +210,12 @@ def email(digest: Digest) -> Email:
     )
 
 
-def render_digest(digest: Digest, *, to: str, base_url: str) -> EmailMessage:
+def render_digest(digest: Digest, *, to: str, base_url: str, product: str = PRODUCT_DEFAULT) -> EmailMessage:
     worded = email(digest)
     return EmailMessage(
         to=to,
         subject=worded.subject,
         text=render_text(worded, base_url),
-        html=render_html(worded, base_url),
+        html=render_html(worded, base_url, product=product),
         tag=KIND,
     )

@@ -325,7 +325,13 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
         wording = None
         if email_open:  # the model words an email only, and only once (P6 review MAJOR 2)
             wording = await _word_email(deps, db, r, composed, today=today, resumed=email_row is not None)
-            message = developer.render_nudge(composed, wording, to=r.email, base_url=deps.settings.public_base_url)
+            message = developer.render_nudge(
+                composed,
+                wording,
+                to=r.email,
+                base_url=deps.settings.public_base_url,
+                product=deps.settings.product_name,
+            )
             status = await _send(deps, db, message, kind=kind, user_id=r.id, org_id=None, key=email_key, period=today)
         await db.commit()
     return Outcome(
@@ -420,7 +426,9 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
             local_date=period,
         )
         if email_open:
-            message = org_digest.render_digest(digest, to=r.email, base_url=deps.settings.public_base_url)
+            message = org_digest.render_digest(
+                digest, to=r.email, base_url=deps.settings.public_base_url, product=deps.settings.product_name
+            )
             status = await _send(
                 deps, db, message, kind=kind, user_id=r.id, org_id=org_id, key=email_key, period=period
             )

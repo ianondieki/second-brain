@@ -23,6 +23,7 @@ from typing import Final, Literal
 from uuid import UUID
 
 from bridge.models.enums import EngagementParty, MilestoneState
+from bridge.notifications.brand import PRODUCT_DEFAULT
 from bridge.notifications.email import EmailMessage
 from bridge.reminders.health import Assessment, EngagementFact, Health, Reason, ReasonCode, assess
 from bridge.reminders.render import (
@@ -303,13 +304,15 @@ def email(nudge: Nudge, wording: Wording) -> Email:
     )
 
 
-def render_nudge(nudge: Nudge, wording: Wording, *, to: str, base_url: str) -> EmailMessage:
+def render_nudge(
+    nudge: Nudge, wording: Wording, *, to: str, base_url: str, product: str = PRODUCT_DEFAULT
+) -> EmailMessage:
     worded = email(nudge, wording)
     return EmailMessage(
         to=to,
         subject=worded.subject,
         text=render_text(worded, base_url),
-        html=render_html(worded, base_url),
+        html=render_html(worded, base_url, product=product),
         tag=KIND,
         headers={WORDING_HEADER: wording.source},
     )

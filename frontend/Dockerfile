@@ -6,9 +6,11 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS build
 WORKDIR /app
-# Next.js resolves rewrites at build time, so the API address is a build argument (compose passes http://api:8000).
+# Next.js resolves rewrites at build time, so the API address is a build argument (compose passes http://api:8000),
+# and NEXT_PUBLIC_* values are inlined at build time: the site's public origin (the certificate's QR encodes it).
 ARG API_ORIGIN=http://api:8000
-ENV NEXT_TELEMETRY_DISABLED=1 API_ORIGIN=${API_ORIGIN}
+ARG NEXT_PUBLIC_SITE_ORIGIN=
+ENV NEXT_TELEMETRY_DISABLED=1 API_ORIGIN=${API_ORIGIN} NEXT_PUBLIC_SITE_ORIGIN=${NEXT_PUBLIC_SITE_ORIGIN}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
