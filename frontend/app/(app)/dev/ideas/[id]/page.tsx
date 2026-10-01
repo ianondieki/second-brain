@@ -125,6 +125,8 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
         </div>
       ) : null}
 
+      <Certificate idea={idea} ownerName={me.user.display_name} />
+
       {idea.current && (status !== "hidden" || (tags?.items.length ?? 0) > 0) ? (
         <Pitches ideaId={idea.id} status={status} tags={tags} />
       ) : null}
@@ -132,7 +134,6 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
 
       {version ? <Teaser version={version} status={status} county={county} /> : null}
       {version ? <Confidential version={version} /> : null}
-      <Certificate idea={idea} />
 
       {status !== "hidden" ? (
         <div className="mt-12">
