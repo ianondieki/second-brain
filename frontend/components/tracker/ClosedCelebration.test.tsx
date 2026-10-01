@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { startTransition } from "react";
-import { hydrateRoot } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 import { celebrationSeenFromCookies } from "./celebration-store";
@@ -63,22 +63,20 @@ describe("ClosedCelebration", () => {
     expect(screen.queryByRole("region")).toBeNull();
   });
 
-  it("never paints a card storage remembers while hydrating", async () => {
-    // The cookie lapsed, so the server drew the card and the head script set the marker. Next hydrates in a
-    // transition, whose store check (which removes the card) runs in a later task than the layout effects: the
-    // marker must outlive the card, so that between the two the page never shows it (and never shifts).
+  /**
+   * What the page could show between tasks (never under act(), which would flush everything at once): the card under
+   * the marker ("hidden"), the card without it ("painted"), or no card ("gone"); the first state is sampled before
+   * React runs at all. The root is mounted in a transition, as Next mounts and hydrates.
+   */
+  const paintable = async (container: HTMLElement, mount: () => Root): Promise<string[]> => {
     const actEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
-    const element = <ClosedCelebration {...props} engagementId="e-11" initialSeen={false} />;
-    const container = document.createElement("div");
-    container.innerHTML = renderToString(element);
     document.body.appendChild(container);
-    window.localStorage.setItem("wazo-closed:v1:e-11", "seen");
-    document.documentElement.setAttribute("data-celebration-seen", "e-11");
     const states = new Set<string>();
+    let root: Root | undefined;
     try {
       startTransition(() => {
-        hydrateRoot(container, element);
+        root = mount();
       });
       for (let tick = 0; tick < 40; tick += 1) {
         await new Promise((resolve) => setImmediate(resolve));
@@ -87,11 +85,38 @@ describe("ClosedCelebration", () => {
         states.add(card ? (marker ? "hidden" : "painted") : "gone");
       }
     } finally {
+      root?.unmount();
       container.remove();
       (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
       document.documentElement.removeAttribute("data-celebration-seen");
+      document.cookie = "wazo-closed=; path=/; max-age=0";
     }
-    expect([...states]).toEqual(["hidden", "gone"]); // never "painted"
+    return [...states];
+  };
+
+  it("never paints a card storage remembers while hydrating", async () => {
+    // The cookie lapsed, so the server drew the card and the head script set the marker. Next hydrates in a
+    // transition, whose store check (which removes the card) runs in a later task than the layout effects: the
+    // marker must outlive the card, so that between the two the page never shows it (and never shifts).
+    const element = <ClosedCelebration {...props} engagementId="e-11" initialSeen={false} />;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(element);
+    window.localStorage.setItem("wazo-closed:v1:e-11", "seen");
+    document.documentElement.setAttribute("data-celebration-seen", "e-11");
+    expect(await paintable(container, () => hydrateRoot(container, element))).toEqual(["hidden", "gone"]);
+  });
+
+  it("never paints an unseen card hidden under a marker another page left", async () => {
+    // A client-side navigation from a page whose marker no shell cleared (a tracker that is not closed) to an unseen
+    // closed tracker: the marker must go before the card's first paint, so the card never appears late (a shift).
+    const container = document.createElement("div");
+    document.documentElement.setAttribute("data-celebration-seen", "e-9");
+    const states = await paintable(container, () => {
+      const root = createRoot(container);
+      root.render(<ClosedCelebration {...props} engagementId="e-10" initialSeen={false} />);
+      return root;
+    });
+    expect(states).toEqual(["gone", "painted"]); // never "hidden"
   });
 
   it("is remembered per engagement, in storage or in the cookie", () => {
