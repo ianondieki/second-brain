@@ -8,7 +8,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
-import { TOUR_COOKIE } from "@/components/tour/tour-store";
+import { tourDoneFromCookies } from "@/components/tour/tour-store";
 import { orgEngagements } from "@/components/tracker/data";
 import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
@@ -57,7 +57,7 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="org" initialDone={(await cookies()).get(TOUR_COOKIE)?.value === "done"} />
+        <FirstLoginTour side="org" initialDone={tourDoneFromCookies(await cookies())} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader

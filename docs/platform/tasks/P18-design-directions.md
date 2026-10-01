@@ -30,7 +30,7 @@ name and a direction (or a mix) before step 2.
 Owner's choice: name **Wazo**; direction C with B's lattice as the one signature; C's dark mode. Delivered on the same
 branch (`docs/platform/design/p18-design-system.md` is the system's record):
 
-- Tokens, dark mode (system + remembered choice, applied before paint), self-hosted fonts in `app/fonts/`, motion,
+- Tokens, dark mode (system + remembered choice, applied before paint), self-hosted fonts in `public/fonts/` (declared in `globals.css`, preloaded from `layout.tsx`), motion,
   print rules; `--jacaranda` renamed `--accent` across the frontend.
 - Brand: `components/brand/` (mark, wordmark, seal); the top bar shows the wordmark and a "Prototype" badge; every
   product string that named "Bridge" now says "Wazo" (frontend; the backend's `product_name` default and the EM7

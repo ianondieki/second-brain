@@ -6,6 +6,20 @@ export const TOUR_STORAGE_KEY = "wazo-tour:v1";
 export const TOUR_COOKIE = "wazo-tour";
 const COOKIE_YEAR = 60 * 60 * 24 * 365;
 
+/** What the server reads (next/headers cookies()): true when this browser finished or skipped the tour. */
+export function tourDoneFromCookies(store: { get(name: string): { value: string } | undefined }): boolean {
+  return store.get(TOUR_COOKIE)?.value === "done";
+}
+
+/** Writes the cookie the server reads; also called again on a visit where storage knows but the cookie has lapsed. */
+export function rememberTourCookie(): void {
+  document.cookie = `${TOUR_COOKIE}=done; path=/; max-age=${COOKIE_YEAR}; SameSite=Lax`;
+}
+
+export function tourCookieSet(): boolean {
+  return document.cookie.split("; ").includes(`${TOUR_COOKIE}=done`);
+}
+
 const listeners = new Set<() => void>();
 /** Finished on this page: the tour closes even when storage refuses the write (a full quota, a private window). */
 let finishedHere = false;
@@ -36,7 +50,7 @@ export function finishTour() {
   } catch {
     // Storage refused the write: the in-memory mark closes the tour for this page; it may show again next time.
   }
-  document.cookie = `${TOUR_COOKIE}=done; path=/; max-age=${COOKIE_YEAR}; SameSite=Lax`;
+  rememberTourCookie();
   for (const listener of listeners) listener();
 }
 

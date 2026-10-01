@@ -8,7 +8,7 @@ import { cn } from "@/components/ui/cn";
 import { Illustration, type IllustrationKind } from "@/components/ui/Illustration";
 import { focusPageTitle } from "@/lib/focus";
 
-import { finishTour, subscribeTour, tourDone } from "./tour-store";
+import { finishTour, rememberTourCookie, subscribeTour, tourCookieSet, tourDone } from "./tour-store";
 
 export type TourSide = "developer" | "org";
 
@@ -45,6 +45,12 @@ export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; i
   const titleId = useId();
   const bodyId = useId();
   const panel = useRef<HTMLElement>(null);
+
+  // Storage remembers for as long as the person comes back, a cookie set from a page lapses sooner (Safari caps it at
+  // seven days): when storage says done and the cookie is gone, write it again, so the next visit renders no tour.
+  useEffect(() => {
+    if (done && !tourCookieSet()) rememberTourCookie();
+  }, [done]);
 
   // While open: Escape from inside it closes it (not an Escape meant for the account menu or a dialog), and the
   // document reserves its room at the page's end from 640 px.

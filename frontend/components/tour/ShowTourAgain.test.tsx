@@ -13,8 +13,10 @@ describe("ShowTourAgain", () => {
     finishTour();
     expect(tourDone()).toBe(true);
     renderWithIntl(<ShowTourAgain />);
+    expect(document.cookie).toContain("wazo-tour=done");
     fireEvent.click(screen.getByRole("button", { name: "Show the tour again" }));
     expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBeNull();
+    expect(document.cookie).not.toContain("wazo-tour=done"); // the server would otherwise keep hiding it
     expect(tourDone()).toBe(false);
     expect(screen.getByRole("status").textContent).toBe("The tour will show the next time you open your home.");
     expect(screen.queryByRole("button")).toBeNull();

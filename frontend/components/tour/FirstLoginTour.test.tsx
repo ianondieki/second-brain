@@ -1,10 +1,14 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { renderToString } from "react-dom/server";
+
+import { ClientStrings } from "@/components/ClientStrings";
+import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
 import { FirstLoginTour } from "./FirstLoginTour";
-import { resetTour, TOUR_STORAGE_KEY } from "./tour-store";
+import { finishTour, resetTour, tourDoneFromCookies, TOUR_COOKIE, TOUR_STORAGE_KEY } from "./tour-store";
 
 // The first-login tour (D-52; docs/spec/07): three steps, skippable from the first, remembered in this browser.
 
@@ -15,6 +19,28 @@ beforeEach(() => {
 });
 
 describe("FirstLoginTour", () => {
+  it("renders on the server exactly when the cookie says the tour was not seen (no layout shift either way)", () => {
+    const html = (initialDone: boolean) =>
+      renderToString(
+        <ClientStrings strings={{ tour: en.tour }}>
+          <FirstLoginTour side="developer" initialDone={initialDone} />
+        </ClientStrings>,
+      );
+    expect(html(false)).toContain('role="dialog"');
+    expect(html(true)).not.toContain('role="dialog"');
+    expect(tourDoneFromCookies({ get: (name) => (name === TOUR_COOKIE ? { value: "done" } : undefined) })).toBe(true);
+    expect(tourDoneFromCookies({ get: () => undefined })).toBe(false);
+  });
+
+  it("writes the cookie again when storage remembers the tour but the cookie has lapsed", () => {
+    finishTour();
+    document.cookie = `${TOUR_COOKIE}=; path=/; max-age=0`;
+    expect(document.cookie).not.toContain("wazo-tour=done");
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.cookie).toContain("wazo-tour=done");
+  });
+
   it("shows the first of three steps as a non-modal dialog with Skip and Next", () => {
     renderWithIntl(<FirstLoginTour side="developer" />);
     const dialog = screen.getByRole("dialog", { name: "This is your home" });

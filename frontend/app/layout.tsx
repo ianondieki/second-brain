@@ -13,7 +13,7 @@ import "./globals.css";
 // LCP, AC-UX-3). The display face is instanced to the one weight the headings use (500) over optical sizes 18–72
 // (42 KB, from 132); the text face to the weights in use (400–600; 35 KB, from 45); the mono face (fingerprints and
 // codes, below the fold) is not preloaded.
-const PRELOADED_FONTS = ["/fonts/newsreader-latin.woff2", "/fonts/ibm-plex-sans-latin.woff2"] as const;
+const PRELOADED_FONTS = ["/fonts/newsreader-latin-v2.woff2", "/fonts/ibm-plex-sans-latin-v2.woff2"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");

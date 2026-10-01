@@ -61,6 +61,13 @@ describe("web security headers", () => {
     expect(headersFor(path)).toEqual({ "X-Content-Type-Options": "nosniff" });
   });
 
+  it("cache the versioned fonts for a year, with nosniff and none of the page headers", () => {
+    expect(headersFor("/fonts/newsreader-latin-v2.woff2")).toEqual({
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+  });
+
   it("match sources in exact case, since Next's default would exempt /_NEXT/static/... pages", () => {
     expect(CASE_SENSITIVE_ROUTES).toBe(true);
     expect(headersFor("/_NEXT/static/x.js", false)).toEqual({ "X-Content-Type-Options": "nosniff" });
