@@ -56,6 +56,18 @@ describe("FirstLoginTour", () => {
     document.documentElement.removeAttribute("data-tour-seen");
   });
 
+  it("marks the document when a side's tour is finished and unmarks it on reset, so a client-side visit home shows it again", () => {
+    document.documentElement.setAttribute("data-tour-seen", "org");
+    finishTour("developer");
+    expect(document.documentElement.getAttribute("data-tour-seen")).toBe("org developer");
+    resetTour("developer"); // Help's "Show the tour again": the CSS hide (globals.css) must let go of this side
+    expect(document.documentElement.getAttribute("data-tour-seen")).toBe("org");
+    renderWithIntl(<FirstLoginTour side="developer" initialDone={false} />);
+    expect(screen.getByRole("dialog", { name: "This is your home" })).toBeTruthy();
+    resetTour("org");
+    expect(document.documentElement.hasAttribute("data-tour-seen")).toBe(false);
+  });
+
   it("shows the first of three steps as a non-modal dialog with Skip and Next", () => {
     renderWithIntl(<FirstLoginTour side="developer" />);
     const dialog = screen.getByRole("dialog", { name: "This is your home" });

@@ -57,6 +57,21 @@ export function tourDone(side: TourSide): boolean {
   return tourCookieSet(side);
 }
 
+const SEEN_ATTRIBUTE = "data-tour-seen";
+
+/**
+ * The before-paint marker on <html> (TOUR_INIT_SCRIPT below; globals.css hides a marked side's tour): kept in step
+ * with the store, so a reset on Help shows the tour again on the next client-side visit home, not only after a
+ * reload, and a finish never leaves a side unmarked.
+ */
+function markSeen(side: TourSide, seen: boolean): void {
+  const root = document.documentElement;
+  const sides = (root.getAttribute(SEEN_ATTRIBUTE) ?? "").split(" ").filter((s) => s !== "" && s !== side);
+  if (seen) sides.push(side);
+  if (sides.length) root.setAttribute(SEEN_ATTRIBUTE, sides.join(" "));
+  else root.removeAttribute(SEEN_ATTRIBUTE);
+}
+
 export function finishTour(side: TourSide) {
   finishedHere.add(side);
   try {
@@ -65,6 +80,7 @@ export function finishTour(side: TourSide) {
     // Storage refused the write: the in-memory mark and the cookie close the tour for this page and the next visit.
   }
   rememberTourCookie(side);
+  markSeen(side, true);
   for (const listener of listeners) listener();
 }
 
@@ -77,6 +93,7 @@ export function resetTour(side: TourSide) {
     // Nothing to forget.
   }
   document.cookie = `${tourCookie(side)}=; path=/; max-age=0; SameSite=Lax`;
+  markSeen(side, false);
   for (const listener of listeners) listener();
 }
 
@@ -88,4 +105,4 @@ export function resetTour(side: TourSide) {
 export const TOUR_INIT_SCRIPT =
   `(function(){try{var s=[];` +
   TOUR_SIDES.map((side) => `if(localStorage.getItem(${JSON.stringify(tourStorageKey(side))})==="done")s.push(${JSON.stringify(side)});`).join("") +
-  `if(s.length)document.documentElement.setAttribute("data-tour-seen",s.join(" "));}catch(e){}})();`;
+  `if(s.length)document.documentElement.setAttribute(${JSON.stringify(SEEN_ATTRIBUTE)},s.join(" "));}catch(e){}})();`;
