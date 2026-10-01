@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-01, session 4): none once P18 is merged (merge commit: see the P18 report's last line). Integration head before P18: `9142360`.
+**Open branches** (2026-10-01, session 4): none. P18 merged as `cf0da47` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `dcf6de1`); integration head before it `9142360`.
 
 **Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
 (not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
@@ -409,7 +409,7 @@ below, the per-screen record `docs/demo/design-scorecard.md`, the task card `tas
 `reviewer` PASS (round 11 over 8dd4ab5..ea41e9d, round 12 over the rest), `ux-reviewer` PASS (round 5), the full
 Playwright suite green on the compose stack (164) and `pr.yml` green on the final head, CodeQL exactly the eight D-42
 findings, Lighthouse ≥ 90 light and dark everywhere, every route under 150 KB gzipped. **Merged into the integration
-branch** (the merge commit is recorded under "Open branches" below). Linux setup this session: `sudo dockerd`, the
+branch** as `cf0da47` (recorded under "Open branches" below). Linux setup this session: `sudo dockerd`, the
 compose CA override (scratchpad `compose.ccr.json`, passed as `DEMO_COMPOSE_EXTRA=<path> python3 infra/demo/demo.py
 up|reset --yes`; `make demo-reset` alone fails on TLS here), `npm ci`, the Playwright shim at `/home/user/pw-shim`,
 Lighthouse 12 in a scratchpad `npm` folder, a fontTools venv for the font instancing; the demo stack is up at the end
