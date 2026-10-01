@@ -10,9 +10,11 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 // Self-hosted faces (app/fonts/LICENCES.md; D-52): latin subsets, swap, a size-adjusted fallback while they load.
-const display = localFont({ src: "./fonts/newsreader-latin.woff2", variable: "--font-display", display: "swap", weight: "400 700", adjustFontFallback: "Times New Roman" });
+// The display face is instanced to the one weight the headings use (500) over optical sizes 18–72 (42 KB, from 132),
+// and the mono face is not preloaded (fingerprints and codes are below the fold): mobile LCP within AC-UX-3.
+const display = localFont({ src: "./fonts/newsreader-latin.woff2", variable: "--font-display", display: "swap", weight: "500", adjustFontFallback: "Times New Roman" });
 const text = localFont({ src: "./fonts/ibm-plex-sans-latin.woff2", variable: "--font-text", display: "swap", weight: "100 700", adjustFontFallback: "Arial" });
-const figures = localFont({ src: "./fonts/ibm-plex-mono-latin.woff2", variable: "--font-figures", display: "swap", weight: "400", adjustFontFallback: false });
+const figures = localFont({ src: "./fonts/ibm-plex-mono-latin.woff2", variable: "--font-figures", display: "swap", weight: "400", adjustFontFallback: false, preload: false });
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
