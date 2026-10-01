@@ -22,4 +22,7 @@ RUN uv sync --frozen --no-dev && useradd --system --uid 10001 bridge
 USER bridge
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["uvicorn", "bridge.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# Keep idle connections longer than the proxies in front do (Node's agent behind Next.js rewrites closes them after
+# 5 s, uvicorn's default): otherwise a request sent on a connection the API is just closing is reset and Next answers a
+# plain 500 (an e2e flake, P16-F). The proxy now always closes first.
+CMD ["uvicorn", "bridge.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-keep-alive", "75"]
