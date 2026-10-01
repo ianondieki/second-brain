@@ -23,8 +23,7 @@
     "name": "Wazo",
     "workingTitle": "Wazo",
     "titleTemplate": "%s | Wazo",
-    "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi.",
-    "loading": "Inapakia…"
+    "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi."
   },
   "shell": {
     "workingName": "Wazo",
@@ -419,7 +418,9 @@
       "engagements": "Ushirikiano",
       "engagementsMeta": "{count, plural, one {# unaendelea} other {# unaendelea}}",
       "needsUs": "Unatusubiri",
-      "needsUsMeta": "Vinatusubiri"
+      "needsUsMeta": "Vinatusubiri",
+      "unknown": "—",
+      "unavailable": "Haikuweza kusomwa sasa hivi"
     }
   },
   "inbox": {

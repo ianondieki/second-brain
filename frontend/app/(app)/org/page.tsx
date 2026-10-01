@@ -99,7 +99,10 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   );
 }
 
-/** Reads one list for Home; the home never becomes the error page, so a failed read shows nothing for that list. */
+/** A stat tile draws its sparkline from this many items on (fewer make a hockey stick with no scale). */
+const SPARK_FROM = 5;
+
+/** Reads one list for Home; the home never becomes the error page, so a failed read shows "could not be read" for that list. */
 async function quietly<T>(read: () => Promise<T>): Promise<T | null> {
   try {
     return await read();
@@ -125,6 +128,8 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   const engagementsLink = engagementsHref(memberships, org.org_id);
 
   const [newest] = inbox?.items ?? [];
+  // A tile whose list could not be read says so instead of a figure (never a confident zero).
+  const unknown = { value: t("stats.unknown"), meta: t("stats.unavailable") };
   const inboxSentence = inbox
     ? newest
       ? t("newest", { title: newest.proposal.teaser.title ?? ti("untitled"), date: formatDay(locale, newest.pitched_at) })
@@ -141,9 +146,10 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="inbox"
               label={t("stats.inbox")}
-              value={stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
-              meta={stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
-              spark={stats.inbox >= 2 ? weeklySeries(inbox!.items.map((item) => item.pitched_at), now) : undefined}
+              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
+              meta={stats.inbox === null ? unknown.meta : stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
+              // A series only once it can show a shape: under five points it is a hockey stick with no scale.
+              spark={inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM ? weeklySeries(inbox.items.map((item) => item.pitched_at), now) : undefined}
               href={inboxLink}
             />
           </li>
@@ -151,17 +157,28 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="matches"
               label={t("stats.matches")}
-              value={stats.matches}
-              meta={stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
-              spark={stats.matches >= 2 ? weeklySeries(matches!.map((match) => match.created_at), now) : undefined}
+              value={stats.matches === null ? unknown.value : stats.matches}
+              meta={stats.matches === null ? unknown.meta : stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
+              spark={matches && stats.matches !== null && stats.matches >= SPARK_FROM ? weeklySeries(matches.map((match) => match.created_at), now) : undefined}
               href={matchesHref(memberships, org.org_id)}
             />
           </li>
           <li>
-            <StatTile data-stat="engagements" label={t("stats.engagements")} value={stats.engagements} meta={t("stats.engagementsMeta", { count: stats.active })} href={engagementsLink} />
+            <StatTile
+              data-stat="engagements"
+              label={t("stats.engagements")}
+              value={stats.engagements === null ? unknown.value : stats.engagements}
+              meta={stats.engagements === null ? unknown.meta : t("stats.engagementsMeta", { count: stats.active })}
+              href={engagementsLink}
+            />
           </li>
           <li>
-            <StatTile data-stat="needs-us" label={t("stats.needsUs")} value={stats.waiting.length} meta={stats.waiting.length > 0 ? t("stats.needsUsMeta") : undefined} />
+            <StatTile
+              data-stat="needs-us"
+              label={t("stats.needsUs")}
+              value={stats.engagements === null ? unknown.value : stats.waiting.length}
+              meta={stats.engagements === null ? unknown.meta : stats.waiting.length > 0 ? t("stats.needsUsMeta") : undefined}
+            />
           </li>
         </ul>
       </section>

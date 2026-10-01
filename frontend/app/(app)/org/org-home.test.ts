@@ -46,7 +46,11 @@ describe("orgHomeStats", () => {
     expect(stats.others).toHaveLength(2);
   });
 
-  it("reads nothing as zero", () => {
-    expect(orgHomeStats(null, null, null)).toMatchObject({ inbox: 0, more: false, fresh: 0, matches: 0, newestMatch: null, engagements: 0, active: 0, waiting: [], others: [] });
+  it("reads a failed read as unknown, never as zero (reviewer MAJOR, round 2)", () => {
+    expect(orgHomeStats(null, null, null)).toMatchObject({ inbox: null, more: false, fresh: 0, matches: null, newestMatch: null, engagements: null, active: 0, waiting: [], others: [] });
+    // One failed read leaves the others' figures intact.
+    const stats = orgHomeStats({ items: [item(null)] }, null, [summary("UNDER_REVIEW", ["org"])]);
+    expect(stats).toMatchObject({ inbox: 1, matches: null, engagements: 1 });
+    expect(stats.waiting).toHaveLength(1);
   });
 });

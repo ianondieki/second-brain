@@ -23,8 +23,7 @@
     "name": "Wazo",
     "workingTitle": "Wazo",
     "titleTemplate": "%s | Wazo",
-    "tagline": "Local developers and organisations working on real problems.",
-    "loading": "Loading…"
+    "tagline": "Local developers and organisations working on real problems."
   },
   "shell": {
     "workingName": "Wazo",
@@ -419,7 +418,9 @@
       "engagements": "Engagements",
       "engagementsMeta": "{count, plural, one {# active} other {# active}}",
       "needsUs": "Need us",
-      "needsUsMeta": "Waiting on us"
+      "needsUsMeta": "Waiting on us",
+      "unknown": "—",
+      "unavailable": "Could not be read just now"
     }
   },
   "inbox": {
