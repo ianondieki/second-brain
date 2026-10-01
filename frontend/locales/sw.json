@@ -708,7 +708,12 @@
     "statusActive": "Anafanya kazi",
     "statusPaused": "Amesitishwa",
     "reviewersUnknown": "Wakaguzi wa {org} hawakuweza kupakiwa, kwa hiyo wapokeaji wa muhtasari wanabaki kama walivyohifadhiwa.",
-    "fitLong": "Ufaafu {value} kati ya 100"
+    "fitLong": "Ufaafu {value} kati ya 100",
+    "group": {
+      "looks": "Inachotafuta",
+      "runs": "Ratiba",
+      "digest": "Muhtasari wa barua pepe"
+    }
   },
   "tier2Share": {
     "title": "Pendekezo kamili",

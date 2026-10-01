@@ -83,14 +83,19 @@ const SHOTS: Shot[] = [
   { name: "org-matches", path: "/org/inbox?tab=matches", who: "org" },
   { name: "org-match", path: "/org/inbox?tab=matches", who: "org", prepare: async (page) => {
       await page.locator("[data-match]").first().getByRole("link").first().click();
-      await page.getByRole("heading", { level: 1 }).waitFor();
+      await page.waitForURL(/\/matches\//);
+      await page.locator("[data-interest]").waitFor();
     } },
   { name: "org-scout", path: "/org/inbox/scouts/new", who: "orgOwner", prepare: async (page) => {
       await page.locator("form[data-scout-form][data-hydrated='true']").waitFor();
     } },
   { name: "discover", path: "/dev/discover", who: "dev" },
+  { name: "discover-projects", path: "/dev/discover?view=projects", who: "dev" },
+  { name: "discover-gap", path: "/dev/discover?view=gap", who: "dev" },
+  { name: "discover-niches", path: "/dev/discover/niches", who: "dev" },
   { name: "problem", path: "/dev/discover", who: "dev", prepare: async (page) => {
       await page.locator("article[data-problem]").first().getByRole("heading", { level: 3 }).getByRole("link").click();
+      await page.waitForURL(/\/problems\//);
       await page.getByRole("heading", { level: 1 }).waitFor();
     } },
   // A proposal from the Inbox: the teaser with the NDA step (or the accepted state), then the marked full proposal.

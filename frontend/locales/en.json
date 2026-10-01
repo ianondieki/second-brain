@@ -708,7 +708,12 @@
     "statusActive": "Active",
     "statusPaused": "Paused",
     "reviewersUnknown": "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved.",
-    "fitLong": "Fit {value} out of 100"
+    "fitLong": "Fit {value} out of 100",
+    "group": {
+      "looks": "What it looks for",
+      "runs": "Schedule",
+      "digest": "The email digest"
+    }
   },
   "tier2Share": {
     "title": "Full proposal",
