@@ -75,7 +75,7 @@ export function NdaAccept({
   const action = refusal ? REFUSAL_ACTION[refusal] : null;
   const href = action === "inbox" ? inboxHref : action ? ACTION_HREF[action] : undefined;
   return (
-    <Form onSubmit={accept} className="flex flex-col items-start gap-4" aria-busy={busy || undefined}>
+    <Form onSubmit={accept} className="flex w-full flex-col items-stretch gap-4 sm:items-start" aria-busy={busy || undefined}>
       {refusal ? (
         <Alert ref={notice} className="w-full" tone="error">
           <p data-refusal={refusal}>{t(`refusal.${refusal}`, { org: orgName })}</p>

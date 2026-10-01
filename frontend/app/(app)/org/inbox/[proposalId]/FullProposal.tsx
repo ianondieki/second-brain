@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 import { ConfidentialIcon } from "@/components/org-icons";
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Callout } from "@/components/ui/Callout";
+import { Card } from "@/components/ui/Card";
+import { LockIcon } from "@/components/ui/status-icons";
 
 import { Fingerprint } from "@/app/(public)/verify/Fingerprint";
 
@@ -55,7 +58,7 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
           // No scripts, forms or same-origin access for the page; its links open in a new tab outside the sandbox.
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
-          className="h-[70dvh] min-h-96 w-full rounded-control border border-line bg-field lg:h-[80vh]"
+          className="h-[70dvh] min-h-96 w-full rounded-panel border border-line bg-field shadow-card lg:h-[80vh]"
           data-tier2-frame=""
         />
         <p className="text-sm text-ink-soft">{t("frameNote")}</p>
@@ -159,7 +162,7 @@ async function NdaStep({
         <h3 className="text-base font-semibold text-ink">{t("ndaHeading")}</h3>
         <p className="mt-1 max-w-[60ch] text-ink">{t("ndaLead", { org: orgName })}</p>
       </div>
-      <div className="w-full max-w-2xl rounded-control border border-line bg-field">
+      <Card padding="none" className="w-full max-w-2xl overflow-hidden">
         <div
           role="region"
           tabIndex={0}
@@ -183,15 +186,20 @@ async function NdaStep({
             </dd>
           </div>
         </dl>
-      </div>
+      </Card>
       {nda.is_placeholder ? <p className="max-w-[60ch] text-sm text-ink-soft">{t("ndaDraft")}</p> : null}
-      <div className="max-w-[60ch]">
-        <h3 className="text-base font-semibold text-ink">{t("noticeHeading")}</h3>
+      <Callout
+        as="section"
+        tone="info"
+        icon={<LockIcon className="mt-0.5 size-5 shrink-0 text-accent" />}
+        title={t("noticeHeading")}
+        titleId="logging-notice-heading"
+        aria-labelledby="logging-notice-heading"
+        className="max-w-2xl"
+      >
         {/* The viewer-logging notice exactly as the API sends it (its version is echoed on acceptance). */}
-        <p className="mt-1 text-ink" data-logging-notice={nda.logging_notice.version}>
-          {nda.logging_notice.text}
-        </p>
-      </div>
+        <p data-logging-notice={nda.logging_notice.version}>{nda.logging_notice.text}</p>
+      </Callout>
       <NdaAccept
         key={`${nda.template_id}:${nda.sha256}:${nda.logging_notice.version}`}
         orgId={orgId}

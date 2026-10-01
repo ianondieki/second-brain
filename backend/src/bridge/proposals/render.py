@@ -36,21 +36,28 @@ SECTIONS: Final = (
     ("notes", "Notes"),
 )
 STYLE: Final = (
+    # The P18 palette (frontend/app/globals.css) in a page that loads nothing: no web fonts (a serif stack for the
+    # title), no images (the lattice echo is a gradient band), and the mark in the accent at a low opacity.
     ":root{color-scheme:light}"
-    'body{margin:0;background:#fff;color:#1b1b1b;font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
+    'body{margin:0;background:#fbfaf6;color:#1a1916;font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",'
+    "Roboto,sans-serif}"
+    "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#1f5e49 0 5px,"
+    "#b89a4a 5px 10px)}"
     "main{position:relative;max-width:46rem;margin:0 auto;padding:2rem 1.25rem 4rem}"
-    ".label{margin:0;color:#8a1c1c;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase}"
-    "h1{margin:.25rem 0 .5rem;font-size:1.75rem;line-height:1.25}"
-    "h2{margin:2rem 0 .5rem;font-size:1.1rem}"
-    ".owner,.note,.mark{color:#474747;font-size:.9rem}"
+    ".label{margin:0;color:#7a5a12;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}"
+    'h1{margin:.35rem 0 .5rem;font:500 1.75rem/1.2 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif;'
+    "letter-spacing:-.01em}"
+    'h2{margin:2rem 0 .5rem;font:500 1.2rem/1.3 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif}'
+    ".owner,.note,.mark{color:#5c5a53;font-size:.9rem}"
     ".text{white-space:pre-wrap;overflow-wrap:anywhere}"
-    "a{color:#0b57d0;overflow-wrap:anywhere}"
-    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #d6d6d6}"
+    "a{color:#1f5e49;text-decoration-thickness:1px;text-underline-offset:.2em;overflow-wrap:anywhere}"
+    "ul{padding-left:1.25rem}"
+    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #dedacf}"
     ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
-    "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:3.5rem 2rem;padding:2rem;"
-    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#000;font-size:.8rem;"
-    "line-height:1.3;overflow-wrap:anywhere}"
-    "@media print{.overlay{opacity:.2}}"
+    "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
+    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.12;color:#1f5e49;font-size:.75rem;"
+    "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}"
+    "@media print{.overlay{opacity:.18}}"
 )
 STYLE_HASH: Final = base64.b64encode(hashlib.sha256(STYLE.encode("utf-8")).digest()).decode("ascii")
 HEADERS: Final = {

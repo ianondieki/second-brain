@@ -21,7 +21,7 @@ const THEMES = (process.env.SHOT_THEMES ?? "light,dark").split(",") as Array<"li
 const WIDTHS = (process.env.SHOT_WIDTHS ?? "1440,375").split(",").map(Number);
 const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : null;
 
-type Who = "none" | "pendingMfa" | "dev" | "org" | "orgOwner" | "staff" | "moderator";
+type Who = "none" | "pendingMfa" | "dev" | "devBrian" | "org" | "orgOwner" | "staff" | "moderator";
 interface Shot {
   name: string;
   path: string;
@@ -34,10 +34,13 @@ interface Shot {
   tour?: boolean;
   /** The viewport only, not the whole page: a modal dialog's backdrop covers the viewport. */
   viewportOnly?: boolean;
+  /** A frame on the page whose own document is shot too (`<name>-frame-…`): the marked full proposal. */
+  frame?: string;
 }
 
 const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name: string }> = {
   dev: { email: "amina@developers.example", name: "Amina Wanjiru" },
+  devBrian: { email: "brian@developers.example", name: "Brian Otieno" },
   org: { email: "reviewer@telco-a.example", name: "Telco A reviewer" },
   orgOwner: { email: "owner@telco-a.example", name: "Telco A owner" },
   staff: { email: "admin@staff.example", name: "Staff Admin (demo)" },
@@ -70,9 +73,45 @@ const SHOTS: Shot[] = [
       await page.locator("[data-certificate]").waitFor();
     } },
   { name: "ideas", path: "/dev/ideas", who: "dev" },
+  // "Who has seen this" with a view in it: Brian's proposal, opened by Telco A's reviewer.
+  { name: "idea-views", path: "/dev/ideas", who: "devBrian", prepare: async (page) => {
+      await page.locator("main article").filter({ hasText: "Cashless market-fee" }).first().getByRole("link").first().click();
+      await page.locator("[data-view]").first().waitFor();
+    } },
   { name: "org-home", path: "/org", who: "org" },
   { name: "org-inbox", path: "/org/inbox", who: "org" },
   { name: "org-matches", path: "/org/inbox?tab=matches", who: "org" },
+  { name: "org-match", path: "/org/inbox?tab=matches", who: "org", prepare: async (page) => {
+      await page.locator("[data-match]").first().getByRole("link").first().click();
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "org-scout", path: "/org/inbox/scouts/new", who: "orgOwner", prepare: async (page) => {
+      await page.locator("form[data-scout-form][data-hydrated='true']").waitFor();
+    } },
+  { name: "discover", path: "/dev/discover", who: "dev" },
+  { name: "problem", path: "/dev/discover", who: "dev", prepare: async (page) => {
+      await page.locator("article[data-problem]").first().getByRole("heading", { level: 3 }).getByRole("link").click();
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  // A proposal from the Inbox: the teaser with the NDA step (or the accepted state), then the marked full proposal.
+  { name: "org-proposal", path: "/org/inbox", who: "org", prepare: async (page) => {
+      await page.locator("main article").first().getByRole("link").first().click();
+      await page.locator("[data-tier2-state]").waitFor();
+    } },
+  // The NDA step as the owner (who has not accepted it for this proposal yet).
+  { name: "org-nda", path: "/org/inbox", who: "orgOwner", prepare: async (page) => {
+      await page.locator("main article").first().getByRole("link").first().click();
+      await page.locator("[data-tier2-state]").waitFor();
+    } },
+  { name: "org-proposal-full", path: "/org/inbox", who: "org", prepare: async (page) => {
+      await page.locator("main article").first().getByRole("link").first().click();
+      await page.locator("[data-tier2-state]").waitFor();
+      const accept = page.getByRole("button", { name: "Accept and view" });
+      if (await accept.isVisible()) await accept.click();
+      else await page.getByRole("link", { name: "View full proposal" }).click();
+      await page.locator("[data-tier2-frame]").waitFor();
+      await page.frameLocator("[data-tier2-frame]").locator(".mark").waitFor();
+    }, frame: "[data-tier2-frame]" },
   { name: "editor-1", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"], [data-hydrated="true"]').first().waitFor().catch(() => undefined);
       await page.getByLabel("Title", { exact: true }).waitFor();
@@ -222,6 +261,11 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
         await page.waitForTimeout(300);
         const file = join(OUT, `${shot.name}-${theme}-${width}.jpg`);
         await page.screenshot({ path: file, fullPage: shot.viewportOnly !== true, type: "jpeg", quality: 78 });
+        if (shot.frame) {
+          // A full-page shot leaves a frame's document blank; its own shot shows the page inside it.
+          await page.locator(shot.frame).scrollIntoViewIfNeeded();
+          await page.locator(shot.frame).screenshot({ path: join(OUT, `${shot.name}-frame-${theme}-${width}.jpg`), type: "jpeg", quality: 78 });
+        }
         let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]);
         for (const selector of shot.exclude ?? []) axe = axe.exclude(selector);
         const results = await axe.analyze();
