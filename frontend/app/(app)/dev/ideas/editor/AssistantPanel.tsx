@@ -296,11 +296,10 @@ export function AssistantPanel({
 
       {!working && (answer || problem || notice) && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
-          {/* Turned off: asking again means turning it on (the dialog shows the wording first). With no model behind
-              the answer (the demo fallback) asking again would only repeat it, so the button is left out. */}
-          {answer?.demo_fallback && consent?.granted !== false ? null : (
-            <Button onClick={() => void ask()}>{t(consent?.granted === false ? "dialog.confirm" : "askAgain")}</Button>
-          )}
+          {/* Turned off: asking again means turning it on (the dialog shows the wording first). Kept after a demo
+              fallback too: the fallback also stands in for a transient failure (bridge/llm/demo_fallback.py), and the
+              chip beside the answer already says no model wrote it. */}
+          <Button onClick={() => void ask()}>{t(consent?.granted === false ? "dialog.confirm" : "askAgain")}</Button>
           {consent?.granted && (
             <Button variant="link" className="text-left whitespace-nowrap" busy={turningOff} onClick={() => void turnOff()}>
               {t(turningOff ? "turningOff" : "turnOff")}
