@@ -9,6 +9,9 @@ import { defineConfig, devices } from "@playwright/test";
 //   cd frontend && npx playwright test -c demo/design-shots.config.ts
 //   SHOT_FILTER="login|signup" … one group of pages; SHOT_THEMES=light SHOT_WIDTHS=1440 … fewer variants.
 // Not part of the e2e suite or CI; a tool of the quality loop (the scorecard quotes its axe report).
+// The runner changes the demo data as a person would (the editor shots create drafts, checkout-success upgrades Brian,
+// org-proposal-full accepts the NDA and logs a view, admin-research starts runs): run `make demo-reset` first, and again
+// before the shots that the scorecard and the pitch quote, so counts and states match the seed.
 function loadE2eEnv() {
   const file = join(__dirname, "..", ".env.e2e");
   if (!existsSync(file)) return;
