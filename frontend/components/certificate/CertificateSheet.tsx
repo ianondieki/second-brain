@@ -18,7 +18,7 @@ export interface CertificateSheetProps {
   certId: string;
   registeredAt: string | null;
   stamped: boolean;
-  /** The public verify page, absolute (the QR encodes it). */
+  /** The public verify address as the sheet prints it and the QR encodes it: absolute when a public origin is configured, else the path. */
   verifyUrl: string;
   /** The version's SHA-256, when the caller has it (the public record does; the owner's idea page does not yet). */
   fingerprint?: string | null;

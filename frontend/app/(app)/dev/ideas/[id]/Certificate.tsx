@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { CertificateSheet } from "@/components/certificate/CertificateSheet";
@@ -9,19 +8,14 @@ import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 import type { MyProposal } from "../ideas";
 
-/** This site's origin as the request names it (behind the edge proxy: the forwarded values), for the QR's absolute link. */
-async function siteOrigin(): Promise<string> {
-  let host = "localhost:3000";
-  let proto: string | null = null;
-  try {
-    const h = await headers();
-    host = h.get("x-forwarded-host") ?? h.get("host") ?? host;
-    proto = h.get("x-forwarded-proto");
-  } catch {
-    // Outside a request (a unit test of the page's reads): the local address.
-  }
-  proto ??= host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https";
-  return `${proto}://${host}`;
+/**
+ * The public verify address printed on the sheet and encoded in its QR: NEXT_PUBLIC_SITE_ORIGIN (frontend/.env.example)
+ * plus the path; with no origin configured, the path alone (never the server's own host or localhost).
+ */
+export function verifyAddress(certId: string, origin: string | undefined = process.env.NEXT_PUBLIC_SITE_ORIGIN): string {
+  const path = `/verify/${encodeURIComponent(certId)}`;
+  const base = origin?.trim().replace(/\/+$/, "");
+  return base ? `${base}${path}` : path;
 }
 
 /**
@@ -44,7 +38,7 @@ export async function Certificate({ idea, ownerName }: { idea: MyProposal; owner
             certId={certId}
             registeredAt={current.registered_at}
             stamped={stamped}
-            verifyUrl={`${await siteOrigin()}/verify/${encodeURIComponent(certId)}`}
+            verifyUrl={verifyAddress(certId)}
             animate
           />
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2" data-no-print="">
