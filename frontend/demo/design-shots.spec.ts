@@ -165,6 +165,23 @@ const SHOTS: Shot[] = [
       await page.getByRole("button", { name: "Check file" }).click();
       await page.locator('[data-testid="file-result"]').waitFor();
     } },
+  { name: "billing", path: "/billing", who: "dev" },
+  { name: "billing-org", path: "/billing", who: "orgOwner" },
+  { name: "checkout", path: "/billing/upgrade?plan=dev_pro_yearly", who: "dev", prepare: async (page) => {
+      await page.getByRole("button", { name: "Start the simulated payment" }).waitFor();
+    } },
+  // Waiting for the (cancelled) simulated payment: Amina's plan stays Free.
+  { name: "checkout-waiting", path: "/billing/upgrade?plan=dev_pro_yearly", who: "dev", prepare: async (page) => {
+      await page.getByRole("radio", { name: "The payment is cancelled" }).check();
+      await page.getByRole("button", { name: "Start the simulated payment" }).click();
+      await page.getByRole("heading", { name: "Waiting for the simulated payment" }).waitFor();
+    } },
+  // Payment confirmed, as Brian (whose plan may change): the other Pro plan when one is already his.
+  { name: "checkout-success", path: "/billing/upgrade?plan=dev_pro_monthly", who: "devBrian", prepare: async (page) => {
+      if (await page.locator("[data-empty-state]").isVisible()) await page.goto("/billing/upgrade?plan=dev_pro_yearly");
+      await page.getByRole("button", { name: "Start the simulated payment" }).click();
+      await page.getByRole("heading", { name: "Payment confirmed" }).waitFor({ timeout: 90_000 });
+    } },
   { name: "login", path: "/login", who: "none" },
   { name: "login-error", path: "/login", who: "none", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"]').first().waitFor();

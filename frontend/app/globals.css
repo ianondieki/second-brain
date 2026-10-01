@@ -15,6 +15,7 @@
   --ink: #1a1916; /* text and icons, 16.4:1 */
   --ink-soft: #5c5a53; /* secondary text and input borders, 6.6:1 */
   --line: #dedacf; /* hairlines and dividers */
+  --bezel: var(--ink); /* the drawn phone's frame (checkout) */
   --accent: #1f5e49; /* the one accent: primary buttons, focus ring, current step, 7.4:1 */
   --accent-wash: #e5efe9; /* selected rows, info notices, the landing panel */
   --flourish: #b89a4a; /* the lattice's second tone and illustration; never text */
@@ -50,6 +51,7 @@ html[data-theme="dark"] {
   --ink: #ece9e1;
   --ink-soft: #b4b0a5;
   --line: #30312c;
+  --bezel: var(--line); /* the drawn phone's frame (checkout) */
   --accent: #7fcbab;
   --accent-wash: #1f2f28;
   --flourish: #a08b48;
@@ -71,6 +73,7 @@ html[data-theme="dark"] {
     --ink: #ece9e1;
     --ink-soft: #b4b0a5;
     --line: #30312c;
+    --bezel: var(--line); /* the drawn phone's frame (checkout) */
     --accent: #7fcbab;
     --accent-wash: #1f2f28;
     --flourish: #a08b48;
@@ -99,6 +102,7 @@ html[data-theme="dark"] {
   --color-warm-line: var(--warm-line);
   --color-on-warm: var(--on-warm);
   --color-line: var(--line);
+  --color-bezel: var(--bezel);
   --color-ok: var(--ok);
   --color-error: var(--error);
   --color-field: var(--field);

@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { SignedInShell } from "@/components/SignedInShell";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { cn } from "@/components/ui/cn";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { requireMe } from "@/lib/api/server";
@@ -12,7 +14,6 @@ import { upgradeHref } from "@/lib/billing/upgrade";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 
 import { getCurrentPlan, getPlans } from "./data";
@@ -96,9 +97,9 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
       headingId="plans-title"
       description={catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : undefined}
     >
-      <RowList ordered data-ladder="">
+      <ol data-ladder="" className="flex flex-col gap-4">
         {plans.map((plan, index) => (
-          <PlanRow
+          <PlanCard
             key={plan.code}
             plan={plan}
             action={rowAction(plans, current.code, plan)}
@@ -106,18 +107,18 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
             href={upgradeHref(plan.code, { org: orgId })}
           />
         ))}
-      </RowList>
+      </ol>
     </Section>,
   );
 }
 
 /**
- * One plan of the ladder, a Row: its name, its price on the right (tabular figures) or "not sold here" under the name,
- * "Your plan" as the accent Badge on the current one (you are here), what the plan allows, and its action: the
- * primary "Upgrade to" on the plan a 402 would point to, the same words as a link on other plans that can be bought
- * (the checkout page is titled that way too).
+ * One plan of the ladder, a card (D-52): its name, its price (tabular figures) or "not sold here" under the name,
+ * "Your plan" as the accent Badge on the current one (you are here, with the accent border), what the plan allows,
+ * and its action: the primary "Upgrade to" on the plan a 402 would point to, the same words as a link on other plans
+ * that can be bought (the checkout page is titled that way too).
  */
-async function PlanRow({
+async function PlanCard({
   plan,
   action,
   href,
@@ -135,46 +136,47 @@ async function PlanRow({
   const kind = priceKind(plan);
   const current = action === "current";
   return (
-    <Row
+    <Card
+      as="li"
+      variant={action === "upgrade" ? "raised" : "flat"}
       aria-current={current ? "true" : undefined}
       data-plan={plan.code}
-      title={plan.name}
-      // A free plan's name already says so ("Free", "Claimed (Free)"); a plan not sold here says why under its name.
-      // The price is the row's figure from 640 px; below that it is the meta line, so what the plan allows and its
-      // one action keep the whole width at 360 px (ux-review round 2).
-      figure={kind === "free" || kind === "notSold" ? undefined : price}
-      figureFrom="sm"
-      meta={
-        kind === "notSold" ? price : kind === "free" ? undefined : <span className="text-base text-ink sm:hidden">{price}</span>
-      }
-      badges={
-        current
-          ? [
-              <Badge key="yours" tone="accent" icon={<CheckIcon />} data-your-plan="">
-                {t("yourPlan")}
-              </Badge>,
-            ]
-          : undefined
-      }
+      className={cn("flex flex-col gap-3", current && "border-accent")}
     >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h3 className="text-base text-ink">{plan.name}</h3>
+        {kind === "free" ? null : (
+          <p className={cn("text-ink tabular-nums", kind === "notSold" ? "text-sm text-ink-soft" : "font-semibold")}>{price}</p>
+        )}
+      </div>
+      {current ? (
+        <p>
+          <Badge tone="accent" icon={<CheckIcon />} data-your-plan="">
+            {t("yourPlan")}
+          </Badge>
+        </p>
+      ) : null}
       {lines.length > 0 ? (
-        <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-ink-soft marker:text-ink-soft">
+        <ul className="flex flex-col gap-1 text-ink-soft">
           {lines.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line} className="flex gap-2">
+              <CheckIcon className="mt-1 size-4 shrink-0 text-accent" />
+              <span>{line}</span>
+            </li>
           ))}
         </ul>
       ) : null}
       {action === "upgrade" ? (
-        <div className="mt-3">
+        <div className="mt-2">
           <ButtonLink href={href} variant="primary" className="no-underline">
             {t("upgradeTo", { plan: plan.name })}
           </ButtonLink>
         </div>
       ) : action === "choose" ? (
-        <p className="mt-1">
+        <p>
           <StandaloneLink href={href}>{t("upgradeTo", { plan: plan.name })}</StandaloneLink>
         </p>
       ) : null}
-    </Row>
+    </Card>
   );
 }

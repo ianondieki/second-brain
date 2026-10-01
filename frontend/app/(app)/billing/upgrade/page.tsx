@@ -50,7 +50,8 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
   // The back link is left out where the body is an empty state (its one action is the way on), and hidden by CSS
   // while the checkout shows a refusal that carries its own action ([data-checkout-blocked]).
   const shell = (title: string, children: ReactNode, tag?: ReactNode, withBack = true) => (
-    <SignedInShell homeHref={home}>
+    <SignedInShell homeHref={home} wide>
+      <div className="max-w-3xl">
       {withBack ? (
         <BackLink href={back} className="[main:has([data-checkout-blocked])_&]:hidden" data-page-back="">
           {tc("back")}
@@ -63,6 +64,7 @@ export default async function UpgradePage({ searchParams }: PageProps<"/billing/
         {tag ? <p className="mt-3">{tag}</p> : null}
       </PageHeader>
       {children}
+      </div>
     </SignedInShell>
   );
   const empty = (sentence: string, action: string, href: string, primary = false) =>

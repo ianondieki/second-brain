@@ -17,7 +17,7 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative)"
   },
   "app": {
     "name": "Wazo",
@@ -2369,6 +2369,17 @@
       "logIn": "Log in",
       "enterCode": "Enter your code",
       "turnOnMfa": "Turn on two-step sign-in"
+    },
+    "phone": {
+      "title": "On your phone",
+      "simulated": "On your phone (simulated)",
+      "prompt": "Pay {price} to Wazo for {plan}?",
+      "pin": "Enter M-Pesa PIN",
+      "cancel": "Cancel",
+      "send": "Send",
+      "waiting": "Waiting for the answer…",
+      "paid": "Paid",
+      "notPaid": "Not paid"
     }
   },
   "notFound": {
