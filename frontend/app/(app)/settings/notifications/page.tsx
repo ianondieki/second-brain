@@ -8,6 +8,7 @@ import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -49,9 +50,11 @@ export default async function NotificationSettingsPage() {
         {choices.length === 0 ? (
           <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
         ) : (
-          <ClientStrings strings={await clientStrings(["notificationSettings"])}>
-            <NotificationChoices initial={choices} />
-          </ClientStrings>
+          <Card variant="flat" className="max-w-3xl p-5 sm:p-6">
+            <ClientStrings strings={await clientStrings(["notificationSettings"])}>
+              <NotificationChoices initial={choices} />
+            </ClientStrings>
+          </Card>
         )}
       </div>
     </SignedInShell>

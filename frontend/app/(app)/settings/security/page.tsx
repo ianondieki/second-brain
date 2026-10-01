@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
@@ -42,16 +43,22 @@ export default async function SecurityPage() {
         }}
       >
         <PasswordStateProvider initial={me.user.password_set}>
-          <Section title={t("title")} headingId="two-step-heading" description={t("lead")} className="mt-10">
-            <SecuritySettings
-              enrolled={me.mfa.enrolled}
-              required={me.mfa.required}
-              homeHref={home}
-              email={me.user.email}
-              productName={tApp("name")}
-            />
-          </Section>
-          <PasswordSettings email={me.user.email} />
+          <div className="mt-10 flex max-w-3xl flex-col gap-6">
+            <Card variant="flat" className="p-5 sm:p-6">
+              <Section title={t("title")} headingId="two-step-heading" description={t("lead")}>
+                <SecuritySettings
+                  enrolled={me.mfa.enrolled}
+                  required={me.mfa.required}
+                  homeHref={home}
+                  email={me.user.email}
+                  productName={tApp("name")}
+                />
+              </Section>
+            </Card>
+            <Card variant="flat" className="p-5 sm:p-6">
+              <PasswordSettings email={me.user.email} />
+            </Card>
+          </div>
         </PasswordStateProvider>
       </ClientStrings>
     </SignedInShell>

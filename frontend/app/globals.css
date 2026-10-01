@@ -289,6 +289,29 @@ html[data-theme="dark"] .lattice-band {
   }
 }
 
+/* Loading bars (components/ui/LoadingScreen.tsx): a quiet shimmer in the hairline tone; still under reduced motion. */
+@utility loading-bar {
+  display: block;
+  border-radius: var(--radius-control, 6px);
+  background: linear-gradient(90deg, var(--line) 0%, var(--wash-soft) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes loading-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    animation: none;
+    background: var(--line);
+  }
+}
+
 /* The first-login tour rises into place once; reduced motion shows it in place. */
 @keyframes tour-enter {
   from {

@@ -23,7 +23,8 @@
     "name": "Wazo",
     "workingTitle": "Wazo",
     "titleTemplate": "%s | Wazo",
-    "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi."
+    "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi.",
+    "loading": "Inapakia…"
   },
   "shell": {
     "workingName": "Wazo",

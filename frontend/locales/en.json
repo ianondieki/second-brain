@@ -23,7 +23,8 @@
     "name": "Wazo",
     "workingTitle": "Wazo",
     "titleTemplate": "%s | Wazo",
-    "tagline": "Local developers and organisations working on real problems."
+    "tagline": "Local developers and organisations working on real problems.",
+    "loading": "Loading…"
   },
   "shell": {
     "workingName": "Wazo",
