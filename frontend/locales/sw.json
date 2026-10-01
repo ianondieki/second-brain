@@ -53,7 +53,7 @@
     "track": "Pande zote mbili hufuata kifuatiliaji kimoja, kuanzia mtazamo wa kwanza hadi hatua inayofuata mliyokubaliana."
   },
   "landing": {
-    "title": "Peleka suluhisho za ndani kwa mashirika yanayozihitaji",
+    "title": "Suluhisho za ndani kwa mashirika yanayozihitaji",
     "lead": "Wasanidi programu huchapisha suluhisho za matatizo halisi, pamoja na ushahidi wenye muhuri wa wakati wa walichowasilisha. Mashirika huzikagua chini ya NDA na kukubaliana hatua inayofuata, na pande zote mbili hufuata kifuatiliaji kimoja.",
     "signUp": "Fungua akaunti",
     "logIn": "Ingia",
@@ -1208,7 +1208,8 @@
     "label": {
       "aiDrafted": "Imeandaliwa na AI, imekaguliwa na mtu tarehe {date}",
       "seeded": "Mfano wa maonyesho (si matokeo halisi ya AI), umekaguliwa na mtu tarehe {date}",
-      "developer": "Imeripotiwa na msanidi programu"
+      "developer": "Imeripotiwa na msanidi programu",
+      "demoBadge": "Data ya mfano"
     },
     "affected": "Wanaoathirika",
     "niche": "Fani",
@@ -1691,19 +1692,18 @@
     "allIdeas": "Mawazo yangu yote",
     "empty": "Ushirikiano wako utaonekana hapa ukishawasilisha wazo lako kwa kampuni.",
     "emptyAction": "Nenda kwa Mawazo yangu",
-    "security": "Kuingia kwa hatua mbili",
     "stats": {
       "label": "Kwa muhtasari",
       "ideas": "Mawazo",
-      "ideasMeta": "{count, plural, one {# rasimu} other {# rasimu}}",
+      "ideasMeta": "{published, plural, one {# limechapishwa} other {# yamechapishwa}} · {drafts, plural, one {# rasimu} other {# rasimu}}",
       "engagements": "Ushirikiano",
       "engagementsMeta": "{count, plural, one {# unaendelea} other {# unaendelea}}",
       "needsYou": "Unakusubiri",
       "needsYouMeta": "Vinakusubiri",
       "deadline": "Tarehe ya mwisho ijayo",
       "deadlineNone": "Hakuna",
-      "deadlineMeta": "{count, plural, one {# siku ya kazi imebaki} other {# siku za kazi zimebaki}}",
-      "deadlineOverdue": "imechelewa",
+      "deadlineMeta": "baada ya siku {count, plural, one {# ya kazi} other {# za kazi}}",
+      "deadlineOverdue": "Imechelewa",
       "deadlineToday": "Inatakiwa leo"
     },
     "openTracker": "Fungua kifuatiliaji",
@@ -2072,7 +2072,8 @@
     "openOwn": "Fungua ushirikiano wako",
     "progress": "Hatua {current} kati ya {total}: {group}",
     "parties": "Pande zote mbili",
-    "stageNowTitle": "Sasa: {stage}"
+    "nextBoth": "Hatua inayofuata kwako na {name}: {step}",
+    "since": "Tangu {date}"
   },
   "trackerActions": {
     "title": "Hatua zako",

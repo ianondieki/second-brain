@@ -41,12 +41,13 @@ export async function LandingContent() {
         </Link>
       </TopBar>
       <main id="main" tabIndex={-1} className="focus:outline-none">
-        <section aria-labelledby="hero-title" className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 pt-10 pb-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:gap-16 lg:pt-20 lg:pb-24">
-          <div className="max-w-xl">
-            <h1 id="hero-title" className="text-3xl text-ink lg:text-[3.5rem] lg:leading-[1.05]">
+        <section aria-labelledby="hero-title" className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pt-10 pb-16 sm:px-6 lg:gap-12 lg:pt-16 lg:pb-24">
+          <div className="max-w-4xl">
+            {/* Eight words, two balanced lines from 1024 px (32ch at 56 px fits the column). */}
+            <h1 id="hero-title" className="max-w-[32ch] text-3xl text-ink lg:text-[3.5rem] lg:leading-[1.06]">
               {t("title")}
             </h1>
-            <p className="mt-5 max-w-[56ch] text-lg text-ink-soft">{t("lead")}</p>
+            <p className="mt-5 max-w-[60ch] text-lg text-ink-soft lg:text-xl">{t("lead")}</p>
             <div className="mt-8 flex flex-col items-start gap-4">
               <ButtonLink href="/signup" variant="primary">
                 {t("signUp")}

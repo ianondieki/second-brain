@@ -53,7 +53,7 @@
     "track": "Both sides follow one shared tracker, from the first look to an agreed next step."
   },
   "landing": {
-    "title": "Bring local solutions to the organisations that need them",
+    "title": "Local solutions for the organisations that need them",
     "lead": "Developers publish solutions to real problems, with timestamped evidence of what they submitted. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
     "signUp": "Create an account",
     "logIn": "Log in",
@@ -1208,7 +1208,8 @@
     "label": {
       "aiDrafted": "AI-drafted, human-reviewed on {date}",
       "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",
-      "developer": "Developer-reported"
+      "developer": "Developer-reported",
+      "demoBadge": "Demo data"
     },
     "affected": "Who is affected",
     "niche": "Niche",
@@ -1691,19 +1692,18 @@
     "allIdeas": "All my ideas",
     "empty": "Your engagements show here once you pitch one of your ideas to a company.",
     "emptyAction": "Go to My ideas",
-    "security": "Two-step sign-in",
     "stats": {
       "label": "At a glance",
       "ideas": "Ideas",
-      "ideasMeta": "{count, plural, one {# draft} other {# drafts}}",
+      "ideasMeta": "{published, plural, one {# published} other {# published}} · {drafts, plural, one {# draft} other {# drafts}}",
       "engagements": "Engagements",
       "engagementsMeta": "{count, plural, one {# active} other {# active}}",
       "needsYou": "Need you",
       "needsYouMeta": "Waiting on you",
       "deadline": "Next deadline",
       "deadlineNone": "None",
-      "deadlineMeta": "{count, plural, one {# business day left} other {# business days left}}",
-      "deadlineOverdue": "overdue",
+      "deadlineMeta": "in {count, plural, one {# business day} other {# business days}}",
+      "deadlineOverdue": "Overdue",
       "deadlineToday": "Due today"
     },
     "openTracker": "Open the tracker",
@@ -2072,7 +2072,8 @@
     "openOwn": "Open your engagements",
     "progress": "Stage {current} of {total}: {group}",
     "parties": "The two parties",
-    "stageNowTitle": "Now: {stage}"
+    "nextBoth": "Next step for you and {name}: {step}",
+    "since": "Since {date}"
   },
   "trackerActions": {
     "title": "Your actions",
