@@ -30,6 +30,8 @@ describe("ClosedCelebration", () => {
     const html = (initialSeen: boolean) => renderToStaticMarkup(<ClosedCelebration {...props} initialSeen={initialSeen} />);
     expect(html(false)).toContain('data-celebration="e-1"');
     expect(html(false)).toContain("Got it");
+    // The card and its button share one element the before-paint hide covers: no button is ever painted alone.
+    expect(html(false)).toMatch(/^<div data-celebration-shell="">[\s\S]*Got it<\/button><\/div><\/div>$/);
     expect(html(true)).toBe("");
     const cookies = (value?: string) => ({ get: (name: string) => (name === "wazo-closed" && value ? { value } : undefined) });
     expect(celebrationSeenFromCookies(cookies("e-7.e-1"), "e-1")).toBe(true);
@@ -83,7 +85,7 @@ describe("ClosedCelebration", () => {
       });
       for (let tick = 0; tick < 40; tick += 1) {
         await new Promise((resolve) => setImmediate(resolve));
-        const card = container.querySelector("[data-celebration]") !== null;
+        const card = container.querySelector("[data-celebration-shell]") !== null;
         const marker = document.documentElement.hasAttribute("data-celebration-seen");
         states.add(card ? (marker ? "hidden" : "painted") : "gone");
       }

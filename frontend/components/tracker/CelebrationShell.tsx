@@ -47,8 +47,9 @@ export function CelebrationShell({
     else if (!celebrationCookieSet(engagementId)) rememberCelebrationCookie(engagementId);
   }, [seen, engagementId]);
   if (seen) return null;
+  // One element for the card and its button: the before-paint hide (globals.css) covers both, never the card alone.
   return (
-    <>
+    <div data-celebration-shell="">
       {children}
       <div className="mt-4">
         <Button
@@ -61,6 +62,6 @@ export function CelebrationShell({
           {dismiss}
         </Button>
       </div>
-    </>
+    </div>
   );
 }

@@ -92,8 +92,9 @@ html[data-tour-seen~="org"] [data-tour-side="org"] {
   display: none;
 }
 
-/* The same for a closed tracker's celebration this browser's storage remembers (components/tracker/celebration-store.ts). */
-html[data-celebration-seen] [data-celebration] {
+/* The same for a closed tracker's celebration this browser's storage remembers (components/tracker/celebration-store.ts):
+   the shell holds the card and its button, so neither is painted alone. */
+html[data-celebration-seen] [data-celebration-shell] {
   display: none;
 }
 
