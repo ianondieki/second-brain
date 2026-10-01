@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -7,6 +8,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
+import { TOUR_COOKIE } from "@/components/tour/tour-store";
 import { orgEngagements } from "@/components/tracker/data";
 import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
@@ -55,7 +57,7 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="org" />
+        <FirstLoginTour side="org" initialDone={(await cookies()).get(TOUR_COOKIE)?.value === "done"} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader

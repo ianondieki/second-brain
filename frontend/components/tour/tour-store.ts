@@ -1,8 +1,10 @@
-// The first-login tour's memory (D-52): "done" in this browser once it was skipped or finished. A module store read
-// through useSyncExternalStore, so the tour never renders on the server (its server snapshot is "done") and never
-// flashes before hydration.
+// The first-login tour's memory (D-52): "done" in this browser once it was skipped or finished, in localStorage (what
+// the client reads) and in a cookie (what the server reads, so a first visit renders the tour in place with no layout
+// shift and a later visit renders nothing: no flash either way). A module store read through useSyncExternalStore.
 
 export const TOUR_STORAGE_KEY = "wazo-tour:v1";
+export const TOUR_COOKIE = "wazo-tour";
+const COOKIE_YEAR = 60 * 60 * 24 * 365;
 
 const listeners = new Set<() => void>();
 /** Finished on this page: the tour closes even when storage refuses the write (a full quota, a private window). */
@@ -34,6 +36,7 @@ export function finishTour() {
   } catch {
     // Storage refused the write: the in-memory mark closes the tour for this page; it may show again next time.
   }
+  document.cookie = `${TOUR_COOKIE}=done; path=/; max-age=${COOKIE_YEAR}; SameSite=Lax`;
   for (const listener of listeners) listener();
 }
 
@@ -45,5 +48,6 @@ export function resetTour() {
   } catch {
     // Nothing to forget.
   }
+  document.cookie = `${TOUR_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
   for (const listener of listeners) listener();
 }

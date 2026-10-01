@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
@@ -17,6 +18,7 @@ import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { ClientStrings } from "@/components/ClientStrings";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
+import { TOUR_COOKIE } from "@/components/tour/tour-store";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
 import { formatShortDate } from "@/lib/format";
@@ -54,7 +56,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="developer" />
+        <FirstLoginTour side="developer" initialDone={(await cookies()).get(TOUR_COOKIE)?.value === "done"} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader

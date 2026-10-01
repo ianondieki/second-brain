@@ -36,12 +36,16 @@ async function expectNotificationSettings(page: Page) {
   await expect(page.getByRole("heading", { level: 2, name: "Notifications" })).toBeVisible();
 }
 
-async function expectHelp(page: Page) {
+async function expectHelp(page: Page, { signedIn = false } = {}) {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Help");
-  // Signed in, a fifth section offers the first-login tour again (D-52).
-  const sections = await page.getByRole("heading", { level: 2 }).allTextContents();
-  expect(sections.slice(0, 4)).toEqual(["How pitching works", "What stays confidential", "Reminders", "Contact support"]);
-  expect(sections.slice(4)).toEqual(sections.length > 4 ? ["The tour"] : []);
+  // Signed in to a portal, a fifth section offers the first-login tour again (D-52); a visitor gets the four.
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+    "How pitching works",
+    "What stays confidential",
+    "Reminders",
+    "Contact support",
+    ...(signedIn ? ["The tour"] : []),
+  ]);
   await expect(page.locator("[data-support-placeholder]")).toHaveText("Support contact to be set.");
   await expect(page.locator("[data-primary]")).toHaveCount(0);
 }
@@ -111,7 +115,7 @@ test.describe("a signed-in developer", () => {
 
     await openMenuItem(page, "Help");
     await expect(page).toHaveURL(/\/help$/, SERVER_STEP);
-    await expectHelp(page);
+    await expectHelp(page, { signedIn: true });
     await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
     await checkScreen(page, { strict: true });
 
@@ -183,7 +187,7 @@ test.describe("from an email", () => {
       await checkScreen(page, { strict: true });
 
       await page.goto(pathOf(help!));
-      await expectHelp(page);
+      await expectHelp(page, { signedIn: true });
       await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
       await checkScreen(page, { strict: true });
     } finally {

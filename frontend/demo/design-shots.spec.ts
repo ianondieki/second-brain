@@ -320,6 +320,9 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
           colorScheme: theme,
           storageState: state,
         });
+        // The tour is remembered as done (the storage key the client reads, the cookie the server reads) unless the
+        // shot is the tour's own.
+        if (!shot.tour) await context.addCookies([{ name: "wazo-tour", value: "done", url: test.info().project.use.baseURL as string }]);
         await context.addInitScript(
           ({ choice, tour }) => {
             window.localStorage.setItem("wazo-theme", choice);

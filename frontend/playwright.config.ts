@@ -13,10 +13,21 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    // The first-login tour (components/tour) is remembered as done, so it never sits over a screen under test;
-    // e2e/tour.spec.ts clears the key for its own run.
+    // The first-login tour (components/tour) is remembered as done (the storage key the client reads and the cookie
+    // the server reads), so it never sits over a screen under test; e2e/tour.spec.ts clears both for its own run.
     storageState: {
-      cookies: [],
+      cookies: [
+        {
+          name: "wazo-tour",
+          value: "done",
+          domain: new URL(process.env.E2E_BASE_URL ?? "http://localhost:3000").hostname,
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
       origins: [{ origin: process.env.E2E_BASE_URL ?? "http://localhost:3000", localStorage: [{ name: "wazo-tour:v1", value: "done" }] }],
     },
     trace: "retain-on-failure",

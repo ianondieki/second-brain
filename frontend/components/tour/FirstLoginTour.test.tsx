@@ -35,13 +35,16 @@ describe("FirstLoginTour", () => {
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
+    expect(document.cookie).toContain("wazo-tour=done"); // what the server reads on the next visit
   });
 
-  it("closes on Escape and hands focus to the page title", () => {
-    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><div id="host"></div></main>';
+  it("closes on Escape pressed inside it (not elsewhere) and hands focus to the page title", () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="menu">Account</button><div id="host"></div></main>';
     renderWithIntl(<FirstLoginTour side="developer" />, { container: document.getElementById("host")! });
     expect(document.documentElement.hasAttribute("data-tour-open")).toBe(true);
-    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(document.getElementById("menu")!, { key: "Escape" }); // the account menu's Escape, not the tour's
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Next" }), { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
     expect(document.activeElement).toBe(document.querySelector("h1"));

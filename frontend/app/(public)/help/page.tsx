@@ -68,17 +68,20 @@ export default async function HelpPage() {
   );
 
   if (person) {
+    // The first-login tour, on request, for the two sides that have one (the staff console has none).
+    const hasTour = person.home === "/dev" || person.home === "/org";
     const tTour = await getTranslations("tour");
     return (
       <SignedInShell homeHref={person.home} nav={<PortalNavFor me={person.me} />} wide>
         <div className="max-w-xl">
           {content}
-          {/* The first-login tour, on request: it shows again on the next visit to the person's home. */}
-          <Section title={tTour("title")} headingId="help-tour" className="mt-12" data-help-section="tour">
-            <ClientStrings strings={await clientStrings(["tour"])}>
-              <ShowTourAgain />
-            </ClientStrings>
-          </Section>
+          {hasTour ? (
+            <Section title={tTour("title")} headingId="help-tour" className="mt-12" data-help-section="tour">
+              <ClientStrings strings={await clientStrings(["tour"])}>
+                <ShowTourAgain />
+              </ClientStrings>
+            </Section>
+          ) : null}
         </div>
       </SignedInShell>
     );

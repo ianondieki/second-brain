@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { buttonClass } from "@/components/ui/Button";
@@ -30,25 +30,31 @@ const STEPS: Record<TourSide, ReadonlyArray<{ key: StepKey; art: IllustrationKin
 /**
  * The first-login tour (D-52; docs/spec/07: at most three steps, skippable from the first), never a modal: the page
  * stays usable. On phones it sits in the page's flow above the title, so it covers nothing it points at and no focused
- * control; from 640 px it floats bottom-right, and the page keeps that much room at its end (globals.css,
- * `html[data-tour-open]`) so a focused control can always scroll clear of it. Each step is a drawing, a title and one
- * sentence; "Skip tour", "Done" or Escape remembers it in this browser (tour-store.ts) and hands focus back to the
- * page's title. Its forward button is styled as the primary action but carries no data-primary: the page keeps its own.
+ * control; from 640 px it floats bottom-right above the tab bar, and the page keeps that much room at its end
+ * (globals.css, `html[data-tour-open]`) so a focused control can always scroll clear of it. Each step is a drawing, a
+ * title and one sentence; "Skip tour", "Done" or Escape pressed inside it remembers it in this browser (tour-store.ts:
+ * in storage and in a cookie the server reads, so the page arrives with or without the tour and never shifts) and
+ * hands focus back to the page's title. Its forward button is styled as the primary action but carries no
+ * data-primary: the page keeps its own.
  */
-export function FirstLoginTour({ side }: { side: TourSide }) {
+export function FirstLoginTour({ side, initialDone = true }: { side: TourSide; initialDone?: boolean }) {
   const t = useStrings("tour");
-  const done = useSyncExternalStore(subscribeTour, tourDone, () => true);
+  // The server's answer comes from the cookie (tour-store.ts): the page arrives with the tour or without it, whole.
+  const done = useSyncExternalStore(subscribeTour, tourDone, () => initialDone);
   const [index, setIndex] = useState(0);
   const titleId = useId();
   const bodyId = useId();
+  const panel = useRef<HTMLElement>(null);
 
-  // While open: Escape closes it, and the document reserves its room at the page's end from 640 px.
+  // While open: Escape from inside it closes it (not an Escape meant for the account menu or a dialog), and the
+  // document reserves its room at the page's end from 640 px.
   useEffect(() => {
     if (done) return;
     const root = document.documentElement;
     root.setAttribute("data-tour-open", "");
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) close();
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.target instanceof Node && panel.current?.contains(event.target)) close();
     };
     document.addEventListener("keydown", onKey);
     return () => {
@@ -63,13 +69,15 @@ export function FirstLoginTour({ side }: { side: TourSide }) {
   const last = index === steps.length - 1;
   return (
     <section
+      ref={panel}
       role="dialog"
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       data-tour={step.key}
       className={cn(
         "tour-enter z-20 rounded-panel border border-line bg-field p-5 text-ink shadow-overlay",
-        "mb-8 sm:fixed sm:right-6 sm:bottom-6 sm:mb-0 sm:w-80 lg:bottom-8",
+        // Above the fixed tab bar until the rail takes over at 1024 px.
+        "mb-8 sm:fixed sm:right-6 sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:mb-0 sm:w-80 lg:bottom-8",
       )}
     >
       <Illustration kind={step.art} className="max-w-40 text-ink" />
