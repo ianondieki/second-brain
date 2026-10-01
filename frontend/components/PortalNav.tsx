@@ -64,7 +64,7 @@ export function PortalNav({ label, items, current, query = "", heading }: Portal
                   "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-left lg:text-base",
                   "transition-colors duration-150 ease-out",
                   active
-                    ? "font-semibold text-jacaranda lg:bg-jacaranda-wash"
+                    ? "font-semibold text-accent lg:bg-accent-wash"
                     : "font-medium text-ink-soft hover:text-ink lg:hover:bg-wash-soft",
                 )}
               >
@@ -74,7 +74,7 @@ export function PortalNav({ label, items, current, query = "", heading }: Portal
                     className={
                       // A fixed 32 px bar centred over the tab (not inset from both sides, which left 4 px over "Home"
                       // at 360 px); from 1024 px a 2 px bar down the rail item's left edge.
-                      "absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-b bg-jacaranda " +
+                      "absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-b bg-accent " +
                       "lg:inset-y-2 lg:left-0 lg:h-auto lg:w-0.5 lg:translate-x-0 lg:rounded-none lg:rounded-r"
                     }
                   />

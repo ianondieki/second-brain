@@ -5,7 +5,9 @@ import { formatConfidence, formatDate, formatMoment, safeHttpsUrl } from "@/comp
 import { Chip } from "@/components/tracker/Chip";
 import { Badge } from "@/components/ui/Badge";
 import { CheckIcon, ClockIcon, ClosedIcon, CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
-import { Row } from "@/components/ui/RowList";
+import Link from "next/link";
+
+import { DataCell, DataRow, dataLinkClass } from "@/components/ui/DataTable";
 
 import {
   nicheLabel,
@@ -22,75 +24,67 @@ import {
 // The research page's lists (REQ-RES-01): the cards waiting for review, the recent runs and the saved excerpts.
 
 /**
- * One card waiting for review, a Row: its title (the way into the review, an h3 under "Waiting for review"), at most
- * two badges (docs/spec/07 item 2): how it was drafted, and whether it names an organisation (D-45); its niche,
- * confidence, sources and draft date as the meta line; then the start of its statement. The whole row is the link's
- * target (a stretched link); `data-review-link` marks that link.
+ * One card waiting for review, a row of the queue's table: its title (the way into the review, the row header) with
+ * at most two badges under it (docs/spec/07 item 2: how it was drafted, and whether it names an organisation, D-45),
+ * then its niche, confidence, sources and draft date. `data-review-link` marks the title's link (its own 44 px band).
  */
 export async function CandidateRow({ candidate, niches }: { candidate: Candidate; niches: readonly AdminNiche[] }) {
   const t = await getTranslations("adminResearch");
   const locale = await getLocale();
   const confidence = formatConfidence(locale, candidate.confidence);
   const niche = nicheLabel(candidate.niche, niches);
-  const drafted = (
-    <Badge
-      key="drafted"
-      data-chip="drafted"
-      tone="accent"
-      icon={candidate.seeded_example ? <InfoIcon /> : <PencilIcon />}
-    >
-      {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
-    </Badge>
-  );
-  const orgs =
-    candidate.named_orgs.length > 0 ? (
-      <Badge key="orgs" data-chip="orgs" tone="neutral" icon={<CompaniesIcon />}>
-        {t("queue.namesOrgs")}
-      </Badge>
-    ) : null;
   return (
-    <Row
-      data-candidate={candidate.id}
-      linkData={{ "data-review-link": "" }}
-      title={candidate.title}
-      href={reviewHref(candidate.id)}
-      meta={
-        <span className="flex flex-wrap gap-x-4 gap-y-1">
-          {niche ? <span>{niche}</span> : null}
-          {confidence ? <span>{t("queue.confidence", { value: confidence })}</span> : null}
-          <span>{t("queue.sources", { count: candidate.sources.length })}</span>
-          <span>{t("queue.drafted", { date: formatMoment(locale, candidate.created_at) })}</span>
-        </span>
-      }
-      badges={orgs ? [drafted, orgs] : [drafted]}
-    >
-      <p className="line-clamp-2 max-w-[65ch] [overflow-wrap:anywhere] text-ink-soft">{candidate.statement}</p>
-    </Row>
+    <DataRow data-candidate={candidate.id}>
+      <DataCell head label={t("columns.card")} className="sm:w-[44%]">
+        <Link href={reviewHref(candidate.id)} data-review-link="" className={dataLinkClass}>
+          {candidate.title}
+        </Link>
+        <p className="mt-1 line-clamp-2 max-w-[52ch] text-sm [overflow-wrap:anywhere] text-ink-soft">{candidate.statement}</p>
+        <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Badge data-chip="drafted" tone="accent" icon={candidate.seeded_example ? <InfoIcon /> : <PencilIcon />}>
+            {candidate.seeded_example ? t("queue.seeded") : t("queue.aiDrafted")}
+          </Badge>
+          {candidate.named_orgs.length > 0 ? (
+            <Badge data-chip="orgs" tone="neutral" icon={<CompaniesIcon />}>
+              {t("queue.namesOrgs")}
+            </Badge>
+          ) : null}
+        </p>
+      </DataCell>
+      <DataCell label={t("columns.niche")}>{niche ?? "–"}</DataCell>
+      <DataCell label={t("columns.confidence")} figure nowrap>
+        {confidence ?? "–"}
+      </DataCell>
+      <DataCell label={t("columns.sources")} figure nowrap>
+        {candidate.sources.length}
+      </DataCell>
+      <DataCell label={t("columns.drafted")} figure nowrap className="text-ink-soft">
+        {formatMoment(locale, candidate.created_at)}
+      </DataCell>
+    </DataRow>
   );
 }
 
-/** One run, a Row: niche, when it started, its status (mark, word, colour) and what came of it. */
+/** One run, a row: its niche, when it started, its status (mark, word, colour) and what came of it. */
 export async function RunRow({ run, niches }: { run: Run; niches: readonly AdminNiche[] }) {
   const t = await getTranslations("adminResearch");
   const locale = await getLocale();
   const outcome = runOutcome(run);
   return (
-    <Row
-      data-run={run.id}
-      title={nicheLabel(run.niche, niches)}
-      meta={t("runs.started", { date: formatMoment(locale, run.created_at) })}
-      badges={[
-        <Chip key="status" kind={RUN_CHIP[run.status]}>
-          {t(`runs.status.${run.status}`)}
-        </Chip>,
-      ]}
-    >
-      <p className="max-w-[60ch] text-ink">
-        {outcome.key === "cards"
-          ? t("runs.cards", { count: outcome.count, total: outcome.total })
-          : t(`runs.${outcome.key}`)}
-      </p>
-    </Row>
+    <DataRow data-run={run.id}>
+      <DataCell head label={t("columns.niche")} className="font-semibold sm:w-[30%]">
+        {nicheLabel(run.niche, niches)}
+      </DataCell>
+      <DataCell label={t("columns.started")} figure nowrap className="text-ink-soft">
+        {formatMoment(locale, run.created_at)}
+      </DataCell>
+      <DataCell label={t("columns.status")} nowrap>
+        <Chip kind={RUN_CHIP[run.status]}>{t(`runs.status.${run.status}`)}</Chip>
+      </DataCell>
+      <DataCell label={t("columns.result")}>
+        {outcome.key === "cards" ? t("runs.cards", { count: outcome.count, total: outcome.total }) : t(`runs.${outcome.key}`)}
+      </DataCell>
+    </DataRow>
   );
 }
 
@@ -168,7 +162,7 @@ function ExcerptLink({ url, children }: { url: string; children: ReactNode }) {
     <a
       href={href}
       rel="noopener noreferrer"
-      className="inline-flex min-h-11 items-center self-start font-medium [overflow-wrap:anywhere] text-jacaranda underline decoration-1 hover:decoration-2"
+      className="inline-flex min-h-11 items-center self-start font-medium [overflow-wrap:anywhere] text-accent underline decoration-1 hover:decoration-2"
     >
       {children}
     </a>

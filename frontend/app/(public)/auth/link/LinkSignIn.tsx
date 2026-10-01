@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
+import { Illustration } from "@/components/ui/Illustration";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { TextField } from "@/components/ui/TextField";
@@ -174,6 +175,7 @@ export function LinkSignIn() {
     return (
       <>
         <h1 className="text-xl text-ink lg:text-2xl">{t("link.title")}</h1>
+        <Illustration kind="waiting" className="mt-4 max-w-48 text-ink" />
         <p role="status" className="mt-3 text-ink-soft">
           {t("link.working")}
         </p>

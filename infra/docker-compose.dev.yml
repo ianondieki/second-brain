@@ -112,6 +112,7 @@ services:
       context: ../frontend
       args:
         API_ORIGIN: http://api:8000   # baked into the rewrites at build time
+        NEXT_PUBLIC_SITE_ORIGIN: ${NEXT_PUBLIC_SITE_ORIGIN:-}   # inlined; the certificate's QR and verify address (empty: the path alone, never localhost)
     environment:
       API_ORIGIN: http://api:8000
       # Which session cookie name the web server reads; must equal the API's COOKIE_SECURE (backend/.env).

@@ -211,9 +211,9 @@ export function AssistantPanel({
   const side = (caption: string, { title, summary }: SuggestedTeaser, suggested?: boolean) => (
     <div
       data-teaser={suggested ? "suggested" : before ? "before" : "now"}
-      className={cn("min-w-0 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
+      className={cn("min-w-0 rounded-control p-4", suggested ? "bg-accent-wash" : "border border-line")}
     >
-      <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
+      <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-accent" : "text-ink-soft")}>{caption}</p>
       <dl>
         {[
           [t("field.title"), title],
@@ -296,10 +296,12 @@ export function AssistantPanel({
 
       {!working && (answer || problem || notice) && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
-          {/* Turned off: asking again means turning it on (the dialog shows the wording first). */}
+          {/* Turned off: asking again means turning it on (the dialog shows the wording first). Kept after a demo
+              fallback too: the fallback also stands in for a transient failure (bridge/llm/demo_fallback.py), and the
+              chip beside the answer already says no model wrote it. */}
           <Button onClick={() => void ask()}>{t(consent?.granted === false ? "dialog.confirm" : "askAgain")}</Button>
           {consent?.granted && (
-            <Button variant="link" className="text-left" busy={turningOff} onClick={() => void turnOff()}>
+            <Button variant="link" className="text-left whitespace-nowrap" busy={turningOff} onClick={() => void turnOff()}>
               {t(turningOff ? "turningOff" : "turnOff")}
             </Button>
           )}

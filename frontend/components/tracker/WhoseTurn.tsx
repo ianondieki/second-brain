@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 
@@ -34,6 +35,8 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
               : t("turn.ended");
 
   const yours = turn.kind === "you" || turn.kind === "both";
+  const awaited = new Set(detail.whose_turn);
+  const ended = turn.kind === "ended";
   // A Callout with a title (docs/platform/design/p16-design-system.md, Notices): the accent tone when it is the
   // viewer's turn, neutral otherwise; the drawn mark says current, completed or ended with the words.
   return (
@@ -50,28 +53,39 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
           kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : "current"}
           className={cn(
             "mt-1 size-5",
-            turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-jacaranda",
+            turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-accent",
           )}
         />
       }
     >
+      <p className="flex items-center gap-2 py-0.5" aria-label={t("parties")}>
+        <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
+        <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
+      </p>
       {turn.kind === "ended" && detail.end_reason ? (
         <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
       ) : null}
-      {yours
-        ? mine.map((command) => (
-            <p key={command} className="text-ink">
-              {t("nextYou", { step: steps(`command.${command}`) })}
-            </p>
-          ))
-        : null}
-      {turn.kind === "other" || turn.kind === "both"
-        ? theirs.map((command) => (
-            <p key={command} className="text-ink-soft">
-              {t("nextThem", { name: other, step: steps(`command.${command}`) })}
-            </p>
-          ))
-        : null}
+      {/* The next step, said once: when both parties owe the same step, one sentence names them both. */}
+      {turn.kind === "both" && mine.length === 1 && theirs.length === 1 && mine[0] === theirs[0] ? (
+        <p className="text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
+      ) : (
+        <>
+          {yours
+            ? mine.map((command) => (
+                <p key={command} className="text-ink">
+                  {t("nextYou", { step: steps(`command.${command}`) })}
+                </p>
+              ))
+            : null}
+          {turn.kind === "other" || turn.kind === "both"
+            ? theirs.map((command) => (
+                <p key={command} className="text-ink-soft">
+                  {t("nextThem", { name: other, step: steps(`command.${command}`) })}
+                </p>
+              ))
+            : null}
+        </>
+      )}
       {detail.due && turn.kind !== "ended" ? (
         <p className="text-sm">
           <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />

@@ -20,7 +20,7 @@ export function SettingsTabs({ current }: { current: SettingsTab }) {
       label={t("label")}
       current={current}
       items={SETTINGS_TABS.map(({ key, href }) => ({ key, href, label: t(key) }))}
-      className="mb-8"
+      className="mt-6 mb-8"
     />
   );
 }

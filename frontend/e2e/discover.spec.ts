@@ -30,7 +30,8 @@ async function expectLabelled(cards: Locator) {
   for (const card of await cards.all()) {
     const label = card.locator("[data-label]");
     await expect(label).toHaveCount(1);
-    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Seeded example for the demo)/);
+    // A seeded example shows the small "Demo data" badge, its sentence behind it (D-52).
+    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Demo data)/);
     await expect(label).not.toHaveText(/(January|February|March|April|June|July|August|September|October|November|December)/);
   }
 }
@@ -99,7 +100,9 @@ test.describe("a new developer", () => {
     // The demo's trending problem: its self-explaining badge, a Why chip, its sources and the project beside it.
     const card = page.locator(`article[data-problem="${trend.problemId}"]`);
     await expect(card).toHaveAttribute("data-trending", "");
-    await expect(card.locator("[data-badge]")).toContainText(/^Trending in .+: .+/);
+    // The card shows the badge's short form (its meta line already says where); the sentence stays in its title (P18).
+    await expect(card.locator("[data-badge]")).toContainText(/^Trending: .+/);
+    await expect(card.locator("[data-badge]")).toHaveAttribute("title", /^Trending in .+: .+/);
     expect(await card.locator("[data-chip=why]").count()).toBeGreaterThanOrEqual(1);
     await expect(card.getByRole("link", { name: trend.title })).toHaveAttribute("href", `/problems/${trend.problemId}`);
     await card.getByText("More about this problem").click();

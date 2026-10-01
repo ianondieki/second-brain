@@ -125,7 +125,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
               {reasonTone(reason) === "flag" ? (
                 <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
               ) : (
-                <InfoIcon className="mt-0.5 size-5 shrink-0 text-jacaranda" />
+                <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
               )}
               <span>{t(`reason.${reason}`)}</span>
             </li>

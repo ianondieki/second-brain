@@ -3,6 +3,7 @@
 import { useStrings } from "@/components/ClientStrings";
 
 import { Callout } from "@/components/ui/Callout";
+import { Card } from "@/components/ui/Card";
 import { LockIcon } from "@/components/ui/status-icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
@@ -32,7 +33,7 @@ export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
   const issueMessage = useIssueMessage();
   const linkProblem = linksProblem(state.links);
   return (
-    <section aria-labelledby="details-notice" className="flex flex-col gap-6">
+    <Card as="section" variant="flat" aria-labelledby="details-notice" className="flex flex-col gap-6">
       {/* Who can read this step, as a static notice with a lock (no coloured left rule). */}
       <Callout
         tone="neutral"
@@ -67,6 +68,6 @@ export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
         onChange={(e) => update({ links: e.target.value })}
       />
       <Attachments {...files} />
-    </section>
+    </Card>
   );
 }

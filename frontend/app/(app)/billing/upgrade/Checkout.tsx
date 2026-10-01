@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
 import { RadioGroup } from "@/components/ui/RadioGroup";
-import { CheckIcon, ClockIcon } from "@/components/ui/status-icons";
+import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/status-icons";
+
+import { haptic } from "@/lib/haptics";
 
 import { formatKes } from "../plans";
 import { checkoutCalls, type CheckoutCalls } from "./calls";
@@ -82,6 +84,12 @@ export function Checkout(props: CheckoutProps) {
     else if (moved && phase.kind !== "starting") heading.current?.focus();
   }, [phase]);
 
+  // A confirmation under the thumb on phones (lib/haptics.ts): once when the outcome arrives.
+  useEffect(() => {
+    if (phase.kind === "succeeded") haptic("success");
+    else if (phase.kind === "failed" || phase.kind === "cancelled") haptic("warn");
+  }, [phase.kind]);
+
   useEffect(() => {
     if (phase.kind === "pending" || phase.kind === "stalled") syncAddress(phase.id);
     else if (phase.kind === "confirm") syncAddress(null);
@@ -126,10 +134,8 @@ export function Checkout(props: CheckoutProps) {
   // A simulated checkout sends no prompt to any phone, so its waiting step does not say "Check your phone".
   const simulated = props.simulated || (phase.kind === "pending" && phase.checkout?.simulated === true);
   const waitingTitle = simulated ? t("simulatedTitle") : t("phoneTitle");
-  return (
-    <div className="mt-6 flex flex-col gap-8">
-      <Steps current={stepOf(phase)} />
-      {phase.kind === "confirm" || phase.kind === "starting" ? (
+  const body =
+    phase.kind === "confirm" || phase.kind === "starting" ? (
         <Confirm
           {...props}
           busy={phase.kind === "starting"}
@@ -155,7 +161,7 @@ export function Checkout(props: CheckoutProps) {
           {phase.kind === "pending" ? (
             <>
               <p role="status" className="flex items-center gap-2 font-medium text-ink">
-                <ClockIcon className="size-5 shrink-0 text-jacaranda motion-safe:animate-pulse" />
+                <ClockIcon className="size-5 shrink-0 text-accent motion-safe:animate-pulse" />
                 {phase.checkout ? t("waiting") : t("checking")}
               </p>
               <p className="max-w-[60ch] text-sm text-ink-soft">{t("canLeave")}</p>
@@ -188,37 +194,134 @@ export function Checkout(props: CheckoutProps) {
         </section>
       ) : (
         <Result phase={phase} {...props} headingProps={headingProps} onRestart={() => dispatch({ type: "restart" })} />
-      )}
+      );
+  return (
+    <div className="mt-6 flex flex-col gap-8">
+      <Steps current={stepOf(phase)} failed={phase.kind === "failed" || phase.kind === "cancelled"} />
+      {/* The step's words and controls, with the phone beside them from 1024 px (after them on a phone, so the one real
+          action stays within reach): what the M-Pesa prompt shows at this step, drawn, so the state reads at a glance. */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
+        <div className="min-w-0">{body}</div>
+        <div>
+          <Phone phase={phase} plan={props.plan.name} price={props.price} simulated={simulated} />
+        </div>
+      </div>
     </div>
   );
 }
 
-/** The three steps as an ordered list with aria-current="step" (docs/spec/07 item 6); not buttons: it only shows. */
-function Steps({ current }: { current: 1 | 2 | 3 }) {
+/**
+ * The phone beside the steps (D-52): a drawn handset whose screen shows what the M-Pesa prompt shows at this step. It
+ * is decoration (aria-hidden): the headings, status and alerts beside it carry the meaning, so nothing is said twice,
+ * and its keys are drawn as plain shapes, not as buttons. A refused start or a lost checkout shows no prompt.
+ */
+function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; price: string; simulated: boolean }) {
   const t = useStrings("checkout");
-  const names = [t("step.confirm"), t("step.phone"), t("step.done")];
+  const kind = phase.kind;
+  const state =
+    kind === "succeeded"
+      ? "paid"
+      : kind === "failed" || kind === "cancelled"
+        ? "notPaid"
+        : kind === "lost" || (kind === "confirm" && phase.refusal)
+          ? "idle"
+          : kind === "pending" || kind === "stalled" || kind === "starting"
+            ? "waiting"
+            : "prompt";
+  return (
+    <div aria-hidden="true" data-phone={state} className="mx-auto w-full max-w-[15rem] lg:mx-0 lg:max-w-none">
+      <div className="rounded-[1.75rem] border-[6px] border-bezel bg-paper p-3 shadow-card">
+        <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-line" />
+        <div className="flex min-h-[15rem] flex-col rounded-[1rem] border border-line bg-field p-4">
+          <p className="text-xs font-semibold tracking-[0.08em] text-ink-soft uppercase">
+            {simulated ? t("phone.simulated") : t("phone.title")}
+          </p>
+          {state === "paid" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-warm-wash text-warm">
+                <CheckIcon className="size-6" />
+              </span>
+              <p className="font-semibold text-ink">{t("phone.paid")}</p>
+              <p className="text-sm text-ink-soft tabular-nums">{price}</p>
+            </div>
+          ) : state === "notPaid" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-error-wash text-error">
+                <AlertIcon className="size-6" />
+              </span>
+              <p className="font-semibold text-ink">{t("phone.notPaid")}</p>
+            </div>
+          ) : state === "idle" ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-center">
+              <p className="text-sm text-ink-soft">{t("phone.idle")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-1 flex-col gap-4 pt-4">
+              <p className="text-ink [overflow-wrap:anywhere]">{t("phone.prompt", { price, plan })}</p>
+              {state === "waiting" ? (
+                <p className="mt-auto flex items-center gap-2 text-sm font-medium text-ink-soft">
+                  <ClockIcon className="size-4 shrink-0 text-accent motion-safe:animate-pulse" />
+                  {t("phone.waiting")}
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-ink-soft">{t("phone.pin")}</p>
+                  <p className="font-mono text-lg tracking-[0.4em] text-ink">····</p>
+                  {/* The prompt's two keys, as the drawing's own shapes: no button styling, no accent fill. */}
+                  <div className="mt-auto flex gap-2">
+                    <span className="flex-1 rounded-control border border-dashed border-line py-1.5 text-center text-sm text-ink-soft">{t("phone.cancel")}</span>
+                    <span className="flex-1 rounded-control border border-dashed border-line py-1.5 text-center text-sm text-ink-soft">{t("phone.send")}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The three steps as an ordered list with aria-current="step" (docs/spec/07 item 6); not buttons: it only shows. A
+ * payment that failed or was cancelled marks the phone step as not completed rather than done, and names the step
+ * it stands on "Not paid" rather than "Done".
+ */
+function Steps({ current, failed = false }: { current: 1 | 2 | 3; failed?: boolean }) {
+  const t = useStrings("checkout");
+  const names = [t("step.confirm"), t("step.phone"), failed ? t("step.notPaid") : t("step.done")];
   return (
     <ol aria-label={t("stepsLabel")} className="grid grid-cols-3 gap-2">
       {names.map((name, index) => {
         const step = index + 1;
-        const done = step < current;
+        const notCompleted = failed && step === 2;
+        const done = step < current && !notCompleted;
         return (
           <li
             key={name}
             aria-current={step === current ? "step" : undefined}
             data-done={done ? "" : undefined}
+            data-failed={notCompleted ? "" : undefined}
             className={cn(
               "flex min-w-0 items-start gap-1 border-t-4 pt-2 text-sm leading-snug",
               step === current
-                ? "border-jacaranda font-semibold text-ink"
-                : done
-                  ? "border-accent-line font-medium text-ink"
-                  : "border-line font-medium text-ink-soft",
+                ? "border-accent font-semibold text-ink"
+                : notCompleted
+                  ? "border-error-line font-medium text-ink"
+                  : done
+                    ? "border-accent-line font-medium text-ink"
+                    : "border-line font-medium text-ink-soft",
             )}
           >
-            {done ? (
+            {notCompleted ? (
               <>
-                <CheckIcon className="mt-px size-4 shrink-0 text-jacaranda" />
+                <AlertIcon className="mt-px size-4 shrink-0 text-error" />
+                <span aria-hidden="true">{name}</span>
+                <span className="sr-only">{t("stepFailed", { name })}</span>
+              </>
+            ) : done ? (
+              <>
+                <CheckIcon className="mt-px size-4 shrink-0 text-accent" />
                 <span aria-hidden="true">{name}</span>
                 <span className="sr-only">{t("stepDone", { name })}</span>
               </>

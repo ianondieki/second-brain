@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
+import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -36,7 +37,8 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
     ? { href: DISCOVER_PATH, label: t("backToDiscover") }
     : { href: home, label: t("back") };
   return (
-    <SignedInShell homeHref={home}>
+    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
+      <div className="max-w-3xl">
       {problem ? (
         <>
           <BackLink href={back.href}>{back.label}</BackLink>
@@ -57,6 +59,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
           <EmptyState sentence={t("notFound")} action={back.label} href={back.href} className="mt-8" />
         </>
       )}
+      </div>
     </SignedInShell>
   );
 }

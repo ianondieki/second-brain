@@ -11,17 +11,29 @@ export interface RowListProps extends HTMLAttributes<HTMLUListElement> {
   ordered?: boolean;
   /** The hairline above the first row (default); off where a line is already there, such as under a tab strip. */
   rule?: boolean;
+  /** Each row in its own compact card, two across from 640 px (D-52), instead of hairline-separated rows. */
+  cards?: boolean;
   children: ReactNode;
 }
 
 /**
  * A list of things, one Row each, each in its own <li>: a hairline above the first row and between rows (the rows
- * draw it), no box around them. Cards are not a page structure.
+ * draw it), no box around them; or, with `cards`, each row in a compact card (D-52).
  */
-export function RowList({ ordered = false, rule = true, className, children, ...rest }: RowListProps) {
+export function RowList({ ordered = false, rule = true, cards = false, className, children, ...rest }: RowListProps) {
   const Tag = ordered ? "ol" : "ul";
   return (
-    <Tag className={cn("flex flex-col", !rule && "[&>li:first-child>article]:border-t-0", className)} {...rest}>
+    <Tag
+      className={cn(
+        cards
+          ? "grid grid-cols-1 gap-4 sm:grid-cols-2 [&>li]:min-w-0 [&>li]:rounded-panel [&>li]:border [&>li]:border-line [&>li]:bg-field [&>li]:px-4 [&>li>article]:border-t-0 [&>li>article]:py-4 " +
+            "[&>li]:transition-[border-color] [&>li]:duration-(--motion-fast) [&>li:hover]:border-accent-line [&_h3>a]:no-underline [&_h3>a]:hover:text-accent"
+          : "flex flex-col",
+        !rule && !cards && "[&>li:first-child>article]:border-t-0",
+        className,
+      )}
+      {...rest}
+    >
       {Children.map(children, (child) =>
         child === null || child === undefined || child === false ? null : (
           <li key={isValidElement(child) ? child.key : undefined}>{child}</li>

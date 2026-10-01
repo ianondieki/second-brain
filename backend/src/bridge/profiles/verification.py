@@ -141,9 +141,9 @@ def mask_phone(phone_e164: str) -> str:
 
 def sms_text(code: str) -> str:
     """The fixed SMS wording. [[COPY-REVIEW]] (English only until the Swahili catalogue; the product name is the
-    working name): no link, no claim, one GSM-7 segment."""
+    Wazo): no link, no claim, one GSM-7 segment."""
     minutes = int(OTP_TTL.total_seconds() // 60)
-    return f"{code} is your Bridge verification code. It expires in {minutes} minutes. Do not share it with anyone."
+    return f"{code} is your Wazo verification code. It expires in {minutes} minutes. Do not share it with anyone."
 
 
 def _secret(settings: Settings) -> str:

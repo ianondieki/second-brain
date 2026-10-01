@@ -17,7 +17,7 @@ const MATCH: Match = {
   scout_id: "s1",
   proposal_id: "p1",
   available: true,
-  owner_handle: "jacaranda-otter-17",
+  owner_handle: "accent-otter-17",
   teaser: {
     title: "Maziwa baridi",
     niche: { id: "n1", slug: "microfinance-saccos", label: "Financial services › Microfinance & SACCOs" },
@@ -46,7 +46,7 @@ describe("a scout match in the Inbox", () => {
     renderWithIntl(<MatchRow match={MATCH} href="/org/inbox/matches/m1" />);
     const row = document.querySelector("[data-match]")!;
     expect(screen.getByRole("link", { name: "Maziwa baridi" }).getAttribute("href")).toBe("/org/inbox/matches/m1");
-    expect(row.textContent).toContain("By jacaranda-otter-17");
+    expect(row.textContent).toContain("By accent-otter-17");
     expect(row.textContent).toContain("Financial services › Microfinance & SACCOs");
     expect(row.textContent).toContain("Fit 82 out of 100");
     expect(row.textContent).toContain("Mentions sacco and fits the niche.");
@@ -73,7 +73,7 @@ describe("a scout match in the Inbox", () => {
     expect(row.textContent).toContain(en.scoutMatches.unavailableTitle);
     expect(row.textContent).not.toContain("Maziwa baridi");
     expect(row.textContent).not.toContain("Mentions sacco");
-    expect(row.textContent).not.toContain("jacaranda-otter-17");
+    expect(row.textContent).not.toContain("accent-otter-17");
     expect(row.querySelector("[data-why-source]")).toBeNull();
   });
 });

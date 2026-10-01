@@ -1,28 +1,25 @@
 {# EM7 daily progress digest, developer and organisation versions (docs/spec/06 6.10, 6.11). Every value is filled
    in by code and escaped (autoescape); party text arrives quoted and defanged. Links are platform URLs only. #}
-<!doctype html>
-<html lang="en">
-<body style="margin:0;padding:24px;background:#fafafa;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
-<div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:24px">
-<p style="font-size:16px;line-height:1.5;margin:0 0 8px">{{ email.headline }}</p>
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ email.subject }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 8px">{{ email.headline }}</p>
 {% for note in email.notes %}
-<p style="font-size:12px;color:#52525b;margin:0 0 8px">{{ note }}</p>
+<p style="font-size:12px;color:#5c5a53;margin:0 0 8px">{{ note }}</p>
 {% endfor %}
 {% for section in email.sections %}
-<h2 style="font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#1d4ed8;margin:20px 0 8px">{{ section.title }}</h2>
-<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.5">
+{{ ui.label(section.title) }}
+<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6">
 {% for line in section.lines %}
 <li style="margin:0 0 6px">{{ line }}</li>
 {% endfor %}
 </ul>
 {% endfor %}
 {% if email.next_step %}
-<h2 style="font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#1d4ed8;margin:20px 0 8px">Next step</h2>
-<p style="font-size:14px;line-height:1.5;margin:0">{{ email.next_step }}</p>
+{{ ui.label("Next step") }}
+<p style="font-size:14px;line-height:1.6;margin:0">{{ email.next_step }}</p>
 {% endif %}
-<p style="margin:24px 0 0"><a href="{{ cta_url }}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">{{ email.cta_label }}</a></p>
-</div>
-<p style="max-width:600px;margin:16px auto 0;font-size:12px;color:#52525b;line-height:1.5">{{ email.footer }}<br>
-<a href="{{ settings_url }}" style="color:#52525b">Manage notifications</a> · <a href="{{ help_url }}" style="color:#52525b">Help</a> · {{ place }}</p>
-</body>
-</html>
+<p style="margin:24px 0 0">{{ ui.button(cta_url, email.cta_label, "open") }}</p>
+{% endblock %}
+{% block footer_line %}{{ email.footer }}{% endblock %}

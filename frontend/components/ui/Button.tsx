@@ -13,14 +13,14 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   // The one primary action per screen (docs/spec/07 AC-UX-2): full width at 360 px, natural width from 640 px.
   primary:
-    "w-full px-6 sm:w-auto bg-jacaranda text-on-accent hover:bg-accent-strong " +
+    "w-full px-6 sm:w-auto bg-accent text-on-accent hover:bg-accent-strong " +
     "aria-disabled:bg-accent-strong",
-  secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-jacaranda-wash",
+  secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-accent-wash",
   // Destructive or ending steps (delete, withdraw, decline): error-coloured words and border, never filled, and never
   // the screen's primary action. Status is still carried by the words, not the colour.
   danger: "px-5 border border-error bg-transparent text-error hover:bg-error-wash",
   link:
-    "min-h-11 min-w-11 px-0 font-medium text-jacaranda underline decoration-1 hover:decoration-2 " +
+    "min-h-11 min-w-11 px-0 font-medium text-accent underline decoration-1 hover:decoration-2 " +
     "hover:text-accent-strong " +
     // Busy: quieter but still readable (--ink-soft, 6.8:1 on paper) with a dotted underline, and hover changes
     // nothing, so a press that would be ignored does not look available.
@@ -33,7 +33,7 @@ const variants: Record<ButtonVariant, string> = {
  * height of the sentence around it.
  */
 export const textLinkClass =
-  "py-2.5 font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
+  "py-3 font-semibold text-accent underline decoration-1 hover:decoration-2 " +
   "hover:text-accent-strong";
 
 /**
@@ -41,14 +41,14 @@ export const textLinkClass =
  * 44 px band (WCAG 2.2 target size), so stacked links never share or overlap a tap area.
  */
 export const standaloneLinkClass =
-  "inline-flex min-h-11 items-center font-semibold text-jacaranda underline decoration-1 hover:decoration-2 " +
+  "inline-flex min-h-11 min-w-11 items-center font-semibold text-accent underline decoration-1 hover:decoration-2 " +
   "hover:text-accent-strong";
 
 /**
  * A title that is a link (a row's title, a problem named inside a row): the words stay ink, with a quiet hairline
  * underline that turns to the accent on hover.
  */
-export const titleLinkClass = "underline decoration-line decoration-1 underline-offset-4 hover:decoration-jacaranda";
+export const titleLinkClass = "underline decoration-line decoration-1 underline-offset-4 hover:decoration-accent";
 
 export function buttonClass(variant: ButtonVariant, className?: string) {
   return cn(base, variants[variant], className);

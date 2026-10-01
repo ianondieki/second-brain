@@ -16,16 +16,17 @@
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages",
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
-    "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided"
+    "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)"
   },
   "app": {
-    "name": "Bridge",
-    "workingTitle": "Bridge (working name)",
-    "titleTemplate": "%s | Bridge (working name)",
+    "name": "Wazo",
+    "workingTitle": "Wazo",
+    "titleTemplate": "%s | Wazo",
     "tagline": "Local developers and organisations working on real problems."
   },
   "shell": {
-    "workingName": "Bridge (working name)",
+    "workingName": "Wazo",
     "skipToContent": "Skip to content",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
@@ -35,7 +36,14 @@
     "security": "Sign-in security",
     "notifications": "Notifications",
     "help": "Help",
-    "billing": "Plan & billing"
+    "billing": "Plan & billing",
+    "theme": {
+      "label": "Appearance",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "prototypeBadge": "Prototype"
   },
   "panel": {
     "title": "How it works",
@@ -46,10 +54,83 @@
     "track": "Both sides follow one shared tracker, from the first look to an agreed next step."
   },
   "landing": {
-    "title": "Bring local solutions to the organisations that need them",
-    "lead": "Developers publish solutions to real problems. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
+    "title": "Local solutions for the organisations that need them",
+    "lead": "Developers publish solutions to real problems, with timestamped evidence of what they submitted. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
     "signUp": "Create an account",
-    "haveAccount": "Already have an account? <login>Log in</login>"
+    "logIn": "Log in",
+    "haveAccount": "Already have an account? <login>Log in</login>",
+    "sample": {
+      "ideaTitle": "Cold chain for dairy co-ops",
+      "org": "Telco A (example)",
+      "stage": "Mutual NDA",
+      "matchTitle": "Scout match",
+      "matchOrg": "Kenya Towers (example) is looking for fuel-level alerts",
+      "matchFit": "Strong fit",
+      "matchWhy": "Why: in a niche you like",
+      "certTitle": "Certificate of authorship",
+      "certStatus": "Timestamped",
+      "label": "Illustrative example"
+    },
+    "how": {
+      "title": "How it works",
+      "lead": "Three steps, one shared tracker.",
+      "publish": {
+        "title": "Publish an idea",
+        "body": "Write a public teaser and the confidential details. Each version is registered with a timestamp and a fingerprint."
+      },
+      "review": {
+        "title": "Reviewed under NDA",
+        "body": "Full details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. Every opening is recorded, and you can see who looked."
+      },
+      "track": {
+        "title": "Agree the next step",
+        "body": "Interest, contact, agreement, implementation and close: both sides follow the same five stages, with deadlines and reminders."
+      }
+    },
+    "who": {
+      "title": "Who it is for",
+      "developers": {
+        "title": "For developers",
+        "point1": "Register what you built, with evidence of when.",
+        "point2": "Pitch to companies that work on your problem, or let their scouts find you.",
+        "point3": "See who opened your full proposal, and where each conversation stands.",
+        "action": "Start as a developer"
+      },
+      "organisations": {
+        "title": "For organisations",
+        "point1": "A scout agent brings proposals that match your problems to your inbox.",
+        "point2": "Open full proposals under one Evaluation NDA, with a record of who looked.",
+        "point3": "Take a proposal from first look to a signed agreement in one tracker.",
+        "action": "Start as an organisation"
+      }
+    },
+    "proof": {
+      "title": "Proof of authorship, not a promise",
+      "lead": "Every registered version gets a certificate that anyone can check. It records what was submitted and when; it does not make an idea anyone's property.",
+      "when": {
+        "title": "When",
+        "body": "An independent timestamp authority signs the time of registration."
+      },
+      "what": {
+        "title": "What",
+        "body": "A SHA-256 fingerprint of the exact text and files, so a later change is visible."
+      },
+      "who": {
+        "title": "Who looked",
+        "body": "Full proposals are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. You see who opened yours, and when."
+      },
+      "note": "Anyone can check a certificate on the <verify>verify page</verify> without an account."
+    },
+    "cta": {
+      "title": "Ready when you are",
+      "lead": "Publishing a first idea takes about ten minutes. Organisations can set up a scout in two.",
+      "action": "Create an account"
+    },
+    "footer": {
+      "note": "A prototype: every figure on this site is seeded example data.",
+      "help": "Help",
+      "terms": "Terms"
+    }
   },
   "fields": {
     "email": "Email address",
@@ -323,7 +404,24 @@
   "orgHome": {
     "inboxTitle": "Inbox",
     "newest": "Newest: {title}, sent {date}.",
-    "open": "Open the Inbox"
+    "open": "Open the Inbox",
+    "allProposals": "All proposals",
+    "openTracker": "Open the tracker",
+    "stats": {
+      "label": "At a glance",
+      "inbox": "Inbox",
+      "more": "{count}+",
+      "inboxMeta": "{count, plural, one {# new} other {# new}}",
+      "inboxMetaNone": "All opened",
+      "matches": "Scout matches",
+      "matchesMeta": "newest {date}",
+      "engagements": "Engagements",
+      "engagementsMeta": "{count, plural, one {# active} other {# active}}",
+      "needsUs": "Need us",
+      "needsUsMeta": "Waiting on us",
+      "unknown": "—",
+      "unavailable": "Could not be read just now"
+    }
   },
   "inbox": {
     "pageTitle": "Inbox",
@@ -612,7 +710,12 @@
     "statusActive": "Active",
     "statusPaused": "Paused",
     "reviewersUnknown": "The reviewers of {org} could not be loaded, so the digest recipients stay as they were saved.",
-    "fitLong": "Fit {value} out of 100"
+    "fitLong": "Fit {value} out of 100",
+    "group": {
+      "looks": "What it looks for",
+      "runs": "Schedule",
+      "digest": "The email digest"
+    }
   },
   "tier2Share": {
     "title": "Full proposal",
@@ -872,6 +975,16 @@
       "openPublic": "Open the public card",
       "rejected": "Rejected. The card stays private.",
       "backToResearch": "Back to Research"
+    },
+    "columns": {
+      "card": "Card",
+      "niche": "Niche",
+      "confidence": "Confidence",
+      "sources": "Sources",
+      "drafted": "Drafted",
+      "started": "Started",
+      "status": "Status",
+      "result": "Result"
     }
   },
   "adminModeration": {
@@ -998,6 +1111,12 @@
       "unsupported_subject": "Cases of this kind are decided from their own queue, not here.",
       "forbidden": "Your staff role cannot decide moderation cases.",
       "generic": "That did not work. Check your connection and try again."
+    },
+    "columns": {
+      "case": "Case",
+      "kind": "Kind",
+      "when": "Filed or decided",
+      "status": "Status"
     }
   },
   "adminClaims": {
@@ -1118,6 +1237,13 @@
       "approved": "Approved",
       "rejected": "Rejected",
       "escalated": "Escalated"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "level": "Level",
+      "claimant": "Claimant",
+      "filed": "Filed",
+      "status": "Status"
     }
   },
   "problem": {
@@ -1128,7 +1254,8 @@
     "label": {
       "aiDrafted": "AI-drafted, human-reviewed on {date}",
       "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",
-      "developer": "Developer-reported"
+      "developer": "Developer-reported",
+      "demoBadge": "Demo data"
     },
     "affected": "Who is affected",
     "niche": "Niche",
@@ -1136,7 +1263,8 @@
     "regionCounty": "{county}, {country}",
     "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
     "confidence": "Confidence",
-    "confidenceValue": "{value} out of 1",
+    "confidenceValue": "{band} ({value})",
+    "confidenceBand": { "high": "High", "medium": "Medium", "low": "Low" },
     "namedOrgs": "Organisations named",
     "sourcesHeading": "Sources",
     "sourcesCount": "{count, plural, one {# source, quoted as published} other {# sources, quoted as published}}",
@@ -1165,7 +1293,7 @@
     "problemStatement": "The problem it solves",
     "summary": "Summary",
     "impactClaims": "Expected impact",
-    "problems": "Problems it solves",
+    "problems": "Problem cards it answers",
     "newProblemTitle": "Problem title",
     "newProblemStatement": "What is the problem?",
     "approach": "Approach",
@@ -1245,7 +1373,21 @@
     "download": "Download the certificate (PDF)",
     "downloadLater": "You can download the certificate once the timestamp is recorded.",
     "noCertificate": "A certificate is issued when you publish.",
-    "noDetails": "No full details yet."
+    "noDetails": "No full details yet.",
+    "sheet": {
+      "title": "Certificate of authorship",
+      "registeredBy": "Registered by {name}, version {number}",
+      "certificate": "Certificate",
+      "registered": "Registered",
+      "evidence": "Evidence",
+      "timestamped": "Timestamped by an independent authority",
+      "pending": "Timestamp pending",
+      "scan": "Scan to verify",
+      "checkAt": "Anyone can check this record at <id>{url}</id>",
+      "print": "Print or save as PDF",
+      "qrLabel": "QR code: the public verify page for certificate {id}",
+      "registeredAt": "{time} Nairobi time"
+    }
   },
   "ideaDelete": {
     "open": "Delete idea",
@@ -1514,6 +1656,10 @@
     "detailsSections": "Written sections: {count}",
     "detailsFiles": "Files: {count}",
     "detailsLinks": "Links: {count}",
+    "detailsSectionsLabel": "Written sections",
+    "detailsFilesLabel": "Files",
+    "detailsLinksLabel": "Links",
+    "detailsNone": "Nothing in the confidential details yet.",
     "backToIdea": "Back to the idea",
     "noProblemsYet": "No problems are listed yet.",
     "assistantTitle": "Writing assistant",
@@ -1598,7 +1744,22 @@
     "allIdeas": "All my ideas",
     "empty": "Your engagements show here once you pitch one of your ideas to a company.",
     "emptyAction": "Go to My ideas",
-    "security": "Two-step sign-in"
+    "stats": {
+      "label": "At a glance",
+      "ideas": "Ideas",
+      "ideasMeta": "{published, plural, one {# published} other {# published}} · {drafts, plural, one {# draft} other {# drafts}}",
+      "engagements": "Engagements",
+      "engagementsMeta": "{count, plural, one {# active} other {# active}}",
+      "needsYou": "Need you",
+      "needsYouMeta": "Waiting on you",
+      "deadline": "Next deadline",
+      "deadlineNone": "None",
+      "deadlineMeta": "in {count, plural, one {# business day} other {# business days}}",
+      "deadlineOverdue": "Overdue",
+      "deadlineToday": "Due today"
+    },
+    "openTracker": "Open the tracker",
+    "otherLead": "Where the rest stand."
   },
   "discover": {
     "pageTitle": "Discover",
@@ -1625,6 +1786,7 @@
     "coldTitle": "New this week",
     "coldLead": "Nothing is trending here yet, so these are the problems published in the last 7 days.",
     "coldProjectsLead": "Nothing is trending here yet, so these are the projects published in the last 7 days.",
+    "trendingShort": "Trending: {detail}",
     "projectsTitle": "Trending projects",
     "projectsLead": "Rising fastest first, then new this week; each one beside the problem it solves.",
     "gapTitle": "Opportunity gap",
@@ -1653,7 +1815,7 @@
   },
   "recommendations": {
     "title": "Recommended for you",
-    "personalisedOn": "Ranked on your niches, your county and your activity on Bridge. <link>Recommendation settings</link>",
+    "personalisedOn": "Ranked on your niches, your county and your activity on Wazo. <link>Recommendation settings</link>",
     "personalisedOff": "Ranked on your niches and county only, not your activity. <link>Recommendation settings</link>",
     "chip": "{pursuit} · {fit}",
     "pursuit": {
@@ -1698,12 +1860,12 @@
       "noProfile": "Only developer accounts choose niches.",
       "signedOut": "You were signed out. Sign in again, then save your niches.",
       "rateLimited": "Too many changes in a short time. Wait a minute, then save again.",
-      "network": "Bridge could not be reached. Check your connection, then save again.",
+      "network": "Wazo could not be reached. Check your connection, then save again.",
       "failed": "Your niches were not saved. Try again."
     },
     "profiling": {
       "title": "Use your activity",
-      "lead": "Recommendations always use your niches and county. With this on, they also use your proposals and engagements on Bridge.",
+      "lead": "Recommendations always use your niches and county. With this on, they also use your proposals and engagements on Wazo.",
       "wording": "The consent reads:",
       "on": "On: your activity is used.",
       "off": "Off: only your niches and county are used.",
@@ -1714,7 +1876,7 @@
         "changed": "The wording of this consent has changed. Reload the page to read it, then decide again.",
         "signedOut": "You were signed out. Sign in again, then decide again.",
         "rateLimited": "Too many changes in a short time. Wait a minute, then try again.",
-        "network": "Bridge could not be reached. Check your connection, then try again.",
+        "network": "Wazo could not be reached. Check your connection, then try again.",
         "failed": "Your choice was not saved. Try again."
       }
     }
@@ -1756,10 +1918,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "{count, plural, one {# business day left} other {# business days left}}, due {date}",
-      "today": "Due today, {date}",
-      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due {date}",
-      "overdueToday": "Overdue, was due {date}"
+      "left": "{count, plural, one {# business day left} other {# business days left}}, due <nowrap>{date}</nowrap>",
+      "today": "Due today, <nowrap>{date}</nowrap>",
+      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due <nowrap>{date}</nowrap>",
+      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>"
     },
     "turn": {
       "you": "Awaiting: you",
@@ -1960,7 +2122,16 @@
     },
     "turnOnMfa": "Turn on two-step sign-in",
     "notMember": "Your account is not a member of this organisation.",
-    "openOwn": "Open your engagements"
+    "openOwn": "Open your engagements",
+    "progress": "Stage {current} of {total}: {group}",
+    "parties": "The two parties",
+    "nextBoth": "Next step for both of you: {step}",
+    "since": "Since {date}",
+    "closed": {
+      "title": "Closed and done",
+      "body": "Both sides finished this engagement. Everything stays here for the record.",
+      "dismiss": "Got it"
+    }
   },
   "trackerActions": {
     "title": "Your actions",
@@ -2176,9 +2347,11 @@
     "step": {
       "confirm": "Confirm",
       "phone": "Check your phone",
-      "done": "Done"
+      "done": "Done",
+      "notPaid": "Not paid"
     },
     "stepDone": "{name}: done",
+    "stepFailed": "{name}: not completed",
     "youPay": "You pay",
     "whatYouGet": "What you get",
     "simulatedNote": "No money moves and no phone number is asked for: this checkout is a simulation.",
@@ -2234,6 +2407,18 @@
       "logIn": "Log in",
       "enterCode": "Enter your code",
       "turnOnMfa": "Turn on two-step sign-in"
+    },
+    "phone": {
+      "title": "On your phone",
+      "simulated": "On your phone (simulated)",
+      "prompt": "Pay {price} to Wazo for {plan}?",
+      "pin": "Enter M-Pesa PIN",
+      "cancel": "Cancel",
+      "send": "Send",
+      "waiting": "Waiting for the answer…",
+      "paid": "Paid",
+      "notPaid": "Not paid",
+      "idle": "No payment prompt yet."
     }
   },
   "notFound": {
@@ -2250,5 +2435,39 @@
     "organisations": "Pitched to {count, plural, one {# organisation} other {# organisations}}",
     "openIdea": "Open the idea",
     "rowsLabel": "Organisations for {title}"
+  },
+  "tour": {
+    "title": "The tour",
+    "showAgainLead": "The three-step tour of your home shows once. You can see it again.",
+    "showAgain": "Show the tour again",
+    "showAgainDone": "The tour will show the next time you open your home.",
+    "stepOf": "Step {current} of {total}",
+    "skip": "Skip tour",
+    "next": "Next",
+    "done": "Done",
+    "devHome": {
+      "title": "This is your home",
+      "body": "What needs you comes first: your turn on an engagement, a deadline, a recommendation worth a look."
+    },
+    "devIdeas": {
+      "title": "Every idea gets a certificate",
+      "body": "Publishing registers the version with a timestamp and a fingerprint. Anyone can check it on the verify page."
+    },
+    "devTracker": {
+      "title": "One tracker for both sides",
+      "body": "When a company opens a conversation, you both follow the same five stages, with deadlines and reminders."
+    },
+    "orgInbox": {
+      "title": "Proposals arrive in your Inbox",
+      "body": "Developers pitch to you, and your scout brings proposals that match the problems you describe."
+    },
+    "orgNda": {
+      "title": "Full details open under one NDA",
+      "body": "The teaser is public. The full proposal opens after the Evaluation NDA, and each opening is recorded for the author."
+    },
+    "orgTracker": {
+      "title": "One tracker for both sides",
+      "body": "From first look to a signed agreement: both sides follow the same five stages, with deadlines and reminders."
+    }
   }
 }

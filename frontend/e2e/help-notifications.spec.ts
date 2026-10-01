@@ -30,13 +30,21 @@ async function choicesReady(page: Page) {
   await page.waitForLoadState("networkidle");
 }
 
-async function expectHelp(page: Page) {
+/** The settings pages share one h1 ("Settings") with the tabs under it; the page's subject heads its card (D-52). */
+async function expectNotificationSettings(page: Page) {
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Settings");
+  await expect(page.getByRole("heading", { level: 2, name: "Notifications" })).toBeVisible();
+}
+
+async function expectHelp(page: Page, { signedIn = false } = {}) {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Help");
+  // Signed in to a portal, a fifth section offers the first-login tour again (D-52); a visitor gets the four.
   await expect(page.getByRole("heading", { level: 2 })).toHaveText([
     "How pitching works",
     "What stays confidential",
     "Reminders",
     "Contact support",
+    ...(signedIn ? ["The tour"] : []),
   ]);
   await expect(page.locator("[data-support-placeholder]")).toHaveText("Support contact to be set.");
   await expect(page.locator("[data-primary]")).toHaveCount(0);
@@ -67,7 +75,7 @@ test("a signed-out reader signs in, both steps, and lands back on the notificati
   await page.getByLabel("6-digit code").fill(await person.code());
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/notifications$/, SERVER_STEP);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications");
+  await expectNotificationSettings(page);
 });
 
 test.describe("a signed-in developer", () => {
@@ -78,7 +86,7 @@ test.describe("a signed-in developer", () => {
   test("opens both pages from the account menu, saves a choice and signs out", async ({ page }) => {
     await openMenuItem(page, "Notifications");
     await expect(page).toHaveURL(/\/settings\/notifications$/, SERVER_STEP);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications");
+    await expectNotificationSettings(page);
     await choicesReady(page);
     const email = page.getByRole("group", { name: "Email" });
     await expect(email.getByRole("checkbox")).toHaveCount(2);
@@ -107,7 +115,7 @@ test.describe("a signed-in developer", () => {
 
     await openMenuItem(page, "Help");
     await expect(page).toHaveURL(/\/help$/, SERVER_STEP);
-    await expectHelp(page);
+    await expectHelp(page, { signedIn: true });
     await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
     await checkScreen(page, { strict: true });
 
@@ -173,12 +181,13 @@ test.describe("from an email", () => {
       expect(em1.html).toContain(`href="${help}"`);
 
       await page.goto(pathOf(settings!));
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications", SERVER_STEP);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Settings", SERVER_STEP);
+      await expectNotificationSettings(page);
       await choicesReady(page);
       await checkScreen(page, { strict: true });
 
       await page.goto(pathOf(help!));
-      await expectHelp(page);
+      await expectHelp(page, { signedIn: true });
       await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
       await checkScreen(page, { strict: true });
     } finally {

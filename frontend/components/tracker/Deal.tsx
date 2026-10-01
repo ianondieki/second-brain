@@ -51,7 +51,7 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
       <AgreementVersion agreement={latest} endorsements={detail.endorsements} />
       {earlier.length > 0 ? (
         <details className="mt-4 border-t border-line pt-3">
-          <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-jacaranda">
+          <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-accent">
             {t("agreement.earlier", { count: earlier.length })}
           </summary>
           {earlier.map((agreement) => (

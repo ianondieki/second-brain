@@ -96,6 +96,7 @@ class Em2Facts:
     shared: bool
     public_entity: bool
     base_url: str
+    product: str = "Wazo"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +124,8 @@ def render(facts: Em2Facts) -> Rendered:
         "notifications_url": f"{base}/settings/notifications",
         "help_url": f"{base}/help",
         "engagement_ref": str(facts.engagement_id),
+        "settings_url": f"{base}/settings/notifications",
+        "product": one_line(facts.product),
     }
     subject = one_line(_ENV.get_template("em2_subject.txt.j2").render(values))
     return Rendered(

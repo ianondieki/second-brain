@@ -45,7 +45,7 @@ export function EngagementRow({
           ? [
               stage,
               // Icon + words + colour (docs/spec/07 item 6): the "current" mark in the badge's own colour.
-              <Badge key="turn" tone="accent" solid data-chip="turn" icon={<ChipMark kind="current" />}>
+              <Badge key="turn" tone="warm" solid data-chip="turn" icon={<ChipMark kind="current" />}>
                 {mine === "developer" ? t("yourTurn") : t("ourTurn")}
               </Badge>,
             ]

@@ -67,6 +67,23 @@ export function formatConfidence(locale: string, value: string | null | undefine
   return new Intl.NumberFormat(`${locale}-KE`, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
 }
 
+export type ConfidenceBand = "high" | "medium" | "low";
+
+/**
+ * The card's confidence in words with the figure as a whole percentage, for people. The band is decided on the
+ * percentage shown (80% and up high, 50% and up medium, else low), so 0.799 reads "High (80%)" like 0.8 does, never
+ * "Medium (80%)". The thresholds are the frontend's wording only; the ranker's own cut-off is 0.5
+ * (backend/config/policy.yaml not_now_below_confidence).
+ */
+export function confidenceWords(locale: string, value: string | null | undefined): { band: ConfidenceBand; percent: string } | null {
+  if (value === null || value === undefined || value.trim() === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  const whole = Math.round(Number((number * 100).toFixed(6)));
+  const band: ConfidenceBand = whole >= 80 ? "high" : whole >= 50 ? "medium" : "low";
+  return { band, percent: new Intl.NumberFormat(`${locale}-KE`, { style: "percent", maximumFractionDigits: 0 }).format(whole / 100) };
+}
+
 /**
  * A source's address when it is a plain https URL, else null (then no link is drawn). The API only stores https URLs
  * on its allowlist; this keeps any other scheme (javascript:, data:) from ever becoming a link.

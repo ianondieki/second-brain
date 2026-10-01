@@ -100,7 +100,7 @@ async function cancelSetup() {
 
 /** Starts setup with the password on file and waits for the key (the page must ask for the password). */
 async function startSetup() {
-  fireEvent.change(screen.getByLabelText(ENROL_FIELD, { selector: "input" }), { target: { value: "jacaranda" } });
+  fireEvent.change(screen.getByLabelText(ENROL_FIELD, { selector: "input" }), { target: { value: "accent" } });
   fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
   await screen.findByTestId("totp-key");
 }
@@ -167,13 +167,13 @@ describe("two-step setup without a password on file (password_set false)", () =>
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
     const field = await screen.findByLabelText(ENROL_FIELD, { selector: "input" });
     fireEvent.change(field, { target: { value: "j" } });
-    fireEvent.change(field, { target: { value: "jacaranda" } });
+    fireEvent.change(field, { target: { value: "accent" } });
     expect(screen.getByLabelText(ENROL_FIELD, { selector: "input" })).toBeTruthy();
 
     // And it is still there on the next attempt, sent with the request.
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2));
-    expect(mocks.post.mock.calls[1]).toEqual(["/api/auth/totp/enrol", { body: { password: "jacaranda" } }]);
+    expect(mocks.post.mock.calls[1]).toEqual(["/api/auth/totp/enrol", { body: { password: "accent" } }]);
     expect(screen.getByLabelText(ENROL_FIELD, { selector: "input" })).toBeTruthy();
   });
 

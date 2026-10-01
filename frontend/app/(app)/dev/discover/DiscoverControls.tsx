@@ -52,7 +52,7 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
       <details open={active > 0} className="group">
         <summary
           className={
-            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-jacaranda " +
+            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-accent " +
             "[&::-webkit-details-marker]:hidden"
           }
         >

@@ -152,8 +152,14 @@ describe("the simulated checkout", () => {
       "The M-Pesa account had too little money, so your plan has not changed.",
     );
     expect(primaries()).toHaveLength(1);
+    // The steps say so too: the phone step not completed, the step it stands on "Not paid", never "Done".
+    expect(document.querySelector("[data-failed]")?.textContent).toContain("Check your phone: not completed");
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Not paid");
+    expect(screen.queryByText("Done")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(phase()).toBe("confirm");
+    expect(document.querySelector("[data-failed]")).toBeNull();
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Confirm");
     // Focus moves to the step that opened again, never back to <body>.
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "You pay" }));
     expect(window.location.search).not.toContain("checkout=");
@@ -167,6 +173,10 @@ describe("the simulated checkout", () => {
     expect(phase()).toBe("cancelled");
     expect(screen.getByRole("heading", { name: "Payment cancelled" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe("The payment was cancelled on the phone, so your plan has not changed.");
+    // The phone step is marked as not completed, never as done (ux review round 3).
+    expect(document.querySelector("[data-failed]")?.textContent).toContain("Check your phone: not completed");
+    expect(document.querySelector("[data-done]")?.textContent).toContain("Confirm");
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Not paid");
   });
 
   it("stops polling after the budget and polls again on Check again", async () => {
@@ -227,6 +237,7 @@ describe("the simulated checkout", () => {
     await advance(2000);
     expect(phase()).toBe("lost");
     expect(screen.getByRole("alert").textContent).toContain("This payment is not one of yours.");
+    expect(document.querySelector("[data-phone]")?.getAttribute("data-phone")).toBe("idle"); // no prompt on the drawn phone
     await advance(60_000);
     expect(calls.read).toHaveBeenCalledTimes(1);
   });
@@ -277,6 +288,7 @@ describe("refused starts", () => {
     expect(screen.getByRole("alert").textContent).toBe("The payment could not be started. Try again in a few minutes.");
     expect(screen.getByRole("alert").querySelectorAll("a")).toHaveLength(0);
     expect(primaries()).toHaveLength(1);
+    expect(document.querySelector("[data-phone]")?.getAttribute("data-phone")).toBe("idle"); // a refused start shows no prompt
     fireEvent.click(screen.getByRole("button", { name: "Start the simulated payment" }));
     await advance(0);
     expect(calls.start).toHaveBeenCalledTimes(2);

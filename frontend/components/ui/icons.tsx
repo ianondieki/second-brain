@@ -95,3 +95,13 @@ export function ClosedIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A four-point spark: the writing assistant (AI-drafted suggestions, docs/spec/09). */
+export function SparkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10 2.75 11.7 8.3 17.25 10 11.7 11.7 10 17.25 8.3 11.7 2.75 10 8.3 8.3 10 2.75Z" />
+      <path d="M15.75 2.75v3M14.25 4.25h3" />
+    </Icon>
+  );
+}

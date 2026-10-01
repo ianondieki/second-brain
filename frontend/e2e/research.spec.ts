@@ -123,7 +123,7 @@ test.describe("a staff admin", () => {
     await expect(page.getByRole("status").filter({ hasText: `The ${niche} run has finished.` })).toBeVisible({
       timeout: 45_000,
     });
-    const runs = page.getByRole("list", { name: "Recent research runs" });
+    const runs = page.getByRole("table", { name: "Recent research runs" });
     await expect(runs.locator("[data-run]").first()).toContainText(niche, SERVER_STEP);
     await expect(runs.locator("[data-run]").first()).toContainText(
       "No card: this run used the demo fallback (no live model answer).",

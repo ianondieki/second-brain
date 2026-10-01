@@ -391,7 +391,29 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-01, session 3): none. Integration head `83e4ed9`.
+**Open branches** (2026-10-01, session 4): none once P18 is merged (merge commit: see the P18 report's last line). Integration head before P18: `9142360`.
+
+**Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
+(not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
+`/design-lab`, 108 screenshots and the recommendation (`docs/demo/directions/directions.md`). The owner chose
+**Wazo**, direction C with B's lattice, C's dark mode. Step 2 delivered: the design system
+(`docs/platform/design/p18-design-system.md`: tokens with dark mode, self-hosted fonts, `--accent` rename, brand,
+Lattice, Avatar, StatTile, ProgressBar, Card, Illustration, ThemeToggle, CertificateSheet) and the four showpiece
+screens (landing, Developer Home, tracker, certificate) with screenshots in `docs/demo/screenshots/p18/`; the lab now
+previews the product's own screens on fixtures (`/design-lab/<screen>`). Checks: typecheck, eslint, vitest (1274),
+`next build`; the e2e suite was not run (no compose stack in this container; the selectors it uses were kept, and
+`auth.spec.ts` reads the new `--ink-soft`). The owner's fix round (seven points: hero, verify origin, one progress
+indicator, card links, Home tiles and notice, round avatars, the warm accent) is applied; `tasks/P18-design-directions.md`.
+**Steps 3 and 4 are done (2026-10-01): the roll-out, its gate and the pitch assets**; the report is "P18 report"
+below, the per-screen record `docs/demo/design-scorecard.md`, the task card `tasks/P18-design-directions.md`. Gate:
+`reviewer` PASS (round 11 over 8dd4ab5..ea41e9d, round 12 over the rest), `ux-reviewer` PASS (round 5), the full
+Playwright suite green on the compose stack (164) and `pr.yml` green on the final head, CodeQL exactly the eight D-42
+findings, Lighthouse ≥ 90 light and dark everywhere, every route under 150 KB gzipped. **Merged into the integration
+branch** (the merge commit is recorded under "Open branches" below). Linux setup this session: `sudo dockerd`, the
+compose CA override (scratchpad `compose.ccr.json`, passed as `DEMO_COMPOSE_EXTRA=<path> python3 infra/demo/demo.py
+up|reset --yes`; `make demo-reset` alone fails on TLS here), `npm ci`, the Playwright shim at `/home/user/pw-shim`,
+Lighthouse 12 in a scratchpad `npm` folder, a fontTools venv for the font instancing; the demo stack is up at the end
+of the session (`demo.py reset --yes` before showing it). The owner's decision that stays open: D-53.
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
@@ -423,6 +445,70 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### P18 report (final, 2026-10-01): the fundable-product design roll-out ("Wazo", D-52)
+
+**What was built.** One design system (`docs/platform/design/p18-design-system.md`: tokens with dark mode applied
+before paint, the self-hosted Newsreader and IBM Plex faces instanced to the weights in use and preloaded, the
+lattice signature, the seal, round avatars, stat tiles, cards as links, bottom sheets, illustrations in every empty
+state) rolled out to every screen of the four portals, the public pages and the ten email kinds; the first-login
+tour (three steps per side, in the page's flow, remembered in storage and a cookie the server reads); the feel
+(haptics after a tap, the one-time closed celebration, bottom sheets on phones); the drawn M-Pesa handset beside
+the checkout steps; the marked full-proposal page in the P18 palette with dark mode through the embedder's colour
+scheme; the staff console's calm dense tables; the backend's product name default "Wazo". 101 commits on
+`claude/fervent-mccarthy-0zyqn2`, each one concern with a REQ-ID.
+
+**Before and after** (the demo story's own screenshots; `docs/demo/screenshots/before-p18/` keeps the P16 set):
+
+| Screen | Before (P16) | After (P18) |
+|---|---|---|
+| Developer Home, 1440 | `docs/demo/screenshots/before-p18/01-dev-home-1440.jpg` | `docs/demo/screenshots/01-dev-home-1440.jpg` (and `00-first-login-tour-1440.jpg`) |
+| Discover, 1440 | `before-p18/02-discover-trending-1440.jpg` | `02-discover-trending-1440.jpg` |
+| Certificate, 1440 | `before-p18/03-idea-certificate-1440.jpg` | `03-idea-certificate-1440.jpg` |
+| Tracker, 1440 | `before-p18/06-dev-tracker-1440.jpg` | `06-dev-tracker-1440.jpg` |
+| Checkout, 1440 | `before-p18/07-billing-checkout-1440.jpg` | `07-billing-checkout-1440.jpg` |
+| Developer Home, 375 | `before-p18/15-dev-home-375.jpg` | `15-dev-home-375.jpg` |
+| Tracker, 375 | `before-p18/16-dev-tracker-375.jpg` | `16-dev-tracker-375.jpg` |
+
+Every screen at 1440 and 375, light and dark: `docs/demo/screenshots/p18/` (60 screens × 4 variants, strict axe 0);
+the hero set at 1440 × 900: `docs/demo/hero/`; the pitch map `docs/demo/overview.md`; the 60-second cut
+`docs/demo/video-script.md`; the walkthrough re-recorded with the tour beat (`docs/demo/README.md`, 00–17).
+
+**The scorecard.** `docs/demo/design-scorecard.md`: every screen ≥ 4 of 5 on hierarchy, typography, colour,
+spacing, clarity and delight against Linear, Stripe, Mercury and Wise (Terms' delight 3 waits on the legal text,
+D-39); the states checked, the interaction checked, axe 0, the ux-reviewer's rounds and what each fixed.
+
+**Review results.** `reviewer`: rounds 1–5 during the roll-out, then rounds 6–12 on the final build (one MAJOR in
+each of rounds 6–9: the tour's reset marker, the celebration's before-paint timing through Next's transition
+hydration, its test wiring; a BLOCKER in round 10 on a flaky between-tasks test; PASS in 11 and 12). `ux-reviewer`:
+rounds 1–3 during the roll-out, round 4 on the final build (one MAJOR: the celebration's button outside the
+before-paint hide; three MINORs), round 5 PASS. `security-reviewer` not required (no `auth/`, `tenancy/`, `billing/`,
+`provenance/` or `engagements/` logic changed; the proposals' marked page changed its CSS and date format only).
+
+**Checks.** Frontend: eslint, tsc, vitest 1320 (145 files); backend: ruff, ruff format, mypy --strict, pytest unit
+2532; the legacy suite unchanged (not touched this session). Playwright on the compose stack: 164 scenarios ×
+mobile-360 and desktop green (the two Discover scenarios updated for the badge's deliberate short form), the
+walkthrough green; `pr.yml` green on the final head (run 313 on 553152b and the final run on 8f1669f); CodeQL on
+the final head: exactly the eight D-42 findings (7 Python, 1 JavaScript). Lighthouse 12 mobile, light and dark:
+performance 91–100, accessibility 100, CLS 0 on every main page; LCP at or under 2.5 s on every signed-in page's
+returning visit and on ten of twelve first visits (D-53 for the rest). JS budget: the tracker 149,321 bytes,
+`/settings/security` 147,332, `/help` 142,500, every other route lower.
+
+**Deviations and decisions.** The route-level loading states were removed (they streamed a skeleton and cost
+0.35–0.7 s of LCP; pending states stay in place). The celebration's memory is one capped cookie plus storage with a
+before-paint hide, after the reviewer found one cookie per engagement unbounded. "Trending: …" and "Not paid"
+entered the locales under `[[COPY-REVIEW]]` (`_meta.reviewP18`). D-53 (the landing's and the first visit's LCP with
+the self-hosted serif, 2.5–3.0 s in this container) is pending the owner with four options; D-42 (CodeQL) stays as
+recorded. No spend, no new vendor, no CDN, no UI library.
+
+**Follow-ups (not blocking).** The tracker and the sign-up page sit within 1 KB of the JS budget: weigh the next
+import. The returning developer Home's LCP is bimodal (2.0 or 2.6 s) on the font swap; D-53 option (b) removes it.
+The hero crops are Playwright viewport screenshots (the container's ffmpeg cannot decode JPEG). `/cost` was not
+captured in this session (no terminal access to the command from the orchestrator's tools).
+
+**Next session.** The owner's decisions first: D-53, D-42, D-50, D-51 and the open gates (G5 can now be answered
+from the brand assets in `frontend/components/brand/` and `docs/platform/design/p18-design-system.md`). Then, by
+`PLAN.md`, the items listed under "Next session" above.
 
 ### Orchestrator rulings re-checked at xhigh (2026-09-29)
 

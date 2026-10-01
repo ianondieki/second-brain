@@ -19,7 +19,7 @@ export interface RadioGroupProps<V extends string> {
 }
 
 /**
- * A fieldset of full-width radio rows (at least 56 px tall); the selected row takes the jacaranda wash. An error is
+ * A fieldset of full-width radio rows (at least 56 px tall); the selected row takes the accent wash. An error is
  * announced through the fieldset's aria-describedby (aria-invalid is not valid on a radio).
  */
 export function RadioGroup<V extends string>({ id, name, legend, options, value, onChange, error }: RadioGroupProps<V>) {
@@ -37,9 +37,9 @@ export function RadioGroup<V extends string>({ id, name, legend, options, value,
             htmlFor={optionId}
             className={
               "flex min-h-14 cursor-pointer items-start gap-3 rounded-control border border-ink-soft bg-field " +
-              "px-4 py-3 has-checked:border-jacaranda has-checked:bg-jacaranda-wash " +
-              "has-checked:shadow-[inset_0_0_0_1px_var(--jacaranda)] " +
-              "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-jacaranda"
+              "px-4 py-3 has-checked:border-accent has-checked:bg-accent-wash " +
+              "has-checked:shadow-[inset_0_0_0_1px_var(--accent)] " +
+              "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
             }
           >
             <input
@@ -50,7 +50,7 @@ export function RadioGroup<V extends string>({ id, name, legend, options, value,
               checked={value === option.value}
               onChange={() => onChange(option.value)}
               aria-describedby={hintId}
-              className="mt-0.5 size-5 shrink-0 cursor-pointer accent-jacaranda focus-visible:outline-none"
+              className="mt-0.5 size-5 shrink-0 cursor-pointer accent-accent focus-visible:outline-none"
             />
             <span className="flex flex-col">
               <span className="font-semibold text-ink">{option.label}</span>

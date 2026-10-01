@@ -1,12 +1,14 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { Lattice } from "@/components/ui/Lattice";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 
 import { Citations } from "./Citations";
-import { formatConfidence, problemLabel, type ProblemDetail } from "./problem";
+import { confidenceWords, problemLabel, type ProblemDetail } from "./problem";
 
 /**
  * A published problem card (REQ-RES-02; docs/spec/06 6.5 ProblemCard): its label ("AI-drafted, human-reviewed on
@@ -18,13 +20,16 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
   const t = await getTranslations("problem");
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
-  const confidence = formatConfidence(locale, problem.confidence);
+  const confidence = confidenceWords(locale, problem.confidence);
   const country = t("country", { country: problem.country });
   const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : InfoIcon;
 
   return (
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
-      <header className="flex flex-col gap-3">
+      {/* The card itself: a lattice-edged sheet (the look of the certificate and /verify), the facts under a rule. */}
+      <Card padding="none" className="overflow-hidden">
+        <Lattice />
+        <header className="flex flex-col gap-3 p-5 sm:p-8">
         <h1 id="problem-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
           {problem.title}
         </h1>
@@ -47,7 +52,9 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
             {problem.county_code ? t("regionCounty", { county: problem.county_code, country }) : country}
           </Description>
           {confidence ? (
-            <Description label={t("confidence")}>{t("confidenceValue", { value: confidence })}</Description>
+            <Description label={t("confidence")}>
+              {t("confidenceValue", { band: t(`confidenceBand.${confidence.band}`), value: confidence.percent })}
+            </Description>
           ) : null}
           {problem.named_orgs.length > 0 ? (
             <Description label={t("namedOrgs")}>
@@ -59,7 +66,8 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
             </Description>
           ) : null}
         </DescriptionList>
-      </header>
+        </header>
+      </Card>
 
       {problem.citations.length > 0 ? (
         <Section

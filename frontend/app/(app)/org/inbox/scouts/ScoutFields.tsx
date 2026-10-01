@@ -75,7 +75,7 @@ export function NicheChoice(props: {
           <li key={parent.id} className="min-w-0 break-inside-avoid">
             <Checkbox
               id={`${props.id}-${parent.id}`}
-              label={<span className="font-semibold">{parent.name}</span>}
+              label={<span className="font-medium">{parent.name}</span>}
               checked={props.chosen.includes(parent.id)}
               onChange={(e) => props.onChange(toggle(props.chosen, parent.id, e.target.checked))}
             />
@@ -114,7 +114,7 @@ export function CountyChoice(props: {
       <details className="group" open={count > 0 ? true : undefined}>
         <summary
           className={
-            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-jacaranda " +
+            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-accent " +
             "[&::-webkit-details-marker]:hidden"
           }
         >

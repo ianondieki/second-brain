@@ -36,20 +36,34 @@ SECTIONS: Final = (
     ("notes", "Notes"),
 )
 STYLE: Final = (
-    ":root{color-scheme:light}"
-    'body{margin:0;background:#fff;color:#1b1b1b;font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
+    # The P18 palette (frontend/app/globals.css) in a page that loads nothing: no web fonts (a serif stack for the
+    # title), no images (the lattice echo is a gradient band). The per-viewer mark keeps its ink, opacity and size from
+    # before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
+    # Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used color-scheme
+    # (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
+    ":root{color-scheme:light dark}"
+    'body{margin:0;background:#fbfaf6;color:#1a1916;font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",'
+    "Roboto,sans-serif}"
+    "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#1f5e49 0 5px,"
+    "#b89a4a 5px 10px)}"
     "main{position:relative;max-width:46rem;margin:0 auto;padding:2rem 1.25rem 4rem}"
-    ".label{margin:0;color:#8a1c1c;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase}"
-    "h1{margin:.25rem 0 .5rem;font-size:1.75rem;line-height:1.25}"
-    "h2{margin:2rem 0 .5rem;font-size:1.1rem}"
-    ".owner,.note,.mark{color:#474747;font-size:.9rem}"
+    ".label{margin:0;color:#7a5a12;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}"
+    'h1{margin:.35rem 0 .5rem;font:500 1.75rem/1.2 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif;'
+    "letter-spacing:-.01em}"
+    'h2{margin:2rem 0 .5rem;font:500 1.2rem/1.3 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif}'
+    ".owner,.note,.mark{color:#5c5a53;font-size:.9rem}"
     ".text{white-space:pre-wrap;overflow-wrap:anywhere}"
-    "a{color:#0b57d0;overflow-wrap:anywhere}"
-    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #d6d6d6}"
+    "a{color:#1f5e49;text-decoration-thickness:1px;text-underline-offset:.2em;overflow-wrap:anywhere}"
+    "ul{padding-left:1.25rem}"
+    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #dedacf}"
     ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
-    "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:3.5rem 2rem;padding:2rem;"
-    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#000;font-size:.8rem;"
-    "line-height:1.3;overflow-wrap:anywhere}"
+    "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
+    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1a1916;font-size:.8rem;"
+    "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}"
+    "@media (prefers-color-scheme:dark){body{background:#131412;color:#ece9e1}"
+    "body::before{background:repeating-linear-gradient(-45deg,#7fcbab 0 5px,#a08b48 5px 10px)}"
+    ".label{color:#e0b85a}.owner,.note,.mark{color:#b4b0a5}a{color:#7fcbab}.mark{border-top-color:#30312c}"
+    ".overlay{color:#ece9e1}}"
     "@media print{.overlay{opacity:.2}}"
 )
 STYLE_HASH: Final = base64.b64encode(hashlib.sha256(STYLE.encode("utf-8")).digest()).decode("ascii")
@@ -92,7 +106,10 @@ class ViewerMark:
 
 
 def eat(ts: datetime, *, seconds: bool = False) -> str:
-    return ts.astimezone(NAIROBI).strftime("%Y-%m-%d %H:%M:%S EAT" if seconds else "%Y-%m-%d %H:%M EAT")
+    """A moment as the product writes it everywhere ("1 Oct 2026, 11:42 EAT"; docs/spec/07 item 7)."""
+    local = ts.astimezone(NAIROBI)
+    clock_part = local.strftime("%H:%M:%S" if seconds else "%H:%M")
+    return f"{local.day} {local:%b %Y}, {clock_part} EAT"
 
 
 def mark_text(viewer: ViewerMark) -> str:

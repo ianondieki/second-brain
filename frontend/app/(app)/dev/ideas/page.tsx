@@ -8,13 +8,13 @@ import { Alert } from "@/components/ui/Alert";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { CardGrid } from "@/components/ui/Card";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { myIdeas } from "./data";
 import { NEW_PATH } from "./ideas";
-import { IdeaRow } from "./IdeaRow";
+import { IdeaCard } from "./IdeaCard";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("ideas");
@@ -58,11 +58,13 @@ export default async function MyIdeasPage({ searchParams }: PageProps<"/dev/idea
 
       <div className="mt-10 max-w-3xl">
         {items.length > 0 ? (
-          <RowList aria-label={t("listLabel")}>
+          <CardGrid aria-label={t("listLabel")}>
             {items.map((item) => (
-              <IdeaRow key={item.id} item={item} />
+              <li key={item.id}>
+                <IdeaCard item={item} />
+              </li>
             ))}
-          </RowList>
+          </CardGrid>
         ) : (
           <EmptyState sentence={t("empty")} action={t("newIdea")} href={NEW_PATH} primary />
         )}

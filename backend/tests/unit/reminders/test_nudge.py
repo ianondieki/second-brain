@@ -179,7 +179,7 @@ def test_the_email_labels_ai_wording_and_never_the_fallback() -> None:
     fixed = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL)
     assert AI_LABEL not in fixed.text
     assert AI_LABEL not in (fixed.html or "")
-    assert fixed.subject == worded.subject == "Your day on Bridge (5 Oct 2026): 1 needs you, 1 at risk"
+    assert fixed.subject == worded.subject == "Your day on Wazo (5 Oct 2026): 1 needs you, 1 at risk"
 
 
 def test_the_in_app_summary_is_code_rendered() -> None:
@@ -242,3 +242,10 @@ def test_the_email_opens_the_developers_own_engagements() -> None:
     message = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL)
     assert f"Open your tracker: {BASE_URL}/dev/engagements\n" in message.text
     assert f'href="{BASE_URL}/dev/engagements"' in (message.html or "")
+
+
+def test_the_product_name_reaches_the_nudge_html() -> None:
+    nudge = compose_nudge(facts(engagement(milestones=(milestone(days(3)),))), NO_HOLIDAYS)
+    message = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL, product="Acme")
+    assert message.html is not None
+    assert ">Acme<" in message.html  # the frame's wordmark and footer line

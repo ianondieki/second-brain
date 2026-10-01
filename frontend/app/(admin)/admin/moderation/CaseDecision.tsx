@@ -67,7 +67,7 @@ function focusSoon(id: string) {
 
 const TONE = {
   ok: { Icon: CheckIcon, className: "text-ok" },
-  info: { Icon: InfoIcon, className: "text-jacaranda" },
+  info: { Icon: InfoIcon, className: "text-accent" },
   error: { Icon: AlertIcon, className: "text-error" },
 } as const;
 

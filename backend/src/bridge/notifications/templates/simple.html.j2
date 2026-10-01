@@ -1,0 +1,15 @@
+{# A short transactional email (the auth emails: confirm your address, a sign-in link, an account notice): the
+   paragraphs as given, one button when there is a link, and the link's address under it for clients that drop
+   buttons. Autoescaped. #}
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ subject }}{% endblock %}
+{% block body %}
+{% for paragraph in paragraphs %}
+<p style="margin:0 0 16px">{{ paragraph }}</p>
+{% endfor %}
+{% if button_url %}
+<p style="margin:24px 0 8px">{{ ui.button(button_url, button_label, "open-link") }}</p>
+<p style="margin:0;font-size:12px;line-height:1.6;color:#5c5a53;word-break:break-all">Or open this address: {{ button_url }}</p>
+{% endif %}
+{% endblock %}

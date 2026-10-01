@@ -150,10 +150,10 @@ describe("the claims queue", () => {
     expect(container.textContent).not.toContain("owner@county-c.example");
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(0); // nothing to decide
     expect(container.querySelector("button")).toBeNull();
-    expect(screen.getByRole("list", { name: "Claims waiting for review, oldest first" })).toBeTruthy();
+    expect(screen.getByRole("table", { name: "Claims waiting for review, oldest first" })).toBeTruthy();
     expect(within(rows[0]).getByRole("link").getAttribute("href")).toBe(`/admin/claims/${CLAIM_ID}`);
-    // P15-F MINOR 6: row titles are h2 under the page's h1 (axe heading-order).
-    for (const row of rows) expect(row.querySelector("h2 a")).not.toBeNull();
+    // D-52: a dense table; each row's title is its row header, so no heading sits inside the table.
+    for (const row of rows) expect(row.querySelector("th a[data-claim-link]")).not.toBeNull();
     expect(container.querySelector("h3")).toBeNull();
   });
 

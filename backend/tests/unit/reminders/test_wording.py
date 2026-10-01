@@ -127,7 +127,7 @@ async def test_a_valid_choice_is_rendered_by_code_and_labelled() -> None:
     client = FakeLLMClient([GOOD])
     wording = await word_nudge(client, nudge(), ctx=CTX)
     assert (wording.source, wording.reason, wording.order) == ("model", None, ("n2", "n1", "h2"))
-    assert wording.headline == "Here is your day on Bridge. 2 things need you today, and 2 engagements need attention."
+    assert wording.headline == "Here is your day on Wazo. 2 things need you today, and 2 engagements need attention."
     assert wording.next_step == f"Start with this: {STEP}"
     (entry,) = client.ledger.entries
     assert (entry.task, entry.user_id) == (TASK, USER)

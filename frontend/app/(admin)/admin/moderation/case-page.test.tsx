@@ -265,21 +265,16 @@ describe("the queue", () => {
     expect(primary[0].getAttribute("href")).toBe(`/admin/moderation/cases/${problem.id}`);
     expect(within(rows[1]).getByText("Public while checked")).toBeTruthy();
     expect(within(rows[1]).getByText("New problem from a developer")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Open cases, oldest first" })).toBeTruthy();
-    // P15-F MINOR 6 and the P16 tour: each row's title is an h2 under the page's h1 (axe heading-order), with nothing
-    // above it; what the case is about is a neutral badge in the meta line, not one of the row's two status badges.
+    // D-52: the queue is a dense table; each row's title is its row header (no headings inside the table), and what
+    // the case is about is plain text, not one of the row's two status badges.
+    expect(screen.getByRole("table", { name: "Open cases, oldest first" })).toBeTruthy();
     for (const row of rows) {
-      const title = row.querySelector("h2")!;
-      expect(title.previousElementSibling).toBeNull();
-      expect(row.querySelector("h3")).toBeNull();
+      expect(row.tagName).toBe("TR");
+      expect(row.querySelector("h2, h3")).toBeNull();
     }
     expect(within(rows[1]).getByText("Problem").closest("[data-chip]")).toBeNull();
-    // Fix round 1: the kind is plain meta text (not a badge), and the first row draws no second hairline under the tabs.
     expect(within(rows[1]).getByText("Problem").className).toBe("font-medium text-ink");
-    expect(screen.getByRole("list", { name: "Open cases, oldest first" }).className).toContain(
-      "[&>li:first-child>article]:border-t-0",
-    );
-    for (const row of rows) expect(row.querySelector("h2 a[data-case-link]")).not.toBeNull();
+    for (const row of rows) expect(row.querySelector("th a[data-case-link]")).not.toBeNull();
     expect(within(rows[0]).getByText("Proposal")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open" }).getAttribute("aria-current")).toBe("page");
   });

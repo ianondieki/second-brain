@@ -1,17 +1,19 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { Avatar } from "@/components/ui/Avatar";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 
 import { formatMoment } from "../dates";
+
 import type { ProposalViews } from "./pitch/picker";
 
 /**
- * "Who has seen this" (REQ-PROV-03, REQ-REPO-03): every opening of the idea's full details, newest first, with the
- * person, their organisation, the time in Nairobi, the version and the NDA version they accepted. Views are recorded
- * only after the viewer accepted the NDA, which the note says in the approved phrasing (docs/spec/04 4.2). The owner's
- * own preview is not a view. Empty: one sentence and one action. A Section with an ordered RowList.
+ * "Who has seen this" (REQ-PROV-03, REQ-REPO-03): every opening of the idea's full details, newest first, as a card
+ * with the viewer's avatar (D-52): the person and their organisation, the time in Nairobi, the version and the NDA
+ * version they accepted. Views are recorded only after the viewer accepted the NDA, which the note says in the
+ * approved phrasing (docs/spec/04 4.2). The owner's own preview is not a view. Empty: one sentence and one action.
  */
 export async function WhoHasSeen({ views }: { views: ProposalViews | null }) {
   const t = await getTranslations("ideaViews");
@@ -23,21 +25,27 @@ export async function WhoHasSeen({ views }: { views: ProposalViews | null }) {
       ) : views.items.length === 0 ? (
         <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/companies" />
       ) : (
-        <RowList ordered aria-label={t("listLabel")}>
+        <ol aria-label={t("listLabel")} className="flex flex-col gap-3">
           {views.items.map((view) => (
-            <Row
-              key={view.view_id}
-              data-view={view.view_id}
-              title={t("viewer", { name: view.viewer_name, org: view.org.name ?? t("unknownOrg") })}
-              meta={<time dateTime={view.viewed_at}>{t("when", { time: formatMoment(locale, view.viewed_at) })}</time>}
-            >
-              <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
-                <span>{t("version", { number: view.version_no })}</span>
-                {view.nda_version ? <span>{t("nda", { version: view.nda_version })}</span> : null}
-              </p>
-            </Row>
+            <li key={view.view_id}>
+              <Card as="article" variant="flat" padding="sm" data-view={view.view_id} className="flex gap-4">
+                <Avatar name={view.viewer_name} kind="person" />
+                <div className="min-w-0">
+                  <h3 className="text-base [overflow-wrap:anywhere] text-ink">
+                    {t("viewer", { name: view.viewer_name, org: view.org.name ?? t("unknownOrg") })}
+                  </h3>
+                  <p className="mt-0.5 text-sm text-ink-soft">
+                    <time dateTime={view.viewed_at}>{t("when", { time: formatMoment(locale, view.viewed_at) })}</time>
+                  </p>
+                  <p className="mt-1.5 flex flex-wrap gap-x-4 text-sm text-ink-soft">
+                    <span>{t("version", { number: view.version_no })}</span>
+                    {view.nda_version ? <span>{t("nda", { version: view.nda_version })}</span> : null}
+                  </p>
+                </div>
+              </Card>
+            </li>
           ))}
-        </RowList>
+        </ol>
       )}
     </Section>
   );

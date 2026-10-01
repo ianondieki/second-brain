@@ -34,7 +34,7 @@ describe("SignedInShell", () => {
   it("puts the top bar, linking home to the portal, with the account menu above the page's main content", async () => {
     const main = await renderShell({ homeHref: "/dev" });
     const header = screen.getByRole("banner");
-    expect(within(header).getByRole("link", { name: "Bridge (working name)" }).getAttribute("href")).toBe("/dev");
+    expect(within(header).getByRole("link", { name: "Wazo" }).getAttribute("href")).toBe("/dev");
     const account = within(header).getByRole("button", { name: "Account" });
     fireEvent.click(account);
     expect(within(header).getByRole("link", { name: "Plan & billing" })).toBeTruthy();

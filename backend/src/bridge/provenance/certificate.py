@@ -137,7 +137,7 @@ def render_pdf(data: CertificateData) -> bytes:
         pageCompression=0,
         title=f"Authorship certificate {data.cert_id}",
         subject=f"SHA-256 {data.content_hash.hex()}",
-        creator="Bridge provenance",
+        creator="Wazo provenance",
         leftMargin=20 * mm,
         rightMargin=20 * mm,
         topMargin=18 * mm,

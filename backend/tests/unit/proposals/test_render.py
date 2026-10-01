@@ -46,7 +46,7 @@ def page(viewer: ViewerMark = VIEWER, document: Mapping[str, Any] | None = None,
 
 def test_the_overlay_and_the_metadata_carry_the_viewer_mark() -> None:
     html = page()
-    line = "Rita Reviewer · Buyer Limited · 2026-09-29 12:05 EAT · view " + str(VIEW_ID)
+    line = "Rita Reviewer · Buyer Limited · 29 Sep 2026, 12:05 EAT · view " + str(VIEW_ID)
     assert mark_text(VIEWER) == line
     overlay = re.search(r'<div class="overlay" aria-hidden="true">(.*?)</div>', html)
     assert overlay is not None
@@ -54,14 +54,14 @@ def test_the_overlay_and_the_metadata_carry_the_viewer_mark() -> None:
     assert f'<meta name="bridge:view-id" content="{VIEW_ID}">' in html
     assert '<meta name="bridge:viewer" content="Rita Reviewer">' in html
     assert '<meta name="bridge:viewer-org" content="Buyer Limited">' in html
-    assert '<meta name="bridge:viewed-on" content="2026-09-29 12:05:07 EAT">' in html
+    assert '<meta name="bridge:viewed-on" content="29 Sep 2026, 12:05:07 EAT">' in html
     assert '<meta name="bridge:cert-id" content="Ab3dEf6hJk">' in html
     assert f'<p class="mark">{line}.' in html  # and once more in plain text at the end
 
 
 def test_the_owner_attribution_names_the_handle_certificate_time_and_verify_link() -> None:
     html = page()
-    assert "By dev-cold-chain · Certificate Ab3dEf6hJk · Registered 2026-09-29 00:30:00 EAT" in html
+    assert "By dev-cold-chain · Certificate Ab3dEf6hJk · Registered 29 Sep 2026, 00:30:00 EAT" in html
     assert 'href="https://bridge.example.test/verify/Ab3dEf6hJk"' in html
 
 
@@ -111,7 +111,7 @@ def test_the_owner_preview_has_no_view_id() -> None:
     html = page(ViewerMark(name="Dev Owner", org_name=None, view_id=None, viewed_at=VIEWER.viewed_at))
     assert "bridge:view-id" not in html
     assert '<meta name="bridge:render" content="owner-preview">' in html
-    assert "Dev Owner · owner preview · 2026-09-29 12:05 EAT</span>" in html
+    assert "Dev Owner · owner preview · 29 Sep 2026, 12:05 EAT</span>" in html
     assert escape(OWNER_NOTE) in html
 
 

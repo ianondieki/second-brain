@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useStrings } from "@/components/ClientStrings";
 import { Suspense, useRef, useState, type FormEvent } from "react";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button, textLinkClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
@@ -210,7 +209,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
           <Alert ref={noticeRef}>{t("codesNotShown", { product: notice.product })}</Alert>
         ) : null}
         {renewing ? null : required ? (
-          <p className="text-ink-soft">{t("mandatory")}</p>
+          <p className="text-sm text-ink-soft">{t("mandatory")}</p>
         ) : stepUp ? (
           <Suspense fallback={null}>
             <StepUpForm onConfirmed={turnOff} busyLabel={t("turningOff")} />
@@ -237,7 +236,7 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
               </Suspense>
             ) : (
               <>
-                <p className="text-ink-soft">{t("recoveryLead")}</p>
+                <p className="max-w-[60ch] text-sm text-ink-soft">{t("recoveryLead")}</p>
                 <Button
                   id="new-codes"
                   // After a lost answer, getting codes is what the notice above asks for: the screen's one primary action.
@@ -250,9 +249,6 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             )}
           </div>
         </section>
-        <Link href={homeHref} className={textLinkClass}>
-          {t("back")}
-        </Link>
       </div>
     );
   }

@@ -5,8 +5,10 @@ import { Component, Suspense, use, useEffect, useRef, useState, type ComponentPr
 import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
+import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { EyeIcon, SparkIcon } from "@/components/ui/icons";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
@@ -366,7 +368,7 @@ export function Editor(props: EditorProps) {
       data-hydrated="false"
       className="m-0 flex min-w-0 flex-col gap-8 border-0 p-0"
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         <Stepper step={step} onStep={goTo} disabled={publishing} />
         {statusLine}
       </div>
@@ -378,8 +380,8 @@ export function Editor(props: EditorProps) {
       {save.kind === "failed" ? <Alert>{t(`problem.${save.problem}`)}</Alert> : null}
 
       {step === 1 ? (
-        <div className="flex flex-col gap-10">
-          <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6">
+          <Card variant="flat" className="flex flex-col gap-6">
             <TextField
               id="idea-title"
               label={f("title")}
@@ -412,7 +414,6 @@ export function Editor(props: EditorProps) {
                 ),
               )}
             </SelectField>
-          </div>
 
           <ProblemPicker
             mode={state.problemMode}
@@ -431,10 +432,12 @@ export function Editor(props: EditorProps) {
             onNewTitle={(newProblemTitle) => update({ newProblemTitle })}
             onNewStatement={(newProblemStatement) => update({ newProblemStatement })}
           />
+          </Card>
 
-          <section aria-labelledby="teaser-title" className="flex flex-col gap-6 pt-4">
+          <Card as="section" variant="flat" aria-labelledby="teaser-title" className="flex flex-col gap-6">
             <div>
-              <h3 id="teaser-title" className="font-semibold text-ink">
+              <h3 id="teaser-title" className="flex items-center gap-2 font-semibold text-ink">
+                <EyeIcon className="size-5 shrink-0 text-accent" />
                 {f("teaserTitle")}
               </h3>
               <p className="mt-1 text-sm text-ink-soft">{t("teaserHint")}</p>
@@ -515,11 +518,12 @@ export function Editor(props: EditorProps) {
               error={errorFor("impact_claims")}
               onChange={(e) => update({ impactClaims: e.target.value })}
             />
-          </section>
+          </Card>
 
-          <section aria-labelledby="assistant-title" className="flex flex-col gap-4 pt-4">
+          <Card as="section" variant="flat" aria-labelledby="assistant-title" className="flex flex-col gap-4">
             <div>
-              <h3 id="assistant-title" className="font-semibold text-ink">
+              <h3 id="assistant-title" className="flex items-center gap-2 font-semibold text-ink">
+                <SparkIcon className="size-5 shrink-0 text-accent" />
                 {t("assistantTitle")}
               </h3>
               <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("assistantHint")}</p>
@@ -568,7 +572,7 @@ export function Editor(props: EditorProps) {
                 </Button>
               </>
             )}
-          </section>
+          </Card>
         </div>
       ) : null}
 
@@ -641,7 +645,7 @@ function SaveStatus({ save, onRetry }: { save: Save; onRetry: () => void }) {
           ? t("notSaved")
           : null;
   return (
-    <div className="flex min-h-11 flex-wrap items-center gap-x-4">
+    <div className="flex min-h-8 flex-wrap items-center gap-x-4">
       <p role="status" className={cn("inline-flex items-center gap-1.5 text-sm", failed ? "text-error" : "text-ink-soft")}>
         {save.kind === "saved" && !save.partial ? <CheckIcon className="size-4 shrink-0 text-ok" /> : null}
         {failed ? <AlertIcon className="size-4 shrink-0" /> : null}
@@ -649,7 +653,7 @@ function SaveStatus({ save, onRetry }: { save: Save; onRetry: () => void }) {
       </p>
       {/* Saving again cannot help when the API refused the content: the marked fields need changes first. */}
       {failed && save.problem !== "fields" && save.problem !== "validation" ? (
-        <Button variant="link" className="text-sm" onClick={onRetry}>
+        <Button variant="link" className="-my-1.5 min-h-11 text-sm" onClick={onRetry}>
           {t("retrySave")}
         </Button>
       ) : null}

@@ -37,10 +37,11 @@ export function TabNav({ label, items, current, className }: TabNavProps) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative inline-flex min-h-11 items-center border-b-2 px-2 whitespace-nowrap no-underline sm:px-3",
+                  // The ring sits inside the tab: the strip scrolls sideways inside its own box, which would clip an outset ring.
+                  "relative inline-flex min-h-11 items-center border-b-2 px-2 whitespace-nowrap no-underline [--focus-offset:-3px] sm:px-3",
                   "transition-colors duration-150 ease-out",
                   active
-                    ? "border-jacaranda font-semibold text-jacaranda"
+                    ? "border-accent font-semibold text-accent"
                     : "border-transparent font-medium text-ink-soft hover:border-line hover:text-ink",
                 )}
               >

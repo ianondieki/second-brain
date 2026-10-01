@@ -5,10 +5,10 @@ import { renderWithIntl } from "@/test/intl";
 
 import { DeleteIdea } from "./[id]/DeleteIdea";
 import type { MyProposalItem } from "./ideas";
-import { IdeaRow } from "./IdeaRow";
+import { IdeaCard } from "./IdeaCard";
 import { IdeaStatusBadge } from "./IdeaStatusBadge";
 
-// REQ-PROP-01 (F2), REQ-PROV-05: the My ideas list rows (≤2 chips, status as icon + words + colour; docs/spec/07 items
+// REQ-PROP-01 (F2), REQ-PROV-05: the My ideas cards (≤2 chips, status as icon + words + colour; docs/spec/07 items
 // 2 and 6) and the delete dialog, which says what is kept before anything happens (AC-IP-6).
 
 const push = vi.fn();
@@ -48,7 +48,7 @@ function item(overrides: Partial<MyProposalItem> = {}): MyProposalItem {
 
 describe("an idea in the list", () => {
   it("links its title to the idea and shows the niche, status and last change", () => {
-    renderWithIntl(<IdeaRow item={item()} />);
+    renderWithIntl(<IdeaCard item={item()} />);
     expect(screen.getByRole("link", { name: "Cold chain for dairy co-ops" }).getAttribute("href")).toBe(
       "/dev/ideas/0199a000-0000-7000-8000-0000000000aa",
     );
@@ -58,13 +58,13 @@ describe("an idea in the list", () => {
   });
 
   it("carries at most two chips: the status and unpublished changes", () => {
-    const { container } = renderWithIntl(<IdeaRow item={item({ has_draft: true })} />);
+    const { container } = renderWithIntl(<IdeaCard item={item({ has_draft: true })} />);
     expect(container.querySelectorAll("[data-status], [data-chip]")).toHaveLength(2);
     expect(screen.getByText("Unpublished changes")).toBeTruthy();
   });
 
   it("names an untitled draft", () => {
-    renderWithIntl(<IdeaRow item={item({ status: "draft", title: null, has_draft: true, niche: null })} />);
+    renderWithIntl(<IdeaCard item={item({ status: "draft", title: null, has_draft: true, niche: null })} />);
     expect(screen.getByRole("link", { name: "Untitled idea" })).toBeTruthy();
     expect(screen.getByText("Draft")).toBeTruthy();
     expect(screen.queryByText("Unpublished changes")).toBeNull();
@@ -118,9 +118,14 @@ describe("deleting an idea", () => {
   });
 });
 
-describe("an idea row under another section", () => {
-  it("takes the heading level it is given (h3 on Home, under My ideas)", () => {
-    renderWithIntl(<IdeaRow item={item()} headingLevel={3} />);
+describe("an idea card's heading level", () => {
+  it("is h2 under the My ideas title, so headings never skip a level", () => {
+    renderWithIntl(<IdeaCard item={item()} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Cold chain for dairy co-ops" })).toBeTruthy();
+  });
+
+  it("takes the level it is given (h3 under Home's section heading)", () => {
+    renderWithIntl(<IdeaCard item={item()} headingLevel={3} />);
     expect(screen.getByRole("heading", { level: 3, name: "Cold chain for dairy co-ops" })).toBeTruthy();
   });
 });

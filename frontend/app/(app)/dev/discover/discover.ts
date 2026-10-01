@@ -105,9 +105,13 @@ export function honestChips(trending: boolean, chips: readonly string[]): string
  */
 export function cardChips(trend: { trending: boolean; badge: string | null }, why: readonly string[]): string[] {
   const badge = trend.trending ? (trend.badge ?? "") : "";
-  const fresh = honestChips(trend.trending, why).filter((chip) => !badge.includes(chip));
+  // The card's footer counts the proposals, so a chip that counts them too ("2 new proposals this month") waits for
+  // "More about this problem" (ux review round 3).
+  const fresh = honestChips(trend.trending, why).filter((chip) => !badge.includes(chip) && !COUNTS_PROPOSALS.test(chip));
   return fresh.slice(0, badge ? 1 : 2);
 }
+
+const COUNTS_PROPOSALS = /\bnew proposals? this month\b/i;
 
 /**
  * Why chips not shown on the card itself (they go under "More about this problem"): neither the chips on the card nor

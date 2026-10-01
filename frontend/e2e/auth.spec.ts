@@ -9,7 +9,7 @@ import { checkScreen as checkPageRules } from "./support/screen";
 // X1-1 (REQ-AUTH-01): signup, email link, password login and TOTP against the compose stack (`make dev`), in the
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
 
-const PASSWORD = "jacaranda season in nairobi";
+const PASSWORD = "accent season in nairobi";
 // Steps that wait on the API (argon2id hashing, email, session rotation) get more than the 5 s default: shared CI
 // runners and Docker Desktop port forwarding both add seconds of latency at times.
 const SERVER_STEP = { timeout: 20_000 };
@@ -169,7 +169,7 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   const email = uniqueEmail("dev");
 
   await page.goto("/");
-  await page.getByRole("link", { name: "Create an account" }).click();
+  await page.getByRole("link", { name: "Create an account" }).first().click(); // the hero's; the final call to action repeats it (D-52)
   await expect(page).toHaveURL(/\/signup$/);
   await hydrated(page);
   await checkScreen(page);
@@ -320,7 +320,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   const cancel = page.getByRole("button", { name: "Cancel setup" });
   await expect(cancel).toHaveAttribute("aria-disabled", "true");
   await expect(cancel).toHaveCSS("cursor", "progress");
-  await expect(cancel).toHaveCSS("color", "rgb(74, 88, 102)"); // --ink-soft: 6.8:1 on paper
+  await expect(cancel).toHaveCSS("color", "rgb(92, 90, 83)"); // --ink-soft: 6.6:1 on paper (D-52 tokens)
   await expect(cancel).toHaveCSS("text-decoration-style", "dotted");
   release();
   await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10, SERVER_STEP);

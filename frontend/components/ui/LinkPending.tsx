@@ -21,7 +21,7 @@ export function LinkPending({ className, tone = "accent" }: { className?: string
       className={cn(
         // "current" on a filled primary button: the bar takes the button's own text colour, visible on the accent.
         "pointer-events-none inline-block h-[3px] w-6 shrink-0 transition-opacity duration-150 ease-out",
-        tone === "current" ? "bg-current" : "bg-jacaranda",
+        tone === "current" ? "bg-current" : "bg-accent",
         "motion-reduce:transition-none",
         pending ? "opacity-100 delay-100 motion-safe:animate-pulse" : "opacity-0",
         className,

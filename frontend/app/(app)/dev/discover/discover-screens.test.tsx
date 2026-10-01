@@ -41,12 +41,14 @@ describe("a Discover problem", () => {
   it("shows its badge, links its card, keeps to two chips and offers to start a proposal", () => {
     renderWithIntl(<ProblemRow item={trendingProblem()} counties={COUNTIES} projects={[trendingProject()]} query={{ view: "problems" }} />);
     const card = screen.getByRole("article");
-    expect(card.querySelector("[data-badge]")?.textContent).toBe(BADGE);
+    // The short form on the card (the meta line already says the niche and the county); the sentence in its title.
+    expect(card.querySelector("[data-badge]")?.textContent).toBe("Trending: 4 companies scouting, 1 new proposal");
+    expect(card.querySelector("[data-badge]")?.getAttribute("title")).toBe(BADGE);
     expect(screen.getByRole("link", { name: "Tower sites go down when generators run dry" }).getAttribute("href")).toBe(
       `/problems/${PROBLEM_ID}`,
     );
     expect(card.querySelectorAll("[data-chip]")).toHaveLength(1); // the badge already says the rest
-    expect(card.querySelector("[data-chip]")?.textContent).toBe("1 new proposal this month");
+    expect(card.querySelector("[data-chip]")?.textContent).toBe("New this week"); // the proposal count is the footer's
     expect(within(card).getByText("Kenya")).toBeTruthy();
     expect(within(card).getByText("1 proposal")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Start a proposal from this problem" }).getAttribute("href")).toBe(
@@ -57,7 +59,7 @@ describe("a Discover problem", () => {
   it("lists the other chips, its sources and the projects solving it under the disclosure", () => {
     renderWithIntl(<ProblemRow item={trendingProblem()} counties={COUNTIES} projects={[trendingProject()]} query={{ view: "problems", niche: "ict" }} />);
     const more = screen.getByText("More about this problem").closest("details")!;
-    expect(within(more).getByText("New this week")).toBeTruthy();
+    expect(within(more).getByText("1 new proposal this month")).toBeTruthy(); // counted on the card's footer already
     expect(within(more).queryByText("4 companies scouting")).toBeNull(); // the badge says it already
     const source = within(more).getByRole("link", { name: "Communications Authority of Kenya" });
     expect(source.getAttribute("href")).toBe("https://www.ca.go.ke/report");

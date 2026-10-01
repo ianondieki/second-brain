@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 
 import { whySourceOf, type Match } from "../../scout";
@@ -31,7 +32,7 @@ export function Why({ match, heading }: { match: Pick<Match, "why" | "why_source
   if (heading) {
     return (
       <Section title={t("why")} headingId="why-heading" className="max-w-[64ch]" data-why-source={source}>
-        {body}
+        <Card variant="wash">{body}</Card>
       </Section>
     );
   }

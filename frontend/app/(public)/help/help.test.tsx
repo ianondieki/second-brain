@@ -1,6 +1,6 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
-import { isValidElement, type ReactElement } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SignedInShell } from "@/components/SignedInShell";
@@ -17,6 +17,7 @@ import { HELP_SECTIONS } from "./sections";
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getMessages: async () => en,
 }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({}) }));
 const me = vi.hoisted(() => ({ get: vi.fn() }));
@@ -26,6 +27,14 @@ afterEach(() => {
   cleanup();
   me.get.mockReset();
 });
+
+/** Whether the element tree holds a help section with this id (through every `children`). */
+function hasSection(node: ReactNode, id: string): boolean {
+  if (Array.isArray(node)) return node.some((child) => hasSection(child, id));
+  if (!isValidElement(node)) return false;
+  const props = node.props as { "data-help-section"?: string; children?: ReactNode };
+  return props["data-help-section"] === id || hasSection(props.children, id);
+}
 
 async function renderSignedOut() {
   renderWithIntl(<>{await resolveServerTree(await HelpPage())}</>);
@@ -85,6 +94,19 @@ describe("the help page", () => {
     const page = await HelpPage();
     expect(isValidElement(page) && page.type).toBe(SignedInShell);
     expect((page as ReactElement<{ homeHref: string }>).props.homeHref).toBe("/org");
+  });
+
+  it("offers the tour again to a portal, not to the staff console", async () => {
+    // The signed-in shell holds an async top bar, so the page is inspected as the tree it returns.
+    me.get.mockResolvedValue({ side: "developer", mfa: { enrolled: false, verified: false, required: false }, user: {} });
+    const dev = await HelpPage();
+    expect(hasSection(dev, "tour")).toBe(true);
+    expect(hasSection(dev, "support")).toBe(true);
+    me.get.mockResolvedValue({ side: "staff", mfa: { enrolled: true, verified: true, required: true }, user: { staff_role: "admin" } });
+    const staff = await HelpPage();
+    expect(isValidElement(staff) && (staff as ReactElement<{ homeHref: string }>).props.homeHref).toBe("/admin");
+    expect(hasSection(staff, "tour")).toBe(false);
+    expect(hasSection(staff, "support")).toBe(true);
   });
 
   it("treats a session still owing its second factor as a visitor", async () => {

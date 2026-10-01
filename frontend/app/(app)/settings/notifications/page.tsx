@@ -3,11 +3,14 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { PortalNavFor } from "@/components/PortalNavFor";
+import { Section } from "@/components/ui/Section";
 import { SignedInShell } from "@/components/SignedInShell";
 import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -41,17 +44,22 @@ export default async function NotificationSettingsPage() {
   const home = homeOf(me);
   const t = await getTranslations("notificationSettings");
   const choices = notificationChoices(await myConsents());
+  const [tNav, tSecurity] = await Promise.all([getTranslations("settingsNav"), getTranslations("security")]);
   return (
-    <SignedInShell homeHref={home}>
+    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
+      <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
       <SettingsTabs current="notifications" />
-      <PageHeader title={t("pageTitle")} lead={t("lead")} />
       <div className="mt-10">
         {choices.length === 0 ? (
           <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
         ) : (
-          <ClientStrings strings={await clientStrings(["notificationSettings"])}>
-            <NotificationChoices initial={choices} />
-          </ClientStrings>
+          <Card variant="flat" className="max-w-3xl p-5 sm:p-6">
+            <Section title={t("pageTitle")} headingId="notifications-heading" description={t("lead")} headingStyle="card">
+              <ClientStrings strings={await clientStrings(["notificationSettings"])}>
+                <NotificationChoices initial={choices} />
+              </ClientStrings>
+            </Section>
+          </Card>
         )}
       </div>
     </SignedInShell>

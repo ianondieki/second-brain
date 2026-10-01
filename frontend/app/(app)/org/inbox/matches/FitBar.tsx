@@ -7,10 +7,10 @@
 export function FitBar({ value, short, long }: { value: number; short: string; long: string }) {
   const width = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <span data-chip="fit" className="inline-flex items-center gap-2 text-sm font-semibold text-jacaranda">
+    <span data-chip="fit" className="inline-flex items-center gap-2 text-sm font-semibold text-accent">
       {/* Square ends: rounded-full is kept for the avatar and the one solid badge (the design plan's Radius). */}
       <span aria-hidden="true" className="relative h-1.5 w-14 overflow-hidden bg-line">
-        <span className="absolute inset-y-0 left-0 bg-jacaranda" style={{ width: `${width}%` }} />
+        <span className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${width}%` }} />
       </span>
       <span aria-hidden="true" className="tabular-nums">
         {short}

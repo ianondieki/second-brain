@@ -2,7 +2,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
-import { Row } from "@/components/ui/RowList";
+import Link from "next/link";
+
+import { DataCell, DataRow, dataLinkClass } from "@/components/ui/DataTable";
 
 import { claimHref, orgName, shortId, slaChip, slaState, STATUS_CHIP, type Claim } from "./claims";
 
@@ -28,33 +30,36 @@ export async function ClaimChip({ claim }: { claim: Pick<Claim, "status" | "sla"
 }
 
 /**
- * One claim in the queue (REQ-DIR-03 queue), a Row: the organisation (the way into the claim, an h2 under the page's
- * h1; by id when staff cannot read it), one status badge (the review time left, or the status), then what it asks
- * for, who filed it, the domain and when as the meta line. No registration number, KRA PIN or address here: those
- * are on the claim's own page only.
+ * One claim in the queue (REQ-DIR-03 queue), a row of the queue's table: the organisation (the way into the claim, the
+ * row header; by id when staff cannot read it), the level, who filed it, the domain, when, and one status badge (the
+ * review time left, or the status). No registration number, KRA PIN or address here: those are on the claim's own
+ * page only.
  */
 export async function ClaimRow({ claim }: { claim: Claim }) {
   const t = await getTranslations("adminClaims");
   const locale = await getLocale();
   const name = orgName(claim.org);
   return (
-    <Row
-      data-claim={claim.id}
-      linkData={{ "data-claim-link": "" }}
-      headingLevel={2}
-      title={name ?? t("unnamed", { id: shortId(claim.org.id) })}
-      href={claimHref(claim.id)}
-      meta={
-        <span className="flex flex-wrap gap-x-4 gap-y-1">
-          <span className="font-medium text-ink">{t(`level.${claim.level}`)}</span>
-          <span>{t("by", { name: claim.claimant.display_name })}</span>
-          <span className="[overflow-wrap:anywhere]">{claim.domain}</span>
-          <span>{t("filed", { date: formatMoment(locale, claim.created_at) })}</span>
-        </span>
-      }
-      badges={[await ClaimChip({ claim })]}
-    >
-      {name ? null : <p className="max-w-[60ch] text-sm text-ink-soft">{t("unnamedNote")}</p>}
-    </Row>
+    <DataRow data-claim={claim.id}>
+      <DataCell head label={t("columns.organisation")} className="sm:w-[26%]">
+        <Link href={claimHref(claim.id)} data-claim-link="" className={dataLinkClass}>
+          {name ?? t("unnamed", { id: shortId(claim.org.id) })}
+        </Link>
+        {name ? null : <p className="mt-1 max-w-[40ch] text-sm text-ink-soft">{t("unnamedNote")}</p>}
+      </DataCell>
+      <DataCell label={t("columns.level")} className="sm:w-[24%]">
+        <span className="font-medium text-ink">{t(`level.${claim.level}`)}</span>
+      </DataCell>
+      <DataCell label={t("columns.claimant")} className="sm:w-[22%]">
+        {claim.claimant.display_name}
+        <span className="block text-sm break-words text-ink-soft">{claim.domain}</span>
+      </DataCell>
+      <DataCell label={t("columns.filed")} figure nowrap className="text-ink-soft">
+        {formatMoment(locale, claim.created_at)}
+      </DataCell>
+      <DataCell label={t("columns.status")} nowrap>
+        {await ClaimChip({ claim })}
+      </DataCell>
+    </DataRow>
   );
 }

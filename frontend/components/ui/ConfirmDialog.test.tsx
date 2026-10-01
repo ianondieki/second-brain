@@ -90,7 +90,7 @@ describe("ConfirmDialog", () => {
   it("styles its main button as primary or danger but never marks it as the screen's primary action", () => {
     const { rerender } = render(<Harness tone="primary" />);
     const confirm = () => within(dialog()).getByRole("button", { name: "Delete", hidden: true });
-    expect(confirm().className).toContain("bg-jacaranda");
+    expect(confirm().className).toContain("bg-accent");
     rerender(<Harness tone="danger" />);
     expect(confirm().className.split(" ")).toEqual(expect.arrayContaining(["text-error", "border-error"]));
     expect(confirm().className).not.toMatch(/(^|\s)bg-error(\s|$)/);

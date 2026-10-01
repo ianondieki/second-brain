@@ -1,18 +1,38 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { HomeSummary } from "@/components/HomeSummary";
+import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
+import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
+import { tourDoneFromCookies } from "@/components/tour/tour-store";
+import { orgEngagements } from "@/components/tracker/data";
+import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { Section } from "@/components/ui/Section";
-import { needsMfaSetup } from "@/lib/auth/routing";
-
-import { getInbox, orgContext } from "./data";
+import { Callout } from "@/components/ui/Callout";
+import { CardGrid } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
+import { StatTile } from "@/components/ui/StatTile";
+import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
+import { needsMfaSetup } from "@/lib/auth/routing";
+import { clientStrings } from "@/lib/i18n/client-strings";
+
+import { getInbox, orgContext, type InboxPage } from "./data";
 import { formatDay } from "./format";
-import { inboxHref, type Membership } from "./membership";
+import { orgHomeStats, weeklySeries } from "./home";
+import { InboxCard } from "./inbox/InboxCard";
+import { engagementsHref, inboxHref, proposalHref, type Membership } from "./membership";
+import { matchesHref, type Match } from "./scout";
+import { getMatches } from "./scout-data";
+
+/** How many Inbox proposals Home shows before "All proposals". */
+const INBOX_SHOWN = 4;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("home");
@@ -20,65 +40,185 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Organisation home: the greeting and two-step sign-in status (owners without it are asked to turn it on, the
- * screen's primary action then), and a short Inbox summary with the way in.
+ * Organisation home (docs/spec/07 item 1; D-52): the greeting, four stat tiles from the Inbox, the scout's matches and
+ * the engagements the page reads anyway (with a sparkline where a series exists), two-step sign-in as a notice only
+ * while it is off, what needs the organisation as prominent cards, then the newest Inbox proposals as compact cards.
+ * "Open the Inbox" is the screen's one primary action; an owner without two-step sign-in gets "Turn on" instead,
+ * since the Inbox is refused until then.
  */
 export default async function OrganisationHome({ searchParams }: PageProps<"/org">) {
   const { me, memberships, org, missing, query } = await orgContext((await searchParams).org);
   const t = await getTranslations("home");
   const ti = await getTranslations("inbox");
   const setupNeeded = needsMfaSetup(me.mfa);
+  const mfa = me.mfa.enrolled ? "on" : setupNeeded ? "required" : "off";
+  const ready = org !== null && !setupNeeded;
+
   return (
-    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />}>
-      <HomeSummary me={me} lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")} />
-      {missing === "notMember" ? (
-        <div className="mt-10">
-          <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
-        </div>
-      ) : null}
-      {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}
-      {org && !setupNeeded ? <InboxSummary memberships={memberships} org={org} /> : null}
+    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
+      <ClientStrings strings={await clientStrings(["tour"])}>
+        <FirstLoginTour side="org" initialDone={tourDoneFromCookies(await cookies(), "org")} />
+      </ClientStrings>
+      <div className="max-w-4xl">
+        <PageHeader
+          title={t("title", { name: me.user.display_name })}
+          lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
+          action={
+            setupNeeded ? (
+              <ButtonLink href="/settings/security" variant="primary">
+                {t("turnOn")}
+              </ButtonLink>
+            ) : org ? (
+              <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
+                {(await getTranslations("orgHome"))("open")}
+              </ButtonLink>
+            ) : undefined
+          }
+        />
+      </div>
+
+      <div className="mt-8 flex max-w-4xl flex-col gap-12">
+        {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
+        {mfa === "on" ? (
+          <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
+            <CheckIcon className="size-4 shrink-0 text-ok" />
+            {t("mfaOn")}
+          </p>
+        ) : (
+          <Callout
+            tone={mfa === "required" ? "error" : "info"}
+            icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />}
+            data-home="security"
+          >
+            <p>{mfa === "required" ? t("mfaRequired") : t("mfaOff")}</p>
+            <Link href="/settings/security" className={standaloneLinkClass}>
+              {t("setUp")}
+            </Link>
+          </Callout>
+        )}
+
+        {missing === "notMember" ? <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" /> : null}
+
+        {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}
+        {ready ? <HomeBody memberships={memberships} org={org} /> : null}
+      </div>
     </SignedInShell>
   );
 }
 
-async function InboxSummary({ memberships, org }: { memberships: Membership[]; org: Membership }) {
-  const t = await getTranslations("orgHome");
-  const ti = await getTranslations("inbox");
-  const locale = await getLocale();
-  // The home never becomes the error page: when the Inbox cannot be read, only the way into it is shown.
-  let result: Awaited<ReturnType<typeof getInbox>> | null = null;
+/** A stat tile draws its sparkline from this many items on (fewer make a hockey stick with no scale). */
+const SPARK_FROM = 5;
+
+/** Reads one list for Home; the home never becomes the error page, so a failed read shows "could not be read" for that list. */
+async function quietly<T>(read: () => Promise<T>): Promise<T | null> {
   try {
-    result = await getInbox(org.org_id, undefined, 1);
+    return await read();
   } catch (error) {
     unstable_rethrow(error); // a redirect (the session ended) still happens
+    return null;
   }
-  let sentence: string | null = null;
-  if (result?.kind === "page") {
-    const [item] = result.page.items;
-    if (item) {
-      const title = item.proposal.teaser.title ?? ti("untitled");
-      sentence = t("newest", { title, date: formatDay(locale, item.pitched_at) });
-    } else if (result.page.held_count > 0) {
-      sentence = ti("held", { count: result.page.held_count, org: org.org_name });
-    } else {
-      const key =
-        result.page.verification === "e2"
-          ? "emptyE2"
-          : result.page.verification === "e1"
-            ? "emptyE1"
-            : "emptyUnverified";
-      sentence = ti(key, { org: org.org_name });
-    }
-  }
+}
+
+async function HomeBody({ memberships, org }: { memberships: Membership[]; org: Membership }) {
+  const [t, ti, tt, locale] = await Promise.all([getTranslations("orgHome"), getTranslations("inbox"), getTranslations("tracker"), getLocale()]);
+  const [inboxRead, matchesRead, engagementsRead] = await Promise.all([
+    quietly(() => getInbox(org.org_id)),
+    quietly(() => getMatches(org.org_id)),
+    quietly(() => orgEngagements(org.org_id)),
+  ]);
+  const inbox: InboxPage | null = inboxRead?.kind === "page" ? inboxRead.page : null;
+  const matches: Match[] | null = matchesRead?.kind === "ok" ? matchesRead.value : null;
+  const engagements = engagementsRead?.ok ? engagementsRead.value : null;
+  const stats = orgHomeStats(inbox, matches, engagements);
+  const now = new Date();
+  const inboxLink = inboxHref(memberships, org.org_id);
+  const engagementsLink = engagementsHref(memberships, org.org_id);
+
+  const [newest] = inbox?.items ?? [];
+  // A tile whose list could not be read says so instead of a figure (never a confident zero).
+  const unknown = { value: t("stats.unknown"), meta: t("stats.unavailable") };
+  const inboxSentence = inbox
+    ? newest
+      ? t("newest", { title: newest.proposal.teaser.title ?? ti("untitled"), date: formatDay(locale, newest.pitched_at) })
+      : inbox.held_count > 0
+        ? ti("held", { count: inbox.held_count, org: org.org_name })
+        : ti(inbox.verification === "e2" ? "emptyE2" : inbox.verification === "e1" ? "emptyE1" : "emptyUnverified", { org: org.org_name })
+    : null;
+
   return (
-    <Section title={t("inboxTitle")} headingId="home-inbox" className="mt-12">
-      <div className="flex flex-col items-start gap-4">
-        {sentence ? <p className="max-w-[60ch] [overflow-wrap:anywhere] text-ink">{sentence}</p> : null}
-        <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
-          {t("open")}
-        </ButtonLink>
-      </div>
-    </Section>
+    <>
+      <section aria-label={t("stats.label")} data-home="stats">
+        <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <li>
+            <StatTile
+              data-stat="inbox"
+              label={t("stats.inbox")}
+              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
+              meta={stats.inbox === null ? unknown.meta : stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
+              // A series only once it can show a shape: under five points it is a hockey stick with no scale.
+              spark={inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM ? weeklySeries(inbox.items.map((item) => item.pitched_at), now) : undefined}
+              href={inboxLink}
+            />
+          </li>
+          <li>
+            <StatTile
+              data-stat="matches"
+              label={t("stats.matches")}
+              value={stats.matches === null ? unknown.value : stats.matches}
+              meta={stats.matches === null ? unknown.meta : stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
+              spark={matches && stats.matches !== null && stats.matches >= SPARK_FROM ? weeklySeries(matches.map((match) => match.created_at), now) : undefined}
+              href={matchesHref(memberships, org.org_id)}
+            />
+          </li>
+          <li>
+            <StatTile
+              data-stat="engagements"
+              label={t("stats.engagements")}
+              value={stats.engagements === null ? unknown.value : stats.engagements}
+              meta={stats.engagements === null ? unknown.meta : t("stats.engagementsMeta", { count: stats.active })}
+              href={engagementsLink}
+            />
+          </li>
+          <li>
+            <StatTile
+              data-stat="needs-us"
+              label={t("stats.needsUs")}
+              value={stats.engagements === null ? unknown.value : stats.waiting.length}
+              meta={stats.engagements === null ? unknown.meta : stats.waiting.length > 0 ? t("stats.needsUsMeta") : undefined}
+            />
+          </li>
+        </ul>
+      </section>
+
+      {stats.waiting.length > 0 ? (
+        <Section title={tt("needsUs")} headingId="home-needs-us" data-home="needs-us">
+          <ul className="flex flex-col gap-4">
+            {stats.waiting.map((item) => (
+              <li key={item.id}>
+                <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} />
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      <Section
+        title={t("inboxTitle")}
+        headingId="home-inbox"
+        data-home="inbox"
+        description={inboxSentence}
+        link={newest ? { href: inboxLink, label: t("allProposals") } : undefined}
+      >
+        {newest ? (
+          <CardGrid>
+            {inbox!.items.slice(0, INBOX_SHOWN).map((item) => (
+              <li key={item.tag_id}>
+                <InboxCard item={item} href={proposalHref(memberships, org.org_id, item.proposal.id)} />
+              </li>
+            ))}
+          </CardGrid>
+        ) : null}
+      </Section>
+    </>
   );
 }

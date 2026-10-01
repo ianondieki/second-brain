@@ -1,14 +1,11 @@
 {# N17 organisation interest, HTML part (REQUIREMENTS.md §5 N17; docs/spec/06 6.9 stage 0). Autoescaped. One call to
    action; the only links are the platform's. [[COPY-REVIEW]] #}
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>{{ company_name }}</title></head>
-<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
-<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:24px">
-<p style="font-size:16px;line-height:1.5;margin:0 0 16px">{{ company_name }} found your proposal &ldquo;<strong>{{ title }}</strong>&rdquo; {{ found_by }} and would like to talk about taking it further.</p>
-<p style="font-size:14px;line-height:1.5;margin:0 0 16px">Accept or decline {{ respond_by }} on your tracker. If you accept, the contact they named can reach you. Their interest is not a contract or a commitment to buy, and your full proposal stays private unless you choose to share it.</p>
-<p style="margin:24px 0"><a data-cta="open-tracker" href="{{ tracker_url }}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">Open your tracker</a></p>
-</div>
-<p style="max-width:560px;margin:16px auto 0;font-size:12px;line-height:1.5;color:#71717a;text-align:center">{{ product }} · Engagement ref {{ engagement_ref }}<br><a href="{{ settings_url }}" style="color:#71717a">Manage notifications</a> · <a href="{{ help_url }}" style="color:#71717a">Help</a> · Nairobi, Kenya</p>
-</body>
-</html>
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ company_name }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px">{{ company_name }} found your proposal &ldquo;<strong>{{ title }}</strong>&rdquo; {{ found_by }} and would like to talk about taking it further.</p>
+<p style="font-size:14px;line-height:1.6;margin:0 0 16px">Accept or decline {{ respond_by }} on your tracker. If you accept, the contact they named can reach you. Their interest is not a contract or a commitment to buy, and your full proposal stays private unless you choose to share it.</p>
+<p style="margin:24px 0 0">{{ ui.button(tracker_url, "Open your tracker", "open-tracker") }}</p>
+{% endblock %}
+{% block footer_line %}{{ product }} · Engagement ref {{ engagement_ref }}{% endblock %}

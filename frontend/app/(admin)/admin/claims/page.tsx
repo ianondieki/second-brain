@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { DataTable } from "@/components/ui/DataTable";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 
@@ -37,7 +37,7 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
   const t = await getTranslations("adminClaims");
   const shell = (lead: ReactNode, children: ReactNode) => (
     <AdminShell role={role} current="claims" wide>
-      <div className="flex max-w-3xl flex-col gap-8">
+      <div className="flex max-w-5xl flex-col gap-8">
         <PageHeader title={t("title")} lead={lead} focusable />
         {children}
       </div>
@@ -66,11 +66,14 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <RowList ordered rule={false} aria-label={t(`list.${view}`)}>
+          <DataTable
+            aria-label={t(`list.${view}`)}
+            columns={[t("columns.organisation"), t("columns.level"), t("columns.claimant"), t("columns.filed"), t("columns.status")]}
+          >
             {items.map((claim) => (
               <ClaimRow key={claim.id} claim={claim} />
             ))}
-          </RowList>
+          </DataTable>
         ) : (
           <EmptyState
             rule={false}

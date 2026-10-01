@@ -22,7 +22,7 @@ afterEach(cleanup);
 describe("chips", () => {
   it.each([
     ["completed", "Completed", "text-ok"],
-    ["current", "Current", "text-jacaranda"],
+    ["current", "Current", "text-accent"],
     ["pending", "Pending", "text-ink-soft"],
     ["onHold", "On hold", "text-ink"],
     ["overdue", "Overdue", "text-error"],
@@ -96,7 +96,9 @@ describe("the whose-turn banner", () => {
       />,
     );
     expect(screen.getByText("Awaiting: you and Telco A (fixture)")).toBeTruthy();
-    expect(screen.getByText("Your next step: Sign the mutual NDA")).toBeTruthy();
+    // The same step owed by both: said once, naming both.
+    expect(screen.getByText("Next step for both of you: Sign the mutual NDA")).toBeTruthy();
+    expect(screen.queryByText("Your next step: Sign the mutual NDA")).toBeNull();
   });
 
   it("says an engagement ended, and why", () => {
@@ -109,7 +111,8 @@ describe("the whose-turn banner", () => {
 
   it("says overdue in words, not colour alone", () => {
     renderWithIntl(<WhoseTurn detail={detail({ due: { due_on: "2026-09-25", business_days_left: -2, overdue: true } })} />);
-    expect(screen.getByText("Overdue by 2 business days, was due 25 Sep 2026")).toBeTruthy();
+    // The date is its own span (it never splits across lines), so the sentence is read from the element's text.
+    expect(document.querySelector("[data-due='overdue']")?.textContent).toBe("Overdue by 2 business days, was due 25 Sep 2026");
   });
 });
 
@@ -296,10 +299,10 @@ describe("the Documents tab's links (fix round 1)", () => {
   it("shows the current document in ink without an underline, the others as links", () => {
     const current = documentLinkClass(true).split(" ");
     expect(current).toEqual(expect.arrayContaining(["text-ink", "no-underline", "min-h-11"]));
-    expect(current).not.toContain("text-jacaranda");
+    expect(current).not.toContain("text-accent");
     expect(current).not.toContain("underline");
     const other = documentLinkClass(false).split(" ");
-    expect(other).toEqual(expect.arrayContaining(["text-jacaranda", "underline", "min-h-11"]));
+    expect(other).toEqual(expect.arrayContaining(["text-accent", "underline", "min-h-11"]));
     expect(other).not.toContain("text-ink");
   });
 });

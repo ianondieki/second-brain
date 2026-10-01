@@ -274,6 +274,7 @@ async def em2_facts(db: AsyncSession, engagement: Engagement, settings: Settings
         shared=shared is not None,
         public_entity=org.public_entity,
         base_url=settings.public_base_url,
+        product=settings.product_name,
     )
 
 

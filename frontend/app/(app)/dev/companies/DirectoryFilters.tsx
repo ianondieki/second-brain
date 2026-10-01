@@ -50,7 +50,7 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
       <details open={active > 0} className="group">
         <summary
           className={
-            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-jacaranda " +
+            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-accent " +
             "[&::-webkit-details-marker]:hidden"
           }
         >

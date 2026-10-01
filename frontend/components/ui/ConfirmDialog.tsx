@@ -2,6 +2,8 @@
 
 import { useId, type ReactNode, type RefObject } from "react";
 
+import { haptic } from "@/lib/haptics";
+
 import { Button, buttonClass } from "./Button";
 import { cn } from "./cn";
 
@@ -88,12 +90,17 @@ export function ConfirmDialog({
         if (opener?.isConnected && (!active || active === document.body || node.contains(active))) opener.focus();
         onClose?.();
       }}
+      data-sheet=""
       className={cn(
+        // A centred dialog from 640 px; a bottom sheet on phones (D-52): full width, rounded on top, rising once.
         "m-auto w-[calc(100%-2rem)] rounded-panel border border-line bg-paper p-6 text-ink shadow-overlay",
         "backdrop:bg-scrim",
+        "max-sm:mt-auto max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:rounded-t-[1.25rem]",
+        "max-sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
         size === "lg" ? "max-w-lg" : "max-w-md",
       )}
     >
+      <span aria-hidden="true" className="mx-auto mb-4 block h-1 w-10 rounded-full bg-line sm:hidden" />
       <h2 id={titleId} className="text-lg text-ink">
         {title}
       </h2>
@@ -109,7 +116,9 @@ export function ConfirmDialog({
         <button
           type="button"
           onClick={() => {
-            if (!blocked) onConfirm();
+            if (blocked) return;
+            haptic("tap");
+            onConfirm();
           }}
           aria-disabled={blocked || undefined}
           data-dialog-confirm=""

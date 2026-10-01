@@ -129,7 +129,7 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     );
     expect(screen.queryByText(/AI-drafted/)).toBeNull();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(problem.title);
-    expect(screen.getByText("0.81 out of 1")).toBeTruthy();
+    expect(screen.getByText("High (81%)")).toBeTruthy(); // in words with the figure (ux review round 3)
     expect(screen.getByText("Kenya")).toBeTruthy();
   });
 
@@ -142,6 +142,6 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     render(await resolve(await ProblemCard({ problem })));
     const classes = document.querySelector("[data-label]")!.className.split(" ");
     expect(classes).toContain("text-ink-soft");
-    expect(classes).not.toContain("text-jacaranda");
+    expect(classes).not.toContain("text-accent");
   });
 });

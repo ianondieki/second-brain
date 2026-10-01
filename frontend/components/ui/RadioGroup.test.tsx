@@ -21,7 +21,7 @@ describe("RadioGroup", () => {
       ["side-org", "side", "org", false],
     ]);
     const row = radios[0].closest("label")!;
-    expect(row.className.split(" ")).toEqual(expect.arrayContaining(["min-h-14", "has-checked:bg-jacaranda-wash"]));
+    expect(row.className.split(" ")).toEqual(expect.arrayContaining(["min-h-14", "has-checked:bg-accent-wash"]));
     expect(screen.getByRole("radio", { name: /I represent an organisation/ })).toBe(radios[1]);
   });
 

@@ -11,7 +11,7 @@ import type { ChipKind } from "./model";
 
 export const CHIP_TONE: Record<ChipKind, string> = {
   completed: "text-ok",
-  current: "text-jacaranda",
+  current: "text-accent",
   pending: "text-ink-soft",
   onHold: "text-ink",
   overdue: "text-error",

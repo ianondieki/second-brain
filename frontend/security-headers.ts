@@ -27,9 +27,12 @@ export interface Header {
 /** Sent with every response, build assets included: the browser must not guess another type than the declared one. */
 export const NOSNIFF: Header = { key: "X-Content-Type-Options", value: "nosniff" };
 
+/** The fonts under /fonts carry a version suffix in their names, so they can be cached for a year without revalidation. */
+export const FONT_CACHE: Header = { key: "Cache-Control", value: "public, max-age=31536000, immutable" };
+
 /**
  * Headers that only mean something on a document: framing, referrers, device features and the CSP. They are not sent
- * with the hashed build assets under /_next/static (scripts, CSS, fonts), where they change nothing but add about
+ * with the hashed build assets under /_next/static (scripts, CSS) or the fonts under /fonts, where they change nothing but add about
  * 0.4 KB to every file a route downloads over HTTP/1.1 (docs/spec/07 item 5: the JS budget). A worker script takes
  * its CSP from its own response, so a future service worker must be served from outside /_next/static.
  */
@@ -51,6 +54,10 @@ export const CASE_SENSITIVE_ROUTES = true;
 /** The rules next.config.ts headers() returns (path-to-regexp sources, as Next.js matches them). */
 export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> = [
   { source: "/:path*", headers: [NOSNIFF] },
-  // Every path except /_next/static/…: a negative lookahead, as in the Next.js middleware matcher examples.
-  { source: "/((?!_next/static/).*)", headers: [...PAGE_HEADERS] },
+  // The self-hosted fonts (public/fonts, versioned file names): cached like the hashed build assets, so a returning
+  // visitor's headline never waits for a revalidation round trip.
+  { source: "/fonts/:file([^/]+-v\\d+\\.woff2)", headers: [FONT_CACHE] },
+  // Every path except /_next/static/… and the versioned font files (a /fonts/… 404 is a document too): a negative
+  // lookahead, as in the Next.js middleware matcher examples.
+  { source: "/((?!_next/static/|fonts/[^/]+-v\\d+\\.woff2$).*)", headers: [...PAGE_HEADERS] },
 ];

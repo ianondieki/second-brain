@@ -2,7 +2,13 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { cookies } from "next/headers";
+
+import { celebrationSeenFromCookies } from "@/components/tracker/celebration-store";
+import { ClosedCelebration } from "@/components/tracker/ClosedCelebration";
+import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -10,6 +16,7 @@ import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
+import { formatDay } from "@/lib/format";
 import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
@@ -37,7 +44,6 @@ import {
 } from "./model";
 import { Stepper } from "./Stepper";
 import { Tier2Section } from "./Tier2Section";
-import { DueText } from "./When";
 import { WhoseTurn } from "./WhoseTurn";
 
 export const TABS = ["tracker", "documents", "history"] as const;
@@ -87,6 +93,14 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
   const line = counterpartLine(detail);
+  // The party who acts now: the developer, the organisation, or both (the tracker's timeline shows them at the step).
+  const awaited = new Set(detail.whose_turn);
+  const actors = isFinished(detail.state) ? null : (
+    <span className="flex shrink-0 items-center gap-1">
+      {awaited.has("developer") ? <Avatar name={detail.developer_name} kind="person" size="sm" active /> : null}
+      {awaited.has("org") ? <Avatar name={detail.org_name} kind="org" size="sm" active /> : null}
+    </span>
+  );
 
   return (
     <ClientStrings strings={await clientStrings(["trackerActions"])}>
@@ -100,32 +114,50 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 max-w-3xl">
         <WhoseTurn detail={detail} />
       </div>
+      {/* The one-time celebration of a closed engagement, drawn on the server; the cookie says whether it was seen. */}
+      {detail.state === "CLOSED" ? (
+        <ClosedCelebration
+          engagementId={detail.id}
+          initialSeen={celebrationSeenFromCookies(await cookies(), detail.id)}
+          title={t("closed.title")}
+          body={t("closed.body")}
+          dismiss={t("closed.dismiss")}
+        />
+      ) : null}
 
-      <div className="mt-8">
+      {/* The one progress indicator: the timeline itself (completed connectors in the accent). On phones the actions
+          card comes first, so the screen's primary action is within reach; the timeline follows it. */}
+      <div className="mt-6 flex flex-col gap-8">
+      <div className="order-2 lg:order-1">
         <Stepper
           steps={steps}
+          actor={actors}
           detail={
             <>
               <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
-              {detail.due && !isFinished(detail.state) ? (
-                <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
+              {!isFinished(detail.state) ? (
+                <span className="block text-ink-soft lg:hidden">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
               ) : null}
             </>
           }
         />
       </div>
 
-      <div className="mt-8 max-w-3xl">
+      {/* Actions stays mounted whatever is left to do (it keeps its own "Done" status and focus after a refresh);
+          the card frame is drawn only while there is something to do, so a closed or ended engagement draws no
+          empty box. */}
+      <Card as="div" variant={items.length > 0 ? "raised" : "bare"} padding={items.length > 0 ? "md" : "none"} className="order-1 max-w-3xl has-[>div:empty]:hidden lg:order-2">
         <Actions
-            engagementId={detail.id}
-            lockVersion={detail.lock_version}
-            items={items}
-            counterpart={counterpart}
-            enrolled={me.mfa.enrolled}
-            members={members}
-            myUserId={me.user.id}
-            recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
-          />
+          engagementId={detail.id}
+          lockVersion={detail.lock_version}
+          items={items}
+          counterpart={counterpart}
+          enrolled={me.mfa.enrolled}
+          members={members}
+          myUserId={me.user.id}
+          recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
+        />
+      </Card>
       </div>
 
       <div className="mt-8 max-w-3xl empty:hidden">

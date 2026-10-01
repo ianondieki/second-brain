@@ -28,7 +28,7 @@ import { totp } from "./totp";
  */
 export const OWNER_DATABASE_URL = process.env.E2E_DATABASE_OWNER_URL;
 
-export const PASSWORD = "jacaranda season in nairobi";
+export const PASSWORD = "accent season in nairobi";
 
 const TEST_DOMAIN = /^[a-z0-9-]+\.example\.com$/;
 

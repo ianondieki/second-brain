@@ -4,7 +4,9 @@ import { formatMoment } from "@/components/problem/problem";
 import { Chip } from "@/components/tracker/Chip";
 import { Badge } from "@/components/ui/Badge";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
-import { Row } from "@/components/ui/RowList";
+import Link from "next/link";
+
+import { DataCell, DataRow, dataLinkClass } from "@/components/ui/DataTable";
 
 import {
   caseHref,
@@ -30,11 +32,10 @@ export async function decidedLine(item: Case): Promise<string | null> {
 }
 
 /**
- * One case in the queue (REQ-MOD-01), a Row: its title (the way into the case, an h2 under the page's h1), the meta
- * line (what it is about, then when it was filed or who decided it), at most two status badges
- * (docs/spec/07 item 2): whether the subject can be seen now (or, once decided, the outcome) and the first reason it
- * was filed; then the start of its public summary. The whole row is the link's target (a stretched link);
- * `data-case-link` marks that link.
+ * One case in the queue (REQ-MOD-01), a row of the queue's table: its title (the way into the case, the row header),
+ * what it is about, when it was filed or who decided it, and at most two status badges (docs/spec/07 item 2): whether
+ * the subject can be seen now (or, once decided, the outcome) and the first reason it was filed. `data-case-link`
+ * marks the title's link (its own 44 px band).
  */
 export async function CaseRow({ item }: { item: Case }) {
   const t = await getTranslations("adminModeration");
@@ -65,26 +66,29 @@ export async function CaseRow({ item }: { item: Case }) {
         {t(`reason.${reason}`)}
       </Badge>
     ) : null;
-  const shown = [status, flag].filter((badge) => badge !== null);
   return (
-    <Row
-      data-case={item.id}
-      linkData={{ "data-case-link": "" }}
-      headingLevel={2}
-      title={title}
-      href={caseHref(item.id)}
-      meta={
+    <DataRow data-case={item.id}>
+      <DataCell head label={t("columns.case")} className="sm:w-[40%]">
+        <Link href={caseHref(item.id)} data-case-link="" className={dataLinkClass}>
+          {title}
+        </Link>
+        {item.preview.text ? (
+          <p className="mt-1 line-clamp-2 max-w-[48ch] text-sm [overflow-wrap:anywhere] text-ink-soft">{item.preview.text}</p>
+        ) : null}
+      </DataCell>
+      {/* Plain text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
+      <DataCell label={t("columns.kind")} nowrap>
+        <span className="font-medium text-ink">{t(`kind.${kind}`)}</span>
+      </DataCell>
+      <DataCell label={t("columns.when")} figure className="text-ink-soft">
+        {decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}
+      </DataCell>
+      <DataCell label={t("columns.status")}>
         <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {/* Plain meta text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
-          <span className="font-medium text-ink">{t(`kind.${kind}`)}</span>
-          <span>{decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}</span>
+          {status}
+          {flag}
         </span>
-      }
-      badges={shown.length === 2 ? [shown[0], shown[1]] : shown.length === 1 ? [shown[0]] : undefined}
-    >
-      {item.preview.text ? (
-        <p className="line-clamp-2 max-w-[65ch] [overflow-wrap:anywhere] text-ink-soft">{item.preview.text}</p>
-      ) : null}
-    </Row>
+      </DataCell>
+    </DataRow>
   );
 }

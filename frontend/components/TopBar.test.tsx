@@ -31,7 +31,7 @@ describe("TopBar", () => {
     expect(focusable[0]).toBe(skip);
     expect(skip.getAttribute("href")).toBe("#main");
     expect(skip.className.split(" ")).toEqual(expect.arrayContaining(["sr-only", "focus:not-sr-only"]));
-    const home = screen.getByRole("link", { name: "Bridge (working name)" });
+    const home = screen.getByRole("link", { name: "Wazo" });
     expect(home.getAttribute("href")).toBe("/");
     expect(home.className.split(" ")).toContain("min-h-11");
   });
@@ -43,9 +43,10 @@ describe("TopBar", () => {
       </TopBar>,
     );
     const header = screen.getByRole("banner");
-    expect(within(header).getByRole("link", { name: "Bridge (working name)" }).getAttribute("href")).toBe("/org?org=1");
-    const bar = header.firstElementChild!;
-    expect([...bar.children].map((child) => child.textContent)).toEqual(["Bridge (working name)", "Account"]);
+    expect(within(header).getByRole("link", { name: "Wazo" }).getAttribute("href")).toBe("/org?org=1");
+    // The lattice band is the header's first child; the bar holds the brand (wordmark and the prototype badge) and the control.
+    const bar = header.lastElementChild!;
+    expect([...bar.children].map((child) => child.textContent)).toEqual(["WazoPrototype", "Account"]);
     expect(bar.className.split(" ")).toContain("justify-between");
   });
 
@@ -63,11 +64,11 @@ describe("TopBarBase", () => {
       return <a data-anchor="marked" {...props} />;
     }
     await renderTree(<TopBarBase homeHref="/dev" Anchor={Marked} />);
-    const home = screen.getByRole("link", { name: "Bridge (working name)" });
+    const home = screen.getByRole("link", { name: "Wazo" });
     expect(home.getAttribute("data-anchor")).toBe("marked");
     expect(home.getAttribute("href")).toBe("/dev");
     cleanup();
     await renderTree(<TopBarBase Anchor="a" />);
-    expect(screen.getByRole("link", { name: "Bridge (working name)" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Wazo" }).getAttribute("href")).toBe("/");
   });
 });

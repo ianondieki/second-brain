@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { TrendIcon, WhyIcon } from "@/components/discover-icons";
@@ -24,12 +25,25 @@ export function WhyChip({ children }: { children: ReactNode }) {
  * "act here" (docs/platform/design/p16-design-system.md, principle 3).
  */
 export function TrendBadge({ badge }: { badge: string | null }) {
+  const t = useTranslations("discover");
   if (!badge) return null;
+  const detail = trendDetail(badge);
   return (
-    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]">
-      {badge}
+    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]" title={badge}>
+      {detail === null ? badge : t("trendingShort", { detail })}
     </Badge>
   );
+}
+
+/**
+ * What the badge says after the niche and county it opens with ("Trending in ICT › Networks · Kenya: 4 companies
+ * scouting" → "4 companies scouting"), for the card's short form (discover.trendingShort): the card's meta line
+ * already says where. The sentence's last ": " splits it, so a niche or place written with one stays whole. The full
+ * sentence stays in the badge's title; a badge in another shape (null here) is shown as it is.
+ */
+export function trendDetail(badge: string): string | null {
+  const match = /^Trending in .+: (.+)$/.exec(badge);
+  return match ? match[1]! : null;
 }
 
 /** A row's badges (at most two, docs/spec/07 item 2): the trend badge first, then the Why chips the caller picked. */
@@ -45,7 +59,7 @@ export function ChipList({ items }: { items: readonly string[] }) {
     <ul className="flex flex-col gap-1">
       {items.map((chip) => (
         <li key={chip} className="flex items-start gap-1.5 text-ink">
-          <WhyIcon className="mt-1 size-4 shrink-0 text-jacaranda" />
+          <WhyIcon className="mt-1 size-4 shrink-0 text-accent" />
           <span className="min-w-0">{chip}</span>
         </li>
       ))}
@@ -61,7 +75,7 @@ export function MoreSummary({ children }: { children: ReactNode }) {
   return (
     <summary
       className={
-        "inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-jacaranda " +
+        "inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-accent " +
         "hover:text-accent-strong [&::-webkit-details-marker]:hidden"
       }
     >

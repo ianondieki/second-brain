@@ -8,6 +8,7 @@ import { useStrings } from "@/components/ClientStrings";
 import { Chip } from "@/components/tracker/Chip";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { Card, cardHeadingClass } from "@/components/ui/Card";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { RadioGroup } from "@/components/ui/RadioGroup";
 import { SelectField } from "@/components/ui/SelectField";
@@ -212,7 +213,11 @@ export function ScoutForm(props: ScoutFormProps) {
         </Alert>
       ) : null}
 
-      <NicheChoice
+      <Card as="section" variant="flat" aria-labelledby="scout-group-looks" className="flex flex-col gap-8">
+        <h2 id="scout-group-looks" className={cardHeadingClass}>
+          {t("group.looks")}
+        </h2>
+        <NicheChoice
         id="scout-niches"
         niches={props.niches}
         chosen={draft.niches}
@@ -269,7 +274,12 @@ export function ScoutForm(props: ScoutFormProps) {
         className="max-w-[8rem]"
         onChange={(e) => change("minFit", e.target.value)}
       />
+      </Card>
 
+      <Card as="section" variant="flat" aria-labelledby="scout-group-runs" className="flex flex-col gap-6">
+        <h2 id="scout-group-runs" className={cardHeadingClass}>
+          {t("group.runs")}
+        </h2>
       <RadioGroup
         id="scout-frequency"
         name="frequency"
@@ -297,7 +307,12 @@ export function ScoutForm(props: ScoutFormProps) {
           ) : null}
         </div>
       ) : null}
+      </Card>
 
+      <Card as="section" variant="flat" aria-labelledby="scout-group-digest" className="flex flex-col gap-6">
+        <h2 id="scout-group-digest" className={cardHeadingClass}>
+          {t("group.digest")}
+        </h2>
       <SelectField
         id="scout-language"
         label={t("language")}
@@ -330,6 +345,7 @@ export function ScoutForm(props: ScoutFormProps) {
           <p className="text-sm text-ink-soft">{t("noReviewers", { org: props.orgName })}</p>
         </div>
       )}
+      </Card>
 
       {refused ? (
         <Alert ref={notice} className="w-full" tone="error">

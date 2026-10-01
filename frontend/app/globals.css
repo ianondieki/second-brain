@@ -1,45 +1,164 @@
 @import "tailwindcss";
 
 /*
+ * The three self-hosted faces (public/fonts/LICENCES.md; D-52), declared here rather than through next/font so the
+ * two above-the-fold faces can be preloaded at high priority from app/layout.tsx (next/font emitted no preload, and
+ * the fonts then queued behind the async scripts: about 0.7 s of mobile LCP). Each has a size-adjusted local fallback
+ * (the metrics next/font computed), so the swap moves nothing.
+ */
+@font-face {
+  font-family: Newsreader;
+  src: url("/fonts/newsreader-latin-v2.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Newsreader Fallback";
+  src: local("Times New Roman");
+  ascent-override: 73.61%;
+  descent-override: 26.54%;
+  line-gap-override: 0%;
+  size-adjust: 99.84%;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/ibm-plex-sans-latin-v2.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400 600;
+}
+@font-face {
+  font-family: "IBM Plex Sans Fallback";
+  src: local(Arial);
+  ascent-override: 101.35%;
+  descent-override: 27.19%;
+  line-gap-override: 0%;
+  size-adjust: 101.13%;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/ibm-plex-mono-latin-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+}
+
+/*
  * Design tokens (docs/platform/design/phase1-auth-ui.md). Brand, palette and radii are placeholders until G5:
  * changing them is a token swap here, not a redesign. Contrast ratios are against --paper.
  */
+/*
+ * Design tokens (docs/platform/design/p18-design-system.md; owner decision D-52): direction C "Editorial trust" with
+ * B's kanga-cut lattice as the one signature. Light values live on :root; dark ones on html[data-theme="dark"] and,
+ * for a system preference with no choice made, under prefers-color-scheme. Contrast ratios are against --paper.
+ */
 :root {
-  --paper: #f5f7f3; /* page background: cool, faintly green-grey paper */
-  --ink: #16232f; /* text and icons, 14.8:1 */
-  --ink-soft: #4a5866; /* secondary text and input borders, 6.8:1 */
-  --jacaranda: #5b3e96; /* the one accent: primary buttons, focus ring, the bridge line, 7.6:1 */
-  --jacaranda-wash: #ece6f6; /* selected radio row, info notice, the side panel */
-  --line: #c9d1c8; /* hairlines and dividers */
-  --ok: #1f6b47; /* success, always with an icon and words, 6.0:1 */
-  --error: #a8241b; /* errors, always with an icon and words, 6.6:1 */
-  --field: #ffffff; /* text inputs, so fields read as fields on paper */
-  --on-accent: #ffffff; /* text and icons on --jacaranda (8.2:1) */
-  --on-ok: #ffffff; /* text and icons on --ok (6.6:1) */
-  /*
-   * Mixes of the colours above, named once (docs/platform/design/p16-design-system.md, token table). Each was
-   * repeated inline before; a component reads the token, never the mix.
-   */
-  --accent-strong: color-mix(in oklab, var(--jacaranda) 84%, var(--ink)); /* hover and pressed accent */
-  --wash-soft: color-mix(in oklab, var(--jacaranda-wash) 55%, var(--paper)); /* nav hover, selected rows */
+  --paper: #fbfaf6; /* page background: warm white */
+  --field: #ffffff; /* inputs, cards, sheets */
+  --ink: #1a1916; /* text and icons, 16.4:1 */
+  --ink-soft: #5c5a53; /* secondary text and input borders, 6.6:1 */
+  --line: #dedacf; /* hairlines and dividers */
+  --bezel: var(--ink); /* the drawn phone's frame (checkout) */
+  --accent: #1f5e49; /* the one accent: primary buttons, focus ring, current step, 7.4:1 */
+  --accent-wash: #e5efe9; /* selected rows, info notices, the landing panel */
+  --flourish: #b89a4a; /* the lattice's second tone and illustration; never text */
+  --warm: #7a5a12; /* the warm accent from the lattice's ochre: "Your turn", success notices, the seal's ring; 6.1:1 */
+  --warm-wash: #f6efdc; /* success notice background */
+  --on-warm: #ffffff; /* text on --warm (6.1:1) */
+  --ok: #1f6b47; /* success, always with an icon and words, 6.3:1 */
+  --error: #9e2a1f; /* errors, always with an icon and words, 7.0:1 */
+  --on-accent: #ffffff; /* text and icons on --accent (7.4:1) */
+  --on-ok: #ffffff; /* text and icons on --ok (6.3:1) */
+  /* Mixes of the colours above, named once; a component reads the token, never the mix. */
+  --accent-strong: color-mix(in oklab, var(--accent) 84%, var(--ink)); /* hover and pressed accent */
+  --wash-soft: color-mix(in oklab, var(--accent-wash) 55%, var(--paper)); /* nav hover, selected rows */
   --error-wash: color-mix(in oklab, var(--error) 7%, var(--field)); /* error notice background, danger hover */
   --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field)); /* success notice background */
   --error-line: color-mix(in oklab, var(--error) 45%, var(--paper)); /* error notice border */
   --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper)); /* success notice border */
-  --accent-line: color-mix(in oklab, var(--jacaranda) 35%, var(--paper)); /* info notice border */
+  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper)); /* info notice border */
+  --warm-line: color-mix(in oklab, var(--warm) 45%, var(--paper)); /* success notice border */
   --scrim: color-mix(in oklab, var(--ink) 45%, transparent); /* the one dialog backdrop */
-  --focus-ring: 2px solid var(--jacaranda);
+  /* Elevation: a card sits a hair above the paper (one very soft, wide shadow); overlays float. */
+  --shadow-card: 0 1px 0 rgb(26 25 22 / 0.04), 0 16px 40px -24px rgb(26 25 22 / 0.22);
+  --shadow-overlay: 0 16px 40px -16px rgb(26 25 22 / 0.24), 0 2px 6px -2px rgb(26 25 22 / 0.1);
+  --focus-ring: 2px solid var(--accent);
   --focus-offset: 2px;
   color-scheme: light;
+}
+
+/* A first-login tour the server rendered but this browser's storage remembers as done (the cookie had lapsed):
+   hidden before paint by the inline script in app/layout.tsx, so hydration removes it with nothing to shift. */
+html[data-tour-seen~="developer"] [data-tour-side="developer"],
+html[data-tour-seen~="org"] [data-tour-side="org"] {
+  display: none;
+}
+
+/* The same for a closed tracker's celebration this browser's storage remembers (components/tracker/celebration-store.ts):
+   the shell holds the card and its button, so neither is painted alone. */
+html[data-celebration-seen] [data-celebration-shell] {
+  display: none;
+}
+
+/* Dark mode: its own steps, not a flip; the accent and status colours are lightened to keep AA on the dark paper. */
+html[data-theme="dark"] {
+  --paper: #131412;
+  --field: #1b1c19;
+  --ink: #ece9e1;
+  --ink-soft: #b4b0a5;
+  --line: #30312c;
+  --bezel: var(--line); /* the drawn phone's frame (checkout) */
+  --accent: #7fcbab;
+  --accent-wash: #1f2f28;
+  --flourish: #a08b48;
+  --warm: #e0b85a;
+  --warm-wash: #2a2416;
+  --on-warm: #131412;
+  --ok: #7ac79a;
+  --error: #ff8f7e;
+  --on-accent: #131412;
+  --on-ok: #131412;
+  --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
+  --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --scrim: color-mix(in oklab, #000 62%, transparent); /* from black: the backdrop dims the dark page */
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) {
+    --paper: #131412;
+    --field: #1b1c19;
+    --ink: #ece9e1;
+    --ink-soft: #b4b0a5;
+    --line: #30312c;
+    --bezel: var(--line); /* the drawn phone's frame (checkout) */
+    --accent: #7fcbab;
+    --accent-wash: #1f2f28;
+    --flourish: #a08b48;
+    --warm: #e0b85a;
+    --warm-wash: #2a2416;
+    --on-warm: #131412;
+    --ok: #7ac79a;
+    --error: #ff8f7e;
+    --on-accent: #131412;
+    --on-ok: #131412;
+    --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
+    --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --scrim: color-mix(in oklab, #000 62%, transparent);
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
   --color-paper: var(--paper);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
-  --color-jacaranda: var(--jacaranda);
-  --color-jacaranda-wash: var(--jacaranda-wash);
+  --color-accent: var(--accent);
+  --color-accent-wash: var(--accent-wash);
+  --color-flourish: var(--flourish);
+  --color-warm: var(--warm);
+  --color-warm-wash: var(--warm-wash);
+  --color-warm-line: var(--warm-line);
+  --color-on-warm: var(--on-warm);
   --color-line: var(--line);
+  --color-bezel: var(--bezel);
   --color-ok: var(--ok);
   --color-error: var(--error);
   --color-field: var(--field);
@@ -53,35 +172,38 @@
   --color-ok-line: var(--ok-line);
   --color-accent-line: var(--accent-line);
   --color-scrim: var(--scrim);
+  --shadow-card: var(--shadow-card);
+  --shadow-overlay: var(--shadow-overlay);
 }
 
 @theme {
-  /* One system font stack (docs/spec/07 item 5: no web fonts). */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  /* Self-hosted faces (public/fonts/LICENCES.md; the @font-face rules at the top of this file). */
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: Newsreader, "Newsreader Fallback", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Radii: controls and the one side panel; nothing else is rounded. */
-  --radius-control: 10px;
-  --radius-panel: 16px;
+  /* Radii: controls, and cards, sheets and the one side panel. */
+  --radius-control: 6px;
+  --radius-panel: 12px;
 
-  /*
-   * The only elevation: things that float over the page (the account menu, the confirm dialog). Offset plus a soft
-   * blur, tinted from --ink (#16232f). Nothing on the page itself casts a shadow.
-   */
-  --shadow-overlay: 0 12px 28px -12px rgb(22 35 47 / 0.28), 0 2px 6px -2px rgb(22 35 47 / 0.12);
+  /* Motion: one timing for every control, slower for sheets and reveals; exponential ease-out, nothing bounces. */
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Type scale: 1.25 ratio on a 16 px base (14 / 16 / 20 / 25 / 31 / 39). */
+  /* Type scale: 1.333 on a 16 px base (14 / 16 / 21 / 28 / 36 / 48); the serif sets the three largest. */
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.5;
   --text-base: 1rem;
   --text-base--line-height: 1.6;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.45;
-  --text-xl: 1.5625rem;
-  --text-xl--line-height: 1.25;
-  --text-2xl: 1.9375rem;
-  --text-2xl--line-height: 1.2;
-  --text-3xl: 2.4375rem;
-  --text-3xl--line-height: 1.15;
+  --text-lg: 1.3125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.75rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 2.25rem;
+  --text-2xl--line-height: 1.15;
+  --text-3xl: 3rem;
+  --text-3xl--line-height: 1.08;
 }
 
 @layer base {
@@ -117,11 +239,36 @@
   }
 
   h1,
-  h2,
-  h3 {
-    font-weight: 600;
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
     letter-spacing: -0.01em;
     text-wrap: balance;
+  }
+
+  h1 {
+    font-variation-settings: "opsz" 48;
+  }
+
+  /* Row and card titles wrap where they must, never balanced onto two short lines (the owner's nit on Home). */
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-wrap: pretty;
+  }
+
+  /* Controls answer at once, in one timing; reduced motion turns it off below. */
+  button,
+  a,
+  summary {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: var(--ease-out);
+    transition-duration: var(--motion-fast);
+  }
+
+  button:active,
+  a[data-primary]:active {
+    transform: translateY(1px);
   }
 
   p {
@@ -139,14 +286,38 @@
   }
 
   ::selection {
-    background: var(--jacaranda-wash);
+    background: var(--accent-wash);
     color: var(--ink);
+  }
+
+  /* Print: the page prints its content on white; the chrome and controls stay on screen. A sheet marked
+     data-print-sheet prints alone (the authorship certificate). */
+  @media print {
+    html {
+      background: #fff;
+      color: #000;
+    }
+    header,
+    nav,
+    [data-tab-bar],
+    [data-no-print],
+    button {
+      display: none !important;
+    }
+    html:has([data-print-sheet]) main > :not(:has([data-print-sheet])) {
+      display: none;
+    }
+    [data-print-sheet] {
+      box-shadow: none !important;
+      border: 1px solid #000 !important;
+      break-inside: avoid;
+    }
   }
 
   input,
   select,
   textarea {
-    caret-color: var(--jacaranda);
+    caret-color: var(--accent);
   }
 
   input::placeholder {
@@ -155,17 +326,103 @@
   }
 }
 
-/* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
-@utility code-figures {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
+/*
+ * The kanga-cut lattice (direction B's signature, kept as the one East African mark): a 6 px two-tone band of
+ * triangles, drawn as a background on [data-lattice] edges. Never behind text. Tones: the accent and the flourish.
+ */
+@utility lattice-band {
+  height: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%231F5E49'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23B89A4A'/%3E%3C/svg%3E");
+  background-size: 24px 6px;
+  background-repeat: repeat-x;
+}
+html[data-theme="dark"] .lattice-band {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%237FCBAB'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23A08B48'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lattice-band {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%237FCBAB'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23A08B48'/%3E%3C/svg%3E");
+  }
 }
 
-/*
- * The bridge line draws itself once on the landing page (the only motion in Phase 1). The resting state is the
- * drawn line, so it stays visible if the animation never runs; reduced motion shows it drawn.
- */
-@keyframes bridge-draw {
+/* Dialogs: a bottom sheet on phones rises once (components/ui/ConfirmDialog.tsx); reduced motion shows it in place. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+dialog[data-sheet][open] {
+  animation: sheet-up var(--motion-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-sheet][open] {
+    animation: none;
+  }
+}
+
+/* The closed-engagement celebration (components/tracker/ClosedCelebration.tsx): twelve lattice-coloured dots fall
+   once; reduced motion leaves them resting along the top edge. */
+.confetti i {
+  position: absolute;
+  top: -8px;
+  display: block;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  animation: confetti-fall 1.8s var(--ease-out) forwards;
+}
+.confetti i:nth-child(3n) {
+  background: var(--flourish);
+}
+.confetti i:nth-child(3n + 1) {
+  background: var(--warm);
+  width: 5px;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(240px) rotate(300deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti i {
+    top: 0;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+/* The first-login tour rises into place once; reduced motion shows it in place. */
+@keyframes tour-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tour-enter {
+  animation: tour-enter var(--motion-base) var(--ease-out) both;
+}
+
+/* The seal on the certificate sheet draws its ring once; reduced motion shows it drawn. */
+@keyframes seal-draw {
   from {
     stroke-dashoffset: 100;
   }
@@ -173,11 +430,36 @@
     stroke-dashoffset: 0;
   }
 }
-
-.bridge-draw {
+.seal-draw {
   stroke-dasharray: 100;
   stroke-dashoffset: 0;
-  animation: bridge-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+  animation: seal-draw 900ms var(--ease-out) 200ms both;
+}
+
+/* The landing hero's product visual: the real stepper at a card's width, its group names a size smaller. */
+[data-hero-visual] [data-stepper] p {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+[data-hero-visual] [data-stepper] p + p {
+  font-size: 0.8125rem;
+}
+@media (width >= 64rem) {
+  [data-hero-visual] [data-stepper] p,
+  [data-hero-visual] [data-stepper] p + p {
+    font-size: 0.875rem;
+  }
+}
+[data-hero-backdrop] {
+  background:
+    radial-gradient(60% 70% at 70% 20%, color-mix(in oklab, var(--accent-wash) 85%, transparent), transparent 70%),
+    radial-gradient(50% 60% at 15% 90%, color-mix(in oklab, var(--warm-wash) 90%, transparent), transparent 70%);
+}
+
+/* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
+@utility code-figures {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -190,7 +472,8 @@
     scroll-behavior: auto !important;
   }
 
-  .bridge-draw {
+  .seal-draw,
+  .tour-enter {
     animation: none !important;
   }
 }
