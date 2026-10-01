@@ -37,7 +37,8 @@ SECTIONS: Final = (
 )
 STYLE: Final = (
     # The P18 palette (frontend/app/globals.css) in a page that loads nothing: no web fonts (a serif stack for the
-    # title), no images (the lattice echo is a gradient band), and the mark in the accent at a low opacity.
+    # title), no images (the lattice echo is a gradient band). The per-viewer mark keeps its ink, opacity and size from
+    # before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
     ":root{color-scheme:light}"
     'body{margin:0;background:#fbfaf6;color:#1a1916;font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",'
     "Roboto,sans-serif}"
@@ -55,9 +56,9 @@ STYLE: Final = (
     ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #dedacf}"
     ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
     "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
-    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.12;color:#1f5e49;font-size:.75rem;"
+    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1a1916;font-size:.8rem;"
     "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}"
-    "@media print{.overlay{opacity:.18}}"
+    "@media print{.overlay{opacity:.2}}"
 )
 STYLE_HASH: Final = base64.b64encode(hashlib.sha256(STYLE.encode("utf-8")).digest()).decode("ascii")
 HEADERS: Final = {
