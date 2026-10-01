@@ -169,7 +169,7 @@ test("a developer signs up, confirms by email link, logs in with a password and 
   const email = uniqueEmail("dev");
 
   await page.goto("/");
-  await page.getByRole("link", { name: "Create an account" }).click();
+  await page.getByRole("link", { name: "Create an account" }).first().click(); // the hero's; the final call to action repeats it (D-52)
   await expect(page).toHaveURL(/\/signup$/);
   await hydrated(page);
   await checkScreen(page);

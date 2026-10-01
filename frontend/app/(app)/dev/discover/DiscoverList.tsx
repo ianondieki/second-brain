@@ -26,8 +26,9 @@ export type DiscoverListProps = { query: DiscoverQuery; counties: readonly Count
 );
 
 /**
- * The chosen list with its heading and one line on what it holds. Cold start (nothing in the list trends yet) titles
- * the problems or the projects "New this week". An empty list is one sentence and one action (docs/spec/07 item 4): clear the filters when they
+ * The chosen list with its heading and one line on what it holds, its items as compact cards two across from 640 px
+ * (D-52, as Home's recommendations). Cold start (nothing in the list trends yet) titles the problems or the projects
+ * "New this week". An empty list is one sentence and one action (docs/spec/07 item 4): clear the filters when they
  * narrowed it, else the next useful step.
  */
 export function DiscoverList(props: DiscoverListProps) {
@@ -45,7 +46,7 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("gapEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <RowList ordered>
+          <RowList ordered cards>
             {items.map((item) => (
               <ProblemRow key={item.problem.id} item={item} counties={counties} query={query} />
             ))}
@@ -70,7 +71,7 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("projectsEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <RowList ordered>
+          <RowList ordered cards>
             {items.map((item) => (
               <ProjectRow key={item.proposal.id} item={item} />
             ))}
@@ -96,7 +97,7 @@ export function DiscoverList(props: DiscoverListProps) {
             : { sentence: t("problemsEmpty"), action: t("problemsEmptyAction"), href: "/dev/ideas/new" })}
         />
       ) : (
-        <RowList ordered>
+        <RowList ordered cards>
           {items.map((item) => (
             <ProblemRow
               key={item.problem.id}

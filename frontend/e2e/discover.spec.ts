@@ -30,7 +30,8 @@ async function expectLabelled(cards: Locator) {
   for (const card of await cards.all()) {
     const label = card.locator("[data-label]");
     await expect(label).toHaveCount(1);
-    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Seeded example for the demo)/);
+    // A seeded example shows the small "Demo data" badge, its sentence behind it (D-52).
+    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Demo data)/);
     await expect(label).not.toHaveText(/(January|February|March|April|June|July|August|September|October|November|December)/);
   }
 }

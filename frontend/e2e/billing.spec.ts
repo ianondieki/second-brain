@@ -83,12 +83,18 @@ test.describe("a developer on the Free plan", () => {
     await expect(page.locator("[data-plan='dev_student']")).toContainText("Not available to buy here yet");
     await expect(page.locator("[data-primary]")).toHaveText("Upgrade to Pro (monthly)");
     await expect(page.locator("[data-primary]")).toHaveAttribute("href", "/billing/upgrade?plan=dev_pro_monthly");
-    // At 360 px the price moves to the meta line, so the one primary action takes the row's whole width on one line
-    // (P16-C1 fix round 2, ux MAJOR B); 1440 keeps the price on the right.
+    // At 360 px the one primary action takes its card's whole content width on one line (P16-C1 fix round 2, ux
+    // MAJOR B; the plans are cards since D-52, so the card's padding is left out); 1440 keeps the price on the right.
     const size = page.viewportSize()!;
     await page.setViewportSize({ width: 360, height: 780 });
-    const [action, row] = await Promise.all([page.locator("[data-primary]").boundingBox(), pro.boundingBox()]);
-    expect(action!.width).toBeGreaterThanOrEqual(row!.width - 1);
+    const [action, inner] = await Promise.all([
+      page.locator("[data-primary]").boundingBox(),
+      pro.evaluate((card) => {
+        const style = getComputedStyle(card);
+        return card.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      }),
+    ]);
+    expect(action!.width).toBeGreaterThanOrEqual(inner - 1);
     expect(action!.height).toBeLessThanOrEqual(48.5);
     await page.setViewportSize(size);
     // Named like the page it opens, as the monthly plan's (P16-C1 fix round 1).

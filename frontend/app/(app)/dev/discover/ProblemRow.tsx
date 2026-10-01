@@ -33,11 +33,12 @@ export interface ProblemRowProps {
 }
 
 /**
- * One trending, new or under-served problem (REQ-TREND-02; docs/spec/06 6.6), a Row: its title linking to the problem
- * card, one meta line (niche, place, proposal count, provenance), at most two badges (the trend badge when it trends,
- * then Why chips; docs/spec/07 item 2), the statement, and "Start a proposal from this problem". The other chips, its
- * newest sources and the projects solving it sit under "More about this problem" (a native disclosure: no script).
- * The title is the only link to the card (the row holds its own controls, so it is not stretched).
+ * One trending, new or under-served problem (REQ-TREND-02; docs/spec/06 6.6), a Row in a compact card (D-52): its
+ * title linking to the problem card, one meta line (niche, place), at most two badges (the trend badge when it trends,
+ * then Why chips; docs/spec/07 item 2), the statement, then a footer line with the proposal count, the provenance and
+ * "Start a proposal from this problem". The other chips, its newest sources and the projects solving it sit under
+ * "More about this problem" (a native disclosure: no script). The title is the only link to the card (the row holds
+ * its own controls, so it is not stretched).
  */
 export function ProblemRow({ item, counties, projects = [], query }: ProblemRowProps) {
   const t = useTranslations("discover");
@@ -62,9 +63,6 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
         <span className="flex flex-wrap gap-x-4">
           {problem.niche ? <span>{problem.niche.label}</span> : null}
           <span>{place}</span>
-          <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
-          {/* Provenance in the page's language: developer-reported, AI-drafted and human-reviewed, or a seeded example. */}
-          <ProblemLabelText problem={problem} />
         </span>
       }
       badges={cardBadges([
@@ -119,8 +117,14 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
         </div>
       </details>
 
-      <p>
-        <StandaloneLink href={startProposalHref(problem.id)}>
+      {/* The footer: how many pitched it and where it comes from (developer-reported, AI-drafted and human-reviewed,
+          or a seeded example, in the page's language), and the way to start, on one line where it fits. */}
+      <p className="mt-1 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-sm text-ink-soft">
+        <span className="flex flex-wrap items-center gap-x-4">
+          <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
+          <ProblemLabelText problem={problem} />
+        </span>
+        <StandaloneLink href={startProposalHref(problem.id)} className="text-sm">
           {t("start")}
         </StandaloneLink>
       </p>

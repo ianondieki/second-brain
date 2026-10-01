@@ -1,6 +1,8 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { Lattice } from "@/components/ui/Lattice";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
@@ -24,7 +26,10 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
 
   return (
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
-      <header className="flex flex-col gap-3">
+      {/* The card itself: a lattice-edged sheet (the look of the certificate and /verify), the facts under a rule. */}
+      <Card padding="none" className="overflow-hidden">
+        <Lattice />
+        <header className="flex flex-col gap-3 p-5 sm:p-8">
         <h1 id="problem-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
           {problem.title}
         </h1>
@@ -59,7 +64,8 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
             </Description>
           ) : null}
         </DescriptionList>
-      </header>
+        </header>
+      </Card>
 
       {problem.citations.length > 0 ? (
         <Section
