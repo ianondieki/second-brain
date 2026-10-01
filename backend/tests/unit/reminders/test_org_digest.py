@@ -24,6 +24,13 @@ def facts(*engagements: object, cadence: str = "daily", today: object = MONDAY) 
     return OrgFacts(ORG_ID, "Telco A (fixture)", today, cadence, tuple(engagements))  # type: ignore[arg-type]
 
 
+def test_the_product_name_reaches_the_digest_html() -> None:
+    digest = compose_digest(facts(engagement(milestones=(milestone(days(20)),))), NO_HOLIDAYS)
+    message = render_digest(digest, to="org@example.com", base_url=BASE_URL, product="Acme")
+    assert message.html is not None
+    assert ">Acme<" in message.html  # the frame's wordmark and footer line
+
+
 def test_no_update_from_the_developer_for_six_days_is_said_and_never_a_percentage() -> None:
     """AC-REM-2."""
     quiet = engagement(milestones=(milestone(days(20)),), last_developer_update_on=days(-6))

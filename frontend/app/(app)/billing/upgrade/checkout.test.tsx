@@ -227,6 +227,7 @@ describe("the simulated checkout", () => {
     await advance(2000);
     expect(phase()).toBe("lost");
     expect(screen.getByRole("alert").textContent).toContain("This payment is not one of yours.");
+    expect(document.querySelector("[data-phone]")?.getAttribute("data-phone")).toBe("idle"); // no prompt on the drawn phone
     await advance(60_000);
     expect(calls.read).toHaveBeenCalledTimes(1);
   });
@@ -277,6 +278,7 @@ describe("refused starts", () => {
     expect(screen.getByRole("alert").textContent).toBe("The payment could not be started. Try again in a few minutes.");
     expect(screen.getByRole("alert").querySelectorAll("a")).toHaveLength(0);
     expect(primaries()).toHaveLength(1);
+    expect(document.querySelector("[data-phone]")?.getAttribute("data-phone")).toBe("idle"); // a refused start shows no prompt
     fireEvent.click(screen.getByRole("button", { name: "Start the simulated payment" }));
     await advance(0);
     expect(calls.start).toHaveBeenCalledTimes(2);
