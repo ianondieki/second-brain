@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { celebrationSeenFromCookies } from "./celebration-store";
 import { ClosedCelebration } from "./ClosedCelebration";
 
 // D-52 (feel): a closed engagement is celebrated once per device, then only its chip and timeline say so.
@@ -19,6 +22,18 @@ afterEach(() => {
 });
 
 describe("ClosedCelebration", () => {
+  it("arrives with the page exactly when the cookie says this engagement was not seen (no layout shift either way)", () => {
+    const html = (initialSeen: boolean) => renderToStaticMarkup(<ClosedCelebration {...props} initialSeen={initialSeen} />);
+    expect(html(false)).toContain('data-celebration="e-1"');
+    expect(html(false)).toContain("Got it");
+    expect(html(true)).toBe("");
+    const cookies = (value?: string) => ({ get: (name: string) => (name === "wazo-closed" && value ? { value } : undefined) });
+    expect(celebrationSeenFromCookies(cookies("e-7.e-1"), "e-1")).toBe(true);
+    expect(celebrationSeenFromCookies(cookies("e-7.e-1"), "e-2")).toBe(false);
+    expect(celebrationSeenFromCookies(cookies("e-10"), "e-1")).toBe(false); // whole ids, never a prefix
+    expect(celebrationSeenFromCookies(cookies(), "e-1")).toBe(false);
+  });
+
   it("shows once with the seal, a buzz and one button, then stays away", () => {
     const { container } = render(<ClosedCelebration {...props} />);
     expect(screen.getByRole("region", { name: "Closed and done" })).toBeTruthy();
@@ -27,7 +42,7 @@ describe("ClosedCelebration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem("wazo-closed:v1:e-1")).toBe("seen");
-    expect(document.cookie).toContain("wazo-closed-e-1=seen"); // what the server reads: the card then never arrives
+    expect(document.cookie).toContain("wazo-closed=e-1"); // what the server reads: the card then never arrives
     cleanup();
     render(<ClosedCelebration {...props} />);
     expect(screen.queryByRole("region")).toBeNull();
@@ -38,10 +53,10 @@ describe("ClosedCelebration", () => {
     render(<ClosedCelebration {...props} engagementId="e-2" />);
     expect(screen.getByRole("region", { name: "Closed and done" })).toBeTruthy();
     cleanup();
-    document.cookie = "wazo-closed-e-5=seen; path=/";
+    document.cookie = "wazo-closed=e-5; path=/";
     render(<ClosedCelebration {...props} engagementId="e-5" />);
     expect(screen.queryByRole("region")).toBeNull();
-    document.cookie = "wazo-closed-e-5=; path=/; max-age=0";
+    document.cookie = "wazo-closed=; path=/; max-age=0";
   });
 
   it("closes and moves focus to the page title even when storage refuses the write", () => {
