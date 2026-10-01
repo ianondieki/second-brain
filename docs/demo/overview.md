@@ -47,7 +47,7 @@ one-pager: the landing, Home, the tracker and the certificate.
 ## Measured (round 2, 2026-10-01; `design-scorecard.md` has the table)
 
 - Lighthouse mobile, light and dark, twelve main pages: performance 91–99, accessibility 100, CLS 0; LCP at or
-  under 2.5 s on every signed-in page, 2.5–2.9 s on the landing's first uncached visit (D-53).
+  under 2.5 s on ten of them, 2.5–2.9 s on the landing's and the developer Home's first uncached visit (D-53).
 - Strict axe: 0 violations on 60 screens × 4 variants; Playwright: the full suite and the demo story green on the
   compose stack; JS under 150 KB gzipped on every route.
 - Every screen scored ≥ 4 of 5 by the art-director pass (hierarchy, typography, colour, spacing, clarity, delight)

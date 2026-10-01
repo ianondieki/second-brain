@@ -61,7 +61,7 @@ noted, signed in through the demo accounts. Performance ≥ 90 and accessibility
 | Landing `/` | 91–95 / 2.5–2.9 s (three runs) | 94–98 / 2.3–2.8 s |
 | Log in | 99 / 2.0 s | 97 / 2.5 s |
 | Verify record | 97 / 2.3 s | 98 / 2.0 s |
-| Developer Home | 97–99 / 2.0–2.1 s | 97–99 / 2.0–2.2 s |
+| Developer Home | 97–99 / 2.0–2.1 s (first visit, the tour showing); 2.05–2.88 s, median 2.64, for a returning visitor whose LCP is the Needs-you card (ux-reviewer, five runs) | 97–99 / 2.0–2.2 s; returning 2.04–2.64 s |
 | Discover | 99 / 2.0 s | 98 / 2.4 s |
 | Idea (certificate) | 98 / 2.1 s | 98 / 2.1 s |
 | Developer tracker | 98 / 2.3 s | 98 / 2.3 s |
@@ -76,9 +76,11 @@ the tour arrives with the page (a cookie the server reads; CLS 0.38 → 0 on bot
 to its one weight (132 → 42 KB) and the text face to the weights in use (45 → 35 KB), and the two above-the-fold
 faces are preloaded at high priority ahead of the async scripts (next/font had emitted no preload: with the scripts
 blocked the landing's LCP was 1.96 s, with them 2.88 s). The landing's LCP, its 56 px headline in the display face,
-still sits at 2.5–2.9 s in this container (run-to-run spread ±0.2 s): the last 0.3 s is the headline's font swap,
-which D-52's self-hosted serif costs on a first, uncached, Slow 4G visit; later visits have both faces cached for a
-year. Recorded in DECISIONS-NEEDED (D-53) with the options.
+still sits at 2.5–2.9 s in this container (run-to-run spread ±0.2 s), and the developer Home for a returning visitor
+(no tour; the first Needs-you card's title is the largest text) reads 2.0–2.9 s with a median of 2.64 s across the
+ux-reviewer's runs: the last 0.3 s is the swap into the self-hosted faces on a first, uncached, Slow 4G visit; later
+visits have both faces cached for a year. Both are recorded in DECISIONS-NEEDED (D-53) with the options. Every other
+signed-in page measured at or under 2.5 s.
 
 JS budget (`scripts/js-budget.mjs`, gzipped script bytes until idle, 150,000 limit): `/settings/security` 147,301
 (the largest route; the tracker 149,8xx in round 1 before the Actions frame change), every other measured route under
