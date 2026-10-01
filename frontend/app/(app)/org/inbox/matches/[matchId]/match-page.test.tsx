@@ -68,7 +68,7 @@ function match(): MatchDetail {
     scout_id: "s1",
     proposal_id: "01a0f30a-ec2d-7335-b592-4b2e86ff7fb8",
     available: true,
-    owner_handle: "jacaranda-otter-17",
+    owner_handle: "accent-otter-17",
     teaser: {
       title: "Maziwa baridi",
       niche: null,

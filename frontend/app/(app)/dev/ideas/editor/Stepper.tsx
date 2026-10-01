@@ -27,7 +27,7 @@ export function Stepper({ step, onStep, disabled = false }: { step: Step; onStep
                 onClick={() => onStep(item)}
                 className={cn(
                   "flex min-h-11 w-full flex-col items-start gap-1.5 border-t-4 pt-2 text-left text-sm",
-                  current ? "border-jacaranda font-semibold text-ink" : "border-line font-medium text-ink-soft",
+                  current ? "border-accent font-semibold text-ink" : "border-line font-medium text-ink-soft",
                   done && "border-accent-line",
                   !current && "hover:text-ink",
                 )}

@@ -155,7 +155,7 @@ export function Checkout(props: CheckoutProps) {
           {phase.kind === "pending" ? (
             <>
               <p role="status" className="flex items-center gap-2 font-medium text-ink">
-                <ClockIcon className="size-5 shrink-0 text-jacaranda motion-safe:animate-pulse" />
+                <ClockIcon className="size-5 shrink-0 text-accent motion-safe:animate-pulse" />
                 {phase.checkout ? t("waiting") : t("checking")}
               </p>
               <p className="max-w-[60ch] text-sm text-ink-soft">{t("canLeave")}</p>
@@ -210,7 +210,7 @@ function Steps({ current }: { current: 1 | 2 | 3 }) {
             className={cn(
               "flex min-w-0 items-start gap-1 border-t-4 pt-2 text-sm leading-snug",
               step === current
-                ? "border-jacaranda font-semibold text-ink"
+                ? "border-accent font-semibold text-ink"
                 : done
                   ? "border-accent-line font-medium text-ink"
                   : "border-line font-medium text-ink-soft",
@@ -218,7 +218,7 @@ function Steps({ current }: { current: 1 | 2 | 3 }) {
           >
             {done ? (
               <>
-                <CheckIcon className="mt-px size-4 shrink-0 text-jacaranda" />
+                <CheckIcon className="mt-px size-4 shrink-0 text-accent" />
                 <span aria-hidden="true">{name}</span>
                 <span className="sr-only">{t("stepDone", { name })}</span>
               </>

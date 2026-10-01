@@ -32,7 +32,7 @@ const PREVIEW: Preview = {
   items: [
     {
       proposal_id: "p1",
-      owner_handle: "jacaranda-otter-17",
+      owner_handle: "accent-otter-17",
       published_at: "2026-09-29T08:00:00Z",
       teaser: {
         title: "Maziwa baridi",
@@ -162,7 +162,7 @@ describe("the scout form", () => {
     expect(preview.querySelector("[data-preview-note]")!.textContent).toBe(
       "Shows what the last 30 days would have matched; this scout sends new proposals only.",
     );
-    expect(preview.textContent).toContain("By jacaranda-otter-17");
+    expect(preview.textContent).toContain("By accent-otter-17");
     expect(preview.textContent).toContain("Matching proposals from the last 30 days: 1.");
     expect(document.activeElement?.id).toBe("preview-heading");
     // Fix round 1: the fit is the same bar and words as the Scout matches' (FitBar), and a Preview row has no link.

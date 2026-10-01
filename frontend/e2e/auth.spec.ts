@@ -9,7 +9,7 @@ import { checkScreen as checkPageRules } from "./support/screen";
 // X1-1 (REQ-AUTH-01): signup, email link, password login and TOTP against the compose stack (`make dev`), in the
 // mobile-360 and desktop projects of playwright.config.ts. Mail is read from Mailpit (E2E_MAILPIT_URL).
 
-const PASSWORD = "jacaranda season in nairobi";
+const PASSWORD = "accent season in nairobi";
 // Steps that wait on the API (argon2id hashing, email, session rotation) get more than the 5 s default: shared CI
 // runners and Docker Desktop port forwarding both add seconds of latency at times.
 const SERVER_STEP = { timeout: 20_000 };

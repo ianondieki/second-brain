@@ -3,7 +3,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "./cn";
 
 export interface PanelProps extends HTMLAttributes<HTMLElement> {
-  /** "field": a bordered white box (the assistant panel); "wash": the jacaranda wash without a border (the auth side panel). */
+  /** "field": a bordered white box (the assistant panel); "wash": the accent wash without a border (the auth side panel). */
   variant?: "field" | "wash";
   as?: "div" | "section" | "aside";
   children: ReactNode;
@@ -11,7 +11,7 @@ export interface PanelProps extends HTMLAttributes<HTMLElement> {
 
 const variants = {
   field: "border border-line bg-field p-5 sm:p-6",
-  wash: "bg-jacaranda-wash p-6 lg:p-8",
+  wash: "bg-accent-wash p-6 lg:p-8",
 } as const;
 
 /**

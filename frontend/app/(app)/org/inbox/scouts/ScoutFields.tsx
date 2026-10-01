@@ -114,7 +114,7 @@ export function CountyChoice(props: {
       <details className="group" open={count > 0 ? true : undefined}>
         <summary
           className={
-            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-jacaranda " +
+            "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-accent " +
             "[&::-webkit-details-marker]:hidden"
           }
         >

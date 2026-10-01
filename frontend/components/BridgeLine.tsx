@@ -1,4 +1,4 @@
-// The one memorable element (docs/platform/design/phase1-auth-ui.md): a single jacaranda stroke from a Developer
+// The one memorable element (docs/platform/design/phase1-auth-ui.md): a single accent stroke from a Developer
 // node to an Organisation node through four stage ticks, the tracker both sides will share. Pure SVG, no JS.
 
 type Point = readonly [number, number];
@@ -51,7 +51,7 @@ export function BridgeLine({ developerLabel, organisationLabel, animate = false 
           <line
             key={`${tick.x1}-${tick.y1}`}
             {...tick}
-            stroke="var(--jacaranda)"
+            stroke="var(--accent)"
             strokeOpacity="0.55"
             strokeWidth="2"
             strokeLinecap="round"
@@ -61,13 +61,13 @@ export function BridgeLine({ developerLabel, organisationLabel, animate = false 
           d={ARCH}
           pathLength={100}
           fill="none"
-          stroke="var(--jacaranda)"
+          stroke="var(--accent)"
           strokeWidth="3"
           strokeLinecap="round"
           className={animate ? "bridge-draw" : undefined}
         />
-        <circle cx={START[0]} cy={START[1]} r="7" fill="var(--jacaranda)" />
-        <circle cx={END[0]} cy={END[1]} r="6" fill="var(--jacaranda-wash)" stroke="var(--jacaranda)" strokeWidth="3" />
+        <circle cx={START[0]} cy={START[1]} r="7" fill="var(--accent)" />
+        <circle cx={END[0]} cy={END[1]} r="6" fill="var(--accent-wash)" stroke="var(--accent)" strokeWidth="3" />
       </svg>
       <div className="mt-2 flex justify-between gap-4 text-sm font-medium text-ink-soft">
         <span>{developerLabel}</span>

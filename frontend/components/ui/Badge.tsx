@@ -12,7 +12,7 @@ export const badgeBase =
   "inline-flex items-start gap-1.5 text-sm font-semibold [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0";
 
 const tones: Record<BadgeTone, string> = {
-  accent: "text-jacaranda",
+  accent: "text-accent",
   ok: "text-ok",
   error: "text-error",
   neutral: "text-ink-soft",
@@ -20,7 +20,7 @@ const tones: Record<BadgeTone, string> = {
 
 // Filled only for the one "Your turn" / "Needs you" marker of a row; rounded-full is kept for it and the avatar.
 const solidTones: Record<BadgeTone, string> = {
-  accent: "bg-jacaranda text-on-accent",
+  accent: "bg-accent text-on-accent",
   ok: "bg-ok text-on-ok",
   error: "bg-error text-on-accent",
   neutral: "bg-ink text-paper",

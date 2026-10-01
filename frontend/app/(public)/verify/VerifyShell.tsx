@@ -26,7 +26,7 @@ export async function VerifyShell({ children }: { children: ReactNode }) {
           <h2 id="what-a-check-shows" className="text-lg text-ink">
             {t("panelTitle")}
           </h2>
-          <ul className="mt-3 flex list-disc flex-col gap-3 pl-5 text-ink marker:text-jacaranda">
+          <ul className="mt-3 flex list-disc flex-col gap-3 pl-5 text-ink marker:text-accent">
             <li className="pl-1">{t("panelFingerprint")}</li>
             <li className="pl-1">{t("panelTime")}</li>
             <li className="pl-1">{t("panelNot")}</li>

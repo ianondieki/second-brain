@@ -44,7 +44,7 @@ export async function Citations({ sources, labelledBy }: { sources: readonly Cit
               <a
                 href={href}
                 rel="noopener noreferrer"
-                className="inline-flex min-h-11 max-w-full items-center self-start font-semibold [overflow-wrap:anywhere] text-jacaranda underline decoration-1 hover:decoration-2"
+                className="inline-flex min-h-11 max-w-full items-center self-start font-semibold [overflow-wrap:anywhere] text-accent underline decoration-1 hover:decoration-2"
               >
                 <span>
                   {t("open", { publisher })} <span className="sr-only">{t("external")}</span>

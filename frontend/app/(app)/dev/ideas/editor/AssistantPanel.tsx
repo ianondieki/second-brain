@@ -211,9 +211,9 @@ export function AssistantPanel({
   const side = (caption: string, { title, summary }: SuggestedTeaser, suggested?: boolean) => (
     <div
       data-teaser={suggested ? "suggested" : before ? "before" : "now"}
-      className={cn("min-w-0 rounded-control p-4", suggested ? "bg-jacaranda-wash" : "border border-line")}
+      className={cn("min-w-0 rounded-control p-4", suggested ? "bg-accent-wash" : "border border-line")}
     >
-      <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-jacaranda" : "text-ink-soft")}>{caption}</p>
+      <p className={cn("mb-3 text-sm font-semibold", suggested ? "text-accent" : "text-ink-soft")}>{caption}</p>
       <dl>
         {[
           [t("field.title"), title],

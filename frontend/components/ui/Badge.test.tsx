@@ -9,7 +9,7 @@ afterEach(cleanup);
 // P16 design system, Status: icon + words + tone, the same everywhere; never colour alone (docs/spec/07 item 6).
 describe("Badge", () => {
   it.each([
-    ["accent", "text-jacaranda"],
+    ["accent", "text-accent"],
     ["ok", "text-ok"],
     ["error", "text-error"],
     ["neutral", "text-ink-soft"],
@@ -41,8 +41,8 @@ describe("Badge", () => {
       </Badge>,
     );
     const classes = container.firstElementChild!.className.split(" ");
-    expect(classes).toEqual(expect.arrayContaining(["bg-jacaranda", "text-on-accent", "rounded-full"]));
-    expect(classes).not.toContain("text-jacaranda");
+    expect(classes).toEqual(expect.arrayContaining(["bg-accent", "text-on-accent", "rounded-full"]));
+    expect(classes).not.toContain("text-accent");
   });
 
   it("passes data-chip and data-badge through, so tests can count a card's chips", () => {

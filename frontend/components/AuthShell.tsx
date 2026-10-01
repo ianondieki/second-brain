@@ -46,7 +46,7 @@ export async function AuthShell({ children, landing = false, topBarAction }: Aut
           <h2 id="how-it-works" className="mt-8 text-lg text-ink">
             {t("title")}
           </h2>
-          <ol className="mt-3 flex list-decimal flex-col gap-3 pl-5 text-ink marker:font-semibold marker:text-jacaranda">
+          <ol className="mt-3 flex list-decimal flex-col gap-3 pl-5 text-ink marker:font-semibold marker:text-accent">
             <li className="pl-1">{t("publish")}</li>
             <li className="pl-1">{t("review")}</li>
             <li className="pl-1">{t("track")}</li>

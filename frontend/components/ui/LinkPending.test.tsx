@@ -26,7 +26,7 @@ describe("LinkPending", () => {
     const hint = container.firstElementChild!;
     expect(hint.getAttribute("data-link-pending")).toBe("true");
     const classes = hint.className.split(" ");
-    expect(classes).toEqual(expect.arrayContaining(["opacity-100", "bg-jacaranda", "motion-safe:animate-pulse"]));
+    expect(classes).toEqual(expect.arrayContaining(["opacity-100", "bg-accent", "motion-safe:animate-pulse"]));
     expect(classes).not.toContain("opacity-0");
     // Same box in both states: no layout shift.
     expect(classes).toEqual(expect.arrayContaining(["h-[3px]", "w-6"]));

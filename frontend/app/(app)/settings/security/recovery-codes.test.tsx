@@ -200,13 +200,13 @@ describe("getting new recovery codes with a password on file", () => {
   it("sends the password and shows the ten codes once, with copy, download and the 'replaced' notice", async () => {
     answers({ [RENEW]: [NEW_CODES] });
     const { container } = onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     const ready = await screen.findByText(READY);
-    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: "jacaranda" }, signal: expect.any(AbortSignal) }]]);
+    expect(renewCalls()).toEqual([[RENEW, { body: { current_password: "accent" }, signal: expect.any(AbortSignal) }]]);
     expect(document.activeElement).toBe(ready.closest('[role="status"]'));
     // The password is dropped once the codes are made: not in the page, and not kept in the form's state.
-    for (const input of document.querySelectorAll("input")) expect(input.value).not.toBe("jacaranda");
-    expect(stateHolds(ready, "jacaranda")).toBe(false);
+    for (const input of document.querySelectorAll("input")) expect(input.value).not.toBe("accent");
+    expect(stateHolds(ready, "accent")).toBe(false);
     const list = screen.getByTestId("recovery-codes");
     expect([...list.querySelectorAll("li")].map((li) => li.textContent)).toEqual(CODES);
     expect(screen.getByRole("button", { name: "Copy codes" })).toBeTruthy();
@@ -228,7 +228,7 @@ describe("getting new recovery codes with a password on file", () => {
   it("asks for a fresh authenticator code when the second factor is stale, then sends the same password again", async () => {
     answers({ [RENEW]: [answer(403, "step_up_required"), NEW_CODES], "/api/auth/step-up": [answer(204)] });
     const { container } = onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     expect(await screen.findByText("To get new codes, enter the current code from your authenticator app.")).toBeTruthy();
     const code = screen.getByLabelText("Code from your app");
     await waitFor(() => expect(document.activeElement).toBe(code));
@@ -243,14 +243,14 @@ describe("getting new recovery codes with a password on file", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm and get new codes" }));
 
     await screen.findByText(READY);
-    const sent = { body: { current_password: "jacaranda" }, signal: expect.any(AbortSignal) };
+    const sent = { body: { current_password: "accent" }, signal: expect.any(AbortSignal) };
     expect(mocks.post.mock.calls).toEqual([[RENEW, sent], ["/api/auth/step-up", { body: { code: "123456" } }], [RENEW, sent]]);
   });
 
   it("can be cancelled at the code step, back to the button, with nothing replaced", async () => {
     answers({ [RENEW]: [answer(403, "step_up_required")] });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     await screen.findByText("To get new codes, enter the current code from your authenticator app.");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(document.activeElement).toBe(opener());
@@ -272,7 +272,7 @@ describe("getting new recovery codes with a password on file", () => {
   it("goes back to the start with a fixed message when two-step sign-in was turned off meanwhile", async () => {
     answers({ [RENEW]: [answer(409, "totp_not_enabled")] });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     const error = await screen.findByText("Two-step sign-in is off, so there are no recovery codes to replace.");
     expect(document.activeElement).toBe(error.closest('[role="alert"]'));
     expect(screen.getByRole("button", { name: "Turn on two-step sign-in" })).toBeTruthy();
@@ -293,13 +293,13 @@ describe("getting new recovery codes with a password on file", () => {
   ])("says the old codes may no longer work when the answer is lost or unreadable (%s)", async (_, lost) => {
     answers({ [RENEW]: [lost()] });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     const notice = await screen.findByText(UNKNOWN);
     expect(document.activeElement).toBe(notice.closest('[role="alert"]'));
     expect(document.body.textContent).not.toContain(SERVER_TEXT);
     expect(screen.queryByText("Something went wrong. Try again in a moment.")).toBeNull();
     // The form stays, the password kept, so getting codes again is one press.
-    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("jacaranda");
+    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("accent");
   });
 
   it("gives up after 10 s without an answer and says the old codes may no longer work", async () => {
@@ -317,7 +317,7 @@ describe("getting new recovery codes with a password on file", () => {
           }),
       );
       onScreen();
-      await submitWith("jacaranda");
+      await submitWith("accent");
       await screen.findByRole("button", { name: "Getting codes…" });
       expect(timeouts.map(({ ms }) => ms)).toEqual([10_000]);
       expect(mocks.post.mock.calls[0][1]?.signal).toBe(timeouts[0].controller.signal);
@@ -335,19 +335,19 @@ describe("getting new recovery codes with a password on file", () => {
   ])("keeps the form with a fixed message for other refusals (%#)", async (refusal, message) => {
     answers({ [RENEW]: [refusal] });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     const error = await screen.findByText(message);
     expect(document.activeElement).toBe(error.closest('[role="alert"]'));
     expect(document.body.textContent).not.toContain(SERVER_TEXT);
     // The password stays, so sending again is one press.
-    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("jacaranda");
+    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("accent");
     expect(screen.queryByTestId("recovery-codes")).toBeNull();
   });
 
   it("links to the login page when the session has ended", async () => {
     answers({ [RENEW]: [answer(401, "unauthenticated")] });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     expect((await screen.findByRole("link", { name: "Log in again" })).getAttribute("href")).toBe("/login");
   });
 
@@ -357,18 +357,18 @@ describe("getting new recovery codes with a password on file", () => {
       "/api/auth/step-up": [answer(204)],
     });
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     fireEvent.change(await screen.findByLabelText("Code from your app"), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and get new codes" }));
     await screen.findByText("Too many attempts. Wait a minute, then try again.");
     expect(screen.queryByLabelText("Code from your app")).toBeNull();
-    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("jacaranda");
+    expect(screen.getByLabelText<HTMLInputElement>(PASSWORD_FIELD, { selector: "input" }).value).toBe("accent");
   });
 
   it("sends once however often the button is pressed while it works", async () => {
     mocks.post.mockReturnValue(new Promise(() => {}));
     onScreen();
-    await submitWith("jacaranda");
+    await submitWith("accent");
     const busy = await screen.findByRole("button", { name: "Getting codes…" });
     fireEvent.click(busy);
     fireEvent.click(busy);

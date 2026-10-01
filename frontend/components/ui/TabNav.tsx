@@ -40,7 +40,7 @@ export function TabNav({ label, items, current, className }: TabNavProps) {
                   "relative inline-flex min-h-11 items-center border-b-2 px-2 whitespace-nowrap no-underline sm:px-3",
                   "transition-colors duration-150 ease-out",
                   active
-                    ? "border-jacaranda font-semibold text-jacaranda"
+                    ? "border-accent font-semibold text-accent"
                     : "border-transparent font-medium text-ink-soft hover:border-line hover:text-ink",
                 )}
               >

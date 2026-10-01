@@ -21,7 +21,7 @@ export function Checkbox({ id, label, error, ...rest }: CheckboxProps) {
         <input
           id={id}
           type="checkbox"
-          className="mt-0.5 size-5 shrink-0 cursor-pointer accent-jacaranda"
+          className="mt-0.5 size-5 shrink-0 cursor-pointer accent-accent"
           aria-describedby={errorId}
           aria-invalid={error ? true : undefined}
           {...rest}

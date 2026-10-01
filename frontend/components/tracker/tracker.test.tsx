@@ -22,7 +22,7 @@ afterEach(cleanup);
 describe("chips", () => {
   it.each([
     ["completed", "Completed", "text-ok"],
-    ["current", "Current", "text-jacaranda"],
+    ["current", "Current", "text-accent"],
     ["pending", "Pending", "text-ink-soft"],
     ["onHold", "On hold", "text-ink"],
     ["overdue", "Overdue", "text-error"],
@@ -296,10 +296,10 @@ describe("the Documents tab's links (fix round 1)", () => {
   it("shows the current document in ink without an underline, the others as links", () => {
     const current = documentLinkClass(true).split(" ");
     expect(current).toEqual(expect.arrayContaining(["text-ink", "no-underline", "min-h-11"]));
-    expect(current).not.toContain("text-jacaranda");
+    expect(current).not.toContain("text-accent");
     expect(current).not.toContain("underline");
     const other = documentLinkClass(false).split(" ");
-    expect(other).toEqual(expect.arrayContaining(["text-jacaranda", "underline", "min-h-11"]));
+    expect(other).toEqual(expect.arrayContaining(["text-accent", "underline", "min-h-11"]));
     expect(other).not.toContain("text-ink");
   });
 });

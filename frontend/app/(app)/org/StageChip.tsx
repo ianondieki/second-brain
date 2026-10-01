@@ -14,7 +14,7 @@ const ENDED: ReadonlySet<State> = new Set(["DECLINED", "WITHDRAWN", "TERMINATED"
 
 /**
  * Where the proposal stands with this organisation: the card's one chip (docs/spec/07 item 2, at most two). A dot and
- * words (status is never colour alone): filled jacaranda while it is new, an open ring once it has ended.
+ * words (status is never colour alone): filled accent while it is new, an open ring once it has ended.
  * With an engagement and `href` (its tracker, REQ-ENG-03), the chip is the link to /org/engagements/{id}.
  */
 export function StageChip({
@@ -30,7 +30,7 @@ export function StageChip({
   const state: State = engagement?.state ?? "SUBMITTED";
   const tone = state === "SUBMITTED" ? "new" : ENDED.has(state) ? "ended" : "open";
   // The Badge's shape and tones (components/ui/Badge.tsx): accent while open, neutral once ended.
-  const look = cn(badgeBase, tone === "ended" ? "text-ink-soft" : "text-jacaranda", className);
+  const look = cn(badgeBase, tone === "ended" ? "text-ink-soft" : "text-accent", className);
   const content = (
     <>
       <svg aria-hidden="true" focusable="false" width="10" height="10" viewBox="0 0 10 10" className="shrink-0">

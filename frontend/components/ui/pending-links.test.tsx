@@ -22,9 +22,9 @@ describe("the pending hint in the system's links", () => {
     );
     const primary = hintOf("New proposal").className.split(" ");
     expect(primary).toEqual(expect.arrayContaining(["bg-current", "absolute", "h-[3px]", "w-6"]));
-    expect(primary).not.toContain("bg-jacaranda");
+    expect(primary).not.toContain("bg-accent");
     expect(screen.getByRole("link", { name: "New proposal" }).className).toContain("relative");
-    expect(hintOf("Edit idea").className.split(" ")).toContain("bg-jacaranda");
+    expect(hintOf("Edit idea").className.split(" ")).toContain("bg-accent");
   });
 
   it("sits inside a Section's secondary link and an empty state's action (plain and primary)", () => {
@@ -36,7 +36,7 @@ describe("the pending hint in the system's links", () => {
       </>,
     );
     for (const name of ["All my ideas", "Go to My ideas"]) {
-      expect(hintOf(name).className.split(" "), name).toEqual(expect.arrayContaining(["absolute", "bg-jacaranda"]));
+      expect(hintOf(name).className.split(" "), name).toEqual(expect.arrayContaining(["absolute", "bg-accent"]));
     }
     expect(hintOf("New idea").className.split(" ")).toContain("bg-current");
   });

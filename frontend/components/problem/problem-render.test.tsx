@@ -142,6 +142,6 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     render(await resolve(await ProblemCard({ problem })));
     const classes = document.querySelector("[data-label]")!.className.split(" ");
     expect(classes).toContain("text-ink-soft");
-    expect(classes).not.toContain("text-jacaranda");
+    expect(classes).not.toContain("text-accent");
   });
 });

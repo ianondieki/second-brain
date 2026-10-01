@@ -42,7 +42,7 @@ export function PasswordField({ id, label, hint, error, className, ...rest }: Pa
             onClick={() => setVisible((v) => !v)}
             className={
               "absolute inset-y-0.5 right-0.5 inline-flex min-w-11 items-center gap-1.5 rounded-[8px] px-3 " +
-              "text-sm font-semibold text-jacaranda hover:bg-jacaranda-wash"
+              "text-sm font-semibold text-accent hover:bg-accent-wash"
             }
           >
             {visible ? <EyeOffIcon className="size-5" /> : <EyeIcon className="size-5" />}

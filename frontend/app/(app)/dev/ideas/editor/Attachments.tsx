@@ -161,8 +161,8 @@ export function Attachments({ attachments, onAttachments, ensureDraft, getCalls 
             htmlFor={`${id}-file`}
             className={cn(
               "inline-flex min-h-12 cursor-pointer items-center justify-center rounded-control border border-ink-soft px-5",
-              "font-semibold text-ink hover:bg-jacaranda-wash",
-              "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-jacaranda",
+              "font-semibold text-ink hover:bg-accent-wash",
+              "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent",
               "peer-disabled:cursor-progress peer-disabled:border-line peer-disabled:text-ink-soft",
             )}
           >

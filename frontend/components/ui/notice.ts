@@ -7,14 +7,14 @@ export const noticeBox = "flex items-start gap-3 rounded-control border px-4 py-
 
 export const noticeTone: Record<NoticeTone, string> = {
   error: "border-error-line bg-error-wash",
-  info: "border-accent-line bg-jacaranda-wash",
+  info: "border-accent-line bg-accent-wash",
   ok: "border-ok-line bg-ok-wash",
   neutral: "border-line bg-transparent",
 };
 
 export const noticeIconTone: Record<NoticeTone, string> = {
   error: "text-error",
-  info: "text-jacaranda",
+  info: "text-accent",
   ok: "text-ok",
   neutral: "text-ink-soft",
 };

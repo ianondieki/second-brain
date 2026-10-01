@@ -322,7 +322,7 @@ function Row({
       data-org-row={row.id}
       className={cn(
         "relative flex min-w-0 flex-col gap-1 border-t border-line py-4 pr-2 pl-9",
-        checked && "bg-jacaranda-wash shadow-[inset_3px_0_0_var(--jacaranda)]",
+        checked && "bg-accent-wash shadow-[inset_3px_0_0_var(--accent)]",
       )}
     >
       <label
@@ -345,7 +345,7 @@ function Row({
             if (available) onToggle(orgKey(row.id), event.target.checked); // an unavailable row never joins the Pitch
           }}
           aria-describedby={`pitch-${rowId}-details`}
-          className="absolute top-[1.35rem] left-2 z-[1] size-5 cursor-pointer accent-jacaranda disabled:cursor-not-allowed"
+          className="absolute top-[1.35rem] left-2 z-[1] size-5 cursor-pointer accent-accent disabled:cursor-not-allowed"
         />
         {row.name}
       </label>

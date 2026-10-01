@@ -20,7 +20,7 @@ export async function signUpDeveloper(page: Page, name = "Achieng Otieno"): Prom
     headers: { "X-CSRF-Token": token },
     data: {
       email,
-      password: "jacaranda season in nairobi",
+      password: "accent season in nairobi",
       display_name: name,
       side: "developer",
       accept_terms: true,

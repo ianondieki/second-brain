@@ -4,41 +4,86 @@
  * Design tokens (docs/platform/design/phase1-auth-ui.md). Brand, palette and radii are placeholders until G5:
  * changing them is a token swap here, not a redesign. Contrast ratios are against --paper.
  */
+/*
+ * Design tokens (docs/platform/design/p18-design-system.md; owner decision D-52): direction C "Editorial trust" with
+ * B's kanga-cut lattice as the one signature. Light values live on :root; dark ones on html[data-theme="dark"] and,
+ * for a system preference with no choice made, under prefers-color-scheme. Contrast ratios are against --paper.
+ */
 :root {
-  --paper: #f5f7f3; /* page background: cool, faintly green-grey paper */
-  --ink: #16232f; /* text and icons, 14.8:1 */
-  --ink-soft: #4a5866; /* secondary text and input borders, 6.8:1 */
-  --jacaranda: #5b3e96; /* the one accent: primary buttons, focus ring, the bridge line, 7.6:1 */
-  --jacaranda-wash: #ece6f6; /* selected radio row, info notice, the side panel */
-  --line: #c9d1c8; /* hairlines and dividers */
-  --ok: #1f6b47; /* success, always with an icon and words, 6.0:1 */
-  --error: #a8241b; /* errors, always with an icon and words, 6.6:1 */
-  --field: #ffffff; /* text inputs, so fields read as fields on paper */
-  --on-accent: #ffffff; /* text and icons on --jacaranda (8.2:1) */
-  --on-ok: #ffffff; /* text and icons on --ok (6.6:1) */
-  /*
-   * Mixes of the colours above, named once (docs/platform/design/p16-design-system.md, token table). Each was
-   * repeated inline before; a component reads the token, never the mix.
-   */
-  --accent-strong: color-mix(in oklab, var(--jacaranda) 84%, var(--ink)); /* hover and pressed accent */
-  --wash-soft: color-mix(in oklab, var(--jacaranda-wash) 55%, var(--paper)); /* nav hover, selected rows */
+  --paper: #fbfaf6; /* page background: warm white */
+  --field: #ffffff; /* inputs, cards, sheets */
+  --ink: #1a1916; /* text and icons, 16.4:1 */
+  --ink-soft: #5c5a53; /* secondary text and input borders, 6.6:1 */
+  --line: #dedacf; /* hairlines and dividers */
+  --accent: #1f5e49; /* the one accent: primary buttons, focus ring, current step, 7.4:1 */
+  --accent-wash: #e5efe9; /* selected rows, info notices, the landing panel */
+  --flourish: #b89a4a; /* the lattice's second tone, seals and illustration only; never text or status */
+  --ok: #1f6b47; /* success, always with an icon and words, 6.3:1 */
+  --error: #9e2a1f; /* errors, always with an icon and words, 7.0:1 */
+  --on-accent: #ffffff; /* text and icons on --accent (7.4:1) */
+  --on-ok: #ffffff; /* text and icons on --ok (6.3:1) */
+  /* Mixes of the colours above, named once; a component reads the token, never the mix. */
+  --accent-strong: color-mix(in oklab, var(--accent) 84%, var(--ink)); /* hover and pressed accent */
+  --wash-soft: color-mix(in oklab, var(--accent-wash) 55%, var(--paper)); /* nav hover, selected rows */
   --error-wash: color-mix(in oklab, var(--error) 7%, var(--field)); /* error notice background, danger hover */
   --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field)); /* success notice background */
   --error-line: color-mix(in oklab, var(--error) 45%, var(--paper)); /* error notice border */
   --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper)); /* success notice border */
-  --accent-line: color-mix(in oklab, var(--jacaranda) 35%, var(--paper)); /* info notice border */
+  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper)); /* info notice border */
   --scrim: color-mix(in oklab, var(--ink) 45%, transparent); /* the one dialog backdrop */
-  --focus-ring: 2px solid var(--jacaranda);
+  /* Elevation: a card sits a hair above the paper (one very soft, wide shadow); overlays float. */
+  --shadow-card: 0 1px 0 rgb(26 25 22 / 0.04), 0 16px 40px -24px rgb(26 25 22 / 0.22);
+  --shadow-overlay: 0 16px 40px -16px rgb(26 25 22 / 0.24), 0 2px 6px -2px rgb(26 25 22 / 0.1);
+  --focus-ring: 2px solid var(--accent);
   --focus-offset: 2px;
   color-scheme: light;
+}
+
+/* Dark mode: its own steps, not a flip; the accent and status colours are lightened to keep AA on the dark paper. */
+html[data-theme="dark"] {
+  --paper: #131412;
+  --field: #1b1c19;
+  --ink: #ece9e1;
+  --ink-soft: #b4b0a5;
+  --line: #30312c;
+  --accent: #7fcbab;
+  --accent-wash: #1f2f28;
+  --flourish: #a08b48;
+  --ok: #7ac79a;
+  --error: #ff8f7e;
+  --on-accent: #131412;
+  --on-ok: #131412;
+  --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
+  --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) {
+    --paper: #131412;
+    --field: #1b1c19;
+    --ink: #ece9e1;
+    --ink-soft: #b4b0a5;
+    --line: #30312c;
+    --accent: #7fcbab;
+    --accent-wash: #1f2f28;
+    --flourish: #a08b48;
+    --ok: #7ac79a;
+    --error: #ff8f7e;
+    --on-accent: #131412;
+    --on-ok: #131412;
+    --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
+    --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
   --color-paper: var(--paper);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
-  --color-jacaranda: var(--jacaranda);
-  --color-jacaranda-wash: var(--jacaranda-wash);
+  --color-accent: var(--accent);
+  --color-accent-wash: var(--accent-wash);
+  --color-flourish: var(--flourish);
   --color-line: var(--line);
   --color-ok: var(--ok);
   --color-error: var(--error);
@@ -53,35 +98,38 @@
   --color-ok-line: var(--ok-line);
   --color-accent-line: var(--accent-line);
   --color-scrim: var(--scrim);
+  --shadow-card: var(--shadow-card);
+  --shadow-overlay: var(--shadow-overlay);
 }
 
 @theme {
-  /* One system font stack (docs/spec/07 item 5: no web fonts). */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  /* Self-hosted faces (app/fonts/LICENCES.md), set by next/font/local in app/layout.tsx. */
+  --font-sans: var(--font-text), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display), Newsreader, Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-figures), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Radii: controls and the one side panel; nothing else is rounded. */
-  --radius-control: 10px;
-  --radius-panel: 16px;
+  /* Radii: controls, and cards, sheets and the one side panel. */
+  --radius-control: 6px;
+  --radius-panel: 12px;
 
-  /*
-   * The only elevation: things that float over the page (the account menu, the confirm dialog). Offset plus a soft
-   * blur, tinted from --ink (#16232f). Nothing on the page itself casts a shadow.
-   */
-  --shadow-overlay: 0 12px 28px -12px rgb(22 35 47 / 0.28), 0 2px 6px -2px rgb(22 35 47 / 0.12);
+  /* Motion: one timing for every control, slower for sheets and reveals; exponential ease-out, nothing bounces. */
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Type scale: 1.25 ratio on a 16 px base (14 / 16 / 20 / 25 / 31 / 39). */
+  /* Type scale: 1.333 on a 16 px base (14 / 16 / 21 / 28 / 36 / 48); the serif sets the three largest. */
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.5;
   --text-base: 1rem;
   --text-base--line-height: 1.6;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.45;
-  --text-xl: 1.5625rem;
-  --text-xl--line-height: 1.25;
-  --text-2xl: 1.9375rem;
-  --text-2xl--line-height: 1.2;
-  --text-3xl: 2.4375rem;
-  --text-3xl--line-height: 1.15;
+  --text-lg: 1.3125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.75rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 2.25rem;
+  --text-2xl--line-height: 1.15;
+  --text-3xl: 3rem;
+  --text-3xl--line-height: 1.08;
 }
 
 @layer base {
@@ -117,11 +165,34 @@
   }
 
   h1,
-  h2,
-  h3 {
-    font-weight: 600;
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
     letter-spacing: -0.01em;
     text-wrap: balance;
+  }
+
+  h1 {
+    font-variation-settings: "opsz" 48;
+  }
+
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+  }
+
+  /* Controls answer at once, in one timing; reduced motion turns it off below. */
+  button,
+  a,
+  summary {
+    transition-timing-function: var(--ease-out);
+    transition-duration: var(--motion-fast);
+  }
+
+  button:active,
+  a[data-primary]:active {
+    transform: translateY(1px);
   }
 
   p {
@@ -139,20 +210,84 @@
   }
 
   ::selection {
-    background: var(--jacaranda-wash);
+    background: var(--accent-wash);
     color: var(--ink);
+  }
+
+  /* Print: the page prints its content on white; the chrome and controls stay on screen. A sheet marked
+     data-print-sheet prints alone (the authorship certificate). */
+  @media print {
+    html {
+      background: #fff;
+      color: #000;
+    }
+    header,
+    nav,
+    [data-tab-bar],
+    [data-no-print],
+    button {
+      display: none !important;
+    }
+    html:has([data-print-sheet]) main > :not(:has([data-print-sheet])) {
+      display: none;
+    }
+    [data-print-sheet] {
+      box-shadow: none !important;
+      border: 1px solid #000 !important;
+      break-inside: avoid;
+    }
   }
 
   input,
   select,
   textarea {
-    caret-color: var(--jacaranda);
+    caret-color: var(--accent);
   }
 
   input::placeholder {
     color: var(--ink-soft);
     opacity: 1;
   }
+}
+
+/*
+ * The kanga-cut lattice (direction B's signature, kept as the one East African mark): a 6 px two-tone band of
+ * triangles, drawn as a background on [data-lattice] edges. Never behind text. Tones: the accent and the flourish.
+ */
+@utility lattice-band {
+  height: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%231F5E49'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23B89A4A'/%3E%3C/svg%3E");
+  background-size: 24px 6px;
+  background-repeat: repeat-x;
+}
+html[data-theme="dark"] .lattice-band {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%237FCBAB'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23A08B48'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lattice-band {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%237FCBAB'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23A08B48'/%3E%3C/svg%3E");
+  }
+}
+
+/* The seal on the certificate sheet draws its ring once; reduced motion shows it drawn. */
+@keyframes seal-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.seal-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: seal-draw 900ms var(--ease-out) 200ms both;
+}
+
+/* The landing hero's product visual: the real stepper at a card's width, its group names a size smaller. */
+[data-hero-visual] [data-stepper] p:first-child {
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
@@ -190,7 +325,8 @@
     scroll-behavior: auto !important;
   }
 
-  .bridge-draw {
+  .bridge-draw,
+  .seal-draw {
     animation: none !important;
   }
 }

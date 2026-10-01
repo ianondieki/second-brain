@@ -24,7 +24,7 @@ describe("EmptyState", () => {
     render(<EmptyState sentence="No ideas yet." action="New idea" href="/dev/ideas/new" primary />);
     const link = screen.getByRole("link", { name: "New idea" });
     expect(link.hasAttribute("data-primary")).toBe(true);
-    expect(link.className).toContain("bg-jacaranda");
+    expect(link.className).toContain("bg-accent");
   });
 
   it("drops its hairline where a line is already there, and passes data attributes through", () => {

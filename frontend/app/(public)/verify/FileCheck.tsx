@@ -78,7 +78,7 @@ export function FileCheck({ certId, primary = false, checkFileImpl = checkFile }
               className={cn(
                 "w-full min-w-0 text-base text-ink",
                 "file:mr-4 file:min-h-11 file:cursor-pointer file:rounded-control file:border file:border-ink-soft",
-                "file:bg-field file:px-4 file:text-base file:font-semibold file:text-ink hover:file:bg-jacaranda-wash",
+                "file:bg-field file:px-4 file:text-base file:font-semibold file:text-ink hover:file:bg-accent-wash",
               )}
               {...control}
             />

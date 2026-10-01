@@ -45,7 +45,7 @@ export function ChipList({ items }: { items: readonly string[] }) {
     <ul className="flex flex-col gap-1">
       {items.map((chip) => (
         <li key={chip} className="flex items-start gap-1.5 text-ink">
-          <WhyIcon className="mt-1 size-4 shrink-0 text-jacaranda" />
+          <WhyIcon className="mt-1 size-4 shrink-0 text-accent" />
           <span className="min-w-0">{chip}</span>
         </li>
       ))}
@@ -61,7 +61,7 @@ export function MoreSummary({ children }: { children: ReactNode }) {
   return (
     <summary
       className={
-        "inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-jacaranda " +
+        "inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-accent " +
         "hover:text-accent-strong [&::-webkit-details-marker]:hidden"
       }
     >

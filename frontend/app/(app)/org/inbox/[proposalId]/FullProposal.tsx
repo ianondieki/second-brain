@@ -70,7 +70,7 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
     // column's edge (no coloured left rule under it; the content keeps the page's own left edge).
     <section aria-labelledby="full-proposal" className="mt-6" data-tier2-state={stateName(nda, viewing)}>
       <div className="flex items-center gap-3">
-        <ConfidentialIcon open={open} className="size-6 shrink-0 text-jacaranda" />
+        <ConfidentialIcon open={open} className="size-6 shrink-0 text-accent" />
         <h2 id="full-proposal" className="shrink-0 text-lg text-ink">
           {t("fullHeading")}
         </h2>

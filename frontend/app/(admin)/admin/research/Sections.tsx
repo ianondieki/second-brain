@@ -168,7 +168,7 @@ function ExcerptLink({ url, children }: { url: string; children: ReactNode }) {
     <a
       href={href}
       rel="noopener noreferrer"
-      className="inline-flex min-h-11 items-center self-start font-medium [overflow-wrap:anywhere] text-jacaranda underline decoration-1 hover:decoration-2"
+      className="inline-flex min-h-11 items-center self-start font-medium [overflow-wrap:anywhere] text-accent underline decoration-1 hover:decoration-2"
     >
       {children}
     </a>
