@@ -18,7 +18,8 @@ export function QrCode({ matrix, label, className = "size-52" }: { matrix: boole
       className={`block border border-line bg-white ${className}`}
     >
       <rect width={size} height={size} fill="#ffffff" />
-      <path d={d} fill="var(--ink)" />
+      {/* Always dark on the white tile: a scanner needs the contrast in dark mode too (ux-reviewer P18 round 1). */}
+      <path d={d} fill="#1a1916" />
     </svg>
   );
 }

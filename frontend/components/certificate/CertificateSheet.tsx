@@ -54,7 +54,7 @@ export async function CertificateSheet({ title, ownerName, versionNo, certId, re
           {registeredAt ? (
             <>
               <dt className="text-ink-soft">{t("registered")}</dt>
-              <dd className="text-ink tabular-nums">{formatMoment(locale, registeredAt)}</dd>
+              <dd className="text-ink tabular-nums">{t("registeredAt", { time: formatMoment(locale, registeredAt) })}</dd>
             </>
           ) : null}
           <dt className="text-ink-soft">{t("evidence")}</dt>
@@ -74,7 +74,7 @@ export async function CertificateSheet({ title, ownerName, versionNo, certId, re
         </dl>
       </div>
       <div className="flex items-center justify-between gap-4 border-t border-line bg-accent-wash px-6 py-4 sm:px-8">
-        <p className="text-sm text-ink [overflow-wrap:anywhere]">{t("checkAt", { url: verifyUrl })}</p>
+        <p className="text-sm text-ink [overflow-wrap:anywhere]">{t.rich("checkAt", { url: verifyUrl, id: (chunks) => <span className="whitespace-nowrap">{chunks}</span> })}</p>
         <div className="flex shrink-0 flex-col items-center gap-1">
           <QrCode matrix={qr} label={t("qrLabel", { id: certId })} className="size-24 rounded-[4px]" />
           <span className="text-xs text-ink-soft">{t("scan")}</span>

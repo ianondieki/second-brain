@@ -22,14 +22,15 @@ describe("homeStats", () => {
   it("counts live ideas and drafts, active engagements, and finds the soonest deadline", async () => {
     const { homeStats } = await import("./home");
     const { summary } = await import("@/test/engagement");
+    // Deadlines the developer owes come first (a, due 9 Oct, waits on the developer); b waits on the organisation.
     const engagements = [
-      summary({ id: "a", due: { due_on: "2026-10-09", business_days_left: 6, overdue: false } }),
-      summary({ id: "b", state: "UNDER_REVIEW", due: { due_on: "2026-10-03", business_days_left: 2, overdue: false } }),
+      summary({ id: "a", whose_turn: ["developer"], due: { due_on: "2026-10-09", business_days_left: 6, overdue: false } }),
+      summary({ id: "b", state: "UNDER_REVIEW", whose_turn: ["org"], due: { due_on: "2026-10-03", business_days_left: 2, overdue: false } }),
       summary({ id: "c", state: "DECLINED", due: { due_on: "2026-10-01", business_days_left: 0, overdue: false } }),
     ];
     const idea = (over: Record<string, unknown>) => ({ id: "x", title: "t", status: "published", moderation_state: "clear", niche: null, cert_id: null, current_version_no: 1, has_draft: false, published_at: null, updated_at: "2026-10-01T00:00:00Z", ...over }) as never;
     const stats = homeStats(engagements, [idea({}), idea({ status: "draft" }), idea({ has_draft: true }), idea({ status: "hidden" })]);
-    expect(stats).toEqual({ ideas: 3, published: 2, drafts: 1, changes: 1, engagements: 3, active: 2, nextDue: engagements[1].due, nextDueId: "b" });
+    expect(stats).toEqual({ ideas: 3, published: 2, drafts: 1, changes: 1, engagements: 3, active: 2, nextDue: engagements[0].due, nextDueId: "a" });
   });
 
   it("has no deadline when no active engagement carries one", async () => {

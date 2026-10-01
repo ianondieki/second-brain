@@ -100,7 +100,7 @@ export async function LandingContent() {
               const Icon = side === "developers" ? IdeasIcon : CompaniesIcon;
               return (
                 <Card as="li" key={side} className="flex flex-col gap-4 p-6 lg:p-8">
-                  <span aria-hidden="true" className="flex size-11 items-center justify-center rounded-control bg-accent-wash text-accent">
+                  <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center self-start rounded-control bg-accent-wash text-accent">
                     <Icon className="size-5" />
                   </span>
                   <h3 className="font-display text-xl font-medium text-ink">{t(`who.${side}.title`)}</h3>
@@ -173,10 +173,10 @@ export async function LandingContent() {
             <p className="text-sm text-ink-soft">{t("footer.note")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/help" className={standaloneLinkClass}>
+            <Link href="/help" className={`${standaloneLinkClass} px-2`}>
               {t("footer.help")}
             </Link>
-            <Link href="/legal/terms" className={standaloneLinkClass}>
+            <Link href="/legal/terms" className={`${standaloneLinkClass} px-2`}>
               {t("footer.terms")}
             </Link>
             <ThemeToggle />

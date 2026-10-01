@@ -58,12 +58,9 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
         />
       }
     >
-      <p className="flex items-center gap-3 py-0.5" aria-label={t("parties")}>
-        <Avatar name={detail.developer_name} kind="person" size="md" active={!ended && awaited.has("developer")} />
-        <Avatar name={detail.org_name} kind="org" size="md" active={!ended && awaited.has("org")} />
-        <span className="text-sm text-ink-soft">
-          {detail.developer_name} · {detail.org_name}
-        </span>
+      <p className="flex items-center gap-2 py-0.5" aria-label={t("parties")}>
+        <Avatar name={detail.developer_name} kind="person" size="md" active={!ended && awaited.has("developer")} labelled />
+        <Avatar name={detail.org_name} kind="org" size="md" active={!ended && awaited.has("org")} labelled />
       </p>
       {turn.kind === "ended" && detail.end_reason ? (
         <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>

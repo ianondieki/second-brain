@@ -111,8 +111,10 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         <WhoseTurn detail={detail} />
       </div>
 
-      {/* The one progress indicator: the timeline itself (completed connectors in the accent), stage n of 5 said once. */}
-      <div className="mt-8">
+      {/* The one progress indicator: the timeline itself (completed connectors in the accent). On phones the actions
+          card comes first, so the screen's primary action is within reach; the timeline follows it. */}
+      <div className="mt-6 flex flex-col gap-8">
+      <div className="order-2 lg:order-1">
         <Stepper
           steps={steps}
           actor={actors}
@@ -127,7 +129,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         />
       </div>
 
-      <Card as="div" className="mt-8 max-w-3xl">
+      <Card as="div" className="order-1 max-w-3xl lg:order-2">
         <Actions
             engagementId={detail.id}
             lockVersion={detail.lock_version}
@@ -139,6 +141,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
           />
       </Card>
+      </div>
 
       <div className="mt-8 max-w-3xl empty:hidden">
         <Tier2Section detail={detail} enrolled={me.mfa.enrolled} query={query} />

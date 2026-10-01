@@ -6,6 +6,7 @@ import { applyTheme, readTheme, THEMES, type ThemeChoice } from "@/lib/theme";
 
 import { useStrings } from "./ClientStrings";
 import { cn } from "./ui/cn";
+import { CheckIcon } from "./ui/status-icons";
 
 // The choice is read from storage on every render after a change (useSyncExternalStore): listeners here, plus the
 // "storage" event for a change made in another tab.
@@ -38,12 +39,14 @@ export function ThemeToggle({ className }: { className?: string }) {
         <label
           key={option}
           className={cn(
-            "inline-flex min-h-9 cursor-pointer items-center rounded-control px-2.5 text-sm font-medium",
+            "inline-flex min-h-11 min-w-11 cursor-pointer items-center gap-1.5 rounded-control px-2.5 text-sm font-medium",
             "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
-            choice === option ? "bg-accent-wash text-ink" : "text-ink-soft hover:bg-wash-soft hover:text-ink",
+            // The chosen option carries a check, not a colour alone (WCAG 1.4.11).
+            choice === option ? "bg-accent-wash font-semibold text-ink" : "text-ink-soft hover:bg-wash-soft hover:text-ink",
           )}
         >
           <input type="radio" name={name} value={option} checked={choice === option} onChange={() => choose(option)} className="sr-only" />
+          {choice === option ? <CheckIcon className="size-4 text-accent" /> : null}
           {t(`theme.${option}`)}
         </label>
       ))}

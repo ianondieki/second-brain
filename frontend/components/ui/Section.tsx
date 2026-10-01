@@ -42,49 +42,29 @@ export function Section({
     <Heading
       id={id}
       tabIndex={focusable ? -1 : undefined}
-      className={cn(
-        "text-ink",
-        headingLevel === 3 ? "text-base" : "text-lg",
-        focusable && "focus:outline-none",
-        description && link ? "sm:col-start-1 sm:row-start-1" : undefined,
-      )}
+      className={cn("text-ink sm:col-start-1 sm:row-start-1", headingLevel === 3 ? "text-base" : "text-lg", focusable && "focus:outline-none")}
     >
       {title}
     </Heading>
   );
+  const lead = description ? (
+    <p className="mt-1 max-w-[62ch] text-sm text-ink-soft sm:col-start-1 sm:row-start-2">{description}</p>
+  ) : null;
   const secondary = link ? (
-    <Link
-      href={link.href}
-      className={cn(standaloneLinkClass, "relative", description ? "justify-self-start sm:col-start-2 sm:row-start-1" : undefined)}
-    >
+    <Link href={link.href} className={cn(standaloneLinkClass, "relative justify-self-start sm:col-start-2 sm:row-start-1")}>
       {link.label}
       <LinkPending className="absolute bottom-0.5 left-0" />
     </Link>
   ) : null;
-  const lead = description ? (
-    <p className={cn("mt-1 max-w-[62ch] text-sm text-ink-soft", link ? "sm:col-start-1 sm:row-start-2" : undefined)}>
-      {description}
-    </p>
-  ) : null;
   return (
     <section aria-labelledby={id} className={className} {...rest}>
-      {description && link ? (
-        // Heading, description, then the link, in reading order: on a phone the link comes after the description
-        // (not wedged between the heading and it); from 640 px it sits at the end of the heading row.
-        <div className="grid grid-cols-1 items-baseline gap-x-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-          {heading}
-          {lead}
-          {secondary}
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-6">
-            {heading}
-            {secondary}
-          </div>
-          {lead}
-        </>
-      )}
+      {/* One layout whatever the combination (ux-reviewer P18 round 1): reading order heading, description, link; on a
+          phone they stack in that order, from 640 px the link ends the heading row and the description sits under it. */}
+      <div className="grid grid-cols-1 items-baseline gap-x-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+        {heading}
+        {lead}
+        {secondary}
+      </div>
       {children ? <div className="mt-4">{children}</div> : null}
     </section>
   );

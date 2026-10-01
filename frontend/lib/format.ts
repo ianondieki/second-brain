@@ -59,11 +59,13 @@ export function formatMomentSeconds(locale: string, iso: string, timeZone: strin
  * A calendar date from the API ("2026-10-02", no time or zone) as "2 Oct 2026", never shifted a day. Anything that is
  * not such a date is returned as it is.
  */
-/** A calendar day as "3 Oct" (no year): a tile's figure. */
+/** A calendar day as "3 Oct" (day, month, no year; the month as dayMonthYear writes it): a tile's figure. */
 export function formatShortDate(locale: string, day: string): string {
   if (!DATE_ONLY.test(day)) return day;
   const [y, m, d] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+  const at = new Date(Date.UTC(y, m - 1, d));
+  const month = new Intl.DateTimeFormat(locale === "en" ? "en-US" : `${locale}-KE`, { month: "short", timeZone: "UTC" }).format(at);
+  return `${d} ${month}`;
 }
 
 export function formatCalendarDate(locale: string, day: string): string {

@@ -97,7 +97,7 @@ describe("the whose-turn banner", () => {
     );
     expect(screen.getByText("Awaiting: you and Telco A (fixture)")).toBeTruthy();
     // The same step owed by both: said once, naming both.
-    expect(screen.getByText("Next step for you and Telco A (fixture): Sign the mutual NDA")).toBeTruthy();
+    expect(screen.getByText("Next step for both of you: Sign the mutual NDA")).toBeTruthy();
     expect(screen.queryByText("Your next step: Sign the mutual NDA")).toBeNull();
   });
 

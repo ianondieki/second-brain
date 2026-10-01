@@ -38,7 +38,7 @@ export function HeroComposition() {
         <div className="relative flex flex-col gap-4 p-4 sm:p-6 lg:block lg:h-[25rem] lg:p-8">
           <article className="rounded-panel border border-line bg-field p-5 shadow-card lg:absolute lg:top-8 lg:right-[33%] lg:left-8">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <h3 className="text-base text-ink">{t("ideaTitle")}</h3>
+              <p className="text-base font-semibold text-ink">{t("ideaTitle")}</p>
               <Chip kind="current">{t("stage")}</Chip>
             </div>
             <p className="mt-0.5 text-sm text-ink-soft">{tt("withOrg", { org: t("org") })}</p>

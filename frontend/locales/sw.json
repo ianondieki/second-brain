@@ -16,7 +16,8 @@
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages [[SW-REVIEW]] draft Swahili",
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
-    "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)"
+    "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off"
   },
   "app": {
     "name": "Wazo",
@@ -79,7 +80,7 @@
       },
       "review": {
         "title": "Hukaguliwa chini ya NDA",
-        "body": "Watu waliothibitishwa katika shirika hukubali NDA ya tathmini kabla ya kufungua pendekezo kamili. Kila ufunguaji hurekodiwa, na unaweza kuona ni nani aliyeangalia."
+        "body": "Maelezo kamili huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura (break-glass) unaorekodiwa na ambao mmiliki hujulishwa. Kila ufunguaji hurekodiwa, na unaweza kuona ni nani aliyeangalia."
       },
       "track": {
         "title": "Kubaliana hatua inayofuata",
@@ -116,7 +117,7 @@
       },
       "who": {
         "title": "Nani aliangalia",
-        "body": "Mapendekezo kamili hufunguliwa chini ya NDA tu, na mwandishi anaweza kuona ni nani aliyeyafungua na lini."
+        "body": "Mapendekezo kamili huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura (break-glass) unaorekodiwa na ambao mmiliki hujulishwa. Unaona ni nani aliyefungua lako, na lini."
       },
       "note": "Mtu yeyote anaweza kukagua cheti kwenye <verify>ukurasa wa uthibitishaji</verify> bila akaunti."
     },
@@ -1336,9 +1337,10 @@
       "timestamped": "Imewekwa muhuri wa wakati na mamlaka huru",
       "pending": "Muhuri wa wakati unasubiri",
       "scan": "Changanua ili kuthibitisha",
-      "checkAt": "Mtu yeyote anaweza kukagua rekodi hii kwenye {url}",
+      "checkAt": "Mtu yeyote anaweza kukagua rekodi hii kwenye <id>{url}</id>",
       "print": "Chapisha au hifadhi kama PDF",
-      "qrLabel": "Msimbo wa QR: ukurasa wa umma wa uthibitishaji wa cheti {id}"
+      "qrLabel": "Msimbo wa QR: ukurasa wa umma wa uthibitishaji wa cheti {id}",
+      "registeredAt": "{time} saa za Nairobi"
     }
   },
   "ideaDelete": {
@@ -2072,7 +2074,7 @@
     "openOwn": "Fungua ushirikiano wako",
     "progress": "Hatua {current} kati ya {total}: {group}",
     "parties": "Pande zote mbili",
-    "nextBoth": "Hatua inayofuata kwako na {name}: {step}",
+    "nextBoth": "Hatua inayofuata kwenu nyote wawili: {step}",
     "since": "Tangu {date}"
   },
   "trackerActions": {

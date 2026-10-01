@@ -16,7 +16,8 @@
     "reviewP13": "[[COPY-REVIEW]] P13 (REQ-PROP-05): ideaEditor.assistantTitle, ideaEditor.assistantHint, ideaEditor.assistantOpen, ideaEditor.assistantOpening, ideaAssistant.*; the consent wording in the dialog comes from the API verbatim (backend config/consents.yaml, held under D-39 item 6); ideaAssistant.problem.* follow the backend's fixed assistant messages",
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
-    "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided"
+    "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off"
   },
   "app": {
     "name": "Wazo",
@@ -79,7 +80,7 @@
       },
       "review": {
         "title": "Reviewed under NDA",
-        "body": "Verified people at an organisation accept the Evaluation NDA before they open the full proposal. Every opening is recorded, and you can see who looked."
+        "body": "Full details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. Every opening is recorded, and you can see who looked."
       },
       "track": {
         "title": "Agree the next step",
@@ -116,7 +117,7 @@
       },
       "who": {
         "title": "Who looked",
-        "body": "Full proposals open only under NDA, and the author can see who opened them and when."
+        "body": "Full proposals are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. You see who opened yours, and when."
       },
       "note": "Anyone can check a certificate on the <verify>verify page</verify> without an account."
     },
@@ -1336,9 +1337,10 @@
       "timestamped": "Timestamped by an independent authority",
       "pending": "Timestamp pending",
       "scan": "Scan to verify",
-      "checkAt": "Anyone can check this record at {url}",
+      "checkAt": "Anyone can check this record at <id>{url}</id>",
       "print": "Print or save as PDF",
-      "qrLabel": "QR code: the public verify page for certificate {id}"
+      "qrLabel": "QR code: the public verify page for certificate {id}",
+      "registeredAt": "{time} Nairobi time"
     }
   },
   "ideaDelete": {
@@ -2072,7 +2074,7 @@
     "openOwn": "Open your engagements",
     "progress": "Stage {current} of {total}: {group}",
     "parties": "The two parties",
-    "nextBoth": "Next step for you and {name}: {step}",
+    "nextBoth": "Next step for both of you: {step}",
     "since": "Since {date}"
   },
   "trackerActions": {
