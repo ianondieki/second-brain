@@ -9,46 +9,21 @@ import { CheckIcon } from "@/components/ui/status-icons";
 import { focusPageTitle } from "@/lib/focus";
 import { haptic } from "@/lib/haptics";
 
-const KEY_PREFIX = "wazo-closed:v1:";
-const listeners = new Set<() => void>();
-/** Dismissed on this page: the card closes even when storage refuses the write (a full quota, a private window). */
-const dismissed = new Set<string>();
+import {
+  celebrationCookieSet,
+  celebrationSeen,
+  dismissCelebration,
+  rememberCelebrationCookie,
+  subscribeCelebration,
+} from "./celebration-store";
 
-function key(id: string) {
-  return KEY_PREFIX + id;
-}
+export { dismissCelebration };
 
-function read(id: string): boolean {
-  if (dismissed.has(id)) return true;
-  try {
-    return window.localStorage.getItem(key(id)) === "seen";
-  } catch {
-    return true; // storage off: never celebrate twice by accident, so not at all
-  }
-}
-
-/** Marks the celebration as seen for this engagement; it never shows again on this device (or, without storage, on this page). */
-export function dismissCelebration(id: string) {
-  dismissed.add(id);
-  try {
-    window.localStorage.setItem(key(id), "seen");
-  } catch {
-    // Storage refused the write: the in-memory mark closes the card for this page.
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  window.addEventListener("storage", listener);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
 
 export interface ClosedCelebrationProps {
   engagementId: string;
+  /** The server's answer, from the cookie: the card arrives with the page or not at all, so nothing shifts. */
+  initialSeen?: boolean;
   title: string;
   body: string;
   dismiss: string;
@@ -60,11 +35,13 @@ export interface ClosedCelebrationProps {
  * one button to put it away, after which focus returns to the page's title. Shown the first time this device opens a
  * CLOSED tracker, then remembered; the stage chip and the timeline say "Closed" on every visit.
  */
-export function ClosedCelebration({ engagementId, title, body, dismiss }: ClosedCelebrationProps) {
-  const seen = useSyncExternalStore(subscribe, () => read(engagementId), () => true);
+export function ClosedCelebration({ engagementId, initialSeen = true, title, body, dismiss }: ClosedCelebrationProps) {
+  const seen = useSyncExternalStore(subscribeCelebration, () => celebrationSeen(engagementId), () => initialSeen);
   useEffect(() => {
     if (!seen) haptic("success");
-  }, [seen]);
+    // Storage remembers longer than a cookie set from a page may: write the cookie again when it lapsed.
+    else if (!celebrationCookieSet(engagementId)) rememberCelebrationCookie(engagementId);
+  }, [seen, engagementId]);
   if (seen) return null;
   return (
     <Card

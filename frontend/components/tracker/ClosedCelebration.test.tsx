@@ -27,15 +27,21 @@ describe("ClosedCelebration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem("wazo-closed:v1:e-1")).toBe("seen");
+    expect(document.cookie).toContain("wazo-closed-e-1=seen"); // what the server reads: the card then never arrives
     cleanup();
     render(<ClosedCelebration {...props} />);
     expect(screen.queryByRole("region")).toBeNull();
   });
 
-  it("is remembered per engagement", () => {
+  it("is remembered per engagement, in storage or in the cookie", () => {
     window.localStorage.setItem("wazo-closed:v1:e-1", "seen");
     render(<ClosedCelebration {...props} engagementId="e-2" />);
     expect(screen.getByRole("region", { name: "Closed and done" })).toBeTruthy();
+    cleanup();
+    document.cookie = "wazo-closed-e-5=seen; path=/";
+    render(<ClosedCelebration {...props} engagementId="e-5" />);
+    expect(screen.queryByRole("region")).toBeNull();
+    document.cookie = "wazo-closed-e-5=; path=/; max-age=0";
   });
 
   it("closes and moves focus to the page title even when storage refuses the write", () => {

@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
+// Its own chunk, fetched only by a closed tracker: an open one stays under the 150 KB JS budget (AC-UX-3).
+const ClosedCelebration = dynamic(() => import("@/components/tracker/ClosedCelebration").then((m) => m.ClosedCelebration));
+
 import { ClientStrings } from "@/components/ClientStrings";
-import { ClosedCelebration } from "@/components/tracker/ClosedCelebration";
+import dynamic from "next/dynamic";
+import { cookies } from "next/headers";
+
+import { celebrationSeenFromCookies } from "@/components/tracker/celebration-store";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -112,7 +118,13 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         <WhoseTurn detail={detail} />
       </div>
       {detail.state === "CLOSED" ? (
-        <ClosedCelebration engagementId={detail.id} title={t("closed.title")} body={t("closed.body")} dismiss={t("closed.dismiss")} />
+        <ClosedCelebration
+          engagementId={detail.id}
+          initialSeen={celebrationSeenFromCookies(await cookies(), detail.id)}
+          title={t("closed.title")}
+          body={t("closed.body")}
+          dismiss={t("closed.dismiss")}
+        />
       ) : null}
 
       {/* The one progress indicator: the timeline itself (completed connectors in the accent). On phones the actions
