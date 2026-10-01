@@ -54,7 +54,7 @@ async def test_the_nudge_is_sent_once_per_day(owner_engine: AsyncEngine) -> None
         assert await w.in_app(dev) == [("em7", "Your daily update")]
         assert await w.in_app_links(dev) == ["/dev/engagements"]  # the developer's own portal
         (message,) = w.email.outbox
-        assert message.subject == "Your day on Bridge (30 Mar 2027): 1 needs you, 1 at risk"
+        assert message.subject == "Your day on Wazo (30 Mar 2027): 1 needs you, 1 at risk"
         assert "Milestone 1 “Pilot for one county” is due 31 Mar 2027" in message.text
         next_day = (await w.nudges(now=DAY_BEFORE_DUE + timedelta(days=1))).of(dev)
         assert next_day is not None
@@ -187,7 +187,7 @@ WORDED = {  # the model's choice (ids only): code renders every word
     "order": ["n1", "h1"],
     "next_step_variant": "start_with",
 }
-WORDED_HEADLINE = "Here is your day on Bridge. 1 thing needs you today, and 1 engagement needs attention."
+WORDED_HEADLINE = "Here is your day on Wazo. 1 thing needs you today, and 1 engagement needs attention."
 
 
 @pytest.mark.parametrize("demo", [False, True])

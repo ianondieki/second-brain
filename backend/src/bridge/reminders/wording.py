@@ -57,7 +57,7 @@ class NextStepVariant(StrEnum):
 
 # [[COPY-REVIEW]] fixed phrases: no fact, no name, no verb about either party, no time of day.
 OPENINGS: Final[dict[Opening, str]] = {
-    Opening.YOUR_DAY: "Here is your day on Bridge.",
+    Opening.YOUR_DAY: "Here is your day on Wazo.",
     Opening.QUICK_LOOK: "A quick look at your engagements.",
     Opening.UPDATE_READY: "Your daily update is ready.",
     Opening.ON_YOUR_LIST: "Here is what is on your list.",

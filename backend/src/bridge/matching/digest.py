@@ -135,7 +135,7 @@ def render(digest: Digest, *, base_url: str, product: str) -> EmailParts:
         "matches_url": platform_url(base_url, MATCHES_PATH.format(org=org)),
         "settings_url": platform_url(base_url, SETTINGS_PATH),
         "help_url": platform_url(base_url, HELP_PATH),
-        "product": name(product, fallback="Bridge"),
+        "product": name(product, fallback="Wazo"),
         "org_name": name(digest.org_name, fallback="your organisation"),
     }
     plain_text = _ENV.get_template("em3.txt.j2").render(values)

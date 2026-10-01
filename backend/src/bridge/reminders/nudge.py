@@ -282,7 +282,7 @@ def summary(nudge: Nudge) -> str:
 
 
 def subject(nudge: Nudge) -> str:
-    return f"Your day on Bridge ({eat_date(nudge.today)}): {summary(nudge)}"
+    return f"Your day on Wazo ({eat_date(nudge.today)}): {summary(nudge)}"
 
 
 def email(nudge: Nudge, wording: Wording) -> Email:

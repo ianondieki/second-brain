@@ -179,7 +179,7 @@ def test_the_email_labels_ai_wording_and_never_the_fallback() -> None:
     fixed = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL)
     assert AI_LABEL not in fixed.text
     assert AI_LABEL not in (fixed.html or "")
-    assert fixed.subject == worded.subject == "Your day on Bridge (5 Oct 2026): 1 needs you, 1 at risk"
+    assert fixed.subject == worded.subject == "Your day on Wazo (5 Oct 2026): 1 needs you, 1 at risk"
 
 
 def test_the_in_app_summary_is_code_rendered() -> None:

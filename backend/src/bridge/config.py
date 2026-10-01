@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: AppEnv = "dev"
-    product_name: str = "Bridge (working name)"
+    product_name: str = "Wazo"
     public_base_url: str = "http://localhost:3000"
     log_level: str = "INFO"
     # Proxies whose X-Forwarded-For is trusted for the client IP (login throttling). Comma-separated IPs or CIDRs.
