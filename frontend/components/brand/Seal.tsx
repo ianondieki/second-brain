@@ -1,19 +1,24 @@
+import { useId } from "react";
+
 import { cn } from "@/components/ui/cn";
 
 /**
  * The authorship seal: the mark's ring at sheet size, with the words "Wazo · Registered" around it and the tick. The
- * outer ring draws once (seal-draw); decorative, the sheet's text says what it certifies.
+ * outer ring draws once (seal-draw); decorative (aria-hidden), the sheet's text says what it certifies, so the ring's
+ * words are brand art in the mark's own language rather than copy (D-52), like the wordmark. Its text path gets an id
+ * of its own: two seals share the landing page.
  */
 export function Seal({ size = 112, animate = false, className }: { size?: number; animate?: boolean; className?: string }) {
+  const pathId = `seal-${useId()}`;
   return (
     <svg width={size} height={size} viewBox="0 0 112 112" aria-hidden="true" focusable="false" className={cn("shrink-0", className)} data-seal="">
       <defs>
-        <path id="seal-text-path" d="M56 12a44 44 0 1 1-.01 0" fill="none" />
+        <path id={pathId} d="M56 12a44 44 0 1 1-.01 0" fill="none" />
       </defs>
       <circle cx="56" cy="56" r="52" fill="var(--field)" stroke="var(--accent)" strokeWidth="1.5" pathLength={100} className={animate ? "seal-draw" : undefined} />
       <circle cx="56" cy="56" r="34" fill="none" stroke="var(--warm)" strokeWidth="1.25" />
       <text fontSize="9" fontWeight="600" fill="var(--accent)" fontFamily="var(--font-sans)" textLength="274" lengthAdjust="spacing">
-        <textPath href="#seal-text-path" startOffset="0" textLength="274" lengthAdjust="spacing">
+        <textPath href={`#${pathId}`} startOffset="0" textLength="274" lengthAdjust="spacing">
           WAZO · REGISTERED · WAZO · REGISTERED ·
         </textPath>
       </text>

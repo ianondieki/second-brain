@@ -150,9 +150,11 @@ export function Review(props: ReviewProps) {
         </h3>
         <p className="mt-1 text-sm text-ink-soft">{f("teaserHint")}</p>
         <div className="mt-3">
-          <p className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">
-            {state.title.trim() || <span className="text-ink-soft">{f("notGiven")}</span>}
-          </p>
+          {state.title.trim() ? (
+            <p className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">{state.title}</p>
+          ) : (
+            <p className="text-ink-soft">{f("notGiven")}</p>
+          )}
           {niche ? <p className="text-sm text-ink-soft">{niche}</p> : null}
           {state.summary.trim() ? (
             <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere] text-ink">{state.summary}</p>
@@ -164,19 +166,25 @@ export function Review(props: ReviewProps) {
         <h3 id={`${id}-details`} className="font-semibold text-ink">
           {f("confidentialTitle")}
         </h3>
-        {/* The three counts as tiles: what the full details hold at a glance. */}
-        <ul className="mt-3 grid grid-cols-3 gap-3 text-ink">
-          {[
-            [t("detailsSections", { count: sections }), sections],
-            [t("detailsFiles", { count: props.attachments }), props.attachments],
-            [t("detailsLinks", { count: linkLines(state.links).length }), linkLines(state.links).length],
-          ].map(([label, count]) => (
-            <li key={String(label)} className="rounded-panel border border-line bg-field p-3">
-              <span className="block text-lg font-semibold tabular-nums">{count}</span>
-              <span className="block text-sm text-ink-soft">{String(label).replace(/:\s*\d+$/, "")}</span>
-            </li>
-          ))}
-        </ul>
+        {/* The three counts as tiles: what the full details hold at a glance; one quiet line while all are empty. */}
+        {sections + props.attachments + linkLines(state.links).length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">{t("detailsNone")}</p>
+        ) : (
+          <ul className="mt-3 grid grid-cols-3 gap-3 text-ink">
+            {(
+              [
+                ["sections", t("detailsSectionsLabel"), sections],
+                ["files", t("detailsFilesLabel"), props.attachments],
+                ["links", t("detailsLinksLabel"), linkLines(state.links).length],
+              ] as const
+            ).map(([key, label, count]) => (
+              <li key={key} data-tile={key} className="rounded-panel border border-line bg-field p-3">
+                <span className="block text-lg font-semibold tabular-nums">{count}</span>
+                <span className="block text-sm text-ink-soft">{label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {blocking.length > 0 ? (

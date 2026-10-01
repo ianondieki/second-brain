@@ -125,7 +125,7 @@ test.describe("a signed-in developer", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.locator("ol [aria-current='step']")).toContainText("Review and publish");
     await expect(page.locator("[data-primary]")).toHaveText("Publish");
-    await expect(page.getByText("Files: 1")).toBeVisible();
+    await expect(page.locator("[data-tile='files']")).toHaveText("1Files"); // the review step's tiles (D-52)
     await checkScreen(page, { strict: true });
 
     // The three statements come from the API and must all be confirmed.
