@@ -92,6 +92,11 @@ html[data-tour-seen~="org"] [data-tour-side="org"] {
   display: none;
 }
 
+/* The same for a closed tracker's celebration this browser's storage remembers (components/tracker/celebration-store.ts). */
+html[data-celebration-seen] [data-celebration] {
+  display: none;
+}
+
 /* Dark mode: its own steps, not a flip; the accent and status colours are lightened to keep AA on the dark paper. */
 html[data-theme="dark"] {
   --paper: #131412;

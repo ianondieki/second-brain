@@ -9,6 +9,7 @@ import { haptic } from "@/lib/haptics";
 import {
   celebrationCookieSet,
   celebrationSeen,
+  clearCelebrationMarker,
   dismissCelebration,
   rememberCelebrationCookie,
   subscribeCelebration,
@@ -33,6 +34,8 @@ export function CelebrationShell({
 }) {
   const seen = useSyncExternalStore(subscribeCelebration, () => celebrationSeen(engagementId), () => initialSeen);
   useEffect(() => {
+    // Hydrated: what is drawn now follows the store, so the before-paint hide (CELEBRATION_INIT_SCRIPT) steps aside.
+    clearCelebrationMarker();
     if (!seen) haptic("success");
     // Storage remembers longer than a cookie set from a page may: write the cookie again when it lapsed.
     else if (!celebrationCookieSet(engagementId)) rememberCelebrationCookie(engagementId);
