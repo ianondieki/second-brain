@@ -198,11 +198,11 @@ export function Checkout(props: CheckoutProps) {
   return (
     <div className="mt-6 flex flex-col gap-8">
       <Steps current={stepOf(phase)} />
-      {/* The step's words and controls, with the phone beside them from 1024 px (above them on a phone): what the
-          M-Pesa prompt shows at this step, drawn, so the state reads at a glance. */}
+      {/* The step's words and controls, with the phone beside them from 1024 px (after them on a phone, so the one real
+          action stays within reach): what the M-Pesa prompt shows at this step, drawn, so the state reads at a glance. */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
-        <div className="order-2 min-w-0 lg:order-1">{body}</div>
-        <div className="order-1 lg:order-2">
+        <div className="min-w-0">{body}</div>
+        <div>
           <Phone phase={phase} plan={props.plan.name} price={props.price} simulated={simulated} />
         </div>
       </div>
@@ -212,13 +212,22 @@ export function Checkout(props: CheckoutProps) {
 
 /**
  * The phone beside the steps (D-52): a drawn handset whose screen shows what the M-Pesa prompt shows at this step. It
- * is decoration (aria-hidden): the headings, status and alerts beside it carry the meaning, so nothing is said twice.
+ * is decoration (aria-hidden): the headings, status and alerts beside it carry the meaning, so nothing is said twice,
+ * and its keys are drawn as plain shapes, not as buttons. A refused start or a lost checkout shows no prompt.
  */
 function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; price: string; simulated: boolean }) {
   const t = useStrings("checkout");
   const kind = phase.kind;
   const state =
-    kind === "succeeded" ? "paid" : kind === "failed" || kind === "cancelled" ? "notPaid" : kind === "pending" || kind === "stalled" || kind === "starting" ? "waiting" : "prompt";
+    kind === "succeeded"
+      ? "paid"
+      : kind === "failed" || kind === "cancelled"
+        ? "notPaid"
+        : kind === "lost" || (kind === "confirm" && phase.refusal)
+          ? "idle"
+          : kind === "pending" || kind === "stalled" || kind === "starting"
+            ? "waiting"
+            : "prompt";
   return (
     <div aria-hidden="true" data-phone={state} className="mx-auto w-full max-w-[15rem] lg:mx-0 lg:max-w-none">
       <div className="rounded-[1.75rem] border-[6px] border-bezel bg-paper p-3 shadow-card">
@@ -242,6 +251,10 @@ function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; 
               </span>
               <p className="font-semibold text-ink">{t("phone.notPaid")}</p>
             </div>
+          ) : state === "idle" ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-center">
+              <p className="text-sm text-ink-soft">{t("phone.idle")}</p>
+            </div>
           ) : (
             <div className="flex flex-1 flex-col gap-4 pt-4">
               <p className="text-ink [overflow-wrap:anywhere]">{t("phone.prompt", { price, plan })}</p>
@@ -254,9 +267,10 @@ function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; 
                 <>
                   <p className="text-sm text-ink-soft">{t("phone.pin")}</p>
                   <p className="font-mono text-lg tracking-[0.4em] text-ink">····</p>
+                  {/* The prompt's two keys, as the drawing's own shapes: no button styling, no accent fill. */}
                   <div className="mt-auto flex gap-2">
-                    <span className="flex-1 rounded-control border border-line py-1.5 text-center text-sm font-medium text-ink-soft">{t("phone.cancel")}</span>
-                    <span className="flex-1 rounded-control bg-accent py-1.5 text-center text-sm font-semibold text-on-accent">{t("phone.send")}</span>
+                    <span className="flex-1 rounded-control border border-dashed border-line py-1.5 text-center text-sm text-ink-soft">{t("phone.cancel")}</span>
+                    <span className="flex-1 rounded-control border border-dashed border-line py-1.5 text-center text-sm text-ink-soft">{t("phone.send")}</span>
                   </div>
                 </>
               )}
