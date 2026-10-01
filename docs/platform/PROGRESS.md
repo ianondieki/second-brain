@@ -346,7 +346,7 @@ Checklist (updated after every task; commit and push after each):
 
 ## Prototype track (D-35, D-36, D-37; started 2026-09-29 in a Linux cloud session)
 
-### Handoff (resume from here; updated 2026-09-30)
+### Handoff (resume from here; updated 2026-10-01)
 
 Cloud session on a Linux container (4 CPUs, 15 GB RAM), started 2026-09-29 from handoff commit `913c6ae`. Session 2 (a new container, network access Full) resumed from `172b0e4` and redid the Linux setup below (legacy suite 307 OK). Every branch
 named in the laptop Handoff exists on origin at the recorded commit. The owner recorded D-35 (prototype first), D-36
@@ -382,39 +382,21 @@ from one design system (`docs/platform/design/p16-design-system.md`), with zero 
 state the three cards shot at 360 and 1440 px, one primary action, no horizontal scroll, and every route under 150 KB
 gzipped. **Stage C is done** (walkthrough `14e19c7`, README `c6873e8`, demo peak 662 MB; M2 report draft below). **Stage D is
 done** (`fc87608`: five read waterfalls fixed with fetch-order tests, the scout form back under 150 KB, Lighthouse
-mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stage E is done** (integration head `866aec2`). E2 `a94ab33` (the coverage gate in `pr.yml`: ≥85 % total and
-≥95 % on the five packages; one test per integration; 19 Vitest files). E1 `2bb3d7b` (one error shape, cursor
-paging, `problem_id`, N+1 fixes with query-count tests, log PII audit mapped to REQ-SEC-03, hermetic tests,
-moderation case by id, trend G5 test; reviewer and security-reviewer PASS). E3 `5976870` (the walkthrough as the
-`demo-story` CI job, in parallel with `e2e`; its first CI run found a TOTP window race in the shared e2e helpers,
-fixed in `de1a909`). **Flake check:** the first run on `60391be` failed one backend trend test at 00:15 Nairobi time
-(the trend test world wrote "0.1 days ago" as an instant, which fell on yesterday's Nairobi day in the first 2.4
-hours after Nairobi midnight); fixed at its cause in `866aec2` (reviewer PASS; the full backend suite passed locally
-from 00:37 to 00:49 Nairobi time). Then three `pr.yml` runs in a row on `866aec2`, all green: 36783883366,
-36786626567, 36789164038 (runs on one ref cancel each other, so they ran one after another). Run 3: backend 4147
-tests, coverage 98.10 % total (auth 99.53, tenancy 99.26, billing 97.85, provenance 98.84, engagements 98.41);
-Vitest 131 files, 1248 tests; Playwright 162/162; demo story 1/1; legacy suite 307 (Linux, skip list) and Windows
-full; traceability 0 errors; copy-lint PASS. **Now Stage F:** `/ecc-code-review` over M2 (`fa5aeb6..866aec2`),
-fixing critical and high findings through the gates, then the final M2 report and scorecard. The container
-restarted once (the demo stack is stopped: `make demo-reset` before showing it). **Backlog** (MINORs, on cards):
-`requirePendingMfa` return path for a signed-out person (P16-C1); `reminders/facts.py` could call `load_many`
-(P16-E1); the E1 and E3 round-2 MINORs.
+mobile on twelve pages: performance ≥98, accessibility and best practices 100). **Stages E and F are done; M2 is done** (integration head `83e4ed9`, 2026-10-01). Stage E: E2 `a94ab33` (the
+coverage gate in `pr.yml`), E1 `2bb3d7b` (API consistency, N+1, clean logs), E3 `5976870` (the demo story in CI), and
+the flake check: three `pr.yml` runs in a row on `866aec2`, each Playwright 162/162 with no retry, after the trend
+test's Nairobi-midnight race was fixed (`866aec2`). Stage F (`tasks/P16-F.md`): the ECC review of M2 found one HIGH (a
+race past the plan's scout limit) and three smaller items, all fixed in `83e4ed9`; its CI also found a flaky e2e (the
+API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the leftover race recorded; the
+structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
+stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-09-30, session 3): none. Integration head `866aec2`.
+**Open branches** (2026-10-01, session 3): none. Integration head `83e4ed9`.
 
-**Next session (a new one, so the vetted skills load; start by checking `/skills` lists `frontend-design`,
-`impeccable`, `webapp-testing`, `vercel-react-best-practices` and the `/ecc-code-review` command).** Remaining M2 work,
-in this order:
-1. P16 polish on every screen: frontend-design → impeccable → Playwright screenshots at 375/1440 (webapp-testing
-   approach) → axe → `ux-reviewer`; vercel-react-best-practices over the frontend changes; local `npx lighthouse`
-   (mobile profile) on the main pages, fixing accessibility or performance below 90. Start from the carried UX MINORs on
-   `tasks/P16.md`, `tasks/REQ-ADM-01.md` (merge-time list) and `tasks/REQ-TREND-01.md` (P12-F list).
-2. README "Run the demo" and the walkthrough video script: demo logins (staff admin and moderator included), Brian and
-   Amina at the free cap, Discover's simulated numbers in the "Real, simulated or planned" table (P12-F MINOR 3),
-   `make demo-reset` for random handles.
-3. `/ecc-code-review --branch` on M2's changes (since `fa5aeb6`), fixing every critical and high finding (an extra
-   pass; reviewer and security-reviewer stay the gates).
-4. The final M2 report (this file), then stop.
+**Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
+come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
+db-migrations (below, plus the index needs on `tasks/P16-E1.md`), the Phase 7 UX pass (with D-51's splits) and Phase 8
+hardening (with the edge proxy's idle timeout, `tasks/P16-F.md`). Open MINORs (33) stay on their cards.
 Recorded, not scheduled: the 0006 items for db-migrations (burst detector data, self-boost check, definer plan index,
 staff SELECT on organizations, handle data migration), D-50 (sock E1 organisations and `scout_match`).
 
@@ -532,51 +514,102 @@ M2:
 - P13 assistant: handle LLMBudgetExceeded scope global with a fixed message (T2.2 security MINOR 3); demo_fallback = no suggestion.
 - P15 admin: if staff can decide claims, fix schema v2 round-6 MINORs 1–3 (seat-aware domain rule, first verification by non-owner, E2 attributes by non-owner) first; else keep the claims queue read-only.
 
-### M2 report (draft, 2026-09-30; final numbers and the quality scorecard come with Stage F)
+### M2 report (final, 2026-10-01): M2 is done, tested and demo-ready
 
-**Result so far.** Every M2 feature of `PLAN.md` §8 is merged into the integration branch and works on `make demo`:
-the scout agent (P10), the research agent (P11), trending problems and the ranker (P12), the submission assistant
-(P13), subscriptions with the simulated M-Pesa checkout (P14), the staff console's moderation, research-approval and
-read-only claims queues (P15), the auth follow-ups (P17), and P16's packaging, done in this session (session 3):
+**Result.** Every M2 feature of `PLAN.md` §8 is merged into the integration branch (head `83e4ed9`) and works end to
+end (on `make demo` in Stage C, and in CI's `demo-story` job on every run since, the final head included): the scout agent (P10), the research agent (P11), trending problems and the ranker (P12), the submission
+assistant (P13), subscriptions with the simulated M-Pesa checkout (P14), the staff console's moderation,
+research-approval and read-only claims queues (P15) and the auth follow-ups (P17), then P16's six stages in session 3:
 
 - **One product, not a patchwork (Stage B).** An inventory of all 42 routes and 10 email kinds
-  (`docs/demo/ui-inventory.md`), then one design system on the shared layer (`docs/platform/design/p16-design-system.md`;
-  merge `238b884`): named tokens for the repeated colour mixes, one overlay shadow, and one component per pattern
-  (Badge, Callout/Alert, PageHeader, BackLink, Section, RowList/Row, DescriptionList, TabNav, EmptyState,
-  ConfirmDialog, Panel, LinkPending, one PortalNav), a static not-found page and a 307 for signed-out portal visits.
-  Then every screen rebuilt from it in two parallel cards: the organisation portal, the shared tracker and the staff
-  console (C2, `02a1953`), the developer portal, public pages, billing and settings (C1, `106f01f`). Zero axe violations
-  of any impact on every state the cards shot at 360 and 1440 px (strict check in the e2e specs of those screens), one
-  primary action and no horizontal scroll on every screen, every route ≤150 KB gzipped (the tightest:
-  `/settings/security` 149,985). Carried UX MINORs from P16-A, P15-F and P12-F are fixed (listed on the cards).
-- **A measured decision.** Route-level loading skeletons were built, measured (React holds a revealed fallback for about
-  0.3 s: +0.35 s LCP on Home, Discover and the tracker, and a 200 instead of the 307 for sessions owing the second
-  factor) and removed; in-app navigation shows a pending hint on the tapped link instead, and direct loads render in
-  one pass. Lighthouse mobile after the change: `/dev` LCP about 1.6 s, perf 96–100, accessibility 100.
-- **Test races fixed at the cause**, found by CI: axe measuring a button mid colour transition (`settled()` now waits
-  for finite animations), a scout digest shared by parallel workers, and a 409 focus race in the notification settings.
-- **Demo packaging (Stage C).** From a clean `make demo-reset` (84 s with cached layers) the demo's highest total
-  memory at any sampled moment, across two resets and two recorded walkthroughs, was **662 MB** (about 600 MB at rest;
-  the seed step 210 MB and then exits; 1.04 GB even if every container peaked at once), well inside Docker Desktop's
-  4 GB. The recorded walkthrough (`make demo-walkthrough`; merge `14e19c7`) walks both portals and the staff console,
-  the clock and the emails in 2 min 17 s, passed three times from a reset, and writes 17 screenshots to
-  `docs/demo/screenshots/` (committed, 1.3 MB) and a video to `docs/demo/video/` (out of git); `docs/demo/README.md`
-  is the 3-minute script. README "Run the demo" (merge `c6873e8`) now covers the M2 logins (staff admin, moderator),
-  the free-plan cap Amina and Brian are at, random handles, the measured memory, a Mermaid diagram of `make demo`, the
-  LLM and payment variable names and the real / simulated / planned table (Discover's trend counts simulated by the
-  seed; the M-Pesa checkout simulated; research drafts nothing without a provider). Found while writing it: the plans
-  page lists "Recommendations with the reasons behind them" under Pro but nothing gates it (pricing copy; the owner's
-  call, see D-44).
+  (`docs/demo/ui-inventory.md`), one design system on the shared layer (`docs/platform/design/p16-design-system.md`;
+  `238b884`: named colour tokens, one overlay shadow, one component per pattern, one PortalNav, a static not-found
+  page, a 307 for signed-out portal visits), then every screen rebuilt from it (C2 `02a1953`, C1 `106f01f`) with the
+  carried UX MINORs of P16-A, P15-F and P12-F fixed. Route-level loading skeletons were built, measured (+0.35 s LCP,
+  and a 200 instead of the 307 for sessions owing the second factor) and removed in favour of a pending hint on the
+  tapped link.
+- **Demo packaging (Stage C).** From a clean `make demo-reset` the demo's highest total memory at any sampled moment
+  was 662 MB; the recorded walkthrough (`make demo-walkthrough`, `14e19c7`) and its 17 committed screenshots; README
+  "Run the demo" (`c6873e8`) with the logins, the free-plan caps, random handles, the Mermaid diagram, the variable
+  names and the real / simulated / planned table.
+- **Frontend depth (Stage D, `fc87608`).** vercel-react-best-practices over the frontend: five read waterfalls made
+  parallel with fetch-order tests, the scout form back under the JS budget, server-formatted strings on
+  `/settings/security` (149,985 → 146,820 bytes). Lighthouse mobile on twelve pages: performance 98–99,
+  accessibility and best practices 100.
+- **Backend, integrations and tests (Stage E).** E2 `a94ab33`: a coverage gate in `pr.yml` (≥85 % total, ≥95 % on
+  `auth`, `tenancy`, `billing`, `provenance`, `engagements`; tenancy 89 → 99 %), one test per integration (fake
+  payment, EM1 over SMTP with Mailpit-style HTML and text, the LLM fallback label on a missing key and on the cap,
+  "Timestamp pending" with the TSA offline, the fake scanner) and Vitest for the shared components. E1 `2bb3d7b`: one
+  error shape for every 4xx and 5xx (a 422 never quotes the refused value), cursor paging on the one list that used
+  offsets, `problem_id` named like every id filter, N+1 fixes with query-count tests (`/api/me/engagements` from 171
+  queries to 16 at 20 rows), logs without personal data (an AST audit test of every log call, the access log's search
+  words redacted), tests that never read a developer's `backend/.env`, the moderation case by id. E3 `5976870`: the
+  recorded walkthrough runs on every CI run as the `demo-story` job. Index needs found on the way are listed for 0006
+  (`tasks/P16-E1.md`); no schema change was made.
+- **Races found and fixed at their cause.** CI and the flake check found four: axe measuring a button mid colour
+  transition, a scout digest shared by parallel workers (Stage B); a TOTP code computed for the window before the
+  current one and checked just after the boundary (the shared e2e helpers, `de1a909`); a trend test that wrote "0.1
+  days ago" as an instant, which fell on yesterday's Nairobi day in the first 2.4 hours after Nairobi midnight
+  (`866aec2`; the full backend suite then passed inside that window, locally and in CI).
+- **ECC review (Stage F, `tasks/P16-F.md`).** `/ecc-code-review` over `fa5aeb6..866aec2` (803 files): one HIGH, a
+  race that let two parallel requests pass the plan's scout limit, fixed with a per-organisation advisory lock and
+  two tests that fail on the old code every time; two MEDIUM (focus lost after revealing a contact; two untested
+  branches) and one LOW (an unencoded `mailto:`), fixed (`83e4ed9`). Nothing found for credentials, SQL
+  injection, XSS, open redirects, input validation, dependencies, path traversal or error handling on external calls.
+  The checklist's structural items (94 functions over 50 lines, 3 nested deeper than 4, one migration over 800 lines)
+  are listed on the card and not refactored in M2 (D-51).
 
-**Decisions made by the orchestrator this session** (recorded on the cards): no route skeletons (above); no code split
-may fail into a route's error boundary (a lazily loaded Sign out was reverted); the static not-found page reads no
-session; problem references carry `published_at`/`seeded_example` for published problems only.
+**Quality scorecard** (integration head `83e4ed9`; CI = `pr.yml` on an egress-blocked runner, which runs the
+`make check` targets)
 
-**Still to do (stages D–F):** vercel-react-best-practices over the frontend and Lighthouse on each portal's main
-pages; API consistency, N+1 checks, logs without personal data, integration tests per provider, backend coverage
-(≥85 %, ≥95 % on auth, tenancy, billing, provenance, engagements) and a coverage gate in `pr.yml`, Vitest for the shared
-components, the full e2e suite three times in CI mode; `/ecc-code-review --branch` since `fa5aeb6`; the final report
-and scorecard.
+| Measure | Result |
+|---|---|
+| Tests | backend 4150 (pytest, incl. migrations and RLS); frontend 1252 in 131 files (Vitest); Playwright 162 at 360 and 1440 px with axe, plus the demo story; legacy suite 313 on Windows (full) and 307 on Linux (skip list), unchanged |
+| Coverage (statements and branches) | total 98.10 %; auth 99.53 %, tenancy 99.26 %, billing 97.85 %, provenance 98.84 %, engagements 98.41 % (gate: 85 / 95) |
+| e2e flake check | 3 runs in a row on `866aec2` (36783883366, 36786626567, 36789164038): Playwright 162/162 and the demo story 1/1 in each, 100 %; then green on `83e4ed9` (run 36796658741 on the fix branch's head: Playwright 162/162 with no retry, demo story 1/1) |
+| Lighthouse 12.8.2, mobile (Slow 4G, Moto G class) | performance 98–99, accessibility 100, best practices 100, CLS 0 on `/`, `/login`, `/verify/<id>`, `/dev`, `/dev/discover`, `/dev/ideas/<id>`, `/dev/engagements/<id>`, `/billing`, `/org/inbox`, `/org/engagements/<id>`, `/admin/moderation`, `/admin/research`; LCP 1.2–2.2 s (`tasks/P16-D.md`) |
+| axe | 0 violations of any impact on every screen and state the e2e suite visits, at 360 and 1440 px |
+| JS budget (gzipped, 1 KB = 1,000 bytes, ≤150,000 per route) | every one of the 41 measured routes is under (`/admin` redirects). 138,537: `/`, `/legal/terms`. 141,413–141,414: `/help`, `/dev`, `/dev/discover` (all views), `/dev/companies` and `/<id>`, `/dev/ideas`, `/dev/engagements`, `/problems/<id>`, `/billing`, `/org`, `/org/inbox` (both tabs), `/org/engagements`. 144,161–145,833: `/settings/notifications`, `/admin/moderation`, `/admin/claims`, `/dev/discover/niches`, `/org/inbox/<id>`, `/signup/check-email`, `/admin/research`, `/verify`, `/verify/<id>`. 146,434–147,900: `/billing/upgrade`, `/dev/ideas/<id>/pitch`, `/org/inbox/matches/<id>`, `/settings/security` (146,820), `/admin/moderation/cases/<id>`, `/dev/ideas/<id>`, `/dev/ideas/new`, `/auth/link`, `/dev/engagements/<id>` and `/org/engagements/<id>` (147,797; the shared tracker chunk grew by 103 bytes in Stage F, so at most 147,900). The tightest: `/org/inbox/scouts/new` and `/<id>` 148,862, `/login` 148,042, `/signup` 149,181, `/dev/ideas/<id>/edit` 149,412 |
+| Demo memory | 662 MB highest total at any sampled moment from `make demo-reset` through two walkthroughs (Docker Desktop's 4 GB) |
+| CodeQL | only the eight accepted findings of D-42 on every M2 branch and on the integration head; nothing new |
+| Scanners | gitleaks, pip-audit, npm audit, osv-scanner and Trivy green |
+| Open MINORs | 33 across the M2 cards (counted from the 35 cards after marking those closed by later work), each on its card; none blocking |
+| Traceability | `check_traceability.py` 0 errors (7 known warnings); copy-lint PASS |
+
+**Real, simulated or planned** (the README table has the detail). Real: accounts and TOTP, proposals with Tier-2
+encryption, certificates and `/verify` (with DigiCert's or FreeTSA's public timestamp; offline "Timestamp pending"),
+pitches, the tracker and its History, the scout's matching rules, Recommended for you, the moderation queue and its
+rules pre-screen, plans and limits. Simulated: Discover's trend counts (the seed writes the activity), the M-Pesa
+checkout (a fake provider; no money moves), email (Mailpit), SMS (fake), identity and organisation verification (set
+by the seed), attachment scanning (the demo scanner); research cards in the demo are seeded examples, labelled as
+such. Planned, not in the demo: real payments and tax invoices, WhatsApp, the full claims and verification flows,
+invitations, Problem Briefs, live web research, a model-written pre-screen, Swahili.
+
+**Decision defaults applied** (nothing here is decided for you; `DECISIONS-NEEDED.md` has the options and the
+recommendations): D-26 (c) OAuth buttons hidden until the test apps exist; D-27 (a) Swahili off until G5; D-28 (a) the
+JS budget counts gzipped bodies; D-29 (a) no refusal fallback models; D-30 (c) a dispute against an E2 organisation
+suspends it; D-31 (a) the E2 badge placeholder; D-32 (a) the digest hardening, (c) before staging; D-33 no name or
+title on `/verify` until the opt-in column exists; D-34 (a); D-38 (a) research excerpts local only; D-39 (a) the
+legal and privacy texts are `[[COPY-REVIEW]]` drafts; D-40 (a)+(c) Tier-2 routes 404 to non-members; D-41 (a) the
+spec's model allocation; D-42 (d) only, CodeQL checked on every branch (your decision needed; recommended (a)+(d));
+D-43 (a) scout Tier-2 isolation by tests; D-44 (a) sample prices labelled; D-45 (a); D-46 (a) the trend definer owned
+by `bridge_owner`; D-47 (a) the profiling consent covers liked niches and county; D-48 (a) separate staff accounts;
+D-49 (a) the support contact placeholder until G2; D-50 (a) E1 and E2 organisations count toward `scout_match`
+(recommended (c)); D-51 (b) the ECC structural items are listed, not refactored in M2.
+
+**Variables to fill in on the laptop** (in `backend/.env`; names only, never values in chat or git). LLM:
+`LLM_PROVIDER`, `LLM_PROTOTYPE_TOTAL_CAP_USD`, `LLM_FREE_<N>_BASE_URL`, `LLM_FREE_<N>_API_KEY`, `LLM_FREE_<N>_MODEL`,
+`LLM_FREE_<N>_DAILY_REQUESTS`, `LLM_FREE_<N>_RESPONSE_FORMAT` (N = 1 to 3), `ANTHROPIC_API_KEY`, `LLM_KILL_SWITCH`,
+`LLM_GLOBAL_DAILY_CAP_USD`, `LLM_MODELS_FILE`; without them every AI feature answers with the labelled demo fallback.
+Payments: `PAYMENT_PROVIDER` (`fake` in the demo) and `FAKE_PAYMENT_DELAY_SECONDS`.
+
+**Deviations and notes.** The flake check's runs ran one after another, not at once: `pr.yml` cancels a run when
+another starts on the same branch. The container restarted once (git state intact; Docker restarted by hand). The
+ECC review's size rules were not applied (D-51), with every finding listed. A local `npm ci` replaced a symlinked
+`node_modules` in one worktree because Turbopack refuses a link outside the project.
+
+**Next.** Your decisions: D-42 (CodeQL), D-50, D-51 and the open G-gates in `GATES.md`. Then, by the plan: the 0006
+items (indexes from P16-E1, the burst detector), the Phase 7 UX pass (with D-51's splits) and Phase 8 hardening.
 
 ### M1 report (2026-09-29): the core flow works end to end on `make demo`
 
@@ -692,5 +725,5 @@ merge after this tag, in the order of `docs/platform/prototype-m2-plan.md`.
 | P13 submission assistant | done: backend `7e813ce`, editor panel `16285de` | M2 |
 | P14 subscriptions + fake M-Pesa | done: backend `6fb3f00`, screens `4569f90` | M2 |
 | P15 admin queues | done: backend `a5386ad`, screens `a07b269` | M2 |
-| P16 packaging: polish, walkthrough video, README Demo | part A done (`b5c344f`: /help, notification settings, one date format); skill-chain polish, README, video in the next session | M2 |
+| P16 packaging: polish, walkthrough video, README Demo | done: part A `b5c344f`; design system `238b884`; screens `02a1953`, `106f01f`; walkthrough `14e19c7`; README `c6873e8`; frontend depth `fc87608`; backend and tests `a94ab33`, `2bb3d7b`, `5976870`, `866aec2`; ECC review `83e4ed9` | M2 |
 | P17 auth follow-ups 7–8 (BLOCKER fix) | done: backend merged; screens `ad04678` (Cancel setup, new recovery codes) | after M1 |
