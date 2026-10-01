@@ -2347,7 +2347,8 @@
     "step": {
       "confirm": "Thibitisha",
       "phone": "Angalia simu yako",
-      "done": "Imekamilika"
+      "done": "Imekamilika",
+      "notPaid": "Haijalipwa"
     },
     "stepDone": "{name}: imekamilika",
     "stepFailed": "{name}: haikukamilika",

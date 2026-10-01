@@ -152,8 +152,14 @@ describe("the simulated checkout", () => {
       "The M-Pesa account had too little money, so your plan has not changed.",
     );
     expect(primaries()).toHaveLength(1);
+    // The steps say so too: the phone step not completed, the step it stands on "Not paid", never "Done".
+    expect(document.querySelector("[data-failed]")?.textContent).toContain("Check your phone: not completed");
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Not paid");
+    expect(screen.queryByText("Done")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(phase()).toBe("confirm");
+    expect(document.querySelector("[data-failed]")).toBeNull();
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Confirm");
     // Focus moves to the step that opened again, never back to <body>.
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "You pay" }));
     expect(window.location.search).not.toContain("checkout=");
@@ -170,6 +176,7 @@ describe("the simulated checkout", () => {
     // The phone step is marked as not completed, never as done (ux review round 3).
     expect(document.querySelector("[data-failed]")?.textContent).toContain("Check your phone: not completed");
     expect(document.querySelector("[data-done]")?.textContent).toContain("Confirm");
+    expect(document.querySelector("[aria-current='step']")?.textContent).toBe("Not paid");
   });
 
   it("stops polling after the budget and polls again on Check again", async () => {

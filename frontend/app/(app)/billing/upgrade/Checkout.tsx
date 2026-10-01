@@ -284,11 +284,12 @@ function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; 
 
 /**
  * The three steps as an ordered list with aria-current="step" (docs/spec/07 item 6); not buttons: it only shows. A
- * payment that failed or was cancelled marks the phone step as not completed rather than done.
+ * payment that failed or was cancelled marks the phone step as not completed rather than done, and names the step
+ * it stands on "Not paid" rather than "Done".
  */
 function Steps({ current, failed = false }: { current: 1 | 2 | 3; failed?: boolean }) {
   const t = useStrings("checkout");
-  const names = [t("step.confirm"), t("step.phone"), t("step.done")];
+  const names = [t("step.confirm"), t("step.phone"), failed ? t("step.notPaid") : t("step.done")];
   return (
     <ol aria-label={t("stepsLabel")} className="grid grid-cols-3 gap-2">
       {names.map((name, index) => {
