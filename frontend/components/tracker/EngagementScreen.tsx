@@ -1,14 +1,11 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
-// Its own chunk, fetched only by a closed tracker: an open one stays under the 150 KB JS budget (AC-UX-3).
-const ClosedCelebration = dynamic(() => import("@/components/tracker/ClosedCelebration").then((m) => m.ClosedCelebration));
-
 import { ClientStrings } from "@/components/ClientStrings";
-import dynamic from "next/dynamic";
 import { cookies } from "next/headers";
 
 import { celebrationSeenFromCookies } from "@/components/tracker/celebration-store";
+import { ClosedCelebration } from "@/components/tracker/ClosedCelebration";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -117,6 +114,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 max-w-3xl">
         <WhoseTurn detail={detail} />
       </div>
+      {/* The one-time celebration of a closed engagement, drawn on the server; the cookie says whether it was seen. */}
       {detail.state === "CLOSED" ? (
         <ClosedCelebration
           engagementId={detail.id}
