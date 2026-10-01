@@ -8,8 +8,6 @@ import type { Me } from "@/lib/auth/routing";
 // a product screen (test/ fixtures cannot be imported under app/, so these are the lab's own copies). Every figure is
 // a demo figure and the screens label them so.
 
-export const PLACEHOLDER_NAME = "Wazo";
-
 export const ME: Me = {
   side: "developer",
   memberships: [],
@@ -208,16 +206,4 @@ export const NDA: EvaluationNda = {
     "2. Confidentiality. The organisation keeps the full proposal confidential, shares it only with the people who evaluate it, and does not build from it without a signed agreement.\n\n" +
     "3. Record. The platform records every opening and shows that record to the developer.\n\n" +
     "4. Term. These obligations last two years from the first opening.",
-};
-
-export const EMAIL = {
-  subject: `Your day on ${PLACEHOLDER_NAME} (Thu 1 Oct): 2 things need you`,
-  headline: "Good morning Achieng. Two engagements wait on you today, one deadline is close.",
-  sections: [
-    { title: "Needs you", lines: ["Sign the mutual NDA with Telco A (fixture) — due Tuesday 7 October", "Reply to Jamii Health (fixture) on milestone 2"] },
-    { title: "Waiting on others", lines: ["Kenya Towers (fixture) is reviewing Fuel-level alerts for off-grid tower sites (2 business days left)"] },
-  ],
-  nextStep: "Open the tracker and sign the NDA: it takes about a minute with your authenticator.",
-  cta: "Open your tracker",
-  footer: "You get this daily reminder because reminders are on for your account. Sent from Nairobi, 07:30 EAT.",
 };

@@ -5,8 +5,6 @@ export const SCREENS = [
   { key: "tracker", label: "Tracker" },
   { key: "proposal", label: "NDA + full proposal" },
   { key: "checkout", label: "M-Pesa checkout" },
-  { key: "email", label: "Email" },
-  { key: "tokens", label: "Tokens" },
 ] as const;
 export type ScreenKey = (typeof SCREENS)[number]["key"];
 
