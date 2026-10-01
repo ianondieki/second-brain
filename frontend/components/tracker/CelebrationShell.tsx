@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { focusPageTitle } from "@/lib/focus";
@@ -33,9 +33,10 @@ export function CelebrationShell({
   children: ReactNode;
 }) {
   const seen = useSyncExternalStore(subscribeCelebration, () => celebrationSeen(engagementId), () => initialSeen);
+  // Mounted: what is drawn now follows the store, so the before-paint hide (CELEBRATION_INIT_SCRIPT) steps aside,
+  // before the first paint (a layout effect), so a card another page's marker would hide is never painted hidden.
+  useLayoutEffect(clearCelebrationMarker, []);
   useEffect(() => {
-    // Hydrated: what is drawn now follows the store, so the before-paint hide (CELEBRATION_INIT_SCRIPT) steps aside.
-    clearCelebrationMarker();
     if (!seen) haptic("success");
     // Storage remembers longer than a cookie set from a page may: write the cookie again when it lapsed.
     else if (!celebrationCookieSet(engagementId)) rememberCelebrationCookie(engagementId);

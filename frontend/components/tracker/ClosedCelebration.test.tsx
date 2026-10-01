@@ -48,6 +48,19 @@ describe("ClosedCelebration", () => {
     expect(screen.queryByRole("region")).toBeNull();
   });
 
+  it("clears the before-paint marker when it mounts, so a card another page's marker would hide is shown", () => {
+    document.documentElement.setAttribute("data-celebration-seen", "e-9");
+    render(<ClosedCelebration {...props} engagementId="e-10" initialSeen={false} />);
+    expect(document.documentElement.hasAttribute("data-celebration-seen")).toBe(false);
+    expect(screen.getByRole("region", { name: "Closed and done" })).toBeTruthy();
+    cleanup();
+    document.documentElement.setAttribute("data-celebration-seen", "e-9");
+    window.localStorage.setItem("wazo-closed:v1:e-9", "seen");
+    render(<ClosedCelebration {...props} engagementId="e-9" initialSeen={false} />);
+    expect(document.documentElement.hasAttribute("data-celebration-seen")).toBe(false); // hydration has the last word
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
   it("is remembered per engagement, in storage or in the cookie", () => {
     window.localStorage.setItem("wazo-closed:v1:e-1", "seen");
     render(<ClosedCelebration {...props} engagementId="e-2" />);
