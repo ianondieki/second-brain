@@ -9680,7 +9680,7 @@
     }
   },
   "info": {
-    "title": "Bridge (working name) API",
+    "title": "Wazo API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
