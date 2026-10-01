@@ -17,7 +17,7 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*"
   },
   "app": {
     "name": "Wazo",
@@ -2365,5 +2365,35 @@
     "organisations": "Pitched to {count, plural, one {# organisation} other {# organisations}}",
     "openIdea": "Open the idea",
     "rowsLabel": "Organisations for {title}"
+  },
+  "tour": {
+    "stepOf": "Step {current} of {total}",
+    "skip": "Skip tour",
+    "next": "Next",
+    "done": "Done",
+    "devHome": {
+      "title": "This is your home",
+      "body": "What needs you comes first: your turn on an engagement, a deadline, a recommendation worth a look."
+    },
+    "devIdeas": {
+      "title": "Every idea gets a certificate",
+      "body": "Publishing registers the version with a timestamp and a fingerprint. Anyone can check it on the verify page."
+    },
+    "devTracker": {
+      "title": "One tracker for both sides",
+      "body": "When a company opens a conversation, you both follow the same five stages, with deadlines and reminders."
+    },
+    "orgInbox": {
+      "title": "Proposals arrive in your Inbox",
+      "body": "Developers pitch to you, and your scout brings proposals that match the problems you describe."
+    },
+    "orgNda": {
+      "title": "Full details open under one NDA",
+      "body": "The teaser is public. The full proposal opens after the Evaluation NDA, and each opening is recorded for the author."
+    },
+    "orgTracker": {
+      "title": "One tracker for both sides",
+      "body": "From first look to a signed agreement: both sides follow the same five stages, with deadlines and reminders."
+    }
   }
 }

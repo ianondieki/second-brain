@@ -56,6 +56,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "fields",
   "validation",
   "errors",
+  "tour",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

@@ -17,7 +17,7 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*"
   },
   "app": {
     "name": "Wazo",
@@ -2365,5 +2365,35 @@
     "organisations": "Mashirika yaliyopokea: {count}",
     "openIdea": "Fungua wazo",
     "rowsLabel": "Mashirika ya {title}"
+  },
+  "tour": {
+    "stepOf": "Hatua {current} kati ya {total}",
+    "skip": "Ruka ziara",
+    "next": "Inayofuata",
+    "done": "Nimemaliza",
+    "devHome": {
+      "title": "Hii ndiyo nyumbani kwako",
+      "body": "Kinachokusubiri huja kwanza: zamu yako kwenye ushirikiano, tarehe ya mwisho, pendekezo linalostahili kuangaliwa."
+    },
+    "devIdeas": {
+      "title": "Kila wazo hupata cheti",
+      "body": "Kuchapisha husajili toleo na muhuri wa wakati na alama ya kidole. Mtu yeyote anaweza kukikagua kwenye ukurasa wa uthibitishaji."
+    },
+    "devTracker": {
+      "title": "Kifuatiliaji kimoja kwa pande zote mbili",
+      "body": "Kampuni ikifungua mazungumzo, nyote mnafuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+    },
+    "orgInbox": {
+      "title": "Mapendekezo huwasili kwenye Kikasha chenu",
+      "body": "Wasanidi programu huwasilisha kwenu, na skauti wenu huleta mapendekezo yanayolingana na matatizo mnayoeleza."
+    },
+    "orgNda": {
+      "title": "Maelezo kamili hufunguliwa chini ya NDA moja",
+      "body": "Muhtasari ni wa umma. Pendekezo kamili hufunguliwa baada ya NDA ya tathmini, na kila ufunguaji hurekodiwa kwa mwandishi."
+    },
+    "orgTracker": {
+      "title": "Kifuatiliaji kimoja kwa pande zote mbili",
+      "body": "Kutoka mtazamo wa kwanza hadi makubaliano yaliyosainiwa: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+    }
   }
 }

@@ -4,7 +4,10 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { HomeSummary } from "@/components/HomeSummary";
 import { OrgNav } from "@/components/OrgNav";
+import { ClientStrings } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
+import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
+import { clientStrings } from "@/lib/i18n/client-strings";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Section } from "@/components/ui/Section";
 import { needsMfaSetup } from "@/lib/auth/routing";
@@ -30,6 +33,9 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   const setupNeeded = needsMfaSetup(me.mfa);
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />}>
+      <ClientStrings strings={await clientStrings(["tour"])}>
+        <FirstLoginTour side="org" />
+      </ClientStrings>
       <HomeSummary me={me} lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")} />
       {missing === "notMember" ? (
         <div className="mt-10">

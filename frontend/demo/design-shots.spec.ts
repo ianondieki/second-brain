@@ -30,6 +30,8 @@ interface Shot {
   prepare?: (page: Page) => Promise<void>;
   /** Selectors axe leaves out (a sandboxed frame it cannot run inside). */
   exclude?: string[];
+  /** Let the first-login tour show (every other shot remembers it as done). */
+  tour?: boolean;
 }
 
 const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name: string }> = {
@@ -43,6 +45,9 @@ const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name:
 const SHOTS: Shot[] = [
   { name: "landing", path: "/", who: "none" },
   { name: "home", path: "/dev", who: "dev" },
+  { name: "tour", path: "/dev", who: "dev", tour: true, prepare: async (page) => {
+      await page.getByRole("dialog").waitFor();
+    } },
   { name: "tracker", path: "/dev/engagements", who: "dev", prepare: async (page) => {
       await page.locator("main").getByRole("heading", { level: 3 }).first().getByRole("link").click();
       await page.locator("[data-whose-turn]").waitFor();
@@ -134,7 +139,14 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
           colorScheme: theme,
           storageState: state,
         });
-        await context.addInitScript((choice) => window.localStorage.setItem("wazo-theme", choice), theme);
+        await context.addInitScript(
+          ({ choice, tour }) => {
+            window.localStorage.setItem("wazo-theme", choice);
+            if (tour) window.localStorage.removeItem("wazo-tour:v1");
+            else window.localStorage.setItem("wazo-tour:v1", "done");
+          },
+          { choice: theme, tour: shot.tour === true },
+        );
         const page = await context.newPage();
         await page.goto(shot.path, { waitUntil: "networkidle" });
         if (shot.prepare) await shot.prepare(page);

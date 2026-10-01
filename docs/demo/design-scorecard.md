@@ -18,3 +18,4 @@ Screenshots: `docs/demo/screenshots/p18/<name>-<theme>-<width>.jpg`; the strict 
 | Check your email | `check-email` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | resent (success), error, no remembered address | one secondary action | round 1 fixed; round 2 pending | waiting drawing |
 | Sign-in link | `link-failed` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | checking (waiting drawing), failed, interrupted, no password | | round 1 fixed; round 2 pending | |
 | Two-step | `two-step`, `two-step-recovery` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | app code, recovery code, invalid code | large code field, 44 px switch | round 1 fixed; round 2 pending | |
+| First-login tour | `tour` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | step 1–3, skip, done, remembered (unit + e2e/tour.spec.ts) | non-modal, 44 px buttons, rises once (reduced motion: in place) | round 2 pending | three steps per side; above the tab bar on phones |

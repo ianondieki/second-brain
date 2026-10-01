@@ -15,6 +15,9 @@ import { Callout } from "@/components/ui/Callout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
+import { ClientStrings } from "@/components/ClientStrings";
+import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
+import { clientStrings } from "@/lib/i18n/client-strings";
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
 import { formatShortDate } from "@/lib/format";
 
@@ -50,6 +53,9 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
 
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
+      <ClientStrings strings={await clientStrings(["tour"])}>
+        <FirstLoginTour side="developer" />
+      </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader
           title={th("title", { name: me.user.display_name })}

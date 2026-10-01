@@ -285,6 +285,21 @@ html[data-theme="dark"] .lattice-band {
   }
 }
 
+/* The first-login tour rises into place once; reduced motion shows it in place. */
+@keyframes tour-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tour-enter {
+  animation: tour-enter var(--motion-base) var(--ease-out) both;
+}
+
 /* The seal on the certificate sheet draws its ring once; reduced motion shows it drawn. */
 @keyframes seal-draw {
   from {
@@ -330,7 +345,8 @@ html[data-theme="dark"] .lattice-band {
     scroll-behavior: auto !important;
   }
 
-  .seal-draw {
+  .seal-draw,
+  .tour-enter {
     animation: none !important;
   }
 }
