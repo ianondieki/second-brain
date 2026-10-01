@@ -2,8 +2,17 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "./cn";
 
+/**
+ * A card whose one link (its title) covers the whole card: the link stretches over the card, keeps no underline,
+ * and the card itself shows the hover and the focus ring (the link's own outline is off). Put this on the title's
+ * <a> inside a Card with `interactive`.
+ */
+export const cardLinkClass = "no-underline text-ink after:absolute after:inset-0 after:rounded-panel focus-visible:outline-none";
+
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   as?: "article" | "div" | "section" | "li";
+  /** The card holds one stretched link (cardLinkClass): hover and focus show on the card. */
+  interactive?: boolean;
   /** `raised` carries the card shadow; `flat` is a bordered box on the paper (compact lists). */
   variant?: "raised" | "flat" | "wash";
   padding?: "sm" | "md";
@@ -17,9 +26,20 @@ const VARIANTS = {
 } as const;
 
 /** A card (docs/platform/design/p18-design-system.md): a bordered box with the panel radius; raised cards carry the one card shadow. */
-export function Card({ as: Tag = "div", variant = "raised", padding = "md", className, children, ...rest }: CardProps) {
+export function Card({ as: Tag = "div", variant = "raised", padding = "md", interactive = false, className, children, ...rest }: CardProps) {
   return (
-    <Tag className={cn("relative min-w-0 rounded-panel", VARIANTS[variant], padding === "md" ? "p-5" : "p-4", className)} {...rest}>
+    <Tag
+      className={cn(
+        "relative min-w-0 rounded-panel",
+        VARIANTS[variant],
+        padding === "md" ? "p-5" : "p-4",
+        interactive &&
+          "transition-[border-color,box-shadow] duration-(--motion-fast) hover:border-accent-line hover:shadow-overlay " +
+            "has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-accent",
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </Tag>
   );
@@ -28,7 +48,7 @@ export function Card({ as: Tag = "div", variant = "raised", padding = "md", clas
 /** Cards side by side: one column on phones, two from 640 px. */
 export function CardGrid({ className, children, ...rest }: HTMLAttributes<HTMLUListElement> & { children: ReactNode }) {
   return (
-    <ul className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2", className)} {...rest}>
+    <ul className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 [&>li]:min-w-0 [&>li>*]:h-full", className)} {...rest}>
       {children}
     </ul>
   );

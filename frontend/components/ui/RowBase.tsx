@@ -26,7 +26,8 @@ export function RowList({ ordered = false, rule = true, cards = false, className
     <Tag
       className={cn(
         cards
-          ? "grid grid-cols-1 gap-4 sm:grid-cols-2 [&>li]:min-w-0 [&>li]:rounded-panel [&>li]:border [&>li]:border-line [&>li]:bg-field [&>li]:px-4 [&>li>article]:border-t-0 [&>li>article]:py-4"
+          ? "grid grid-cols-1 gap-4 sm:grid-cols-2 [&>li]:min-w-0 [&>li]:rounded-panel [&>li]:border [&>li]:border-line [&>li]:bg-field [&>li]:px-4 [&>li>article]:border-t-0 [&>li>article]:py-4 " +
+            "[&>li]:transition-[border-color] [&>li]:duration-(--motion-fast) [&>li:hover]:border-accent-line [&_h3>a]:no-underline [&_h3>a]:hover:text-accent"
           : "flex flex-col",
         !rule && !cards && "[&>li:first-child>article]:border-t-0",
         className,

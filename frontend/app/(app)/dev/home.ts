@@ -17,8 +17,10 @@ import { isFinished } from "@/components/tracker/model";
 export interface HomeStats {
   /** Ideas the developer can still act on (hidden and archived ones are not counted). */
   ideas: number;
-  /** Among them, ideas with unpublished work. */
+  published: number;
+  /** Ideas not yet published (status draft); a published idea's saved edits are "unpublished changes", counted apart. */
   drafts: number;
+  changes: number;
   engagements: number;
   active: number;
   /** The soonest deadline among the active engagements, and whose it is. */
@@ -33,7 +35,9 @@ export function homeStats(engagements: readonly Summary[], ideas: readonly MyPro
   const withDue = active.filter((item) => item.due).sort((a, b) => a.due!.due_on.localeCompare(b.due!.due_on));
   return {
     ideas: live.length,
-    drafts: live.filter((idea) => idea.status === "draft" || idea.has_draft).length,
+    published: live.filter((idea) => idea.status === "published").length,
+    drafts: live.filter((idea) => idea.status === "draft").length,
+    changes: live.filter((idea) => idea.status === "published" && idea.has_draft).length,
     engagements: engagements.length,
     active: active.length,
     nextDue: withDue[0]?.due ?? null,

@@ -1,5 +1,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
+import { DemoBadge } from "./DemoBadge";
+
 import { listedProblemLabel, type ListedProblem } from "./problem";
 
 /**
@@ -13,5 +15,7 @@ export function ProblemLabelText({ problem }: { problem: ListedProblem }) {
   if (!label) return null;
   const text =
     label.key === "api" ? label.text : label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date });
+  // A seeded example: the small "Demo data" badge, the sentence on demand (D-52).
+  if (label.key === "seeded") return <DemoBadge label={t("label.demoBadge")} sentence={text} data-label={label.key} />;
   return <span data-label={label.key}>{text}</span>;
 }

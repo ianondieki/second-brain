@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import { titleLinkClass } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, cardLinkClass } from "@/components/ui/Card";
 import { LinkPending } from "@/components/ui/LinkPending";
 
 import { formatDay } from "./dates";
@@ -15,9 +14,9 @@ export function IdeaCard({ item }: { item: MyProposalItem }) {
   const t = useTranslations("ideas");
   const locale = useLocale();
   return (
-    <Card as="article" variant="flat" padding="sm" className="flex flex-col gap-1.5">
+    <Card as="article" variant="flat" padding="sm" interactive className="flex flex-col gap-1.5">
       <h3 className="text-base [overflow-wrap:anywhere] text-ink">
-        <Link href={ideaHref(item.id)} className={`${titleLinkClass} after:absolute after:inset-0`}>
+        <Link href={ideaHref(item.id)} className={cardLinkClass}>
           {item.title?.trim() || t("untitled")}
           <LinkPending className="absolute -top-px left-0" />
         </Link>

@@ -44,8 +44,9 @@ describe("provenance", () => {
     // The API's English label says "30 September 2026"; the page builds its own, in the problem page's date format.
     const item = recommendation({ problem: { ...recommendation().problem, label: seeded, seeded_example: true } });
     const home = renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [item] }))} />);
+    // A seeded example shows the small "Demo data" badge with the full sentence behind it (D-52).
     expect(document.querySelector("[data-label]")?.textContent).toBe(
-      "Seeded example for the demo (not a live AI result), human-reviewed on 30 Sep 2026",
+      "Demo dataSeeded example for the demo (not a live AI result), human-reviewed on 30 Sep 2026",
     );
     home.unmount();
     // An API without the field: its own words, never a guess.

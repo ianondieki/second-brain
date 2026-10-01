@@ -6,17 +6,17 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { EngagementCard } from "@/components/tracker/EngagementCard";
 import type { Summary } from "@/components/tracker/model";
 import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
-import { Badge } from "@/components/ui/Badge";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { CardGrid } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/icons";
+import { AlertIcon, InfoIcon } from "@/components/ui/icons";
+import { Callout } from "@/components/ui/Callout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
-import { formatCalendarDate } from "@/lib/format";
+import { formatShortDate } from "@/lib/format";
 
 import { RecommendedForYou } from "./discover/RecommendedForYou";
 import type { RecommendationsState } from "./discover/recommendations";
@@ -46,7 +46,6 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
   const { waiting, others } = homeGroups(engagements);
   const stats = homeStats(engagements, ideas);
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
-  const MfaIcon = mfa === "on" ? CheckIcon : mfa === "required" ? AlertIcon : InfoIcon;
   const rowHref = (id: string) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}`;
 
   return (
@@ -67,7 +66,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
         <section aria-label={t("stats.label")} data-home="stats">
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <li>
-              <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { count: stats.drafts })} href="/dev/ideas" />
+              <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
             </li>
             <li>
               <StatTile data-stat="engagements" label={t("stats.engagements")} value={stats.engagements} meta={t("stats.engagementsMeta", { count: stats.active })} href={ENGAGEMENTS_PATH} />
@@ -79,7 +78,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
               <StatTile
                 data-stat="deadline"
                 label={t("stats.deadline")}
-                value={stats.nextDue ? formatCalendarDate(locale, stats.nextDue.due_on) : t("stats.deadlineNone")}
+                value={stats.nextDue ? formatShortDate(locale, stats.nextDue.due_on) : t("stats.deadlineNone")}
                 meta={
                   stats.nextDue
                     ? stats.nextDue.overdue
@@ -94,6 +93,16 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
             </li>
           </ul>
         </section>
+
+        {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
+        {mfa !== "on" ? (
+          <Callout tone={mfa === "required" ? "error" : "info"} icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />} data-home="security">
+            <p>{mfa === "required" ? th("mfaRequired") : th("mfaOff")}</p>
+            <Link href="/settings/security" className={standaloneLinkClass}>
+              {th("setUp")}
+            </Link>
+          </Callout>
+        ) : null}
 
         {engagements.length === 0 ? (
           <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/ideas" />
@@ -143,16 +152,6 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
           </Section>
         ) : null}
 
-        <Section title={t("security")} headingId="home-security" data-home="security">
-          <div className="flex flex-col items-start gap-1">
-            <Badge tone={mfa === "on" ? "ok" : mfa === "required" ? "error" : "neutral"} icon={<MfaIcon />}>
-              {mfa === "on" ? th("mfaOn") : mfa === "required" ? th("mfaRequired") : th("mfaOff")}
-            </Badge>
-            <Link href="/settings/security" className={standaloneLinkClass}>
-              {me.mfa.enrolled ? th("manage") : th("setUp")}
-            </Link>
-          </div>
-        </Section>
       </div>
     </SignedInShell>
   );
