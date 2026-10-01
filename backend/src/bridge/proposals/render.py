@@ -39,7 +39,9 @@ STYLE: Final = (
     # The P18 palette (frontend/app/globals.css) in a page that loads nothing: no web fonts (a serif stack for the
     # title), no images (the lattice echo is a gradient band). The per-viewer mark keeps its ink, opacity and size from
     # before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
-    ":root{color-scheme:light}"
+    # Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used color-scheme
+    # (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
+    ":root{color-scheme:light dark}"
     'body{margin:0;background:#fbfaf6;color:#1a1916;font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",'
     "Roboto,sans-serif}"
     "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#1f5e49 0 5px,"
@@ -58,6 +60,10 @@ STYLE: Final = (
     "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
     "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1a1916;font-size:.8rem;"
     "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}"
+    "@media (prefers-color-scheme:dark){body{background:#131412;color:#ece9e1}"
+    "body::before{background:repeating-linear-gradient(-45deg,#7fcbab 0 5px,#a08b48 5px 10px)}"
+    ".label{color:#e0b85a}.owner,.note,.mark{color:#b4b0a5}a{color:#7fcbab}.mark{border-top-color:#30312c}"
+    ".overlay{color:#ece9e1}}"
     "@media print{.overlay{opacity:.2}}"
 )
 STYLE_HASH: Final = base64.b64encode(hashlib.sha256(STYLE.encode("utf-8")).digest()).decode("ascii")
@@ -100,7 +106,10 @@ class ViewerMark:
 
 
 def eat(ts: datetime, *, seconds: bool = False) -> str:
-    return ts.astimezone(NAIROBI).strftime("%Y-%m-%d %H:%M:%S EAT" if seconds else "%Y-%m-%d %H:%M EAT")
+    """A moment as the product writes it everywhere ("1 Oct 2026, 11:42 EAT"; docs/spec/07 item 7)."""
+    local = ts.astimezone(NAIROBI)
+    clock_part = local.strftime("%H:%M:%S" if seconds else "%H:%M")
+    return f"{local.day} {local:%b %Y}, {clock_part} EAT"
 
 
 def mark_text(viewer: ViewerMark) -> str:
