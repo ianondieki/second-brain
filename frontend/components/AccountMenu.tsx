@@ -7,6 +7,7 @@ import { MenuOptions } from "./AccountMenuScope";
 import { menuBillingHref } from "./billing-link";
 import { useStrings } from "./ClientStrings";
 import { SignOutButton } from "./SignOutButton";
+import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "./ui/cn";
 import { Icon, type IconProps } from "./ui/status-icons";
 
@@ -33,7 +34,7 @@ const NOTIFICATIONS_HREF = "/settings/notifications";
 const HELP_HREF = "/help";
 
 const itemClass =
-  "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-jacaranda-wash";
+  "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
 
 // The popover floats over the page: the one elevation (shadow-overlay, docs/platform/design/p16-design-system.md).
 
@@ -83,9 +84,9 @@ export function AccountMenu() {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
-        className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-ink hover:bg-jacaranda-wash"
+        className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-ink hover:bg-accent-wash"
       >
-        <span className="flex size-8 items-center justify-center rounded-full bg-jacaranda-wash text-jacaranda">
+        <span className="flex size-8 items-center justify-center rounded-full bg-accent-wash text-accent">
           <PersonIcon className="size-5" />
         </span>
         {/* Under 640 px the avatar carries the name alone, so the working name keeps one line. */}
@@ -121,12 +122,16 @@ export function AccountMenu() {
             </a>
           </li>
         </ul>
+        <div className="mt-1 border-t border-line px-1 pt-2 pb-1">
+          <p className="px-2 text-xs font-medium text-ink-soft">{t("theme.label")}</p>
+          <ThemeToggle className="mt-1" />
+        </div>
         {/* Sign out reads as a menu item like the links above it; its failure notice stays under it. */}
         <div
           className={
             "mt-1 flex border-t border-line pt-1 [&>div]:w-full [&>div]:items-stretch [&>div>p]:px-3 [&>div>p]:text-left " +
             "[&_button]:w-full [&_button]:justify-start [&_button]:rounded-control [&_button]:px-3 [&_button]:text-ink " +
-            "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-jacaranda-wash [&_button:hover]:text-ink"
+            "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-accent-wash [&_button:hover]:text-ink"
           }
         >
           <SignOutButton />
