@@ -63,3 +63,19 @@ branch (`docs/platform/design/p18-design-system.md` is the system's record):
 
 Also: `e2e/auth.spec.ts` reads the new `--ink-soft` value. Checks as above (1275 unit tests, production build).
 Waiting on the owner's OK before the roll-out (the owner switches the model to Opus 5.5 for it).
+
+## Steps 3 and 4 (2026-10-01): the roll-out, the gate and the pitch assets
+
+Every remaining screen in demo-story order (sign-in and sign-up, the tour, My ideas and the editor, /verify, the
+organisation Home and Inbox, the NDA step and the marked page, the scout match and form, Discover and the problem
+page, billing and the drawn M-Pesa handset, the staff console's dense tables, help, settings, the lists, every empty
+state), the feel (haptics, the one-time closed celebration, bottom sheets) and the branded emails, each through the
+quality loop (frontend-design and impeccable, screenshots at 1440 and 375 light and dark, the art-director scores,
+states, interaction, strict axe 0, ux-reviewer); the scorecard is `docs/demo/design-scorecard.md`. The gate:
+`reviewer` PASS (rounds 11 and 12), `ux-reviewer` PASS (round 5), the full Playwright suite and the demo story green
+on the compose stack and in `pr.yml`, CodeQL exactly the eight D-42 findings, Lighthouse performance ≥ 90 and
+accessibility 100 light and dark on every main page, every route under 150 KB gzipped. The pitch assets:
+`docs/demo/screenshots/` re-recorded with the tour beat (00–17; `before-p18/` keeps seven screens from before),
+`docs/demo/hero/`, `docs/demo/overview.md`, `docs/demo/video-script.md`. Open: D-53 (the landing's and the first
+visit's LCP with the self-hosted serif), pending the owner. The final report is in `PROGRESS.md` ("P18 report").
+

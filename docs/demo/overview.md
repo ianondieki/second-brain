@@ -44,19 +44,22 @@ one-pager: the landing, Home, the tracker and the certificate.
 - **Honesty**: "Demo data" and "Demo fallback" labels stay, small and muted; the marked page says what the mark does and
   does not do; no claim of protection anywhere.
 
-## Measured (round 2, 2026-10-01; `design-scorecard.md` has the table)
+## Measured (rounds 2–3, 2026-10-01; `design-scorecard.md` has the tables)
 
 - Lighthouse mobile, light and dark, twelve main pages: performance 91–99, accessibility 100, CLS 0; LCP at or
   under 2.5 s on ten of them, 2.5–2.9 s on the landing's and the developer Home's first uncached visit (D-53).
 - Strict axe: 0 violations on 60 screens × 4 variants; Playwright: the full suite and the demo story green on the
   compose stack; JS under 150 KB gzipped on every route.
 - Every screen scored ≥ 4 of 5 by the art-director pass (hierarchy, typography, colour, spacing, clarity, delight)
-  against Linear, Stripe, Mercury and Wise; `ux-reviewer` and `reviewer` PASS on the final build.
+  against Linear, Stripe, Mercury and Wise; `reviewer` PASS (round 11 over the roll-out's fixes, round 12 over the
+  last ones) and `ux-reviewer` PASS (round 5) on the final build; the closed tracker's celebration and the tour are
+  remembered without a layout shift on any path (CLS 0), pinned by tests that sample the DOM between tasks.
 
 ## Where things are
 
 - Run it: README "Run the demo" (`make demo`, the demo logins, `make demo-totp`).
-- Record it again: `docs/demo/README.md` (`make demo-walkthrough`: video in `docs/demo/video/`, screenshots 00–17).
+- Record it again: `docs/demo/README.md` (`make demo-walkthrough`: video in `docs/demo/video/`, screenshots 00–17;
+  the same seven screens before P18 are kept in `docs/demo/screenshots/before-p18/` for the before-and-after).
 - The 60-second cut: `docs/demo/video-script.md`.
 - Every screen's score, states, interaction and axe result: `docs/demo/design-scorecard.md`; every screenshot
   at 1440 and 375 px, light and dark: `docs/demo/screenshots/p18/`.
