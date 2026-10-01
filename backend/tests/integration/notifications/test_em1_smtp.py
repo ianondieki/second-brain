@@ -73,7 +73,7 @@ async def test_em1_goes_out_over_smtp_with_both_parts_rendered_and_linking_to_th
     link = f"{base}/dev/ideas/{proposal_id}"
     assert f"Open your proposal: {link}" in text
     assert html.count(f'href="{link}"') == 1
-    assert re.findall(r'<a data-cta="[^"]+" href="([^"]+)"', html) == [link]  # the one call to action
+    assert re.findall(r'<a href="([^"]+)" data-cta="[^"]+"', html) == [link]  # the one call to action
     for page in ("(app)/dev/ideas/[id]", "(app)/settings/notifications", "(public)/help"):
         assert (FRONTEND_APP / page / "page.tsx").is_file(), page  # every link opens a page the web app has
     for path in ("/settings/notifications", "/help"):

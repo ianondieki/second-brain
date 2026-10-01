@@ -56,7 +56,8 @@ export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> 
   { source: "/:path*", headers: [NOSNIFF] },
   // The self-hosted fonts (public/fonts, versioned file names): cached like the hashed build assets, so a returning
   // visitor's headline never waits for a revalidation round trip.
-  { source: "/fonts/:path*", headers: [FONT_CACHE] },
-  // Every path except /_next/static/… and /fonts/…: a negative lookahead, as in the Next.js middleware matcher examples.
-  { source: "/((?!_next/static/|fonts/).*)", headers: [...PAGE_HEADERS] },
+  { source: "/fonts/:file([^/]+-v\\d+\\.woff2)", headers: [FONT_CACHE] },
+  // Every path except /_next/static/… and the versioned font files (a /fonts/… 404 is a document too): a negative
+  // lookahead, as in the Next.js middleware matcher examples.
+  { source: "/((?!_next/static/|fonts/[^/]+-v\\d+\\.woff2$).*)", headers: [...PAGE_HEADERS] },
 ];

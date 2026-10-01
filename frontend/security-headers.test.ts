@@ -68,6 +68,12 @@ describe("web security headers", () => {
     });
   });
 
+  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/newsreader-latin.woff2"])("treat %s under /fonts as a page (not cached, with the page headers)", (path) => {
+    const sent = headersFor(path);
+    expect(sent["Cache-Control"]).toBeUndefined();
+    expect(sent["X-Frame-Options"]).toBe("DENY");
+  });
+
   it("match sources in exact case, since Next's default would exempt /_NEXT/static/... pages", () => {
     expect(CASE_SENSITIVE_ROUTES).toBe(true);
     expect(headersFor("/_NEXT/static/x.js", false)).toEqual({ "X-Content-Type-Options": "nosniff" });
