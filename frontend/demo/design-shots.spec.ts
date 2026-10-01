@@ -26,8 +26,8 @@ interface Shot {
   name: string;
   path: string;
   who: Who;
-  /** Steps after the page loaded (open a tab, a dialog, type into a field). */
-  prepare?: (page: Page) => Promise<void>;
+  /** Steps after the page loaded (open a tab, a dialog, type into a field); `false` skips the shot (its state cannot be reached on this stack). */
+  prepare?: (page: Page) => Promise<void | false>;
   /** Selectors axe leaves out (a sandboxed frame it cannot run inside). */
   exclude?: string[];
   /** Let the first-login tour show (every other shot remembers it as done). */
@@ -182,6 +182,50 @@ const SHOTS: Shot[] = [
       await page.getByRole("button", { name: "Start the simulated payment" }).click();
       await page.getByRole("heading", { name: "Payment confirmed" }).waitFor({ timeout: 90_000 });
     } },
+  { name: "admin", path: "/admin", who: "staff" },
+  { name: "admin-research", path: "/admin/research", who: "staff" },
+  // A card waiting for review; with none in the queue, a run (the fake agent) brings some.
+  { name: "admin-research-candidate", path: "/admin/research", who: "staff", prepare: async (page) => {
+      const link = page.locator('main a[href*="/admin/research/candidates/"]').first();
+      if (!(await link.isVisible())) {
+        // The page is rendered on the server: start a run, then reload until the drafted card is listed.
+        await page.getByRole("button", { name: "Start run" }).click();
+        await page.waitForTimeout(3_000);
+        for (let round = 0; round < 12 && !(await link.isVisible()); round++) {
+          await page.waitForTimeout(4_000);
+          await page.reload({ waitUntil: "networkidle" });
+        }
+        if (!(await link.isVisible())) return false; // every saved excerpt is already a card: nothing to review
+      }
+      await link.click();
+      await page.waitForURL(/\/admin\/research\/candidates\//);
+    } },
+  { name: "admin-moderation", path: "/admin/moderation", who: "moderator" },
+  { name: "admin-moderation-case", path: "/admin/moderation", who: "moderator", prepare: async (page) => {
+      await page.locator('main a[href*="/admin/moderation/cases/"]').first().click();
+      await page.waitForURL(/\/admin\/moderation\/cases\//);
+    } },
+  { name: "admin-claims", path: "/admin/claims", who: "staff" },
+  { name: "admin-claim", path: "/admin/claims", who: "staff", prepare: async (page) => {
+      await page.locator('main a[href*="/admin/claims/"]').first().click();
+      await page.waitForURL(/\/admin\/claims\/[^/]+$/);
+    } },
+  { name: "settings-security", path: "/settings/security", who: "dev", prepare: async (page) => {
+      await page.locator('[data-hydrated="true"]').first().waitFor().catch(() => undefined);
+    } },
+  { name: "settings-notifications", path: "/settings/notifications", who: "dev", prepare: async (page) => {
+      await page.locator('[data-hydrated="true"]').first().waitFor().catch(() => undefined);
+    } },
+  { name: "help", path: "/help", who: "dev" },
+  { name: "help-public", path: "/help", who: "none" },
+  { name: "terms", path: "/legal/terms", who: "none" },
+  { name: "companies", path: "/dev/companies", who: "dev" },
+  { name: "company", path: "/dev/companies", who: "dev", prepare: async (page) => {
+      await page.locator('main a[href*="/dev/companies/"]').first().click();
+      await page.waitForURL(/\/dev\/companies\/[^/?]+/);
+    } },
+  { name: "dev-engagements", path: "/dev/engagements", who: "dev" },
+  { name: "org-engagements", path: "/org/engagements", who: "org" },
   { name: "login", path: "/login", who: "none" },
   { name: "login-error", path: "/login", who: "none", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"]').first().waitFor();
@@ -275,7 +319,11 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
         );
         const page = await context.newPage();
         await page.goto(shot.path, { waitUntil: "networkidle" });
-        if (shot.prepare) await shot.prepare(page);
+        if (shot.prepare && (await shot.prepare(page)) === false) {
+          console.log(`${shot.name} ${theme} ${width}: skipped (state not reachable on this stack)`);
+          await context.close();
+          continue;
+        }
         await settled(page);
         await page.evaluate(() => document.fonts.ready);
         // The fixed phone tab bar sits at the page's end in a full-page shot.

@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
-import { RowList } from "@/components/ui/RowList";
+import { DataTable } from "@/components/ui/DataTable";
 import { Section } from "@/components/ui/Section";
 import { ClientStrings } from "@/components/ClientStrings";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -68,7 +68,7 @@ export default async function ResearchPage() {
 
   return (
     <AdminShell role={role} current="research" wide>
-      <div className="flex max-w-3xl flex-col gap-12">
+      <div className="flex max-w-5xl flex-col gap-12">
         {header}
 
         {/* The screen's one panel: where its one primary action lives. */}
@@ -89,11 +89,14 @@ export default async function ResearchPage() {
 
         <Section title={t("queue.heading")} headingId="queue">
           {candidates.length > 0 ? (
-            <RowList ordered aria-labelledby="queue">
+            <DataTable
+              aria-labelledby="queue"
+              columns={[t("columns.card"), t("columns.niche"), t("columns.confidence"), t("columns.sources"), t("columns.drafted")]}
+            >
               {candidates.map((candidate) => (
                 <CandidateRow key={candidate.id} candidate={candidate} niches={niches} />
               ))}
-            </RowList>
+            </DataTable>
           ) : (
             <EmptyState sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
           )}
@@ -101,11 +104,14 @@ export default async function ResearchPage() {
 
         {runs.length > 0 ? (
           <Section title={t("runs.heading")} headingId="runs">
-            <RowList ordered aria-label={t("runs.listLabel")}>
+            <DataTable
+              aria-label={t("runs.listLabel")}
+              columns={[t("columns.niche"), t("columns.started"), t("columns.status"), t("columns.result")]}
+            >
               {runs.slice(0, RUNS_SHOWN).map((run) => (
                 <RunRow key={run.id} run={run} niches={niches} />
               ))}
-            </RowList>
+            </DataTable>
           </Section>
         ) : null}
 

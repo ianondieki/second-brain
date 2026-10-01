@@ -6,7 +6,7 @@ import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { DataTable } from "@/components/ui/DataTable";
 
 import { AdminShell } from "../AdminShell";
 import { PageStepUp } from "../research/PageStepUp";
@@ -38,7 +38,7 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
   // The header's action slot holds "Review the oldest case", the screen's one primary action, when there is one.
   const shell = (children: React.ReactNode, action?: React.ReactNode) => (
     <AdminShell role={role} current="moderation" wide>
-      <div className="flex max-w-3xl flex-col gap-8">
+      <div className="flex max-w-5xl flex-col gap-8">
         <PageHeader title={t("title")} lead={t("lead")} focusable action={action} />
         {children}
       </div>
@@ -69,11 +69,14 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <RowList ordered rule={false} aria-label={view === "open" ? t("listOpen") : t("listDecided")}>
+          <DataTable
+            aria-label={view === "open" ? t("listOpen") : t("listDecided")}
+            columns={[t("columns.case"), t("columns.kind"), t("columns.when"), t("columns.status")]}
+          >
             {items.map((item) => (
               <CaseRow key={item.id} item={item} />
             ))}
-          </RowList>
+          </DataTable>
         ) : view === "open" ? (
           <EmptyState rule={false} sentence={t("emptyOpen")} action={t("emptyOpenAction")} href={viewHref("decided")} />
         ) : (

@@ -17,7 +17,7 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative)"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings)"
   },
   "app": {
     "name": "Wazo",
@@ -973,6 +973,16 @@
       "openPublic": "Fungua kadi ya umma",
       "rejected": "Imekataliwa. Kadi inabaki ya faragha.",
       "backToResearch": "Rudi kwenye Utafiti"
+    },
+    "columns": {
+      "card": "Kadi",
+      "niche": "Niche",
+      "confidence": "Uhakika",
+      "sources": "Vyanzo",
+      "drafted": "Iliandaliwa",
+      "started": "Ilianza",
+      "status": "Hali",
+      "result": "Matokeo"
     }
   },
   "adminModeration": {
@@ -1099,6 +1109,12 @@
       "unsupported_subject": "Kesi za aina hii huamuliwa kutoka kwenye foleni yake, si hapa.",
       "forbidden": "Jukumu lako la wafanyakazi haliwezi kuamua kesi za udhibiti.",
       "generic": "Hilo halikufanikiwa. Angalia muunganisho wako kisha ujaribu tena."
+    },
+    "columns": {
+      "case": "Kesi",
+      "kind": "Aina",
+      "when": "Iliwasilishwa au iliamuliwa",
+      "status": "Hali"
     }
   },
   "adminClaims": {
@@ -1219,6 +1235,13 @@
       "approved": "Imeidhinishwa",
       "rejected": "Imekataliwa",
       "escalated": "Imepelekwa juu"
+    },
+    "columns": {
+      "organisation": "Shirika",
+      "level": "Kiwango",
+      "claimant": "Mdai",
+      "filed": "Iliwasilishwa",
+      "status": "Hali"
     }
   },
   "problem": {
