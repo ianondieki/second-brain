@@ -162,7 +162,7 @@ async function nudgesTo(page: Page, to: string): Promise<number> {
     messages?: Array<{ Subject?: string; To?: Array<{ Address: string }> }>;
   };
   return messages.filter(
-    (m) => /^Your day on Bridge/.test(m.Subject ?? "") && m.To?.some((r) => r.Address.toLowerCase() === to),
+    (m) => /^Your day on Wazo/.test(m.Subject ?? "") && m.To?.some((r) => r.Address.toLowerCase() === to),
   ).length;
 }
 
@@ -453,7 +453,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
       );
     }
     await page.goto(MAILPIT);
-    const nudge = page.getByText(/Your day on Bridge/).first();
+    const nudge = page.getByText(/Your day on Wazo/).first();
     await expect(nudge).toBeVisible(SLOW);
     await expect(page.getByText(/Telco A \(fixture\): (weekly )?progress digest/).first()).toBeVisible();
     await pause(page);
