@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -40,9 +41,11 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   const subject = billingSubject(me, (await searchParams).org);
 
   const shell = (lead: ReactNode, children: ReactNode) => (
-    <SignedInShell homeHref={home}>
-      <PageHeader title={t("pageTitle")}>{lead}</PageHeader>
-      <div className="mt-10">{children}</div>
+    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
+      <div className="max-w-4xl">
+        <PageHeader title={t("pageTitle")}>{lead}</PageHeader>
+        <div className="mt-10">{children}</div>
+      </div>
     </SignedInShell>
   );
 
@@ -97,7 +100,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
       headingId="plans-title"
       description={catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : undefined}
     >
-      <ol data-ladder="" className="flex flex-col gap-4">
+      {/* The ladder: one column on phones, two across from 1024 px so the plans compare side by side. */}
+      <ol data-ladder="" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {plans.map((plan, index) => (
           <PlanCard
             key={plan.code}

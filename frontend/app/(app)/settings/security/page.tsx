@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
@@ -31,10 +32,11 @@ export default async function SecurityPage() {
   const t = await getTranslations("security");
   const tApp = await getTranslations("app");
   const home = homeOf(me);
+  const tNav = await getTranslations("settingsNav");
   return (
-    <SignedInShell homeHref={home}>
+    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
+      <PageHeader title={tNav("label")} back={{ href: home, label: t("back") }} />
       <SettingsTabs current="security" />
-      <PageHeader title={t("pageTitle")} />
       {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
       <ClientStrings
         strings={{
@@ -45,7 +47,7 @@ export default async function SecurityPage() {
         <PasswordStateProvider initial={me.user.password_set}>
           <div className="mt-10 flex max-w-3xl flex-col gap-6">
             <Card variant="flat" className="p-5 sm:p-6">
-              <Section title={t("title")} headingId="two-step-heading" description={t("lead")}>
+              <Section title={t("title")} headingId="two-step-heading" description={t("lead")} headingStyle="card">
                 <SecuritySettings
                   enrolled={me.mfa.enrolled}
                   required={me.mfa.required}

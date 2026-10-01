@@ -21,7 +21,7 @@ export const DEV_SECTIONS = [
 export type DevSection = (typeof DEV_SECTIONS)[number]["key"];
 
 /** The developer portal's navigation (PortalNav: bottom tabs under 1024 px, a left rail from 1024 px). */
-export function DevNav({ current }: { current: DevSection }) {
+export function DevNav({ current }: { current?: DevSection }) {
   const t = useTranslations("nav");
   return (
     <PortalNav

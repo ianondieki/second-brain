@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useId, type HTMLAttributes, type ReactNode } from "react";
 
 import { standaloneLinkClass } from "./Button";
+import { cardHeadingClass } from "./Card";
 import { cn } from "./cn";
 import { LinkPending } from "./LinkPending";
 
@@ -16,6 +17,8 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
   link?: { href: string; label: ReactNode };
   /** The heading takes focus when a change ends there (tabIndex -1, no ring: it is not a control), as PageHeader's. */
   focusable?: boolean;
+  /** `card` inside a card: the card heading (sans, 16 px, semibold) instead of the page's serif section heading. */
+  headingStyle?: "display" | "card";
   children?: ReactNode;
 }
 
@@ -31,6 +34,7 @@ export function Section({
   description,
   link,
   focusable = false,
+  headingStyle = "display",
   className,
   children,
   ...rest
@@ -42,7 +46,11 @@ export function Section({
     <Heading
       id={id}
       tabIndex={focusable ? -1 : undefined}
-      className={cn("text-ink sm:col-start-1 sm:row-start-1", headingLevel === 3 ? "text-base" : "text-lg", focusable && "focus:outline-none")}
+      className={cn(
+        "text-ink sm:col-start-1 sm:row-start-1",
+        headingStyle === "card" ? cardHeadingClass : headingLevel === 3 ? "text-base" : "text-lg",
+        focusable && "focus:outline-none",
+      )}
     >
       {title}
     </Heading>

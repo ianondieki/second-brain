@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useStrings } from "@/components/ClientStrings";
 import { Suspense, useRef, useState, type FormEvent } from "react";
 
 import { AccountUsername } from "@/components/ui/AccountUsername";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
-import { Button, textLinkClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { settle } from "@/lib/api/call";
@@ -250,9 +249,6 @@ export function SecuritySettings({ enrolled, required, homeHref, email, productN
             )}
           </div>
         </section>
-        <Link href={homeHref} className={textLinkClass}>
-          {t("back")}
-        </Link>
       </div>
     );
   }

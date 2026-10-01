@@ -33,7 +33,7 @@ const variants: Record<ButtonVariant, string> = {
  * height of the sentence around it.
  */
 export const textLinkClass =
-  "py-2.5 font-semibold text-accent underline decoration-1 hover:decoration-2 " +
+  "py-3 font-semibold text-accent underline decoration-1 hover:decoration-2 " +
   "hover:text-accent-strong";
 
 /**
@@ -41,7 +41,7 @@ export const textLinkClass =
  * 44 px band (WCAG 2.2 target size), so stacked links never share or overlap a tap area.
  */
 export const standaloneLinkClass =
-  "inline-flex min-h-11 items-center font-semibold text-accent underline decoration-1 hover:decoration-2 " +
+  "inline-flex min-h-11 min-w-11 items-center font-semibold text-accent underline decoration-1 hover:decoration-2 " +
   "hover:text-accent-strong";
 
 /**

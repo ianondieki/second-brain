@@ -9,6 +9,13 @@ import { cn } from "./cn";
  */
 export const cardLinkClass = "no-underline text-ink after:absolute after:inset-0 after:rounded-panel focus-visible:outline-none";
 
+/**
+ * The heading of a group inside a card (a settings card, a form's fieldset, the editor's panels): the text face at
+ * 16 px, semibold; the serif is kept for the page's own h1 and h2 (p18-design-system.md, Type). One style for the role,
+ * wherever the card is.
+ */
+export const cardHeadingClass = "font-sans text-base font-semibold tracking-[-0.005em] text-ink";
+
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   as?: "article" | "div" | "section" | "li" | "fieldset";
   /** The card holds one stretched link (cardLinkClass): hover and focus show on the card. */

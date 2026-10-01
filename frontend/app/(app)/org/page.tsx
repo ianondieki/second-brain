@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
-import { AlertIcon, InfoIcon } from "@/components/ui/status-icons";
+import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
@@ -76,8 +76,13 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
       </div>
 
       <div className="mt-8 flex max-w-4xl flex-col gap-12">
-        {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
-        {mfa !== "on" ? (
+        {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
+        {mfa === "on" ? (
+          <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
+            <CheckIcon className="size-4 shrink-0 text-ok" />
+            {t("mfaOn")}
+          </p>
+        ) : (
           <Callout
             tone={mfa === "required" ? "error" : "info"}
             icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />}
@@ -88,7 +93,7 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
               {t("setUp")}
             </Link>
           </Callout>
-        ) : null}
+        )}
 
         {missing === "notMember" ? <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" /> : null}
 

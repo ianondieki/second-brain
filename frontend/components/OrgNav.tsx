@@ -23,7 +23,7 @@ export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];
  * The organisation portal's navigation (PortalNav, as DevNav). `query` ("?org=<id>" for members of several
  * organisations) keeps the chosen organisation across sections.
  */
-export function OrgNav({ current, query = "" }: { current: OrgSection; query?: string }) {
+export function OrgNav({ current, query = "" }: { current?: OrgSection; query?: string }) {
   const t = useTranslations("nav");
   return (
     <PortalNav
