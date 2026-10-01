@@ -20,6 +20,7 @@ const MIXES: Record<string, string> = {
   "error-line": "color-mix(in oklab, var(--error) 45%, var(--paper))",
   "ok-line": "color-mix(in oklab, var(--ok) 45%, var(--paper))",
   "accent-line": "color-mix(in oklab, var(--accent) 35%, var(--paper))",
+  "warm-line": "color-mix(in oklab, var(--warm) 45%, var(--paper))",
   scrim: "color-mix(in oklab, var(--ink) 45%, transparent)",
 };
 

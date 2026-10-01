@@ -9,7 +9,7 @@ export function initialsOf(name: string): string {
 
 export interface AvatarProps {
   name: string;
-  /** A person is round; an organisation is a rounded square, so the two parties read apart at a glance. */
+  /** Named for tests and styling hooks; both kinds are round (one avatar shape everywhere). */
   kind?: "person" | "org";
   size?: "sm" | "md" | "lg";
   /** Marks the party whose turn it is. */
@@ -21,7 +21,7 @@ export interface AvatarProps {
 
 const SIZES = { sm: "size-7 text-xs", md: "size-9 text-sm", lg: "size-12 text-base" } as const;
 
-/** An avatar with initials (no photos in the prototype): accent on the wash, a ring when it is this party's turn. */
+/** An avatar with initials (no photos in the prototype): round, accent on the wash, a ring when it is this party's turn. */
 export function Avatar({ name, kind = "person", size = "md", active = false, labelled = false, className }: AvatarProps) {
   return (
     <span
@@ -30,8 +30,7 @@ export function Avatar({ name, kind = "person", size = "md", active = false, lab
       aria-label={labelled ? name : undefined}
       aria-hidden={labelled ? undefined : true}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center bg-accent-wash font-semibold text-accent tabular-nums select-none",
-        kind === "person" ? "rounded-full" : "rounded-control",
+        "inline-flex shrink-0 items-center justify-center rounded-full bg-accent-wash font-semibold text-accent tabular-nums select-none",
         active && "ring-2 ring-accent ring-offset-2 ring-offset-paper",
         SIZES[size],
         className,

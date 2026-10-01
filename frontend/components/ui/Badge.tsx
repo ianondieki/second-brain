@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "./cn";
 
-export type BadgeTone = "accent" | "ok" | "error" | "neutral";
+export type BadgeTone = "accent" | "warm" | "ok" | "error" | "neutral";
 
 /**
  * The shape every status mark shares: an icon and words, small and bold. The icon sits on the first line (a 16 px
@@ -13,14 +13,16 @@ export const badgeBase =
 
 const tones: Record<BadgeTone, string> = {
   accent: "text-accent",
+  warm: "text-warm",
   ok: "text-ok",
   error: "text-error",
   neutral: "text-ink-soft",
 };
 
-// Filled only for the one "Your turn" / "Needs you" marker of a row; rounded-full is kept for it and the avatar.
+// Filled only for the one "Your turn" / "Needs you" marker of a row (the warm accent, D-52); rounded-full is kept for it and the avatar.
 const solidTones: Record<BadgeTone, string> = {
   accent: "bg-accent text-on-accent",
+  warm: "bg-warm text-on-warm",
   ok: "bg-ok text-on-ok",
   error: "bg-error text-on-accent",
   neutral: "bg-ink text-paper",

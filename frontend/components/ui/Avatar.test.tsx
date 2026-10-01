@@ -16,7 +16,7 @@ describe("Avatar", () => {
     expect(initialsOf(name)).toBe(initials);
   });
 
-  it("is decorative beside a name, round for a person, square for an organisation, ringed when active", () => {
+  it("is decorative beside a name, round for both kinds, ringed when active", () => {
     const { container } = render(
       <>
         <Avatar name="Achieng Otieno" />
@@ -26,7 +26,7 @@ describe("Avatar", () => {
     const [person, org] = container.querySelectorAll("[data-avatar]");
     expect(person.getAttribute("aria-hidden")).toBe("true");
     expect(person.className).toContain("rounded-full");
-    expect(org.className).toContain("rounded-control");
+    expect(org.className).toContain("rounded-full");
     expect(org.className).toContain("ring-2");
     expect(org.textContent).toBe("TA");
   });

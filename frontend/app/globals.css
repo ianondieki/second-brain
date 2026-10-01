@@ -17,7 +17,10 @@
   --line: #dedacf; /* hairlines and dividers */
   --accent: #1f5e49; /* the one accent: primary buttons, focus ring, current step, 7.4:1 */
   --accent-wash: #e5efe9; /* selected rows, info notices, the landing panel */
-  --flourish: #b89a4a; /* the lattice's second tone, seals and illustration only; never text or status */
+  --flourish: #b89a4a; /* the lattice's second tone and illustration; never text */
+  --warm: #7a5a12; /* the warm accent from the lattice's ochre: "Your turn", success notices, the seal's ring; 6.1:1 */
+  --warm-wash: #f6efdc; /* success notice background */
+  --on-warm: #ffffff; /* text on --warm (6.1:1) */
   --ok: #1f6b47; /* success, always with an icon and words, 6.3:1 */
   --error: #9e2a1f; /* errors, always with an icon and words, 7.0:1 */
   --on-accent: #ffffff; /* text and icons on --accent (7.4:1) */
@@ -30,6 +33,7 @@
   --error-line: color-mix(in oklab, var(--error) 45%, var(--paper)); /* error notice border */
   --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper)); /* success notice border */
   --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper)); /* info notice border */
+  --warm-line: color-mix(in oklab, var(--warm) 45%, var(--paper)); /* success notice border */
   --scrim: color-mix(in oklab, var(--ink) 45%, transparent); /* the one dialog backdrop */
   /* Elevation: a card sits a hair above the paper (one very soft, wide shadow); overlays float. */
   --shadow-card: 0 1px 0 rgb(26 25 22 / 0.04), 0 16px 40px -24px rgb(26 25 22 / 0.22);
@@ -49,6 +53,9 @@ html[data-theme="dark"] {
   --accent: #7fcbab;
   --accent-wash: #1f2f28;
   --flourish: #a08b48;
+  --warm: #e0b85a;
+  --warm-wash: #2a2416;
+  --on-warm: #131412;
   --ok: #7ac79a;
   --error: #ff8f7e;
   --on-accent: #131412;
@@ -67,6 +74,9 @@ html[data-theme="dark"] {
     --accent: #7fcbab;
     --accent-wash: #1f2f28;
     --flourish: #a08b48;
+    --warm: #e0b85a;
+    --warm-wash: #2a2416;
+    --on-warm: #131412;
     --ok: #7ac79a;
     --error: #ff8f7e;
     --on-accent: #131412;
@@ -84,6 +94,10 @@ html[data-theme="dark"] {
   --color-accent: var(--accent);
   --color-accent-wash: var(--accent-wash);
   --color-flourish: var(--flourish);
+  --color-warm: var(--warm);
+  --color-warm-wash: var(--warm-wash);
+  --color-warm-line: var(--warm-line);
+  --color-on-warm: var(--on-warm);
   --color-line: var(--line);
   --color-ok: var(--ok);
   --color-error: var(--error);
@@ -285,9 +299,17 @@ html[data-theme="dark"] .lattice-band {
 }
 
 /* The landing hero's product visual: the real stepper at a card's width, its group names a size smaller. */
-[data-hero-visual] [data-stepper] p:first-child {
-  font-size: 0.75rem;
+[data-hero-visual] [data-stepper] p {
+  font-size: 0.8125rem;
   line-height: 1.4;
+}
+[data-hero-visual] [data-stepper] p + p {
+  font-size: 0.8125rem;
+}
+[data-hero-backdrop] {
+  background:
+    radial-gradient(60% 70% at 70% 20%, color-mix(in oklab, var(--accent-wash) 85%, transparent), transparent 70%),
+    radial-gradient(50% 60% at 15% 90%, color-mix(in oklab, var(--warm-wash) 90%, transparent), transparent 70%);
 }
 
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */

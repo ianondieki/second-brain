@@ -11,7 +11,7 @@ export function Seal({ size = 112, animate = false, className }: { size?: number
         <path id="seal-text-path" d="M56 12a44 44 0 1 1-.01 0" fill="none" />
       </defs>
       <circle cx="56" cy="56" r="52" fill="var(--field)" stroke="var(--accent)" strokeWidth="1.5" pathLength={100} className={animate ? "seal-draw" : undefined} />
-      <circle cx="56" cy="56" r="34" fill="none" stroke="var(--flourish)" strokeWidth="1" />
+      <circle cx="56" cy="56" r="34" fill="none" stroke="var(--warm)" strokeWidth="1.25" />
       <text fontSize="9" fontWeight="600" fill="var(--accent)" fontFamily="var(--font-sans)" textLength="274" lengthAdjust="spacing">
         <textPath href="#seal-text-path" startOffset="0" textLength="274" lengthAdjust="spacing">
           WAZO · REGISTERED · WAZO · REGISTERED ·

@@ -8,7 +8,7 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false" className={cn("shrink-0", className)}>
       <circle cx="16" cy="16" r="13" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
-      <circle cx="16" cy="16" r="10" fill="none" stroke="var(--flourish)" strokeWidth="1" />
+      <circle cx="16" cy="16" r="10" fill="none" stroke="var(--warm)" strokeWidth="1" />
       <path d="m10.5 16.5 3.6 3.5 7.4-8" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
