@@ -37,4 +37,24 @@ describe("ClosedCelebration", () => {
     render(<ClosedCelebration {...props} engagementId="e-2" />);
     expect(screen.getByRole("region", { name: "Closed and done" })).toBeTruthy();
   });
+
+  it("closes and moves focus to the page title even when storage refuses the write", () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Tracker</h1><div id="host"></div></main>';
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    render(<ClosedCelebration {...props} engagementId="e-3" />, { container: document.getElementById("host")! });
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(document.activeElement).toBe(document.querySelector("h1"));
+    setItem.mockRestore();
+    document.body.innerHTML = "";
+  });
+
+  it("does not buzz before the person has touched the page", () => {
+    Object.defineProperty(navigator, "userActivation", { value: { hasBeenActive: false }, configurable: true });
+    render(<ClosedCelebration {...props} engagementId="e-4" />);
+    expect(navigator.vibrate).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, "userActivation", { value: undefined, configurable: true });
+  });
 });

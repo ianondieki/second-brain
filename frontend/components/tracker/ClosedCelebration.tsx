@@ -6,16 +6,20 @@ import { Seal } from "@/components/brand/Seal";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CheckIcon } from "@/components/ui/status-icons";
+import { focusPageTitle } from "@/lib/focus";
 import { haptic } from "@/lib/haptics";
 
 const KEY_PREFIX = "wazo-closed:v1:";
 const listeners = new Set<() => void>();
+/** Dismissed on this page: the card closes even when storage refuses the write (a full quota, a private window). */
+const dismissed = new Set<string>();
 
 function key(id: string) {
   return KEY_PREFIX + id;
 }
 
 function read(id: string): boolean {
+  if (dismissed.has(id)) return true;
   try {
     return window.localStorage.getItem(key(id)) === "seen";
   } catch {
@@ -23,12 +27,13 @@ function read(id: string): boolean {
   }
 }
 
-/** Marks the celebration as seen for this engagement; it never shows again on this device. */
+/** Marks the celebration as seen for this engagement; it never shows again on this device (or, without storage, on this page). */
 export function dismissCelebration(id: string) {
+  dismissed.add(id);
   try {
     window.localStorage.setItem(key(id), "seen");
   } catch {
-    // Storage off: the card closes for this render only.
+    // Storage refused the write: the in-memory mark closes the card for this page.
   }
   for (const listener of listeners) listener();
 }
@@ -51,8 +56,9 @@ export interface ClosedCelebrationProps {
 
 /**
  * The one-time celebration of a closed engagement (D-52, feel): the seal draws its ring once, a few lattice-coloured
- * dots fall (still under reduced motion), a short buzz on phones, and one button to put it away. Shown the first time
- * this device opens a CLOSED tracker, then remembered; the stage chip and the timeline say "Closed" on every visit.
+ * dots fall (still under reduced motion), a short buzz on phones (only after a tap: browsers refuse it before one), and
+ * one button to put it away, after which focus returns to the page's title. Shown the first time this device opens a
+ * CLOSED tracker, then remembered; the stage chip and the timeline say "Closed" on every visit.
  */
 export function ClosedCelebration({ engagementId, title, body, dismiss }: ClosedCelebrationProps) {
   const seen = useSyncExternalStore(subscribe, () => read(engagementId), () => true);
@@ -83,7 +89,13 @@ export function ClosedCelebration({ engagementId, title, body, dismiss }: Closed
           </h2>
           <p className="mt-2 max-w-[60ch] text-ink-soft">{body}</p>
           <div className="mt-4">
-            <Button variant="secondary" onClick={() => dismissCelebration(engagementId)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                dismissCelebration(engagementId);
+                focusPageTitle();
+              }}
+            >
               {dismiss}
             </Button>
           </div>

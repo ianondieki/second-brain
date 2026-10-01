@@ -22,9 +22,15 @@ export function hapticsAvailable(): boolean {
   return true;
 }
 
-/** Plays one pattern; returns whether the device accepted it. Never throws (some browsers refuse it before a tap). */
+/** True once the person has tapped or typed on this page: browsers refuse a vibration before that (and log an error). */
+function activated(): boolean {
+  const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  return activation === undefined || activation.hasBeenActive;
+}
+
+/** Plays one pattern; returns whether the device accepted it. Never throws, and never asks before a gesture. */
 export function haptic(kind: HapticKind): boolean {
-  if (!hapticsAvailable()) return false;
+  if (!hapticsAvailable() || !activated()) return false;
   try {
     return navigator.vibrate(PATTERNS[kind]) === true;
   } catch {
