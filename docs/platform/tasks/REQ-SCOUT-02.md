@@ -464,3 +464,7 @@ measured) are addressed; items 2, 3 and 6 stand.
    after Pause/Resume, or Back from a cancelled checkout, drops the kept draft; run the discard once on mount.
 3. `e2e/scout.spec.ts:113` opens `?restore=1` itself; follow the simulated checkout's Continue link once instead.
 4. JS headroom after the merge: `/org/inbox/scouts/new` about 148,367 B of 150,000.
+
+**Closed since** (orchestrator, 2026-10-01): P10-F open item 1 (the developer handle built from the display name)
+and the round-2 MINOR on EM3's own-member rule are fixed by the random-handle merge `7babb38` (security-reviewer and
+reviewer PASS).
