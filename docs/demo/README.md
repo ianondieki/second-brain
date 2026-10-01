@@ -28,6 +28,7 @@ stack with the demo data, without the video, and with its screenshots kept out o
 
 | File | What it shows |
 |---|---|
+| [00-first-login-tour-1440.jpg](screenshots/00-first-login-tour-1440.jpg) | Amina's first sign-in: the three-step tour in the page's flow, skippable, remembered on this device |
 | [01-dev-home-1440.jpg](screenshots/01-dev-home-1440.jpg) | Amina's Home: what needs her, then problems recommended for her with the reasons |
 | [02-discover-trending-1440.jpg](screenshots/02-discover-trending-1440.jpg) | Discover: trending problems with their sources and why they trend |
 | [03-idea-certificate-1440.jpg](screenshots/03-idea-certificate-1440.jpg) | One of Amina's ideas: its timestamped certificate |
