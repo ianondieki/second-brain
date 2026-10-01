@@ -185,9 +185,21 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
   let certId = "";
   let saccoTracker = "";
 
-  await test.step("Developer: Amina's Home, Discover and My ideas", async () => {
+  await test.step("Developer: Amina's first login, the tour, then Home, Discover and My ideas", async () => {
     await signIn(page, AMINA, /\/dev$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome, Amina Wanjiru");
+    // The first-login tour (D-52): three steps, never a modal; a fresh browser has not seen it.
+    const tour = page.getByRole("dialog", { name: "This is your home" });
+    await expect(tour).toBeVisible();
+    await pause(page);
+    await shot(page, "00-first-login-tour-1440");
+    await tour.getByRole("button", { name: "Next" }).click();
+    await pause(page);
+    await page.getByRole("dialog").getByRole("button", { name: "Next" }).click();
+    await pause(page);
+    await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await pause(page, 0.5);
     const needsYou = page.getByRole("region", { name: "Needs you" });
     await expect(needsYou).toContainText(IDEA);
     await expect(needsYou).toContainText("Your turn");
