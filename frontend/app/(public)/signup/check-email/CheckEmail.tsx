@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Illustration } from "@/components/ui/Illustration";
 import { Button, textLinkClass } from "@/components/ui/Button";
 import { settle } from "@/lib/api/call";
 import { api } from "@/lib/api/client";
@@ -44,6 +45,7 @@ export function CheckEmail({ kind }: { kind: CheckEmailKind }) {
 
   return (
     <>
+      <Illustration kind="waiting" className="mt-4 max-w-48 text-ink" />
       <p className="mt-2 max-w-[62ch] text-ink-soft">
         {email
           ? t.rich(kind, { email, minutes: LINK_MINUTES, b: bold })

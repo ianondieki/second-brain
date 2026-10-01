@@ -45,7 +45,7 @@ export function OtpInput({ id, label, hint, error, value, onChange, length = 6, 
           value={value}
           onChange={(event) => onChange(normaliseCode(event.target.value, length))}
           onPaste={handlePaste}
-          className={cn(controlClass, "code-figures max-w-[12rem] text-lg font-semibold", className)}
+          className={cn(controlClass, "h-14 max-w-[14rem] text-center font-mono text-2xl font-medium tracking-[0.3em] text-ink", className)}
           {...control}
           {...rest}
         />
