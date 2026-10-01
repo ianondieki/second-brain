@@ -2,7 +2,10 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -87,6 +90,17 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
   const line = counterpartLine(detail);
+  const completed = steps.filter((step) => step.chip === "completed").length;
+  const currentIndex = steps.findIndex((step) => step.chip !== "completed" && step.chip !== "pending");
+  const currentGroup = steps[currentIndex === -1 ? steps.length - 1 : currentIndex].group;
+  // The party who acts now: the developer, the organisation, or both (the tracker's timeline shows them at the step).
+  const awaited = new Set(detail.whose_turn);
+  const actors = isFinished(detail.state) ? null : (
+    <span className="flex shrink-0 items-center -space-x-1">
+      {awaited.has("developer") ? <Avatar name={detail.developer_name} kind="person" size="sm" active /> : null}
+      {awaited.has("org") ? <Avatar name={detail.org_name} kind="org" size="sm" active /> : null}
+    </span>
+  );
 
   return (
     <ClientStrings strings={await clientStrings(["trackerActions"])}>
@@ -101,9 +115,21 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         <WhoseTurn detail={detail} />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 max-w-3xl">
+        <ProgressBar
+          value={completed}
+          max={steps.length}
+          label={t("progress", { current: Math.min(completed + 1, steps.length), total: steps.length, group: t(`group.${currentGroup}`) })}
+        />
+        <p className="mt-2 text-sm text-ink-soft tabular-nums">
+          {t("progress", { current: Math.min(completed + 1, steps.length), total: steps.length, group: t(`group.${currentGroup}`) })}
+        </p>
+      </div>
+
+      <div className="mt-6">
         <Stepper
           steps={steps}
+          actor={actors}
           detail={
             <>
               <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
@@ -115,7 +141,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         />
       </div>
 
-      <div className="mt-8 max-w-3xl">
+      <Card as="div" className="mt-8 max-w-3xl">
+        <p className="text-sm font-medium text-ink-soft">{t("stageNowTitle", { stage: detail.stage_label })}</p>
         <Actions
             engagementId={detail.id}
             lockVersion={detail.lock_version}
@@ -126,7 +153,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             myUserId={me.user.id}
             recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
           />
-      </div>
+      </Card>
 
       <div className="mt-8 max-w-3xl empty:hidden">
         <Tier2Section detail={detail} enrolled={me.mfa.enrolled} query={query} />

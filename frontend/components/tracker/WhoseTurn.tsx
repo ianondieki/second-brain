@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 
@@ -34,6 +35,8 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
               : t("turn.ended");
 
   const yours = turn.kind === "you" || turn.kind === "both";
+  const awaited = new Set(detail.whose_turn);
+  const ended = turn.kind === "ended";
   // A Callout with a title (docs/platform/design/p16-design-system.md, Notices): the accent tone when it is the
   // viewer's turn, neutral otherwise; the drawn mark says current, completed or ended with the words.
   return (
@@ -50,11 +53,18 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
           kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : "current"}
           className={cn(
             "mt-1 size-5",
-            turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-jacaranda",
+            turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : "text-accent",
           )}
         />
       }
     >
+      <p className="flex items-center gap-2" aria-label={t("parties")}>
+        <Avatar name={detail.developer_name} kind="person" size="sm" active={!ended && awaited.has("developer")} />
+        <Avatar name={detail.org_name} kind="org" size="sm" active={!ended && awaited.has("org")} />
+        <span className="text-sm text-ink-soft">
+          {detail.developer_name} · {detail.org_name}
+        </span>
+      </p>
       {turn.kind === "ended" && detail.end_reason ? (
         <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
       ) : null}

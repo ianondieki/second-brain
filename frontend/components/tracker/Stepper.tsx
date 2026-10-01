@@ -11,7 +11,7 @@ import type { Step } from "./model";
  * aria-current="step". Vertical under 1024 px, a horizontal spine from 1024 px. Each group shows its mark, name and
  * status word; the current group also shows the stage's own label and what is due (`detail`).
  */
-export function Stepper({ steps, detail }: { steps: Step[]; detail?: ReactNode }) {
+export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: ReactNode; /** Who acts now (an Avatar), shown with the current step. */ actor?: ReactNode }) {
   const t = useTranslations("tracker");
   const currentIndex = steps.findIndex((s) => s.chip !== "completed" && s.chip !== "pending");
   return (
@@ -25,7 +25,7 @@ export function Stepper({ steps, detail }: { steps: Step[]; detail?: ReactNode }
             aria-current={current ? "step" : undefined}
             data-group={step.group}
             data-state={step.chip}
-            className="relative flex gap-3 pb-6 last:pb-0 lg:flex-col lg:gap-2 lg:pr-4 lg:pb-0"
+            className="relative flex gap-3 pb-6 last:pb-0 lg:flex-col lg:gap-2 lg:pr-3 lg:pb-0"
           >
             {last ? null : (
               <span
@@ -39,11 +39,17 @@ export function Stepper({ steps, detail }: { steps: Step[]; detail?: ReactNode }
             )}
             <ChipMark kind={step.chip} className={cn("relative size-6 bg-paper", CHIP_TONE[step.chip])} />
             <div className="min-w-0 flex-1">
-              <p className={cn("leading-6", current ? "font-semibold text-ink" : "font-medium text-ink")}>
+              {/* Group names wrap only at spaces, never inside a word ("Implementation" stays whole at every width). */}
+              <p className={cn("leading-6 [overflow-wrap:normal] hyphens-none lg:text-sm", current ? "font-semibold text-ink" : "font-medium text-ink")}>
                 {t(`group.${step.group}`)}
               </p>
               <p className={cn("text-sm font-semibold", CHIP_TONE[step.chip])}>{t(`chip.${step.chip}`)}</p>
-              {current && detail ? <div className="mt-1 text-sm text-ink">{detail}</div> : null}
+              {current && (detail || actor) ? (
+                <div className="mt-1 flex items-start gap-2 text-sm text-ink">
+                  {actor ? <span className="lg:hidden">{actor}</span> : null}
+                  {detail ? <div className="min-w-0">{detail}</div> : null}
+                </div>
+              ) : null}
             </div>
           </li>
         );
