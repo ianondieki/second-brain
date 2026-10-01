@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { titleLinkClass } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, cardLinkClass } from "@/components/ui/Card";
 import { LinkPending } from "@/components/ui/LinkPending";
 
 import { Chip } from "./Chip";
@@ -13,9 +12,9 @@ import { DueText } from "./When";
 export function EngagementCard({ item, mine, href }: { item: Summary; mine: Party; href: string }) {
   const t = useTranslations("tracker");
   return (
-    <Card as="article" variant="flat" padding="sm" data-engagement={item.id} className="flex flex-col gap-1.5">
+    <Card as="article" variant="flat" padding="sm" interactive data-engagement={item.id} className="flex flex-col gap-1.5">
       <h3 className="text-base [overflow-wrap:anywhere] text-ink">
-        <Link href={href} className={`${titleLinkClass} after:absolute after:inset-0`}>
+        <Link href={href} className={cardLinkClass}>
           {item.proposal_title}
           <LinkPending className="absolute -top-px left-0" />
         </Link>
