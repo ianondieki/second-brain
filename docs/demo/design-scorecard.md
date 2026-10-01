@@ -9,7 +9,7 @@ Screenshots: `docs/demo/screenshots/p18/<name>-<theme>-<width>.jpg`; the strict 
 
 | Screen | Shots | H | T | C | S | Cl | D | axe | states | interaction | ux-reviewer | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Landing | `landing` | 5 | 5 | 4 | 4 | 5 | 4 | 0 | static; long title at 375 | keyboard, focus, hover, motion | round 1 fixed (heading order, icon tiles, approved wording, footer targets) | two-line headline; framed product visual; demo badge |
+| Landing | `landing` | 5 | 5 | 4 | 4 | 5 | 4 | 0 | static; long title at 375 | keyboard, focus, hover, motion | round 1 fixed (heading order, icon tiles, approved wording, footer targets) | two-line headline; framed product visual about 15 % larger at 1440 (the owner's nit: tighter backdrop, taller stage, larger type and seal); the Who-it-is-for cards wrap in list items so the grid no longer stretches their icon tiles; demo badge |
 | Developer Home | `home` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | needs-you, none waiting, no engagements (empty), no deadline | card links, focus ring on card | round 1 fixed (deadline order and ownership, section headers, demo badge) | stat tiles; cards as links; real data: `home-*` |
 | Tracker | `tracker` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | current, both owe, ended (fixtures; unit tests) | actions, tabs, dialogs | round 1 fixed (names once, actions first on phones) | timeline as the one progress indicator; real data: `tracker-*` |
 | Certificate (idea page) | `certificate` | 5 | 5 | 4 | 4 | 5 | 5 | 0 | timestamped, pending (unit); print | print, links | round 1 fixed (BLOCKER: dark-mode QR; id never breaks; Nairobi time) | the showpiece sheet; real data: `certificate-*` |

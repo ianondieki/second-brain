@@ -411,6 +411,12 @@ dialog[data-sheet][open] {
 [data-hero-visual] [data-stepper] p + p {
   font-size: 0.8125rem;
 }
+@media (width >= 64rem) {
+  [data-hero-visual] [data-stepper] p,
+  [data-hero-visual] [data-stepper] p + p {
+    font-size: 0.875rem;
+  }
+}
 [data-hero-backdrop] {
   background:
     radial-gradient(60% 70% at 70% 20%, color-mix(in oklab, var(--accent-wash) 85%, transparent), transparent 70%),

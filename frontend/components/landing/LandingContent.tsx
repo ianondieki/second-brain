@@ -99,7 +99,8 @@ export async function LandingContent() {
             {(["developers", "organisations"] as const).map((side) => {
               const Icon = side === "developers" ? IdeasIcon : CompaniesIcon;
               return (
-                <Card as="li" key={side} className="flex flex-col gap-4 p-6 lg:p-8">
+                <li key={side}>
+                <Card className="flex h-full flex-col gap-4 p-6 lg:p-8">
                   <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center self-start rounded-control bg-accent-wash text-accent">
                     <Icon className="size-5" />
                   </span>
@@ -116,6 +117,7 @@ export async function LandingContent() {
                     {t(`who.${side}.action`)}
                   </Link>
                 </Card>
+                </li>
               );
             })}
           </CardGrid>
