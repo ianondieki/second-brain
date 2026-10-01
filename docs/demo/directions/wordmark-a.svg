@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40">
+<!-- Placeholder name until the owner chooses (docs/demo/directions/directions.md); text is live, so the display face must be installed or embedded; step 2 converts it to paths. -->
+<g transform="translate(4 4)"><rect x="2" y="2" width="28" height="28" rx="7" fill="#2140E8"/><rect x="8" y="17" width="7" height="7" rx="1.5" fill="#FFFFFF"/><rect x="17" y="8" width="7" height="7" rx="1.5" fill="#FFFFFF" opacity=".55"/><path d="M11.5 17 20.5 15" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"/></g>
+<text x="46" y="27" font-family="Manrope, system-ui, sans-serif" font-weight="700" font-size="24" letter-spacing="-0.4" fill="#0C1424">Wazo</text>
+</svg>
