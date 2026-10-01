@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderToStaticMarkup } from "react-dom/server";
+import { startTransition } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 import { celebrationSeenFromCookies } from "./celebration-store";
 import { ClosedCelebration } from "./ClosedCelebration";
@@ -59,6 +61,37 @@ describe("ClosedCelebration", () => {
     render(<ClosedCelebration {...props} engagementId="e-9" initialSeen={false} />);
     expect(document.documentElement.hasAttribute("data-celebration-seen")).toBe(false); // hydration has the last word
     expect(screen.queryByRole("region")).toBeNull();
+  });
+
+  it("never paints a card storage remembers while hydrating", async () => {
+    // The cookie lapsed, so the server drew the card and the head script set the marker. Next hydrates in a
+    // transition, whose store check (which removes the card) runs in a later task than the layout effects: the
+    // marker must outlive the card, so that between the two the page never shows it (and never shifts).
+    const actEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+    const element = <ClosedCelebration {...props} engagementId="e-11" initialSeen={false} />;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(element);
+    document.body.appendChild(container);
+    window.localStorage.setItem("wazo-closed:v1:e-11", "seen");
+    document.documentElement.setAttribute("data-celebration-seen", "e-11");
+    const states = new Set<string>();
+    try {
+      startTransition(() => {
+        hydrateRoot(container, element);
+      });
+      for (let tick = 0; tick < 40; tick += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+        const card = container.querySelector("[data-celebration]") !== null;
+        const marker = document.documentElement.hasAttribute("data-celebration-seen");
+        states.add(card ? (marker ? "hidden" : "painted") : "gone");
+      }
+    } finally {
+      container.remove();
+      (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+      document.documentElement.removeAttribute("data-celebration-seen");
+    }
+    expect([...states]).toEqual(["hidden", "gone"]); // never "painted"
   });
 
   it("is remembered per engagement, in storage or in the cookie", () => {

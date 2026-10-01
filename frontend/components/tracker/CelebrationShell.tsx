@@ -33,10 +33,15 @@ export function CelebrationShell({
   children: ReactNode;
 }) {
   const seen = useSyncExternalStore(subscribeCelebration, () => celebrationSeen(engagementId), () => initialSeen);
-  // Mounted: what is drawn now follows the store, so the before-paint hide (CELEBRATION_INIT_SCRIPT) steps aside,
-  // before the first paint (a layout effect), so a card another page's marker would hide is never painted hidden.
-  useLayoutEffect(clearCelebrationMarker, []);
+  // The before-paint hide (CELEBRATION_INIT_SCRIPT) steps aside once what is drawn follows the store. A marker another
+  // page left (a tracker that is not closed, a 404) goes before the first paint, so an unseen card is never painted
+  // hidden; the marker for a card storage remembers stays until the passive effect, after hydration has removed the
+  // card (Next hydrates in a transition, whose store check runs then), so that card is never painted at all.
+  useLayoutEffect(() => {
+    if (!celebrationSeen(engagementId)) clearCelebrationMarker();
+  }, [engagementId]);
   useEffect(() => {
+    clearCelebrationMarker();
     if (!seen) haptic("success");
     // Storage remembers longer than a cookie set from a page may: write the cookie again when it lapsed.
     else if (!celebrationCookieSet(engagementId)) rememberCelebrationCookie(engagementId);
