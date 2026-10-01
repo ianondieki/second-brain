@@ -50,4 +50,16 @@ branch (`docs/platform/design/p18-design-system.md` is the system's record):
   and the tracker were kept (`[data-primary]`, `[data-home='others'] article [data-chip]`, `[data-whose-turn]`, the
   "Stages" list, `[data-actions]`).
 
-Waiting on the owner's review of the four screens before the roll-out to the remaining screens.
+### Fix round (2026-10-01, the owner's seven points)
+
+1. Landing: eight-word headline on two lines; the visual is the hero in a browser frame over a backdrop, text ≥ 13 px.
+2. Certificate: the verify address from `NEXT_PUBLIC_SITE_ORIGIN`, else the path; never localhost.
+3. Tracker: the timeline is the one progress indicator; the next step said once; avatars with room; "Since <date>"
+   on the current step on phones (dates for completed steps need the history read; not shown yet).
+4. Cards are one link each (title as the name, stretched, focus ring and hover on the card), no underlined titles.
+5. Home: no two-step section (a notice only while off); "Demo data" badge with the sentence on press; equal heights.
+6. Round avatars everywhere; the Ideas tile says published and drafts; the deadline tile "Oct 3" + "in 2 business days".
+7. `--warm` from the lattice's ochre (AA in both modes) on "Your turn", success notices and the seal's ring.
+
+Also: `e2e/auth.spec.ts` reads the new `--ink-soft` value. Checks as above (1275 unit tests, production build).
+Waiting on the owner's OK before the roll-out (the owner switches the model to Opus 5.5 for it).

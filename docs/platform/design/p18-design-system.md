@@ -16,7 +16,8 @@ owner's brief (D-52), then `docs/spec/07` and `docs/spec/04` §4.6 for everythin
 | `--ink` / `--ink-soft` | `#1A1916` / `#5C5A53` | `#ECE9E1` / `#B4B0A5` | text (16.4:1, 6.6:1 on paper) |
 | `--line` | `#DEDACF` | `#30312C` | hairlines |
 | `--accent` / `--accent-wash` | `#1F5E49` / `#E5EFE9` | `#7FCBAB` / `#1F2F28` | act here, current, focus; selected, info |
-| `--flourish` | `#B89A4A` | `#A08B48` | the lattice's second tone, seals, art; never text or status |
+| `--flourish` | `#B89A4A` | `#A08B48` | the lattice's second tone and illustration; never text |
+| `--warm` / `--warm-wash` | `#7A5A12` / `#F6EFDC` | `#E0B85A` / `#2A2416` | the warm secondary accent from the lattice's ochre (6.1:1 light, 9.9:1 dark), used sparingly: the solid "Your turn" badge, success notices (`Alert`/`Callout` tone `ok`), the seal's inner ring and the mark's inner ring |
 | `--ok` / `--error` | `#1F6B47` / `#9E2A1F` | `#7AC79A` / `#FF8F7E` | status, always with an icon and words |
 | `--shadow-card` | `0 1px 0 … / 0.04, 0 16px 40px -24px … / 0.22` | from black | cards, sheets, tiles |
 | `--shadow-overlay` | as before, re-tinted | from black | menus, dialogs, sheets over the page |
@@ -54,25 +55,43 @@ never behind text, never as wallpaper.
 | `landing/LandingContent`, `landing/HeroComposition` | the landing page and its layered product visual (illustrative, labelled) |
 | `ThemeToggle` | system / light / dark, in the account menu and the landing footer |
 
+**Cards that are links.** A card holds one link, its title, stretched over the whole card (`cardLinkClass`, `Card
+interactive`): no underline on the title, the accessible name is the title, the card shows the hover (accent-line
+border, overlay shadow) and the focus ring; the link's own outline is off. "Open the tracker" on a Needs-you card is
+the link's visual cue, not a second link. Underlines stay for links inside running text. Rows turned into cards
+(`RowList cards`) keep their title link but drop the underline. Cards in a grid are equal height. Avatars are round
+for people and organisations alike.
+
+**Stat tiles** say what they count: Ideas "2 published · 1 draft" (a published idea's saved edits are "unpublished
+changes" on its own card, not a draft); the deadline tile shows "Oct 3" with "in 2 business days", "Due today" or
+"Overdue" under it, never wrapping at 375 px.
+
+**The certificate's verify address** comes from `NEXT_PUBLIC_SITE_ORIGIN` (frontend/.env.example) plus the path; with
+no origin configured the sheet and its QR carry the path alone, never the server's own host.
+
 The top bar (`TopBarBase`) shows the wordmark as the home link (accessible name "Wazo") and the muted "Prototype"
 badge once per screen. Demo honesty labels stay neutral badges ("Seeded example", "(fixture)", "Illustrative
 example", "Sample prices, not final").
 
 ## The four showpiece screens (this step)
 
-- **Landing** (`app/(public)/page.tsx` → `LandingContent`): hero with the promise and the layered visual (the real
-  stepper and progress bar, a scout match card, the certificate card), "How it works" in three numbered steps with
+- **Landing** (`app/(public)/page.tsx` → `LandingContent`): an eight-word headline on two lines with the long
+  sentence as the subhead, then the product visual as the hero: a browser frame over a soft backdrop holding the real
+  tracker card (avatars, "Your turn", the stepper), a scout match card and the certificate card with a little depth,
+  every word at least 13 px, "How it works" in three numbered steps with
   icons (a real sequence), "Who it is for" as two cards, "Proof of authorship, not a promise" with the seal and three
   points (no protection claims; `locales.test.ts` keeps the approved logging phrasing), the final call to action on
   the wash with the lattice, and a footer with the appearance toggle.
-- **Developer Home** (`app/(app)/dev/HomeContent.tsx`): four stat tiles (ideas with drafts, engagements with active,
-  needs you, next deadline with days left), "Needs you" as `NeedsYouCard`s with the other party's avatar, the stage,
-  "Your turn", the deadline and "Open the tracker", "Recommended for you" as cards, the other engagements and ideas as
-  compact cards, the two-step sign-in line.
-- **Tracker** (`components/tracker/EngagementScreen.tsx`): the whose-turn card now shows both parties' avatars with
-  the awaited ones ringed; a segmented progress bar with "Stage n of 5: group"; the timeline (the `Stepper`, whose
-  names never break inside a word) with the acting party's avatar on the current step on phones; the actions in a
-  card headed "Now: stage". Every test selector (`[data-whose-turn]`, the "Stages" list, `[data-actions]`) is unchanged.
+- **Developer Home** (`app/(app)/dev/HomeContent.tsx`): four stat tiles (ideas with published and drafts,
+  engagements with active, needs you, next deadline), "Needs you" as `NeedsYouCard`s with the other party's avatar,
+  the stage, "Your turn", the deadline and the way in, "Recommended for you" as cards (a seeded example carries the
+  small "Demo data" badge, its full sentence on press), the other engagements and ideas as compact cards; two-step
+  sign-in appears only as a notice while it is off.
+- **Tracker** (`components/tracker/EngagementScreen.tsx`): the whose-turn card shows both parties' avatars with
+  the awaited ones ringed and says the next step once (one sentence when both owe the same step); the timeline (the
+  `Stepper`, whose names never break inside a word) is the one progress indicator, with "Now: stage" on the current
+  step and, on phones, the acting party's avatars and "Since <date>"; the actions in a card. Every test selector
+  (`[data-whose-turn]`, the "Stages" list, `[data-actions]`) is unchanged.
 - **Certificate** (`app/(app)/dev/ideas/[id]/Certificate.tsx`): the sheet is the section's default view, placed right
   under the idea's actions; the links (public record, PDF when timestamped) and "Print or save as PDF" follow.
 

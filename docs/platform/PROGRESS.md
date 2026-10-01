@@ -401,7 +401,9 @@ stopped since a container restart: `make demo-reset` before showing it.
 Lattice, Avatar, StatTile, ProgressBar, Card, Illustration, ThemeToggle, CertificateSheet) and the four showpiece
 screens (landing, Developer Home, tracker, certificate) with screenshots in `docs/demo/screenshots/p18/`; the lab now
 previews the product's own screens on fixtures (`/design-lab/<screen>`). Checks: typecheck, eslint, vitest (1274),
-`next build`; the e2e suite was not run (no compose stack in this container; the selectors it uses were kept).
+`next build`; the e2e suite was not run (no compose stack in this container; the selectors it uses were kept, and
+`auth.spec.ts` reads the new `--ink-soft`). The owner's fix round (seven points: hero, verify origin, one progress
+indicator, card links, Home tiles and notice, round avatars, the warm accent) is applied; `tasks/P18-design-directions.md`.
 **Resume at step 3** once the owner has reviewed the four screens: the remaining screens in demo-story order
 (`tasks/P18-design-directions.md` lists them), haptics, the tour, the branded emails (also the backend's
 `product_name` default), then step 4's pitch assets. Linux setup this session: `npm ci` only (no Docker, no backend:
