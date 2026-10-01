@@ -3,13 +3,17 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { ClientStrings } from "@/components/ClientStrings";
+import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { TopBar } from "@/components/TopBar";
+import { ShowTourAgain } from "@/components/tour/ShowTourAgain";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { getMe } from "@/lib/api/server";
-import { homeOf, isPending, type Home } from "@/lib/auth/routing";
+import { homeOf, isPending, type Home, type Me } from "@/lib/auth/routing";
+import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { HELP_SECTIONS, NOTIFICATIONS_HREF } from "./sections";
 
@@ -18,11 +22,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("pageTitle") };
 }
 
-/** The signed-in person's home, or null for a visitor (and when the API cannot say: help must open regardless). */
-async function signedInHome(): Promise<Home | null> {
+/** The signed-in person (and their home), or null for a visitor (and when the API cannot say: help must open regardless). */
+async function signedIn(): Promise<{ me: Me; home: Home } | null> {
   try {
     const me = await getMe();
-    return me && !isPending(me) ? homeOf(me) : null;
+    return me && !isPending(me) ? { me, home: homeOf(me) } : null;
   } catch {
     return null;
   }
@@ -35,7 +39,7 @@ async function signedInHome(): Promise<Home | null> {
  */
 export default async function HelpPage() {
   const t = await getTranslations("help");
-  const home = await signedInHome();
+  const person = await signedIn();
   const content = (
     <>
       <PageHeader title={t("pageTitle")} lead={t("lead")} />
@@ -63,7 +67,22 @@ export default async function HelpPage() {
     </>
   );
 
-  if (home) return <SignedInShell homeHref={home}>{content}</SignedInShell>;
+  if (person) {
+    const tTour = await getTranslations("tour");
+    return (
+      <SignedInShell homeHref={person.home} nav={<PortalNavFor me={person.me} />} wide>
+        <div className="max-w-xl">
+          {content}
+          {/* The first-login tour, on request: it shows again on the next visit to the person's home. */}
+          <Section title={tTour("title")} headingId="help-tour" className="mt-12" data-help-section="tour">
+            <ClientStrings strings={await clientStrings(["tour"])}>
+              <ShowTourAgain />
+            </ClientStrings>
+          </Section>
+        </div>
+      </SignedInShell>
+    );
+  }
   return (
     <>
       <TopBar>

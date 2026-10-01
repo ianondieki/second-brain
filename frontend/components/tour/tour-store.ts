@@ -5,6 +5,8 @@
 export const TOUR_STORAGE_KEY = "wazo-tour:v1";
 
 const listeners = new Set<() => void>();
+/** Finished on this page: the tour closes even when storage refuses the write (a full quota, a private window). */
+let finishedHere = false;
 
 export function subscribeTour(listener: () => void) {
   listeners.add(listener);
@@ -17,6 +19,7 @@ export function subscribeTour(listener: () => void) {
 
 /** True when the tour was skipped or finished in this browser (or storage cannot be read: then it stays out of the way). */
 export function tourDone(): boolean {
+  if (finishedHere) return true;
   try {
     return window.localStorage.getItem(TOUR_STORAGE_KEY) === "done";
   } catch {
@@ -25,16 +28,18 @@ export function tourDone(): boolean {
 }
 
 export function finishTour() {
+  finishedHere = true;
   try {
     window.localStorage.setItem(TOUR_STORAGE_KEY, "done");
   } catch {
-    // Blocked storage: the tour closes for this page and may show again next time.
+    // Storage refused the write: the in-memory mark closes the tour for this page; it may show again next time.
   }
   for (const listener of listeners) listener();
 }
 
-/** Help's "Show the tour again". */
+/** Help's "Show the tour again" (components/tour/ShowTourAgain.tsx): the tour shows on the next home visit. */
 export function resetTour() {
+  finishedHere = false;
   try {
     window.localStorage.removeItem(TOUR_STORAGE_KEY);
   } catch {

@@ -1,6 +1,6 @@
 import { cn } from "./cn";
 
-export type IllustrationKind = "empty" | "waiting" | "done";
+export type IllustrationKind = "empty" | "waiting" | "done" | "guide";
 
 /**
  * Engraving-style line drawings for empty and quiet states (D-52): thin ink lines with one accent stroke, about 1 KB
@@ -16,6 +16,21 @@ export function Illustration({ kind = "empty", className }: { kind?: Illustratio
           <circle cx="120" cy="50" r="28" strokeDasharray="1 4" />
         </g>
         <path d="M120 50V30M120 50l14 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+        <path d="M20 86h200" stroke="var(--line)" strokeWidth="1" />
+      </svg>
+    );
+  }
+  if (kind === "guide") {
+    // A signpost: two boards on a post, the upper one in the accent (the first-login tour).
+    return (
+      <svg {...common}>
+        <g fill="none" stroke="var(--ink)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M120 86V28" />
+          <path d="M120 54h-46l-8 7 8 7h46z" />
+          <path d="M66 86h108" strokeDasharray="1 4" />
+        </g>
+        <path d="M120 34h50l8 7-8 7h-50z" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M128 41h30M82 61h30" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" />
         <path d="M20 86h200" stroke="var(--line)" strokeWidth="1" />
       </svg>
     );

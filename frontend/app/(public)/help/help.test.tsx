@@ -17,6 +17,7 @@ import { HELP_SECTIONS } from "./sections";
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getMessages: async () => en,
 }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({}) }));
 const me = vi.hoisted(() => ({ get: vi.fn() }));

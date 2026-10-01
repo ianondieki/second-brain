@@ -1292,7 +1292,7 @@
     "problemStatement": "Tatizo inalotatua",
     "summary": "Muhtasari",
     "impactClaims": "Matokeo yanayotarajiwa",
-    "problems": "Matatizo inayotatua",
+    "problems": "Kadi za matatizo inazojibu",
     "newProblemTitle": "Kichwa cha tatizo",
     "newProblemStatement": "Tatizo ni nini?",
     "approach": "Mbinu",
@@ -1655,6 +1655,10 @@
     "detailsSections": "Sehemu zilizoandikwa: {count}",
     "detailsFiles": "Faili: {count}",
     "detailsLinks": "Viungo: {count}",
+    "detailsSectionsLabel": "Sehemu zilizoandikwa",
+    "detailsFilesLabel": "Faili",
+    "detailsLinksLabel": "Viungo",
+    "detailsNone": "Bado hakuna chochote katika maelezo ya siri.",
     "backToIdea": "Rudi kwenye wazo",
     "noProblemsYet": "Bado hakuna matatizo yaliyoorodheshwa.",
     "assistantTitle": "Msaidizi wa uandishi",
@@ -1854,7 +1858,7 @@
       "noProfile": "Ni akaunti za wasanidi programu pekee zinazochagua nyanja.",
       "signedOut": "Umetolewa. Ingia tena, kisha hifadhi nyanja zako.",
       "rateLimited": "Mabadiliko mengi mno kwa muda mfupi. Subiri dakika moja, kisha hifadhi tena.",
-      "network": "Bridge haikupatikana. Angalia muunganisho wako, kisha hifadhi tena.",
+      "network": "Wazo haikupatikana. Angalia muunganisho wako, kisha hifadhi tena.",
       "failed": "Nyanja zako hazikuhifadhiwa. Jaribu tena."
     },
     "profiling": {
@@ -1870,7 +1874,7 @@
         "changed": "Maneno ya idhini hii yamebadilika. Pakia ukurasa upya uyasome, kisha uamue tena.",
         "signedOut": "Umetolewa. Ingia tena, kisha uamue tena.",
         "rateLimited": "Mabadiliko mengi mno kwa muda mfupi. Subiri dakika moja, kisha ujaribu tena.",
-        "network": "Bridge haikupatikana. Angalia muunganisho wako, kisha ujaribu tena.",
+        "network": "Wazo haikupatikana. Angalia muunganisho wako, kisha ujaribu tena.",
         "failed": "Uamuzi wako haukuhifadhiwa. Jaribu tena."
       }
     }
@@ -1912,10 +1916,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho {date}",
-      "today": "Mwisho leo, {date}",
-      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho ulikuwa {date}",
-      "overdueToday": "Imechelewa, mwisho ulikuwa {date}"
+      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho <nowrap>{date}</nowrap>",
+      "today": "Mwisho leo, <nowrap>{date}</nowrap>",
+      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho ulikuwa <nowrap>{date}</nowrap>",
+      "overdueToday": "Imechelewa, mwisho ulikuwa <nowrap>{date}</nowrap>"
     },
     "turn": {
       "you": "Inasubiri: wewe",
@@ -2409,7 +2413,8 @@
       "send": "Tuma",
       "waiting": "Inasubiri jibu…",
       "paid": "Imelipwa",
-      "notPaid": "Haijalipwa"
+      "notPaid": "Haijalipwa",
+      "idle": "Bado hakuna ombi la malipo."
     }
   },
   "notFound": {
@@ -2428,6 +2433,10 @@
     "rowsLabel": "Mashirika ya {title}"
   },
   "tour": {
+    "title": "Ziara",
+    "showAgainLead": "Ziara ya hatua tatu ya nyumbani kwako huonyeshwa mara moja. Unaweza kuiona tena.",
+    "showAgain": "Onyesha ziara tena",
+    "showAgainDone": "Ziara itaonekana utakapofungua nyumbani kwako mara nyingine.",
     "stepOf": "Hatua {current} kati ya {total}",
     "skip": "Ruka ziara",
     "next": "Inayofuata",

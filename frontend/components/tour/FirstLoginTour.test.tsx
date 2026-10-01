@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
 
@@ -35,6 +35,28 @@ describe("FirstLoginTour", () => {
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
+  });
+
+  it("closes on Escape and hands focus to the page title", () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><div id="host"></div></main>';
+    renderWithIntl(<FirstLoginTour side="developer" />, { container: document.getElementById("host")! });
+    expect(document.documentElement.hasAttribute("data-tour-open")).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem(TOUR_STORAGE_KEY)).toBe("done");
+    expect(document.activeElement).toBe(document.querySelector("h1"));
+    expect(document.documentElement.hasAttribute("data-tour-open")).toBe(false);
+    document.body.innerHTML = "";
+  });
+
+  it("closes even when storage refuses the write", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip tour" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    setItem.mockRestore();
   });
 
   it("remembers Skip and stays away afterwards", () => {

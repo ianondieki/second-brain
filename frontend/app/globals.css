@@ -44,6 +44,17 @@
   color-scheme: light;
 }
 
+/* While the first-login tour floats bottom-right (from 640 px), the page keeps its height free at the end and
+   focus scrolling stops above it, so no focused control ends up under the panel (WCAG 2.4.11). */
+@media (min-width: 40rem) {
+  html[data-tour-open] {
+    scroll-padding-bottom: 22rem;
+  }
+  html[data-tour-open] body {
+    padding-bottom: 22rem;
+  }
+}
+
 /* Dark mode: its own steps, not a flip; the accent and status colours are lightened to keep AA on the dark paper. */
 html[data-theme="dark"] {
   --paper: #131412;
@@ -64,6 +75,7 @@ html[data-theme="dark"] {
   --on-ok: #131412;
   --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
   --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --scrim: color-mix(in oklab, #000 62%, transparent); /* from black: the backdrop dims the dark page */
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -86,6 +98,7 @@ html[data-theme="dark"] {
     --on-ok: #131412;
     --shadow-card: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 40px -24px rgb(0 0 0 / 0.6);
     --shadow-overlay: 0 16px 40px -16px rgb(0 0 0 / 0.7), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --scrim: color-mix(in oklab, #000 62%, transparent);
     color-scheme: dark;
   }
 }

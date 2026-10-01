@@ -1292,7 +1292,7 @@
     "problemStatement": "The problem it solves",
     "summary": "Summary",
     "impactClaims": "Expected impact",
-    "problems": "Problems it solves",
+    "problems": "Problem cards it answers",
     "newProblemTitle": "Problem title",
     "newProblemStatement": "What is the problem?",
     "approach": "Approach",
@@ -1655,6 +1655,10 @@
     "detailsSections": "Written sections: {count}",
     "detailsFiles": "Files: {count}",
     "detailsLinks": "Links: {count}",
+    "detailsSectionsLabel": "Written sections",
+    "detailsFilesLabel": "Files",
+    "detailsLinksLabel": "Links",
+    "detailsNone": "Nothing in the confidential details yet.",
     "backToIdea": "Back to the idea",
     "noProblemsYet": "No problems are listed yet.",
     "assistantTitle": "Writing assistant",
@@ -1912,10 +1916,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "{count, plural, one {# business day left} other {# business days left}}, due {date}",
-      "today": "Due today, {date}",
-      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due {date}",
-      "overdueToday": "Overdue, was due {date}"
+      "left": "{count, plural, one {# business day left} other {# business days left}}, due <nowrap>{date}</nowrap>",
+      "today": "Due today, <nowrap>{date}</nowrap>",
+      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due <nowrap>{date}</nowrap>",
+      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>"
     },
     "turn": {
       "you": "Awaiting: you",
@@ -2409,7 +2413,8 @@
       "send": "Send",
       "waiting": "Waiting for the answer…",
       "paid": "Paid",
-      "notPaid": "Not paid"
+      "notPaid": "Not paid",
+      "idle": "No payment prompt yet."
     }
   },
   "notFound": {
@@ -2428,6 +2433,10 @@
     "rowsLabel": "Organisations for {title}"
   },
   "tour": {
+    "title": "The tour",
+    "showAgainLead": "The three-step tour of your home shows once. You can see it again.",
+    "showAgain": "Show the tour again",
+    "showAgainDone": "The tour will show the next time you open your home.",
     "stepOf": "Step {current} of {total}",
     "skip": "Skip tour",
     "next": "Next",
