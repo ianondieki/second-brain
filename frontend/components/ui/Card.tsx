@@ -10,7 +10,7 @@ import { cn } from "./cn";
 export const cardLinkClass = "no-underline text-ink after:absolute after:inset-0 after:rounded-panel focus-visible:outline-none";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
-  as?: "article" | "div" | "section" | "li";
+  as?: "article" | "div" | "section" | "li" | "fieldset";
   /** The card holds one stretched link (cardLinkClass): hover and focus show on the card. */
   interactive?: boolean;
   /** `raised` carries the card shadow; `flat` is a bordered box on the paper (compact lists). */

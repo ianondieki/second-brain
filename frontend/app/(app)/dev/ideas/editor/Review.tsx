@@ -7,6 +7,7 @@ import { useStrings } from "@/components/ClientStrings";
 
 import { Alert } from "@/components/ui/Alert";
 import { Callout } from "@/components/ui/Callout";
+import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { upgradeHref } from "@/lib/billing/upgrade";
@@ -140,8 +141,8 @@ export function Review(props: ReviewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <section aria-labelledby={`${id}-teaser`}>
+    <div className="flex flex-col gap-6">
+      <Card as="section" variant="flat" aria-labelledby={`${id}-teaser`}>
         <h3 id={`${id}-teaser`} className="font-semibold text-ink">
           {f("teaserTitle")}
         </h3>
@@ -155,16 +156,24 @@ export function Review(props: ReviewProps) {
             <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere] text-ink">{state.summary}</p>
           ) : null}
         </div>
-      </section>
+      </Card>
 
       <section aria-labelledby={`${id}-details`}>
         <h3 id={`${id}-details`} className="font-semibold text-ink">
           {f("confidentialTitle")}
         </h3>
-        <ul className="mt-2 flex flex-col gap-0.5 text-ink">
-          <li>{t("detailsSections", { count: sections })}</li>
-          <li>{t("detailsFiles", { count: props.attachments })}</li>
-          <li>{t("detailsLinks", { count: linkLines(state.links).length })}</li>
+        {/* The three counts as tiles: what the full details hold at a glance. */}
+        <ul className="mt-3 grid grid-cols-3 gap-3 text-ink">
+          {[
+            [t("detailsSections", { count: sections }), sections],
+            [t("detailsFiles", { count: props.attachments }), props.attachments],
+            [t("detailsLinks", { count: linkLines(state.links).length }), linkLines(state.links).length],
+          ].map(([label, count]) => (
+            <li key={String(label)} className="rounded-panel border border-line bg-field p-3">
+              <span className="block text-lg font-semibold tabular-nums">{count}</span>
+              <span className="block text-sm text-ink-soft">{String(label).replace(/:\s*\d+$/, "")}</span>
+            </li>
+          ))}
         </ul>
       </section>
 
@@ -192,9 +201,9 @@ export function Review(props: ReviewProps) {
         </Callout>
       ) : null}
 
-      <fieldset className="flex flex-col gap-1">
-        <legend className="font-semibold text-ink">{t("attestationsTitle")}</legend>
-        <p className="mb-2 text-sm text-ink-soft">{t("publishLead")}</p>
+      <Card as="fieldset" variant="flat" className="flex flex-col gap-1">
+        <legend className="float-left font-semibold text-ink">{t("attestationsTitle")}</legend>
+        <p className="mb-2 clear-both text-sm text-ink-soft">{t("publishLead")}</p>
         {text.statements.map((statement) => (
           <Checkbox
             key={`${text.version}-${statement.key}`}
@@ -206,7 +215,7 @@ export function Review(props: ReviewProps) {
             onChange={(event) => setConfirmed((current) => ({ ...current, [statement.key]: event.target.checked }))}
           />
         ))}
-      </fieldset>
+      </Card>
 
       {publishing.kind === "checklist" ? (
         <Alert ref={alert}>{blocking.length > 0 ? t("problem.checklist") : t("problem.attestationsRequired")}</Alert>

@@ -32,6 +32,8 @@ interface Shot {
   exclude?: string[];
   /** Let the first-login tour show (every other shot remembers it as done). */
   tour?: boolean;
+  /** The viewport only, not the whole page: a modal dialog's backdrop covers the viewport. */
+  viewportOnly?: boolean;
 }
 
 const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name: string }> = {
@@ -41,6 +43,17 @@ const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name:
   staff: { email: "admin@staff.example", name: "Staff Admin (demo)" },
   moderator: { email: "moderator@staff.example", name: "Staff Moderator (demo)" },
 };
+
+/** Types a teaser and opens the writing assistant; it either asks for consent (a dialog) or answers. */
+async function askAssistant(page: Page) {
+  await page.getByLabel("Title", { exact: true }).fill("Shared solar chillers for dairy co-ops");
+  await page.getByLabel("Summary").fill("Shared solar chillers booked by SMS, paid per litre, built with two Kiambu co-ops.");
+  await page.getByRole("button", { name: "Suggest a clearer teaser" }).click();
+  await Promise.race([
+    page.getByRole("dialog").waitFor({ timeout: 60_000 }),
+    page.locator("#assistant-panel").getByRole("button", { name: "Ask again" }).waitFor({ timeout: 60_000 }),
+  ]);
+}
 
 const SHOTS: Shot[] = [
   { name: "landing", path: "/", who: "none" },
@@ -55,6 +68,39 @@ const SHOTS: Shot[] = [
   { name: "certificate", path: "/dev/ideas", who: "dev", prepare: async (page) => {
       await page.locator("main article").filter({ hasText: "Published" }).first().getByRole("link").first().click();
       await page.locator("[data-certificate]").waitFor();
+    } },
+  { name: "ideas", path: "/dev/ideas", who: "dev" },
+  { name: "editor-1", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
+      await page.locator('form[data-hydrated="true"], [data-hydrated="true"]').first().waitFor().catch(() => undefined);
+      await page.getByLabel("Title", { exact: true }).waitFor();
+    } },
+  { name: "editor-2", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
+      await page.getByLabel("Title", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.locator("ol [aria-current='step']").filter({ hasText: "Full details" }).waitFor();
+    } },
+  { name: "editor-3", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
+      await page.getByLabel("Title", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.locator("ol [aria-current='step']").filter({ hasText: "Full details" }).waitFor();
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.locator("ol [aria-current='step']").filter({ hasText: "Review and publish" }).waitFor();
+    } },
+  // The writing assistant's consent dialog (the API's wording, verbatim), then its answer on the demo stack.
+  { name: "editor-consent", path: "/dev/ideas/new", who: "dev", viewportOnly: true, prepare: async (page) => {
+      await askAssistant(page);
+      if (!(await page.getByRole("dialog").isVisible())) {
+        // Consent lasts the sign-in: turn the assistant off, then asking again shows the dialog.
+        await page.getByRole("button", { name: "Turn off the assistant for this sign-in" }).click();
+        await page.getByText("The writing assistant is off for this sign-in.").waitFor();
+        await page.locator("#assistant-panel").getByRole("button", { name: "Turn on and ask" }).click();
+        await page.getByRole("dialog").waitFor();
+      }
+    } },
+  { name: "editor-assistant", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
+      await askAssistant(page);
+      if (await page.getByRole("dialog").isVisible()) await page.getByRole("dialog").getByRole("button", { name: "Turn on and ask" }).click();
+      await page.locator("#assistant-panel").getByRole("button", { name: "Ask again" }).waitFor({ timeout: 60_000 });
     } },
   { name: "login", path: "/login", who: "none" },
   { name: "login-error", path: "/login", who: "none", prepare: async (page) => {
@@ -156,7 +202,7 @@ test("design screenshots with a strict axe pass", async ({ browser }) => {
         await page.addStyleTag({ content: "@media (width < 64rem){[data-tab-bar]{position:absolute!important}} body{position:relative} nextjs-portal{display:none!important}" });
         await page.waitForTimeout(300);
         const file = join(OUT, `${shot.name}-${theme}-${width}.jpg`);
-        await page.screenshot({ path: file, fullPage: true, type: "jpeg", quality: 78 });
+        await page.screenshot({ path: file, fullPage: shot.viewportOnly !== true, type: "jpeg", quality: 78 });
         let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]);
         for (const selector of shot.exclude ?? []) axe = axe.exclude(selector);
         const results = await axe.analyze();
