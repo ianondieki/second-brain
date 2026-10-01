@@ -14,6 +14,8 @@ const props = { engagementId: "e-1", title: "Closed and done", body: "Both sides
 
 beforeEach(() => {
   window.localStorage.clear();
+  document.cookie = "wazo-closed=; path=/; max-age=0";
+  document.documentElement.removeAttribute("data-celebration-seen");
   Object.defineProperty(navigator, "vibrate", { value: vi.fn(() => true), configurable: true });
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
 });
@@ -44,7 +46,7 @@ describe("ClosedCelebration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem("wazo-closed:v1:e-1")).toBe("seen");
-    expect(document.cookie).toContain("wazo-closed=e-1"); // what the server reads: the card then never arrives
+    expect(document.cookie).toMatch(/(^|; )wazo-closed=(e-\d+\.)*e-1(;|$)/); // what the server reads: the card never arrives again
     cleanup();
     render(<ClosedCelebration {...props} />);
     expect(screen.queryByRole("region")).toBeNull();
@@ -65,8 +67,9 @@ describe("ClosedCelebration", () => {
 
   /**
    * What the page could show between tasks (never under act(), which would flush everything at once): the card under
-   * the marker ("hidden"), the card without it ("painted"), or no card ("gone"); the first state is sampled before
-   * React runs at all. The root is mounted in a transition, as Next mounts and hydrates.
+   * the marker ("hidden"), the card without it ("painted"), or no card ("gone"). React may have committed before the
+   * first sample, so a test asserts what was never seen and what was, not an exact sequence. The root is mounted in
+   * a transition, as Next mounts and hydrates.
    */
   const paintable = async (container: HTMLElement, mount: () => Root): Promise<string[]> => {
     const actEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
@@ -85,11 +88,11 @@ describe("ClosedCelebration", () => {
         states.add(card ? (marker ? "hidden" : "painted") : "gone");
       }
     } finally {
-      root?.unmount();
-      container.remove();
       (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
       document.documentElement.removeAttribute("data-celebration-seen");
       document.cookie = "wazo-closed=; path=/; max-age=0";
+      container.remove();
+      root?.unmount(); // last: an unmount that throws must not skip the lines above
     }
     return [...states];
   };
@@ -103,7 +106,9 @@ describe("ClosedCelebration", () => {
     container.innerHTML = renderToString(element);
     window.localStorage.setItem("wazo-closed:v1:e-11", "seen");
     document.documentElement.setAttribute("data-celebration-seen", "e-11");
-    expect(await paintable(container, () => hydrateRoot(container, element))).toEqual(["hidden", "gone"]);
+    const states = await paintable(container, () => hydrateRoot(container, element));
+    expect(states).not.toContain("painted");
+    expect(states).toContain("gone");
   });
 
   it("never paints an unseen card hidden under a marker another page left", async () => {
@@ -116,7 +121,8 @@ describe("ClosedCelebration", () => {
       root.render(<ClosedCelebration {...props} engagementId="e-10" initialSeen={false} />);
       return root;
     });
-    expect(states).toEqual(["gone", "painted"]); // never "hidden"
+    expect(states).not.toContain("hidden");
+    expect(states).toContain("painted");
   });
 
   it("is remembered per engagement, in storage or in the cookie", () => {
