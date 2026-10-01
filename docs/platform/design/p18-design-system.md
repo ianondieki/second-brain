@@ -28,8 +28,9 @@ and under `prefers-color-scheme: dark` when no choice was made (`lib/theme.ts`, 
 choice is applied before paint by an inline script in `app/layout.tsx`). `viewport.themeColor` carries both.
 
 **Type.** Newsreader (display: `h1`, `h2`, the wordmark, card titles that are the page's point), IBM Plex Sans
-(text, `h3`), IBM Plex Mono (fingerprints, codes); OFL, self-hosted latin-subset variable WOFF2 through
-`next/font/local` with `font-display: swap` (`app/fonts/LICENCES.md`). Scale 1.333 on 16 px: 14 / 16 / 21 / 28 / 36
+(text, `h3`), IBM Plex Mono (fingerprints, codes); OFL, self-hosted latin-subset variable WOFF2 declared in
+`app/globals.css` (`@font-face`, `font-display: swap`, size-adjusted local fallbacks) and preloaded from `app/layout.tsx`
+(`public/fonts/LICENCES.md`). Scale 1.333 on 16 px: 14 / 16 / 21 / 28 / 36
 / 48; the landing title 56 px. **Radius** 6 px controls, 12 px cards and sheets. **Motion** `--motion-fast` 180 ms,
 `--motion-base` 260 ms, `--ease-out` cubic-bezier(0.16, 1, 0.3, 1): every control transitions on hover and presses
 sink 1 px; the seal's ring draws once; reduced motion turns all of it off. **Print**: the certificate sheet prints

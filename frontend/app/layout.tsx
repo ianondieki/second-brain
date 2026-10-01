@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
@@ -9,12 +8,12 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
-// Self-hosted faces (app/fonts/LICENCES.md; D-52): latin subsets, swap, a size-adjusted fallback while they load.
-// The display face is instanced to the one weight the headings use (500) over optical sizes 18–72 (42 KB, from 132),
-// and the mono face is not preloaded (fingerprints and codes are below the fold): mobile LCP within AC-UX-3.
-const display = localFont({ src: "./fonts/newsreader-latin.woff2", variable: "--font-display", display: "swap", weight: "500", adjustFontFallback: "Times New Roman" });
-const text = localFont({ src: "./fonts/ibm-plex-sans-latin.woff2", variable: "--font-text", display: "swap", weight: "100 700", adjustFontFallback: "Arial" });
-const figures = localFont({ src: "./fonts/ibm-plex-mono-latin.woff2", variable: "--font-figures", display: "swap", weight: "400", adjustFontFallback: false, preload: false });
+// Self-hosted faces (public/fonts/LICENCES.md; D-52; the @font-face rules in globals.css): the two faces that paint
+// above the fold are preloaded at high priority, ahead of the async scripts, so the headline swaps in early (mobile
+// LCP, AC-UX-3). The display face is instanced to the one weight the headings use (500) over optical sizes 18–72
+// (42 KB, from 132); the text face to the weights in use (400–600; 35 KB, from 45); the mono face (fingerprints and
+// codes, below the fold) is not preloaded.
+const PRELOADED_FONTS = ["/fonts/newsreader-latin.woff2", "/fonts/ibm-plex-sans-latin.woff2"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
@@ -36,8 +35,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await getLocale();
   return (
-    <html lang={locale} className={`h-full antialiased ${display.variable} ${text.variable} ${figures.variable}`} suppressHydrationWarning>
+    <html lang={locale} className="h-full antialiased" suppressHydrationWarning>
       <head>
+        {PRELOADED_FONTS.map((href) => (
+          <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
+        ))}
         {/* The remembered appearance, before the first paint (lib/theme.ts); nothing else runs here. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

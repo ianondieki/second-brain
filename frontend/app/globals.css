@@ -1,6 +1,47 @@
 @import "tailwindcss";
 
 /*
+ * The three self-hosted faces (public/fonts/LICENCES.md; D-52), declared here rather than through next/font so the
+ * two above-the-fold faces can be preloaded at high priority from app/layout.tsx (next/font emitted no preload, and
+ * the fonts then queued behind the async scripts: about 0.7 s of mobile LCP). Each has a size-adjusted local fallback
+ * (the metrics next/font computed), so the swap moves nothing.
+ */
+@font-face {
+  font-family: Newsreader;
+  src: url("/fonts/newsreader-latin.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Newsreader Fallback";
+  src: local("Times New Roman");
+  ascent-override: 73.61%;
+  descent-override: 26.54%;
+  line-gap-override: 0%;
+  size-adjust: 99.84%;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400 600;
+}
+@font-face {
+  font-family: "IBM Plex Sans Fallback";
+  src: local(Arial);
+  ascent-override: 101.35%;
+  descent-override: 27.19%;
+  line-gap-override: 0%;
+  size-adjust: 101.13%;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/ibm-plex-mono-latin.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+}
+
+/*
  * Design tokens (docs/platform/design/phase1-auth-ui.md). Brand, palette and radii are placeholders until G5:
  * changing them is a token swap here, not a redesign. Contrast ratios are against --paper.
  */
@@ -134,10 +175,10 @@ html[data-theme="dark"] {
 }
 
 @theme {
-  /* Self-hosted faces (app/fonts/LICENCES.md), set by next/font/local in app/layout.tsx. */
-  --font-sans: var(--font-text), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-display), Newsreader, Georgia, "Times New Roman", serif;
-  --font-mono: var(--font-figures), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Self-hosted faces (public/fonts/LICENCES.md; the @font-face rules at the top of this file). */
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: Newsreader, "Newsreader Fallback", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Radii: controls, and cards, sheets and the one side panel. */
   --radius-control: 6px;
