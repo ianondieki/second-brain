@@ -19,13 +19,13 @@
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)"
   },
   "app": {
-    "name": "Bridge",
-    "workingTitle": "Bridge (jina la muda)",
-    "titleTemplate": "%s | Bridge (jina la muda)",
+    "name": "Wazo",
+    "workingTitle": "Wazo",
+    "titleTemplate": "%s | Wazo",
     "tagline": "Wasanidi programu wa ndani na mashirika wanaoshughulikia matatizo halisi."
   },
   "shell": {
-    "workingName": "Bridge (jina la muda)",
+    "workingName": "Wazo",
     "skipToContent": "Ruka hadi maudhui",
     "signOut": "Toka",
     "signingOut": "Unatoka…",
@@ -35,7 +35,14 @@
     "security": "Usalama wa kuingia",
     "notifications": "Arifa",
     "help": "Msaada",
-    "billing": "Mpango na malipo"
+    "billing": "Mpango na malipo",
+    "theme": {
+      "label": "Mwonekano",
+      "system": "Mfumo",
+      "light": "Mwanga",
+      "dark": "Giza"
+    },
+    "prototypeBadge": "Mfano wa awali"
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
@@ -47,9 +54,82 @@
   },
   "landing": {
     "title": "Peleka suluhisho za ndani kwa mashirika yanayozihitaji",
-    "lead": "Wasanidi programu huchapisha suluhisho za matatizo halisi. Mashirika huzikagua chini ya NDA na kukubaliana hatua inayofuata, na pande zote mbili hufuata kifuatiliaji kimoja.",
+    "lead": "Wasanidi programu huchapisha suluhisho za matatizo halisi, pamoja na ushahidi wenye muhuri wa wakati wa walichowasilisha. Mashirika huzikagua chini ya NDA na kukubaliana hatua inayofuata, na pande zote mbili hufuata kifuatiliaji kimoja.",
     "signUp": "Fungua akaunti",
-    "haveAccount": "Tayari una akaunti? <login>Ingia</login>"
+    "logIn": "Ingia",
+    "haveAccount": "Tayari una akaunti? <login>Ingia</login>",
+    "sample": {
+      "ideaTitle": "Mnyororo wa baridi kwa vyama vya maziwa",
+      "org": "Telco A (mfano)",
+      "stage": "NDA ya pande zote",
+      "matchTitle": "Ulinganifu wa skauti",
+      "matchOrg": "Kenya Towers (mfano) inatafuta arifa za kiwango cha mafuta",
+      "matchFit": "Inafaa sana",
+      "matchWhy": "Kwa nini: katika niche unayopenda",
+      "certTitle": "Cheti cha uandishi",
+      "certStatus": "Imewekwa muhuri wa wakati",
+      "label": "Mfano wa kuonyesha"
+    },
+    "how": {
+      "title": "Jinsi inavyofanya kazi",
+      "lead": "Hatua tatu, kifuatiliaji kimoja cha pamoja.",
+      "publish": {
+        "title": "Chapisha wazo",
+        "body": "Andika muhtasari wa umma na maelezo ya siri. Kila toleo husajiliwa na muhuri wa wakati na alama ya kidole."
+      },
+      "review": {
+        "title": "Hukaguliwa chini ya NDA",
+        "body": "Watu waliothibitishwa katika shirika hukubali NDA ya tathmini kabla ya kufungua pendekezo kamili. Kila ufunguaji hurekodiwa, na unaweza kuona ni nani aliyeangalia."
+      },
+      "track": {
+        "title": "Kubaliana hatua inayofuata",
+        "body": "Nia, mawasiliano, makubaliano, utekelezaji na kufunga: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+      }
+    },
+    "who": {
+      "title": "Ni kwa ajili ya nani",
+      "developers": {
+        "title": "Kwa wasanidi programu",
+        "point1": "Sajili ulichojenga, na ushahidi wa lini.",
+        "point2": "Wasilisha kwa kampuni zinazoshughulikia tatizo lako, au acha skauti zao zikupate.",
+        "point3": "Ona ni nani aliyefungua pendekezo lako kamili, na mazungumzo yako yalipofikia.",
+        "action": "Anza kama msanidi programu"
+      },
+      "organisations": {
+        "title": "Kwa mashirika",
+        "point1": "Wakala wa skauti huleta mapendekezo yanayolingana na matatizo yenu kwenye kikasha chenu.",
+        "point2": "Fungua mapendekezo kamili chini ya NDA moja ya tathmini, na rekodi ya nani aliyeangalia.",
+        "point3": "Peleka pendekezo kutoka mtazamo wa kwanza hadi makubaliano yaliyosainiwa katika kifuatiliaji kimoja.",
+        "action": "Anza kama shirika"
+      }
+    },
+    "proof": {
+      "title": "Ushahidi wa uandishi, si ahadi",
+      "lead": "Kila toleo lililosajiliwa hupata cheti ambacho mtu yeyote anaweza kukagua. Kinarekodi kilichowasilishwa na lini; hakifanyi wazo kuwa mali ya mtu yeyote.",
+      "when": {
+        "title": "Lini",
+        "body": "Mamlaka huru ya muhuri wa wakati husaini wakati wa usajili."
+      },
+      "what": {
+        "title": "Nini",
+        "body": "Alama ya kidole ya SHA-256 ya maandishi na faili halisi, ili mabadiliko ya baadaye yaonekane."
+      },
+      "who": {
+        "title": "Nani aliangalia",
+        "body": "Mapendekezo kamili hufunguliwa chini ya NDA tu, na mwandishi anaweza kuona ni nani aliyeyafungua na lini."
+      },
+      "note": "Mtu yeyote anaweza kukagua cheti kwenye <verify>ukurasa wa uthibitishaji</verify> bila akaunti."
+    },
+    "cta": {
+      "title": "Tuko tayari ukiwa tayari",
+      "lead": "Kuchapisha wazo la kwanza huchukua kama dakika kumi. Mashirika yanaweza kuweka skauti kwa dakika mbili.",
+      "action": "Fungua akaunti"
+    },
+    "footer": {
+      "note": "Mfano wa awali: kila takwimu kwenye tovuti hii ni data ya mfano iliyopandwa.",
+      "help": "Msaada",
+      "terms": "Masharti"
+    }
   },
   "fields": {
     "email": "Anwani ya barua pepe",
@@ -1245,7 +1325,20 @@
     "download": "Pakua cheti (PDF)",
     "downloadLater": "Utaweza kupakua cheti muhuri wa muda ukishawekwa.",
     "noCertificate": "Cheti hutolewa unapochapisha.",
-    "noDetails": "Bado hakuna maelezo kamili."
+    "noDetails": "Bado hakuna maelezo kamili.",
+    "sheet": {
+      "title": "Cheti cha uandishi",
+      "registeredBy": "Imesajiliwa na {name}, toleo la {number}",
+      "certificate": "Cheti",
+      "registered": "Imesajiliwa",
+      "evidence": "Ushahidi",
+      "timestamped": "Imewekwa muhuri wa wakati na mamlaka huru",
+      "pending": "Muhuri wa wakati unasubiri",
+      "scan": "Changanua ili kuthibitisha",
+      "checkAt": "Mtu yeyote anaweza kukagua rekodi hii kwenye {url}",
+      "print": "Chapisha au hifadhi kama PDF",
+      "qrLabel": "Msimbo wa QR: ukurasa wa umma wa uthibitishaji wa cheti {id}"
+    }
   },
   "ideaDelete": {
     "open": "Futa wazo",
@@ -1598,7 +1691,23 @@
     "allIdeas": "Mawazo yangu yote",
     "empty": "Ushirikiano wako utaonekana hapa ukishawasilisha wazo lako kwa kampuni.",
     "emptyAction": "Nenda kwa Mawazo yangu",
-    "security": "Kuingia kwa hatua mbili"
+    "security": "Kuingia kwa hatua mbili",
+    "stats": {
+      "label": "Kwa muhtasari",
+      "ideas": "Mawazo",
+      "ideasMeta": "{count, plural, one {# rasimu} other {# rasimu}}",
+      "engagements": "Ushirikiano",
+      "engagementsMeta": "{count, plural, one {# unaendelea} other {# unaendelea}}",
+      "needsYou": "Unakusubiri",
+      "needsYouMeta": "Vinakusubiri",
+      "deadline": "Tarehe ya mwisho ijayo",
+      "deadlineNone": "Hakuna",
+      "deadlineMeta": "{count, plural, one {# siku ya kazi imebaki} other {# siku za kazi zimebaki}}",
+      "deadlineOverdue": "imechelewa",
+      "deadlineToday": "Inatakiwa leo"
+    },
+    "openTracker": "Fungua kifuatiliaji",
+    "otherLead": "Mengine yalipofikia."
   },
   "discover": {
     "pageTitle": "Gundua",
@@ -1653,7 +1762,7 @@
   },
   "recommendations": {
     "title": "Yanayopendekezwa kwako",
-    "personalisedOn": "Yamepangwa kwa nyanja zako, kaunti yako na shughuli zako kwenye Bridge. <link>Mipangilio ya mapendekezo</link>",
+    "personalisedOn": "Yamepangwa kwa nyanja zako, kaunti yako na shughuli zako kwenye Wazo. <link>Mipangilio ya mapendekezo</link>",
     "personalisedOff": "Yamepangwa kwa nyanja na kaunti yako tu, si shughuli zako. <link>Mipangilio ya mapendekezo</link>",
     "chip": "{pursuit} · {fit}",
     "pursuit": {
@@ -1703,7 +1812,7 @@
     },
     "profiling": {
       "title": "Tumia shughuli zako",
-      "lead": "Mapendekezo hutumia nyanja na kaunti yako kila wakati. Ukiwasha hili, yanatumia pia mapendekezo na ushirikiano wako kwenye Bridge.",
+      "lead": "Mapendekezo hutumia nyanja na kaunti yako kila wakati. Ukiwasha hili, yanatumia pia mapendekezo na ushirikiano wako kwenye Wazo.",
       "wording": "Idhini inasema:",
       "on": "Imewashwa: shughuli zako zinatumika.",
       "off": "Imezimwa: nyanja na kaunti yako pekee ndizo zinatumika.",
@@ -1960,7 +2069,10 @@
     },
     "turnOnMfa": "Washa kuingia kwa hatua mbili",
     "notMember": "Akaunti yako si mwanachama wa shirika hili.",
-    "openOwn": "Fungua ushirikiano wako"
+    "openOwn": "Fungua ushirikiano wako",
+    "progress": "Hatua {current} kati ya {total}: {group}",
+    "parties": "Pande zote mbili",
+    "stageNowTitle": "Sasa: {stage}"
   },
   "trackerActions": {
     "title": "Hatua zako",

@@ -37,7 +37,7 @@ describe("the not-found screen", () => {
 
   it("keeps the top bar and reads no session", async () => {
     await renderScreen();
-    expect(screen.getByRole("link", { name: "Bridge (working name)" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Wazo" }).getAttribute("href")).toBe("/");
     expect(screen.getByRole("link", { name: "Skip to content" })).toBeTruthy();
     expect(document.querySelector("[data-account-menu]")).toBeNull();
     expect(me.get).not.toHaveBeenCalled();

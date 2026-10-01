@@ -19,13 +19,13 @@
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided"
   },
   "app": {
-    "name": "Bridge",
-    "workingTitle": "Bridge (working name)",
-    "titleTemplate": "%s | Bridge (working name)",
+    "name": "Wazo",
+    "workingTitle": "Wazo",
+    "titleTemplate": "%s | Wazo",
     "tagline": "Local developers and organisations working on real problems."
   },
   "shell": {
-    "workingName": "Bridge (working name)",
+    "workingName": "Wazo",
     "skipToContent": "Skip to content",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
@@ -35,7 +35,14 @@
     "security": "Sign-in security",
     "notifications": "Notifications",
     "help": "Help",
-    "billing": "Plan & billing"
+    "billing": "Plan & billing",
+    "theme": {
+      "label": "Appearance",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "prototypeBadge": "Prototype"
   },
   "panel": {
     "title": "How it works",
@@ -47,9 +54,82 @@
   },
   "landing": {
     "title": "Bring local solutions to the organisations that need them",
-    "lead": "Developers publish solutions to real problems. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
+    "lead": "Developers publish solutions to real problems, with timestamped evidence of what they submitted. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
     "signUp": "Create an account",
-    "haveAccount": "Already have an account? <login>Log in</login>"
+    "logIn": "Log in",
+    "haveAccount": "Already have an account? <login>Log in</login>",
+    "sample": {
+      "ideaTitle": "Cold chain for dairy co-ops",
+      "org": "Telco A (example)",
+      "stage": "Mutual NDA",
+      "matchTitle": "Scout match",
+      "matchOrg": "Kenya Towers (example) is looking for fuel-level alerts",
+      "matchFit": "Strong fit",
+      "matchWhy": "Why: in a niche you like",
+      "certTitle": "Certificate of authorship",
+      "certStatus": "Timestamped",
+      "label": "Illustrative example"
+    },
+    "how": {
+      "title": "How it works",
+      "lead": "Three steps, one shared tracker.",
+      "publish": {
+        "title": "Publish an idea",
+        "body": "Write a public teaser and the confidential details. Each version is registered with a timestamp and a fingerprint."
+      },
+      "review": {
+        "title": "Reviewed under NDA",
+        "body": "Verified people at an organisation accept the Evaluation NDA before they open the full proposal. Every opening is recorded, and you can see who looked."
+      },
+      "track": {
+        "title": "Agree the next step",
+        "body": "Interest, contact, agreement, implementation and close: both sides follow the same five stages, with deadlines and reminders."
+      }
+    },
+    "who": {
+      "title": "Who it is for",
+      "developers": {
+        "title": "For developers",
+        "point1": "Register what you built, with evidence of when.",
+        "point2": "Pitch to companies that work on your problem, or let their scouts find you.",
+        "point3": "See who opened your full proposal, and where each conversation stands.",
+        "action": "Start as a developer"
+      },
+      "organisations": {
+        "title": "For organisations",
+        "point1": "A scout agent brings proposals that match your problems to your inbox.",
+        "point2": "Open full proposals under one Evaluation NDA, with a record of who looked.",
+        "point3": "Take a proposal from first look to a signed agreement in one tracker.",
+        "action": "Start as an organisation"
+      }
+    },
+    "proof": {
+      "title": "Proof of authorship, not a promise",
+      "lead": "Every registered version gets a certificate that anyone can check. It records what was submitted and when; it does not make an idea anyone's property.",
+      "when": {
+        "title": "When",
+        "body": "An independent timestamp authority signs the time of registration."
+      },
+      "what": {
+        "title": "What",
+        "body": "A SHA-256 fingerprint of the exact text and files, so a later change is visible."
+      },
+      "who": {
+        "title": "Who looked",
+        "body": "Full proposals open only under NDA, and the author can see who opened them and when."
+      },
+      "note": "Anyone can check a certificate on the <verify>verify page</verify> without an account."
+    },
+    "cta": {
+      "title": "Ready when you are",
+      "lead": "Publishing a first idea takes about ten minutes. Organisations can set up a scout in two.",
+      "action": "Create an account"
+    },
+    "footer": {
+      "note": "A prototype: every figure on this site is seeded example data.",
+      "help": "Help",
+      "terms": "Terms"
+    }
   },
   "fields": {
     "email": "Email address",
@@ -1245,7 +1325,20 @@
     "download": "Download the certificate (PDF)",
     "downloadLater": "You can download the certificate once the timestamp is recorded.",
     "noCertificate": "A certificate is issued when you publish.",
-    "noDetails": "No full details yet."
+    "noDetails": "No full details yet.",
+    "sheet": {
+      "title": "Certificate of authorship",
+      "registeredBy": "Registered by {name}, version {number}",
+      "certificate": "Certificate",
+      "registered": "Registered",
+      "evidence": "Evidence",
+      "timestamped": "Timestamped by an independent authority",
+      "pending": "Timestamp pending",
+      "scan": "Scan to verify",
+      "checkAt": "Anyone can check this record at {url}",
+      "print": "Print or save as PDF",
+      "qrLabel": "QR code: the public verify page for certificate {id}"
+    }
   },
   "ideaDelete": {
     "open": "Delete idea",
@@ -1598,7 +1691,23 @@
     "allIdeas": "All my ideas",
     "empty": "Your engagements show here once you pitch one of your ideas to a company.",
     "emptyAction": "Go to My ideas",
-    "security": "Two-step sign-in"
+    "security": "Two-step sign-in",
+    "stats": {
+      "label": "At a glance",
+      "ideas": "Ideas",
+      "ideasMeta": "{count, plural, one {# draft} other {# drafts}}",
+      "engagements": "Engagements",
+      "engagementsMeta": "{count, plural, one {# active} other {# active}}",
+      "needsYou": "Need you",
+      "needsYouMeta": "Waiting on you",
+      "deadline": "Next deadline",
+      "deadlineNone": "None",
+      "deadlineMeta": "{count, plural, one {# business day left} other {# business days left}}",
+      "deadlineOverdue": "overdue",
+      "deadlineToday": "Due today"
+    },
+    "openTracker": "Open the tracker",
+    "otherLead": "Where the rest stand."
   },
   "discover": {
     "pageTitle": "Discover",
@@ -1653,7 +1762,7 @@
   },
   "recommendations": {
     "title": "Recommended for you",
-    "personalisedOn": "Ranked on your niches, your county and your activity on Bridge. <link>Recommendation settings</link>",
+    "personalisedOn": "Ranked on your niches, your county and your activity on Wazo. <link>Recommendation settings</link>",
     "personalisedOff": "Ranked on your niches and county only, not your activity. <link>Recommendation settings</link>",
     "chip": "{pursuit} · {fit}",
     "pursuit": {
@@ -1698,12 +1807,12 @@
       "noProfile": "Only developer accounts choose niches.",
       "signedOut": "You were signed out. Sign in again, then save your niches.",
       "rateLimited": "Too many changes in a short time. Wait a minute, then save again.",
-      "network": "Bridge could not be reached. Check your connection, then save again.",
+      "network": "Wazo could not be reached. Check your connection, then save again.",
       "failed": "Your niches were not saved. Try again."
     },
     "profiling": {
       "title": "Use your activity",
-      "lead": "Recommendations always use your niches and county. With this on, they also use your proposals and engagements on Bridge.",
+      "lead": "Recommendations always use your niches and county. With this on, they also use your proposals and engagements on Wazo.",
       "wording": "The consent reads:",
       "on": "On: your activity is used.",
       "off": "Off: only your niches and county are used.",
@@ -1714,7 +1823,7 @@
         "changed": "The wording of this consent has changed. Reload the page to read it, then decide again.",
         "signedOut": "You were signed out. Sign in again, then decide again.",
         "rateLimited": "Too many changes in a short time. Wait a minute, then try again.",
-        "network": "Bridge could not be reached. Check your connection, then try again.",
+        "network": "Wazo could not be reached. Check your connection, then try again.",
         "failed": "Your choice was not saved. Try again."
       }
     }
@@ -1960,7 +2069,10 @@
     },
     "turnOnMfa": "Turn on two-step sign-in",
     "notMember": "Your account is not a member of this organisation.",
-    "openOwn": "Open your engagements"
+    "openOwn": "Open your engagements",
+    "progress": "Stage {current} of {total}: {group}",
+    "parties": "The two parties",
+    "stageNowTitle": "Now: {stage}"
   },
   "trackerActions": {
     "title": "Your actions",
