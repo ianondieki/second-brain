@@ -60,7 +60,7 @@ export function RecommendedForYou({ state }: { state: RecommendationsState }) {
     >
       {state.kind === "list" ? (
         <>
-          <RowList ordered>
+          <RowList ordered cards>
             {state.items.map((item) => (
               <RecommendationRow key={item.problem.id} item={item} />
             ))}
