@@ -111,7 +111,8 @@ describe("the whose-turn banner", () => {
 
   it("says overdue in words, not colour alone", () => {
     renderWithIntl(<WhoseTurn detail={detail({ due: { due_on: "2026-09-25", business_days_left: -2, overdue: true } })} />);
-    expect(screen.getByText("Overdue by 2 business days, was due 25 Sep 2026")).toBeTruthy();
+    // The date is its own span (it never splits across lines), so the sentence is read from the element's text.
+    expect(document.querySelector("[data-due='overdue']")?.textContent).toBe("Overdue by 2 business days, was due 25 Sep 2026");
   });
 });
 

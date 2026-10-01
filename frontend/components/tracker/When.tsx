@@ -1,4 +1,5 @@
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 import { eatParts, formatDate, type Due } from "./model";
 
@@ -27,18 +28,19 @@ export function Day({ day }: { day: string }) {
   return <time dateTime={day}>{format(day)}</time>;
 }
 
-/** The stage's countdown in Kenyan business days, or how long it is overdue. */
+/** The stage's countdown in Kenyan business days, or how long it is overdue; the date itself never splits across lines. */
 export function DueText({ due, className }: { due: Due; className?: string }) {
   const t = useTranslations("tracker");
   const date = useDay()(due.due_on);
   const late = Math.abs(due.business_days_left);
+  const nowrap = (chunks: ReactNode) => <span className="whitespace-nowrap">{chunks}</span>;
   const text = due.overdue
     ? late > 0
-      ? t("due.overdue", { count: late, date })
-      : t("due.overdueToday", { date })
+      ? t.rich("due.overdue", { count: late, date, nowrap })
+      : t.rich("due.overdueToday", { date, nowrap })
     : due.business_days_left <= 0
-      ? t("due.today", { date })
-      : t("due.left", { count: due.business_days_left, date });
+      ? t.rich("due.today", { date, nowrap })
+      : t.rich("due.left", { count: due.business_days_left, date, nowrap });
   return (
     <span data-due={due.overdue ? "overdue" : "open"} className={className}>
       {text}

@@ -13,7 +13,7 @@ import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { TabNav } from "@/components/ui/TabNav";
 import { clientStrings } from "@/lib/i18n/client-strings";
-import { formatCalendarDate } from "@/lib/format";
+import { formatDay } from "@/lib/format";
 import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
@@ -126,7 +126,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             <>
               <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
               {!isFinished(detail.state) ? (
-                <span className="block text-ink-soft lg:hidden">{t("since", { date: formatCalendarDate(locale, detail.stage_entered_at.slice(0, 10)) })}</span>
+                <span className="block text-ink-soft lg:hidden">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
               ) : null}
             </>
           }
