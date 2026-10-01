@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  confidenceWords,
   formatConfidence,
   formatDate,
   formatMoment,
@@ -78,6 +79,19 @@ describe("dates and numbers", () => {
       date: "1 Oct 2026",
     });
     expect(formatMoment("en", "2026-09-30T11:06:00Z")).toBe("30 Sep 2026, 14:06");
+  });
+
+  it("bands confidence on the whole percentage it shows", () => {
+    expect(confidenceWords("en", "0.4")).toEqual({ band: "low", percent: "40%" });
+    expect(confidenceWords("en", "0.499")).toEqual({ band: "medium", percent: "50%" });
+    expect(confidenceWords("en", "0.5")).toEqual({ band: "medium", percent: "50%" });
+    expect(confidenceWords("en", "0.785")).toEqual({ band: "medium", percent: "79%" });
+    expect(confidenceWords("en", "0.799")).toEqual({ band: "high", percent: "80%" });
+    expect(confidenceWords("en", "0.8")).toEqual({ band: "high", percent: "80%" });
+    expect(confidenceWords("en", "1")).toEqual({ band: "high", percent: "100%" });
+    expect(confidenceWords("en", null)).toBeNull();
+    expect(confidenceWords("en", " ")).toBeNull();
+    expect(confidenceWords("en", "abc")).toBeNull();
   });
 
   it("shows confidence to two places", () => {

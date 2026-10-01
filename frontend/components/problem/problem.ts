@@ -69,13 +69,19 @@ export function formatConfidence(locale: string, value: string | null | undefine
 
 export type ConfidenceBand = "high" | "medium" | "low";
 
-/** The card's confidence in words (≥ 0.8 high, ≥ 0.5 medium, else low) with the figure as a percentage, for people. */
+/**
+ * The card's confidence in words with the figure as a whole percentage, for people. The band is decided on the
+ * percentage shown (80% and up high, 50% and up medium, else low), so 0.799 reads "High (80%)" like 0.8 does, never
+ * "Medium (80%)". The thresholds are the frontend's wording only; the ranker's own cut-off is 0.5
+ * (backend/config/policy.yaml not_now_below_confidence).
+ */
 export function confidenceWords(locale: string, value: string | null | undefined): { band: ConfidenceBand; percent: string } | null {
   if (value === null || value === undefined || value.trim() === "") return null;
   const number = Number(value);
   if (!Number.isFinite(number)) return null;
-  const band: ConfidenceBand = number >= 0.8 ? "high" : number >= 0.5 ? "medium" : "low";
-  return { band, percent: new Intl.NumberFormat(`${locale}-KE`, { style: "percent", maximumFractionDigits: 0 }).format(number) };
+  const whole = Math.round(Number((number * 100).toFixed(6)));
+  const band: ConfidenceBand = whole >= 80 ? "high" : whole >= 50 ? "medium" : "low";
+  return { band, percent: new Intl.NumberFormat(`${locale}-KE`, { style: "percent", maximumFractionDigits: 0 }).format(whole / 100) };
 }
 
 /**
