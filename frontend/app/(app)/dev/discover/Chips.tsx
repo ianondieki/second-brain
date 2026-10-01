@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { TrendIcon, WhyIcon } from "@/components/discover-icons";
@@ -24,22 +25,25 @@ export function WhyChip({ children }: { children: ReactNode }) {
  * "act here" (docs/platform/design/p16-design-system.md, principle 3).
  */
 export function TrendBadge({ badge }: { badge: string | null }) {
+  const t = useTranslations("discover");
   if (!badge) return null;
+  const detail = trendDetail(badge);
   return (
     <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]" title={badge}>
-      {shortTrend(badge)}
+      {detail === null ? badge : t("trendingShort", { detail })}
     </Badge>
   );
 }
 
 /**
- * The badge on a card without the niche and county it opens with ("Trending in ICT › Networks · Kenya: 4 companies
- * scouting" → "Trending: 4 companies scouting"): the card's meta line already says where. The full sentence stays in
- * the badge's title; a badge in another shape is shown as it is.
+ * What the badge says after the niche and county it opens with ("Trending in ICT › Networks · Kenya: 4 companies
+ * scouting" → "4 companies scouting"), for the card's short form (discover.trendingShort): the card's meta line
+ * already says where. The sentence's last ": " splits it, so a niche or place written with one stays whole. The full
+ * sentence stays in the badge's title; a badge in another shape (null here) is shown as it is.
  */
-export function shortTrend(badge: string): string {
-  const match = /^Trending in .+?: (.+)$/.exec(badge);
-  return match ? `Trending: ${match[1]}` : badge;
+export function trendDetail(badge: string): string | null {
+  const match = /^Trending in .+: (.+)$/.exec(badge);
+  return match ? match[1]! : null;
 }
 
 /** A row's badges (at most two, docs/spec/07 item 2): the trend badge first, then the Why chips the caller picked. */
