@@ -423,3 +423,9 @@ a G5 check. Open items 2-4 above stand.
 5. `ProjectRow.tsx:52-59`: the Solves pane omits the problem's provenance label.
 6. `discover.ts:113-116`: `moreWhy` repeats what the trend badge says ("4 companies scouting").
 7. `e2e/discover.spec.ts`: assert a non-empty `[data-label]` on every problem and recommendation.
+
+## Closed since (orchestrator, 2026-10-01, for the M2 report's MINOR count)
+- P12-B re-review MINOR 1 (project actors from the recent window, G5): the test is `058f3e7` (P16-E1).
+- P12-B re-review MINOR 2: recorded as D-50 and a THREAT_MODEL residual (a decision for the owner, not a code item).
+- P12-F re-review MINORs 1, 2, 4, 5, 6 and 7: fixed by P16-C1 as its build items 5–10 (`tasks/P16-C1.md`).
+- P12-F re-review MINOR 3 (Discover's simulated trend counts in the README table): README "Run the demo" (`c6873e8`).

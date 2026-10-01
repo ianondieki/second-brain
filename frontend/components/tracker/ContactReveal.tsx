@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -24,6 +24,13 @@ export function ContactReveal({
   const [contact, setContact] = useState<Contact | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [busy, setBusy] = useState(false);
+  const revealed = useRef<HTMLDivElement>(null);
+
+  // The button the person pressed is replaced by the details: focus moves to them, so they are announced where the
+  // control was (WCAG 2.4.3; ECC review, P16-F), as ShareTier2 does.
+  useEffect(() => {
+    if (contact) revealed.current?.focus();
+  }, [contact]);
 
   async function reveal() {
     if (busy) return;
@@ -37,12 +44,14 @@ export function ContactReveal({
 
   if (contact) {
     return (
-      <DescriptionList data-contact-revealed="">
-        <Description label={t("contact.name")}>{contact.developer_name}</Description>
-        <Description label={t("contact.email")}>
-          {contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : t("contact.noEmail")}
-        </Description>
-      </DescriptionList>
+      <div ref={revealed} tabIndex={-1} className="focus:outline-none">
+        <DescriptionList data-contact-revealed="">
+          <Description label={t("contact.name")}>{contact.developer_name}</Description>
+          <Description label={t("contact.email")}>
+            {contact.email ? <a href={mailto(contact.email)}>{contact.email}</a> : t("contact.noEmail")}
+          </Description>
+        </DescriptionList>
+      </div>
     );
   }
 
@@ -54,4 +63,14 @@ export function ContactReveal({
       </Button>
     </div>
   );
+}
+
+/**
+ * A mailto: link to one address and nothing else: the local part and the domain are encoded, so an address the API
+ * accepted with `?`, `&` or `=` in it cannot add recipients, a subject or a body to the draft (ECC review, P16-F).
+ */
+export function mailto(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 0) return `mailto:${encodeURIComponent(email)}`;
+  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`;
 }

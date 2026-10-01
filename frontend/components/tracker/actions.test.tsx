@@ -11,7 +11,7 @@ import { renderWithIntl } from "@/test/intl";
 
 import { Actions, type ActionsProps } from "./Actions";
 import { refusalOf, runCommand, type CommandOutcome } from "./calls";
-import { ContactReveal } from "./ContactReveal";
+import { ContactReveal, mailto } from "./ContactReveal";
 import { actionItems, type CommandRequest, type Detail } from "./model";
 
 // REQ-ENG-03: the caller's buttons come only from the API's `actions`; each becomes the right request; the step-up
@@ -371,6 +371,26 @@ describe("the contact reveal", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
     expect(revealImpl).toHaveBeenCalledWith("e1");
     expect(screen.getByRole("link", { name: "achieng@example.com" }).getAttribute("href")).toBe("mailto:achieng@example.com");
+  });
+
+  it("moves focus to the details that replace the button (WCAG 2.4.3)", async () => {
+    const revealImpl = vi.fn(async () => ({
+      ok: true as const,
+      contact: { developer_name: "Achieng Otieno", email: "achieng@example.com", phone: null },
+    }));
+    renderWithIntl(<ContactReveal engagementId="e1" revealImpl={revealImpl} />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
+    const details = document.querySelector("[data-contact-revealed]");
+    expect(details).not.toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(details?.parentElement);
+    expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("links to the one address only, whatever characters the address holds", () => {
+    expect(mailto("achieng@example.com")).toBe("mailto:achieng@example.com");
+    expect(mailto("dev?cc=boss@example.com")).toBe("mailto:dev%3Fcc%3Dboss@example.com");
+    expect(mailto("x?to=ceo%40corp.com&z=@evil.com")).toBe("mailto:x%3Fto%3Dceo%2540corp.com%26z%3D@evil.com");
   });
 });
 

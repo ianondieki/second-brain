@@ -37,6 +37,20 @@ describe("continueToReturnPath", () => {
     expect(r.replace).toHaveBeenCalledWith("/auth/mfa?next=%2Forg%2Finbox");
   });
 
+  it("goes to sign in again when the session is already gone (ECC review, P16-F)", async () => {
+    mocks.get.mockResolvedValue({ data: undefined });
+    const r = router();
+    await continueToReturnPath(r, false, "/org/inbox");
+    expect(r.replace).toHaveBeenCalledWith("/login");
+  });
+
+  it("still goes to the page when the session read fails; the page checks the session itself", async () => {
+    mocks.get.mockRejectedValue(new TypeError("offline"));
+    const r = router();
+    await continueToReturnPath(r, false, "/org/inbox");
+    expect(r.replace).toHaveBeenCalledWith("/org/inbox");
+  });
+
   it("goes the usual way (home) without a return path, or with an unsafe one", async () => {
     for (const next of [undefined, "//evil.example", "https://evil.example/dev", "/\\evil", "/%2F%2Fevil"]) {
       const r = router();

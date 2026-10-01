@@ -60,6 +60,10 @@ PREFIX: Final = "/api/orgs/{org_id}/scouts"
 SCOUT_AGENTS: Final = "scout_agents"
 SCOUT_FREQUENCIES: Final = "scout_frequencies"
 _NOW = text("SELECT now()")
+# One plan count at a time per organisation: creating or resuming a scout takes this lock before counting, so two
+# parallel requests cannot both pass the plan's scout_agents limit (ECC review, P16-F; as proposals.service and
+# billing.checkout do). Transaction-scoped: it is released when the request commits or rolls back.
+_PLAN_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _COUNTIES = text("SELECT code FROM regions WHERE code = ANY(:codes) AND kind = 'county'")
 _REVIEWERS = text(
     "SELECT user_id FROM memberships WHERE org_id = :org AND user_id = ANY(:users) AND status = 'active'"
@@ -227,6 +231,7 @@ async def create_scout(body: ScoutForm, org: OrgAdmin, db: Db, settings: Setting
     """A new scout (402 beyond the plan's scouts or for a frequency it lacks; 422 for an invalid form)."""
     weights = get_weights()
     ent = await entitlements.for_subject(db, settings, org_id=org.org_id)
+    await db.execute(_PLAN_LOCK, {"key": f"scouts.plan:{org.org_id}"})
     used = int(
         await db.scalar(select(func.count()).select_from(ScoutAgent).where(ScoutAgent.org_id == org.org_id)) or 0
     )
@@ -359,6 +364,7 @@ async def update_scout(scout_id: UUID, body: ScoutPatch, org: OrgAdmin, db: Db, 
         check_frequency(settings, ent, frequency)
     if paused is False and scout.paused_at is not None:  # resuming counts against the plan again
         limit = ent.limit(SCOUT_AGENTS)
+        await db.execute(_PLAN_LOCK, {"key": f"scouts.plan:{org.org_id}"})
         used = await _active_scouts(db, org.org_id, but=scout.id)
         if limit is not None and used >= limit:
             raise entitlements.PlanLimitExceeded(settings, ent, SCOUT_AGENTS, limit=limit, used=used)

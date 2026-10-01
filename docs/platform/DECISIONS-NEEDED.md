@@ -220,6 +220,18 @@ Options: (a) keep E1 and E2 (spec as written; the 0006 burst detector is the def
 organisations for `scout_match`; (c) count E1 organisations only once they are older than N days (e.g. 30).
 Default applied: (a), unchanged code. Recommended: (c) with N = 30, together with the 0006 burst detector.
 
+### D-51 · The ECC review's structural items on M2: long functions, long files, deep nesting (P16-F; CLAUDE.md step 7)
+
+Context: `/ecc-code-review` lists "functions > 50 lines, files > 800 lines, nesting > 4" under HIGH. On the code M2
+touched there are 94 functions over 50 lines (20 backend, 74 React components; median 82 lines, the editor 480), 3
+nested deeper than 4 (`auth/router.py` `oauth_callback`, `matching/matches.py` `interest_state`, `CaseDecision.tsx`)
+and one migration over 800 lines (`tasks/P16-F.md` lists them all). No test, review or scanner found a defect in
+them; every other CRITICAL and HIGH finding of the review was fixed. Options: (a) split them all now (a wide change
+across security-reviewed packages and every screen, with the JS budget re-measured); (b) keep them, split them
+during the Phase 7 UX pass and Phase 8 hardening, and add lint warnings (ruff `PLR0915`/`C901`, eslint
+`max-lines-per-function`/`max-depth`) so they stop growing; (c) split only those over 150 lines now.
+Default applied: (b), nothing refactored in M2. Recommended: (b), taking the 15 over 150 lines first.
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
