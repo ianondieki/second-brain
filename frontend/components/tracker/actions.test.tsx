@@ -382,7 +382,9 @@ describe("the contact reveal", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
     const details = document.querySelector("[data-contact-revealed]");
     expect(details).not.toBeNull();
-    expect(document.activeElement?.contains(details)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(details?.parentElement);
+    expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
   });
 
   it("links to the one address only, whatever characters the address holds", () => {
