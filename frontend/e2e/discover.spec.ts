@@ -100,7 +100,9 @@ test.describe("a new developer", () => {
     // The demo's trending problem: its self-explaining badge, a Why chip, its sources and the project beside it.
     const card = page.locator(`article[data-problem="${trend.problemId}"]`);
     await expect(card).toHaveAttribute("data-trending", "");
-    await expect(card.locator("[data-badge]")).toContainText(/^Trending in .+: .+/);
+    // The card shows the badge's short form (its meta line already says where); the sentence stays in its title (P18).
+    await expect(card.locator("[data-badge]")).toContainText(/^Trending: .+/);
+    await expect(card.locator("[data-badge]")).toHaveAttribute("title", /^Trending in .+: .+/);
     expect(await card.locator("[data-chip=why]").count()).toBeGreaterThanOrEqual(1);
     await expect(card.getByRole("link", { name: trend.title })).toHaveAttribute("href", `/problems/${trend.problemId}`);
     await card.getByText("More about this problem").click();
