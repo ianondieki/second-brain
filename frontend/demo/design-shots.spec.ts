@@ -85,10 +85,6 @@ const SHOTS: Shot[] = [
     } },
   { name: "ideas", path: "/dev/ideas", who: "dev" },
   // "Who has seen this" with a view in it: Brian's proposal, opened by Telco A's reviewer.
-  { name: "idea-views", path: "/dev/ideas", who: "devBrian", prepare: async (page) => {
-      await page.locator("main article").filter({ hasText: "Cashless market-fee" }).first().getByRole("link").first().click();
-      await page.locator("[data-view]").first().waitFor();
-    } },
   { name: "org-home", path: "/org", who: "org" },
   { name: "org-inbox", path: "/org/inbox", who: "org" },
   { name: "org-matches", path: "/org/inbox?tab=matches", who: "org" },
@@ -128,6 +124,11 @@ const SHOTS: Shot[] = [
       await page.locator("[data-tier2-frame]").waitFor();
       await page.frameLocator("[data-tier2-frame]").locator(".mark").waitFor();
     }, frame: "[data-tier2-frame]" },
+  // After org-proposal-full: the first view of Brian's full proposal is what this screen lists.
+  { name: "idea-views", path: "/dev/ideas", who: "devBrian", prepare: async (page) => {
+      await page.locator("main article").filter({ hasText: "Cashless market-fee" }).first().getByRole("link").first().click();
+      await page.locator("[data-view]").first().waitFor();
+    } },
   { name: "editor-1", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"], [data-hydrated="true"]').first().waitFor().catch(() => undefined);
       await page.getByLabel("Title", { exact: true }).waitFor();
