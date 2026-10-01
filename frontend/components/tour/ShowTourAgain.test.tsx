@@ -21,5 +21,6 @@ describe("ShowTourAgain", () => {
     expect(tourDone("org")).toBe(true); // the other side's tour is its own memory
     expect(screen.getByRole("status").textContent).toBe("The tour will show the next time you open your home.");
     expect(screen.queryByRole("button")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("status")); // never <body> after the button has gone
   });
 });
