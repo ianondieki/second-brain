@@ -151,7 +151,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
             <CardGrid>
               {ideas.slice(0, IDEAS_SHOWN).map((item) => (
                 <li key={item.id}>
-                  <IdeaCard item={item} />
+                  <IdeaCard item={item} headingLevel={3} />
                 </li>
               ))}
             </CardGrid>
