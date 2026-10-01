@@ -10,6 +10,8 @@ import { cn } from "@/components/ui/cn";
 import { RadioGroup } from "@/components/ui/RadioGroup";
 import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/status-icons";
 
+import { haptic } from "@/lib/haptics";
+
 import { formatKes } from "../plans";
 import { checkoutCalls, type CheckoutCalls } from "./calls";
 import {
@@ -81,6 +83,12 @@ export function Checkout(props: CheckoutProps) {
     if (phase.kind === "confirm" && phase.refusal) alert.current?.focus();
     else if (moved && phase.kind !== "starting") heading.current?.focus();
   }, [phase]);
+
+  // A confirmation under the thumb on phones (lib/haptics.ts): once when the outcome arrives.
+  useEffect(() => {
+    if (phase.kind === "succeeded") haptic("success");
+    else if (phase.kind === "failed" || phase.kind === "cancelled") haptic("warn");
+  }, [phase.kind]);
 
   useEffect(() => {
     if (phase.kind === "pending" || phase.kind === "stalled") syncAddress(phase.id);

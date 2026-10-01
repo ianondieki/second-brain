@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { ClosedCelebration } from "@/components/tracker/ClosedCelebration";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -110,6 +111,9 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 max-w-3xl">
         <WhoseTurn detail={detail} />
       </div>
+      {detail.state === "CLOSED" ? (
+        <ClosedCelebration engagementId={detail.id} title={t("closed.title")} body={t("closed.body")} dismiss={t("closed.dismiss")} />
+      ) : null}
 
       {/* The one progress indicator: the timeline itself (completed connectors in the accent). On phones the actions
           card comes first, so the screen's primary action is within reach; the timeline follows it. */}
@@ -129,8 +133,10 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         />
       </div>
 
-      <Card as="div" className="order-1 max-w-3xl lg:order-2">
-        <Actions
+      {/* The card only when there is something to do: a closed or ended engagement draws no empty box. */}
+      {items.length > 0 ? (
+        <Card as="div" className="order-1 max-w-3xl lg:order-2">
+          <Actions
             engagementId={detail.id}
             lockVersion={detail.lock_version}
             items={items}
@@ -140,7 +146,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
             myUserId={me.user.id}
             recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
           />
-      </Card>
+        </Card>
+      ) : null}
       </div>
 
       <div className="mt-8 max-w-3xl empty:hidden">

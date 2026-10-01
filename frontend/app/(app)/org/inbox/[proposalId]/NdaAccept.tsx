@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
+import { haptic } from "@/lib/haptics";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Form, SubmitButton } from "@/components/ui/Form";
@@ -60,6 +61,7 @@ export function NdaAccept({
         body: { template_id: templateId, sha256, logging_notice_version: noticeVersion },
       });
       if (response.ok) {
+        haptic("success");
         router.replace(viewHref); // stays busy until the marked page replaces this step
         return;
       }

@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/haptics";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
@@ -118,6 +119,7 @@ export function ExpressInterest(props: ExpressInterestProps) {
     const outcome = await post(body());
     if (outcome.ok) {
       setMode("sent");
+      haptic("success");
       router.push(`/org/engagements/${encodeURIComponent(outcome.engagementId)}${props.query}`);
       return;
     }

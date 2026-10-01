@@ -72,6 +72,17 @@ const SHOTS: Shot[] = [
       await page.locator("main article").filter({ hasText: "Published" }).first().getByRole("link").first().click();
       await page.locator("[data-certificate]").waitFor();
     } },
+  // A closed engagement's one-time celebration (a fresh browser context, so it shows), and a confirm dialog as a
+  // bottom sheet on phones.
+  { name: "tracker-closed", path: "/dev/engagements", who: "dev", prepare: async (page) => {
+      await page.locator("main article").filter({ hasText: "Project closed" }).first().getByRole("link").first().click();
+      await page.locator("[data-celebration]").waitFor();
+    } },
+  { name: "dialog-sheet", path: "/dev/ideas", who: "dev", viewportOnly: true, prepare: async (page) => {
+      await page.locator("main article").filter({ hasText: "Published" }).first().getByRole("link").first().click();
+      await page.getByRole("button", { name: "Delete idea" }).click();
+      await page.getByRole("dialog").waitFor();
+    } },
   { name: "ideas", path: "/dev/ideas", who: "dev" },
   // "Who has seen this" with a view in it: Brian's proposal, opened by Telco A's reviewer.
   { name: "idea-views", path: "/dev/ideas", who: "devBrian", prepare: async (page) => {

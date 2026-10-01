@@ -312,6 +312,67 @@ html[data-theme="dark"] .lattice-band {
   }
 }
 
+/* Dialogs: a bottom sheet on phones rises once (components/ui/ConfirmDialog.tsx); reduced motion shows it in place. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+dialog[data-sheet][open] {
+  animation: sheet-up var(--motion-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-sheet][open] {
+    animation: none;
+  }
+}
+
+/* The closed-engagement celebration (components/tracker/ClosedCelebration.tsx): twelve lattice-coloured dots fall
+   once; reduced motion leaves them resting along the top edge. */
+.confetti i {
+  position: absolute;
+  top: -8px;
+  display: block;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  animation: confetti-fall 1.8s var(--ease-out) forwards;
+}
+.confetti i:nth-child(3n) {
+  background: var(--flourish);
+}
+.confetti i:nth-child(3n + 1) {
+  background: var(--warm);
+  width: 5px;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(240px) rotate(300deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti i {
+    top: 0;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
 /* The first-login tour rises into place once; reduced motion shows it in place. */
 @keyframes tour-enter {
   from {

@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/haptics";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -126,6 +127,7 @@ export function Review(props: ReviewProps) {
     const attestations = Object.fromEntries(keys.map((key) => [key, true])) as unknown as Attestations;
     const outcome = await calls.publish(proposalId, text, attestations);
     if (outcome.ok) {
+      haptic("success");
       router.push(`${ideaHref(proposalId)}?published=1`);
       return;
     }
