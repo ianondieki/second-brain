@@ -48,6 +48,15 @@ describe("design tokens", () => {
   });
 
   // Dark mode is its own set of steps, not a flip: every colour token the light set declares, the dark set declares.
+  it("hides a remembered tour and a remembered celebration, whole, before paint", () => {
+    // The inline scripts mark <html> (components/tour/tour-store.ts, components/tracker/celebration-store.ts); the
+    // celebration's rule must target the shell, which holds the card and its button, never the card alone.
+    expect(css).toContain('html[data-tour-seen~="developer"] [data-tour-side="developer"]');
+    expect(css).toContain('html[data-tour-seen~="org"] [data-tour-side="org"]');
+    expect(css).toMatch(/html\[data-celebration-seen\] \[data-celebration-shell\] \{\s*display: none;/);
+    expect(css).not.toMatch(/html\[data-celebration-seen\] \[data-celebration\]/);
+  });
+
   it("declares every colour token for dark mode too", () => {
     const light = css.slice(css.indexOf("\n:root {"), css.indexOf("\nhtml[data-theme=\"dark\"] {"));
     const dark = css.slice(css.indexOf("\nhtml[data-theme=\"dark\"] {"), css.indexOf("\n@media (prefers-color-scheme: dark)"));
