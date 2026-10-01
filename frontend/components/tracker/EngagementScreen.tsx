@@ -133,21 +133,21 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         />
       </div>
 
-      {/* The card only when there is something to do: a closed or ended engagement draws no empty box. */}
-      {items.length > 0 ? (
-        <Card as="div" className="order-1 max-w-3xl lg:order-2">
-          <Actions
-            engagementId={detail.id}
-            lockVersion={detail.lock_version}
-            items={items}
-            counterpart={counterpart}
-            enrolled={me.mfa.enrolled}
-            members={members}
-            myUserId={me.user.id}
-            recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
-          />
-        </Card>
-      ) : null}
+      {/* Actions stays mounted whatever is left to do (it keeps its own "Done" status and focus after a refresh);
+          the card frame is drawn only while there is something to do, so a closed or ended engagement draws no
+          empty box. */}
+      <Card as="div" variant={items.length > 0 ? "raised" : "bare"} padding={items.length > 0 ? "md" : "none"} className="order-1 max-w-3xl has-[>div:empty]:hidden lg:order-2">
+        <Actions
+          engagementId={detail.id}
+          lockVersion={detail.lock_version}
+          items={items}
+          counterpart={counterpart}
+          enrolled={me.mfa.enrolled}
+          members={members}
+          myUserId={me.user.id}
+          recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
+        />
+      </Card>
       </div>
 
       <div className="mt-8 max-w-3xl empty:hidden">

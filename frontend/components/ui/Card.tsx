@@ -13,8 +13,9 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
   as?: "article" | "div" | "section" | "li" | "fieldset";
   /** The card holds one stretched link (cardLinkClass): hover and focus show on the card. */
   interactive?: boolean;
-  /** `raised` carries the card shadow; `flat` is a bordered box on the paper (compact lists). */
-  variant?: "raised" | "flat" | "wash";
+  /** `raised` carries the card shadow; `flat` is a bordered box on the paper (compact lists); `bare` draws nothing
+   *  (the same element kept in place while its content decides whether a frame is due). */
+  variant?: "raised" | "flat" | "wash" | "bare";
   /** `none` for a card whose edge is drawn by its content (a lattice band, then its own padded body). */
   padding?: "none" | "sm" | "md";
   children: ReactNode;
@@ -24,6 +25,7 @@ const VARIANTS = {
   raised: "border border-line bg-field shadow-card",
   flat: "border border-line bg-field",
   wash: "bg-accent-wash",
+  bare: "",
 } as const;
 
 /** A card (docs/platform/design/p18-design-system.md): a bordered box with the panel radius; raised cards carry the one card shadow. */
