@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Card } from "@/components/ui/Card";
 import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 import { Field } from "@/components/ui/Field";
@@ -61,7 +62,7 @@ export function FileCheck({ certId, primary = false, checkFileImpl = checkFile }
   const headingId = `${id}-title`;
 
   return (
-    <section aria-labelledby={headingId}>
+    <Card as="section" variant="flat" aria-labelledby={headingId} className="p-5 sm:p-6">
       <h2 id={headingId} className="text-lg text-ink">
         {t("title")}
       </h2>
@@ -76,8 +77,8 @@ export function FileCheck({ certId, primary = false, checkFileImpl = checkFile }
               name="file"
               onChange={() => setState({ kind: "idle" })}
               className={cn(
-                "w-full min-w-0 text-base text-ink",
-                "file:mr-4 file:min-h-11 file:cursor-pointer file:rounded-control file:border file:border-ink-soft",
+                "w-full min-w-0 rounded-control border border-line bg-paper p-1.5 text-base text-ink",
+                "file:mr-4 file:min-h-10 file:cursor-pointer file:rounded-[4px] file:border file:border-line",
                 "file:bg-field file:px-4 file:text-base file:font-semibold file:text-ink hover:file:bg-accent-wash",
               )}
               {...control}
@@ -93,7 +94,7 @@ export function FileCheck({ certId, primary = false, checkFileImpl = checkFile }
       <div role="status" className="mt-6 empty:hidden">
         {state.kind === "done" ? <Result result={state.result} certId={certId} /> : null}
       </div>
-    </section>
+    </Card>
   );
 }
 

@@ -15,7 +15,8 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
   interactive?: boolean;
   /** `raised` carries the card shadow; `flat` is a bordered box on the paper (compact lists). */
   variant?: "raised" | "flat" | "wash";
-  padding?: "sm" | "md";
+  /** `none` for a card whose edge is drawn by its content (a lattice band, then its own padded body). */
+  padding?: "none" | "sm" | "md";
   children: ReactNode;
 }
 
@@ -32,7 +33,7 @@ export function Card({ as: Tag = "div", variant = "raised", padding = "md", inte
       className={cn(
         "relative min-w-0 rounded-panel",
         VARIANTS[variant],
-        padding === "md" ? "p-5" : "p-4",
+        padding === "md" ? "p-5" : padding === "sm" ? "p-4" : null,
         interactive &&
           "transition-[border-color,box-shadow] duration-(--motion-fast) hover:border-accent-line hover:shadow-overlay " +
             "has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-accent",

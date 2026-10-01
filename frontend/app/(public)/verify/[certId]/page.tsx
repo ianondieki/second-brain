@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 
 import { IntlScope } from "@/components/IntlScope";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { EmptyStateFrame } from "@/components/ui/EmptyStateFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 import { normaliseCertId } from "../certificate";
@@ -50,24 +51,24 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
     return (
       <VerifyShell>
         <PageHeader title={t("pageTitle")} />
-        <p className="mt-4 max-w-[60ch] text-ink" data-testid="verify-message">
-          {lookup.kind === "rateLimited"
-            ? t("rateLimited")
-            : lookup.kind === "unavailable"
-              ? t("unavailable")
-              : t("notFound")}
-        </p>
-        <div className="mt-3">
-          {again && certId ? (
-            <StandaloneLink href={`/verify/${certId}`}>
-              {t("retry")}
-            </StandaloneLink>
-          ) : (
-            <Link href="/verify" className={standaloneLinkClass}>
-              {t("another")}
-            </Link>
-          )}
-        </div>
+        <EmptyStateFrame
+          rule={false}
+          className="mt-6"
+          sentence={
+            <span data-testid="verify-message">
+              {lookup.kind === "rateLimited" ? t("rateLimited") : lookup.kind === "unavailable" ? t("unavailable") : t("notFound")}
+            </span>
+          }
+          action={
+            again && certId ? (
+              <StandaloneLink href={`/verify/${certId}`}>{t("retry")}</StandaloneLink>
+            ) : (
+              <Link href="/verify" className={standaloneLinkClass}>
+                {t("another")}
+              </Link>
+            )
+          }
+        />
       </VerifyShell>
     );
   }
@@ -75,15 +76,15 @@ export default async function CertificatePage({ params }: PageProps<"/verify/[ce
   return (
     <VerifyShell>
       <PageHeader title={t("recordTitle", { certId })} />
-      <div className="mt-8">
+      <div className="mt-6">
         <VerifyRecord record={lookup.record} />
       </div>
-      <div className="mt-12">
+      <div className="mt-8">
         <IntlScope namespaces={["verifyFile"]}>
           <FileCheck certId={certId} primary />
         </IntlScope>
       </div>
-      <p className="mt-10">
+      <p className="mt-8">
         <Link href="/verify" className={standaloneLinkClass}>
           {t("another")}
         </Link>

@@ -102,6 +102,22 @@ const SHOTS: Shot[] = [
       if (await page.getByRole("dialog").isVisible()) await page.getByRole("dialog").getByRole("button", { name: "Turn on and ask" }).click();
       await page.locator("#assistant-panel").getByRole("button", { name: "Ask again" }).waitFor({ timeout: 60_000 });
     } },
+  // The public trust page: the lookup, a timestamped record (reached from the owner's certificate), a miss, and a
+  // file check that matches nothing.
+  { name: "verify", path: "/verify", who: "none" },
+  { name: "verify-record", path: "/dev/ideas", who: "dev", prepare: async (page) => {
+      await page.locator("main article").filter({ hasText: "Published" }).first().getByRole("link").first().click();
+      await page.locator("[data-certificate]").waitFor();
+      await page.getByRole("link", { name: "Check it on the verify page" }).click();
+      await page.locator('[data-testid="verify-status"]').waitFor();
+    } },
+  { name: "verify-notfound", path: "/verify/NOSUCHCERT01", who: "none" },
+  { name: "verify-file", path: "/verify", who: "none", prepare: async (page) => {
+      await page.locator('form[data-hydrated="true"]').first().waitFor();
+      await page.getByLabel("Manifest file").setInputFiles({ name: "manifest.json", mimeType: "application/json", buffer: Buffer.from('{"not":"a registered manifest"}') });
+      await page.getByRole("button", { name: "Check file" }).click();
+      await page.locator('[data-testid="file-result"]').waitFor();
+    } },
   { name: "login", path: "/login", who: "none" },
   { name: "login-error", path: "/login", who: "none", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"]').first().waitFor();
