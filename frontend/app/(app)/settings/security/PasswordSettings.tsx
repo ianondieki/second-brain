@@ -86,7 +86,7 @@ export function PasswordSettings({ email }: { email: string }) {
     // imported: this page is within a few hundred bytes of the 150 KB budget (docs/spec/07 item 5; P16-C1 card).
     <section id="password" aria-labelledby="password-heading" hidden={enrolling} className="scroll-mt-8">
       {/* The card heading (ui/Card cardHeadingClass, written out: this file stays off the Card module, JS budget). */}
-      <h2 id="password-heading" className="font-sans text-base font-semibold tracking-[-0.005em] text-ink">
+      <h2 id="password-heading" className="font-sans text-lg font-semibold tracking-[-0.01em] text-ink">
         {t("title")}
       </h2>
       <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("lead")}</p>

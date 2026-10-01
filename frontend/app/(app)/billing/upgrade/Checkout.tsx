@@ -197,7 +197,7 @@ export function Checkout(props: CheckoutProps) {
       );
   return (
     <div className="mt-6 flex flex-col gap-8">
-      <Steps current={stepOf(phase)} />
+      <Steps current={stepOf(phase)} failed={phase.kind === "failed" || phase.kind === "cancelled"} />
       {/* The step's words and controls, with the phone beside them from 1024 px (after them on a phone, so the one real
           action stays within reach): what the M-Pesa prompt shows at this step, drawn, so the state reads at a glance. */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
@@ -282,30 +282,43 @@ function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; 
   );
 }
 
-/** The three steps as an ordered list with aria-current="step" (docs/spec/07 item 6); not buttons: it only shows. */
-function Steps({ current }: { current: 1 | 2 | 3 }) {
+/**
+ * The three steps as an ordered list with aria-current="step" (docs/spec/07 item 6); not buttons: it only shows. A
+ * payment that failed or was cancelled marks the phone step as not completed rather than done.
+ */
+function Steps({ current, failed = false }: { current: 1 | 2 | 3; failed?: boolean }) {
   const t = useStrings("checkout");
   const names = [t("step.confirm"), t("step.phone"), t("step.done")];
   return (
     <ol aria-label={t("stepsLabel")} className="grid grid-cols-3 gap-2">
       {names.map((name, index) => {
         const step = index + 1;
-        const done = step < current;
+        const notCompleted = failed && step === 2;
+        const done = step < current && !notCompleted;
         return (
           <li
             key={name}
             aria-current={step === current ? "step" : undefined}
             data-done={done ? "" : undefined}
+            data-failed={notCompleted ? "" : undefined}
             className={cn(
               "flex min-w-0 items-start gap-1 border-t-4 pt-2 text-sm leading-snug",
               step === current
                 ? "border-accent font-semibold text-ink"
-                : done
-                  ? "border-accent-line font-medium text-ink"
-                  : "border-line font-medium text-ink-soft",
+                : notCompleted
+                  ? "border-error-line font-medium text-ink"
+                  : done
+                    ? "border-accent-line font-medium text-ink"
+                    : "border-line font-medium text-ink-soft",
             )}
           >
-            {done ? (
+            {notCompleted ? (
+              <>
+                <AlertIcon className="mt-px size-4 shrink-0 text-error" />
+                <span aria-hidden="true">{name}</span>
+                <span className="sr-only">{t("stepFailed", { name })}</span>
+              </>
+            ) : done ? (
               <>
                 <CheckIcon className="mt-px size-4 shrink-0 text-accent" />
                 <span aria-hidden="true">{name}</span>

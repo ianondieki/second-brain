@@ -1263,7 +1263,8 @@
     "regionCounty": "{county}, {country}",
     "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
     "confidence": "Uhakika",
-    "confidenceValue": "{value} kati ya 1",
+    "confidenceValue": "{band} ({value})",
+    "confidenceBand": { "high": "Juu", "medium": "Wastani", "low": "Chini" },
     "namedOrgs": "Mashirika yaliyotajwa",
     "sourcesHeading": "Vyanzo",
     "sourcesCount": "{count, plural, one {# chanzo, kimenukuliwa kama kilivyochapishwa} other {# vyanzo, vimenukuliwa kama vilivyochapishwa}}",
@@ -2348,6 +2349,7 @@
       "done": "Imekamilika"
     },
     "stepDone": "{name}: imekamilika",
+    "stepFailed": "{name}: haikukamilika",
     "youPay": "Unalipa",
     "whatYouGet": "Unachopata",
     "simulatedNote": "Hakuna pesa inayohamishwa na hakuna nambari ya simu inayoombwa: malipo haya ni ya kuigiza.",

@@ -8,7 +8,7 @@ import { InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 
 import { Citations } from "./Citations";
-import { formatConfidence, problemLabel, type ProblemDetail } from "./problem";
+import { confidenceWords, problemLabel, type ProblemDetail } from "./problem";
 
 /**
  * A published problem card (REQ-RES-02; docs/spec/06 6.5 ProblemCard): its label ("AI-drafted, human-reviewed on
@@ -20,7 +20,7 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
   const t = await getTranslations("problem");
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
-  const confidence = formatConfidence(locale, problem.confidence);
+  const confidence = confidenceWords(locale, problem.confidence);
   const country = t("country", { country: problem.country });
   const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : InfoIcon;
 
@@ -52,7 +52,9 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
             {problem.county_code ? t("regionCounty", { county: problem.county_code, country }) : country}
           </Description>
           {confidence ? (
-            <Description label={t("confidence")}>{t("confidenceValue", { value: confidence })}</Description>
+            <Description label={t("confidence")}>
+              {t("confidenceValue", { band: t(`confidenceBand.${confidence.band}`), value: confidence.percent })}
+            </Description>
           ) : null}
           {problem.named_orgs.length > 0 ? (
             <Description label={t("namedOrgs")}>

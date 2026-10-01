@@ -167,6 +167,9 @@ describe("the simulated checkout", () => {
     expect(phase()).toBe("cancelled");
     expect(screen.getByRole("heading", { name: "Payment cancelled" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe("The payment was cancelled on the phone, so your plan has not changed.");
+    // The phone step is marked as not completed, never as done (ux review round 3).
+    expect(document.querySelector("[data-failed]")?.textContent).toContain("Check your phone: not completed");
+    expect(document.querySelector("[data-done]")?.textContent).toContain("Confirm");
   });
 
   it("stops polling after the budget and polls again on Check again", async () => {

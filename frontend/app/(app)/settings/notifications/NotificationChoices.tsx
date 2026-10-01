@@ -117,7 +117,7 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
       {channels.map(({ channel, choices }) => (
         // Disabled while a save is in flight, so what is sent is what the page shows (P16-A review MINOR 4).
         <fieldset key={channel} data-channel={channel} disabled={busy}>
-          <legend className="text-lg font-semibold text-ink">{t(`channel.${channel}`)}</legend>
+          <legend className="text-base font-medium text-ink">{t(`channel.${channel}`)}</legend>
           <div className="mt-1 flex flex-col">
             {choices.map((choice) => {
               const offered = isOffered(choice);

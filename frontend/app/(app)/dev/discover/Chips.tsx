@@ -26,10 +26,20 @@ export function WhyChip({ children }: { children: ReactNode }) {
 export function TrendBadge({ badge }: { badge: string | null }) {
   if (!badge) return null;
   return (
-    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]">
-      {badge}
+    <Badge data-badge="" tone="neutral" icon={<TrendIcon />} className="[overflow-wrap:anywhere]" title={badge}>
+      {shortTrend(badge)}
     </Badge>
   );
+}
+
+/**
+ * The badge on a card without the niche and county it opens with ("Trending in ICT › Networks · Kenya: 4 companies
+ * scouting" → "Trending: 4 companies scouting"): the card's meta line already says where. The full sentence stays in
+ * the badge's title; a badge in another shape is shown as it is.
+ */
+export function shortTrend(badge: string): string {
+  const match = /^Trending in .+?: (.+)$/.exec(badge);
+  return match ? `Trending: ${match[1]}` : badge;
 }
 
 /** A row's badges (at most two, docs/spec/07 item 2): the trend badge first, then the Why chips the caller picked. */

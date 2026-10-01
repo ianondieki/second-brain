@@ -146,7 +146,9 @@ describe("the API's words are text", () => {
     const { unmount } = renderWithIntl(<ProblemRow item={item} counties={COUNTIES} query={{ view: "problems" }} />);
     expect(document.querySelector("img")).toBeNull();
     expect(document.querySelector("b")).toBeNull();
-    expect(document.querySelector("[data-badge]")?.textContent).toBe("Trending in <i>ICT</i> · Kenya: 4 companies scouting");
+    // The card shows the badge's short form (its title keeps the sentence); the markup stays text either way.
+    expect(document.querySelector("[data-badge]")?.textContent).toBe("Trending: 4 companies scouting");
+    expect(document.querySelector("[data-badge]")?.getAttribute("title")).toBe("Trending in <i>ICT</i> · Kenya: 4 companies scouting");
     expect(document.querySelector("i")).toBeNull();
     expect(document.querySelector("[data-chip]")?.textContent).toBe(MARKUP);
     unmount();

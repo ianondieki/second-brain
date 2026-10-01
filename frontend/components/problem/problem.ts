@@ -67,6 +67,17 @@ export function formatConfidence(locale: string, value: string | null | undefine
   return new Intl.NumberFormat(`${locale}-KE`, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
 }
 
+export type ConfidenceBand = "high" | "medium" | "low";
+
+/** The card's confidence in words (≥ 0.8 high, ≥ 0.5 medium, else low) with the figure as a percentage, for people. */
+export function confidenceWords(locale: string, value: string | null | undefined): { band: ConfidenceBand; percent: string } | null {
+  if (value === null || value === undefined || value.trim() === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  const band: ConfidenceBand = number >= 0.8 ? "high" : number >= 0.5 ? "medium" : "low";
+  return { band, percent: new Intl.NumberFormat(`${locale}-KE`, { style: "percent", maximumFractionDigits: 0 }).format(number) };
+}
+
 /**
  * A source's address when it is a plain https URL, else null (then no link is drawn). The API only stores https URLs
  * on its allowlist; this keeps any other scheme (javascript:, data:) from ever becoming a link.
