@@ -105,7 +105,8 @@ celebration's client half is the shell only), `/settings/security` 147,325, the 
 
 Lighthouse, returning visitor (the tour and the celebration remembered), three runs each where it matters: developer
 Home light 97–99 / LCP 2.04–2.63 s, dark 2.02–2.64 s; organisation Home 100 / 1.88–1.91 s; landing 95–96 / 2.80 s;
-CLS 0 and accessibility 100 on every run. The landing and the returning developer Home stay as recorded in D-53.
+CLS 0 and accessibility 100 on every run. The landing and the first visits are as recorded in D-53, decided (a) now and
+(d) before the pitch: the laptop and host readings go in a table under this one when they are taken.
 
 The ux-reviewer's rounds 4 and 5 on the rebuilt stack: round 4 found the celebration's "Got it" button outside the
 before-paint hide (a lone button painted, then removed: CLS 0.037 at 375), a focus drop after "Show the tour again"

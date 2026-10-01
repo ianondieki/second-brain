@@ -76,6 +76,7 @@ states, interaction, strict axe 0, ux-reviewer); the scorecard is `docs/demo/des
 on the compose stack and in `pr.yml`, CodeQL exactly the eight D-42 findings, Lighthouse performance ≥ 90 and
 accessibility 100 light and dark on every main page, every route under 150 KB gzipped. The pitch assets:
 `docs/demo/screenshots/` re-recorded with the tour beat (00–17; `before-p18/` keeps seven screens from before),
-`docs/demo/hero/`, `docs/demo/overview.md`, `docs/demo/video-script.md`. Open: D-53 (the landing's and the first
-visit's LCP with the self-hosted serif), pending the owner. The final report is in `PROGRESS.md` ("P18 report").
+`docs/demo/hero/`, `docs/demo/overview.md`, `docs/demo/video-script.md`. D-53 (the landing's and the first visit's
+LCP with the self-hosted serif) decided: (a) accepted now, (d) Lighthouse on the owner's laptop and the intended host
+before the pitch, readings into the scorecard; (b) follows if a reading there is still over 2.5 s. The final report is in `PROGRESS.md` ("P18 report").
 

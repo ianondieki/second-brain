@@ -413,7 +413,8 @@ branch** as `cf0da47` (recorded under "Open branches" below). Linux setup this s
 compose CA override (scratchpad `compose.ccr.json`, passed as `DEMO_COMPOSE_EXTRA=<path> python3 infra/demo/demo.py
 up|reset --yes`; `make demo-reset` alone fails on TLS here), `npm ci`, the Playwright shim at `/home/user/pw-shim`,
 Lighthouse 12 in a scratchpad `npm` folder, a fontTools venv for the font instancing; the demo stack is up at the end
-of the session (`demo.py reset --yes` before showing it). The owner's decision that stays open: D-53.
+of the session (`demo.py reset --yes` before showing it). D-53 decided by the owner the same day: (a) now, (d) before
+the pitch (Lighthouse on the laptop and the intended host, readings into the scorecard; (b) if still over 2.5 s).
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
@@ -506,7 +507,8 @@ import. The returning developer Home's LCP is bimodal (2.0 or 2.6 s) on the font
 The hero crops are Playwright viewport screenshots (the container's ffmpeg cannot decode JPEG). `/cost` was not
 captured in this session (no terminal access to the command from the orchestrator's tools).
 
-**Next session.** The owner's decisions first: D-53, D-42, D-50, D-51 and the open gates (G5 can now be answered
+**Next session.** Before the pitch: D-53 (d), Lighthouse on the owner's laptop and the intended host, light and dark,
+the landing and the three signed-in pages, readings into `docs/demo/design-scorecard.md`. The owner's decisions first: D-42, D-50, D-51 and the open gates (G5 can now be answered
 from the brand assets in `frontend/components/brand/` and `docs/platform/design/p18-design-system.md`). Then, by
 `PLAN.md`, the items listed under "Next session" above.
 
