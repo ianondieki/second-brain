@@ -41,10 +41,11 @@ def test_the_expected_directories_are_copied() -> None:
 
 
 def test_the_api_keeps_idle_connections_longer_than_the_proxy() -> None:
-    """P16-F flake: Next.js rewrites proxy through Node's agent, which drops idle sockets after 5 s, uvicorn's default
-    keep-alive too; a request reusing a socket the API was closing came back as a plain 500. The API must outlast it."""
+    """P16-F flake: Next.js rewrites proxy /api through httpxy's keep-alive agent (no idle timeout), so uvicorn closes
+    idle sockets; with its default 5 s, the e2e suite's ordinary gaps between requests sometimes reused a socket in
+    the moment it closed and got a plain 500. A longer keep-alive narrows that window (it does not remove it)."""
     cmd = next(line for line in DOCKERFILE.read_text(encoding="utf-8").splitlines() if line.startswith("CMD "))
     args = json.loads(cmd.removeprefix("CMD "))
     assert args[0] == "uvicorn"
-    assert "--timeout-keep-alive" in args, "uvicorn's default keep-alive (5 s) equals the proxy's"
-    assert int(args[args.index("--timeout-keep-alive") + 1]) > 5
+    assert "--timeout-keep-alive" in args, "uvicorn's default keep-alive (5 s) matches the e2e suite's request gaps"
+    assert int(args[args.index("--timeout-keep-alive") + 1]) >= 60

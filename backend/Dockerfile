@@ -22,7 +22,9 @@ RUN uv sync --frozen --no-dev && useradd --system --uid 10001 bridge
 USER bridge
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-# Keep idle connections longer than the proxies in front do (Node's agent behind Next.js rewrites closes them after
-# 5 s, uvicorn's default): otherwise a request sent on a connection the API is just closing is reset and Next answers a
-# plain 500 (an e2e flake, P16-F). The proxy now always closes first.
+# Idle connections stay open 75 s, not uvicorn's default 5 s. Next.js rewrites proxy /api through httpxy's own
+# keep-alive agent, which has no idle timeout, so the API is the side that closes them; a request sent in the moment
+# the API closes one is reset and Next answers a plain 500. The e2e suite's gaps between requests often lasted about
+# 5 s (a flake, P16-F); a socket idle exactly 75 s is far rarer. This narrows the race, it does not remove it
+# (tasks/P16-F.md: a client-side idle timeout or a retry would; check the edge proxy's idle timeout in Phase 8).
 CMD ["uvicorn", "bridge.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-keep-alive", "75"]
