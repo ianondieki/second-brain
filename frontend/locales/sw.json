@@ -404,7 +404,22 @@
   "orgHome": {
     "inboxTitle": "Kikasha",
     "newest": "Pendekezo jipya zaidi: {title}, lilitumwa {date}.",
-    "open": "Fungua Kikasha"
+    "open": "Fungua Kikasha",
+    "allProposals": "Mapendekezo yote",
+    "openTracker": "Fungua kifuatiliaji",
+    "stats": {
+      "label": "Kwa muhtasari",
+      "inbox": "Kikasha",
+      "more": "{count}+",
+      "inboxMeta": "{count, plural, one {# jipya} other {# mapya}}",
+      "inboxMetaNone": "Yote yamefunguliwa",
+      "matches": "Yaliyopatikana na skauti",
+      "matchesMeta": "jipya zaidi {date}",
+      "engagements": "Ushirikiano",
+      "engagementsMeta": "{count, plural, one {# unaendelea} other {# unaendelea}}",
+      "needsUs": "Unatusubiri",
+      "needsUsMeta": "Vinatusubiri"
+    }
   },
   "inbox": {
     "pageTitle": "Kikasha",

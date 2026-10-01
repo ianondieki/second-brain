@@ -70,6 +70,9 @@ const SHOTS: Shot[] = [
       await page.locator("[data-certificate]").waitFor();
     } },
   { name: "ideas", path: "/dev/ideas", who: "dev" },
+  { name: "org-home", path: "/org", who: "org" },
+  { name: "org-inbox", path: "/org/inbox", who: "org" },
+  { name: "org-matches", path: "/org/inbox?tab=matches", who: "org" },
   { name: "editor-1", path: "/dev/ideas/new", who: "dev", prepare: async (page) => {
       await page.locator('form[data-hydrated="true"], [data-hydrated="true"]').first().waitFor().catch(() => undefined);
       await page.getByLabel("Title", { exact: true }).waitFor();

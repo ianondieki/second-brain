@@ -404,7 +404,22 @@
   "orgHome": {
     "inboxTitle": "Inbox",
     "newest": "Newest: {title}, sent {date}.",
-    "open": "Open the Inbox"
+    "open": "Open the Inbox",
+    "allProposals": "All proposals",
+    "openTracker": "Open the tracker",
+    "stats": {
+      "label": "At a glance",
+      "inbox": "Inbox",
+      "more": "{count}+",
+      "inboxMeta": "{count, plural, one {# new} other {# new}}",
+      "inboxMetaNone": "All opened",
+      "matches": "Scout matches",
+      "matchesMeta": "newest {date}",
+      "engagements": "Engagements",
+      "engagementsMeta": "{count, plural, one {# active} other {# active}}",
+      "needsUs": "Need us",
+      "needsUsMeta": "Waiting on us"
+    }
   },
   "inbox": {
     "pageTitle": "Inbox",
