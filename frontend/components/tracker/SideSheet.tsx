@@ -23,9 +23,8 @@ export interface SideSheetProps {
   busy: boolean;
   /** The refusal of the last attempt, shown above the buttons unless it belongs to a field. */
   problem?: ReactNode;
-  /** That refusal's code, and the notice it came with (a new object per attempt), to put it on its field. */
-  refusal?: Refusal;
-  notice?: object | null;
+  /** The notice of the last attempt (a new object each time), whose refusal a field may carry. */
+  notice?: { refusal?: Refusal } | null;
   /** The other party's name. */
   counterpart: string;
   /** answer_info: the organisation's question and the day it was asked ("2 Oct 2026"). */
@@ -72,9 +71,10 @@ export function SideSheet(props: SideSheetProps) {
   const [resumeAt, setResumeAt] = useState("");
   const [errors, setErrors] = useState<{ text?: string; date?: string }>({});
   // A refusal about a field is said on it until the field changes, and focus goes back to the field.
-  const field = props.refusal ? FIELD_OF[props.refusal] : undefined;
+  const code = props.notice?.refusal;
+  const field = code ? FIELD_OF[code] : undefined;
   const [edited, setEdited] = useState<object | null | undefined>(null);
-  const refused = field && props.notice && props.notice !== edited ? t(`refusal.${props.refusal!}`) : undefined;
+  const refused = field && props.notice && props.notice !== edited ? t(`refusal.${code!}`) : undefined;
   const ids = { text: `${id}-text`, date: `${id}-date` };
 
   // Opens as a modal once mounted; focus goes to the first field (to Cancel when there is none, as a confirmation).

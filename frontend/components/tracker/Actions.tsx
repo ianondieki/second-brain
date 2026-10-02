@@ -264,7 +264,6 @@ export function Actions(props: ActionsProps) {
             command={mode.item.command}
             busy={busy}
             problem={message}
-            refusal={notice?.refusal}
             notice={notice}
             counterpart={props.counterpart}
             question={props.question}
