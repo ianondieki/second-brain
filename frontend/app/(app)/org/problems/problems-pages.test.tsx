@@ -148,7 +148,7 @@ describe("the Problems list", () => {
     expect(document.activeElement).toBe(status); // the form that had focus is gone
   });
 
-  it("with every open Brief in use, says so once with the next plan, and Post a Brief is no longer primary", async () => {
+  it("with every open Brief in use, says so once with the next plan, and offers no Post a Brief", async () => {
     await listPage(); // the fixture's claimed plan: 1 of 1
     const full = document.querySelector<HTMLElement>("[data-plan-full]")!;
     expect(full.textContent).toContain(
@@ -160,7 +160,7 @@ describe("the Problems list", () => {
     ]);
     expect(document.querySelector("[data-plan-cap]")).toBeNull(); // one fact, said once
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
-    expect(screen.getByRole("link", { name: "Post a Brief" }).hasAttribute("data-primary")).toBe(false);
+    expect(screen.queryByRole("link", { name: "Post a Brief" })).toBeNull(); // the upgrade link is the next step
   });
 
   it("is one sentence and Post a brief when there is none yet", async () => {

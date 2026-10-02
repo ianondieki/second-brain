@@ -134,9 +134,10 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
         </p>
       ) : null}
     </>,
-    // With every open Brief in use the notice above the list is what to do next, so posting is not the primary.
-    posts ? (
-      <ButtonLink href={newHref} variant={full ? "secondary" : "primary"}>
+    // With every open Brief in use the notice above the list (and its upgrade link) is the next step: no "Post a
+    // Brief" leading to a page that only repeats it.
+    posts && !full ? (
+      <ButtonLink href={newHref} variant="primary">
         {t("post")}
       </ButtonLink>
     ) : undefined,
