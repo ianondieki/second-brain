@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 import { waitForSignInLink } from "./mailpit";
 import { totp } from "./totp";
@@ -35,6 +35,14 @@ export function ownerSql(sql: string, variables: Record<string, string>): string
   const result = spawnSync("psql", args, { input: sql, encoding: "utf-8", timeout: 15_000 });
   if (result.status !== 0) throw new Error(`psql failed: ${result.stderr || result.error?.message}`);
   return result.stdout.trim();
+}
+
+/**
+ * Waits until the caller's buttons work: the tracker's actions region says it has hydrated. The server's HTML shows
+ * the buttons first, and a press before hydration does nothing (seen under two workers).
+ */
+export async function actionsReady(page: Page) {
+  await expect(page.locator("[data-actions][data-hydrated='true']")).toBeVisible({ timeout: 20_000 });
 }
 
 export function tag() {

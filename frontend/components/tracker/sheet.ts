@@ -12,15 +12,3 @@ export function addDays(day: string, days: number): string {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
-
-/** A calendar date with its weekday, as a person says it ("Monday, 12 October 2026"; Swahili "Jumatatu, 12 Oktoba 2026"). */
-export function longDate(day: string, locale = "en"): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat(`${locale}-KE`, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(y, m - 1, d)));
-}

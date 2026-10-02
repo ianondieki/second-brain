@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
@@ -48,7 +49,10 @@ export interface ActionsProps {
   resumeOn?: string | null;
   /** The page's language, for the dates and counts the sheets write. */
   locale?: string;
-  /** Today in Nairobi on the platform's clock (the API's `today`), for a hold's date range; null: the API decides. */
+  /**
+   * Today in Nairobi on the platform's clock (the API's `today`): the forms' default and earliest dates (a contact-by
+   * date) and a hold's date range; null: the browser's day for the forms, and the API decides a hold's date.
+   */
   today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`). */
   limits?: SideLimits | null;
@@ -79,6 +83,8 @@ export function Actions(props: ActionsProps) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  // Tests wait for this before pressing a button: the server's HTML shows the buttons before they work.
+  const hydrated = useHydrated();
   const noticeRef = useRef<HTMLDivElement>(null);
   // The step-up retries its step once, and only while its form is still open (not after Cancel or a refresh).
   const stepUpOpen = useRef(false);
@@ -138,11 +144,12 @@ export function Actions(props: ActionsProps) {
       setMode({ kind: "stepUp", item, request });
       return;
     }
-    // A form or sheet stays open with its refusal when the input was refused (a hold's date past what is left of
-    // the engagement's days on hold too); everything else goes back to the buttons.
+    // A form or sheet stays open with its refusal, and what was typed, when the input was refused (a hold's date past
+    // what is left of the engagement's days on hold too) or one party's steps per hour ran out (429); everything else
+    // goes back to the buttons.
     const keepForm =
       (mode.kind === "form" || mode.kind === "sheet") &&
-      (outcome.status === 422 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
+      (outcome.status === 422 || outcome.status === 429 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
     if (!keepForm) setMode({ kind: "list" });
     setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
     if (outcome.status === 409 || outcome.status === 404) router.refresh();
@@ -171,7 +178,7 @@ export function Actions(props: ActionsProps) {
     <div ref={root} className="flex flex-col gap-4">
       {listNotice}
       {props.items.length === 0 && listed ? null : (
-    <section aria-labelledby="actions-heading" data-actions="" className="flex flex-col gap-4">
+    <section aria-labelledby="actions-heading" data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
       <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
         {listed ? t("title") : label(mode.item)}
       </h2>
@@ -241,6 +248,7 @@ export function Actions(props: ActionsProps) {
             members={props.members}
             myUserId={props.myUserId}
             recorded={props.recorded}
+            today={props.today ?? undefined}
             onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
           />
@@ -253,6 +261,8 @@ export function Actions(props: ActionsProps) {
             command={mode.item.command}
             busy={busy}
             problem={message}
+            refusal={notice?.refusal}
+            notice={notice}
             counterpart={props.counterpart}
             question={props.question}
             resumeOn={props.resumeOn}

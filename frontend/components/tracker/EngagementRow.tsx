@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Row } from "@/components/ui/RowList";
 
 import { Chip, ChipMark } from "./Chip";
-import { awaitsMe, isFinished, stageChip, type Party, type Summary } from "./model";
-import { DueText } from "./When";
+import { awaitsMe, stageChip, type Party, type Summary } from "./model";
+import { DueLine } from "./When";
 
 /**
  * One engagement in a list (a Row): the idea's title as the link to its tracker, the other party, and at most two
@@ -52,9 +52,7 @@ export function EngagementRow({
           : [stage]
       }
     >
-      {item.due && !isFinished(item.state) ? (
-        <DueText due={item.due} className={item.due.overdue ? "text-sm font-semibold text-error" : "text-sm text-ink-soft"} />
-      ) : null}
+      <DueLine item={item} mine={mine} />
     </Row>
   );
 }

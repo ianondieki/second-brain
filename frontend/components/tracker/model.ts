@@ -88,6 +88,8 @@ export function stageLeft(state: State, events: readonly HistoryEvent[] | null |
 export interface Step {
   group: Group;
   chip: ChipKind;
+  /** The chip's own word where the mark's would mislead: an open question is a turn, not a hold. */
+  word?: "awaitingAnswer";
 }
 
 /**
@@ -109,7 +111,10 @@ export function stepperSteps(input: {
   const at = asGroup(input.stage_group) ?? (stage ? MAIN_PATH_GROUP[stage] : undefined) ?? GROUPS[0];
   const index = GROUPS.indexOf(at);
   const here = stageChip(input);
-  return GROUPS.map((group, i) => ({ group, chip: i < index ? "completed" : i === index ? here : "pending" }));
+  const word = input.state === "INFO_REQUESTED" && here === "onHold" ? "awaitingAnswer" : undefined;
+  return GROUPS.map((group, i) =>
+    i === index ? { group, chip: here, ...(word ? { word } : {}) } : { group, chip: i < index ? "completed" : "pending" },
+  );
 }
 
 /**

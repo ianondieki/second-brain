@@ -8,8 +8,9 @@ import { SheetHandle, sheetClass } from "@/components/ui/ConfirmDialog";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
+import type { Refusal } from "./calls";
 import { formatDate, type SheetCommand, type SheetInput, type SideLimits } from "./model";
-import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
+import { addDays, HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
 // resume, and the organisation's withdrawal of its question. Each is a native modal <dialog> drawn as the confirmation
@@ -20,8 +21,11 @@ import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS 
 export interface SideSheetProps {
   command: SheetCommand;
   busy: boolean;
-  /** The refusal of the last attempt, shown above the buttons. */
+  /** The refusal of the last attempt, shown above the buttons unless it belongs to a field. */
   problem?: ReactNode;
+  /** That refusal's code, and the notice it came with (a new object per attempt), to put it on its field. */
+  refusal?: Refusal;
+  notice?: object | null;
   /** The other party's name. */
   counterpart: string;
   /** answer_info: the organisation's question and the day it was asked ("2 Oct 2026"). */
@@ -49,6 +53,14 @@ const SUBMIT = {
   cancel_request: "sheet.cancelRequest.submit",
 } as const satisfies Record<SheetCommand, string>;
 
+/** Refusals about what was typed: said on the field itself (aria-invalid, aria-describedby), which keeps the focus. */
+const FIELD_OF: Partial<Record<Refusal, "text" | "date">> = {
+  containsContact: "text",
+  invalidNote: "text",
+  invalidResumeAt: "date",
+  holdLimit: "date",
+};
+
 export function SideSheet(props: SideSheetProps) {
   const t = useStrings("trackerActions");
   const ref = useRef<HTMLDialogElement>(null);
@@ -59,9 +71,17 @@ export function SideSheet(props: SideSheetProps) {
   const [text, setText] = useState("");
   const [resumeAt, setResumeAt] = useState("");
   const [errors, setErrors] = useState<{ text?: string; date?: string }>({});
+  // A refusal about a field is said on it until the field changes, and focus goes back to the field.
+  const field = props.refusal ? FIELD_OF[props.refusal] : undefined;
+  const [edited, setEdited] = useState<object | null | undefined>(null);
+  const refused = field && props.notice && props.notice !== edited ? t(`refusal.${props.refusal!}`) : undefined;
   const ids = { text: `${id}-text`, date: `${id}-date` };
 
   // Opens as a modal once mounted; focus goes to the first field (to Cancel when there is none, as a confirmation).
+  useEffect(() => {
+    if (field && props.notice) document.getElementById(field === "text" ? ids.text : ids.date)?.focus();
+  }, [props.notice, field, ids.text, ids.date]);
+
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -134,9 +154,10 @@ export function SideSheet(props: SideSheetProps) {
       maxLength={QUESTION_MAX_CHARS}
       rows={5}
       value={text}
-      error={errors.text}
+      error={errors.text ?? (field === "text" ? refused : undefined)}
       onChange={(e) => {
         setText(e.target.value);
+        setEdited(props.notice);
         setErrors((current) => ({ ...current, text: undefined }));
       }}
     />
@@ -149,9 +170,10 @@ export function SideSheet(props: SideSheetProps) {
       maxLength={REASON_MAX_CHARS}
       autoComplete="off"
       value={text}
-      error={errors.text}
+      error={errors.text ?? (field === "text" ? refused : undefined)}
       onChange={(e) => {
         setText(e.target.value);
+        setEdited(props.notice);
         setErrors((current) => ({ ...current, text: undefined }));
       }}
     />
@@ -225,21 +247,22 @@ export function SideSheet(props: SideSheetProps) {
               min={earliest}
               max={latest}
               value={resumeAt}
-              error={errors.date}
+              error={errors.date ?? (field === "date" ? refused : undefined)}
               onChange={(e) => {
                 setResumeAt(e.target.value);
+                setEdited(props.notice);
                 setErrors((current) => ({ ...current, date: undefined }));
               }}
               className="max-w-[14rem]"
             />
-            {/* The chosen date in words, with its weekday, said politely as it changes. */}
+            {/* The chosen date, said politely as it changes; nothing while it is outside the range the field states. */}
             <p aria-live="polite" data-resumes="" className="text-sm text-ink">
-              {resumeAt ? t("sheet.pause.resumes", { date: longDate(resumeAt, locale) }) : ""}
+              {resumeAt && !outOfRange(resumeAt) ? t("sheet.pause.resumes", { date: formatDate(resumeAt, locale) }) : ""}
             </p>
           </div>
         ) : null}
 
-        {props.problem}
+        {field ? null : props.problem}
 
         {/* Cancel first, on top on phones and on the left from 640 px (the confirmations' order); the send button is
             styled, not marked, as primary: the screen's data-primary stays on the page's own action. */}

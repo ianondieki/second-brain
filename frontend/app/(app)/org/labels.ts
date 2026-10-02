@@ -10,6 +10,7 @@ const LABELLED_STAGES = [
   "SUBMITTED",
   "UNDER_REVIEW",
   "INFO_REQUESTED",
+  "ON_HOLD",
   "DECLINED",
   "WITHDRAWN",
   "TERMINATED",
@@ -19,7 +20,10 @@ const LABELLED_STAGES = [
 type LabelledStage = (typeof LABELLED_STAGES)[number];
 const LABELLED: ReadonlySet<string> = new Set(LABELLED_STAGES);
 
-/** `inbox.stage.*`: the stages the Inbox names; every other open stage reads "In progress" until the tracker exists. */
+/**
+ * `inbox.stage.*`: the stages the Inbox names (an open question and a hold as the tracker labels them); every other
+ * open stage reads "In progress".
+ */
 export function stageKey(state: EngagementState): `stage.${LabelledStage | "other"}` {
   return LABELLED.has(state) ? `stage.${state as LabelledStage}` : "stage.other";
 }

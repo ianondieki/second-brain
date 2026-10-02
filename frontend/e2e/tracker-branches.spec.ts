@@ -1,7 +1,8 @@
 import { expect, test, type APIRequestContext, type Browser, type Page, type TestInfo } from "@playwright/test";
 
+import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import { actionsReady, OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 
 // REQ-ENG-10 part (AC-TRACK-4 part; docs/spec/06 6.9 side branches): the tracker's side states walked by both parties
 // in their own browsers against the compose stack: a question and its answer, a hold and an early resume, a question
@@ -54,12 +55,14 @@ const actions = (page: Page) => page.locator("[data-actions]");
 
 /** Presses one of the caller's buttons and waits until the step ran and the tracker refreshed. */
 async function step(page: Page, name: string) {
+  await actionsReady(page);
   await actions(page).getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
 }
 
 /** Opens a side state's sheet (a modal dialog; a bottom sheet on phones) from the caller's buttons. */
 async function openSheet(page: Page, name: string) {
+  await actionsReady(page);
   await actions(page).getByRole("button", { name, exact: true }).click();
   const sheet = page.locator("dialog[open][data-side-sheet]");
   await expect(sheet).toBeVisible();
@@ -74,18 +77,6 @@ async function send(page: Page, submit: string) {
   await sheet.getByRole("button", { name: submit, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
   await expect(page.locator("dialog[open]")).toHaveCount(0);
-}
-
-/** The app's day in Nairobi (the shared test clock, else the real day), as "2026-10-02". */
-async function appToday(request: APIRequestContext): Promise<string> {
-  const response = await request.get("/api/test-clock");
-  const now = response.ok() ? new Date(((await response.json()) as { now: string }).now) : new Date();
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(now);
-}
-
-function plusDays(day: string, days: number): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 interface Due {

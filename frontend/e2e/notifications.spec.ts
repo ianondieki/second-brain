@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
+import { appToday, plusDays } from "./support/clock";
 import { loginReturningTo } from "./support/login";
 import { checkScreen, expectEmptyState } from "./support/screen";
 import { OWNER_DATABASE_URL, pitchFromDeveloper, post, signUpOrg } from "./support/tracker-scene";
@@ -94,7 +95,7 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     await orgCommand(orgPage.request, amina.engagementId, "start-review");
     await expect.poll(() => unreadCount(page.request), WORKER).toBe(before + 1);
     const me = (await (await orgPage.request.get("/api/auth/me")).json()) as { user: { id: string } };
-    const contactBy = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const contactBy = plusDays(await appToday(orgPage.request), 1); // the platform's day: the API checks against it
     await orgCommand(orgPage.request, amina.engagementId, "approve", {
       contact_user_id: me.user.id,
       contact_channel: "email",

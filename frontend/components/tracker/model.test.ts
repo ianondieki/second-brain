@@ -23,7 +23,7 @@ import {
   withQuery,
   type ChipKind,
 } from "./model";
-import { addDays, longDate } from "./sheet";
+import { addDays } from "./sheet";
 
 // REQ-ENG-03 (AC-TRACK-3/4 prototype part): the tracker's view model. The stepper's groups come from `stage_group`,
 // whose turn from `whose_turn`, the buttons only from `actions`; nothing here decides who may act.
@@ -393,7 +393,5 @@ describe("side states", () => {
   it("writes a hold's dates", () => {
     expect(addDays("2026-10-02", 60)).toBe("2026-12-01");
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
-    expect(longDate("2026-10-12")).toBe("Monday, 12 October 2026");
-    expect(longDate("2026-10-12", "sw")).toBe("Jumatatu, 12 Oktoba 2026");
   });
 });

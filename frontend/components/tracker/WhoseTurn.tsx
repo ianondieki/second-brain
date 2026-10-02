@@ -141,14 +141,14 @@ function SideState({ side, detail }: { side: SideBanner; detail: Detail }) {
   if (side.kind === "info") {
     return side.question ? (
       <p data-side="info" className="text-ink">
-        {t.rich("side.info", { date: formatDay(locale, side.question.at), question: side.question.body, quote })}
+        {t.rich("side.info", { date: formatDay(locale, side.question.at), question: side.question.body, quote, nowrap })}
       </p>
     ) : null;
   }
   if (side.kind === "answered") {
     return (
       <p data-side="answered" className="text-ink">
-        {t.rich("side.answered", { date: formatDay(locale, side.answer.at), answer: side.answer.body, quote })}
+        {t.rich("side.answered", { date: formatDay(locale, side.answer.at), answer: side.answer.body, quote, nowrap })}
       </p>
     );
   }
@@ -159,12 +159,12 @@ function SideState({ side, detail }: { side: SideBanner; detail: Detail }) {
       {side.hold ? (
         <p data-side="hold" className="text-ink">
           {side.hold.by === detail.my_party
-            ? t.rich("side.holdYou", { date, reason: side.hold.body, quote })
-            : t.rich("side.hold", { name: nameOf(side.hold.by), date, reason: side.hold.body, quote })}
+            ? t.rich("side.holdYou", { date, reason: side.hold.body, quote, nowrap })
+            : t.rich("side.hold", { name: nameOf(side.hold.by), date, reason: side.hold.body, quote, nowrap })}
         </p>
       ) : until ? (
         <p data-side="hold" className="text-ink">
-          {t("side.holdNoNote", { date })}
+          {t.rich("side.holdNoNote", { date, nowrap })}
         </p>
       ) : null}
       <p className="text-sm text-ink-soft">{t("side.holdClock")}</p>

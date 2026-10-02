@@ -43,7 +43,7 @@ export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: Reac
               <p className={cn("leading-6 [overflow-wrap:normal] hyphens-none lg:text-sm", current ? "font-semibold text-ink" : "font-medium text-ink")}>
                 {t(`group.${step.group}`)}
               </p>
-              <p className={cn("text-sm font-semibold", CHIP_TONE[step.chip])}>{t(`chip.${step.chip}`)}</p>
+              <p className={cn("text-sm font-semibold", CHIP_TONE[step.chip])}>{t(`chip.${step.word ?? step.chip}`)}</p>
               {current && (detail || actor) ? (
                 <div className="mt-1 flex items-start gap-2 text-sm text-ink">
                   {actor ? <span className="lg:hidden">{actor}</span> : null}
