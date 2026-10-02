@@ -32,7 +32,7 @@ from datetime import date, datetime
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import insert, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -363,12 +363,13 @@ async def _append(step: Step) -> EngagementEvent:
 
 async def _write_note(step: Step, event: EngagementEvent, note: NoteInput) -> None:
     """The note of a side-state event, right after it (revision 0006): its seq is the database's, read back; written
-    as the event's actor, its time the database's clock."""
+    as the event's actor. Only the columns bridge_app may insert are sent: ``created_at`` is the database's clock and
+    the redaction columns are the owner's (D-54), so a plain INSERT names neither (an ORM add would send NULLs)."""
     seq = await step.db.scalar(select(EngagementEvent.seq).where(EngagementEvent.id == event.id))
     if seq is None:  # the event was just flushed in this transaction
         raise RuntimeError("the event of a note is not readable")
-    step.db.add(
-        EngagementNote(
+    await step.db.execute(
+        insert(EngagementNote).values(
             id=uuid7(),
             engagement_id=step.engagement.id,
             event_seq=seq,
@@ -378,7 +379,6 @@ async def _write_note(step: Step, event: EngagementEvent, note: NoteInput) -> No
             created_by=step.party.user_id,
         )
     )
-    await step.db.flush()
 
 
 async def open_tag(db: AsyncSession, engagement: Engagement) -> Tag | None:
