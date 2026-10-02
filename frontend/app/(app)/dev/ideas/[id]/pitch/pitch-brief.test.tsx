@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithIntl } from "@/test/intl";
 
 import { PitchForm, type PitchFormProps } from "./PitchForm";
+import { leadWith } from "./order";
 import { MAX_BATCH, parsePickerQuery, pitchHref } from "./picker";
 
 // REQ-DIR-05 (P19-F §F-B): an idea started from an organisation's Problem Brief pitches with that organisation chosen
@@ -85,5 +86,28 @@ describe("a pitch started from a Brief", () => {
   it("says nothing when no organisation was chosen this way", () => {
     renderForm({ preselected: undefined, initialSelected: [] });
     expect(document.querySelector("[data-preselected]")).toBeNull();
+  });
+});
+
+describe("the picker's order for a Brief", () => {
+  const row = (id: string) => ({ id, name: id });
+  const groups = [
+    { key: "a", rows: [row("a1"), row("a2")] },
+    { key: "b", rows: [row("b1"), row(TELCO), row("b3")] },
+    { key: "c", rows: [row("c1")] },
+  ];
+
+  it("lists the pre-chosen organisation first, its group first, the rest in their order", () => {
+    expect(leadWith(groups, TELCO).map((g) => [g.key, g.rows.map((r) => r.id)])).toEqual([
+      ["b", [TELCO, "b1", "b3"]],
+      ["a", ["a1", "a2"]],
+      ["c", ["c1"]],
+    ]);
+    expect(groups[1].rows.map((r) => r.id)).toEqual(["b1", TELCO, "b3"]); // the input is left as it was
+  });
+
+  it("leaves the order alone without ?org= or when the organisation is not on the page", () => {
+    expect(leadWith(groups, undefined)).toEqual(groups);
+    expect(leadWith(groups, "0199a000-0000-7000-8000-0000000000ff")).toEqual(groups);
   });
 });
