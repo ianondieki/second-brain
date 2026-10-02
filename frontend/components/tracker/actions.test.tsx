@@ -619,7 +619,7 @@ describe("the side states' sheets", () => {
     expect(within(dialog).getByText("Choose a date.")).toBeTruthy();
     expect(document.activeElement).toBe(date);
     fireEvent.change(date, { target: { value: "2026-10-12" } });
-    expect(dialog.querySelector("[data-resumes]")?.textContent).toBe("It resumes by itself on Monday, 12 October 2026.");
+    expect(dialog.querySelector("[data-resumes]")?.textContent).toBe("It resumes by itself on 12 Oct 2026.");
     expect(dialog.querySelector("[data-resumes]")?.getAttribute("aria-live")).toBe("polite");
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
     expect(runImpl.mock.calls[0][0]).toEqual({
@@ -703,6 +703,7 @@ describe("the side states' sheets", () => {
       fireEvent.change(date, { target: { value: day } });
       await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
       expect(within(dialog).getByText("Choose a resume date from 3 Oct 2026 to 1 Dec 2026.")).toBeTruthy();
+      expect(dialog.querySelector("[data-resumes]")?.textContent).toBe(""); // no resume date the API would refuse
       expect(date.getAttribute("aria-invalid")).toBe("true");
       expect(document.activeElement).toBe(date);
     }

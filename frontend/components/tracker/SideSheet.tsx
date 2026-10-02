@@ -10,7 +10,7 @@ import { TextField } from "@/components/ui/TextField";
 
 import type { Refusal } from "./calls";
 import { formatDate, type SheetCommand, type SheetInput, type SideLimits } from "./model";
-import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
+import { addDays, HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
 // resume, and the organisation's withdrawal of its question. Each is a native modal <dialog> drawn as the confirmation
@@ -255,9 +255,9 @@ export function SideSheet(props: SideSheetProps) {
               }}
               className="max-w-[14rem]"
             />
-            {/* The chosen date in words, with its weekday, said politely as it changes. */}
+            {/* The chosen date, said politely as it changes; nothing while it is outside the range the field states. */}
             <p aria-live="polite" data-resumes="" className="text-sm text-ink">
-              {resumeAt ? t("sheet.pause.resumes", { date: longDate(resumeAt, locale) }) : ""}
+              {resumeAt && !outOfRange(resumeAt) ? t("sheet.pause.resumes", { date: formatDate(resumeAt, locale) }) : ""}
             </p>
           </div>
         ) : null}
