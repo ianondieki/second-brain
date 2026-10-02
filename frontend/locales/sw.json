@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili"
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili; ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg"
   },
   "app": {
     "name": "Wazo",
@@ -366,7 +366,9 @@
     "pages": "Arifa zaidi",
     "older": "Arifa za zamani zaidi",
     "newest": "Arifa za karibuni zaidi",
-    "staleCursor": "Ukurasa huo wa arifa haupatikani tena."
+    "staleCursor": "Ukurasa huo wa arifa haupatikani tena.",
+    "emptyStaff": "Hakuna kitu bado: taarifa za ukaguzi wa maudhui na utafiti zitafika hapa.",
+    "emptyOrg": "Hakuna kitu bado: mapendekezo mapya, yaliyopatikana na skauti na taarifa za ushirikiano za shirika lako zitafika hapa."
   },
   "help": {
     "pageTitle": "Msaada",
@@ -446,7 +448,8 @@
       "unavailable": "Haikuweza kusomwa sasa hivi",
       "briefs": "Maelezo ya matatizo",
       "briefsMetaReview": "{count, plural, one {# yanakaguliwa} other {# yanakaguliwa}}",
-      "briefsMetaProposals": "Mapendekezo: {count}"
+      "briefsMetaProposals": "Mapendekezo: {count}",
+      "briefsValue": "{count} wazi"
     }
   },
   "inbox": {
@@ -1058,7 +1061,8 @@
       "hidden": "Imefichwa hadi iamuliwe",
       "public": "Ni ya umma inapokaguliwa",
       "rejected": "Imefichwa: imekataliwa",
-      "gone": "Haipo tena"
+      "gone": "Haipo tena",
+      "briefHidden": "Yamefichwa hadi yaidhinishwe"
     },
     "outcome": {
       "approved": "Imeidhinishwa",
@@ -1108,7 +1112,8 @@
       "decisionHeading": "Uamuzi",
       "leadHidden": "Idhinisha ili iwe ya umma, au ikatae ili ibaki imefichwa.",
       "leadPublic": "Idhinisha ili ibaki ya umma, au ikatae ili iondolewe.",
-      "textHeadingDecided": "Maandishi kama yalivyokaguliwa"
+      "textHeadingDecided": "Maandishi kama yalivyokaguliwa",
+      "leadBrief": "Wasanidi programu hawayaoni maelezo haya hadi yaidhinishwe. Idhinisha ili kuyachapisha kwa wasanidi programu, au kataa ili yabaki yamefichwa."
     },
     "decision": {
       "approve": "Idhinisha",
@@ -1124,7 +1129,9 @@
       "rejected": "Imekataliwa. Sasa imefichwa.",
       "changed": "Mwandishi alichapisha toleo jipya ulipokuwa ukilikagua. Maandishi yaliyo juu ni toleo jipya: yasome tena, kisha uamue.",
       "next": "Kagua kesi inayofuata",
-      "back": "Rudi kwenye Udhibiti wa maudhui"
+      "back": "Rudi kwenye Udhibiti wa maudhui",
+      "approvedBrief": "Yameidhinishwa. Maelezo yamechapishwa kwa wasanidi programu.",
+      "rejectConfirmBrief": "Ukatae maelezo haya? Wasanidi programu hawatayaona kamwe, na hayahesabiwi tena kwenye mpango wa shirika."
     },
     "blocked": {
       "already_decided": "Kesi hii tayari imeamuliwa.",
@@ -1319,7 +1326,10 @@
     "budgetOpen": "Haijatolewa",
     "deadline": "Mapendekezo yanahitajika kufikia",
     "noDeadline": "Hakuna tarehe ya mwisho",
-    "briefEnded": "Maelezo haya yamefungwa au tarehe yake ya mwisho imepita, kwa hiyo shirika halitafuti mapendekezo tena. Bado unaweza kuanza pendekezo kutoka tatizo hili."
+    "briefEnded": {
+      "closed": "Shirika limefunga maelezo haya, kwa hiyo halitafuti mapendekezo tena. Bado unaweza kuanza pendekezo kutoka tatizo hili.",
+      "pastDeadline": "Tarehe ya mwisho ya maelezo haya ilipita {date}, kwa hiyo shirika halitafuti mapendekezo tena. Bado unaweza kuanza pendekezo kutoka tatizo hili."
+    }
   },
   "ideaFields": {
     "title": "Kichwa",
@@ -1787,17 +1797,18 @@
       "high_overlap": "Mfanano mkubwa: muhtasari wako unakaribiana na wazo jingine lililochapishwa. Huu si uamuzi; inafaa kuangalia kinachofanya lako kuwa tofauti."
     },
     "disclosure": {
-      "flagged": "Hii inaeleza jinsi, si nini: {fields}.",
       "flaggedAny": "Hii inaeleza jinsi unavyofanya kazi, si unachofanya.",
       "advice": "Mbinu, zana na msimbo zinafaa kwenye maelezo kamili, ambayo yanabaki siri.",
       "clear": "Hakuna kinachofichua jinsi unavyofanya kazi.",
-      "demo": "Onyesho hili halina modeli ya AI iliyounganishwa, na ukaguzi wa haraka haukupata chochote kinachofichua jinsi unavyofanya kazi.",
-      "unchecked": "Muhtasari haukuweza kukaguliwa safari hii. Pitia maandishi, kisha ujaribu tena."
+      "demo": "Hakuna modeli ya AI iliyounganishwa katika onyesho hili. Ukaguzi wa haraka unatafuta tu dalili za kawaida, kama msimbo, majina ya faili na majina ya zana, na haukupata yoyote.",
+      "unchecked": "Muhtasari haukuweza kukaguliwa safari hii. Pitia maandishi, kisha ujaribu tena.",
+      "flaggedOne": "Sehemu yako ({fields}) inaeleza jinsi wazo linavyofanya kazi, si linachofanya.",
+      "flaggedMany": "Sehemu zako ({fields}) zinaeleza jinsi wazo linavyofanya kazi, si linachofanya."
     },
     "problem": {
       "noText": "Andika muhtasari wa umma kwanza, kisha uukague.",
       "notSaved": "Mabadiliko yako ya karibuni hayajahifadhiwa, kwa hivyo hakuna kilichokaguliwa. Rekebisha sehemu zilizowekwa alama, kisha ujaribu tena.",
-      "originality_limit": "Umetumia ukaguzi wa leo; kesho utapata zaidi.",
+      "originality_limit": "Umetumia ukaguzi wa leo wa kufanana; unarudi saa sita usiku kwa saa za Nairobi.",
       "originality_busy": "Ukaguzi wa mfanano bado unaendelea. Jaribu tena baada ya muda mfupi.",
       "disclosure_busy": "Ukaguzi wa muhtasari bado unaendelea. Jaribu tena baada ya muda mfupi.",
       "disclosure_rate_limited": "Umefanya ukaguzi mwingi wa muhtasari leo. Jaribu tena kesho.",
@@ -2560,8 +2571,8 @@
     "post": "Chapisha maelezo",
     "cap": "Maelezo yaliyo wazi kwenye mpango wako: {used} kati ya {limit}",
     "capUnlimited": "Mpango wako unaruhusu maelezo yaliyo wazi bila kikomo.",
-    "capFull": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zimetumika. Funga moja, au pandisha mpango wako, ili uchapishe mengine.",
-    "capFullTop": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zimetumika. Funga moja ili uchapishe mengine.",
+    "capFull": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zinatumika ({used} kati ya {limit}). Funga moja, au hamia {plan} ili uchapishe mengine.",
+    "capFullTop": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zinatumika ({used} kati ya {limit}). Funga moja ili uchapishe mengine.",
     "upgrade": "Pandisha mpango wako",
     "listLabel": "Maelezo yako, mapya kwanza",
     "empty": "{org} bado haijachapisha maelezo ya tatizo: chapisha moja na wasanidi programu wataweza kuyajibu kwa mapendekezo.",
@@ -2576,7 +2587,7 @@
     "proposals": "Mapendekezo: {count}",
     "deadline": "Mapendekezo kufikia {date}",
     "noDeadline": "Hakuna tarehe ya mwisho",
-    "anywhere": "Popote nchini Kenya",
+    "anywhere": "Kenya",
     "posted": "Maelezo yametumwa kukaguliwa. Wafanyakazi husoma kila maelezo kabla wasanidi programu hawajayaona.",
     "older": "Maelezo ya zamani zaidi",
     "staleCursor": "Ukurasa huu wa maelezo haupatikani tena.",
@@ -2601,7 +2612,8 @@
       "budget": "Kiwango cha bajeti",
       "deadline": "Mapendekezo yanahitajika kufikia",
       "proposals": "Mapendekezo hadi sasa"
-    }
+    },
+    "upgradeTo": "Hamia {plan}"
   },
   "briefForm": {
     "group": {
