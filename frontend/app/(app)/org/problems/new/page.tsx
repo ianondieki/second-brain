@@ -1,22 +1,19 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { standaloneLinkClass } from "@/components/ui/Button";
-import { Callout } from "@/components/ui/Callout";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { upgradeHref } from "@/lib/billing/upgrade";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { getBriefs } from "../../brief-data";
 import { briefUpgrade, newBriefHref, planFull, postsBriefs, problemsHref, todayInNairobi } from "../../briefs";
 import { orgContext } from "../../data";
 import { OrgRefusal } from "../../OrgRefusal";
+import { PlanNotice } from "../PlanNotice";
 import { getCounties, getNicheTree, getOrgPlans, getVerification } from "../../scout-data";
 import { BriefForm } from "./BriefForm";
 
@@ -94,23 +91,17 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
 
   const { plan, budget_bands: bands } = list.value;
   const here = newBriefHref(memberships, org.org_id);
-  const next = planFull(plan) ? briefUpgrade(plans, plan.plan) : null;
+  const full = planFull(plan);
+  const notice = (
+    <PlanNotice plan={plan} next={full ? briefUpgrade(plans, plan.plan) : null} orgId={org.org_id} here={here} />
+  );
+  // With every open Brief in use the API would refuse the form (402), so the page says it once, with the way to more
+  // room, instead of a form, a second notice and the same refusal after typing.
+  if (full) return frame(notice);
   return frame(
     <>
       <p className="mt-2 max-w-[62ch] text-ink-soft">{t("newLead")}</p>
-      <p className="mt-4 text-sm text-ink" data-plan-cap={plan.problem_briefs ?? "unlimited"}>
-        {plan.problem_briefs === null ? t("capUnlimited") : t("cap", { used: plan.used, limit: plan.problem_briefs })}
-      </p>
-      {planFull(plan) ? (
-        <Callout className="mt-4 max-w-[62ch]" data-plan-full="">
-          <p>{next ? t("capFull") : t("capFullTop")}</p>
-          {next ? (
-            <Link href={upgradeHref(next.code, { org: org.org_id, next: here })} className={standaloneLinkClass}>
-              {t("upgrade")}
-            </Link>
-          ) : null}
-        </Callout>
-      ) : null}
+      {notice}
       <div className="mt-8">
         <ClientStrings strings={await clientStrings(["briefForm"])}>
           <BriefForm

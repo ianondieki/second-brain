@@ -6,19 +6,20 @@ import type { ReactNode } from "react";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
-import { Alert } from "@/components/ui/Alert";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RowList } from "@/components/ui/RowList";
 
 import { getBriefs } from "../brief-data";
-import { briefHref, newBriefHref, postsBriefs, problemsHref } from "../briefs";
+import { briefHref, briefUpgrade, newBriefHref, planFull, postsBriefs, problemsHref } from "../briefs";
 import { orgContext } from "../data";
 import { first, inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
-import { getCounties } from "../scout-data";
+import { getCounties, getOrgPlans } from "../scout-data";
 import { BriefItem } from "./BriefItem";
+import { PlanNotice } from "./PlanNotice";
+import { PostedNote } from "./Notes";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("briefs");
@@ -63,9 +64,10 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
   }
 
   const cursor = first(params.cursor);
-  const [list, counties] = await Promise.all([
+  const [list, counties, plans] = await Promise.all([
     getBriefs(org.org_id, cursor && cursor.length <= 2000 ? cursor : undefined),
     getCounties(),
+    getOrgPlans(),
   ]);
   const self = problemsHref(memberships, org.org_id);
   if (list.kind === "staleCursor" || (list.kind === "ok" && cursor && list.value.items.length === 0)) {
@@ -81,6 +83,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
 
   const { items, plan, next_cursor: next } = list.value;
   const posts = postsBriefs(org);
+  const full = planFull(plan);
   const newHref = newBriefHref(memberships, org.org_id);
   const countyName = (code: string | null) => (code ? (counties.find((c) => c.code === code)?.name ?? code) : null);
 
@@ -99,14 +102,8 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
 
   return frame(
     <>
-      {first(params.posted) === "1" ? (
-        <Alert tone="ok" className="mt-6">
-          <p data-posted="">{t("posted")}</p>
-        </Alert>
-      ) : null}
-      <p className="mt-6 text-sm text-ink" data-plan-cap={plan.problem_briefs ?? "unlimited"}>
-        {plan.problem_briefs === null ? t("capUnlimited") : t("cap", { used: plan.used, limit: plan.problem_briefs })}
-      </p>
+      {first(params.posted) === "1" ? <PostedNote text={t("posted")} /> : null}
+      <PlanNotice plan={plan} next={full ? briefUpgrade(plans, plan.plan) : null} orgId={org.org_id} here={self} />
       {/* The list's name as a hidden h2, so the Briefs' h3 titles follow the page's h1 in order (axe heading-order). */}
       <section aria-labelledby="briefs-list" className="mt-6">
         <h2 id="briefs-list" className="sr-only">
@@ -131,8 +128,9 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
         </p>
       ) : null}
     </>,
+    // With every open Brief in use the notice above the list is what to do next, so posting is not the primary.
     posts ? (
-      <ButtonLink href={newHref} variant="primary">
+      <ButtonLink href={newHref} variant={full ? "secondary" : "primary"}>
         {t("post")}
       </ButtonLink>
     ) : undefined,
