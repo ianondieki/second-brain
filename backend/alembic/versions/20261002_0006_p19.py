@@ -25,11 +25,17 @@ for a hold.
 - Written (bridge_app: SELECT and INSERT only) by the party who wrote the event, as themselves
   (``created_by = app_user_id()``), in the event's transaction: the event exists (composite foreign key to
   ``engagement_events (engagement_id, seq)``), names the caller as its actor (a system event, written by a job, takes
-  no note), is still the engagement's latest event (the chain's row lock keeps it so until commit), and its transition
-  is the kind's: ``info_request`` enters ``INFO_REQUESTED`` and ``hold`` enters ``ON_HOLD``, each from a state that
+  no note), was appended in the note's transaction (its time is at or after the transaction's start on the shared
+  clock: ``now()`` plus the test clock's offset), is still the engagement's latest event, and its transition is the
+  kind's: ``info_request`` enters ``INFO_REQUESTED`` and ``hold`` enters ``ON_HOLD``, each from a state that
   is neither a side state nor terminal; ``info_answer`` leaves ``INFO_REQUESTED`` and ``resume`` leaves ``ON_HOLD``,
   each for such a state (the state it was entered from: the chain enforces that). One note per event (UNIQUE
   (engagement_id, event_seq)). Who may enter or leave a side state is the event's policy and the state machine's.
+  "Still the latest" is checked twice: by the policy, and by ``engagement_notes_1_latest_event`` (SECURITY DEFINER,
+  BEFORE INSERT, every role, right after the visibility check), which locks the engagement's row FOR NO KEY UPDATE
+  (it waits for any append in flight: the chain holds FOR UPDATE until commit) and then compares ``event_seq`` with
+  the chain's current ``max(seq)``, so a note can never be written once a later event has committed, whatever the
+  policy's snapshot saw.
 - Append-only, but for its redaction (D-54, default (a)): no UPDATE or DELETE grant; ``engagement_notes_no_delete``
   and ``_no_truncate`` (``block_mutation()``) refuse DELETE and TRUNCATE for every role, the owner included; and
   ``engagement_notes_redaction_guard`` admits an UPDATE only from the table's owner or a SECURITY DEFINER function it
@@ -156,13 +162,17 @@ class Policy(NamedTuple):
 NOTE_VISIBLE = "EXISTS (SELECT 1 FROM engagements e WHERE e.id = engagement_notes.engagement_id)"
 # Side and terminal states: a note explains entering a side state from the main path, or leaving it back to it.
 _OFF_MAIN_PATH = "('INFO_REQUESTED', 'ON_HOLD', 'DISPUTED', 'DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED')"
-# The note's event (read under the caller's RLS, so its engagement is visible): appended by the caller as themselves,
-# still the engagement's latest event, and of the kind's transition. A NULL from_state (the genesis) matches no kind.
+# The note's event (read under the caller's RLS, so its engagement is visible): appended by the caller as themselves in
+# this transaction, still the engagement's latest event, and of the kind's transition. A NULL from_state (the genesis)
+# matches no kind. "In this transaction": the chain stamps an event with app_clock_now() (clock_timestamp() plus the
+# test clock's offset), which is never before now() (the transaction's start) plus that offset; an equality with
+# app_clock_now() would never hold, as the clock moves on between the event and its note.
 NOTE_INSERT = (
     "created_by = app_user_id()"
     " AND EXISTS (SELECT 1 FROM engagement_events ev"
     " WHERE ev.engagement_id = engagement_notes.engagement_id AND ev.seq = engagement_notes.event_seq"
     " AND ev.actor_user_id = app_user_id()"
+    " AND ev.created_at >= now() + coalesce((SELECT c.clock_offset FROM test_clock c WHERE c.enabled), interval '0')"
     " AND CASE engagement_notes.kind"
     f" WHEN 'info_request' THEN ev.to_state = 'INFO_REQUESTED' AND ev.from_state NOT IN {_OFF_MAIN_PATH}"
     f" WHEN 'info_answer' THEN ev.from_state = 'INFO_REQUESTED' AND ev.to_state NOT IN {_OFF_MAIN_PATH}"
@@ -197,6 +207,28 @@ BRIEFS_SELECT = (
 )
 
 FUNCTIONS_SQL = r"""
+-- A note is written only while its event is the engagement's latest (the policy says so too, under its snapshot).
+-- Locks the engagement's row FOR NO KEY UPDATE, so an append in flight (the chain holds FOR UPDATE until commit) is
+-- waited for, then reads the chain's head anew: a note is never written once a later event has committed. Fires
+-- right after tracker_engagement_visible() (<table>_1_latest_event sorts second), so it locks and reports only an
+-- engagement the caller can see. SECURITY DEFINER: locks and reads the chain whatever the caller's grants.
+CREATE FUNCTION engagement_notes_latest_event() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_latest bigint;
+BEGIN
+    PERFORM 1 FROM public.engagements e WHERE e.id = NEW.engagement_id FOR NO KEY UPDATE;
+    SELECT max(ev.seq) INTO v_latest FROM public.engagement_events ev WHERE ev.engagement_id = NEW.engagement_id;
+    IF NEW.event_seq IS DISTINCT FROM v_latest THEN
+        RAISE EXCEPTION 'engagement_notes: a note is written only while its event is the engagement''s latest'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- D-54 (default (a)): a note changes only by its redaction, once: its body becomes the fixed marker '[redacted]' with
 -- redacted_at and redacted_by set in the same statement, and nothing else changes. Only the table's owner, or a
 -- SECURITY DEFINER function it owns (a staff-only redaction function: none exists yet), may do it; bridge_app holds no
@@ -331,6 +363,7 @@ $$;
 """
 
 TRIGGER_FUNCTIONS = (
+    "engagement_notes_latest_event()",
     "engagement_notes_redaction_guard()",
     "problem_briefs_status_guard()",
     "problems_brief_text_guard()",
@@ -342,6 +375,9 @@ TRIGGERS_SQL = r"""
 CREATE TRIGGER engagement_notes_0_visible
     BEFORE INSERT ON engagement_notes
     FOR EACH ROW EXECUTE FUNCTION tracker_engagement_visible();
+CREATE TRIGGER engagement_notes_1_latest_event
+    BEFORE INSERT ON engagement_notes
+    FOR EACH ROW EXECUTE FUNCTION engagement_notes_latest_event();
 CREATE TRIGGER engagement_notes_no_delete
     BEFORE DELETE ON engagement_notes
     FOR EACH ROW EXECUTE FUNCTION block_mutation();

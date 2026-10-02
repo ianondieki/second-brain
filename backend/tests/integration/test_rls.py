@@ -850,6 +850,7 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
         await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner))
         rls, hidden = "row-level security", "no engagement of the caller's with that id"
+        stale = "only while its event is the engagement's latest"  # engagement_notes_1_latest_event
         for actor, org, params, refusal in (
             (p.owner, p.org, _note(engagement, 2, "info_request", p.signatory), rls),  # as someone else
             (p.owner, p.org, _note(engagement, 2, "hold", p.owner, resume_at=RESUME_AT), rls),  # not the kind's
@@ -860,7 +861,7 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
             (p.outsider, None, _note(engagement, 2, "info_request", p.outsider), hidden),
             (p.other_member, p.other_org, _note(engagement, 2, "info_request", p.other_member), hidden),
             (p.owner, p.org, _note(engagement, 2, "info_request", p.owner), "duplicate key"),  # one note per event
-            (p.owner, p.org, _note(engagement, 1, "info_request", p.owner), rls),  # the genesis takes none
+            (p.owner, p.org, _note(engagement, 1, "info_request", p.owner), stale),  # the genesis takes none
         ):
             await t.act(conn, actor, org)
             await t.expect(conn, NOTE, refusal, **params)
@@ -882,7 +883,7 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         )
         await t.append(conn, engagement, p.developer, "developer", "resume", "ON_HOLD", "SUBMITTED")  # seq 5
         late = _note(engagement, 4, "hold", p.developer, resume_at=RESUME_AT)
-        await t.expect(conn, NOTE, rls, **late)  # its event is no longer the latest
+        await t.expect(conn, NOTE, stale, **late)  # its event is no longer the latest
         await t.run(conn, NOTE, **_note(engagement, 5, "resume", p.developer, body="Budget approved early."))
         await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses
         await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
