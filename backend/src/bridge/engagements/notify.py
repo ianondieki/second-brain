@@ -114,6 +114,7 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.CONFIRM_PAYMENT, DEV): 'The developer confirmed the final payment for "{title}". The project is closed.',
     (C.REQUEST_INFO, ORG): '{org} asked you a question about "{title}". The review waits for your answer.',
     (C.ANSWER_INFO, DEV): 'The developer answered your question about "{title}". The review clock runs again.',
+    (C.CANCEL_REQUEST, ORG): '{org} withdrew its question about "{title}". The review clock runs again.',
     (C.PAUSE, DEV): 'The developer put "{title}" on hold until {until}. Due dates move by the time on hold.',
     (C.PAUSE, ORG): '{org} put "{title}" on hold until {until}. Due dates move by the time on hold.',
     (C.RESUME, DEV): 'The developer resumed "{title}" before its hold ended. Due dates moved by the time on hold.',
@@ -133,7 +134,9 @@ EXPIRED_SENTENCES: Final = {
 }
 RESUMED_SENTENCE: Final = '"{title}" is no longer on hold: it resumed on its date. Due dates moved by the time on hold.'
 # Party events that also go by email in the status layout (the system's always do).
-EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.PAUSE, C.RESUME})
+EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME})
+# An expiry's words when the stage it ended reads better than its reason code (an unanswered question).
+EXPIRY_LABELS_BY_STATE: Final = {EngagementState.INFO_REQUESTED: "the organisation's question was not answered in time"}
 # [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
 INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
 ORG_ROLES: Final = frozenset(
@@ -223,7 +226,7 @@ def compose_system(event: EngagementEvent, company: str, title: str) -> list[tup
     org, name = em2.one_line(company), em2.one_line(title)
     if event.command == sm.EXPIRE and event.end_reason in EXPIRY_LABELS and event.from_state in sm.EXPIRY_NOTICE:
         kind = f"engagement.{sm.EXPIRY_NOTICE[event.from_state].lower()}"
-        reason = EXPIRY_LABELS[event.end_reason]
+        reason = EXPIRY_LABELS_BY_STATE.get(event.from_state) or EXPIRY_LABELS[event.end_reason]
         label = sm.STAGE_LABELS[EngagementState.EXPIRED]
         return [
             (party, Notice(kind, label, sentence.format(org=org, title=name, reason=reason), _link(party, event)))

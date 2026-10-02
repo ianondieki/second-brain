@@ -126,11 +126,14 @@ async def test_a_question_pauses_the_review_clock_until_the_developer_answers(
         assert code(await t.post(s.dev, "request-info", {"question": QUESTION})) == (403, "not_your_action")
         asked = await t.ok(s.reviewer, "request-info", {"question": QUESTION})
         assert (asked["state"], asked["paused_from"]) == ("INFO_REQUESTED", "UNDER_REVIEW")
-        assert (asked["stage_deadline_at"], asked["due"]) == (None, None)  # the clock is paused
+        # The review clock is paused; the question's own deadline is its answer-by date (10 BD, policy.yaml).
+        answer_by = sm.end_of_day(add_business_days(await db_today(owner_engine), 10, off))
+        assert deadline_of(asked) == answer_by
+        assert asked["due"]["business_days_left"] == 10
         assert (asked["stage_label"], asked["stage_group"]) == ("Information requested", None)
         assert asked["whose_turn"] == ["developer"]
         assert asked["awaiting"] == [{"command": "answer_info", "party": "developer"}]
-        assert asked["actions"] == []  # the organisation waits for the answer
+        assert asked["actions"] == ["cancel_request"]  # it waits for the answer, or withdraws its question
         assert [(n["kind"], n["body"], n["resume_at"], n["by"]) for n in asked["notes"]] == [
             ("info_request", QUESTION, None, "org")
         ]
@@ -159,7 +162,7 @@ async def test_a_question_pauses_the_review_clock_until_the_developer_answers(
     assert await note_rows(owner_engine, engagement) == [("info_request", asked_seq), ("info_answer", answered_seq)]
     asking = history["events"][asked_seq - 1]
     assert asking["payload"] == {"paused_due_on": str(local_date(due))}  # ids and dates only: no text
-    assert asking["stage_deadline_at"] is None
+    assert datetime.fromisoformat(asking["stage_deadline_at"]) == answer_by
     assert history["chain_verified"] is True
     assert QUESTION not in str(history["events"])
     # N03 both ways: the developer is told of the question, the organisation's reviewer of the answer, each in-app
@@ -362,3 +365,35 @@ async def test_no_contact_details_travel_in_a_note_before_first_contact(
         )
     assert shared["state"] == "ON_HOLD"  # after first contact the parties exchange details anyway
     assert [n["kind"] for n in shared["notes"]] == ["info_request", "info_answer", "hold", "resume", "hold"]
+
+
+async def test_a_stage_takes_two_questions_and_the_organisation_may_withdraw_one(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """policy.yaml info_requests_per_stage (2): a third question in the same stage is 409 info_request_limit. The
+    organisation withdraws its open question (cancel-request): back to the stage with the days it waited added to
+    the deadline, no note, and the developer told; a withdrawn question still counts."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        reviewing = await t.ok(s.reviewer, "start-review")
+        await t.ok(s.reviewer, "request-info", {"question": QUESTION})
+        await t.ok(s.dev, "answer-info", {"answer": ANSWER})
+        asked = await t.ok(s.signatory, "request-info", {"question": "And the warranty?"})
+        assert asked["actions"] == ["cancel_request"]
+        assert code(await t.post(s.dev, "cancel-request")) == (403, "not_your_action")
+        await business_days_later(owner_engine, advance, 2)
+        withdrawn = await t.ok(s.signatory, "cancel-request")
+        assert (withdrawn["state"], withdrawn["paused_from"]) == ("UNDER_REVIEW", None)
+        assert "request_info" not in withdrawn["actions"]  # two questions asked in this stage
+        assert code(await t.post(s.reviewer, "request-info", {"question": "One more?"})) == (409, "info_request_limit")
+        history = (await s.dev.get(t.path("/history"))).json()
+    assert deadline_of(withdrawn) == sm.end_of_day(add_business_days(local_date(deadline_of(reviewing)), 2, off))
+    assert [n["kind"] for n in withdrawn["notes"]] == ["info_request", "info_answer", "info_request"]  # none for it
+    assert history["events"][-1]["command"] == "cancel_request"
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, engagement, provider)
+    told = [body for kind, _, body in await in_app(owner_engine, world.developer, engagement) if "withdrew" in body]
+    assert told == [f'{world.org_name} withdrew its question about "{PROPOSAL_TITLE}". The review clock runs again.']

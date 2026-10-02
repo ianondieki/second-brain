@@ -98,6 +98,7 @@ class Command(StrEnum):
     CONFIRM_PAYMENT = "confirm_payment"
     REQUEST_INFO = "request_info"
     ANSWER_INFO = "answer_info"
+    CANCEL_REQUEST = "cancel_request"
     PAUSE = "pause"
     RESUME = "resume"
 
@@ -162,6 +163,7 @@ EXPIRY_NOTICE: Final[Mapping[EngagementState, str]] = {
     S.SUBMITTED: "N01",
     S.UNDER_REVIEW: "N03",
     S.INTEREST_CONFIRMED: "N05",
+    S.INFO_REQUESTED: "N03",  # a question left unanswered past its answer-by date (policy.yaml info_requested)
 }
 EXPIRE: Final = "expire"  # the command code of the system's expiry event (no party runs it: not a row)
 RESUME_NOTICE: Final = "N20"  # the system's resume of a hold at its date tells both parties
@@ -437,6 +439,8 @@ TABLE: Final[Mapping[Command, Transition]] = {
         # returns to the state it left, its deadline moved by the business days paused.
         _t(Command.REQUEST_INFO, {ORG: DECIDERS}, {S.SUBMITTED, S.UNDER_REVIEW}, target=S.INFO_REQUESTED, notice="N03"),
         _t(Command.ANSWER_INFO, _DEV, {S.INFO_REQUESTED}, resumes=True, notice="N03"),
+        # The organisation withdraws its own question (no note: the History shows the command).
+        _t(Command.CANCEL_REQUEST, {ORG: DECIDERS}, {S.INFO_REQUESTED}, resumes=True, notice="N03"),
         _t(Command.PAUSE, {DEV: DEVELOPER, ORG: DECIDERS}, PAUSABLE, target=S.ON_HOLD, notice="N20"),
         _t(Command.RESUME, {DEV: DEVELOPER, ORG: DECIDERS}, {S.ON_HOLD}, resumes=True, notice="N20"),
     )
@@ -471,7 +475,8 @@ class Facts:
     the parties that signed the current stage's document (the NDA, the final agreement or the acceptance
     certificate); ``draft_by``/``draft_status``/``ip_terms``: the latest agreement version; ``milestones``: the
     states of the signed agreement's milestones; ``paused_from``: in a side state, the state it was entered from
-    (where it returns)."""
+    (where it returns); ``questions_left`` and ``hold_days_left``: what the policy's caps leave this stage's questions
+    and the engagement's holds (None: these facts do not limit them)."""
 
     endorsed: frozenset[EngagementParty] = frozenset()
     signed: frozenset[EngagementParty] = frozenset()
@@ -484,6 +489,8 @@ class Facts:
     payment_recorded: bool = False
     deals_enabled: bool = True
     paused_from: EngagementState | None = None
+    questions_left: int | None = None
+    hold_days_left: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -634,6 +641,12 @@ def _guard(command: Command, party: EngagementParty, facts: Facts, milestone: Mi
         raise Conflict("payment_recorded", "The final payment is already recorded.")
     if command is Command.CONFIRM_PAYMENT and not facts.payment_recorded:
         raise Conflict("no_payment_recorded", "The organisation has not recorded the final payment yet.")
+    if command is Command.REQUEST_INFO and facts.questions_left is not None and facts.questions_left <= 0:
+        raise Conflict(
+            "info_request_limit", "Your organisation asked all the questions this stage allows: decide, or decline."
+        )
+    if command is Command.PAUSE and facts.hold_days_left is not None and facts.hold_days_left <= 0:
+        raise Conflict("hold_limit", "This engagement has used all the days on hold it may have.")
 
 
 def pending(state: EngagementState, facts: Facts) -> tuple[Pending, ...]:
@@ -754,6 +767,20 @@ def resumed_deadline(
     return end_of_day(add_business_days(paused_due_on, paused, holidays) if paused else paused_due_on)
 
 
+def question_deadline(now: datetime, holidays: Collection[date], policy: TrackerPolicy) -> datetime:
+    """The answer-by date of a question asked at ``now`` (policy.yaml ``info_requested.expire_bd``): the stage's clock
+    is paused, and past this date the engagement expires (``expiry_reason``)."""
+    return end_of_day(add_business_days(local_date(now), policy.info_expire_bd, holidays))
+
+
+def expiry_reason(state: EngagementState) -> EngagementEndReason | None:
+    """Why an engagement the clock ends in ``state`` expired: the stage's reason (``EXPIRY``), or the developer's
+    silence for an unanswered question."""
+    if state is S.INFO_REQUESTED:
+        return EngagementEndReason.NO_DEV_RESPONSE
+    return EXPIRY.get(state)
+
+
 def expires_at(
     state: EngagementState,
     entered_on: date,
@@ -802,14 +829,21 @@ def check_contact_by(contact_by: date, now: datetime, holidays: Collection[date]
         )
 
 
-def check_resume_at(resume_at: date, now: datetime, policy: TrackerPolicy) -> None:
-    """A hold's resume date (docs/spec/06 6.9 ON_HOLD): after today and at most ``on_hold_max_days`` days ahead."""
+def check_resume_at(resume_at: date, now: datetime, policy: TrackerPolicy, *, days_left: int | None = None) -> None:
+    """A hold's resume date (docs/spec/06 6.9 ON_HOLD): after today and at most ``on_hold_max_days`` days ahead (422),
+    and within the ``days_left`` the engagement's earlier holds left (policy.yaml ``hold_days_total``; 409)."""
     today = local_date(now)
     latest = today + timedelta(days=policy.on_hold_max_days)
     if not today < resume_at <= latest:
         raise Invalid(
             "invalid_resume_at",
             f"Choose a resume date from tomorrow to {latest:%d %b %Y} (at most {policy.on_hold_max_days} days ahead).",
+        )
+    if days_left is not None and (resume_at - today).days > days_left:
+        raise Conflict(
+            "hold_limit",
+            f"This engagement may be on hold {days_left} more days: choose a resume date by"
+            f" {today + timedelta(days=max(days_left, 0)):%d %b %Y}.",
         )
 
 

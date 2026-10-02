@@ -121,6 +121,15 @@ def side(
     [
         ("request_info", R.REVIEWER, S.UNDER_REVIEW, S.INFO_REQUESTED, DEV, "engagement.n03", "asked you a question"),
         ("answer_info", R.DEVELOPER, S.INFO_REQUESTED, S.UNDER_REVIEW, ORG, "engagement.n03", "answered your question"),
+        (
+            "cancel_request",
+            R.REVIEWER,
+            S.INFO_REQUESTED,
+            S.UNDER_REVIEW,
+            DEV,
+            "engagement.n03",
+            "withdrew its question",
+        ),
         ("pause", R.DEVELOPER, S.NEGOTIATION, S.ON_HOLD, ORG, "engagement.n20", "on hold until 20 Oct 2026"),
         ("pause", R.OWNER, S.NEGOTIATION, S.ON_HOLD, DEV, "engagement.n20", "Telco A put"),
         ("resume", R.SIGNATORY, S.ON_HOLD, S.NEGOTIATION, DEV, "engagement.n20", "resumed"),
@@ -163,6 +172,7 @@ def test_a_hold_without_its_date_still_reads() -> None:
         (S.UNDER_REVIEW, EngagementEndReason.NO_DECISION, "engagement.n03", "no decision was made in time"),
         (S.INTEREST_CONFIRMED, EngagementEndReason.CONTACT_NOT_MADE, "engagement.n05", "first contact was not made"),
         (S.ORG_INTEREST, EngagementEndReason.NO_DEV_RESPONSE, "engagement.n17", "the interest was not answered"),
+        (S.INFO_REQUESTED, EngagementEndReason.NO_DEV_RESPONSE, "engagement.n03", "the organisation's question was"),
     ],
 )
 def test_an_expiry_tells_both_parties_why(

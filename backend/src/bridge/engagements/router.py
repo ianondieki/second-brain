@@ -12,7 +12,8 @@ Reads (parties only; anyone else gets 404):
 
 Commands: ``POST /api/engagements/{id}/<command>`` (and ``.../milestones/{milestone_id}/<step>``), one per row of
 the state machine's table, each with ``lock_version``; the side states (REQ-ENG-10 part) are ``request-info``,
-``answer-info``, ``pause`` and ``resume``, each with its text (a question, an answer, a reason). Refusals: 404 (not a
+``answer-info``, ``pause`` and ``resume``, each with its text (a question, an answer, a reason), and
+``cancel-request`` (the organisation withdraws its open question). Refusals: 404 (not a
 party), 403 (wrong party or role, a missing fresh second factor for signing or endorsing, D2 for the developer's
 agreement signature, the deals flag), 409 (a transition not in the table, a precondition, a stale ``lock_version``),
 422 (an invalid body). A command's response is the engagement as the caller now sees it.
@@ -154,6 +155,7 @@ SIMPLE_COMMANDS: tuple[tuple[str, sm.Command], ...] = (
     ("deliver", sm.Command.DELIVER),
     ("accept-delivery", sm.Command.ACCEPT_DELIVERY),
     ("sign-certificate", sm.Command.SIGN_CERTIFICATE),
+    ("cancel-request", sm.Command.CANCEL_REQUEST),  # the organisation withdraws its open question
 )
 MILESTONE_COMMANDS: tuple[tuple[str, sm.Command], ...] = (
     ("start", sm.Command.START_MILESTONE),

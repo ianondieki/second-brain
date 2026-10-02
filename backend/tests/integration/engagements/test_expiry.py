@@ -177,8 +177,9 @@ async def test_an_engagement_nobody_moves_expires_once(
 async def test_a_question_at_15_business_days_stops_the_expiry_at_25(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    """AC-PROP-3 "Request info pauses the clock": asked at +15 BD, a submitted engagement is still waiting at +25 BD;
-    answered then, it expires 20 BD after it was submitted plus the business days it waited."""
+    """AC-PROP-3 "Request info pauses the clock": asked at +15 BD, a submitted engagement is still waiting at +25 BD
+    (past its 20 BD; the question's own answer-by date is the end of that day); answered then, it expires 20 BD after
+    it was submitted plus the business days it waited."""
     world = await build(owner_engine)
     off = await holidays_of(owner_engine)
     entered_on = await db_today(owner_engine)
@@ -187,7 +188,8 @@ async def test_a_question_at_15_business_days_stops_the_expiry_at_25(
         submitted = await t.detail(s.dev)
         await business_days_later(owner_engine, advance, 15)
         await t.ok(s.reviewer, "request-info", {"question": "Which depots does the pilot cover?"})
-        await advance((add_business_days(entered_on, 25, off) - await db_today(owner_engine)).days + 1)
+        await business_days_later(owner_engine, advance, 10)
+        assert await db_today(owner_engine) == add_business_days(entered_on, 25, off)
         assert (await tick(app_engine, world)).outcomes == ()
         assert (await t.detail(s.dev))["state"] == "INFO_REQUESTED"
         answered = await t.ok(s.dev, "answer-info", {"answer": "Nairobi, Mombasa and Kisumu."})
@@ -197,7 +199,7 @@ async def test_a_question_at_15_business_days_stops_the_expiry_at_25(
             local_date(datetime.fromisoformat(answered["stage_deadline_at"])),
             off,
         )
-        assert waited >= 10
+        assert waited == 10
         last = add_business_days(entered_on, 20 + waited, off)
         assert (await tick(app_engine, world, now=sm.end_of_day(last))).outcomes == ()
         await advance((last - await db_today(owner_engine)).days + 1)
@@ -282,3 +284,54 @@ async def test_a_failure_never_stops_the_run_and_the_next_run_retries_it(
         assert {failed, done} == {t.engagement for t in trackers}
         retried = await run_expiry(factory, user_ids=developers)
     assert retried.outcomes == (Outcome(failed, "expire", S.EXPIRED),)
+
+
+async def test_an_unanswered_question_expires_after_ten_business_days(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """policy.yaml info_requested.expire_bd: a question left unanswered past its answer-by date ends the engagement
+    EXPIRED (NO_DEV_RESPONSE), the tag expires, both parties are told under N03."""
+    world = await build(owner_engine)
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        t = Tracker(await open_engagement(app_engine, world))
+        asked = await t.ok(s.reviewer, "request-info", {"question": "Which depots does the pilot cover?"})
+        answer_by = local_date(datetime.fromisoformat(asked["stage_deadline_at"]))
+        assert answer_by == add_business_days(await db_today(owner_engine), 10, off)
+        assert (await tick(app_engine, world, now=sm.end_of_day(answer_by))).outcomes == ()
+        await advance((answer_by - await db_today(owner_engine)).days + 1)
+        report = await tick(app_engine, world)
+        ended = await t.detail(s.dev)
+    assert report.of(t.engagement) == Outcome(t.engagement, "expire", S.EXPIRED)
+    assert (ended["state"], ended["end_reason"]) == ("EXPIRED", "NO_DEV_RESPONSE")
+    assert await tag_closed(owner_engine, world) == ("expired", True)
+    await run_notifications(owner_engine, app_engine, t.engagement, FakeEmailProvider())
+    assert await told(owner_engine, world.reviewer, t.engagement, "engagement.n03") == [
+        f'The engagement on "{PROPOSAL_TITLE}" expired: the organisation\'s question was not answered in time.'
+    ]
+
+
+async def test_the_holds_of_an_engagement_add_up_to_sixty_days(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """policy.yaml on_hold.hold_days_total (60): after a 40-day hold, a second hold may last 20 days (409
+    hold_limit beyond), and once all 60 are used no hold starts."""
+    world = await build(owner_engine)
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        t = Tracker(await open_engagement(app_engine, world))
+        await walk_to(t, s, world, today, "NEGOTIATION")
+        await t.ok(s.dev, "pause", {"reason": "Budget cycle.", "resume_at": str(today + timedelta(days=40))})
+        await advance(40)
+        assert (await tick(app_engine, world)).of(t.engagement) == Outcome(t.engagement, "resume", S.NEGOTIATION)
+        later = await db_today(owner_engine)
+        too_long = await t.post(s.owner, "pause", {"reason": "Audit.", "resume_at": str(later + timedelta(days=21))})
+        assert (too_long.status_code, too_long.json()["detail"]["code"]) == (409, "hold_limit")
+        await t.ok(s.owner, "pause", {"reason": "Audit.", "resume_at": str(later + timedelta(days=20))})
+        await advance(20)
+        await tick(app_engine, world)
+        spent = await t.detail(s.dev)
+        refused = await t.post(s.dev, "pause", {"reason": "Again.", "resume_at": str(later + timedelta(days=21))})
+    assert spent["state"] == "NEGOTIATION"
+    assert "pause" not in spent["actions"]
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "hold_limit")

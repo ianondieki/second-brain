@@ -84,8 +84,16 @@ def test_a_hold_resumes_on_its_resume_date_and_nothing_else_moves() -> None:
     assert expiry.due_action(S.ON_HOLD, at(resume_at + timedelta(days=3)), deadline, None, set(), POLICY) == "resume"
     assert expiry.due_action(S.ON_HOLD, at(resume_at), None, None, set(), POLICY) is None
     late = at(MONDAY + timedelta(days=300))
-    for state in (S.INFO_REQUESTED, S.NEGOTIATION, S.EXPIRED, S.CLOSED):
+    for state in (S.NEGOTIATION, S.EXPIRED, S.CLOSED):
         assert expiry.due_action(state, late, sm.end_of_day(MONDAY), entered(MONDAY, MONDAY), set(), POLICY) is None
+
+
+def test_an_unanswered_question_expires_once_its_answer_by_date_has_passed() -> None:
+    answer_by = sm.end_of_day(date(2026, 10, 19))
+    assert expiry.due_action(S.INFO_REQUESTED, answer_by, answer_by, None, set(), POLICY) is None
+    later = answer_by + timedelta(seconds=1)
+    assert expiry.due_action(S.INFO_REQUESTED, later, answer_by, None, set(), POLICY) == "expire"
+    assert expiry.due_action(S.INFO_REQUESTED, later, None, None, set(), POLICY) is None  # no answer-by date
 
 
 def test_a_report_finds_an_engagements_outcome() -> None:

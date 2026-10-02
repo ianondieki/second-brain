@@ -796,7 +796,9 @@ def _note_text(step: Step, limit: int) -> str:
 async def _request_info(step: Step) -> None:
     question = _note_text(step, sm.QUESTION_MAX_CHARS)
     _paused_deadline(step)
-    step.sets_deadline, step.deadline = True, None  # the clock is paused until the answer
+    # The stage's clock is paused until the answer; the question's own deadline is the answer-by date (policy.yaml
+    # info_requested.expire_bd), past which the expiry job ends the engagement (NO_DEV_RESPONSE).
+    step.sets_deadline, step.deadline = True, sm.question_deadline(step.now, step.holidays, step.policy)
     step.note = NoteInput("info_request", question)
 
 
@@ -805,7 +807,7 @@ async def _hold(step: Step) -> None:
     resume_at = step.inputs.resume_at
     if resume_at is None:  # the router always sends one
         raise sm.Invalid("invalid_resume_at", "Choose the date the engagement resumes.")
-    sm.check_resume_at(resume_at, step.now, step.policy)
+    sm.check_resume_at(resume_at, step.now, step.policy, days_left=step.loaded.facts.hold_days_left)
     _paused_deadline(step)
     step.payload["resume_at"] = resume_at.isoformat()
     step.sets_deadline, step.deadline = True, sm.end_of_day(resume_at)  # "due" reads the resume date
@@ -819,6 +821,13 @@ async def _return(step: Step) -> None:
     step.sets_deadline = True
     step.deadline = await returning_deadline(step.db, step.engagement, step.now)
     step.note = NoteInput("info_answer" if answer else "resume", text)
+
+
+async def _cancel_request(step: Step) -> None:
+    """The organisation withdraws its open question: back to the stage, the days it waited moved like an answer's.
+    No note (the notes' kinds are a question, an answer, a hold and a resume; the History shows the command)."""
+    step.sets_deadline = True
+    step.deadline = await returning_deadline(step.db, step.engagement, step.now)
 
 
 Effect = Callable[[Step], Awaitable[None]]
@@ -848,6 +857,7 @@ EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.CONFIRM_PAYMENT: _confirm_payment,
     C.REQUEST_INFO: _request_info,
     C.ANSWER_INFO: _return,
+    C.CANCEL_REQUEST: _cancel_request,
     C.PAUSE: _hold,
     C.RESUME: _return,
 }

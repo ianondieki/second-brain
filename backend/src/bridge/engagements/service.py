@@ -27,6 +27,7 @@ from bridge.admin.models import Holiday
 from bridge.auth.sessions import LiveSession
 from bridge.db import bind_tenant
 from bridge.engagements import state_machine as sm
+from bridge.engagements.calendar import local_date
 from bridge.engagements.models import (
     Agreement,
     Engagement,
@@ -36,6 +37,7 @@ from bridge.engagements.models import (
     PaymentRecord,
     Signature,
 )
+from bridge.engagements.policy import get_policy
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.models.enums import (
     MFA_REQUIRED_ORG_ROLES,
@@ -218,17 +220,23 @@ async def load_many(
     # stage_round for endorsements), which round its latest entry from the main path began, and, in a side state,
     # the state it was entered from.
     entered = await db.execute(
-        select(EngagementEvent.engagement_id, EngagementEvent.from_state, EngagementEvent.to_state)
+        select(
+            EngagementEvent.engagement_id,
+            EngagementEvent.from_state,
+            EngagementEvent.to_state,
+            EngagementEvent.created_at,
+        )
         .where(
             EngagementEvent.engagement_id.in_(ids),
             EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
         )
         .order_by(EngagementEvent.engagement_id, EngagementEvent.seq)
     )
-    changes: dict[UUID, list[tuple[EngagementState | None, EngagementState]]] = defaultdict(list)
-    for eid, from_state, to_state in entered.tuples():
-        changes[eid].append((from_state, to_state))
+    changes: dict[UUID, list[Change]] = defaultdict(list)
+    for eid, from_state, to_state, at in entered.tuples():
+        changes[eid].append((from_state, to_state, at))
     rounds = {e.id: _rounds(changes[e.id], e.state) for e in engagements}
+    side_use = {e.id: _side_use(changes[e.id], e.state, rounds[e.id][2], e.stage_deadline_at) for e in engagements}
     endorsements = await db.execute(
         select(
             EngagementEndorsement.engagement_id,
@@ -324,19 +332,45 @@ async def load_many(
             signed=frozenset(signatures.get((e.id, *signing[e.id]), ())) if e.id in signing else frozenset(),
             developer_d2=developer_caller and levels.get(e.developer_id) in _D2_OR_ABOVE,
             deals_enabled=deals_enabled,
+            side_use=side_use[e.id],
         )
         for e in engagements
     }
 
 
-def _rounds(
-    changes: Sequence[tuple[EngagementState | None, EngagementState]], state: EngagementState
-) -> tuple[int, int, EngagementState | None]:
+Change = tuple[EngagementState | None, EngagementState, datetime]  # a state change: from, to, when
+
+
+def _side_use(
+    changes: Sequence[Change], state: EngagementState, paused_from: EngagementState | None, deadline: datetime | None
+) -> tuple[int, int]:
+    """(questions asked in the current stage since it was entered from the main path, calendar days on hold over the
+    engagement) from its state changes in chain order. A hold counts from its Nairobi date to the day it resumed; the
+    current one to its resume date (its deadline). The policy's caps are read against these (``_loaded``)."""
+    stage = paused_from if state in sm.RETURNING else state
+    questions = held = 0
+    hold_from: date | None = None
+    for from_state, to_state, at in changes:
+        if to_state is stage and from_state not in sm.RETURNING:
+            questions = 0  # a new entry into the stage from the main path
+        if to_state is EngagementState.INFO_REQUESTED and from_state is stage:
+            questions += 1
+        if to_state is EngagementState.ON_HOLD:
+            hold_from = local_date(at)
+        elif from_state is EngagementState.ON_HOLD and hold_from is not None:
+            held += (local_date(at) - hold_from).days
+            hold_from = None
+    if hold_from is not None and deadline is not None:
+        held += (local_date(deadline) - hold_from).days
+    return questions, held
+
+
+def _rounds(changes: Sequence[Change], state: EngagementState) -> tuple[int, int, EngagementState | None]:
     """(first round, current round, paused from) of an engagement in ``state`` from its state changes in chain order:
     a return from a side state (docs/spec/06 6.9: ON_HOLD, INFO_REQUESTED) enters the stage again in the database's
     count but continues it, so what was endorsed before the pause still counts."""
     first = current = 0
-    for from_state, to_state in changes:
+    for from_state, to_state, _ in changes:
         if to_state is state:
             current += 1
             if from_state not in sm.RETURNING:
@@ -359,6 +393,7 @@ def _loaded(
     signed: frozenset[EngagementParty],
     developer_d2: bool,
     deals_enabled: bool,
+    side_use: tuple[int, int] = (0, 0),
 ) -> Loaded:
     """One engagement's ``Loaded`` from the rows ``load_many`` read (agreements newest version first)."""
     latest = agreements[0] if agreements else None
@@ -366,6 +401,8 @@ def _loaded(
     signed_agreement = next((a for a in agreements if a.status is AgreementStatus.SIGNED), None)
     own_milestones = list(milestones.get(signed_agreement.id, ())) if signed_agreement is not None else []
     first_round, stage_round, paused_from = rounds
+    questions, held = side_use
+    policy = get_policy()
     loaded = Loaded(sm.Facts(), stage_round, first_round, latest_agreement=latest, final_agreement=final)
     loaded.signed_agreement, loaded.milestones, loaded.final_payment = signed_agreement, own_milestones, payment
     if engagement.state is EngagementState.NDA_PENDING:
@@ -388,6 +425,8 @@ def _loaded(
         payment_recorded=payment is not None,
         deals_enabled=deals_enabled,
         paused_from=paused_from,
+        questions_left=policy.info_requests_per_stage - questions,
+        hold_days_left=policy.hold_days_total - held,
     )
     return loaded
 

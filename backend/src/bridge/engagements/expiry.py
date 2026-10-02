@@ -9,7 +9,9 @@ acts on expire, and holds resume at their date.
   business days a question or a hold paused it added back): the system's ``EXPIRED`` event with the stage's reason
   (``NO_DEV_RESPONSE``, ``NO_REVIEW``, ``NO_DECISION``, ``CONTACT_NOT_MADE``); a tagged engagement's tag closes;
 - ``ON_HOLD`` once its resume date has come (Africa/Nairobi): the system's ``resume`` event back to the stage it was
-  paused from, the deadline moved by the business days on hold (as a party's early resume).
+  paused from, the deadline moved by the business days on hold (as a party's early resume);
+- ``INFO_REQUESTED`` once its answer-by date (policy.yaml ``info_requested.expire_bd``) has passed: ``EXPIRED``
+  (``NO_DEV_RESPONSE``: the developer left the organisation's question unanswered).
 
 Each event is the system's (``actor_role`` system, no user: revision 0003 lets a job bound to a party write it; the
 run binds the engagement's developer, always a party) and takes no note. Each is written in its own transaction under
@@ -86,6 +88,8 @@ def due_action(
     nothing."""
     if state is S.ON_HOLD:
         return "resume" if deadline is not None and local_date(now) >= local_date(deadline) else None
+    if state is S.INFO_REQUESTED:  # an unanswered question, past its answer-by date
+        return "expire" if deadline is not None and now > deadline else None
     if state not in sm.EXPIRY or entered is None:
         return None
     at = sm.expires_at(
@@ -124,7 +128,7 @@ def _system_event(
         command=command,
         from_state=engagement.state,
         to_state=to_state,
-        end_reason=sm.EXPIRY.get(engagement.state) if to_state is S.EXPIRED else None,
+        end_reason=sm.expiry_reason(engagement.state) if to_state is S.EXPIRED else None,
         stage_deadline_at=deadline,
         payload={},
     )

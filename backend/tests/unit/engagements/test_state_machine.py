@@ -54,7 +54,7 @@ PAUSED = {S.INFO_REQUESTED, S.ON_HOLD}
 # docs/spec/06 6.9 side branches: either party pauses before the agreement, except while the proposal is only submitted.
 PAUSABLE = BEFORE_AGREEMENT - {S.SUBMITTED}
 # The rows that leave a side state for the state it was entered from (their target is that state).
-RESUMING = {sm.Command.ANSWER_INFO, sm.Command.RESUME}
+RESUMING = {sm.Command.ANSWER_INFO, sm.Command.CANCEL_REQUEST, sm.Command.RESUME}
 # command: (developer may run it, organisation roles that may, source states, target, completes, deals gate)
 EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]] = {
     C.ACCEPT_INTEREST: (True, set(), {S.ORG_INTEREST}, S.INTEREST_CONFIRMED, None, False),
@@ -82,6 +82,7 @@ EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]
     C.CONFIRM_PAYMENT: (True, set(), {S.PAYMENT_FINAL}, S.CLOSED, None, True),
     C.REQUEST_INFO: (False, DECIDERS, {S.SUBMITTED, S.UNDER_REVIEW}, S.INFO_REQUESTED, None, False),
     C.ANSWER_INFO: (True, set(), {S.INFO_REQUESTED}, None, None, False),
+    C.CANCEL_REQUEST: (False, DECIDERS, {S.INFO_REQUESTED}, None, None, False),
     C.PAUSE: (True, DECIDERS, PAUSABLE, S.ON_HOLD, None, False),
     C.RESUME: (True, DECIDERS, {S.ON_HOLD}, None, None, False),
 }
@@ -527,8 +528,9 @@ def test_side_states_are_refused_outside_their_rows() -> None:
 @pytest.mark.parametrize(
     ("state", "developer_actions", "organisation_actions"),
     [
-        # While the organisation's question is open it waits for the answer: no approval, no decline.
-        (S.INFO_REQUESTED, (C.WITHDRAW, C.ANSWER_INFO), ()),
+        # While the organisation's question is open it waits for the answer (no approval, no decline) or withdraws
+        # its question.
+        (S.INFO_REQUESTED, (C.WITHDRAW, C.ANSWER_INFO), (C.CANCEL_REQUEST,)),
         # On hold: either party resumes early (or the date does); the developer may still withdraw.
         (S.ON_HOLD, (C.WITHDRAW, C.RESUME), (C.RESUME,)),
     ],
@@ -595,6 +597,7 @@ def test_the_four_stages_expire_after_expire_bd_paused_days_added() -> None:
         S.SUBMITTED: "N01",
         S.UNDER_REVIEW: "N03",
         S.INTEREST_CONFIRMED: "N05",
+        S.INFO_REQUESTED: "N03",  # an unanswered question
     }
     for state, days in ((S.ORG_INTEREST, 5), (S.SUBMITTED, 20), (S.UNDER_REVIEW, 30), (S.INTEREST_CONFIRMED, 10)):
         due_on = add_business_days(monday, POLICY.stage(state).due_bd or 0, set())
@@ -614,6 +617,29 @@ def test_the_four_stages_expire_after_expire_bd_paused_days_added() -> None:
         assert sm.expires_at(state, monday, monday, monday, set(), POLICY) is None
 
 
+def test_the_caps_on_questions_and_holds_are_409_with_their_codes() -> None:
+    """policy.yaml: at most info_requests_per_stage questions each time in stage 1 or 2, and hold_days_total days on
+    hold over the engagement; the facts carry what is left (None: not limited by these facts)."""
+    reviewer = sm.Actor(ORG, frozenset({R.REVIEWER}))
+    developer = ACTORS[0]
+    with pytest.raises(sm.Conflict) as asked:
+        sm.decide(C.REQUEST_INFO, reviewer, S.UNDER_REVIEW, sm.Facts(questions_left=0))
+    assert (asked.value.status, asked.value.code) == (409, "info_request_limit")
+    assert sm.decide(C.REQUEST_INFO, reviewer, S.UNDER_REVIEW, sm.Facts(questions_left=1)).to_state is S.INFO_REQUESTED
+    with pytest.raises(sm.Conflict) as held:
+        sm.decide(C.PAUSE, developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
+    assert (held.value.status, held.value.code) == (409, "hold_limit")
+    assert C.PAUSE not in sm.available(developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
+    assert C.REQUEST_INFO not in sm.available(reviewer, S.SUBMITTED, sm.Facts(questions_left=0))
+    now = at(date(2026, 10, 5))
+    sm.check_resume_at(date(2026, 10, 15), now, POLICY, days_left=10)
+    with pytest.raises(sm.Conflict) as longer:
+        sm.check_resume_at(date(2026, 10, 16), now, POLICY, days_left=10)
+    assert (longer.value.status, longer.value.code) == (409, "hold_limit")
+    with pytest.raises(sm.Invalid):  # the range check comes first (422)
+        sm.check_resume_at(date(2026, 10, 5), now, POLICY, days_left=10)
+
+
 def test_withdrawing_from_a_side_state_needs_its_stage_before_the_agreement() -> None:
     developer = ACTORS[0]
     for paused in (S.IN_IMPLEMENTATION, S.DELIVERED, None):
@@ -623,3 +649,13 @@ def test_withdrawing_from_a_side_state_needs_its_stage_before_the_agreement() ->
     assert sm.decide(C.WITHDRAW, developer, S.INFO_REQUESTED, sm.Facts(paused_from=S.SUBMITTED)).to_state is (
         S.WITHDRAWN
     )
+
+
+def test_an_unanswered_question_expires_after_its_answer_by_date() -> None:
+    """policy.yaml info_requested.expire_bd (10 BD): the question's deadline is the answer-by date; past it the
+    engagement expires with NO_DEV_RESPONSE (the developer did not answer)."""
+    friday = date(2026, 10, 16)
+    assert sm.question_deadline(at(friday), {date(2026, 10, 20)}, POLICY) == sm.end_of_day(date(2026, 11, 2))
+    assert sm.expiry_reason(S.INFO_REQUESTED) is EngagementEndReason.NO_DEV_RESPONSE
+    assert sm.expiry_reason(S.SUBMITTED) is EngagementEndReason.NO_REVIEW
+    assert sm.expiry_reason(S.NEGOTIATION) is None

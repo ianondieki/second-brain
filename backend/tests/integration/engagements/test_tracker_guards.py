@@ -75,6 +75,7 @@ ROUTES: dict[sm.Command, str] = {
     # Side states (REQ-ENG-10 part): each carries its text.
     sm.Command.REQUEST_INFO: "request-info",
     sm.Command.ANSWER_INFO: "answer-info",
+    sm.Command.CANCEL_REQUEST: "cancel-request",
     sm.Command.PAUSE: "pause",
     sm.Command.RESUME: "resume",
 }
