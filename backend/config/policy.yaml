@@ -64,8 +64,11 @@ on_hold:
   # Either party pauses an engagement before the agreement (ON_HOLD, docs/spec/06 6.9 side branches) with a reason
   # and a resume date at most this many calendar days ahead; due dates then move by the hold's business days.
   max_days: 60
-  # All the holds of one engagement together, in calendar days (a hold counts until it resumes); then 409 hold_limit.
+  # All the holds of one engagement together, in calendar days (a hold counts until it resumes, at least one day);
+  # then 409 hold_limit.
   hold_days_total: 60
+  # Holds each time the engagement is in a stage (as for questions); then 409 hold_limit.
+  holds_per_stage: 2
 
 info_requested:
   # The organisation asks the developer a question from stage 1 or 2 (INFO_REQUESTED): at most this many each time
@@ -73,6 +76,11 @@ info_requested:
   info_requests_per_stage: 2
   # ... and a question left unanswered this many BD ends the engagement EXPIRED (NO_DEV_RESPONSE), by the expiry job.
   expire_bd: 10
+
+side_states:
+  # One party's side-state commands (a question, an answer, withdrawing a question, a pause, a resume) on one
+  # engagement within any hour; then 429 too_many_actions, so neither party floods the other with notices.
+  actions_per_hour: 10
 
 reminders:
   # The daily reminders' health rules and start times (REQ-REM-01, REQ-REM-02; docs/spec/06 6.11). Read by

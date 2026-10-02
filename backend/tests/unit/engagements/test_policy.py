@@ -47,6 +47,7 @@ def test_the_shipped_policy_has_the_spec_deadlines() -> None:
     # REQ-ENG-10: a hold resumes at most 60 days ahead; only the four expiring stages carry expire_bd.
     assert policy.on_hold_max_days == 60
     assert policy.hold_days_total == 60  # all holds of one engagement together
+    assert (policy.holds_per_stage, policy.side_actions_per_hour) == (2, 10)
     assert (policy.info_requests_per_stage, policy.info_expire_bd) == (2, 10)
     expiring = {state for state in p.STAGE_KEYS if policy.stage(state).expire_bd is not None}
     assert expiring == set(p.EXPIRING_STAGES)
@@ -113,6 +114,14 @@ def _broken(change: str) -> dict[str, Any]:
         data["info_requested"]["info_requests_per_stage"] = 0
     elif change == "info_expire_long":
         data["info_requested"]["expire_bd"] = 61
+    elif change == "holds_zero":
+        data["on_hold"]["holds_per_stage"] = 0
+    elif change == "side_missing":
+        del data["side_states"]
+    elif change == "side_keys":
+        data["side_states"]["actions_per_day"] = 50
+    elif change == "side_zero":
+        data["side_states"]["actions_per_hour"] = 0
     return data
 
 
@@ -146,6 +155,10 @@ def _broken(change: str) -> dict[str, Any]:
         "info_keys",
         "info_requests_zero",
         "info_expire_long",
+        "holds_zero",
+        "side_missing",
+        "side_keys",
+        "side_zero",
     ],
 )
 def test_a_broken_policy_is_refused(change: str) -> None:

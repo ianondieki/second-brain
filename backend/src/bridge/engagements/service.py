@@ -343,26 +343,29 @@ Change = tuple[EngagementState | None, EngagementState, datetime]  # a state cha
 
 def _side_use(
     changes: Sequence[Change], state: EngagementState, paused_from: EngagementState | None, deadline: datetime | None
-) -> tuple[int, int]:
-    """(questions asked in the current stage since it was entered from the main path, calendar days on hold over the
-    engagement) from its state changes in chain order. A hold counts from its Nairobi date to the day it resumed; the
-    current one to its resume date (its deadline). The policy's caps are read against these (``_loaded``)."""
+) -> tuple[int, int, int]:
+    """(questions and holds in the current stage since it was entered from the main path, calendar days on hold over
+    the engagement) from its state changes in chain order. A hold counts from its Nairobi date to the day it resumed,
+    at least one day (a pause resumed the same day is not free); the current one to its resume date (its deadline).
+    The policy's caps are read against these (``_loaded``)."""
     stage = paused_from if state in sm.RETURNING else state
-    questions = held = 0
+    questions = holds = held = 0
     hold_from: date | None = None
     for from_state, to_state, at in changes:
         if to_state is stage and from_state not in sm.RETURNING:
-            questions = 0  # a new entry into the stage from the main path
+            questions = holds = 0  # a new entry into the stage from the main path
         if to_state is EngagementState.INFO_REQUESTED and from_state is stage:
             questions += 1
         if to_state is EngagementState.ON_HOLD:
             hold_from = local_date(at)
+            if from_state is stage:
+                holds += 1
         elif from_state is EngagementState.ON_HOLD and hold_from is not None:
-            held += (local_date(at) - hold_from).days
+            held += max(1, (local_date(at) - hold_from).days)
             hold_from = None
     if hold_from is not None and deadline is not None:
-        held += (local_date(deadline) - hold_from).days
-    return questions, held
+        held += max(1, (local_date(deadline) - hold_from).days)
+    return questions, holds, held
 
 
 def _rounds(changes: Sequence[Change], state: EngagementState) -> tuple[int, int, EngagementState | None]:
@@ -393,7 +396,7 @@ def _loaded(
     signed: frozenset[EngagementParty],
     developer_d2: bool,
     deals_enabled: bool,
-    side_use: tuple[int, int] = (0, 0),
+    side_use: tuple[int, int, int] = (0, 0, 0),
 ) -> Loaded:
     """One engagement's ``Loaded`` from the rows ``load_many`` read (agreements newest version first)."""
     latest = agreements[0] if agreements else None
@@ -401,7 +404,7 @@ def _loaded(
     signed_agreement = next((a for a in agreements if a.status is AgreementStatus.SIGNED), None)
     own_milestones = list(milestones.get(signed_agreement.id, ())) if signed_agreement is not None else []
     first_round, stage_round, paused_from = rounds
-    questions, held = side_use
+    questions, holds, held = side_use
     policy = get_policy()
     loaded = Loaded(sm.Facts(), stage_round, first_round, latest_agreement=latest, final_agreement=final)
     loaded.signed_agreement, loaded.milestones, loaded.final_payment = signed_agreement, own_milestones, payment
@@ -426,6 +429,7 @@ def _loaded(
         deals_enabled=deals_enabled,
         paused_from=paused_from,
         questions_left=policy.info_requests_per_stage - questions,
+        holds_left=policy.holds_per_stage - holds,
         hold_days_left=policy.hold_days_total - held,
     )
     return loaded

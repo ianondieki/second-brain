@@ -634,6 +634,10 @@ def test_the_caps_on_questions_and_holds_are_409_with_their_codes() -> None:
     with pytest.raises(sm.Conflict) as held:
         sm.decide(C.PAUSE, developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
     assert (held.value.status, held.value.code) == (409, "hold_limit")
+    with pytest.raises(sm.Conflict) as twice:  # holds_per_stage spent
+        sm.decide(C.PAUSE, developer, S.NEGOTIATION, sm.Facts(holds_left=0, hold_days_left=50))
+    assert (twice.value.status, twice.value.code) == (409, "hold_limit")
+    assert C.PAUSE not in sm.available(reviewer, S.NEGOTIATION, sm.Facts(holds_left=0))
     assert C.PAUSE not in sm.available(developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
     assert C.REQUEST_INFO not in sm.available(reviewer, S.SUBMITTED, sm.Facts(questions_left=0))
     now = at(date(2026, 10, 5))

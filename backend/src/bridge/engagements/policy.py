@@ -77,8 +77,10 @@ class TrackerPolicy:
     decline_other_max_chars: int
     on_hold_max_days: int  # a hold's resume date is at most this many calendar days after the day it starts
     hold_days_total: int  # all the holds of one engagement together, in calendar days
+    holds_per_stage: int  # holds each time the engagement is in a stage
     info_requests_per_stage: int  # questions the organisation may ask each time the engagement is in stage 1 or 2
     info_expire_bd: int  # an unanswered question ends the engagement EXPIRED (NO_DEV_RESPONSE) after this many BD
+    side_actions_per_hour: int  # one party's side-state commands on one engagement within any hour
 
     def stage(self, state: EngagementState) -> StagePolicy:
         """The policy of an open main-path stage; an empty one for any other state (no deadline)."""
@@ -138,7 +140,8 @@ def parse_policy(data: Any) -> TrackerPolicy:
     )
     agreement = _section(data, "agreement", {"deemed_acceptance_days_max", "exclusivity_max_chars"})
     decline = _section(data, "decline", {"other_min_chars", "other_max_chars"})
-    on_hold = _section(data, "on_hold", {"max_days", "hold_days_total"})
+    on_hold = _section(data, "on_hold", {"max_days", "hold_days_total", "holds_per_stage"})
+    side = _section(data, "side_states", {"actions_per_hour"})
     info = _section(data, "info_requested", {"info_requests_per_stage", "expire_bd"})
     policy = TrackerPolicy(
         stages=stages,
@@ -159,6 +162,8 @@ def parse_policy(data: Any) -> TrackerPolicy:
         hold_days_total=_bd(on_hold["hold_days_total"], "on_hold.hold_days_total", high=365),
         info_requests_per_stage=_bd(info["info_requests_per_stage"], "info_requested.info_requests_per_stage", high=10),
         info_expire_bd=_bd(info["expire_bd"], "info_requested.expire_bd"),
+        holds_per_stage=_bd(on_hold["holds_per_stage"], "on_hold.holds_per_stage", high=10),
+        side_actions_per_hour=_bd(side["actions_per_hour"], "side_states.actions_per_hour", high=100),
     )
     if policy.review_window_bd_default > policy.review_window_bd_max:
         raise PolicyError("policy.yaml: milestones.review_window_bd_default exceeds review_window_bd_max")

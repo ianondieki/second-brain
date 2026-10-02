@@ -166,6 +166,10 @@ EXPIRY_NOTICE: Final[Mapping[EngagementState, str]] = {
     S.INTEREST_CONFIRMED: "N05",
     S.INFO_REQUESTED: "N03",  # a question left unanswered past its answer-by date (policy.yaml info_requested)
 }
+# The side-state commands one party may run a limited number of times an hour (policy.yaml side_states).
+SIDE_COMMANDS: Final = frozenset(
+    {Command.REQUEST_INFO, Command.ANSWER_INFO, Command.CANCEL_REQUEST, Command.PAUSE, Command.RESUME}
+)
 EXPIRE: Final = "expire"  # the command code of the system's expiry event (no party runs it: not a row)
 RESUME_NOTICE: Final = "N20"  # the system's resume of a hold at its date tells both parties
 # The longest text a note carries (engagement_notes' body CHECK, revision 0006), and a reason's.
@@ -476,8 +480,8 @@ class Facts:
     the parties that signed the current stage's document (the NDA, the final agreement or the acceptance
     certificate); ``draft_by``/``draft_status``/``ip_terms``: the latest agreement version; ``milestones``: the
     states of the signed agreement's milestones; ``paused_from``: in a side state, the state it was entered from
-    (where it returns); ``questions_left`` and ``hold_days_left``: what the policy's caps leave this stage's questions
-    and the engagement's holds (None: these facts do not limit them)."""
+    (where it returns); ``questions_left``, ``holds_left`` and ``hold_days_left``: what the policy's caps leave this
+    stage's questions and holds and the engagement's days on hold (None: these facts do not limit them)."""
 
     endorsed: frozenset[EngagementParty] = frozenset()
     signed: frozenset[EngagementParty] = frozenset()
@@ -491,6 +495,7 @@ class Facts:
     deals_enabled: bool = True
     paused_from: EngagementState | None = None
     questions_left: int | None = None
+    holds_left: int | None = None
     hold_days_left: int | None = None
 
 
@@ -646,6 +651,8 @@ def _guard(command: Command, party: EngagementParty, facts: Facts, milestone: Mi
         raise Conflict(
             "info_request_limit", "Your organisation asked all the questions this stage allows: decide, or decline."
         )
+    if command is Command.PAUSE and facts.holds_left is not None and facts.holds_left <= 0:
+        raise Conflict("hold_limit", "This stage has had all the holds it may have: go on, or withdraw.")
     if command is Command.PAUSE and facts.hold_days_left is not None and facts.hold_days_left <= 0:
         raise Conflict("hold_limit", "This engagement has used all the days on hold it may have.")
 

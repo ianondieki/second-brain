@@ -422,3 +422,32 @@ async def test_a_hold_at_stage_3_moves_the_contact_by_date_the_tracker_shows(
     async with owner_engine.connect() as conn:
         named = await conn.execute(text("SELECT contact_by FROM engagements WHERE id = :e"), {"e": engagement})
         assert named.scalar_one() == today
+
+
+async def test_pause_and_resume_loops_are_refused_and_never_free(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """THREAT_MODEL D (a party floods the other through free side-state cycles): 200 same-day pause and resume
+    cycles stop at the third pause (policy.yaml holds_per_stage, 409 hold_limit), each hold charged at least a day of
+    hold_days_total, and the organisation hears of two holds only."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    today = await db_today(owner_engine)
+    pause = {"reason": REASON, "resume_at": str(today + timedelta(days=30))}
+    async with seats(app_engine, deals_on(), world) as s:
+        await walk_to(t, s, world, today, "NEGOTIATION")
+        refused = None
+        for cycle in range(200):
+            paused = await t.post(s.dev, "pause", pause)
+            if paused.status_code != 200:
+                refused = (cycle, code(paused))
+                break
+            await t.ok(s.owner, "resume", {"reason": "Ready."})
+        spent = await t.detail(s.dev)
+    assert refused == (2, (409, "hold_limit"))
+    assert "pause" not in spent["actions"]
+    assert [n["kind"] for n in spent["notes"]] == ["hold", "resume", "hold", "resume"]
+    await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
+    holds = [b for k, _, b in await in_app(owner_engine, world.owner, engagement) if k == "engagement.n20"]
+    assert len(holds) == 2
