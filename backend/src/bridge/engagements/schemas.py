@@ -35,6 +35,9 @@ NO_NUL = r"^[^\x00]*$"  # PostgreSQL text cannot hold NUL
 # One line of text: no C0 control (line breaks included) and no DEL, so a party's words cannot forge a line of a
 # signed text or a record (security review P5, MINOR 1).
 ONE_LINE = r"^[^\x00-\x1f\x7f]*$"
+# Several lines: line feeds and tabs are the only control characters (no carriage return, escape or DEL), so a
+# party's text renders as typed and cannot steer a terminal or a log viewer.
+LINES = r"^[^\x00-\x08\x0b-\x1f\x7f]*$"
 MAX_KES_MINOR = 10**13  # KES 100 billion: a typo guard, far above any engagement
 
 
@@ -89,13 +92,13 @@ class ConfirmPaymentBody(CommandBody):
 class RequestInfoBody(CommandBody):
     """The organisation's question (stages 1-2): the review clock pauses until the developer answers."""
 
-    question: str = Field(min_length=1, max_length=2000, pattern=NO_NUL)
+    question: str = Field(min_length=1, max_length=2000, pattern=LINES)
 
 
 class AnswerInfoBody(CommandBody):
     """The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause."""
 
-    answer: str = Field(min_length=1, max_length=2000, pattern=NO_NUL)
+    answer: str = Field(min_length=1, max_length=2000, pattern=LINES)
 
 
 class PauseBody(CommandBody):
