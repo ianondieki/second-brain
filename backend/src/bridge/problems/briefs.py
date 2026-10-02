@@ -12,13 +12,14 @@ A verified organisation posts a Problem Brief: a ProblemCard (a ``problems`` row
   sanitiser's rule) and keeps the ProblemCard's lengths; the niche, county and budget band come from the lists; the
   deadline is today or later (Africa/Nairobi, on the platform clock). Refusals are 422 ``invalid_brief`` with a code
   per field, never quoting the text. ``invited`` is not available yet (422 ``visibility_not_available``).
-- Review: the problem is inserted ``pending_review`` (held when the developer problems' pre-screen holds it) and a
-  moderation case is filed (``new_org_brief``); staff publish it through ``app_moderate_problem``. The Brief row is
-  written ``published`` when it is posted: under revision 0002's policies only the organisation's editors write it
-  (staff cannot), and only an E2 organisation may write it published. Developers still see nothing until staff
-  publish the problem: ``problems`` RLS and every read here require a published, clear problem.
-- Closing sets the Brief ``closed``: it leaves Discover and frees its plan slot; the problem stays published. Under
-  revision 0002's policies a closed Brief's problem is then readable by the organisation's members and staff only.
+- Review: the problem is inserted ``pending_review`` (held when the developer problems' pre-screen holds it) with its
+  Brief as a ``draft``, and a moderation case is filed (``new_org_brief``). Staff approval (``app_moderate_problem``,
+  revision 0006) publishes the problem and the draft Brief of an E2 organisation together; nothing here ever writes
+  ``published``, and nothing of a draft is readable beyond the organisation and staff.
+- Closing sets a published Brief ``closed`` (a draft is 409 ``brief_not_published``: revision 0006 closes only from
+  ``published``): it leaves Discover and frees its plan slot; the problem stays published, and its page and the
+  proposals' links to it stay readable. The moderated text of a published Brief never changes here (revision 0006
+  refuses it with SQLSTATE 55000: 409 ``brief_frozen``).
 
 The rules themselves (text, state, band) are ``bridge.problems.brief_rules``; developers read Briefs on Discover's
 Briefs view (``bridge.matching.discover.briefs_view``) and on their problem page.
@@ -69,6 +70,8 @@ NEW_BRIEF_REASON: Final = "new_org_brief"  # every Brief waits for staff review
 NOT_VERIFIED: Final = "Only organisations with legal verification (E2) can post Problem Briefs."
 NOT_AVAILABLE: Final = "Invited-only Briefs are not available yet. Post a public Brief."
 CLOSED: Final = "This Brief is closed. Post a new one to ask again."
+NOT_PUBLISHED: Final = "This Brief is still in review: it can be closed once it is published."
+FROZEN: Final = "A published Brief keeps the text staff approved. Post a new Brief to change it."
 NO_BRIEF: Final = "No Brief of your organisation has this id."
 
 _NOW = text("SELECT app_clock_now()")
@@ -87,7 +90,7 @@ _INSERT_PROBLEM = text(
 )
 _INSERT_BRIEF = text(
     "INSERT INTO problem_briefs (problem_id, org_id, visibility, budget_band, deadline, status)"
-    " VALUES (:id, :org, 'public', :band, :deadline, 'published')"
+    " VALUES (:id, :org, 'public', :band, :deadline, 'draft')"
 )
 _LOCK_BRIEF = text("SELECT status FROM problem_briefs WHERE problem_id = :id AND org_id = :org FOR UPDATE")
 _UPDATE_BRIEF = text(
@@ -157,12 +160,25 @@ async def _require_e2(db: AsyncSession, org_id: UUID) -> None:
 
 
 def _db_refusal(exc: DBAPIError) -> ApiError | None:
+    """The database's refusals of a Brief's transaction that the API words; anything else is raised as it is."""
     sqlstate = getattr(exc.orig, "sqlstate", None)
-    if sqlstate == "42501":  # RLS: a published Brief of an organisation no longer E2 (checked first: a race)
-        return forbidden("verification_required", NOT_VERIFIED)
+    if sqlstate == "55000":  # revision 0006's text guard: a published Brief keeps its moderated text
+        return ApiError(409, "brief_frozen", FROZEN)
     if sqlstate in ("23503", "23514"):  # a niche or county gone meanwhile, or a CHECK: the form was checked first
         return brief_rules.invalid([])
     return None
+
+
+async def _write_brief(db: AsyncSession, statement: Any, params: dict[str, Any]) -> None:
+    """A write to ``problem_briefs``: its policies' E2 guard on a published Brief refuses an organisation that is no
+    longer E2 (42501, checked first: a race) as ``verification_required``; only here is 42501 worded so."""
+    try:
+        await db.execute(statement, params)
+    except DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "42501":
+            raise
+        await db.rollback()
+        raise forbidden("verification_required", NOT_VERIFIED) from exc
 
 
 @asynccontextmanager
@@ -312,7 +328,7 @@ async def create(
             },
         )
         brief = {"id": problem_id, "org": org.org_id, "band": body.budget_band, "deadline": body.deadline}
-        await db.execute(_INSERT_BRIEF, brief)
+        await _write_brief(db, _INSERT_BRIEF, brief)
         classifier = None if screen.classifier is None else json.dumps(screen.classifier)
         await problems.open_case(db, "problem", problem_id, [NEW_BRIEF_REASON, *screen.reasons], classifier)
         await audit(
@@ -354,7 +370,7 @@ async def update(db: AsyncSession, org: OrgContext, problem_id: UUID, body: Brie
             "deadline": changes.get("deadline"),
         }
         async with _writing(db):
-            await db.execute(_UPDATE_BRIEF, params)
+            await _write_brief(db, _UPDATE_BRIEF, params)
             await audit(
                 db,
                 "brief.updated",
@@ -368,10 +384,14 @@ async def update(db: AsyncSession, org: OrgContext, problem_id: UUID, body: Brie
 
 
 async def close(db: AsyncSession, org: OrgContext, problem_id: UUID) -> BriefOut:
-    """Close the Brief (closing a closed one changes nothing): off Discover, its plan slot freed."""
-    if await _locked_status(db, org.org_id, problem_id) is not BriefStatus.CLOSED:
+    """Close a published Brief (closing a closed one changes nothing; a draft is 409 ``brief_not_published``): off
+    Discover, its plan slot freed, its page kept."""
+    status = await _locked_status(db, org.org_id, problem_id)
+    if status is BriefStatus.DRAFT:
+        raise ApiError(409, "brief_not_published", NOT_PUBLISHED)
+    if status is not BriefStatus.CLOSED:
         async with _writing(db):
-            await db.execute(_CLOSE_BRIEF, {"id": problem_id, "org": org.org_id})
+            await _write_brief(db, _CLOSE_BRIEF, {"id": problem_id, "org": org.org_id})
             await audit(
                 db,
                 "brief.closed",

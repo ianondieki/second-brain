@@ -129,11 +129,16 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
     async with clients(app_engine, SETTINGS, world.org.reviewer, world.org.viewer) as (reviewer, viewer):
         created = await post(reviewer, world.org.id, body)
         brief_id = created["id"]
-        assert (created["problem_status"], created["moderation_state"], created["state"]) == (
+        assert (created["status"], created["problem_status"], created["moderation_state"], created["state"]) == (
+            "draft",
             "pending_review",
             "clear",
             "in_review",
         )
+        [row] = await rows(owner_engine, "SELECT status FROM problem_briefs WHERE problem_id = :id", id=UUID(brief_id))
+        assert row.status == "draft"  # nothing of it is readable beyond the organisation and staff
+        early = await reviewer.post(path(world.org.id, f"/{brief_id}/close"))
+        assert (early.status_code, early.json()["detail"]["code"]) == (409, "brief_not_published")
         assert created["budget_band"] == {"code": "500k_2m", "label": "KES 500,000 to 2 million"}
         assert created["deadline"] == body["deadline"]
         assert created["proposal_count"] == 0
@@ -147,6 +152,8 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
         assert brief_id not in await recommended_ids(developer)  # AC-PERS-7: a Brief under review never ranks
 
         await approve(moderators, brief_id)
+        approved = (await reviewer.get(path(world.org.id, f"/{brief_id}"))).json()
+        assert (approved["status"], approved["state"]) == ("published", "published")  # approval published both
 
         item = (await feed(developer, world))[brief_id]
         org_ref = {"id": str(world.org.id), "slug": f"p10-{world.org.id.hex}", "name": TELCO}
@@ -186,6 +193,10 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
         assert (closed.json()["status"], closed.json()["state"]) == ("closed", "closed")
         assert brief_id not in await feed(developer, world)
         assert (await reviewer.get(f"/api/problems/{brief_id}")).status_code == 200  # the problem stays
+        kept = await developer.get(f"/api/problems/{brief_id}")
+        assert (kept.status_code, kept.json()["brief"]["org"]) == (200, org_ref)  # readable once closed (0006)
+        teaser = (await developer.get(f"/api/proposals/{proposal['id']}")).json()
+        assert brief_id in [p["id"] for p in teaser["problems"]]  # the proposal's link stays
         [row] = await rows(owner_engine, "SELECT status FROM problems WHERE id = :id", id=UUID(brief_id))
         assert row.status == "published"
         again = await reviewer.post(path(world.org.id, f"/{brief_id}/close"))
@@ -350,7 +361,7 @@ async def test_an_org_negative_brief_is_held_for_the_moderator(
 
 
 async def test_the_band_and_deadline_change_until_the_brief_closes(
-    owner_engine: AsyncEngine, app_engine: AsyncEngine
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, moderators: Staff
 ) -> None:
     world = await telco_world(owner_engine)
     day = await today(owner_engine)
@@ -370,6 +381,9 @@ async def test_the_band_and_deadline_change_until_the_brief_closes(
         assert unknown.json()["detail"]["errors"][0]["code"] == "unknown_budget_band"
         extra = await reviewer.patch(one, json={"title": "A new title"})
         assert extra.status_code == 422  # the moderated text does not change here
+        await approve(moderators, brief["id"])
+        published = await reviewer.patch(one, json={"budget_band": "2m_10m"})  # still open once published
+        assert published.json()["budget_band"]["code"] == "2m_10m"
         assert (await reviewer.post(f"{one}/close")).status_code == 200
         late = await reviewer.patch(one, json={"budget_band": "under_500k"})
         assert (late.status_code, late.json()["detail"]["code"]) == (409, "brief_closed")
@@ -417,3 +431,21 @@ async def test_the_lists_page_filter_and_a_passed_deadline_leaves_the_view(
     kept = await developer.get(f"/api/problems/{posted[0]}")
     assert kept.status_code == 200
     assert kept.json()["brief"]["deadline"] < (await today(owner_engine)).isoformat()
+
+
+async def test_an_organisation_no_longer_e2_cannot_change_its_published_brief(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, moderators: Staff
+) -> None:
+    """The policies' E2 guard on a published Brief refuses the change (42501 on the Brief's write): 403
+    verification_required, nothing changed; closing it is still the organisation's."""
+    world = await telco_world(owner_engine)
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        brief = await post(reviewer, world.org.id, await form(owner_engine, world.niche))
+        await approve(moderators, brief["id"])
+        async with owner_engine.begin() as conn:
+            await run(conn, "UPDATE organizations SET verification = 'e1' WHERE id = :id", id=world.org.id)
+        one = path(world.org.id, f"/{brief['id']}")
+        refused = await reviewer.patch(one, json={"budget_band": "over_10m"})
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "verification_required")
+        assert (await reviewer.get(one)).json()["budget_band"]["code"] == "500k_2m"
+        assert (await reviewer.post(f"{one}/close")).json()["state"] == "closed"

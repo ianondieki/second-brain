@@ -23542,7 +23542,7 @@
     },
     "/api/orgs/{org_id}/briefs/{problem_id}/close": {
       "post": {
-        "description": "Close the Brief: it leaves Discover and frees its plan slot; the problem stays published.",
+        "description": "Close a published Brief: it leaves Discover and frees its plan slot; its problem page stays.",
         "operationId": "close_brief_api_orgs__org_id__briefs__problem_id__close_post",
         "parameters": [
           {

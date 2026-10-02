@@ -1883,7 +1883,7 @@ export interface paths {
         put?: never;
         /**
          * Close Brief
-         * @description Close the Brief: it leaves Discover and frees its plan slot; the problem stays published.
+         * @description Close a published Brief: it leaves Discover and frees its plan slot; its problem page stays.
          */
         post: operations["close_brief_api_orgs__org_id__briefs__problem_id__close_post"];
         delete?: never;

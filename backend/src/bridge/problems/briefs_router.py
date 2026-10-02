@@ -7,7 +7,8 @@
   ``visibility_not_available`` for an invited Brief and ``invalid_brief`` (a code per field) for the form. The Brief
   waits for staff review (``pending_review``) before any developer sees it.
 - ``GET /api/orgs/{org_id}/briefs/{problem_id}``: any member; ``PATCH`` (budget band, deadline; 409 ``brief_closed``
-  once closed) and ``POST .../close``: the editors above.
+  once closed) and ``POST .../close`` (a published Brief; 409 ``brief_not_published`` while in review): the editors
+  above. The Brief is a draft until staff approve its problem, which publishes both.
 
 A non-member gets 404 (the organisation's existence is not confirmed), a member without the role 403, another
 organisation's Brief 404. Developers read Briefs on Discover (``GET /api/discover/briefs``) and their problem page
@@ -67,5 +68,5 @@ async def update_brief(problem_id: UUID, body: BriefPatch, org: BriefEditor, db:
 
 @router.post(f"{PREFIX}/{{problem_id}}/close")
 async def close_brief(problem_id: UUID, org: BriefEditor, db: Db) -> BriefOut:
-    """Close the Brief: it leaves Discover and frees its plan slot; the problem stays published."""
+    """Close a published Brief: it leaves Discover and frees its plan slot; its problem page stays."""
     return await briefs.close(db, org, problem_id)

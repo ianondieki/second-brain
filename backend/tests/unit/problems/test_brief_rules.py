@@ -112,7 +112,7 @@ class _Orig(Exception):
 
 @pytest.mark.parametrize(
     ("sqlstate", "status", "code"),
-    [("42501", 403, "verification_required"), ("23503", 422, "invalid_brief"), ("23514", 422, "invalid_brief")],
+    [("55000", 409, "brief_frozen"), ("23503", 422, "invalid_brief"), ("23514", 422, "invalid_brief")],
 )
 def test_database_refusals_answer_as_the_api(sqlstate: str, status: int, code: str) -> None:
     refusal = _db_refusal(DBAPIError("INSERT", None, _Orig(sqlstate)))
@@ -120,5 +120,7 @@ def test_database_refusals_answer_as_the_api(sqlstate: str, status: int, code: s
     assert (refusal.status_code, cast(dict[str, Any], refusal.detail)["code"]) == (status, code)
 
 
-def test_other_database_errors_are_not_mapped() -> None:
-    assert _db_refusal(DBAPIError("INSERT", None, _Orig("40001"))) is None
+@pytest.mark.parametrize("sqlstate", ["40001", "42501"])
+def test_other_database_errors_are_not_mapped(sqlstate: str) -> None:
+    """42501 is worded verification_required only on a write to problem_briefs (``_write_brief``), never here."""
+    assert _db_refusal(DBAPIError("INSERT", None, _Orig(sqlstate))) is None
