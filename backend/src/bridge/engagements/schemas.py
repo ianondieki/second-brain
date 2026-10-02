@@ -281,6 +281,13 @@ class EngagementDetail(EngagementSummary):
     side_limits: SideLimitsOut | None = Field(
         default=None, description="The caps left for the current stage's side states; null once ended or none apply"
     )
+    # Always sent; optional in the generated web types (no non-null default), so a client reads an older API as "no
+    # day sent".
+    today: date | None = Field(
+        default=None,
+        description="Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the"
+        " side-state rules count from",
+    )
 
 
 class HistoryEventOut(BaseModel):

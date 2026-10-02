@@ -391,6 +391,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             for n in notes
         ],
         side_limits=_side_limits(engagement.state, loaded.facts),
+        today=sm.platform_day(now),  # the clock the commands check a hold's date against
     )
 
 

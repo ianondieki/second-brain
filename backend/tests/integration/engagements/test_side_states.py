@@ -504,3 +504,15 @@ async def test_the_question_cap_is_per_stage(owner_engine: AsyncEngine, app_engi
         asked = await t.post(s.reviewer, "request-info", {"question": "And under review?"})
     assert asked.status_code == 200, asked.text
     assert asked.json()["paused_from"] == "UNDER_REVIEW"
+
+
+async def test_the_detail_says_today_on_the_platform_clock(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """The web app checks a hold's date against the API's ``today`` (the platform clock's Nairobi day), never the
+    database's real time: with the test clock moved 30 days, ``today`` is the moved day."""
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        before = await db_today(owner_engine)
+        assert (await t.detail(s.dev))["today"] == str(before)
+        await advance(30)
+        assert (await t.detail(s.owner))["today"] == str(before + timedelta(days=30))
