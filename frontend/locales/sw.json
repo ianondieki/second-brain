@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES)"
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px"
   },
   "app": {
     "name": "Wazo",
@@ -1013,7 +1013,8 @@
       "problem": "Tatizo",
       "org_claim": "Mzozo wa dai",
       "other": "Kesi nyingine",
-      "brief": "Maelezo ya tatizo"
+      "brief": "Maelezo ya tatizo",
+      "briefBy": "Maelezo ya {org}"
     },
     "untitled": {
       "proposal": "Pendekezo lisilo na kichwa",
@@ -1782,7 +1783,7 @@
     "views": {
       "problems": "Matatizo",
       "projects": "Miradi",
-      "gap": "Pengo la fursa",
+      "gap": "Pengo",
       "briefs": "Maelezo"
     },
     "filters": "Vichujio",
@@ -2554,7 +2555,7 @@
     "titleHint": "Mstari mmoja ambao msanidi programu anaweza kuuelewa kwa haraka. Hadi herufi {max}.",
     "statement": "Maelezo ya tatizo",
     "statementHint": "Nini kinaharibika, kwa nani na mara ngapi. Eleza tatizo ni nini, si jinsi ya kulitatua. Bila namba za simu, barua pepe wala anwani za tovuti: maelezo ni ya umma yakishaidhinishwa.",
-    "meter": "Maneno: {count}. Herufi: {current} kati ya {max}.",
+    "meter": "Maneno: {count} kati ya {max}. Herufi: {current} kati ya {limit}.",
     "affected": "Wanaoathirika (si lazima)",
     "affectedHint": "Kwa mfano: wanachama wa SACCO katika matawi ya vijijini.",
     "niche": "Fani",
@@ -2578,7 +2579,8 @@
       "nicheRequired": "Chagua fani.",
       "tooLong": "Isizidi herufi {max}.",
       "deadlinePast": "Chagua leo au tarehe ya baadaye.",
-      "deadlineInvalid": "Weka tarehe kwa siku, mwezi na mwaka."
+      "deadlineInvalid": "Weka tarehe kwa siku, mwezi na mwaka.",
+      "tooManyWords": "Yasizidi maneno {max}."
     },
     "fieldError": {
       "blank": "Andika sehemu hii ya maelezo.",
@@ -2607,7 +2609,11 @@
       "mfaSetup": "Washa uthibitishaji wa hatua mbili ili kuchapisha au kufunga maelezo.",
       "mfaCode": "Weka msimbo kutoka kwenye programu yako ya uthibitishaji, kisha ujaribu tena.",
       "network": "Hatukuweza kufikia seva. Angalia muunganisho wako na ujaribu tena.",
-      "generic": "Kuna kitu kilienda vibaya, kwa hiyo hakuna kilichobadilika. Jaribu tena."
+      "generic": "Kuna kitu kilienda vibaya, kwa hiyo hakuna kilichobadilika. Jaribu tena.",
+      "dailyLimit": "Shirika lako limechapisha maelezo mengi kadiri linavyoweza leo. Jaribu tena kesho.",
+      "orgUnavailable": "Shirika lako haliwezi kuchapisha wala kufunga maelezo kwa sasa.",
+      "notPublished": "Maelezo haya bado yanakaguliwa, kwa hiyo hayawezi kufungwa bado.",
+      "frozen": "Maandishi ya maelezo yaliyochapishwa hayawezi kubadilishwa. Yafunge na uchapishe mapya."
     },
     "close": {
       "open": "Funga maelezo haya",

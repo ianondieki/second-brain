@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
-    "reviewP19": "[[COPY-REVIEW]] P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES)"
+    "reviewP19": "[[COPY-REVIEW]] P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px"
   },
   "app": {
     "name": "Wazo",
@@ -1013,7 +1013,8 @@
       "problem": "Problem",
       "org_claim": "Claim dispute",
       "other": "Other case",
-      "brief": "Problem Brief"
+      "brief": "Problem Brief",
+      "briefBy": "Brief by {org}"
     },
     "untitled": {
       "proposal": "Untitled proposal",
@@ -1782,7 +1783,7 @@
     "views": {
       "problems": "Problems",
       "projects": "Projects",
-      "gap": "Opportunity gap",
+      "gap": "Gap",
       "briefs": "Briefs"
     },
     "filters": "Filters",
@@ -2554,7 +2555,7 @@
     "titleHint": "One line a developer can take in at a glance. Up to {max} characters.",
     "statement": "Problem statement",
     "statementHint": "What goes wrong, for whom and how often. Say what the problem is, not how to solve it. No phone numbers, emails or web addresses: the Brief is public once approved.",
-    "meter": "Words: {count}. Characters: {current} of {max}.",
+    "meter": "Words: {count} of {max}. Characters: {current} of {limit}.",
     "affected": "Who is affected (optional)",
     "affectedHint": "For example: SACCO members in rural branches.",
     "niche": "Niche",
@@ -2578,7 +2579,8 @@
       "nicheRequired": "Choose a niche.",
       "tooLong": "Keep this to {max} characters or fewer.",
       "deadlinePast": "Choose today or a later date.",
-      "deadlineInvalid": "Enter the date as day, month and year."
+      "deadlineInvalid": "Enter the date as day, month and year.",
+      "tooManyWords": "Keep this to {max} words or fewer."
     },
     "fieldError": {
       "blank": "Write this part of the Brief.",
@@ -2607,7 +2609,11 @@
       "mfaSetup": "Turn on two-step sign-in to post or close a Brief.",
       "mfaCode": "Enter the code from your authenticator app, then try again.",
       "network": "We could not reach the server. Check your connection and try again.",
-      "generic": "Something went wrong, so nothing changed. Try again."
+      "generic": "Something went wrong, so nothing changed. Try again.",
+      "dailyLimit": "Your organisation has posted as many Briefs as it can today. Try again tomorrow.",
+      "orgUnavailable": "Your organisation cannot post or close Briefs right now.",
+      "notPublished": "This Brief is still in review, so it cannot be closed yet.",
+      "frozen": "A published Brief's text cannot be changed. Close it and post a new one."
     },
     "close": {
       "open": "Close this brief",
