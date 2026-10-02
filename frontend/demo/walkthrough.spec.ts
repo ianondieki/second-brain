@@ -601,7 +601,8 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await show(page, brief);
     await shot(page, "14d-discover-briefs-1440");
     await brief.getByRole("link", { name: "Start a proposal from this Brief" }).click();
-    await expect(page).toHaveURL(/\/dev\/ideas\/[0-9a-f-]{36}\/edit/, SLOW);
+    await expect(page).toHaveURL(/\/dev\/ideas\/new\?problem=[0-9a-f-]{36}$/, SLOW); // the Brief linked from the start
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("New idea");
     await expect(page.getByRole("main")).toContainText(BRIEF_TITLE);
     await pause(page, 2);
     await signOut(page);
