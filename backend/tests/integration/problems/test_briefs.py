@@ -19,9 +19,11 @@ from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge import pagination
 from bridge.config import get_settings
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
+    MOMBASA_CODE,
     NAIROBI_CODE,
     ScoutWorld,
     add_org,
@@ -257,3 +259,161 @@ async def test_only_verified_organisations_post_briefs(owner_engine: AsyncEngine
             assert response.status_code == 403, response.text
             assert response.json()["detail"]["code"] == "verification_required"
             assert await briefs_count(owner_engine, org.id) == 0
+
+
+async def test_editors_post_and_other_members_read(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Owner, admin, signatory and reviewer post; finance and viewer get 403; a non-member and another organisation's
+    member get 404 for the list, a Brief, a change and a close."""
+    world = await telco_world(owner_engine)
+    await subscribe(owner_engine, world.org.id, "org_growth")
+    async with clients(
+        app_engine, SETTINGS, world.org.finance, world.org.owner, world.other.owner, world.developer
+    ) as (finance, owner, outsider, stranger):
+        body = await form(owner_engine, world.niche)
+        refused = await finance.post(path(world.org.id), json=body)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "forbidden")
+        assert (await finance.get(path(world.org.id))).status_code == 200
+        brief = await post(owner, world.org.id, body)
+        assert (await finance.get(path(world.org.id, f"/{brief['id']}"))).status_code == 200
+        assert (await finance.post(path(world.org.id, f"/{brief['id']}/close"))).status_code == 403
+        for client in (outsider, stranger):
+            assert (await client.get(path(world.org.id))).status_code == 404
+            assert (await client.get(path(world.org.id, f"/{brief['id']}"))).status_code == 404
+        # Another organisation's own path does not reach this Brief.
+        foreign = path(world.other.id, f"/{brief['id']}")
+        assert (await outsider.get(foreign)).status_code == 404
+        assert (await outsider.patch(foreign, json={"budget_band": None})).status_code == 404
+        assert (await outsider.post(f"{foreign}/close")).status_code == 404
+
+
+async def test_invited_briefs_are_not_available_yet(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    world = await telco_world(owner_engine)
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        response = await reviewer.post(
+            path(world.org.id), json=await form(owner_engine, world.niche, visibility="invited")
+        )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "visibility_not_available"
+    assert await briefs_count(owner_engine, world.org.id) == 0
+
+
+async def test_a_brief_is_public_text_and_its_form_is_checked(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """A phone number or an email address (the sanitiser's contact rule), a long title or statement, an unknown band,
+    niche or county and a past deadline are 422 ``invalid_brief`` with one error per field; nothing is created."""
+    world = await telco_world(owner_engine)
+    yesterday = (await today(owner_engine) - timedelta(days=1)).isoformat()
+    cases: list[tuple[dict[str, Any], dict[str, str]]] = [
+        ({"statement": "Call our desk on 0712 345 678 to discuss."}, {"statement": "contains_phone"}),
+        ({"title": "Write to briefs@telco.example.com"}, {"title": "contains_email"}),
+        ({"title": "T" * 91}, {"title": "too_long"}),
+        ({"statement": "S" * 1201}, {"statement": "too_long"}),
+        ({"title": "<b></b>"}, {"title": "blank"}),
+        ({"budget_band": "a_lot"}, {"budget_band": "unknown_budget_band"}),
+        ({"deadline": yesterday}, {"deadline": "deadline_past"}),
+        ({"niche_id": str(UUID(int=7))}, {"niche_id": "unknown_niche"}),
+        ({"county_code": "KE-99"}, {"county_code": "unknown_county"}),
+        (
+            {"budget_band": "a_lot", "deadline": yesterday},
+            {"budget_band": "unknown_budget_band", "deadline": "deadline_past"},
+        ),
+    ]
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        for overrides, expected in cases:
+            response = await reviewer.post(path(world.org.id), json=await form(owner_engine, world.niche, **overrides))
+            assert response.status_code == 422, (overrides, response.text)
+            detail = response.json()["detail"]
+            assert detail["code"] == "invalid_brief"
+            assert {e["field"]: e["code"] for e in detail["errors"]} == expected
+            assert all(e["message"] for e in detail["errors"])
+            assert "0712" not in response.text  # the refused text is never quoted back
+            assert "telco.example.com" not in response.text
+        assert await briefs_count(owner_engine, world.org.id) == 0
+        ok = await post(reviewer, world.org.id, await form(owner_engine, world.niche, deadline=None, budget_band=None))
+        assert (ok["deadline"], ok["budget_band"], ok["visibility"]) == (None, None, "public")
+
+
+async def test_an_org_negative_brief_is_held_for_the_moderator(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, moderators: Staff
+) -> None:
+    """The same pre-screen as a developer's problem: naming a directory organisation negatively holds the Brief."""
+    world = await telco_world(owner_engine)
+    statement = f"{world.other.name} is a fraud and its agents cheat farmers."
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        held = await post(reviewer, world.org.id, await form(owner_engine, world.niche, statement=statement))
+    assert (held["moderation_state"], held["state"]) == ("held", "in_review")
+    staff = await moderators()
+    [case] = await cases_about(staff, held["id"])
+    assert {"new_org_brief", "names_real_org_negative"} <= set(case["reasons"])
+    assert {f["name"] for f in case["fields"]} == {"title", "statement", "affected_group"}
+
+
+async def test_the_band_and_deadline_change_until_the_brief_closes(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    world = await telco_world(owner_engine)
+    day = await today(owner_engine)
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        brief = await post(reviewer, world.org.id, await form(owner_engine, world.niche))
+        one = path(world.org.id, f"/{brief['id']}")
+        later = (day + timedelta(days=60)).isoformat()
+        moved = await reviewer.patch(one, json={"budget_band": "over_10m", "deadline": later})
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["budget_band"]["code"] == "over_10m"
+        assert moved.json()["deadline"] == later
+        cleared = (await reviewer.patch(one, json={"deadline": None})).json()
+        assert (cleared["deadline"], cleared["budget_band"]["code"]) == (None, "over_10m")
+        past = await reviewer.patch(one, json={"deadline": (day - timedelta(days=1)).isoformat()})
+        assert (past.status_code, past.json()["detail"]["code"]) == (422, "invalid_brief")
+        unknown = await reviewer.patch(one, json={"budget_band": "a_lot"})
+        assert unknown.json()["detail"]["errors"][0]["code"] == "unknown_budget_band"
+        extra = await reviewer.patch(one, json={"title": "A new title"})
+        assert extra.status_code == 422  # the moderated text does not change here
+        assert (await reviewer.post(f"{one}/close")).status_code == 200
+        late = await reviewer.patch(one, json={"budget_band": "under_500k"})
+        assert (late.status_code, late.json()["detail"]["code"]) == (409, "brief_closed")
+        missing = await reviewer.patch(path(world.org.id, f"/{UUID(int=9)}"), json={"budget_band": None})
+        assert missing.status_code == 404
+
+
+async def test_the_lists_page_filter_and_a_passed_deadline_leaves_the_view(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, moderators: Staff
+) -> None:
+    """The organisation's list and Discover's Briefs view page with ``limit`` and ``cursor`` (newest first); the view
+    filters by county; a Brief whose deadline has passed leaves the view and keeps its page."""
+    world = await telco_world(owner_engine)
+    await subscribe(owner_engine, world.org.id, "org_growth")
+    developer = await developers()
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        posted = [
+            (await post(reviewer, world.org.id, await form(owner_engine, world.niche, title=f"Brief {n}")))["id"]
+            for n in range(3)
+        ]
+        first = (await reviewer.get(path(world.org.id), params={"limit": 2})).json()
+        assert [item["id"] for item in first["items"]] == posted[:0:-1]
+        rest = (await reviewer.get(path(world.org.id), params={"limit": 2, "cursor": first["next_cursor"]})).json()
+        assert ([item["id"] for item in rest["items"]], rest["next_cursor"]) == ([posted[0]], None)
+        momentless = pagination.encode(None, UUID(posted[0]))
+        refused = await reviewer.get(path(world.org.id), params={"cursor": momentless})
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (400, "invalid_cursor")
+    for brief_id in posted:
+        await approve(moderators, brief_id)
+
+    niche = f"p10-niche-{world.tag}"
+    page = (await developer.get("/api/discover/briefs", params={"niche": niche, "limit": 2})).json()
+    assert [item["problem"]["id"] for item in page["items"]] == posted[:0:-1]
+    after = {"niche": niche, "limit": 2, "cursor": page["next_cursor"]}
+    tail = (await developer.get("/api/discover/briefs", params=after)).json()
+    assert ([item["problem"]["id"] for item in tail["items"]], tail["next_cursor"]) == ([posted[0]], None)
+    nairobi = await developer.get("/api/discover/briefs", params={"niche": niche, "county": NAIROBI_CODE})
+    assert len(nairobi.json()["items"]) == 3
+    mombasa = await developer.get("/api/discover/briefs", params={"niche": niche, "county": MOMBASA_CODE})
+    assert mombasa.json()["items"] == []
+
+    async with owner_engine.begin() as conn:
+        await run(conn, "UPDATE problem_briefs SET deadline = deadline - 31 WHERE problem_id = :id", id=UUID(posted[0]))
+    assert posted[0] not in await feed(developer, world)
+    kept = await developer.get(f"/api/problems/{posted[0]}")
+    assert kept.status_code == 200
+    assert kept.json()["brief"]["deadline"] < (await today(owner_engine)).isoformat()
