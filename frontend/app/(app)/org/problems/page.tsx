@@ -16,7 +16,7 @@ import { briefHref, briefUpgrade, newBriefHref, planFull, postsBriefs, problemsH
 import { orgContext } from "../data";
 import { first, inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
-import { getCounties, getOrgPlans } from "../scout-data";
+import { getCounties, readOrgPlans } from "../scout-data";
 import { BriefItem } from "./BriefItem";
 import { PlanNotice } from "./PlanNotice";
 import { PostedNote } from "./Notes";
@@ -67,7 +67,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
   const [list, counties, plans] = await Promise.all([
     getBriefs(org.org_id, cursor && cursor.length <= 2000 ? cursor : undefined),
     getCounties(),
-    getOrgPlans(),
+    readOrgPlans(),
   ]);
   const self = problemsHref(memberships, org.org_id);
   if (list.kind === "staleCursor" || (list.kind === "ok" && cursor && list.value.items.length === 0)) {
@@ -103,7 +103,13 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
   return frame(
     <>
       {first(params.posted) === "1" ? <PostedNote text={t("posted")} /> : null}
-      <PlanNotice plan={plan} next={full ? briefUpgrade(plans, plan.plan) : null} orgId={org.org_id} here={self} />
+      <PlanNotice
+        plan={plan}
+        next={full && plans ? briefUpgrade(plans, plan.plan) : null}
+        plansUnknown={full && plans === null}
+        orgId={org.org_id}
+        here={self}
+      />
       {/* The list's name as a hidden h2, so the Briefs' h3 titles follow the page's h1 in order (axe heading-order). */}
       <section aria-labelledby="briefs-list" className="mt-6">
         <h2 id="briefs-list" className="sr-only">

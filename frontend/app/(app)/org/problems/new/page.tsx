@@ -14,7 +14,7 @@ import { briefUpgrade, newBriefHref, planFull, postsBriefs, problemsHref, todayI
 import { orgContext } from "../../data";
 import { OrgRefusal } from "../../OrgRefusal";
 import { PlanNotice } from "../PlanNotice";
-import { getCounties, getNicheTree, getOrgPlans, getVerification } from "../../scout-data";
+import { getCounties, getNicheTree, getVerification, readOrgPlans } from "../../scout-data";
 import { BriefForm } from "./BriefForm";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -66,7 +66,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
     getVerification(org.org_id),
     getNicheTree(),
     getCounties(),
-    getOrgPlans(),
+    readOrgPlans(),
   ]);
   if (list.kind !== "ok") {
     return frame(
@@ -93,7 +93,13 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
   const here = newBriefHref(memberships, org.org_id);
   const full = planFull(plan);
   const notice = (
-    <PlanNotice plan={plan} next={full ? briefUpgrade(plans, plan.plan) : null} orgId={org.org_id} here={here} />
+    <PlanNotice
+      plan={plan}
+      next={full && plans ? briefUpgrade(plans, plan.plan) : null}
+      plansUnknown={full && plans === null}
+      orgId={org.org_id}
+      here={here}
+    />
   );
   // With every open Brief in use the API would refuse the form (402), so the page says it once, with the way to more
   // room, instead of a form, a second notice and the same refusal after typing.
@@ -112,7 +118,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
             bands={bands}
             today={todayInNairobi()}
             planLimit={plan.problem_briefs}
-            planNames={Object.fromEntries(plans.map((p) => [p.code, p.name]))}
+            planNames={Object.fromEntries((plans ?? []).map((p) => [p.code, p.name]))}
             doneHref={problemsHref(memberships, org.org_id, { posted: true })}
             hereHref={here}
             cancelHref={back}

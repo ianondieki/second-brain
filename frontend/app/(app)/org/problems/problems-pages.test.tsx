@@ -48,6 +48,7 @@ const state = vi.hoisted(() => ({
   list: null as BriefsRead | null,
   one: null as { kind: "ok"; value: Brief } | null,
   verification: "e2" as string | null,
+  plansFail: false,
 }));
 
 vi.mock("../data", () => ({
@@ -67,11 +68,12 @@ vi.mock("../scout-data", () => ({
   getCounties: async () => [{ code: "KE-30", name: "Nairobi City" }],
   getNicheTree: async () => [{ id: "p", slug: "ict", name: "ICT", children: [] }],
   getVerification: async () => state.verification,
-  getOrgPlans: async () => [
-    { code: "org_claimed", name: "Claimed (Free)", purchasable: false, upgrade_to: "org_starter", limits: { problem_briefs: 1 } },
-    { code: "org_starter", name: "Starter", purchasable: true, upgrade_to: null, limits: { problem_briefs: 5 } },
-  ],
+  readOrgPlans: async () => (state.plansFail ? null : PLANS),
 }));
+const PLANS = vi.hoisted(() => [
+  { code: "org_claimed", name: "Claimed (Free)", purchasable: false, upgrade_to: "org_starter", limits: { problem_briefs: 1 } },
+  { code: "org_starter", name: "Starter", purchasable: true, upgrade_to: null, limits: { problem_briefs: 5 } },
+]);
 
 const reviewer: Membership = { org_id: ORG_ID, org_name: ORG_NAME, roles: ["reviewer"] };
 const finance: Membership = { org_id: ORG_ID, org_name: ORG_NAME, roles: ["finance"] };
@@ -81,6 +83,7 @@ beforeEach(() => {
   state.list = { kind: "ok", value: briefList() };
   state.one = { kind: "ok", value: brief() };
   state.verification = "e2";
+  state.plansFail = false;
 });
 afterEach(cleanup);
 
@@ -255,6 +258,19 @@ describe("the Post a brief page", () => {
       `/billing/upgrade?plan=org_starter&org=${ORG_ID}&next=%2Forg%2Fproblems%2Fnew`,
     ]);
     expect(document.querySelectorAll("[data-upgrade]")).toHaveLength(1);
+  });
+
+  it.each([
+    ["the list", () => listPage(), "/billing?org=" + ORG_ID],
+    ["the form's page", () => newPage(), "/billing?org=" + ORG_ID],
+  ])("on %s, says the upgrade choices could not be loaded when the plans fail, never the top of the ladder", async (_, open, href) => {
+    state.plansFail = true;
+    await open();
+    const full = document.querySelector<HTMLElement>("[data-plan-full]")!;
+    expect(full.getAttribute("data-plan-full")).toBe("unknown");
+    expect(full.textContent).toContain(en.briefs.capFullUnknown.replace("{used}", "1").replace("{limit}", "1"));
+    expect(full.textContent).not.toContain("Close one to post another.");
+    expect(within(full).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")])).toEqual([[en.briefs.billing, href]]);
   });
 
   it("at the top of the ladder says to close one, with no upgrade link", async () => {

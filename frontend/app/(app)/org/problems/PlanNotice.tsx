@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
-import { upgradeHref } from "@/lib/billing/upgrade";
+import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 
 import { planFull, type BriefPlan, type PlanOption } from "../briefs";
 
@@ -17,6 +17,7 @@ export async function PlanNotice({
   next,
   orgId,
   here,
+  plansUnknown = false,
 }: {
   plan: BriefPlan;
   /** The plan to buy for more open Briefs (briefUpgrade), or null. */
@@ -24,6 +25,8 @@ export async function PlanNotice({
   orgId: string;
   /** The page the checkout comes back to. */
   here: string;
+  /** The plans could not be read: the next plan is unknown, never "none" (the top of the ladder). */
+  plansUnknown?: boolean;
 }) {
   const t = await getTranslations("briefs");
   if (!planFull(plan)) {
@@ -34,6 +37,16 @@ export async function PlanNotice({
     );
   }
   const counts = { used: plan.used, limit: plan.problem_briefs ?? plan.used };
+  if (plansUnknown) {
+    return (
+      <Callout className="mt-6 max-w-[62ch]" data-plan-full="unknown">
+        <p>{t("capFullUnknown", counts)}</p>
+        <Link href={billingHref(orgId)} className={standaloneLinkClass} data-billing="">
+          {t("billing")}
+        </Link>
+      </Callout>
+    );
+  }
   return (
     <Callout className="mt-6 max-w-[62ch]" data-plan-full="">
       <p>{next ? t("capFull", { ...counts, plan: next.name }) : t("capFullTop", counts)}</p>
