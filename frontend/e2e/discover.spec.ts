@@ -129,7 +129,7 @@ test.describe("a new developer", () => {
     await shot(page, info, "p12f-projects");
 
     // The opportunity gap: under-served rising problems only.
-    await page.getByRole("navigation", { name: "Lists" }).getByRole("link", { name: "Opportunity gap" }).click();
+    await page.getByRole("navigation", { name: "Lists" }).getByRole("link", { name: "Gap" }).click();
     await expect(page).toHaveURL(/view=gap/, SERVER_STEP);
     await expect(page.getByRole("heading", { level: 2 })).toHaveText("Opportunity gap");
     for (const count of await page.locator("article[data-problem] [data-proposals]").all()) {

@@ -2,6 +2,7 @@ import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 import { BRIEF_ID, discoverBrief, ORG_ID } from "@/test/briefs";
 import { renderWithIntl } from "@/test/intl";
 
@@ -19,7 +20,7 @@ afterEach(cleanup);
 const COUNTIES = [{ code: "KE-30", name: "Nairobi City" }];
 
 describe("the Briefs view's address", () => {
-  it("is a fourth view, after the Opportunity gap", () => {
+  it("is a fourth view, after the opportunity gap", () => {
     expect(VIEWS).toEqual(["problems", "projects", "gap", "briefs"]);
     expect(parseDiscover({ view: "briefs", county: "KE-30" })).toEqual({ view: "briefs", county: "KE-30" });
     expect(discoverHref({ view: "briefs", niche: "ict" })).toBe("/dev/discover?view=briefs&niche=ict");
@@ -37,10 +38,28 @@ describe("the Briefs view's address", () => {
     expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
       "Problems",
       "Projects",
-      "Opportunity gap",
+      "Gap",
       "Briefs",
     ]);
     expect(within(nav).getByRole("link", { name: "Briefs" }).getAttribute("aria-current")).toBe("page");
+  });
+});
+
+// e2e/navigation.spec.ts: the Discover tabs fit 360 px without sideways scroll. The three tabs before this view
+// ("Problems", "Projects", "Opportunity gap": 31 letters) fitted; the four now take no more letters in either language,
+// and none is longer than the longest of the five developer tabs, which share the 360 px tab bar.
+describe("the Discover tabs at 360 px", () => {
+  const BUDGET = "ProblemsProjectsOpportunity gap".length;
+  it.each([
+    ["en", en],
+    ["sw", sw],
+  ] as const)("keep their %s labels within the three tabs' letters", (_, messages) => {
+    const labels = VIEWS.map((view) => messages.discover.views[view]);
+    expect(labels.reduce((sum, label) => sum + label.length, 0)).toBeLessThanOrEqual(BUDGET);
+    const devLongest = Math.max(
+      ...(["home", "discover", "ideas", "engagements", "companies"] as const).map((key) => messages.nav[key].length),
+    );
+    for (const label of labels) expect(label.length, label).toBeLessThanOrEqual(devLongest);
   });
 });
 
