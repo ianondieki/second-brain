@@ -397,3 +397,28 @@ async def test_a_stage_takes_two_questions_and_the_organisation_may_withdraw_one
     await run_notifications(owner_engine, app_engine, engagement, provider)
     told = [body for kind, _, body in await in_app(owner_engine, world.developer, engagement) if "withdrew" in body]
     assert told == [f'{world.org_name} withdrew its question about "{PROPOSAL_TITLE}". The review clock runs again.']
+
+
+async def test_a_hold_at_stage_3_moves_the_contact_by_date_the_tracker_shows(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """At INTEREST_CONFIRMED the stage's deadline is the contact-by date the organisation named; a hold moves it by
+    the business days on hold, and the tracker shows the moved date as the contact-by date (the row keeps the named
+    one, which EM2 quoted)."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    off = await holidays_of(owner_engine)
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        approved = await walk_to(t, s, world, today, "INTEREST_CONFIRMED")
+        assert approved["contact"]["contact_by"] == str(today)
+        await t.ok(s.dev, "pause", {"reason": REASON, "resume_at": str(today + timedelta(days=7))})
+        await business_days_later(owner_engine, advance, 2)
+        resumed = await t.ok(s.owner, "resume", {"reason": "Ready."})
+    moved = add_business_days(today, 2, off)
+    assert local_date(deadline_of(resumed)) == moved
+    assert resumed["contact"]["contact_by"] == str(moved)
+    async with owner_engine.connect() as conn:
+        named = await conn.execute(text("SELECT contact_by FROM engagements WHERE id = :e"), {"e": engagement})
+        assert named.scalar_one() == today

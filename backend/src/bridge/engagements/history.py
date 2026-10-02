@@ -314,7 +314,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             name=names.get(engagement.contact_user_id),
             role=role,
             channel=engagement.contact_channel,
-            contact_by=engagement.contact_by,
+            contact_by=await _contact_by(db, engagement),
         )
     documents_out = [
         DocumentRefOut(kind=ref.kind, ref=ref.ref, sha256=ref.sha256.hex())
@@ -388,6 +388,22 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             for n in notes
         ],
     )
+
+
+async def _contact_by(db: AsyncSession, engagement: Engagement) -> date:
+    """The contact-by date as the tracker shows it: the date the organisation named (kept on the row, quoted by EM2),
+    moved like every due date by a hold at stage 3 (docs/spec/06 6.9: due dates shift by the hold's length). While the
+    stage's deadline is the named date it entered with, the deadline now is that date moved; otherwise (a date that
+    had passed when the stage was entered) the named date stands."""
+    named = engagement.contact_by
+    assert named is not None  # the caller checked
+    deadline = engagement.stage_deadline_at
+    if engagement.state is not EngagementState.INTEREST_CONFIRMED or deadline is None:
+        return named
+    entered = await entering_event(db, engagement.id, EngagementState.INTEREST_CONFIRMED, from_main_path=True)
+    if entered is None or entered.stage_deadline_at is None or local_date(entered.stage_deadline_at) != named:
+        return named
+    return max(named, local_date(deadline))
 
 
 def _milestone(m: Milestone, review_due_on: date | None) -> MilestoneOut:
