@@ -22,8 +22,6 @@ export function BriefItem({ brief, href, county }: { brief: Brief; href: string;
       data-state={brief.state}
       title={brief.title}
       titleId={titleId}
-      // The page has no h2 above its list (docs/spec/07 item 6, axe heading-order): each Brief's title is one.
-      headingLevel={2}
       href={href}
       meta={
         <span className="flex flex-wrap gap-x-4">

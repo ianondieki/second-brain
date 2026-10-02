@@ -107,7 +107,11 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
       <p className="mt-6 text-sm text-ink" data-plan-cap={plan.problem_briefs ?? "unlimited"}>
         {plan.problem_briefs === null ? t("capUnlimited") : t("cap", { used: plan.used, limit: plan.problem_briefs })}
       </p>
-      <section aria-label={t("listLabel")} className="mt-6">
+      {/* The list's name as a hidden h2, so the Briefs' h3 titles follow the page's h1 in order (axe heading-order). */}
+      <section aria-labelledby="briefs-list" className="mt-6">
+        <h2 id="briefs-list" className="sr-only">
+          {t("listLabel")}
+        </h2>
         <RowList cards data-briefs="">
           {items.map((brief) => (
             <BriefItem

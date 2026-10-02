@@ -110,8 +110,10 @@ describe("the Problems list", () => {
     expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 1");
     const cards = screen.getAllByRole("article");
     expect(cards).toHaveLength(2);
-    // Heading order (axe): the page's h1, then each Brief's title as an h2.
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+    // Heading order (axe): the page's h1, the list's (hidden) h2 naming the region, then each Brief's title as an h3.
+    const list = screen.getByRole("region", { name: en.briefs.listLabel });
+    expect(within(list).getByRole("heading", { level: 2 }).textContent).toBe(en.briefs.listLabel);
+    expect(within(list).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
       "Tower sites go dark when fuel runs out",
       "Closed one",
     ]);
