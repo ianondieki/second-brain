@@ -71,6 +71,27 @@ describe("getMe, one request", () => {
   });
 });
 
+describe("the bell's count, beside /api/auth/me", () => {
+  beforeEach(() => vi.stubEnv("COOKIE_SECURE", "true"));
+
+  it("is asked for while /api/auth/me is still open, not after it answers", async () => {
+    vi.resetModules();
+    let answerMe: (response: Response) => void = () => undefined;
+    const fetch = vi.fn((request: Request) =>
+      new URL(request.url).pathname === "/api/auth/me"
+        ? new Promise<Response>((resolve) => (answerMe = resolve))
+        : Promise.resolve(json({ count: 1 })),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { requireMe } = await import("./server");
+    const signedIn = requireMe();
+    await vi.waitFor(() => expect(asked(fetch)).toContain("/api/auth/me"));
+    await vi.waitFor(() => expect(asked(fetch)).toContain("/api/me/notifications/unread-count"));
+    answerMe(json(ME)); // /api/auth/me answers only now
+    expect(await signedIn).toEqual(ME);
+  });
+});
+
 describe("getUnreadCount, never in the way", () => {
   beforeEach(() => vi.stubEnv("COOKIE_SECURE", "true"));
 
