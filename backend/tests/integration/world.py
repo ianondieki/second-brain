@@ -204,7 +204,16 @@ async def add_problem(
 async def add_tracker_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID) -> None:
     """Revision 0003: one row of each tracker table on an engagement in SUBMITTED (its genesis event is the
     database's), written as the owner like every fixture: an endorsement of the current stage, a draft agreement with
-    a milestone, a signature and an unconfirmed payment record."""
+    a milestone, a signature and an unconfirmed payment record; revision 0006: a note on the genesis event (the
+    owner is not held to the notes' INSERT policy, which ``test_rls`` exercises as bridge_app)."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+        " VALUES (:id, :engagement, 1, 'info_request', 'Which counties does the pilot cover?', :user)",
+        id=uuid7(),
+        engagement=engagement_id,
+        user=developer_id,
+    )
     await _insert(
         conn,
         "INSERT INTO engagement_endorsements (id, engagement_id, stage, party, user_id, role, method)"
@@ -636,7 +645,8 @@ NO_ORG, NO_USER = "CAST(NULL AS uuid)", "CAST(NULL AS uuid)"
 # Readable by every signed-in user (docs/spec/06 6.1, 6.2): the rules restated from the spec, not from the policies.
 _PUBLIC_PROBLEM = (
     "t.status = 'published' AND t.moderation_state = 'clear' AND (t.org_id IS NULL OR EXISTS (SELECT 1"
-    " FROM problem_briefs b WHERE b.problem_id = t.id AND b.visibility = 'public' AND b.status = 'published'))"
+    " FROM problem_briefs b WHERE b.problem_id = t.id AND b.visibility = 'public'"
+    " AND b.status IN ('published', 'closed')))"
 )
 _PUBLIC_PROPOSAL = "p.status = 'published' AND p.moderation_state = 'clear'"
 
@@ -707,7 +717,7 @@ TENANT_ROWS: dict[str, Rows] = {
         "t.problem_id::text",
         "t.org_id",
         NO_USER,
-        "t.visibility = 'public' AND t.status = 'published'",
+        "t.visibility = 'public' AND t.status IN ('published', 'closed')",  # closed stays readable (revision 0006)
     ),
     "brief_invitations": _rows("brief_invitations", "t.id::text", "t.org_id", "t.user_id"),
     "proposal_confidential": _rows("proposal_confidential", "t.version_id::text", NO_ORG, "t.owner_id"),
@@ -738,6 +748,7 @@ TENANT_ROWS: dict[str, Rows] = {
             "milestones",
             "signatures",
             "payment_records",
+            "engagement_notes",  # revision 0006
         )
     },
     # revision 0005: the scout's rows are its organisation's; a payment is its user's or its organisation's

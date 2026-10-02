@@ -17,6 +17,11 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - Every Tier-2 role bound to developer A reads and updates 0 of B's Tier-2 rows and writes none of B's embeddings;
   tier2_moderation reads nothing without a staff context.
 - ``aggregate_worker`` reads 0 rows of every tenant table (no privilege at all) and reads ``signal_events``.
+- Engagement notes (revision 0006, REQ-ENG-10): both parties and staff admin read them, nobody else does; only the
+  actor of the engagement's latest event writes its one note, of the kind its transition is; nothing is ever updated
+  or deleted. In-app notifications (REQ-NOT-03): a user marks only their own read and changes nothing else. Problem
+  Briefs (REQ-DIR-05): a draft Brief awaiting review is unreadable to developers; approval publishes it; a closed
+  public Brief stays readable.
 - A cross-tenant API access returns 404.
 """
 
@@ -25,7 +30,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, NamedTuple
 from uuid import UUID
 
@@ -41,6 +46,7 @@ from bridge.ids import uuid7
 from bridge.models import Base, Tenancy
 from bridge.models.base import RLS_TENANCIES
 from tests.integration import world as w
+from tests.integration.engagements import tracker as t
 
 TABLES = Base.metadata.tables
 TENANT_KINDS = {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED}
@@ -811,6 +817,213 @@ async def test_aggregate_worker_reads_signal_events_the_app_can_only_write(owner
         await conn.execute(text("SET LOCAL ROLE aggregate_worker"))
         found = await conn.execute(text("SELECT kind FROM signal_events WHERE item_id = :item"), {"item": item})
         assert list(found.scalars()) == ["proposal.published"]
+
+
+# --- revision 0006: the side states' notes and marking in-app notifications read -----------------------------------
+
+NOTE = (
+    "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, resume_at, created_by)"
+    " VALUES (:id, :e, :seq, :kind, :body, :resume_at, :by)"
+)
+COUNT_NOTES = "SELECT count(*) FROM engagement_notes WHERE engagement_id = :e"
+RESUME_AT = date(2027, 1, 29)
+
+
+def _note(
+    engagement: UUID, seq: int, kind: str, by: UUID, *, resume_at: date | None = None, body: str = "Which counties?"
+) -> dict[str, object]:
+    return {"id": uuid7(), "e": engagement, "seq": seq, "kind": kind, "body": body, "resume_at": resume_at, "by": by}
+
+
+async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both_parties(
+    owner_engine: AsyncEngine,
+) -> None:
+    """Given an engagement and its two parties, When the organisation requests information, the developer answers
+    and either side pauses and resumes, Then each note is written only by its event's actor, as themselves, while the
+    event is the latest, with the kind of its transition, once; both parties and staff admin read the notes, a
+    stranger reads none; and no role updates, deletes or truncates them."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        await t.act(conn, p.owner, p.org)  # seq 2: the organisation asks
+        await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+        await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner))
+        rls, hidden = "row-level security", "no engagement of the caller's with that id"
+        for actor, org, params, refusal in (
+            (p.owner, p.org, _note(engagement, 2, "info_request", p.signatory), rls),  # as someone else
+            (p.owner, p.org, _note(engagement, 2, "hold", p.owner, resume_at=RESUME_AT), rls),  # not the kind's
+            (p.owner, p.org, _note(engagement, 2, "info_answer", p.owner), rls),
+            (p.signatory, p.org, _note(engagement, 2, "info_request", p.signatory), rls),  # not the event's actor
+            (p.developer, None, _note(engagement, 2, "info_answer", p.developer), rls),
+            (p.staff, None, _note(engagement, 2, "info_request", p.staff), rls),
+            (p.outsider, None, _note(engagement, 2, "info_request", p.outsider), hidden),
+            (p.other_member, p.other_org, _note(engagement, 2, "info_request", p.other_member), hidden),
+            (p.owner, p.org, _note(engagement, 2, "info_request", p.owner), "duplicate key"),  # one note per event
+            (p.owner, p.org, _note(engagement, 1, "info_request", p.owner), rls),  # the genesis takes none
+        ):
+            await t.act(conn, actor, org)
+            await t.expect(conn, NOTE, refusal, **params)
+        await t.act(conn, p.developer)  # seq 3: the developer answers
+        await t.append(conn, engagement, p.developer, "developer", "answer_info", "INFO_REQUESTED", "SUBMITTED")
+        for params, constraint in (
+            (_note(engagement, 3, "info_answer", p.developer, body="  "), "ck_engagement_notes_body_length"),
+            (_note(engagement, 3, "info_answer", p.developer, body="x" * 2001), "ck_engagement_notes_body_length"),
+            (
+                _note(engagement, 3, "info_answer", p.developer, resume_at=RESUME_AT),
+                "ck_engagement_notes_resume_at_only_for_hold",
+            ),
+        ):
+            await t.expect(conn, NOTE, constraint, **params)
+        await t.run(conn, NOTE, **_note(engagement, 3, "info_answer", p.developer, body="Nairobi and Kisumu."))
+        await t.append(conn, engagement, p.developer, "developer", "pause", "SUBMITTED", "ON_HOLD")  # seq 4
+        await t.expect(
+            conn, NOTE, "ck_engagement_notes_resume_at_only_for_hold", **_note(engagement, 4, "hold", p.developer)
+        )
+        await t.append(conn, engagement, p.developer, "developer", "resume", "ON_HOLD", "SUBMITTED")  # seq 5
+        late = _note(engagement, 4, "hold", p.developer, resume_at=RESUME_AT)
+        await t.expect(conn, NOTE, rls, **late)  # its event is no longer the latest
+        await t.run(conn, NOTE, **_note(engagement, 5, "resume", p.developer, body="Budget approved early."))
+        await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses
+        await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
+        await t.run(conn, NOTE, **_note(engagement, 6, "hold", p.owner, resume_at=RESUME_AT, body="Board meets."))
+        await t.act(conn, p.developer)  # seq 7: the job resumes it, bound to the developer; a system event takes none
+        await t.append(conn, engagement, None, "system", "resume", "ON_HOLD", "SUBMITTED")
+        await t.expect(conn, NOTE, rls, **_note(engagement, 7, "resume", p.developer))
+        for reader, org, seen in (
+            (p.developer, None, 4),
+            (p.viewer, p.org, 4),
+            (p.staff, None, 4),
+            (p.owner, p.other_org, 0),  # a forged organisation context
+            (p.outsider, None, 0),
+            (p.other_member, p.other_org, 0),
+            (None, None, 0),
+        ):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, COUNT_NOTES, e=engagement) == seen, reader
+        await t.act(conn, p.developer)
+        for sql in (
+            "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
+            "UPDATE engagement_notes SET resume_at = NULL WHERE engagement_id = :e",
+            "DELETE FROM engagement_notes WHERE engagement_id = :e",
+            "TRUNCATE engagement_notes",
+        ):
+            await t.expect(conn, sql, "permission denied", e=engagement)
+        await t.as_owner(conn)  # the triggers hold for every role
+        for sql in (
+            "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
+            "DELETE FROM engagement_notes WHERE engagement_id = :e",
+            "TRUNCATE engagement_notes",
+        ):
+            await t.expect(conn, sql, "append-only", e=engagement)
+        assert await t.run(conn, COUNT_NOTES, e=engagement) == 4
+
+
+async def test_a_user_marks_only_their_own_notifications_read(app_engine: AsyncEngine, world: w.World) -> None:
+    """REQ-NOT-03 (P19-C): bridge_app updates read_at only (revision 0006), and only on the user's own rows."""
+    async with app_engine.connect() as conn, conn.begin():
+        await _as_tenant(conn, world.a.user_id, None)
+        own = sa.text("SELECT count(*) FROM in_app_notifications WHERE user_id = :u AND read_at IS NULL")
+        unread = (await conn.execute(own, {"u": world.a.user_id})).scalar_one()
+        assert unread >= 1
+        marked = await conn.execute(text("UPDATE in_app_notifications SET read_at = now() WHERE read_at IS NULL"))
+        assert marked.rowcount == unread
+        assert (await conn.execute(own, {"u": world.a.user_id})).scalar_one() == 0
+        foreign = await conn.execute(
+            text("UPDATE in_app_notifications SET read_at = now() WHERE user_id = :b"), {"b": world.b.user_id}
+        )
+        assert foreign.rowcount == 0
+        for assignment in (
+            "title = 'Changed'",
+            "body = 'Changed'",
+            "link = '/elsewhere'",
+            "kind = 'changed'",
+            "user_id = user_id",
+            "org_id = NULL",
+            "created_at = now()",
+        ):
+            savepoint = await conn.begin_nested()
+            with pytest.raises(ProgrammingError, match="permission denied"):
+                await conn.execute(text(f"UPDATE in_app_notifications SET {assignment}"))
+            await savepoint.rollback()
+        await conn.rollback()
+
+
+BRIEF = (
+    "INSERT INTO problem_briefs (problem_id, org_id, visibility, budget_band, deadline, status)"
+    " VALUES (:p, :org, 'public', 'band_b', :deadline, CAST(:status AS brief_status))"
+)
+BRIEF_STATUS = "SELECT CAST(status AS text) FROM problem_briefs WHERE problem_id = :p"
+MODERATE = "SELECT app_moderate_problem(:p, CAST(:state AS moderation_state), CAST(:status AS problem_status))"
+BRIEF_AND_PROBLEM_READ = (
+    "SELECT (SELECT count(*) FROM problem_briefs WHERE problem_id = :p) + (SELECT count(*) FROM problems WHERE id = :p)"
+)
+
+
+async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed(owner_engine: AsyncEngine) -> None:
+    """REQ-DIR-05 (P19-B; revision 0006). Given an E2 organisation's reviewer posting a public Brief as a draft with
+    its problem awaiting review, Then a developer reads neither, and the organisation can neither publish nor close it
+    ahead of moderation; When staff approve the problem, Then the Brief is published and the developer reads both;
+    When the organisation closes it, Then the developer still reads both, and a later approval leaves it closed. A
+    rejected problem, and an approved problem of an E1 organisation, leave their Brief a draft nobody else reads."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        niche, e1_org = uuid7(), uuid7()
+        await t.run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Briefs')", id=niche, s=niche.hex)
+        await t.run(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source, verification)"
+            " VALUES (:id, 'company', 'Pending E2 Ltd', :slug, 'seed', 'e1')",
+            id=e1_org,
+            slug=f"e1-{e1_org.hex}",
+        )
+        await t.member(conn, e1_org, p.outsider, "{reviewer}")
+        brief, rejected, early = [
+            await w.add_problem(conn, p.reviewer, niche, org_id=p.org, status="pending_review") for _ in range(3)
+        ]
+        e1_brief = await w.add_problem(conn, p.outsider, niche, org_id=e1_org, status="pending_review")
+        deadline = date(2027, 3, 31)
+        await t.act(conn, p.reviewer, p.org)
+        for problem in (brief, rejected):
+            await t.run(conn, BRIEF, p=problem, org=p.org, deadline=deadline, status="draft")
+        ahead = "a Brief is published only once its problem is published and clear"
+        await t.expect(conn, BRIEF, ahead, p=early, org=p.org, deadline=deadline, status="published")
+        await t.expect(conn, "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p", ahead, p=brief)
+        closing = "only a published Brief is closed"
+        await t.expect(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", closing, p=brief)
+        await t.expect(conn, BRIEF, closing, p=early, org=p.org, deadline=deadline, status="closed")
+        await t.act(conn, p.outsider, e1_org)
+        await t.run(conn, BRIEF, p=e1_brief, org=e1_org, deadline=deadline, status="draft")
+        await t.act(conn, p.developer)
+        for problem in (brief, rejected, e1_brief):
+            assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) == 0, "a Brief awaiting review is read"
+        await t.act(conn, p.staff)
+        for problem, state, status in (
+            (brief, "clear", "published"),
+            (rejected, "rejected", "rejected"),
+            (e1_brief, "clear", "published"),
+        ):
+            await t.run(conn, MODERATE, p=problem, state=state, status=status)
+        statuses = {problem: await t.run(conn, BRIEF_STATUS, p=problem) for problem in (brief, rejected, e1_brief)}
+        assert statuses == {brief: "published", rejected: "draft", e1_brief: "draft"}
+        await t.act(conn, p.developer)
+        reads = {problem: await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) for problem in statuses}
+        assert reads == {brief: 2, rejected: 0, e1_brief: 0}
+        await t.act(conn, p.outsider, e1_org)  # the E2 guard on 'published' holds once the problem is published
+        await t.expect(
+            conn,
+            "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p",
+            "row-level security",
+            p=e1_brief,
+        )
+        await t.act(conn, p.reviewer, p.org)
+        closed = await t.rowcount(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", p=brief)
+        assert closed == 1
+        await t.act(conn, p.developer)
+        assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 2  # the problem page and the links stay
+        await t.act(conn, p.staff)
+        await t.run(conn, MODERATE, p=brief, state="clear", status="published")  # say, clearing a later hold
+        assert await t.run(conn, BRIEF_STATUS, p=brief) == "closed"
 
 
 # ---------------------------------------------------------------- cross-tenant API access returns 404
