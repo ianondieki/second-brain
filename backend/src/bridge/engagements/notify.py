@@ -137,6 +137,14 @@ RESUMED_SENTENCE: Final = '"{title}" is no longer on hold: it resumed on its dat
 EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME})
 # An expiry's words when the stage it ended reads better than its reason code (an unanswered question).
 EXPIRY_LABELS_BY_STATE: Final = {EngagementState.INFO_REQUESTED: "the organisation's question was not answered in time"}
+# [[COPY-REVIEW]] the title of a notice about an event that returns to the stage it left, named by what happened
+# (the stage's own label, "Under review", would say nothing new); every other notice is titled by the state entered
+# ("Information requested", "On hold", "Expired"). The status email's subject begins with the same title.
+EVENT_TITLES: Final[dict[sm.Command, str]] = {
+    C.ANSWER_INFO: "Question answered",
+    C.CANCEL_REQUEST: "Question withdrawn",
+    C.RESUME: "Resumed",
+}
 # [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
 INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
 ORG_ROLES: Final = frozenset(
@@ -205,7 +213,7 @@ def compose(
         body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
     if reason_text:
         body += f" Their reason: {reason_text}"
-    label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
+    label = EVENT_TITLES.get(command) or sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
     told = sm.other(acted)
     return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
 
@@ -234,8 +242,7 @@ def compose_system(event: EngagementEvent, company: str, title: str) -> list[tup
             notices.append((party, Notice(kind, label, body, engagement_path(party, event.engagement_id))))
         return notices
     if event.command == C.RESUME.value and event.from_state is EngagementState.ON_HOLD:
-        kind = f"engagement.{sm.RESUME_NOTICE.lower()}"
-        label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
+        kind, label = f"engagement.{sm.RESUME_NOTICE.lower()}", EVENT_TITLES[C.RESUME]
         body = RESUMED_SENTENCE.format(title=name)
         return [(party, Notice(kind, label, body, engagement_path(party, event.engagement_id))) for party in (DEV, ORG)]
     return []

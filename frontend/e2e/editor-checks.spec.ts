@@ -99,7 +99,7 @@ test("a teaser that says how it works is named by the rules, and warns without b
   await newIdea(page, "We use a gradient-boosted model over M-Pesa statements to score each co-op.");
   await page.getByRole("button", { name: DISCLOSURE }).click();
   await expect(answer(page, "disclosure").locator("p").first()).toHaveText(
-    "Your summary reads like how it works, not what it does.",
+    "This reads like how it works, not what it does: summary.",
     SERVER_STEP,
   );
   await expect(answer(page, "disclosure")).toContainText(
