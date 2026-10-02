@@ -198,6 +198,8 @@ jobs:
         run: python3 infra/demo/demo.py config
       - name: Playwright (mobile 360 px and desktop, axe)
         run: infra/ci/sandboxed.sh make check-e2e
+      - name: Playwright test-clock scenarios (the tracker's expiry and the moved deadline; alone, since the clock moves the whole stack; AC-TRACK-4)
+        run: infra/ci/sandboxed.sh make check-e2e-clock
       - name: Stack logs on failure
         if: failure()
         run: docker compose --env-file infra/.env -f infra/docker-compose.dev.yml logs --tail=200
