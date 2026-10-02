@@ -46,7 +46,8 @@ export interface CommandFormProps {
   myUserId?: string;
   /** confirm_payment: the organisation's recorded amount, shown as a hint (never filled in for the developer). */
   recorded?: string | null;
-  today?: string;
+  /** Today on the platform's clock (the API's `today`); absent or null: the browser's day. */
+  today?: string | null;
 }
 
 type Errors = Record<string, string | undefined>;
