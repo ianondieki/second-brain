@@ -206,8 +206,10 @@ test.describe("a Problem Brief", () => {
     await devPage.goto(`/dev/ideas/${draft.id}`);
     await devPage.getByRole("link", { name: "Pitch to companies" }).first().click(); // the page offers it twice (the primary and the section link)
     await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/${draft.id}/pitch\\?org=${orgId}$`), SERVER_STEP);
-    await hydrated(devPage);
-    await expect(devPage.getByRole("checkbox", { name: new RegExp(scene.org.replace(/[()]/g, "\\$&")) })).toBeChecked();
+    // The picker is a plain GET form (no data-hydrated): its checkboxes are enabled once it is live, as pitch.spec waits.
+    const chosen = devPage.getByRole("checkbox", { name: new RegExp(scene.org.replace(/[()]/g, "\\$&")) });
+    await expect(chosen).toBeEnabled(SERVER_STEP);
+    await expect(chosen).toBeChecked();
     await expect(devPage.locator("[data-preselected]")).toHaveText(
       `${scene.org} is already chosen: your idea answers its Brief. Untick it if you would rather not pitch to them.`,
     );
@@ -217,9 +219,13 @@ test.describe("a Problem Brief", () => {
     await page.goto(`/org/problems/${briefId}`);
     await expect(page.locator("[data-state-note='published']")).toBeVisible(SERVER_STEP);
     await checkScreen(page, { strict: true });
-    await hydrated(page);
-    await page.getByRole("button", { name: "Close this brief" }).click();
+    // "Close this brief" is a lone button, not a form with data-hydrated: press it until its dialog opens (a press
+    // before hydration does nothing).
     const sheet = page.locator("dialog[open]");
+    await expect(async () => {
+      await page.getByRole("button", { name: "Close this brief" }).click();
+      await expect(sheet).toBeVisible({ timeout: 1_000 });
+    }).toPass(SERVER_STEP);
     await expect(sheet).toContainText("It leaves Discover");
     await sheet.getByRole("button", { name: "Close the brief" }).click();
     await expect(page.locator("[data-state-note='closed']")).toBeVisible(SERVER_STEP);
