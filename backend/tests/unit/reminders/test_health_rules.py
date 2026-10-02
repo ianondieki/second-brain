@@ -224,3 +224,15 @@ def test_the_reminder_text_names_the_milestone_and_its_due_date() -> None:
         assert "Milestone 1 “County pilot dashboard” is due 6 Oct 2026" in part
         assert "Milestone 2 “Payments export” was due 27 Sep 2026 and is 8 days overdue" in part
     assert [row.health for row in nudge.health] == [Health.AT_RISK, Health.OFF_TRACK]
+
+
+def test_a_question_or_a_hold_pauses_the_engagement_never_overdue() -> None:
+    """REQ-ENG-10 (part): INFO_REQUESTED and ON_HOLD are paused: whatever their dates, no item is due or overdue."""
+    for state in (S.INFO_REQUESTED, S.ON_HOLD):
+        e = engagement(state, stage_deadline_on=MONDAY - timedelta(days=30), awaiting=frozenset({DEV, ORG}))
+        assert e.paused
+        assert not e.assessed
+        assert assess(e, MONDAY, NO_HOLIDAYS) == assess(engagement(S.CLOSED), MONDAY, NO_HOLIDAYS)
+        assert quiet_since(e, MONDAY) is None
+    for state in (S.NEGOTIATION, S.DISPUTED, S.EXPIRED):
+        assert not engagement(state).paused

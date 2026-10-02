@@ -12,18 +12,24 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
 from bridge.notifications.email import FakeEmailProvider
+from bridge.reminders.facts import developer_facts, org_facts
+from bridge.reminders.nudge import Nudge, compose_nudge
+from bridge.reminders.org_digest import Digest, compose_digest
 from tests.integration.engagements.api_world import (
+    PROPOSAL_TITLE,
     Tracker,
+    World,
     build,
     business_days_later,
     db_today,
@@ -58,6 +64,27 @@ async def in_app(owner_engine: AsyncEngine, user: UUID, engagement: UUID) -> lis
 async def email_of(owner_engine: AsyncEngine, user: UUID) -> str:
     async with owner_engine.connect() as conn:
         return str((await conn.execute(text("SELECT email FROM users WHERE id = :u"), {"u": user})).scalar_one())
+
+
+def eat(day: date) -> str:
+    return f"{day.day} {day:%b %Y}"
+
+
+def held_name(detail: dict[str, Any]) -> str:
+    return str(detail["developer_name"])
+
+
+async def reminders_of(app_engine: AsyncEngine, world: World, today: date) -> tuple[Digest, Nudge]:
+    """The organisation's progress digest (read as its owner) and the developer's daily reminder, composed from the
+    facts both read (REQ-REM-01, REQ-REM-02)."""
+    factory = create_session_factory(app_engine)
+    async with factory() as db:
+        await bind_tenant(db, user_id=world.owner, org_id=world.org)
+        digest = compose_digest(await org_facts(db, world.org, today, "daily", deals_enabled=True), frozenset())
+    async with factory() as db:
+        await bind_tenant(db, user_id=world.developer)
+        nudge = compose_nudge(await developer_facts(db, world.developer, today, deals_enabled=True), frozenset())
+    return digest, nudge
 
 
 def deadline_of(detail: dict[str, Any]) -> datetime:
@@ -194,6 +221,11 @@ async def test_a_hold_reads_its_resume_date_and_an_early_resume_moves_the_deadli
         organisation_view = await t.detail(s.owner)
         assert organisation_view["actions"] == ["resume"]
         assert organisation_view["notes"] == held["notes"]
+        digest, nudge = await reminders_of(app_engine, world, today)
+        assert digest.paused == (f"“{PROPOSAL_TITLE}” by {held_name(held)} (On hold): paused until {eat(resume_at)}.",)
+        assert (digest.entries, digest.overdue, digest.needs_us) == ((), (), ())  # paused: never overdue
+        assert nudge.waiting == (f"“{PROPOSAL_TITLE}” with {world.org_name}: on hold until {eat(resume_at)}.",)
+        assert nudge.health == ()
         assert code(await t.post(s.owner, "propose-terms", simple_terms(today))) == (409, "illegal_transition")
         assert code(await t.post(s.dev, "pause", {"reason": REASON, "resume_at": str(resume_at)})) == (
             409,

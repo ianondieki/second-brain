@@ -4,7 +4,8 @@ Rendered by code from fact tuples only: no LLM is involved (this module imports 
 the organisation: its stage, On track / At risk / Off track with the code-computed reasons (``bridge.reminders.health``,
 the same ``assess`` the developer's reminder uses, AC-REM-3), open milestones due soon, what awaits the organisation,
 and "No update from {developer} since {date}" when the developer has been quiet (never a guessed percentage). Also
-the new tagged proposals of the period and every overdue item. Developer-written text (titles, deliverables, names)
+the new tagged proposals of the period, every overdue item, and the paused engagements (an open question, a hold:
+REQ-ENG-10 part), never assessed or overdue. Developer-written text (titles, deliverables, names)
 is quoted, attributed and defanged (``bridge.reminders.render``); links are platform URLs only (AC-MAIL-5).
 
 Cadence per plan (``plans.yaml`` ``progress_digest``): ``daily``, or ``weekly`` (one digest per ISO week, dated its
@@ -78,10 +79,11 @@ class Digest:
     new_tagged: tuple[str, ...]
     overdue: tuple[str, ...]
     entries: tuple[DigestEntry, ...]
+    paused: tuple[str, ...] = ()
 
     @property
     def empty(self) -> bool:
-        return not self.entries and not self.new_tagged
+        return not self.entries and not self.new_tagged and not self.paused
 
     @property
     def period(self) -> date:
@@ -96,6 +98,8 @@ class Digest:
         rows = [entry.health for entry in self.entries]
         parts = [plural(len(rows), "active engagement")]
         parts += [f"{rows.count(h)} {HEALTH_LABELS[h].lower()}" for h in Health if rows.count(h)]
+        if self.paused:
+            parts.append(f"{len(self.paused)} paused")
         if self.needs_us:
             parts.append(f"{len(self.needs_us)} awaiting you")
         if self.new_tagged:
@@ -127,6 +131,18 @@ def _needs_us(e: EngagementFact) -> list[str]:
     if submitted:
         return [f"Milestone {m.seq} {quote(m.deliverable)} of {_title(e)}: review it." for m in submitted]
     return [f"{_title(e)}: {organisation_action(e)}{_due(e.stage_deadline_on)}."]
+
+
+def _paused(e: EngagementFact) -> str:
+    """A paused engagement in one line: until its hold's resume date, or until the developer answers."""
+    stage = STAGE_LABELS.get(e.state, e.state.value)
+    if e.state is EngagementState.ON_HOLD and e.stage_deadline_on is not None:
+        until = eat_date(e.stage_deadline_on)
+    elif e.state is EngagementState.INFO_REQUESTED:
+        until = f"{_dev(e)} answers your question"
+    else:
+        until = "it resumes"
+    return f"{_title(e)} ({stage}): paused until {until}."
 
 
 def _entry(
@@ -182,6 +198,7 @@ def compose_digest(facts: OrgFacts, holidays: Collection[date], policy: Reminder
         new_tagged,
         tuple(overdue),
         tuple(entries),
+        tuple(_paused(e) for e in facts.engagements if e.paused),
     )
 
 
@@ -202,6 +219,7 @@ def email(digest: Digest) -> Email:
             ("New tagged proposals", digest.new_tagged),
             ("Overdue", digest.overdue),
             ("Engagements", [entry.line for entry in digest.entries]),
+            ("Paused", digest.paused),
         ),
         next_step=None,
         cta_label=CTA,
