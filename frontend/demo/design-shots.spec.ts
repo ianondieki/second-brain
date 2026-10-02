@@ -20,7 +20,8 @@ import { expect, test, type APIRequestContext, type Browser, type BrowserContext
 import { DEMO_PASSWORD, DemoStaff } from "../e2e/support/moderation-scene";
 import { settled } from "../e2e/support/screen";
 import { demoTotpSecret, totp } from "../e2e/support/totp";
-import { pitchFromDeveloper, post, signUpOrg } from "../e2e/support/tracker-scene";
+import { appToday, plusDays } from "../e2e/support/clock";
+import { actionsReady, pitchFromDeveloper, post, signUpOrg } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
 const SHOTS_ROOT = join(REPO, "docs", "demo", "screenshots");
@@ -33,8 +34,8 @@ const WIDTHS = (process.env.SHOT_WIDTHS ?? "1440,375").split(",").map(Number);
 const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : null;
 
 type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator";
-/** A demo person, a session that owes its second factor, or one of the two new test accounts of the bell's scene. */
-type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg";
+/** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
+type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg";
 interface Shot {
   name: string;
   path: string;
@@ -87,7 +88,12 @@ const states = new Map<Exclude<Who, "none">, Promise<string>>();
 function stateOf(browser: Browser, who: Exclude<Who, "none">): Promise<string> {
   let state = states.get(who);
   if (!state) {
-    state = who === "freshDev" || who === "freshOrg" ? bellScene(browser).then((scene) => scene[who]) : signIn(browser, who);
+    state =
+      who === "freshDev" || who === "freshOrg"
+        ? bellScene(browser).then((scene) => scene[who])
+        : who === "sideDev" || who === "sideOrg"
+          ? sideScene(browser).then((scene) => scene[who])
+          : signIn(browser, who);
     states.set(who, state);
   }
   return state;
@@ -300,6 +306,96 @@ async function tidyUp(browser: Browser) {
       expect(response.ok(), `delete the teaser draft: ${response.status()}`).toBeTruthy();
     });
   }
+}
+
+/** One step on an engagement through the API, on the lock version it last read. */
+async function engagementCommand(request: APIRequestContext, id: string, command: string, body: Record<string, unknown> = {}) {
+  const detail = await getJson<{ lock_version: number }>(request, `/api/engagements/${id}`);
+  await post(request, `/api/engagements/${id}/${command}`, { lock_version: detail.lock_version, ...body });
+}
+
+// [[COPY-REVIEW]] demo content: the side states' question, answer, hold and resume.
+const SIDE = {
+  orgName: "Maziwa Bora Dairies Limited",
+  question: "Which co-ops ran the pilot, and roughly how many litres a day did the chillers keep cold?",
+  answer: "Kipkelion and Olenguruone dairy co-ops, about 1,200 litres a day over six weeks.",
+  nextQuestion: "Did the co-ops pay per litre during the pilot, or was it free?",
+  holdReason: "Our budget committee meets next week; we pick this up after it.",
+  resumeReason: "The committee met early and approved the review.",
+};
+
+interface SideScene {
+  sideDev: string;
+  sideOrg: string;
+  id: string;
+}
+let side: Promise<SideScene> | null = null;
+let sideAnswered: Promise<SideScene> | null = null;
+let sidePaused: Promise<SideScene> | null = null;
+let sideResumed: Promise<SideScene> | null = null;
+
+/**
+ * The tracker's side states (REQ-ENG-10) on one engagement of two new test accounts, as e2e/tracker-branches.spec.ts
+ * builds them: a developer pitches to a new organisation, which starts the review and asks a question. The later
+ * states follow on demand, in the shots' order: the developer answers; the organisation pauses for 7 days on the app's
+ * clock; the developer resumes early.
+ */
+function sideScene(browser: Browser): Promise<SideScene> {
+  side ??= (async () => {
+    const orgContext = await browser.newContext({ baseURL: baseUrl() });
+    const devContext = await browser.newContext({ baseURL: baseUrl() });
+    try {
+      const org = await signUpOrg(orgContext.request, { orgName: SIDE.orgName });
+      const dev = await pitchFromDeveloper(devContext.request, org.orgId, { title: TEASER.title });
+      await engagementCommand(orgContext.request, dev.engagementId, "start-review");
+      await engagementCommand(orgContext.request, dev.engagementId, "request-info", { question: SIDE.question });
+      const dir = join(__dirname, "..", "test-results", "design-shots");
+      mkdirSync(dir, { recursive: true });
+      const scene = { sideDev: join(dir, "state-sideDev.json"), sideOrg: join(dir, "state-sideOrg.json"), id: dev.engagementId };
+      await devContext.storageState({ path: scene.sideDev });
+      await orgContext.storageState({ path: scene.sideOrg });
+      return scene;
+    } finally {
+      await orgContext.close();
+      await devContext.close();
+    }
+  })();
+  return side;
+}
+
+function answeredSide(browser: Browser): Promise<SideScene> {
+  sideAnswered ??= sideScene(browser).then(async (scene) => {
+    await asPerson(browser, "sideDev", ({ request }) => engagementCommand(request, scene.id, "answer-info", { answer: SIDE.answer }));
+    return scene;
+  });
+  return sideAnswered;
+}
+
+function pausedSide(browser: Browser): Promise<SideScene> {
+  sidePaused ??= answeredSide(browser).then(async (scene) => {
+    await asPerson(browser, "sideOrg", async ({ request }) =>
+      engagementCommand(request, scene.id, "pause", { reason: SIDE.holdReason, resume_at: plusDays(await appToday(request), 7) }),
+    );
+    return scene;
+  });
+  return sidePaused;
+}
+
+function resumedSide(browser: Browser): Promise<SideScene> {
+  sideResumed ??= pausedSide(browser).then(async (scene) => {
+    await asPerson(browser, "sideDev", ({ request }) => engagementCommand(request, scene.id, "resume", { reason: SIDE.resumeReason }));
+    return scene;
+  });
+  return sideResumed;
+}
+
+/** Opens a tracker's side-state sheet through its button, once the actions have hydrated. */
+async function openSideSheet(page: Page, name: string) {
+  await actionsReady(page);
+  await page.locator("[data-actions]").getByRole("button", { name, exact: true }).click();
+  const sheet = page.locator("dialog[open][data-side-sheet]");
+  await sheet.waitFor();
+  return sheet;
 }
 
 const SHOTS: Shot[] = [
@@ -572,6 +668,51 @@ const SHOTS: Shot[] = [
   { name: "notifications-empty", set: "p19", path: "/notifications", who: "freshOrg" },
   // The top bar with the unread count, on a phone.
   { name: "bell", set: "p19", path: "/dev", who: "freshDev", widths: [375], element: "header" },
+
+  // The tracker's side states (REQ-ENG-10), in the order the scene moves: asked, answered, a sheet of each kind, on
+  // hold, then the History after an early resume. EXPIRED is left out: only moving the shared test clock reaches it.
+  { name: "tracker-info-requested-org", set: "p19", path: "/org/engagements", who: "sideOrg", prepare: async (page, browser) => {
+      const scene = await sideScene(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='info']").waitFor();
+      await actionsReady(page);
+    } },
+  { name: "tracker-info-requested-dev", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await sideScene(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-info-clock]").waitFor();
+      await actionsReady(page);
+    } },
+  { name: "tracker-answered", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='answered']").waitFor();
+    } },
+  { name: "sheet-request-information", set: "p19", path: "/org/engagements", who: "sideOrg", viewportOnly: true, prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      const sheet = await openSideSheet(page, "Request information");
+      await sheet.getByLabel("Your question").fill(SIDE.nextQuestion);
+      await sheet.getByText(`${SIDE.nextQuestion.length} of 2,000 characters`).waitFor();
+    } },
+  { name: "sheet-pause", set: "p19", path: "/org/engagements", who: "sideOrg", viewportOnly: true, prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      const sheet = await openSideSheet(page, "Pause this engagement");
+      await sheet.getByLabel("Reason").fill(SIDE.holdReason);
+      await sheet.getByLabel("Resumes on").fill(plusDays(await appToday(page.request), 7));
+      await sheet.locator("[data-resumes]").filter({ hasText: "It resumes by itself on" }).waitFor();
+    } },
+  { name: "tracker-on-hold", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await pausedSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='hold']").waitFor();
+    } },
+  { name: "history-side-states", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await resumedSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}?tab=history`, { waitUntil: "networkidle" });
+      await page.locator("[data-event='resume'] [data-note='resume']").waitFor();
+    } },
 ];
 
 function wanted(shot: Shot) {
