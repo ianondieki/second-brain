@@ -467,7 +467,7 @@ async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
 ) -> None:
     """THREAT_MODEL D: policy.yaml side_states.actions_per_hour caps one party's side-state commands on one engagement
     within any hour (here 3): the fourth is 429 too_many_actions and writes nothing; the other party is counted
-    apart."""
+    apart, and the organisation's members together."""
     tight = replace(get_policy(), side_actions_per_hour=3, holds_per_stage=10)
     monkeypatch.setattr(commands, "get_policy", lambda: tight)
     monkeypatch.setattr(service, "get_policy", lambda: tight)
@@ -486,6 +486,10 @@ async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
         assert (await t.detail(s.dev))["lock_version"] == before["lock_version"]  # nothing written
         resumed = await t.ok(s.owner, "resume", {"reason": "Ready."})  # the organisation's own count
         assert code(await t.post(s.dev, "pause", pause)) == (429, "too_many_actions")
+        # The organisation's members share one budget (THREAT_MODEL D): the owner spends it, the reviewer is refused.
+        await t.ok(s.owner, "pause", pause)
+        await t.ok(s.owner, "resume", {"reason": "Ready again."})
+        assert code(await t.post(s.reviewer, "pause", pause)) == (429, "too_many_actions")
     assert resumed["state"] == "NEGOTIATION"
 
 
