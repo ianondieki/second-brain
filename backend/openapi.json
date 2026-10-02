@@ -20919,7 +20919,7 @@
     },
     "/api/me/proposals/{proposal_id}/originality": {
       "get": {
-        "description": "Today's last originality check of this proposal (Nairobi day), or null.",
+        "description": "Today's last originality check of this proposal (Nairobi day), or null, also once the teaser text changed.",
         "operationId": "last_originality_api_me_proposals__proposal_id__originality_get",
         "parameters": [
           {

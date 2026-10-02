@@ -1616,7 +1616,7 @@ export interface paths {
         };
         /**
          * Last Originality
-         * @description Today's last originality check of this proposal (Nairobi day), or null.
+         * @description Today's last originality check of this proposal (Nairobi day), or null, also once the teaser text changed.
          */
         get: operations["last_originality_api_me_proposals__proposal_id__originality_get"];
         put?: never;
