@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { NextIntlClientProvider } from "next-intl";
 
@@ -214,6 +214,13 @@ describe("refusals", () => {
     [403, { detail: { code: "not_found" } }, "notAllowed"],
     [404, { detail: { code: "not_found" } }, "notFound"],
     [422, { detail: [{ loc: ["body", "reason"], msg: "x", type: "y" }] }, "invalid"],
+    [422, { detail: { code: "contains_contact" } }, "containsContact"],
+    [422, { detail: { code: "invalid_note" } }, "invalidNote"],
+    [422, { detail: { code: "invalid_resume_at" } }, "invalidResumeAt"],
+    [409, { detail: { code: "info_request_limit" } }, "questionLimit"],
+    [409, { detail: { code: "hold_limit" } }, "holdLimit"],
+    [403, { detail: { code: "not_your_action" } }, "notAllowed"],
+    [403, { detail: { code: "role_required" } }, "notAllowed"],
     [500, "oops", "generic"],
   ] as const)("maps %i %j to %s", (status, body, refusal) => {
     expect(refusalOf(status, body)).toBe(refusal);
@@ -449,5 +456,211 @@ describe("focus follows the actions (WCAG 2.4.3)", () => {
     expect(screen.getByRole("status")).toBe(done);
     expect(document.activeElement).toBe(done);
     expect(document.querySelector("[data-actions]")).toBeNull();
+  });
+});
+
+// REQ-ENG-10 part (docs/spec/06 6.9 side branches): the side states' sheets. Each opens over the tracker as a modal
+// <dialog> (a bottom sheet on phones), sends its text with the lock_version the page read, keeps a refused text open
+// with the refusal in words, and gives focus back to its button when closed.
+describe("the side states' sheets", () => {
+  beforeAll(() => {
+    // jsdom implements <dialog> but not its modal methods.
+    HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function close(this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    };
+  });
+
+  const question = { body: "Which co-ops ran the pilot?\nAnd for how long?", date: "1 Oct 2026" };
+  const devAsked = () =>
+    detail({
+      state: "INFO_REQUESTED",
+      paused_from: "UNDER_REVIEW",
+      actions: ["answer_info", "withdraw"],
+      awaiting: [{ command: "answer_info", party: "developer" }],
+      whose_turn: ["developer"],
+      lock_version: 6,
+    });
+  const orgReviewing = () =>
+    detail({
+      my_party: "org",
+      my_roles: ["signatory"],
+      state: "UNDER_REVIEW",
+      actions: ["request_info", "pause", "approve", "decline"],
+      awaiting: [{ command: "approve", party: "org" }],
+      lock_version: 9,
+    });
+  const sheet = async () => (await screen.findByRole("dialog")) as HTMLDialogElement;
+
+  it("answers the organisation's question: the awaited step, primary, with the question quoted and a counter", async () => {
+    const { runImpl } = renderActions(devAsked(), { question });
+    const answer = screen.getByRole("button", { name: "Answer the question" });
+    expect(answer.hasAttribute("data-primary")).toBe(true);
+    fireEvent.click(answer);
+    const dialog = await sheet();
+    expect(dialog.hasAttribute("data-sheet")).toBe(true); // the bottom sheet on phones (globals.css, D-52)
+    expect(within(dialog).getByRole("heading", { name: "Answer the question" })).toBeTruthy();
+    expect(within(dialog).getByText("Telco A (fixture) asked on 1 Oct 2026:")).toBeTruthy();
+    expect(dialog.querySelector("[data-question]")?.textContent).toBe(question.body);
+    const field = within(dialog).getByLabelText("Your answer");
+    expect(document.activeElement).toBe(field);
+    expect(field.getAttribute("maxlength")).toBe("2000");
+    expect(within(dialog).getByText("0 of 2,000 characters")).toBeTruthy();
+    // The send button is styled, not marked, as primary: the page keeps one data-primary.
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send the answer" }));
+    expect(within(dialog).getByText("Fill in this field.")).toBeTruthy();
+    expect(runImpl).not.toHaveBeenCalled();
+    const typed = "  Kipkelion and Olenguruone, six weeks.  ";
+    fireEvent.change(field, { target: { value: typed } });
+    expect(within(dialog).getByText(`${typed.length} of 2,000 characters`)).toBeTruthy();
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the answer" })));
+    expect(runImpl).toHaveBeenCalledWith({
+      path: "/api/engagements/{engagement_id}/answer-info",
+      params: { engagement_id: devAsked().id },
+      body: { answer: "Kipkelion and Olenguruone, six weeks.", lock_version: 6 },
+    });
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("Done. The tracker is up to date.");
+  });
+
+  it("asks a question for the organisation, naming the developer and the limits", async () => {
+    const { runImpl } = renderActions(orgReviewing());
+    const ask = screen.getByRole("button", { name: "Request information" });
+    expect(ask.hasAttribute("data-primary")).toBe(false);
+    fireEvent.click(ask);
+    const dialog = await sheet();
+    expect(dialog.textContent).toContain("Ask Achieng Otieno one question.");
+    expect(dialog.textContent).toContain("they have ten business days");
+    expect(dialog.textContent).toContain("two questions at this stage");
+    expect(dialog.textContent).toContain("Keep contact details and links out");
+    fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "Which co-ops?" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    expect(runImpl.mock.calls[0][0]).toEqual({
+      path: "/api/engagements/{engagement_id}/request-info",
+      params: { engagement_id: orgReviewing().id },
+      body: { question: "Which co-ops?", lock_version: 9 },
+    });
+  });
+
+  it("keeps a text with contact details open, with the reason in words (422 contains_contact)", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "containsContact", status: 422 }));
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "Call me on 0712 345 678" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    const alert = within(dialog).getByRole("alert");
+    expect(alert.textContent).toBe(
+      "Contact details stay out of the tracker until the organisation approves; please remove the email, phone number or link.",
+    );
+    expect(document.activeElement).toBe(alert);
+    expect((within(dialog).getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Call me on 0712 345 678");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("closes on a spent question limit (409) and says so after the refresh", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "questionLimit", status: 409 }));
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "One more?" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Your organisation has asked all the questions this stage allows. Decide, or decline.",
+    );
+  });
+
+  it("pauses with a one-line reason and a resume date, said in words with its weekday", async () => {
+    const { runImpl } = renderActions(orgReviewing());
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    expect(dialog.textContent).toContain("Nothing is due while it is on hold.");
+    expect(dialog.textContent).toContain("at most 60 days ahead. All the holds of one engagement together may last 60 days.");
+    const reason = within(dialog).getByLabelText("Reason");
+    expect(reason.tagName).toBe("INPUT"); // one line
+    expect(reason.getAttribute("maxlength")).toBe("500");
+    const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
+    expect(date.type).toBe("date");
+    expect(date.min < date.max).toBe(true);
+    fireEvent.change(reason, { target: { value: "Budget committee meets on the 20th" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(within(dialog).getByText("Choose a date.")).toBeTruthy();
+    expect(document.activeElement).toBe(date);
+    fireEvent.change(date, { target: { value: "2026-10-12" } });
+    expect(dialog.querySelector("[data-resumes]")?.textContent).toBe("It resumes by itself on Monday, 12 October 2026.");
+    expect(dialog.querySelector("[data-resumes]")?.getAttribute("aria-live")).toBe("polite");
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(runImpl.mock.calls[0][0]).toEqual({
+      path: "/api/engagements/{engagement_id}/pause",
+      params: { engagement_id: orgReviewing().id },
+      body: { reason: "Budget committee meets on the 20th", resume_at: "2026-10-12", lock_version: 9 },
+    });
+  });
+
+  it("keeps a hold open when its date passes the days on hold left (409 hold_limit)", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "holdLimit", status: 409 }));
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
+    fireEvent.change(within(dialog).getByLabelText("Resumes on"), { target: { value: "2026-11-30" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(within(dialog).getByRole("alert").textContent).toContain("all its holds together may last 60 days");
+    expect(screen.getByRole("dialog")).toBe(dialog);
+  });
+
+  it("resumes early with a reason, saying when the hold was due to end", async () => {
+    const held = detail({ state: "ON_HOLD", paused_from: "NEGOTIATION", actions: ["resume", "withdraw"], awaiting: [], whose_turn: [], lock_version: 12 });
+    const { runImpl } = renderActions(held, { resumeOn: "21 Oct 2026" });
+    fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
+    const dialog = await sheet();
+    expect(dialog.textContent).toContain("It was due to resume on 21 Oct 2026.");
+    fireEvent.change(within(dialog).getByLabelText("Reason for resuming now"), { target: { value: "Budget approved early" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Resume now" })));
+    expect(runImpl.mock.calls[0][0]).toEqual({
+      path: "/api/engagements/{engagement_id}/resume",
+      params: { engagement_id: held.id },
+      body: { reason: "Budget approved early", lock_version: 12 },
+    });
+  });
+
+  it("asks before the organisation withdraws its question, focusing Cancel, and sends nothing more", async () => {
+    const asked = detail({
+      my_party: "org",
+      state: "INFO_REQUESTED",
+      actions: ["cancel_request"],
+      awaiting: [{ command: "answer_info", party: "developer" }],
+      whose_turn: ["developer"],
+      lock_version: 7,
+    });
+    const { runImpl } = renderActions(asked);
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw the question" }));
+    const dialog = await sheet();
+    expect(dialog.textContent).toContain("Withdraw your question to Achieng Otieno?");
+    expect(dialog.textContent).toContain("still counts towards the two this stage allows");
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" }));
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Withdraw the question" })));
+    expect(runImpl.mock.calls[0][0]).toEqual({
+      path: "/api/engagements/{engagement_id}/cancel-request",
+      params: { engagement_id: asked.id },
+      body: { lock_version: 7 },
+    });
+  });
+
+  it("closes on Cancel without sending, giving focus back to the button that opened it", async () => {
+    const { runImpl } = renderActions(orgReviewing());
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(runImpl).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause this engagement" }));
   });
 });

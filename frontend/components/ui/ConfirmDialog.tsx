@@ -34,6 +34,25 @@ export interface ConfirmDialogProps {
   bodyProps?: { [key: `data-${string}`]: string | undefined; className?: string };
 }
 
+/**
+ * The dialog's frame, shared with the tracker's form sheets: a centred dialog from 640 px; a bottom sheet on phones
+ * (D-52): full width, rounded on top, rising once (globals.css `dialog[data-sheet]`, off under reduced motion).
+ */
+export function sheetClass(size: "md" | "lg" = "md") {
+  return cn(
+    "m-auto w-[calc(100%-2rem)] rounded-panel border border-line bg-paper p-6 text-ink shadow-overlay",
+    "backdrop:bg-scrim",
+    "max-sm:mt-auto max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:rounded-t-[1.25rem]",
+    "max-sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+    size === "lg" ? "max-w-lg" : "max-w-md",
+  );
+}
+
+/** The bottom sheet's grab handle on phones (decorative). */
+export function SheetHandle() {
+  return <span aria-hidden="true" className="mx-auto mb-4 block h-1 w-10 rounded-full bg-line sm:hidden" />;
+}
+
 // The control that had focus when each dialog opened, to give it back on close.
 const openers = new WeakMap<HTMLDialogElement, HTMLElement>();
 
@@ -91,16 +110,9 @@ export function ConfirmDialog({
         onClose?.();
       }}
       data-sheet=""
-      className={cn(
-        // A centred dialog from 640 px; a bottom sheet on phones (D-52): full width, rounded on top, rising once.
-        "m-auto w-[calc(100%-2rem)] rounded-panel border border-line bg-paper p-6 text-ink shadow-overlay",
-        "backdrop:bg-scrim",
-        "max-sm:mt-auto max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:rounded-t-[1.25rem]",
-        "max-sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
-        size === "lg" ? "max-w-lg" : "max-w-md",
-      )}
+      className={sheetClass(size)}
     >
-      <span aria-hidden="true" className="mx-auto mb-4 block h-1 w-10 rounded-full bg-line sm:hidden" />
+      <SheetHandle />
       <h2 id={titleId} className="text-lg text-ink">
         {title}
       </h2>
