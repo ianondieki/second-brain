@@ -326,6 +326,7 @@ async def test_a_brief_is_public_text_and_its_form_is_checked(
         ({"title": "Write to briefs@telco.example.com"}, {"title": "contains_email"}),
         ({"title": "T" * 91}, {"title": "too_long"}),
         ({"statement": "S" * 1201}, {"statement": "too_long"}),
+        ({"statement": "word " * 121}, {"statement": "too_long"}),
         ({"title": "<b></b>"}, {"title": "blank"}),
         ({"budget_band": "a_lot"}, {"budget_band": "unknown_budget_band"}),
         ({"deadline": yesterday}, {"deadline": "deadline_past"}),

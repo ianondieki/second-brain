@@ -71,6 +71,7 @@ def test_brief_text_is_cleaned_and_checked() -> None:
         ({"affected_group": "See https://telco.example.com"}, [("affected_group", "contains_url")]),
         ({"title": "T" * (MAX_LENGTHS["title"] + 1)}, [("title", "too_long")]),
         ({"statement": "S" * (MAX_LENGTHS["statement"] + 1)}, [("statement", "too_long")]),
+        ({"statement": "word " * 121}, [("statement", "too_long")]),  # 605 characters, 121 words (docs/spec/06 6.5)
         ({"affected_group": "A" * (MAX_LENGTHS["affected_group"] + 1)}, [("affected_group", "too_long")]),
         ({"title": "<p> </p>"}, [("title", "blank")]),
         ({"affected_group": "<i></i>"}, []),  # optional: blank means none
@@ -124,3 +125,10 @@ def test_database_refusals_answer_as_the_api(sqlstate: str, status: int, code: s
 def test_other_database_errors_are_not_mapped(sqlstate: str) -> None:
     """42501 is worded verification_required only on a write to problem_briefs (``_write_brief``), never here."""
     assert _db_refusal(DBAPIError("INSERT", None, _Orig(sqlstate))) is None
+
+
+def test_a_statement_is_at_most_120_words() -> None:
+    _, fine = text_errors({"title": "T", "statement": "word " * 120, "affected_group": None})
+    assert fine == []
+    _, [error] = text_errors({"title": "T", "statement": "word\n" * 121, "affected_group": None})
+    assert (error.field, error.code, error.message) == ("statement", "too_long", "Keep this to 120 words or fewer.")

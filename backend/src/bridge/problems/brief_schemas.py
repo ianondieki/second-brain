@@ -39,7 +39,9 @@ class BriefIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=RAW_CAP, description="At most 90 characters")
-    statement: str = Field(min_length=1, max_length=RAW_CAP_STATEMENT, description="At most 1,200 characters")
+    statement: str = Field(
+        min_length=1, max_length=RAW_CAP_STATEMENT, description="At most 120 words and 1,200 characters"
+    )
     affected_group: str | None = Field(default=None, max_length=RAW_CAP, description="Who has the problem (<= 200)")
     niche_id: UUID
     county_code: str | None = Field(default=None, pattern=r"^KE-\d{2}$", description="Null: nationwide")

@@ -3,7 +3,8 @@
 - Who writes: the organisation's owner, admin, signatory or reviewer (revision 0002's ``_ORG_EDITOR``).
 - Text: a Brief is public once approved, so its title, statement and affected group are cleaned to plain text, carry
   no contact details (the sanitiser's rule, ``sanitise.contact_codes``, in a Brief's words) and keep the ProblemCard's
-  lengths; title and statement are required. An error names the field and a code, never the refused text.
+  lengths (docs/spec/06 6.5: a statement of at most 120 words, counted as the research checks count them, within a
+  1,200-character cap); title and statement are required. An error names the field and a code, never the refused text.
 - State: what the organisation's list shows, from the Brief's own status and its problem's.
 - Budget band: a code from ``config/matching/weights_v1.yaml``; a stored code the configuration no longer has shows
   no band (never a made-up label).
@@ -20,6 +21,8 @@ from bridge.matching.config import Weights, get_weights
 from bridge.matching.schemas import BudgetBandOut
 from bridge.models.enums import BriefStatus, ModerationState, OrgRole, ProblemStatus
 from bridge.problems.brief_schemas import BriefFacts, BriefState
+from bridge.problems.research.checks import MAX_STATEMENT_WORDS
+from bridge.problems.research.text import word_count
 from bridge.proposals import sanitise
 from bridge.proposals.sanitise import FieldError
 from bridge.proposals.schemas import OrgRef
@@ -43,6 +46,7 @@ MESSAGES: Final[Mapping[str, str]] = {
     "deadline_past": "Choose today or a later date.",
 }
 TOO_LONG: Final = "Keep this to {limit} characters or fewer."
+TOO_MANY_WORDS: Final = "Keep this to {limit} words or fewer."
 INVALID: Final = "Some parts of the Brief need attention."
 
 
@@ -52,7 +56,8 @@ def error(field: str, code: str) -> FieldError:
 
 def text_errors(fields: Mapping[str, str | None]) -> tuple[dict[str, str | None], list[FieldError]]:
     """Plain-text copies of a Brief's text fields (blank becomes None) and their errors, field by field: contact
-    details (checked raw and cleaned), a blank title or statement, more than ``MAX_LENGTHS`` characters."""
+    details (checked raw and cleaned), a blank title or statement, more than ``MAX_LENGTHS`` characters, a statement
+    of more than ``MAX_STATEMENT_WORDS`` words (``too_long`` either way, the message saying which)."""
     cleaned: dict[str, str | None] = {}
     errors: list[FieldError] = []
     for name, value in fields.items():
@@ -65,6 +70,8 @@ def text_errors(fields: Mapping[str, str | None]) -> tuple[dict[str, str | None]
                 errors.append(error(name, "blank"))
         elif len(plain) > MAX_LENGTHS[name]:
             errors.append(FieldError(name, "too_long", TOO_LONG.format(limit=MAX_LENGTHS[name])))
+        elif name == "statement" and word_count(plain) > MAX_STATEMENT_WORDS:
+            errors.append(FieldError(name, "too_long", TOO_MANY_WORDS.format(limit=MAX_STATEMENT_WORDS)))
     return cleaned, errors
 
 

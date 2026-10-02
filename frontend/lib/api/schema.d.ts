@@ -2749,7 +2749,7 @@ export interface components {
             niche_id: string;
             /**
              * Statement
-             * @description At most 1,200 characters
+             * @description At most 120 words and 1,200 characters
              */
             statement: string;
             /**

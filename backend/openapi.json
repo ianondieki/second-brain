@@ -690,7 +690,7 @@
             "type": "string"
           },
           "statement": {
-            "description": "At most 1,200 characters",
+            "description": "At most 120 words and 1,200 characters",
             "maxLength": 10000,
             "minLength": 1,
             "title": "Statement",
