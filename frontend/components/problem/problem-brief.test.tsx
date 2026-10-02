@@ -77,18 +77,27 @@ describe("starting a proposal from a problem page", () => {
     expect(document.querySelector("[data-brief-ended]")).toBeNull();
   });
 
+  // The API decides why on the platform clock (brief.ended): the page never compares dates itself.
   it.each([
-    ["past its deadline, on which day", "2020-01-31", false, "This Brief’s deadline passed on 31 Jan 2020, so the organisation is no longer asking for proposals. You can still start one from the problem."],
-    ["closed before its deadline", "2999-12-31", false, en.problem.briefEnded.closed],
-    ["closed with no deadline", null, false, en.problem.briefEnded.closed],
-    ["of an API that does not say", null, undefined, en.problem.briefEnded.closed],
-  ] as const)("offers the plain action for a Brief %s, and says which quietly", async (_, deadline, open, sentence) => {
-    render(await ProblemStart({ problem: detail({ brief: { org: ORG, budget_band: BAND, deadline, open } }) }));
+    ["past_deadline", "2026-10-01", "This Brief’s deadline passed on 1 Oct 2026, so the organisation is no longer asking for proposals. You can still start one from the problem.", "past_deadline"],
+    ["closed (it wins over a passed deadline)", "2020-01-31", en.problem.briefEnded.closed, "closed"],
+    ["closed before its deadline", "2999-12-31", en.problem.briefEnded.closed, "closed"],
+    ["absent (an older API): no guess, even with a passed deadline", "2020-01-31", en.problem.briefEnded.notOpen, "absent"],
+    ["null while not published", null, en.problem.briefEnded.notOpen, null],
+  ] as const)("offers the plain action when ended is %s, and says why quietly", async (_, deadline, sentence, ended) => {
+    const brief = { org: ORG, budget_band: BAND, deadline, open: false, ...(ended === "absent" ? {} : { ended }) };
+    render(await ProblemStart({ problem: detail({ brief }) }));
     expect(screen.getByRole("link", { name: "Start a proposal from this problem" }).getAttribute("href")).toBe(
       `/dev/ideas/new?problem=${BRIEF_ID}`,
     );
     expect(screen.queryByRole("link", { name: "Start a proposal from this Brief" })).toBeNull();
     expect(document.querySelector("[data-brief-ended]")?.textContent).toBe(sentence);
+  });
+
+  it("says nothing while the Brief is open (ended null), deadline today included", async () => {
+    render(await ProblemStart({ problem: detail({ brief: { org: ORG, budget_band: BAND, deadline: "2026-10-02", open: true, ended: null } }) }));
+    expect(screen.getByRole("link", { name: "Start a proposal from this Brief" })).toBeTruthy();
+    expect(document.querySelector("[data-brief-ended]")).toBeNull();
   });
 
   it("offers the plain action, with no note, for any other problem", async () => {
