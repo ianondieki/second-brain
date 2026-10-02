@@ -22,7 +22,7 @@ in the job's arguments to the developer's notification (it never enters the hash
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Final
 from uuid import UUID
 
@@ -106,6 +106,12 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.SIGN_CERTIFICATE, ORG): '{org} signed the acceptance certificate for "{title}". Countersign it on your tracker.',
     (C.RECORD_PAYMENT, ORG): '{org} recorded the final payment for "{title}". Confirm the amount you received.',
     (C.CONFIRM_PAYMENT, DEV): 'The developer confirmed the final payment for "{title}". The project is closed.',
+    (C.REQUEST_INFO, ORG): '{org} asked you a question about "{title}". The review waits for your answer.',
+    (C.ANSWER_INFO, DEV): 'The developer answered your question about "{title}". The review clock runs again.',
+    (C.PAUSE, DEV): 'The developer put "{title}" on hold until {until}. Due dates move by the time on hold.',
+    (C.PAUSE, ORG): '{org} put "{title}" on hold until {until}. Due dates move by the time on hold.',
+    (C.RESUME, DEV): 'The developer resumed "{title}" before its hold ended. Due dates moved by the time on hold.',
+    (C.RESUME, ORG): '{org} resumed "{title}" before its hold ended. Due dates moved by the time on hold.',
 }
 # [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
 INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
@@ -167,8 +173,10 @@ def compose(
     if notice is None or sentence is None:
         return None
     reason = DECLINE_LABELS.get(event.end_reason, "") if event.end_reason else ""
-    body = sentence.format(org=em2.one_line(company), title=em2.one_line(title), reason=reason)
     payload = dict(event.payload)
+    body = sentence.format(
+        org=em2.one_line(company), title=em2.one_line(title), reason=reason, until=_until(payload.get("resume_at"))
+    )
     if event.end_reason is EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY and "internal_start_date" in payload:
         body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
     if reason_text:
@@ -176,6 +184,14 @@ def compose(
     label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
     told = sm.other(acted)
     return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
+
+
+def _until(resume_at: object) -> str:
+    """A hold's resume date as people read it ("20 Oct 2026"), from the pausing event's payload."""
+    try:
+        return em2.eat_date(date.fromisoformat(str(resume_at)))
+    except ValueError:
+        return "its resume date"
 
 
 async def _in_app(db: AsyncSession, user_id: UUID, org_id: UUID | None, notice: Notice, event_id: UUID) -> bool:
