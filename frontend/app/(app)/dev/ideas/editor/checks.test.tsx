@@ -255,8 +255,9 @@ describe("refusals", () => {
     ["the daily limit", OVERLAP, { status: 429, body: refusal("originality_limit") }, "You have used today’s ten checks; tomorrow brings ten more."],
     ["429 originality_busy", OVERLAP, { status: 429, body: refusal("originality_busy") }, "The overlap check is still running. Try again in a moment."],
     ["409 proposal_hidden", OVERLAP, { status: 409, body: refusal("proposal_hidden") }, "This idea was deleted, so it cannot be checked."],
-    ["403 not_owner", OVERLAP, { status: 403, body: refusal("not_owner") }, "Only the idea’s owner can check it."],
-    ["404", OVERLAP, { status: 404, body: refusal("not_found") }, "This idea is not one of yours, or it was deleted."],
+    // Another owner's idea answers 404 like an unknown one (bridge/proposals/originality.owned_by).
+    ["404 not_found (another owner's idea, or none)", OVERLAP, { status: 404, body: refusal("not_found") }, "This idea is not one of yours, or it was deleted."],
+    ["404 not_found on the disclosure check", DISCLOSURE, { status: 404, body: refusal("not_found") }, "This idea is not one of yours, or it was deleted."],
     ["401", OVERLAP, { status: 401, body: refusal("unauthenticated") }, "Your session has ended. Log in again, then come back to this idea."],
     ["a plain 429", OVERLAP, { status: 429, body: refusal("rate_limited") }, "Too many attempts. Wait a minute, then try again."],
     ["503 without a code", OVERLAP, { status: 503, body: { detail: "Service Unavailable" } }, "The check could not finish just now. Try again later."],

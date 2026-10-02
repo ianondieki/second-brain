@@ -1764,7 +1764,6 @@
       "originality_busy": "The overlap check is still running. Try again in a moment.",
       "disclosure_busy": "The teaser check is still running. Try again in a moment.",
       "disclosure_rate_limited": "You have run many teaser checks today. Try again tomorrow.",
-      "notOwner": "Only the idea’s owner can check it.",
       "hidden": "This idea was deleted, so it cannot be checked.",
       "unavailable": "The check could not finish just now. Try again later."
     }

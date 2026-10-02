@@ -27,7 +27,6 @@ export type CheckCode =
 /** Why a check did not answer: its own code, or one every editor call shares. */
 export type CheckProblem =
   | CheckCode
-  | "notOwner"
   | "signedOut"
   | "mfaRequired"
   | "rateLimited"
@@ -48,7 +47,6 @@ export function checkRefusal(status: number, body: unknown): CheckProblem {
   if (typeof code === "string" && OWN.test(code)) return code as CheckCode;
   if (status === 0) return "network";
   if (status === 401) return code === "mfa_required" ? "mfaRequired" : "signedOut";
-  if (status === 403 && code === "not_owner") return "notOwner";
   if (status === 429) return "rateLimited";
   if (status === 404) return "notFound";
   if (status === 409 && code === "proposal_hidden") return "hidden";
