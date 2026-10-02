@@ -185,7 +185,7 @@ _NEAREST = text(
     " WHERE p.status = 'published' AND p.moderation_state = 'clear'"
     " AND p.published_at IS NOT NULL AND p.owner_id <> :owner AND p.id <> :self"
     " AND p.teaser_embedding IS NOT NULL AND p.embed_model = :model AND p.embed_version = :version"
-    " ORDER BY p.teaser_embedding <=> :vector, p.id LIMIT :limit"
+    " ORDER BY p.teaser_embedding <=> :vector LIMIT :limit"  # distance only, so the HNSW index can serve it
 ).bindparams(bindparam("vector", type_=PgVector(EMBED_DIM)))
 
 
@@ -229,7 +229,8 @@ class SqlTeaserPool:
             "self": proposal_id,
             "limit": limit,
         }
-        return [(_teaser(row), float(row.similarity)) for row in (await self._db.execute(_NEAREST, params)).all()]
+        found = [(_teaser(row), float(row.similarity)) for row in (await self._db.execute(_NEAREST, params)).all()]
+        return sorted(found, key=lambda item: (-item[1], str(item[0].proposal_id)))  # ties broken here, not in SQL
 
 
 # --- the check ------------------------------------------------------------------------------------------------------
