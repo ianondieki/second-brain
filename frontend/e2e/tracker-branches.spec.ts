@@ -88,12 +88,18 @@ function plusDays(day: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-/** The banner's due date ("… due 23 Oct 2026") as a time, to compare two of them. */
-async function dueAt(page: Page): Promise<number> {
-  const text = (await banner(page).locator("[data-due]").textContent()) ?? "";
-  const day = /(\d{1,2} \w{3} \d{4})\s*$/.exec(text)?.[1];
-  expect(day, text).toBeTruthy();
-  return Date.parse(`${day} UTC`);
+interface Due {
+  due_on: string;
+  business_days_left: number;
+}
+
+/** The engagement's countdown as the API sends it (Kenyan business days from the app's today to the due day). */
+async function dueOf(request: APIRequestContext, id: string): Promise<Due> {
+  const response = await request.get(`/api/engagements/${id}`);
+  expect(response.ok()).toBeTruthy();
+  const due = ((await response.json()) as { due: Due | null }).due;
+  expect(due, "a stage deadline").not.toBeNull();
+  return due!;
 }
 
 test("the organisation asks a question, the developer answers it, both read it in the History", async ({ page, browser }, info) => {
@@ -102,12 +108,36 @@ test("the organisation asks a question, the developer answers it, both read it i
   const question = "Which co-ops ran the pilot?\nA rough count of litres a day is enough.";
   const answer = "Kipkelion and Olenguruone, about 1,200 litres a day over six weeks.";
   try {
+    // Escape closes a sheet and gives focus back to its button.
+    await openSheet(orgPage, "Request information");
+    await orgPage.keyboard.press("Escape");
+    await expect(orgPage.locator("dialog[open]")).toHaveCount(0);
+    await expect(actions(orgPage).getByRole("button", { name: "Request information", exact: true })).toBeFocused();
+
     const ask = await openSheet(orgPage, "Request information");
     await expect(ask).toContainText("two questions at this stage");
+    await expect(ask).toContainText("Questions left at this stage: 2");
     await expect(ask.getByLabel("Your question")).toBeFocused();
     await ask.getByLabel("Your question").fill(question);
     await expect(ask).toContainText(`${question.length} of 2,000 characters`);
-    await send(orgPage, "Send the question");
+    await checkScreen(orgPage, { strict: true });
+    // While the request is in flight the sheet's buttons and Escape do nothing (the request is held until checked).
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await orgPage.route("**/api/engagements/*/request-info", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await ask.getByRole("button", { name: "Send the question", exact: true }).click();
+    await expect(ask.getByRole("button", { name: "Working…" })).toHaveAttribute("aria-disabled", "true");
+    await expect(ask.getByRole("button", { name: "Cancel" })).toHaveAttribute("aria-disabled", "true");
+    await orgPage.keyboard.press("Escape");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toBeVisible();
+    release();
+    await expect(orgPage.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
+    await expect(orgPage.locator("dialog[open]")).toHaveCount(0);
+    await orgPage.unroute("**/api/engagements/*/request-info");
 
     // The organisation waits on the developer; the review stays the current step, on hold.
     await expect(banner(orgPage)).toContainText("Awaiting: ");
@@ -233,22 +263,28 @@ test.describe("on the test clock", () => {
     );
   }
 
-  test("a question answered days later moves the review's deadline by the business days it was open", async ({ page, browser }, info) => {
+  test("a question answered days later keeps the review's business days: its deadline moved by the days it was open", async ({ page, browser }, info) => {
     test.setTimeout(180_000);
     const { dev, devPage, orgPage, close } = await scene(page, browser, info);
     try {
-      const before = await dueAt(orgPage);
+      const before = await dueOf(orgPage.request, dev.engagementId);
       const ask = await openSheet(orgPage, "Request information");
       await ask.getByLabel("Your question").fill("Which co-ops ran the pilot?");
       await send(orgPage, "Send the question");
-      await advance(orgPage.request, 7);
+      await advance(orgPage.request, 7); // at least four Kenyan business days, whatever the holidays
 
       await devPage.goto(`/dev/engagements/${dev.engagementId}`);
       const reply = await openSheet(devPage, "Answer the question");
       await reply.getByLabel("Your answer").fill("Kipkelion and Olenguruone.");
       await send(devPage, "Send the answer");
       await expect(banner(devPage).locator("[data-side='answered']")).toBeVisible();
-      expect(await dueAt(devPage), "the deadline moved by the days the question was open").toBeGreaterThan(before);
+
+      // The clock was paused while the question was open: the business days left are those the review had when it
+      // was asked, so the due day moved by exactly the business days the question was open (holidays included).
+      const after = await dueOf(devPage.request, dev.engagementId);
+      expect(after.business_days_left, "the review's business days left, unchanged by the pause").toBe(before.business_days_left);
+      expect(after.due_on > before.due_on, `${before.due_on} → ${after.due_on}`).toBe(true);
+      await expect(banner(devPage).locator("[data-due]")).toContainText(`${after.business_days_left} business days left`);
       await checkScreen(devPage, { strict: true });
     } finally {
       await close();
