@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
+from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import (
     Tracker,
     build,
@@ -30,6 +31,7 @@ from tests.integration.engagements.api_world import (
     holidays_of,
     moved_clock,
     open_engagement,
+    run_notifications,
     seats,
     simple_terms,
     walk_to,
@@ -38,6 +40,24 @@ from tests.integration.engagements.api_world import (
 QUESTION = "What would a pilot for 3 depots cost,\nand who maintains the sensors?"
 ANSWER = "KES 250,000 for 3 depots; we maintain the sensors for 12 months."
 REASON = "Our budget committee meets next month."
+
+
+async def in_app(owner_engine: AsyncEngine, user: UUID, engagement: UUID) -> list[tuple[str, str, str]]:
+    """The user's in-app notices about the engagement: (kind, title, body), oldest first."""
+    async with owner_engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT kind, title, body FROM in_app_notifications WHERE user_id = :u AND link LIKE :l"
+                " ORDER BY created_at, id"
+            ),
+            {"u": user, "l": f"%/engagements/{engagement}"},
+        )
+        return [(str(kind), str(title), str(body)) for kind, title, body in rows.all()]
+
+
+async def email_of(owner_engine: AsyncEngine, user: UUID) -> str:
+    async with owner_engine.connect() as conn:
+        return str((await conn.execute(text("SELECT email FROM users WHERE id = :u"), {"u": user})).scalar_one())
 
 
 def deadline_of(detail: dict[str, Any]) -> datetime:
@@ -115,6 +135,29 @@ async def test_a_question_pauses_the_review_clock_until_the_developer_answers(
     assert asking["stage_deadline_at"] is None
     assert history["chain_verified"] is True
     assert QUESTION not in str(history["events"])
+    # N03 both ways: the developer is told of the question, the organisation's reviewer of the answer, each in-app
+    # and by one status email (the start of the review is in-app only); the texts stay on the tracker.
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, engagement, provider)
+    developer_notices = await in_app(owner_engine, world.developer, engagement)
+    assert [(kind, title) for kind, title, _ in developer_notices] == [
+        ("engagement.n03", "Under review"),
+        ("engagement.n03", "Information requested"),
+    ]
+    assert "asked you a question" in developer_notices[1][2]
+    [(kind, title, body)] = await in_app(owner_engine, world.reviewer, engagement)
+    assert (kind, title) == ("engagement.n03", "Under review")
+    assert "answered your question" in body
+    developer_email, reviewer_email = (
+        await email_of(owner_engine, world.developer),
+        await email_of(owner_engine, world.reviewer),
+    )
+    assert sorted(m.to for m in provider.outbox) == sorted([developer_email, reviewer_email])
+    for message in provider.outbox:
+        assert QUESTION.splitlines()[0] not in message.text
+        assert ANSWER not in message.text
+        assert f"/engagements/{engagement}" in message.text
+    assert await run_notifications(owner_engine, app_engine, engagement, provider) == 0  # nothing left to send
 
 
 async def test_a_hold_reads_its_resume_date_and_an_early_resume_moves_the_deadline(
@@ -167,6 +210,21 @@ async def test_a_hold_reads_its_resume_date_and_an_early_resume_moves_the_deadli
     assert pausing["actor_role"] == "developer"
     assert [kind for kind, _ in await note_rows(owner_engine, engagement)] == ["hold", "resume"]
     assert history["chain_verified"] is True
+    # N20: the organisation's people on the engagement are told of the hold, the developer of the early resume.
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, engagement, provider)
+    owner_notices = [n for n in await in_app(owner_engine, world.owner, engagement) if n[0] == "engagement.n20"]
+    assert [(title, body.split(" until ")[1]) for _, title, body in owner_notices] == [
+        ("On hold", f"{resume_at.day} {resume_at:%b %Y}. Due dates move by the time on hold.")
+    ]
+    developer_notices = [n for n in await in_app(owner_engine, world.developer, engagement) if n[0] == "engagement.n20"]
+    assert [title for _, title, _ in developer_notices] == ["Terms and agreement drafting"]
+    assert "resumed" in developer_notices[0][2]
+    held_to = sorted(m.to for m in provider.outbox if m.subject == 'On hold: "RLS proposal"')
+    acted = (world.owner, world.reviewer, world.signatory)  # the named contact and every member who acted on it
+    assert held_to == sorted([await email_of(owner_engine, person) for person in acted])
+    resumed_to = [m.to for m in provider.outbox if m.subject == 'Terms and agreement drafting: "RLS proposal"']
+    assert resumed_to == [await email_of(owner_engine, world.developer)]
 
 
 async def test_a_hold_at_first_contact_keeps_what_the_stage_had(
@@ -193,3 +251,30 @@ async def test_a_hold_at_first_contact_keeps_what_the_stage_had(
         assert [e["stage_round"] for e in confirmed["endorsements"]] == [1, 2]
         sent = await t.ok(s.dev, "send-nda")
     assert sent["state"] == "NDA_PENDING"
+
+
+async def test_the_status_email_follows_the_preference_and_a_verified_address(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The side states' emails are mutable (REQUIREMENTS.md §5 N03, N20): a developer who turned the kind's email off
+    and a member without a verified address get the in-app notice only."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO notification_preferences (user_id, kind, channel, enabled)"
+                " VALUES (:u, 'engagement.n03', 'email', false)"
+            ),
+            {"u": world.developer},
+        )
+        await conn.execute(text("UPDATE users SET email_verified_at = NULL WHERE id = :u"), {"u": world.reviewer})
+    async with seats(app_engine, deals_on(), world) as s:
+        await t.ok(s.reviewer, "request-info", {"question": QUESTION})
+        await t.ok(s.dev, "answer-info", {"answer": ANSWER})
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, engagement, provider)
+    assert provider.outbox == []
+    assert [kind for kind, _, _ in await in_app(owner_engine, world.developer, engagement)] == ["engagement.n03"]
+    assert [kind for kind, _, _ in await in_app(owner_engine, world.reviewer, engagement)] == ["engagement.n03"]

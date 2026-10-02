@@ -21,13 +21,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import create_session_factory
-from bridge.engagements import expiry
+from bridge.engagements import expiry, notify
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, business_days_between, local_date
 from bridge.engagements.expiry import Outcome, Report, run_expiry
-from bridge.models.enums import EngagementState
+from bridge.models.enums import EngagementEndReason, EngagementState
+from bridge.notifications.email import FakeEmailProvider
 from tests.integration import world as w
 from tests.integration.engagements.api_world import (
+    PROPOSAL_TITLE,
     Seats,
     Tracker,
     World,
@@ -39,6 +41,7 @@ from tests.integration.engagements.api_world import (
     moved_clock,
     open_engagement,
     run,
+    run_notifications,
     seats,
     walk_to,
 )
@@ -96,20 +99,34 @@ def system_events(history: dict[str, Any]) -> list[dict[str, Any]]:
     return [e for e in history["events"] if e["actor_role"] == "system"]
 
 
+async def told(owner_engine: AsyncEngine, user: UUID, engagement: UUID, kind: str) -> list[str]:
+    """The bodies of the user's in-app notices of ``kind`` about the engagement that tell of an expiry or a resume."""
+    async with owner_engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT body FROM in_app_notifications WHERE user_id = :u AND kind = :k AND link LIKE :l"
+                " ORDER BY created_at"
+            ),
+            {"u": user, "k": kind, "l": f"%/engagements/{engagement}"},
+        )
+        return [str(body) for body in rows.scalars() if " expired: " in body or "no longer on hold" in body]
+
+
 @pytest.mark.parametrize(
-    ("state", "reason", "expire_bd"),
+    ("state", "reason", "expire_bd", "kind"),
     [
-        (S.SUBMITTED, "NO_REVIEW", 20),
-        (S.UNDER_REVIEW, "NO_DECISION", 30),
-        (S.INTEREST_CONFIRMED, "CONTACT_NOT_MADE", 10),
-        (S.ORG_INTEREST, "NO_DEV_RESPONSE", 5),
+        (S.SUBMITTED, "NO_REVIEW", 20, "engagement.n01"),
+        (S.UNDER_REVIEW, "NO_DECISION", 30, "engagement.n03"),
+        (S.INTEREST_CONFIRMED, "CONTACT_NOT_MADE", 10, "engagement.n05"),
+        (S.ORG_INTEREST, "NO_DEV_RESPONSE", 5, "engagement.n17"),
     ],
 )
 async def test_an_engagement_nobody_moves_expires_once(
-    owner_engine: AsyncEngine, app_engine: AsyncEngine, state: S, reason: str, expire_bd: int
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, state: S, reason: str, expire_bd: int, kind: str
 ) -> None:
     """AC-PROP-3: Given the stage and the clock past its expire_bd, When the job runs, Then EXPIRED with the reason,
-    the tag closed, and a second run writes nothing."""
+    the tag closed, and a second run writes nothing; both parties are told (the organisation's people who acted on
+    it: nobody yet while it was only submitted), in-app and by email."""
     world = await build(owner_engine)
     off = await holidays_of(owner_engine)
     async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
@@ -134,6 +151,25 @@ async def test_an_engagement_nobody_moves_expires_once(
     assert history["chain_verified"] is True
     if state is not S.ORG_INTEREST:  # a tagged engagement's tag closes with it (an organisation's interest has none)
         assert (await tag_closed(owner_engine, world))[1] is True
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, t.engagement, provider)
+    words = notify.EXPIRY_LABELS[EngagementEndReason(reason)]
+    assert await told(owner_engine, world.developer, t.engagement, kind) == [
+        f'Your engagement with {world.org_name} on "{PROPOSAL_TITLE}" expired: {words}.'
+    ]
+    acted = {
+        S.SUBMITTED: (),
+        S.UNDER_REVIEW: (world.reviewer,),
+        S.INTEREST_CONFIRMED: (world.owner, world.reviewer, world.signatory),
+        S.ORG_INTEREST: (world.owner, world.signatory),
+    }[state]
+    for person in acted:
+        assert await told(owner_engine, person, t.engagement, kind) == [
+            f'The engagement on "{PROPOSAL_TITLE}" expired: {words}.'
+        ]
+    expired_mail = [m for m in provider.outbox if m.tag == kind and m.subject.startswith("Expired: ")]
+    assert len(expired_mail) == 1 + len(acted)  # one each
+    assert await run_notifications(owner_engine, app_engine, t.engagement, provider) == 0
 
 
 async def test_a_question_at_15_business_days_stops_the_expiry_at_25(
@@ -196,6 +232,19 @@ async def test_a_hold_resumes_by_itself_on_its_date(owner_engine: AsyncEngine, a
     assert (resume["command"], resume["from_state"], resume["to_state"]) == ("resume", "ON_HOLD", "NEGOTIATION")
     assert [n["kind"] for n in resumed["notes"]] == ["hold"]
     assert history["chain_verified"] is True
+    provider = FakeEmailProvider()
+    await run_notifications(owner_engine, app_engine, t.engagement, provider)
+    for person in (world.developer, world.owner):  # both parties
+        notices = await told(owner_engine, person, t.engagement, "engagement.n20")
+        assert any(
+            body.endswith("is no longer on hold: it resumed on its date. Due dates moved by the time on hold.")
+            for body in notices
+        ), person
+    resumed_mail = [m.to for m in provider.outbox if m.subject == 'Terms and agreement drafting: "RLS proposal"']
+    everyone = (world.developer, world.owner, world.reviewer, world.signatory)  # the developer, the org's people
+    async with owner_engine.connect() as conn:
+        addresses = await conn.execute(text("SELECT email FROM users WHERE id = ANY(:ids)"), {"ids": list(everyone)})
+        assert sorted(resumed_mail) == sorted(addresses.scalars().all())  # one each
 
 
 async def test_a_failing_engagement_is_reported_and_retried_by_the_next_run(
