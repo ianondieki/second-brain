@@ -2952,6 +2952,11 @@ export interface components {
              */
             deadline: string | null;
             /**
+             * Ended
+             * @description Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it) or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock); null while it is open and for a Brief not published
+             */
+            ended?: ("closed" | "past_deadline") | null;
+            /**
              * Open
              * @description Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals
              */
