@@ -957,7 +957,7 @@
             "title": "Problem Briefs"
           },
           "used": {
-            "description": "Open Briefs now: not closed and not rejected",
+            "description": "Open Briefs now: not closed, deadline not passed, not rejected",
             "title": "Used",
             "type": "integer"
           }

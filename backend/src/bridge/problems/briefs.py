@@ -6,8 +6,9 @@ A verified organisation posts a Problem Brief: a ProblemCard (a ``problems`` row
 - Who: the organisation's owner, admin, signatory or reviewer post, change and close (the RLS editor set); any member
   reads. Only an E2 (legally verified) organisation posts: anything else is 403 ``verification_required`` (the
   database refuses a published Brief of an organisation that is not E2 as well).
-- How many: the plan's ``problem_briefs`` limit counts open Briefs (not closed, problem not rejected or archived),
-  under a per-organisation advisory lock so parallel posts cannot pass it (402 ``plan_limit``, the next plan up).
+- How many: the plan's ``problem_briefs`` limit counts open Briefs (not closed, its deadline unset or not passed,
+  its problem not rejected or archived), under a per-organisation advisory lock so parallel posts cannot pass it (402
+  ``plan_limit``, the next plan up).
 - What: the text is public once approved, so it is cleaned to plain text, carries no contact details (the
   sanitiser's rule) and keeps the ProblemCard's lengths; the niche, county and budget band come from the lists; the
   deadline is today or later (Africa/Nairobi, on the platform clock). Refusals are 422 ``invalid_brief`` with a code
@@ -81,7 +82,8 @@ _PLAN_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _COUNTY = text("SELECT count(*) FROM regions WHERE code = :code AND kind = 'county'")
 _OPEN_BRIEFS = text(
     "SELECT count(*) FROM problem_briefs b JOIN problems p ON p.id = b.problem_id"
-    " WHERE b.org_id = :org AND b.status <> 'closed' AND p.status IN ('pending_review', 'published')"
+    " WHERE b.org_id = :org AND b.status <> 'closed' AND (b.deadline IS NULL OR b.deadline >= :today)"
+    " AND p.status IN ('pending_review', 'published')"
 )
 _INSERT_PROBLEM = text(
     "INSERT INTO problems (id, source, niche_id, county_code, title, statement, affected_group, status, created_by,"
@@ -121,7 +123,10 @@ async def today(db: AsyncSession) -> date:
 
 
 async def open_briefs(db: AsyncSession, org_id: UUID) -> int:
-    return int((await db.execute(_OPEN_BRIEFS, {"org": org_id})).scalar_one())
+    """The organisation's open Briefs (the plan count): not closed, deadline unset or today or later (Africa/Nairobi,
+    the platform clock), problem not rejected or archived."""
+    params = {"org": org_id, "today": await today(db)}
+    return int((await db.execute(_OPEN_BRIEFS, params)).scalar_one())
 
 
 async def proposal_counts(db: AsyncSession, problem_ids: Iterable[UUID]) -> dict[UUID, int]:

@@ -2857,7 +2857,7 @@ export interface components {
             problem_briefs: number | null;
             /**
              * Used
-             * @description Open Briefs now: not closed and not rejected
+             * @description Open Briefs now: not closed, deadline not passed, not rejected
              */
             used: number;
         };

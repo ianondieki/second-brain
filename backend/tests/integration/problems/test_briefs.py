@@ -97,6 +97,12 @@ async def feed(client: httpx.AsyncClient, world: ScoutWorld) -> dict[str, dict[s
     return {item["problem"]["id"]: item for item in response.json()["items"]}
 
 
+async def pass_deadline(owner_engine: AsyncEngine, brief_id: str) -> None:
+    """Move a Brief's deadline 31 days back (into the past: ``form`` sets it 30 days ahead)."""
+    async with owner_engine.begin() as conn:
+        await run(conn, "UPDATE problem_briefs SET deadline = deadline - 31 WHERE problem_id = :id", id=UUID(brief_id))
+
+
 async def recommended_ids(developer: httpx.AsyncClient) -> set[str]:
     response = await developer.get("/api/me/recommendations")
     assert response.status_code == 200, response.text
@@ -425,8 +431,7 @@ async def test_the_lists_page_filter_and_a_passed_deadline_leaves_the_view(
     mombasa = await developer.get("/api/discover/briefs", params={"niche": niche, "county": MOMBASA_CODE})
     assert mombasa.json()["items"] == []
 
-    async with owner_engine.begin() as conn:
-        await run(conn, "UPDATE problem_briefs SET deadline = deadline - 31 WHERE problem_id = :id", id=UUID(posted[0]))
+    await pass_deadline(owner_engine, posted[0])
     assert posted[0] not in await feed(developer, world)
     kept = await developer.get(f"/api/problems/{posted[0]}")
     assert kept.status_code == 200
@@ -471,8 +476,22 @@ async def test_a_brief_past_its_deadline_leaves_trending_and_the_ranker(
 
     assert brief_id in await trending()
     assert brief_id in await recommended_ids(developer)
-    async with owner_engine.begin() as conn:
-        await run(conn, "UPDATE problem_briefs SET deadline = deadline - 31 WHERE problem_id = :id", id=UUID(brief_id))
+    await pass_deadline(owner_engine, brief_id)
     assert brief_id not in await trending()
     assert brief_id not in await recommended_ids(developer)
     assert (await developer.get(f"/api/problems/{brief_id}")).status_code == 200
+
+
+async def test_a_brief_past_its_deadline_frees_its_plan_slot(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Open, for the plan, is not closed and the deadline unset or not passed: on the claimed plan (one Brief) a
+    Brief whose deadline has passed no longer counts, so another may be posted."""
+    world = await telco_world(owner_engine)
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        first = await post(reviewer, world.org.id, await form(owner_engine, world.niche))
+        assert (await reviewer.post(path(world.org.id), json=await form(owner_engine, world.niche))).status_code == 402
+        await pass_deadline(owner_engine, first["id"])
+        assert (await reviewer.get(path(world.org.id))).json()["plan"]["used"] == 0
+        await post(reviewer, world.org.id, await form(owner_engine, world.niche, deadline=None))
+        assert (await reviewer.get(path(world.org.id))).json()["plan"]["used"] == 1  # no deadline: open until closed

@@ -88,7 +88,7 @@ class BriefOut(BaseModel):
 class BriefPlanOut(BaseModel):
     plan: str
     problem_briefs: int | None = Field(description="Open Briefs the plan allows; null means unlimited")
-    used: int = Field(description="Open Briefs now: not closed and not rejected")
+    used: int = Field(description="Open Briefs now: not closed, deadline not passed, not rejected")
 
 
 class BriefList(BaseModel):
