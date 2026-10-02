@@ -81,13 +81,11 @@ export function trendQuery({ niche, county }: DiscoverQuery): { niche?: string; 
 }
 
 /**
- * A new idea that already links this problem (the editor reads `?problem=`). For an organisation's Problem Brief,
- * `org` names the organisation that posted it, so the way to pitch can start with it chosen (REQ-DIR-05).
+ * A new idea that already links this problem (the editor reads `?problem=`). For a Problem Brief the pitch later starts
+ * with its organisation chosen, from the idea's linked problem (REQ-DIR-05), so nothing more travels here.
  */
-export function startProposalHref(problemId: string, orgId?: string | null): string {
-  const query = new URLSearchParams({ problem: problemId });
-  if (orgId) query.set("org", orgId);
-  return `/dev/ideas/new?${query.toString()}`;
+export function startProposalHref(problemId: string): string {
+  return `/dev/ideas/new?problem=${encodeURIComponent(problemId)}`;
 }
 
 /** The id of a project's row on the Projects view, so a problem can link to the project beside it and back. */

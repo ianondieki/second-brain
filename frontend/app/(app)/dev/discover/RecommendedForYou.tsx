@@ -142,7 +142,7 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
             </section>
           ) : null}
           <p>
-            <StandaloneLink href={startProposalHref(item.problem.id, item.problem.org?.id)}>
+            <StandaloneLink href={startProposalHref(item.problem.id)}>
               {t("start")}
             </StandaloneLink>
           </p>

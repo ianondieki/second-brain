@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import en from "@/locales/en.json";
 import sw from "@/locales/sw.json";
-import { BRIEF_ID, discoverBrief, ORG_ID } from "@/test/briefs";
+import { BRIEF_ID, discoverBrief } from "@/test/briefs";
 import { renderWithIntl } from "@/test/intl";
 
 import { BriefRow } from "./BriefRow";
@@ -26,10 +26,8 @@ describe("the Briefs view's address", () => {
     expect(discoverHref({ view: "briefs", niche: "ict" })).toBe("/dev/discover?view=briefs&niche=ict");
   });
 
-  it("starts a proposal with the problem linked and, for a Brief, its organisation named", () => {
+  it("starts a proposal with the problem linked (the pitch finds the organisation from it)", () => {
     expect(startProposalHref(BRIEF_ID)).toBe(`/dev/ideas/new?problem=${BRIEF_ID}`);
-    expect(startProposalHref(BRIEF_ID, null)).toBe(`/dev/ideas/new?problem=${BRIEF_ID}`);
-    expect(startProposalHref(BRIEF_ID, ORG_ID)).toBe(`/dev/ideas/new?problem=${BRIEF_ID}&org=${ORG_ID}`);
   });
 
   it("is a tab of the Lists navigation", () => {
@@ -79,7 +77,7 @@ describe("a Brief on Discover", () => {
     expect(within(card).getByText(/Field teams learn about empty generator tanks/)).toBeTruthy();
     expect(within(card).getByText("2 proposals")).toBeTruthy();
     expect(within(card).getByRole("link", { name: "Start a proposal from this brief" }).getAttribute("href")).toBe(
-      `/dev/ideas/new?problem=${BRIEF_ID}&org=${ORG_ID}`,
+      `/dev/ideas/new?problem=${BRIEF_ID}`,
     );
     expect(card.querySelectorAll("[data-primary]")).toHaveLength(0); // the card's way in is a link, not the screen's primary
   });

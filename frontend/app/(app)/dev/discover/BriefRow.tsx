@@ -13,8 +13,8 @@ import { countryName, countyName, problemAnchor, startProposalHref, type CountyR
  * One organisation's Problem Brief on Discover (REQ-DIR-05; docs/spec/06 6.2, 6.5), a compact card like a problem's:
  * its title linking to the problem card, one meta line (niche, place), the one "Posted by <organisation>" badge
  * (docs/spec/07 item 2: at most two), the budget band and the deadline on one line, the statement, then the proposals
- * answering it and "Start a proposal from this brief", which starts the idea with the problem linked and the
- * organisation named for the pitch.
+ * answering it and "Start a proposal from this brief", which starts the idea with the problem linked (its pitch then
+ * starts with the organisation chosen).
  */
 export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: readonly CountyRef[] }) {
   const t = useTranslations("discover");
@@ -59,7 +59,7 @@ export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: re
       <p className="mt-1 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
       <p className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-sm text-ink-soft">
         <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
-        <StandaloneLink href={startProposalHref(problem.id, org?.id)} className="text-sm" data-start-brief="">
+        <StandaloneLink href={startProposalHref(problem.id)} className="text-sm" data-start-brief="">
           {t("startBrief")}
         </StandaloneLink>
       </p>
