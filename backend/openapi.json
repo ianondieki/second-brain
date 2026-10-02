@@ -581,6 +581,53 @@
         "title": "BillingInterval",
         "type": "string"
       },
+      "BriefFacts": {
+        "description": "What a developer reads about a Brief beside its problem card.",
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetBandOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's budget band; null when it gave none"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
+            "title": "Deadline"
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation that posted it; null when it is not in the directory"
+          }
+        },
+        "required": [
+          "org",
+          "budget_band",
+          "deadline"
+        ],
+        "title": "BriefFacts",
+        "type": "object"
+      },
       "BriefIn": {
         "additionalProperties": false,
         "description": "A new Brief. Plain text only (markup is removed) and no contact details: a Brief is public once approved.",
@@ -2742,6 +2789,59 @@
           "next_cursor"
         ],
         "title": "DirectoryPage",
+        "type": "object"
+      },
+      "DiscoverBrief": {
+        "properties": {
+          "brief": {
+            "$ref": "#/components/schemas/BriefFacts"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/DiscoverProblem",
+            "description": "The Brief's problem card ('Posted by <organisation>', with org)"
+          },
+          "proposal_count": {
+            "description": "Published proposals that link this Brief",
+            "title": "Proposal Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "problem",
+          "brief",
+          "proposal_count"
+        ],
+        "title": "DiscoverBrief",
+        "type": "object"
+      },
+      "DiscoverBriefsOut": {
+        "properties": {
+          "items": {
+            "description": "Published, open Briefs, newest first",
+            "items": {
+              "$ref": "#/components/schemas/DiscoverBrief"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "DiscoverBriefsOut",
         "type": "object"
       },
       "DiscoverProblem": {
@@ -14885,6 +14985,180 @@
         "summary": "Get Org Card",
         "tags": [
           "directory"
+        ]
+      }
+    },
+    "/api/discover/briefs": {
+      "get": {
+        "description": "Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first.",
+        "operationId": "discover_briefs_api_discover_briefs_get",
+        "parameters": [
+          {
+            "description": "Niche slug (a parent includes children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "ISO 3166-2 county code",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}-[A-Z0-9]{1,5}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2 county code",
+              "title": "County"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverBriefsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Discover Briefs",
+        "tags": [
+          "discover"
         ]
       }
     },

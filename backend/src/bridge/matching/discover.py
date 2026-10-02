@@ -8,6 +8,8 @@ beside the problems they solve, and the Opportunity Gap. Computed on read from `
 - Trending Projects: published, clear proposals that are Trending (verified organisations' interest) or New this week,
   each with the visible problem it solves (a proposal with none is not listed, AC-TREND-2); their badges and chips
   never count or name an organisation, and their scores are not returned (a score would count the organisations).
+- Briefs (REQ-DIR-05): verified organisations' published, open Problem Briefs, newest first, read directly (not
+  scored): "Posted by <organisation>" with the organisation, budget band, deadline and the proposals linking each.
 - Opportunity Gap: the top decile, by trend z-score, of the problems in the filter's scope that have a z-score
   (niches with a baseline) and a positive score; of those, the ones whose z-score reaches the Trending floor (1.0)
   and that have fewer than 3 published proposals (AC-TREND-2). The decile is the scope's (a niche's top tenth when
@@ -26,11 +28,17 @@ from dataclasses import dataclass
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
+from bridge import pagination
+from bridge.directory.models import Niche
 from bridge.directory.service import niche_label
+from bridge.matching.config import get_weights
 from bridge.matching.discover_schemas import (
+    DiscoverBrief,
+    DiscoverBriefsOut,
     DiscoverProblem,
     DiscoverSource,
     OpportunityGapOut,
@@ -43,10 +51,14 @@ from bridge.matching.discover_schemas import (
 from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import Board, ProblemFact, ProblemSignals, board, load
 from bridge.matching.trending import Trend
-from bridge.models.enums import ProblemSource, ProblemStatus
-from bridge.problems.service import label_for, org_ref, published_facts
-from bridge.proposals.schemas import NicheOut, ProblemRef
+from bridge.models.enums import BriefStatus, BriefVisibility, ModerationState, ProblemSource, ProblemStatus
+from bridge.problems import brief_rules, briefs
+from bridge.problems.brief_schemas import BriefFacts
+from bridge.problems.models import Problem, ProblemBrief
+from bridge.problems.service import label_for, niche_out, org_ref, published_after, published_facts
+from bridge.proposals.schemas import NicheOut, OrgRef, ProblemRef
 from bridge.proposals.serializers import teaser_items
+from bridge.tenancy.models import Organization
 
 _NICHES = text("SELECT id, slug::text AS slug, name_en, parent_id FROM niches")
 _CITATIONS = text(
@@ -287,3 +299,83 @@ async def opportunity_gap(
         and b.signals[pid].proposals < cfg.discover.gap_fewer_than
     ][: cfg.discover.items]
     return OpportunityGapOut(generated_at=b.facts.now, items=await _problem_items(db, b, tree, cfg, gap, {}))
+
+
+_Parent = aliased(Niche)
+
+
+async def briefs_view(
+    db: AsyncSession,
+    *,
+    niche: str | None,
+    county: str | None,
+    limit: int,
+    after: pagination.MomentCursor | None,
+) -> DiscoverBriefsOut:
+    """Verified organisations' Problem Briefs (REQ-DIR-05): published and clear, public, not closed and whose deadline
+    has not passed (Africa/Nairobi, platform clock), newest first, under the reader's RLS; each with its organisation,
+    budget band, deadline and the published proposals linking it."""
+    stmt = (
+        select(
+            Problem.id,
+            Problem.title,
+            Problem.statement,
+            Problem.niche_id,
+            Niche.slug.label("niche_slug"),
+            Niche.name_en.label("niche_name"),
+            _Parent.name_en.label("parent_name"),
+            Problem.country,
+            Problem.county_code,
+            Problem.published_at,
+            Organization.id.label("org_id"),
+            Organization.slug.label("org_slug"),
+            Organization.legal_name.label("org_name"),
+            ProblemBrief.budget_band,
+            ProblemBrief.deadline,
+        )
+        .join(ProblemBrief, ProblemBrief.problem_id == Problem.id)
+        .join(Organization, Organization.id == Problem.org_id)
+        .outerjoin(Niche, Niche.id == Problem.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .where(
+            Problem.source == ProblemSource.ORG_BRIEF,
+            Problem.status == ProblemStatus.PUBLISHED,
+            Problem.moderation_state == ModerationState.CLEAR,
+            ProblemBrief.status == BriefStatus.PUBLISHED,
+            ProblemBrief.visibility == BriefVisibility.PUBLIC,
+            or_(ProblemBrief.deadline.is_(None), ProblemBrief.deadline >= await briefs.today(db)),
+        )
+    )
+    if niche is not None:
+        stmt = stmt.where(or_(Niche.slug == niche, _Parent.slug == niche))
+    if county is not None:
+        stmt = stmt.where(Problem.county_code == county)
+    if after is not None:
+        stmt = stmt.where(published_after(after))
+    order = (Problem.published_at.desc().nulls_last(), Problem.id.desc())
+    rows = (await db.execute(stmt.order_by(*order).limit(limit + 1))).all()
+    page, weights = rows[:limit], get_weights()
+    counts = await briefs.proposal_counts(db, [row.id for row in page])
+    items = []
+    for row in page:
+        org = OrgRef(id=row.org_id, slug=row.org_slug, name=row.org_name)
+        label = label_for(ProblemSource.ORG_BRIEF, ProblemStatus.PUBLISHED, row.published_at, False, org_name=org.name)
+        problem = DiscoverProblem(
+            id=row.id,
+            title=row.title,
+            source=ProblemSource.ORG_BRIEF,
+            label=label,
+            niche=niche_out(row.niche_id, row.niche_slug, row.niche_name, row.parent_name),
+            seeded_example=False,
+            published_at=row.published_at,
+            org=org,
+            statement=row.statement,
+            country=row.country,
+            county_code=row.county_code,
+        )
+        brief = BriefFacts(org=org, budget_band=brief_rules.band_out(row.budget_band, weights), deadline=row.deadline)
+        items.append(DiscoverBrief(problem=problem, brief=brief, proposal_count=counts.get(row.id, 0)))
+    last = page[-1] if len(rows) > limit else None
+    return DiscoverBriefsOut(
+        items=items, next_cursor=None if last is None else pagination.encode(last.published_at, last.id)
+    )

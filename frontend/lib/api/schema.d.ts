@@ -750,6 +750,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/briefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Briefs
+         * @description Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first.
+         */
+        get: operations["discover_briefs_api_discover_briefs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discover/opportunity-gap": {
         parameters: {
             query?: never;
@@ -2683,6 +2703,21 @@ export interface components {
          */
         BillingInterval: "none" | "month" | "year";
         /**
+         * BriefFacts
+         * @description What a developer reads about a Brief beside its problem card.
+         */
+        BriefFacts: {
+            /** @description The organisation's budget band; null when it gave none */
+            budget_band: components["schemas"]["BudgetBandOut"] | null;
+            /**
+             * Deadline
+             * @description Proposals wanted by this day (Africa/Nairobi); null when none
+             */
+            deadline: string | null;
+            /** @description The organisation that posted it; null when it is not in the directory */
+            org: components["schemas"]["OrgRef"] | null;
+        };
+        /**
          * BriefIn
          * @description A new Brief. Plain text only (markup is removed) and no contact details: a Brief is public once approved.
          */
@@ -3461,6 +3496,30 @@ export interface components {
         DirectoryPage: {
             /** Groups */
             groups: components["schemas"]["DirectoryGroup"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
+        };
+        /** DiscoverBrief */
+        DiscoverBrief: {
+            brief: components["schemas"]["BriefFacts"];
+            /** @description The Brief's problem card ('Posted by <organisation>', with org) */
+            problem: components["schemas"]["DiscoverProblem"];
+            /**
+             * Proposal Count
+             * @description Published proposals that link this Brief
+             */
+            proposal_count: number;
+        };
+        /** DiscoverBriefsOut */
+        DiscoverBriefsOut: {
+            /**
+             * Items
+             * @description Published, open Briefs, newest first
+             */
+            items: components["schemas"]["DiscoverBrief"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= for the next page; null on the last page
@@ -10198,6 +10257,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgCard"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    discover_briefs_api_discover_briefs_get: {
+        parameters: {
+            query?: {
+                /** @description Niche slug (a parent includes children) */
+                niche?: string | null;
+                /** @description ISO 3166-2 county code */
+                county?: string | null;
+                limit?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverBriefsOut"];
                 };
             };
             /** @description Bad Request */
