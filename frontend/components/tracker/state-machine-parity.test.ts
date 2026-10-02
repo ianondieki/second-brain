@@ -11,14 +11,12 @@ import {
   COMMAND_SEGMENT,
   CONTACT_REVEALED_STATES,
   DUAL_ENDORSEMENT_STATES,
-  HOLD_MAX_DAYS,
   MAIN_PATH_GROUP,
   MILESTONE_SEGMENT,
   MILESTONE_STEPS,
   PAUSED_STATES,
-  QUESTION_MAX_CHARS,
-  REASON_MAX_CHARS,
 } from "./model";
+import { HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // docs/spec/06 6.9: the state machine (backend/src/bridge/engagements/state_machine.py) is the only definition of the
 // stages. The frozen API sends the current stage's group, not the table, so the tracker keeps three small copies; this

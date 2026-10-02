@@ -4,7 +4,6 @@ import { detail, history, inImplementation, summary } from "@/test/engagement";
 
 import {
   actionItems,
-  addDays,
   awaitsMe,
   commandRequest,
   documentKinds,
@@ -12,7 +11,6 @@ import {
   endorsementRows,
   formatDate,
   kesAmount,
-  longDate,
   milestoneTargets,
   notesByEvent,
   offersContactReveal,
@@ -25,6 +23,7 @@ import {
   withQuery,
   type ChipKind,
 } from "./model";
+import { addDays, longDate } from "./sheet";
 
 // REQ-ENG-03 (AC-TRACK-3/4 prototype part): the tracker's view model. The stepper's groups come from `stage_group`,
 // whose turn from `whose_turn`, the buttons only from `actions`; nothing here decides who may act.

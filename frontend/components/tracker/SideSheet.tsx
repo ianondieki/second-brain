@@ -8,17 +8,8 @@ import { SheetHandle, sheetClass } from "@/components/ui/ConfirmDialog";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
-import {
-  addDays,
-  formatDate,
-  HOLD_MAX_DAYS,
-  longDate,
-  nairobiToday,
-  QUESTION_MAX_CHARS,
-  REASON_MAX_CHARS,
-  type SheetCommand,
-  type SheetInput,
-} from "./model";
+import { formatDate, nairobiToday, type SheetCommand, type SheetInput } from "./model";
+import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
 // resume, and the organisation's withdrawal of its question. Each is a native modal <dialog> drawn as the confirmation

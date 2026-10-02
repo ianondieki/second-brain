@@ -53,7 +53,6 @@ const BY_CODE: Record<string, Refusal> = {
   invalid_resume_at: "invalidResumeAt",
   info_request_limit: "questionLimit",
   hold_limit: "holdLimit",
-  illegal_transition: "conflict",
 };
 
 export function refusalOf(status: number, error: unknown): Refusal {

@@ -291,24 +291,6 @@ export function notesByEvent(events: readonly HistoryEvent[], notes: readonly No
   return found;
 }
 
-/** A calendar date `days` after another ("2026-10-02" + 60), for the hold's latest resume date. */
-export function addDays(day: string, days: number): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-}
-
-/** A calendar date with its weekday, as a person says it ("Monday, 12 October 2026"; Swahili "Jumatatu, 12 Oktoba 2026"). */
-export function longDate(day: string, locale = "en"): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat(`${locale}-KE`, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(y, m - 1, d)));
-}
-
 // --------------------------------------------------------------------------------------------- actions → requests
 
 /** Commands whose request carries more than `lock_version`: each opens a small form first. */
@@ -322,12 +304,6 @@ export type FormCommand = (typeof FORM_COMMANDS)[number];
  */
 export const SHEET_COMMANDS = ["request_info", "answer_info", "pause", "resume", "cancel_request"] as const satisfies readonly Command[];
 export type SheetCommand = (typeof SHEET_COMMANDS)[number];
-
-/** The longest question or answer, and the longest reason (state_machine.QUESTION_MAX_CHARS / REASON_MAX_CHARS). */
-export const QUESTION_MAX_CHARS = 2000;
-export const REASON_MAX_CHARS = 500;
-/** A hold's resume date: at most this many calendar days ahead (policy.yaml on_hold.max_days). */
-export const HOLD_MAX_DAYS = 60;
 
 /** Commands that end the engagement: a confirmation first, never the primary button. */
 export const ENDING_COMMANDS = ["withdraw", "decline_interest", "decline"] as const satisfies readonly Command[];
