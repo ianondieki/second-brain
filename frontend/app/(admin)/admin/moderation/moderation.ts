@@ -35,6 +35,16 @@ export function caseKind(subjectType: string): CaseKind {
   return subjectType === "proposal" || subjectType === "problem" || subjectType === "org_claim" ? subjectType : "other";
 }
 
+/**
+ * What the queue calls a case's subject (`adminModeration.kind.*`): its kind, or "brief" for a problem an
+ * organisation posted as a Problem Brief (filed with `new_org_brief`, REQ-DIR-05), so staff can tell it from a
+ * developer's problem in the list. The case carries no organisation name; the case page shows the Brief's text.
+ */
+export function caseKindLabel(item: Pick<Case, "subject_type" | "reasons">): CaseKind | "brief" {
+  const kind = caseKind(item.subject_type);
+  return kind === "problem" && item.reasons.includes("new_org_brief") ? "brief" : kind;
+}
+
 /** The subject's title as it is now (its Tier-1 title field, else the preview's), or null when it has none. */
 export function caseTitle(item: Pick<Case, "fields" | "preview">): string | null {
   const field = item.fields.find((f) => f.name === "title")?.text.trim();
@@ -42,14 +52,16 @@ export function caseTitle(item: Pick<Case, "fields" | "preview">): string | null
 }
 
 /**
- * Why the pre-screen or a person filed the case. The rules pre-screen (bridge/proposals/prescreen.py) and the publish
- * path (bridge/proposals/service.py) file the first four; the rest are the Haiku pre-screen's classes (docs/spec/06
- * 6.12) for when it is plugged in. Anything else reads "other".
+ * Why the pre-screen or a person filed the case. The rules pre-screen (bridge/proposals/prescreen.py), the publish
+ * path (bridge/proposals/service.py) and a posted Problem Brief (bridge/problems/briefs.py, REQ-DIR-05) file the first
+ * five; the rest are the Haiku pre-screen's classes (docs/spec/06 6.12) for when it is plugged in. Anything else reads
+ * "other".
  */
 export const REASONS = [
   "names_real_org_negative",
   "security_vulnerability",
   "new_developer_problem",
+  "new_org_brief",
   "new_version_of_moderated_proposal",
   "spam",
   "defamation",
@@ -66,17 +78,20 @@ export function caseReasons(reasons: readonly string[]): Reason[] {
 }
 
 /**
- * Routine reasons (every developer problem is queued; a new version of a checked proposal is filed again) read as
- * information; the rest are flags and read as warnings. Both carry a mark and words.
+ * Routine reasons (every developer problem and every organisation's Brief is queued; a new version of a checked
+ * proposal is filed again) read as information; the rest are flags and read as warnings. Both carry a mark and words.
  */
-const ROUTINE: readonly Reason[] = ["new_developer_problem", "new_version_of_moderated_proposal"];
+const ROUTINE: readonly Reason[] = ["new_developer_problem", "new_org_brief", "new_version_of_moderated_proposal"];
 
 export function reasonTone(reason: Reason): "info" | "flag" {
   return ROUTINE.includes(reason) ? "info" : "flag";
 }
 
-/** The Tier-1 fields the queue shows (bridge/admin/moderation.py TIER1_FIELDS); anything else is "other". */
-export const FIELDS = ["title", "problem_statement", "impact_claims", "summary", "statement"] as const;
+/**
+ * The Tier-1 fields the queue shows (bridge/admin/moderation.py TIER1_FIELDS; a problem's affected group since
+ * REQ-DIR-05, public text in a Brief); anything else is "other".
+ */
+export const FIELDS = ["title", "problem_statement", "impact_claims", "summary", "statement", "affected_group"] as const;
 export type FieldName = (typeof FIELDS)[number] | "other";
 
 export function fieldKey(name: string): FieldName {

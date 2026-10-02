@@ -24,6 +24,7 @@ import { getCase } from "../../data";
 import {
   caseHref,
   caseKind,
+  caseKindLabel,
   caseReasons,
   caseTitle,
   fieldKey,
@@ -102,7 +103,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
             while checked" or "Hidden until decided" would no longer be true), as the meta line. */}
         <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
           <li data-header-tag="kind">
-            <Badge tone="neutral">{t(`kind.${kind}`)}</Badge>
+            <Badge tone="neutral">{t(`kind.${caseKindLabel(item)}`)}</Badge>
           </li>
           {result ? (
             <li data-header-tag="outcome">

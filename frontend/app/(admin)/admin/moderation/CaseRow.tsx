@@ -11,6 +11,7 @@ import { DataCell, DataRow, dataLinkClass } from "@/components/ui/DataTable";
 import {
   caseHref,
   caseKind,
+  caseKindLabel,
   caseReasons,
   caseTitle,
   outcome,
@@ -78,7 +79,7 @@ export async function CaseRow({ item }: { item: Case }) {
       </DataCell>
       {/* Plain text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
       <DataCell label={t("columns.kind")} nowrap>
-        <span className="font-medium text-ink">{t(`kind.${kind}`)}</span>
+        <span className="font-medium text-ink">{t(`kind.${caseKindLabel(item)}`)}</span>
       </DataCell>
       <DataCell label={t("columns.when")} figure className="text-ink-soft">
         {decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}
