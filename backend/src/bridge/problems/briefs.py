@@ -56,7 +56,7 @@ from bridge.models.enums import (
 )
 from bridge.problems import brief_rules
 from bridge.problems import service as problems
-from bridge.problems.brief_schemas import BriefIn, BriefList, BriefOut, BriefPlanOut
+from bridge.problems.brief_schemas import BriefIn, BriefList, BriefOut, BriefPatch, BriefPlanOut
 from bridge.problems.models import Problem, ProblemBrief
 from bridge.proposals.prescreen import PreScreen, ScreenInput, listed_org_names
 from bridge.proposals.sanitise import FieldError
@@ -68,6 +68,7 @@ NEW_BRIEF_REASON: Final = "new_org_brief"  # every Brief waits for staff review
 # [[COPY-REVIEW]] the refusals' sentences (the field sentences are bridge.problems.brief_rules.MESSAGES).
 NOT_VERIFIED: Final = "Only organisations with legal verification (E2) can post Problem Briefs."
 NOT_AVAILABLE: Final = "Invited-only Briefs are not available yet. Post a public Brief."
+CLOSED: Final = "This Brief is closed. Post a new one to ask again."
 NO_BRIEF: Final = "No Brief of your organisation has this id."
 
 _NOW = text("SELECT app_clock_now()")
@@ -87,6 +88,15 @@ _INSERT_PROBLEM = text(
 _INSERT_BRIEF = text(
     "INSERT INTO problem_briefs (problem_id, org_id, visibility, budget_band, deadline, status)"
     " VALUES (:id, :org, 'public', :band, :deadline, 'published')"
+)
+_LOCK_BRIEF = text("SELECT status FROM problem_briefs WHERE problem_id = :id AND org_id = :org FOR UPDATE")
+_UPDATE_BRIEF = text(
+    "UPDATE problem_briefs SET budget_band = CASE WHEN :set_band THEN CAST(:band AS varchar) ELSE budget_band END,"
+    " deadline = CASE WHEN :set_deadline THEN CAST(:deadline AS date) ELSE deadline END, updated_at = now()"
+    " WHERE problem_id = :id AND org_id = :org"
+)
+_CLOSE_BRIEF = text(
+    "UPDATE problem_briefs SET status = 'closed', updated_at = now() WHERE problem_id = :id AND org_id = :org"
 )
 # Published, clear proposals whose current version links the problem (Discover's proposal_count rule).
 _PROPOSAL_COUNTS = text(
@@ -314,4 +324,61 @@ async def create(
             subject_id=problem_id,
             payload={"visibility": BriefVisibility.PUBLIC.value, "moderation_state": moderation.value},
         )
+    return await get_one(db, org.org_id, problem_id)
+
+
+async def _locked_status(db: AsyncSession, org_id: UUID, problem_id: UUID) -> BriefStatus:
+    status = (await db.execute(_LOCK_BRIEF, {"id": problem_id, "org": org_id})).scalar_one_or_none()
+    if status is None:
+        raise not_found(NO_BRIEF)
+    return BriefStatus(status)
+
+
+async def update(db: AsyncSession, org: OrgContext, problem_id: UUID, body: BriefPatch) -> BriefOut:
+    """Change the budget band or deadline (``null`` clears it) of a Brief that is not closed (409 ``brief_closed``)."""
+    changes = body.model_dump(exclude_unset=True)
+    if await _locked_status(db, org.org_id, problem_id) is BriefStatus.CLOSED:
+        raise ApiError(409, "brief_closed", CLOSED)
+    errors = await _choice_errors(
+        db, get_weights(), budget_band=changes.get("budget_band"), deadline=changes.get("deadline")
+    )
+    if errors:
+        raise brief_rules.invalid(errors)
+    if changes:
+        params = {
+            "id": problem_id,
+            "org": org.org_id,
+            "set_band": "budget_band" in changes,
+            "band": changes.get("budget_band"),
+            "set_deadline": "deadline" in changes,
+            "deadline": changes.get("deadline"),
+        }
+        async with _writing(db):
+            await db.execute(_UPDATE_BRIEF, params)
+            await audit(
+                db,
+                "brief.updated",
+                actor_user_id=org.live.user.id,
+                org_id=org.org_id,
+                subject_type="problem",
+                subject_id=problem_id,
+                payload={"fields": sorted(changes)},
+            )
+    return await get_one(db, org.org_id, problem_id)
+
+
+async def close(db: AsyncSession, org: OrgContext, problem_id: UUID) -> BriefOut:
+    """Close the Brief (closing a closed one changes nothing): off Discover, its plan slot freed."""
+    if await _locked_status(db, org.org_id, problem_id) is not BriefStatus.CLOSED:
+        async with _writing(db):
+            await db.execute(_CLOSE_BRIEF, {"id": problem_id, "org": org.org_id})
+            await audit(
+                db,
+                "brief.closed",
+                actor_user_id=org.live.user.id,
+                org_id=org.org_id,
+                subject_type="problem",
+                subject_id=problem_id,
+                payload={},
+            )
     return await get_one(db, org.org_id, problem_id)
