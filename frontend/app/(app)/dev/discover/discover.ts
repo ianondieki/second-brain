@@ -13,14 +13,19 @@ export type ProblemRef = Schemas["ProblemRef"];
 export type OpportunityGapOut = Schemas["OpportunityGapOut"];
 export type NicheNode = Schemas["NicheNode"];
 export type CountyRef = Schemas["CountyRef"];
+export type DiscoverBriefsOut = Schemas["DiscoverBriefsOut"];
+export type DiscoverBrief = Schemas["DiscoverBrief"];
 
 export const DISCOVER_PATH = "/dev/discover";
 export const NICHES_PATH = "/dev/discover/niches";
 /** The profiling consent's section on the niches page (Home's "Recommended for you" note links here). */
 export const PROFILING_HREF = `${NICHES_PATH}#profiling`;
 
-/** Discover's three lists (docs/spec/07 item 1): one at a time, chosen in the address so each is shareable. */
-export const VIEWS = ["problems", "projects", "gap"] as const;
+/**
+ * Discover's lists (docs/spec/07 item 1), one at a time, chosen in the address so each is shareable: trending problems,
+ * trending projects, the opportunity gap and the organisations' Problem Briefs (REQ-DIR-05).
+ */
+export const VIEWS = ["problems", "projects", "gap", "briefs"] as const;
 export type View = (typeof VIEWS)[number];
 
 /** The API lists at most 20 per list (REQ-TREND-01 card); the screen never shows more. */
@@ -70,14 +75,19 @@ export function discoverHref({ view = "problems", niche, county }: Partial<Disco
   return text ? `${DISCOVER_PATH}?${text}` : DISCOVER_PATH;
 }
 
-/** The query for GET /api/discover/trending and /api/discover/opportunity-gap. */
+/** The query for GET /api/discover/trending, /api/discover/opportunity-gap and /api/discover/briefs. */
 export function trendQuery({ niche, county }: DiscoverQuery): { niche?: string; county?: string } {
   return { niche, county };
 }
 
-/** A new idea that already links this problem (the editor reads `?problem=`). */
-export function startProposalHref(problemId: string): string {
-  return `/dev/ideas/new?problem=${encodeURIComponent(problemId)}`;
+/**
+ * A new idea that already links this problem (the editor reads `?problem=`). For an organisation's Problem Brief,
+ * `org` names the organisation that posted it, so the way to pitch can start with it chosen (REQ-DIR-05).
+ */
+export function startProposalHref(problemId: string, orgId?: string | null): string {
+  const query = new URLSearchParams({ problem: problemId });
+  if (orgId) query.set("org", orgId);
+  return `/dev/ideas/new?${query.toString()}`;
 }
 
 /** The id of a project's row on the Projects view, so a problem can link to the project beside it and back. */

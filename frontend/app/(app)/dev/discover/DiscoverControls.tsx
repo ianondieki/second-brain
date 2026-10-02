@@ -17,7 +17,7 @@ import {
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 /**
- * Discover's three lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
+ * Discover's four lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
  * server-rendered and shareable).
  */
 export function ViewSwitch({ query }: { query: DiscoverQuery }) {

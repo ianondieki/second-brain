@@ -124,7 +124,7 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
           <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
           <ProblemLabelText problem={problem} />
         </span>
-        <StandaloneLink href={startProposalHref(problem.id)} className="text-sm">
+        <StandaloneLink href={startProposalHref(problem.id, problem.org?.id)} className="text-sm">
           {t("start")}
         </StandaloneLink>
       </p>

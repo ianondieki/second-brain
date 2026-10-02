@@ -24,14 +24,15 @@ async function expectAtMostTwoChips(cards: Locator) {
 
 /**
  * Every problem says where it comes from: a non-empty provenance label, in the problem page's words (developer-reported,
- * AI-drafted and human-reviewed on a day, or a seeded example), never the API's English date ("30 September 2026").
+ * AI-drafted and human-reviewed on a day, a seeded example, or an organisation's Problem Brief "Posted by <name>",
+ * REQ-DIR-05), never the API's English date ("30 September 2026").
  */
 async function expectLabelled(cards: Locator) {
   for (const card of await cards.all()) {
     const label = card.locator("[data-label]");
     await expect(label).toHaveCount(1);
     // A seeded example shows the small "Demo data" badge, its sentence behind it (D-52).
-    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Demo data)/);
+    await expect(label).toHaveText(/^(Developer-reported|AI-drafted, human-reviewed on|Demo data|Posted by )/);
     await expect(label).not.toHaveText(/(January|February|March|April|June|July|August|September|October|November|December)/);
   }
 }
