@@ -17,9 +17,11 @@ the engagement's row lock, after reading the engagement and the clock again: a r
 nothing, and a terminal state never takes a second event (the chain refuses one too), so runs are idempotent. Both
 parties are told (``bridge.engagements.notify``, queued in the same transaction).
 
-Finding the engagements: no application role reads every tenant's engagements, so the run goes developer by
-developer (``users`` has no RLS), each in a session bound to them that reads their engagements in the states above.
-One engagement's failure is logged and never stops the run (the next run retries it). The organisation's
+Finding the engagements: no application role reads every tenant's engagements, so the run asks
+``app_engagements_due_for_expiry(now)`` (revision 0007; ids only, a superset of what is due, called with no user
+bound) and decides each listed engagement again in a session bound to its developer. An expired tagged engagement's
+tag closes as ``expired`` (``app_close_tag(tag, 'expired')``); an organisation's interest has no tag. One
+engagement's failure is logged and never stops the run (the next run retries it). The organisation's
 responsiveness score is not recomputed here (its data source comes later; P19 card).
 """
 
@@ -31,11 +33,10 @@ from datetime import date, datetime
 from typing import Final, Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.admin.models import Holiday
-from bridge.auth.models import User
 from bridge.db import bind_tenant
 from bridge.engagements import notify
 from bridge.engagements import state_machine as sm
@@ -46,11 +47,12 @@ from bridge.engagements.policy import TrackerPolicy, get_policy
 from bridge.engagements.service import app_now, entering_event, lock_engagement
 from bridge.ids import uuid7
 from bridge.logging import get_logger
-from bridge.models.enums import EngagementActorRole, EngagementState
+from bridge.models.enums import EngagementActorRole, EngagementState, TagStatus
 
 S = EngagementState
 Action = Literal["expire", "resume"]
-WATCHED: Final = (*sm.EXPIRY, S.ON_HOLD)
+# Revision 0007: the engagements the clock may act on at a time (ids only; called with no user bound).
+_DUE: Final = text("SELECT developer_id, engagement_id FROM app_engagements_due_for_expiry(:now)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,18 +113,6 @@ async def _action(
     return due_action(engagement.state, now, engagement.stage_deadline_at, entered, holidays, policy)
 
 
-async def _due(
-    db: AsyncSession, developer_id: UUID, now: datetime, holidays: Collection[date], policy: TrackerPolicy
-) -> list[UUID]:
-    """The developer's engagements the clock acts on at ``now`` (the session is bound to them)."""
-    rows = await db.scalars(
-        select(Engagement)
-        .where(Engagement.developer_id == developer_id, Engagement.state.in_(WATCHED))
-        .order_by(Engagement.created_at, Engagement.id)
-    )
-    return [e.id for e in rows.all() if await _action(db, e, now, holidays, policy) is not None]
-
-
 def _system_event(
     engagement: Engagement, command: str, to_state: EngagementState, deadline: datetime | None
 ) -> EngagementEvent:
@@ -163,8 +153,8 @@ async def act_on(
     db.add(event)
     await db.flush()
     await db.refresh(engagement)  # the database projected the event
-    if engagement.state is S.EXPIRED:
-        await close_tag(db, engagement)
+    if engagement.state is S.EXPIRED:  # revision 0007: a tagged engagement's tag expires with it (AC-PROP-3)
+        await close_tag(db, engagement, status=TagStatus.EXPIRED)
     await notify.enqueue(db, engagement, event)
     return Outcome(engagement_id, action, engagement.state)
 
@@ -176,31 +166,31 @@ async def run_expiry(
     user_ids: Sequence[UUID] | None = None,
     policy: TrackerPolicy | None = None,
 ) -> Report:
-    """One pass of ``engagements.expire`` over every developer's engagements (or ``user_ids``' only)."""
+    """One pass of ``engagements.expire``: the engagements ``app_engagements_due_for_expiry`` lists at the run's time
+    (a superset of what is due, ids only, asked with no user bound), each decided again and acted on in a session bound
+    to its developer (``user_ids``: only those developers'). The report holds what the run did: each event written and
+    each failure; an engagement listed but not due yet is not reported."""
     log = get_logger(__name__)
     policy = policy or get_policy()
     async with factory() as db:
         clock = now or await app_now(db)
         holidays = await _holidays(db)
-        query = select(User.id).order_by(User.id)
-        if user_ids is not None:
-            query = query.where(User.id.in_(list(user_ids)))
-        developers = list((await db.scalars(query)).all())
+        listed = (await db.execute(_DUE, {"now": clock})).tuples().all()
+    if user_ids is not None:
+        listed = [(developer, engagement) for developer, engagement in listed if developer in set(user_ids)]
     outcomes: list[Outcome] = []
-    for developer in developers:
-        async with factory() as db:
-            await bind_tenant(db, user_id=developer)
-            due = await _due(db, developer, clock, holidays, policy)
-        for engagement_id in due:
-            try:
-                async with factory() as db:
-                    await bind_tenant(db, user_id=developer)
-                    outcome = await act_on(db, engagement_id, now=now, holidays=holidays, policy=policy)
-                    await db.commit()
-            except Exception:  # one engagement never stops the run; the next run retries it
-                log.exception("engagements.expiry_failed", engagement_id=str(engagement_id))
-                outcome = Outcome(engagement_id, None, None, error=True)
-            else:
-                log.info("engagements.expiry", engagement_id=str(engagement_id), step=outcome.action)
-            outcomes.append(outcome)
+    for developer, engagement_id in listed:
+        try:  # one engagement (or its developer's session) never stops the run; the next run retries it
+            async with factory() as db:
+                await bind_tenant(db, user_id=developer)
+                outcome = await act_on(db, engagement_id, now=now, holidays=holidays, policy=policy)
+                await db.commit()
+        except Exception:
+            log.exception("engagements.expiry_failed", engagement_id=str(engagement_id))
+            outcome = Outcome(engagement_id, None, None, error=True)
+        else:
+            if outcome.action is None:
+                continue
+            log.info("engagements.expiry", engagement_id=str(engagement_id), step=outcome.action)
+        outcomes.append(outcome)
     return Report(clock, tuple(outcomes))

@@ -108,6 +108,7 @@ CONTACT_ROLE_ORDER: Final = (
 )
 _DIGEST = text("SELECT app_subject_digest(:user_id, convert_to(:data, 'UTF8'))")
 _CLOSE_TAG = text("SELECT app_close_tag(:tag_id)")
+_CLOSE_TAG_AS = text("SELECT app_close_tag(:tag_id, CAST(:status AS tag_status))")
 
 
 @dataclass(frozen=True, slots=True)
@@ -398,12 +399,17 @@ async def open_tag(db: AsyncSession, engagement: Engagement) -> Tag | None:
     return found
 
 
-async def close_tag(db: AsyncSession, engagement: Engagement) -> None:
+async def close_tag(db: AsyncSession, engagement: Engagement, *, status: TagStatus | None = None) -> None:
     """The engagement ended (DECLINED, EXPIRED or CLOSED): its tag closes (``app_close_tag``), freeing the developer's
-    one open tag with this organisation."""
+    one open tag with this organisation. ``status`` (revision 0007): ``expired`` when the system expired a tagged
+    engagement, in a session bound to its developer; otherwise the tag keeps its status (the one-argument call)."""
     tag = await open_tag(db, engagement)
-    if tag is not None:
+    if tag is None:  # an organisation's interest (no tag), or the tag closed already
+        return
+    if status is None:
         await db.execute(_CLOSE_TAG, {"tag_id": tag.id})
+    else:
+        await db.execute(_CLOSE_TAG_AS, {"tag_id": tag.id, "status": status.value})
 
 
 async def _open_tag(step: Step) -> Tag | None:

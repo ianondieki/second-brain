@@ -18,7 +18,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from bridge.db import create_session_factory
 from bridge.engagements import expiry, notify
@@ -149,8 +149,10 @@ async def test_an_engagement_nobody_moves_expires_once(
     assert (expired["command"], expired["from_state"], expired["to_state"]) == ("expire", state.value, "EXPIRED")
     assert (expired["actor_user_id"], expired["end_reason"], expired["payload"]) == (None, reason, {})
     assert history["chain_verified"] is True
-    if state is not S.ORG_INTEREST:  # a tagged engagement's tag closes with it (an organisation's interest has none)
-        assert (await tag_closed(owner_engine, world))[1] is True
+    if state is not S.ORG_INTEREST:  # AC-PROP-3: a tagged engagement's tag expires with it
+        assert await tag_closed(owner_engine, world) == ("expired", True)
+    else:  # an organisation's interest has no tag: the world's tag was never used
+        assert await tag_closed(owner_engine, world) == ("delivered", False)
     provider = FakeEmailProvider()
     await run_notifications(owner_engine, app_engine, t.engagement, provider)
     words = notify.EXPIRY_LABELS[EngagementEndReason(reason)]
@@ -247,25 +249,36 @@ async def test_a_hold_resumes_by_itself_on_its_date(owner_engine: AsyncEngine, a
         assert sorted(resumed_mail) == sorted(addresses.scalars().all())  # one each
 
 
-async def test_a_failing_engagement_is_reported_and_retried_by_the_next_run(
+async def test_a_failure_never_stops_the_run_and_the_next_run_retries_it(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One engagement's failure never stops the run: it is logged and reported, nothing of it is written, and the
-    next run acts on it."""
-    world = await build(owner_engine)
+    """Two due engagements of two developers: the first one's work fails (logged and reported, nothing of it
+    written), the second still expires in the same run, and the next run expires the first."""
+    worlds = [await build(owner_engine), await build(owner_engine)]
     off = await holidays_of(owner_engine)
-    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
-        t = await reach(owner_engine, app_engine, world, s, S.SUBMITTED)
+    trackers = [Tracker(await open_engagement(app_engine, world)) for world in worlds]
+    async with moved_clock(owner_engine) as advance:
         last = add_business_days(await db_today(owner_engine), 20, off)
         await advance((last - await db_today(owner_engine)).days + 1)
+        calls: list[UUID] = []
+        real_act_on = expiry.act_on
 
-        async def broken(*args: object, **kwargs: object) -> Outcome:
-            raise RuntimeError("the database went away")
+        async def first_fails(db: AsyncSession, engagement_id: UUID, **kwargs: Any) -> Outcome:
+            calls.append(engagement_id)
+            if len(calls) == 1:
+                raise RuntimeError("the database went away")
+            return await real_act_on(db, engagement_id, **kwargs)
 
+        developers = [world.developer for world in worlds]
+        factory = create_session_factory(app_engine)
         with monkeypatch.context() as patched:
-            patched.setattr(expiry, "act_on", broken)
-            failed = await tick(app_engine, world)
-        assert failed.of(t.engagement) == Outcome(t.engagement, None, None, error=True)
-        assert (await t.detail(s.dev))["state"] == "SUBMITTED"
-        retried = await tick(app_engine, world)
-    assert retried.of(t.engagement) == Outcome(t.engagement, "expire", S.EXPIRED)
+            patched.setattr(expiry, "act_on", first_fails)
+            report = await run_expiry(factory, user_ids=developers)
+        failed, done = calls
+        assert report.outcomes == (
+            Outcome(failed, None, None, error=True),
+            Outcome(done, "expire", S.EXPIRED),
+        )
+        assert {failed, done} == {t.engagement for t in trackers}
+        retried = await run_expiry(factory, user_ids=developers)
+    assert retried.outcomes == (Outcome(failed, "expire", S.EXPIRED),)
