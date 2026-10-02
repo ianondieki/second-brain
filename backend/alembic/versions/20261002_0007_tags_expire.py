@@ -43,8 +43,9 @@ returns ids only (no title, party name, state or date). An engagement is listed,
   with none, its ``stage_entered_at``) is at or before ``p_now``. A superset of what expires: an engagement expires
   ``expire_bd`` business days after it entered the stage, never before its deadline (``due_bd <= expire_bd``, enforced
   by ``bridge.engagements.policy``; pauses move both alike);
-- in ``INFO_REQUESTED`` once its ``stage_deadline_at`` is at or before ``p_now`` (a question pauses the clock and the
-  application sets no deadline on it, so today none is listed);
+- in ``INFO_REQUESTED`` once its ``stage_deadline_at``, the question's answer-by date (``info_requested.expire_bd``
+  business days; the stage's own clock stays paused), is at or before ``p_now``: a question left unanswered past it
+  ends the engagement ``EXPIRED (NO_DEV_RESPONSE)``;
 - in ``ON_HOLD`` from the start (00:00 Africa/Nairobi) of the day its ``stage_deadline_at`` falls on, its resume date
   (the job resumes a hold from that moment); a hold without a deadline is never listed.
 
@@ -159,8 +160,9 @@ $$;
 -- no user bound (a signed-in request learns nothing about other parties' engagements). A superset of what is due,
 -- never less: ORG_INTEREST, SUBMITTED, UNDER_REVIEW and INTEREST_CONFIRMED once the stage deadline (without one, the
 -- stage's entry) is at or before p_now, since a stage expires expire_bd business days after its entry and never
--- before its deadline (due_bd <= expire_bd); INFO_REQUESTED once its deadline is (none is set while the clock is
--- paused); ON_HOLD from 00:00 Africa/Nairobi on the day of its deadline, the resume date. The job decides again.
+-- before its deadline (due_bd <= expire_bd); INFO_REQUESTED once its deadline, the question's answer-by date, is (an
+-- unanswered question expires the engagement past it); ON_HOLD from 00:00 Africa/Nairobi on the day of its deadline,
+-- the resume date. The job decides again.
 CREATE FUNCTION app_engagements_due_for_expiry(p_now timestamptz)
     RETURNS TABLE (developer_id uuid, engagement_id uuid)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
