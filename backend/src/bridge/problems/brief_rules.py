@@ -6,6 +6,8 @@
   lengths (docs/spec/06 6.5: a statement of at most 120 words, counted as the research checks count them, within a
   1,200-character cap); title and statement are required. An error names the field and a code, never the refused text.
 - State: what the organisation's list shows, from the Brief's own status and its problem's.
+- Open: a Brief asks for proposals while it is published (not a draft, not closed) and its deadline is unset or
+  today or later (Africa/Nairobi on the platform clock).
 - Budget band: a code from ``config/matching/weights_v1.yaml``; a stored code the configuration no longer has shows
   no band (never a made-up label).
 """
@@ -97,8 +99,20 @@ def band_out(code: str | None, weights: Weights) -> BudgetBandOut | None:
     return None if band is None else BudgetBandOut(code=band.code, label=band.label)
 
 
-def facts(org: OrgRef | None, budget_band: str | None, deadline: date | None) -> BriefFacts:
-    return BriefFacts(org=org, budget_band=band_out(budget_band, get_weights()), deadline=deadline)
+def is_open(status: BriefStatus, deadline: date | None, today: date) -> bool:
+    """Whether the Brief still asks for proposals: published, and its deadline unset or not passed."""
+    return status is BriefStatus.PUBLISHED and (deadline is None or deadline >= today)
+
+
+def facts(
+    org: OrgRef | None, budget_band: str | None, deadline: date | None, *, status: BriefStatus, today: date
+) -> BriefFacts:
+    return BriefFacts(
+        org=org,
+        budget_band=band_out(budget_band, get_weights()),
+        deadline=deadline,
+        open=is_open(status, deadline, today),
+    )
 
 
 def invalid(errors: Sequence[FieldError]) -> ApiError:

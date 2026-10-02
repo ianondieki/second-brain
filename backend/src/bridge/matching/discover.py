@@ -374,7 +374,8 @@ async def briefs_view(
             country=row.country,
             county_code=row.county_code,
         )
-        brief = BriefFacts(org=org, budget_band=brief_rules.band_out(row.budget_band, weights), deadline=row.deadline)
+        band = brief_rules.band_out(row.budget_band, weights)
+        brief = BriefFacts(org=org, budget_band=band, deadline=row.deadline, open=True)  # the view lists open ones only
         items.append(DiscoverBrief(problem=problem, brief=brief, proposal_count=counts.get(row.id, 0)))
     last = page[-1] if len(rows) > limit else None
     return DiscoverBriefsOut(

@@ -2714,6 +2714,11 @@ export interface components {
              * @description Proposals wanted by this day (Africa/Nairobi); null when none
              */
             deadline: string | null;
+            /**
+             * Open
+             * @description Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals
+             */
+            open?: boolean;
             /** @description The organisation that posted it; null when it is not in the directory */
             org: components["schemas"]["OrgRef"] | null;
         };

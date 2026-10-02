@@ -23,7 +23,8 @@ from pydantic import BaseModel, Field
 from bridge import pagination
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, not_found
-from bridge.problems import brief_rules, service
+from bridge.models.enums import BriefStatus
+from bridge.problems import brief_rules, briefs, service
 from bridge.problems.brief_schemas import BriefFacts
 from bridge.proposals.schemas import ProblemRef
 
@@ -97,6 +98,10 @@ async def get_problem(problem_id: UUID, live: CurrentSession, db: Db) -> Problem
     if found is None:
         raise not_found("No such problem.")
     ref, row, citations = found
+    brief = None
+    if row.brief_status is not None:
+        status, today = BriefStatus(row.brief_status), await briefs.today(db)
+        brief = brief_rules.facts(ref.org, row.budget_band, row.deadline, status=status, today=today)
     return ProblemDetail(
         **ref.model_dump(),
         statement=row.statement,
@@ -117,5 +122,5 @@ async def get_problem(problem_id: UUID, live: CurrentSession, db: Db) -> Problem
             )
             for c in citations
         ],
-        brief=None if row.brief_status is None else brief_rules.facts(ref.org, row.budget_band, row.deadline),
+        brief=brief,
     )

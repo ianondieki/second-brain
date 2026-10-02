@@ -9,7 +9,7 @@ member, no contact. The organisation's own shapes add the moderation facts and t
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,12 +25,24 @@ RAW_CAP_STATEMENT = 10_000
 BriefState = Literal["in_review", "published", "rejected", "closed"]
 
 
+def _without_default(schema: dict[str, Any]) -> None:
+    """Leave a field's default out of the OpenAPI document: always sent, it stays optional in the generated web types
+    (openapi-typescript makes a field with a non-null default required), so clients add it at their own pace."""
+    schema.pop("default", None)
+
+
 class BriefFacts(BaseModel):
     """What a developer reads about a Brief beside its problem card."""
 
     org: OrgRef | None = Field(description="The organisation that posted it; null when it is not in the directory")
     budget_band: BudgetBandOut | None = Field(description="The organisation's budget band; null when it gave none")
     deadline: date | None = Field(description="Proposals wanted by this day (Africa/Nairobi); null when none")
+    open: bool = Field(
+        default=False,
+        description="Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock):"
+        " the organisation is still asking for proposals",
+        json_schema_extra=_without_default,
+    )
 
 
 class BriefIn(BaseModel):

@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import pytest
@@ -17,7 +17,7 @@ from sqlalchemy.exc import DBAPIError
 
 from bridge.matching.config import get_weights
 from bridge.models.enums import BriefStatus, ModerationState, ProblemSource, ProblemStatus
-from bridge.problems.brief_rules import MAX_LENGTHS, MESSAGES, band_out, brief_state, text_errors
+from bridge.problems.brief_rules import MAX_LENGTHS, MESSAGES, band_out, brief_state, is_open, text_errors
 from bridge.problems.briefs import _db_refusal
 from bridge.problems.service import label_for
 from bridge.proposals import sanitise
@@ -132,3 +132,19 @@ def test_a_statement_is_at_most_120_words() -> None:
     assert fine == []
     _, [error] = text_errors({"title": "T", "statement": "word\n" * 121, "affected_group": None})
     assert (error.field, error.code, error.message) == ("statement", "too_long", "Keep this to 120 words or fewer.")
+
+
+@pytest.mark.parametrize(
+    ("status", "deadline", "expected"),
+    [
+        (BriefStatus.PUBLISHED, None, True),
+        (BriefStatus.PUBLISHED, date(2026, 10, 2), True),  # the deadline day itself is still open
+        (BriefStatus.PUBLISHED, date(2026, 10, 1), False),
+        (BriefStatus.CLOSED, None, False),
+        (BriefStatus.DRAFT, None, False),
+    ],
+)
+def test_a_brief_is_open_while_published_and_before_its_deadline(
+    status: BriefStatus, deadline: date | None, expected: bool
+) -> None:
+    assert is_open(status, deadline, date(2026, 10, 2)) is expected

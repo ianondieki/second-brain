@@ -608,6 +608,11 @@
             "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
             "title": "Deadline"
           },
+          "open": {
+            "description": "Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals",
+            "title": "Open",
+            "type": "boolean"
+          },
           "org": {
             "anyOf": [
               {
