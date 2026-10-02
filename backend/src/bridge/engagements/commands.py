@@ -26,7 +26,6 @@ second factor this request verified through the session (TOTP; passkeys are not 
 from __future__ import annotations
 
 import ipaddress
-import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -90,7 +89,7 @@ from bridge.models.enums import (
     TagStatus,
 )
 from bridge.proposals.models import Proposal, Tag
-from bridge.proposals.sanitise import contact_findings, detection_skeleton, plain_text
+from bridge.proposals.sanitise import contact_codes
 from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
@@ -780,16 +779,14 @@ async def returning_deadline(db: AsyncSession, engagement: Engagement, now: date
 def _note_text(step: Step, limit: int) -> str:
     """The note's text, trimmed (1 to ``limit`` characters), with no contact details before first contact: the stage
     the command starts from, or the one a side state returns to, is before CONTACT_MADE (the Tier-1 detectors of
-    ``proposals.sanitise``, on the raw text and on its plain text)."""
+    ``proposals.sanitise.contact_codes``, on the raw text and on its plain text, entities decoded)."""
     text = sm.check_note(step.inputs.note, limit)
     stage = step.decision.to_state if step.decision.resumes else step.decision.from_state
-    if stage in sm.BEFORE_CONTACT:
-        raw = unicodedata.normalize("NFKC", text)
-        if contact_findings(detection_skeleton(raw)) or contact_findings(detection_skeleton(plain_text(raw))):
-            raise sm.Invalid(
-                "contains_contact",
-                "Contact details and links are shared once first contact is made. Remove them from the text.",
-            )
+    if stage in sm.BEFORE_CONTACT and contact_codes(text):
+        raise sm.Invalid(
+            "contains_contact",
+            "Contact details and links are shared once first contact is made. Remove them from the text.",
+        )
     return text
 
 

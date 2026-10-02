@@ -302,6 +302,7 @@ def test_a_note_before_first_contact_carries_no_contact_details() -> None:
         (sm.Command.ANSWER_INFO, S.INFO_REQUESTED, S.UNDER_REVIEW, "Call 0712 345 678"),
         (sm.Command.PAUSE, S.INTEREST_CONFIRMED, S.ON_HOLD, "See <b>www.telco.example</b>"),
         (sm.Command.RESUME, S.ON_HOLD, S.UNDER_REVIEW, "jane [at] telco (dot) co.ke"),
+        (sm.Command.REQUEST_INFO, S.UNDER_REVIEW, S.INFO_REQUESTED, "Mail jane&#64;telco.example"),  # an entity
     )
     for command, from_state, to_state, text in early:
         with pytest.raises(sm.Invalid) as refused:
