@@ -37,8 +37,8 @@ from bridge.matching.matches import router as matches_router
 from bridge.matching.router import router as discover_router
 from bridge.matching.scouts import router as scouts_router
 from bridge.notifications.email import provider_from_settings
-from bridge.problems.briefs_router import router as briefs_router
 from bridge.notifications.in_app_router import router as notifications_router
+from bridge.problems.briefs_router import router as briefs_router
 from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
