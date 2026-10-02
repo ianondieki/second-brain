@@ -12,9 +12,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -26,8 +24,11 @@ from bridge.engagements.calendar import add_business_days, local_date
 from tests.integration.engagements.api_world import (
     Tracker,
     build,
+    business_days_later,
     db_today,
     deals_on,
+    holidays_of,
+    moved_clock,
     open_engagement,
     seats,
     simple_terms,
@@ -37,42 +38,6 @@ from tests.integration.engagements.api_world import (
 QUESTION = "What would a pilot for 3 depots cost,\nand who maintains the sensors?"
 ANSWER = "KES 250,000 for 3 depots; we maintain the sensors for 12 months."
 REASON = "Our budget committee meets next month."
-
-
-async def holidays_of(owner_engine: AsyncEngine) -> frozenset[date]:
-    async with owner_engine.connect() as conn:
-        rows = await conn.execute(text("SELECT observed_on FROM holidays WHERE country = 'KE'"))
-        return frozenset(rows.scalars().all())
-
-
-@asynccontextmanager
-async def moved_clock(owner_engine: AsyncEngine) -> AsyncIterator[Callable[[int], Awaitable[None]]]:
-    """The shared dev/test clock, moved forward by whole days on demand, and put back as it was at the end."""
-    async with owner_engine.connect() as conn:
-        enabled, offset = (await conn.execute(text("SELECT enabled, clock_offset FROM test_clock"))).one()
-    moved = [offset]
-
-    async def advance(days: int) -> None:
-        moved[0] += timedelta(days=days)
-        async with owner_engine.begin() as conn:
-            await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = :o"), {"o": moved[0]})
-
-    try:
-        yield advance
-    finally:
-        async with owner_engine.begin() as conn:
-            await conn.execute(
-                text("UPDATE test_clock SET enabled = :e, clock_offset = :o"), {"e": enabled, "o": offset}
-            )
-
-
-async def business_days_later(owner_engine: AsyncEngine, advance: Callable[[int], Awaitable[None]], n: int) -> date:
-    """Move the clock to the ``n``-th Kenyan business day after today (Nairobi); returns that date."""
-    today = await db_today(owner_engine)
-    later = add_business_days(today, n, await holidays_of(owner_engine))
-    await advance((later - today).days)
-    assert await db_today(owner_engine) == later
-    return later
 
 
 def deadline_of(detail: dict[str, Any]) -> datetime:

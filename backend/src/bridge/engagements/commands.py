@@ -381,12 +381,11 @@ async def _write_note(step: Step, event: EngagementEvent, note: NoteInput) -> No
     await step.db.flush()
 
 
-async def _open_tag(step: Step) -> Tag | None:
+async def open_tag(db: AsyncSession, engagement: Engagement) -> Tag | None:
     """The developer's open tag behind a ``tagged`` engagement (an organisation's interest has none)."""
-    engagement = step.engagement
     if engagement.origin is not EngagementOrigin.TAGGED:
         return None
-    found: Tag | None = await step.db.scalar(
+    found: Tag | None = await db.scalar(
         select(Tag).where(
             Tag.proposal_id == engagement.proposal_id,
             Tag.org_id == engagement.org_id,
@@ -395,6 +394,18 @@ async def _open_tag(step: Step) -> Tag | None:
         )
     )
     return found
+
+
+async def close_tag(db: AsyncSession, engagement: Engagement) -> None:
+    """The engagement ended (DECLINED, EXPIRED or CLOSED): its tag closes (``app_close_tag``), freeing the developer's
+    one open tag with this organisation."""
+    tag = await open_tag(db, engagement)
+    if tag is not None:
+        await db.execute(_CLOSE_TAG, {"tag_id": tag.id})
+
+
+async def _open_tag(step: Step) -> Tag | None:
+    return await open_tag(step.db, step.engagement)
 
 
 async def _withdraw_tag(step: Step) -> None:
@@ -407,11 +418,7 @@ async def _withdraw_tag(step: Step) -> None:
 
 
 async def _close_tag(step: Step) -> None:
-    """The engagement ended (DECLINED or CLOSED): its tag closes (``app_close_tag``), freeing the developer's one open
-    tag with this organisation."""
-    tag = await _open_tag(step)
-    if tag is not None:
-        await step.db.execute(_CLOSE_TAG, {"tag_id": tag.id})
+    await close_tag(step.db, step.engagement)
 
 
 # ------------------------------------------------------------------------------------------------ the effects

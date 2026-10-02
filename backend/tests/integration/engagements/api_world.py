@@ -9,7 +9,7 @@ has its own developer, organisation and proposal, so tests never share an engage
 from __future__ import annotations
 
 import base64
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -25,6 +25,7 @@ from bridge.auth.crypto import encrypt
 from bridge.config import Settings, get_settings
 from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import notify
+from bridge.engagements.calendar import add_business_days
 from bridge.engagements.commands import open_engagement_for_tag
 from bridge.ids import uuid7
 from bridge.notifications.email import FakeEmailProvider
@@ -302,6 +303,42 @@ async def db_today(engine: AsyncEngine) -> date:
         result = await conn.execute(text("SELECT (app_clock_now() AT TIME ZONE 'Africa/Nairobi')::date"))
         today: date = result.scalar_one()
         return today
+
+
+async def holidays_of(owner_engine: AsyncEngine) -> frozenset[date]:
+    async with owner_engine.connect() as conn:
+        rows = await conn.execute(text("SELECT observed_on FROM holidays WHERE country = 'KE'"))
+        return frozenset(rows.scalars().all())
+
+
+@asynccontextmanager
+async def moved_clock(owner_engine: AsyncEngine) -> AsyncIterator[Callable[[int], Awaitable[None]]]:
+    """The shared dev/test clock, moved forward by whole days on demand, and put back as it was at the end."""
+    async with owner_engine.connect() as conn:
+        enabled, offset = (await conn.execute(text("SELECT enabled, clock_offset FROM test_clock"))).one()
+    moved = [offset]
+
+    async def advance(days: int) -> None:
+        moved[0] += timedelta(days=days)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = :o"), {"o": moved[0]})
+
+    try:
+        yield advance
+    finally:
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE test_clock SET enabled = :e, clock_offset = :o"), {"e": enabled, "o": offset}
+            )
+
+
+async def business_days_later(owner_engine: AsyncEngine, advance: Callable[[int], Awaitable[None]], n: int) -> date:
+    """Move the clock to the ``n``-th Kenyan business day after today (Nairobi); returns that date."""
+    today = await db_today(owner_engine)
+    later = add_business_days(today, n, await holidays_of(owner_engine))
+    await advance((later - today).days)
+    assert await db_today(owner_engine) == later
+    return later
 
 
 def simple_terms(today: date, ip_terms: str = "non_exclusive_licence") -> dict[str, Any]:
