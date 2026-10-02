@@ -17,11 +17,14 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
   reads them; nobody else sees anything. Each row names its actor as the caller (a system row names nobody).
 - Event payloads hold only ids, codes, dates, amounts and digests: string values match ``[A-Za-z0-9_.:+-]{0,128}``
   and keys ``[a-z][a-z0-9_]*`` (free text and personal data go to a mutable details store, as for the audit log).
-- Endorsements, signatures and events are append-only; a payment record changes once, by the developer's
+- Endorsements, signatures, events and notes are append-only; a payment record changes once, by the developer's
   confirmation. The platform records payments and never moves money.
-- Times (event ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``, ``recorded_at``,
-  ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's offset applies only
-  where the owner enabled it: dev, test and staging databases).
+- A note (revision 0006) is the text a side-state command carries, a sibling of the event it explains, never part of
+  the chain: written by that event's actor as themselves, in the event's transaction (the event is still the
+  engagement's latest), one per event, its kind matching the event's transition.
+- Times (event and note ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
+  ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
+  offset applies only where the owner enabled it: dev, test and staging databases).
 
 ORM notes: after appending an event, refresh the ``Engagement`` (its projection changed in the database). The
 engagement's ``lock_version`` is a server-side version counter (bumped by the database on every UPDATE), so a stale
@@ -233,6 +236,43 @@ class EngagementEndorsement(IdMixin, Base):
     endorsed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+# docs/spec/06 6.9 side branches: the organisation's question and the developer's answer (INFO_REQUESTED), the reason
+# of a pause (ON_HOLD, with its resume date) and of an early resume.
+NOTE_KINDS = ("info_request", "info_answer", "hold", "resume")
+
+
+class EngagementNote(IdMixin, Base):
+    """The text a side-state command carries (REQ-ENG-10; revision 0006): ``info_request`` (the organisation's
+    question, on the event entering ``INFO_REQUESTED``), ``info_answer`` (the developer's answer, on the event leaving
+    it), ``hold`` (the reason of a pause, on the event entering ``ON_HOLD``, with ``resume_at``) and ``resume`` (the
+    reason of an early resume, on the event leaving it). A sibling of the event it explains (``event_seq``), never
+    part of the hash chain. INSERT-only (grants and triggers). Write it in the event's transaction, after the event
+    (its ``seq`` is the database's: read it back), as the event's actor; a system event takes no note.
+    ``created_at`` is the database's clock (``app_clock_now()``): leave it out."""
+
+    __tablename__ = "engagement_notes"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "event_seq"),  # one note per event
+        ForeignKeyConstraint(
+            ["engagement_id", "event_seq"],
+            ["engagement_events.engagement_id", "engagement_events.seq"],
+            name="fk_engagement_notes_event",
+        ),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NOTE_KINDS)})", name="kind_known"),
+        CheckConstraint("btrim(body) <> '' AND char_length(body) <= 2000", name="body_length"),
+        CheckConstraint("(kind = 'hold') = (resume_at IS NOT NULL)", name="resume_at_only_for_hold"),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    event_seq: Mapped[int] = mapped_column(BigInteger)  # engagement_events.seq of the event the note explains
+    kind: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    resume_at: Mapped[date | None] = mapped_column(Date)  # a hold's resume date (Africa/Nairobi), only for a hold
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
 class Agreement(IdMixin, TimestampsMixin, Base):
     """A version of the definitive agreement (docs/spec/06 6.9 stage 8, AC-TRACK-10). A draft is edited by either
     party; marking it ``final`` needs the IP terms, the deemed-acceptance clause, the final PDF's SHA-256 and at least
@@ -398,6 +438,7 @@ __all__ = [
     "Engagement",
     "EngagementEndorsement",
     "EngagementEvent",
+    "EngagementNote",
     "Milestone",
     "PaymentRecord",
     "Signature",
