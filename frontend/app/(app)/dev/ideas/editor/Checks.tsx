@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Button } from "@/components/ui/Button";
@@ -23,13 +23,24 @@ import { CheckAnswer, type CheckAnswerProps } from "./CheckAnswer";
 
 export type CheckKind = "overlap" | "disclosure";
 
-/** What the card remembers while the owner visits the other steps (the editor keeps it; the card is redrawn). */
+/** Each check's answer and whether it is running: replaced, never changed, on every update. */
+export interface ChecksSnapshot {
+  answers: Partial<Record<CheckKind, CheckAnswerProps>>;
+  working: Partial<Record<CheckKind, boolean>>;
+}
+
+/**
+ * What the card keeps while the owner visits the other steps: the editor holds the object and the card is redrawn. A
+ * check keeps running when its card goes; the card drawn next reads its state here and hears when it changes.
+ */
 export interface ChecksMemory {
   /** The check whose button opened the card: it runs once, as the card appears. */
   start?: CheckKind;
-  overlap?: CheckAnswerProps;
-  disclosure?: CheckAnswerProps;
+  snapshot?: ChecksSnapshot;
+  listeners?: Set<() => void>;
 }
+
+const NOTHING: ChecksSnapshot = { answers: {}, working: {} };
 
 export interface ChecksProps {
   /** The editor's memory of the card (the same object every time). */
@@ -68,9 +79,15 @@ const isShared = (why: string): why is Shared => (SHARED as readonly string[]).i
 export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = checksCalls }: ChecksProps) {
   const c = useStrings("ideaChecks");
   const a = useStrings("ideaAssistant");
-  const [answers, setAnswers] = useState(() => ({ overlap: memory().overlap, disclosure: memory().disclosure }));
-  const [working, setWorking] = useState<Record<CheckKind, boolean>>({ overlap: false, disclosure: false });
-  const busy = useRef<Record<CheckKind, boolean>>({ overlap: false, disclosure: false });
+  const { answers, working } = useSyncExternalStore(
+    (listener) => {
+      const kept = memory();
+      (kept.listeners ??= new Set()).add(listener);
+      return () => kept.listeners?.delete(listener);
+    },
+    () => memory().snapshot ?? NOTHING,
+    () => NOTHING,
+  );
 
   const chips = (answer: { ai_drafted: boolean; demo_fallback: boolean }) =>
     chipsOf(answer).map((chip) => ({ label: a(chip), quiet: chip === "demoFallback" }));
@@ -108,15 +125,22 @@ export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = che
     return { tone: "note", sentence: c("disclosure.unchecked") };
   }
 
-  function show(kind: CheckKind, answer: CheckAnswerProps) {
-    memory()[kind] = answer;
-    setAnswers((current) => ({ ...current, [kind]: answer }));
+  /** Updates the editor's copy and tells whichever card is drawn now (this one may be gone by then). */
+  function update(kind: CheckKind, running: boolean, answer?: CheckAnswerProps) {
+    const kept = memory();
+    const now = kept.snapshot ?? NOTHING;
+    kept.snapshot = {
+      answers: answer ? { ...now.answers, [kind]: answer } : now.answers,
+      working: { ...now.working, [kind]: running },
+    };
+    kept.listeners?.forEach((listener) => listener());
   }
 
+  const show = (kind: CheckKind, answer: CheckAnswerProps) => update(kind, false, answer);
+
   async function run(kind: CheckKind) {
-    if (busy.current[kind]) return;
-    busy.current[kind] = true;
-    setWorking((current) => ({ ...current, [kind]: true }));
+    if (memory().snapshot?.working[kind]) return; // one at a time, even across a redrawn card
+    update(kind, true);
     try {
       const { title, problemStatement, summary, impactClaims } = state;
       if (![title, problemStatement, summary, impactClaims].some((text) => text.trim())) return show(kind, problem("noText"));
@@ -132,8 +156,7 @@ export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = che
         show(kind, result.ok ? disclosureAnswer(result.value) : problem(result.problem));
       }
     } finally {
-      busy.current[kind] = false;
-      setWorking((current) => ({ ...current, [kind]: false }));
+      update(kind, false);
     }
   }
 

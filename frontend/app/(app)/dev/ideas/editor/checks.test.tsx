@@ -317,6 +317,42 @@ describe("today's last check", () => {
 });
 
 describe("across the steps", () => {
+  it("keeps a running check busy on the redrawn card, and its answer arrives there", async () => {
+    let release: (value: CheckOutcome<Originality>) => void = () => {};
+    const fake = checksCalls({
+      overlap: vi.fn(() => new Promise<CheckOutcome<Originality>>((resolve) => (release = resolve))),
+    });
+    await check(OVERLAP, fake);
+    await press("Continue");
+    await settleLazy();
+    await press("Back");
+    // A new card: the check still runs, so its button is busy and a press sends nothing more.
+    expect(region("overlap").textContent).toBe("Comparing your teaser with other published ideas…");
+    expect(screen.getByRole("button", { name: OVERLAP }).getAttribute("aria-disabled")).toBe("true");
+    await press(OVERLAP);
+    expect(fake.overlap).toHaveBeenCalledTimes(1);
+    await act(async () => release({ ok: true, value: SOME }));
+    expect(region("overlap").textContent).toContain("Some overlap with another published idea.");
+    expect(screen.getByRole("button", { name: OVERLAP }).getAttribute("aria-disabled")).toBeNull();
+    expect(chips("overlap")).toEqual(["AI-drafted"]);
+  });
+
+  it("shows on the redrawn card an answer that arrived while the owner was on another step", async () => {
+    let release: (value: CheckOutcome<Originality>) => void = () => {};
+    const fake = checksCalls({
+      overlap: vi.fn(() => new Promise<CheckOutcome<Originality>>((resolve) => (release = resolve))),
+    });
+    await check(OVERLAP, fake);
+    await press("Continue");
+    await settleLazy();
+    await act(async () => release({ ok: true, value: NONE }));
+    await press("Back");
+    expect(region("overlap").textContent).toBe("No overlap with other published ideas (compared with 12).");
+    expect(screen.getByRole("button", { name: OVERLAP }).getAttribute("aria-disabled")).toBeNull();
+    expect(fake.overlap).toHaveBeenCalledTimes(1);
+  });
+
+
   it("keeps the answers when the owner comes back to step 1, without checking again", async () => {
     const fake = checksCalls({ disclosure: vi.fn(async () => ({ ok: true as const, value: BY_RULES })) });
     await check(OVERLAP, fake);
