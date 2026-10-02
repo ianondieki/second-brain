@@ -68,6 +68,11 @@ def submission_text(fields: Mapping[str, object]) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def text_digest(fields: Mapping[str, object]) -> str:
+    """SHA-256 (hex) of ``submission_text``: which Tier-1 text a stored check was about, without keeping the text."""
+    return hashlib.sha256(submission_text(fields).encode("utf-8")).hexdigest()
+
+
 def words(text: str) -> list[str]:
     return _WORD.findall(plain_text(text).casefold())
 

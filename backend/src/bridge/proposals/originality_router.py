@@ -4,15 +4,16 @@ Informational, never blocking: nothing here changes the proposal or stands in th
 Tier-2 gate: only Tier-1 text is read (the saved draft's four teaser fields), so the route carries no ``tier2`` tag.
 
 - ``POST /api/me/proposals/{id}/originality``: check the saved draft (or the current version when there is no draft)
-  against other owners' published, clear teasers. Owner only: 404 for anyone else's proposal, published or
-  not (AC-SEC-1/b), 409 ``proposal_hidden`` once deleted. 429 ``originality_busy`` while a
-  check of this proposal is running (per API process) and 429 ``originality_limit`` past ``policy.yaml``
-  ``originality.daily_limit`` checks per Nairobi day (one ``originality_checks`` row each, the band only). The
-  answer: the band, how many teasers were compared, and at most one checked, AI-drafted sentence (none for the band
-  ``none``: the explainer is not called), with the "demo fallback" label when no model wrote it. A
-  ``proposal.originality_checked`` audit event keeps the band and the count; the sentence goes to its details.
-- ``GET /api/me/proposals/{id}/originality``: today's last check of this proposal, so the editor can show it again
-  (null when there is none today).
+  against other owners' published, clear teasers. Owner only: 404 for anyone else's proposal, published or not
+  (AC-SEC-1/b), 409 ``proposal_hidden`` once deleted. 429 ``originality_busy`` while a check of this proposal is
+  running (per API process) and 429 ``originality_limit`` past ``policy.yaml`` ``originality.daily_limit`` checks per
+  Nairobi day (one ``originality_checks`` row each, the band only, committed with its audit event). The answer: the
+  band, how many teasers were compared, and at most one checked, AI-drafted sentence (none for the band ``none``: the
+  explainer is not called), with the "demo fallback" label when no model wrote it. The
+  ``proposal.originality_checked`` audit event keeps the band, the count and a SHA-256 of the checked Tier-1 text; the
+  explainer's outcome (sentence, fallback label) goes to its details after the call.
+- ``GET /api/me/proposals/{id}/originality``: today's last check of this proposal, so the editor can show it again;
+  null when there is none today or when the saved Tier-1 text is no longer the text that was checked.
 """
 
 from __future__ import annotations
@@ -22,9 +23,10 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import text
+from sqlalchemy import insert, text
 
 from bridge import clock
+from bridge.audit.models import EventDetails
 from bridge.audit.service import record as audit
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, ApiError
@@ -77,9 +79,29 @@ async def check_originality(
         await originality.check_daily_limit(db, user_id, policy, now)
         fields = await originality.load_teaser(db, own)
 
+        digest = originality.text_digest(fields)
+        event: list[UUID] = []
+
         async def assessed(assessment: Assessment) -> None:
+            # The counter row and its audit event in one commit (the lock ends here too, before the model call): a
+            # failure after this point never costs a check without its record.
             await originality.record_check(db, user_id, assessment.band, now)
-            await db.commit()  # the counter row and the lock end before the model call
+            event_id = await audit(
+                db,
+                ACTION,
+                actor_user_id=user_id,
+                subject_type="proposal",
+                subject_id=proposal_id,
+                payload={
+                    "version_id": str(own.version_id),
+                    "band": assessment.band.value,
+                    "compared": assessment.compared,
+                    "checked_at": now.isoformat(),
+                    "text_sha256": digest,
+                },
+            )
+            await db.commit()
+            event.append(event_id)
 
         out, explained = await run(
             SqlTeaserPool(db),
@@ -93,24 +115,15 @@ async def check_originality(
             checked_at=now,
             assessed=assessed,
         )
-        await audit(
-            db,
-            ACTION,
-            actor_user_id=user_id,
-            subject_type="proposal",
-            subject_id=proposal_id,
-            payload={
-                "version_id": str(own.version_id),
-                "band": out.band.value,
-                "compared": out.compared,
+        if out.band is not OriginalityBand.NONE:  # the explainer's outcome joins the event (mutable details)
+            details = {
+                "explanation": out.explanation,
                 "demo_fallback": out.demo_fallback,
                 "explainer": explained.reason,
                 "trace_id": explained.trace_id,
-                "checked_at": now.isoformat(),
-            },
-            details={"explanation": out.explanation} if out.explanation is not None else None,
-        )
-        await db.commit()
+            }
+            await db.execute(insert(EventDetails).values(event_id=event[0], details=details))
+            await db.commit()
     finally:
         running.release(proposal_id)
     return out
@@ -118,9 +131,9 @@ async def check_originality(
 
 @router.get(PATH)
 async def last_originality(proposal_id: UUID, live: CurrentSession, db: Db) -> OriginalityOut | None:
-    """Today's last originality check of this proposal (Nairobi day), or null."""
+    """Today's last originality check of this proposal (Nairobi day), or null, also once the teaser text changed."""
     user_id = live.user.id
-    await originality.owned_by(db, user_id, proposal_id)
+    own = await originality.owned_by(db, user_id, proposal_id)
     row = (await db.execute(_LAST, {"user": user_id, "action": ACTION, "id": proposal_id})).first()
     if row is None:
         return None
@@ -128,9 +141,12 @@ async def last_originality(proposal_id: UUID, live: CurrentSession, db: Db) -> O
     checked_at = datetime.fromisoformat(payload["checked_at"])
     if checked_at < originality.nairobi_day_start(clock.utcnow()):
         return None
-    explanation = (row.details or {}).get("explanation")
+    if payload.get("text_sha256") != originality.text_digest(await originality.load_teaser(db, own)):
+        return None  # the band was about other text
+    details: dict[str, Any] = row.details or {}
+    explanation = details.get("explanation")
     return OriginalityOut(
-        demo_fallback=bool(payload["demo_fallback"]),
+        demo_fallback=details.get("demo_fallback") is True,
         band=OriginalityBand(payload["band"]),
         compared=int(payload["compared"]),
         explanation=explanation if isinstance(explanation, str) else None,

@@ -21,10 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge import clock
 from bridge.llm.embeddings import FAKE_MODEL
-from bridge.proposals import originality
+from bridge.llm.errors import LLMConfigError
+from bridge.proposals import originality, originality_explainer
 from bridge.proposals.assistant import InFlight
 from bridge.proposals.originality_explainer import OverlapExplanation
-from tests.integration.proposals.assistant_rig import install, llm_rows, make_demo, new_draft
+from tests.integration.proposals.assistant_rig import audit_rows, install, llm_rows, make_demo, new_draft
 from tests.integration.proposals.helpers import (
     TIER2_MARKERS,
     Developers,
@@ -233,3 +234,46 @@ async def test_a_near_copy_is_found_through_the_stored_buckets(
     body = (await check(submitter, proposal_id)).json()
     assert body["band"] == "high_overlap"
     assert_no_leak(body, teaser)
+
+
+async def test_the_last_check_is_shown_only_for_the_text_it_was_about(
+    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld
+) -> None:
+    client = await developers()
+    install(client, provider="fake")
+    teaser = unique_teaser(proposal_world.tag + "txt")
+    proposal_id = await new_draft(client, proposal_world, **teaser)
+    body = (await check(client, proposal_id)).json()
+    [payload] = await audit_rows(owner_engine, user_of(client), "proposal.originality_checked")
+    assert payload["text_sha256"] == originality.text_digest(teaser)
+    assert (await client.get(PATH.format(proposal_id))).json() == body
+
+    url = f"/api/me/proposals/{proposal_id}"
+    assert (await client.patch(url, json={"teaser": {"summary": "Something else entirely."}})).status_code == 200
+    assert (await client.get(PATH.format(proposal_id))).json() is None  # the band was about other text
+    assert (await client.patch(url, json={"teaser": {"summary": teaser["summary"]}})).status_code == 200
+    assert (await client.get(PATH.format(proposal_id))).json() == body  # the same text again
+    assert (await client.patch(url, json={"confidential": {"notes": "changed"}})).status_code == 200
+    assert (await client.get(PATH.format(proposal_id))).json() == body  # Tier 2 is not part of the check
+
+
+async def test_a_failure_after_the_count_still_leaves_its_audit_event(
+    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A code mistake in the explainer step: the check was counted, and its record was committed with the count."""
+
+    async def broken(*args: Any, **kwargs: Any) -> Any:
+        raise LLMConfigError("a code mistake after the count")
+
+    monkeypatch.setattr(originality_explainer, "explain", broken)
+    client = await developers()
+    install(client, provider="fake")
+    proposal_id = await new_draft(client, proposal_world, **unique_teaser(proposal_world.tag + "err"))
+    try:
+        response = await check(client, proposal_id)
+        assert response.status_code == 500
+    except LLMConfigError:
+        pass  # the transport re-raises the app's unhandled error
+    assert await count_checks(owner_engine, user_of(client)) == 1
+    [payload] = await audit_rows(owner_engine, user_of(client), "proposal.originality_checked")
+    assert (payload["band"], payload["compared"] >= 0) == ("none", True)
