@@ -228,20 +228,17 @@ def compose_system(event: EngagementEvent, company: str, title: str) -> list[tup
         kind = f"engagement.{sm.EXPIRY_NOTICE[event.from_state].lower()}"
         reason = EXPIRY_LABELS_BY_STATE.get(event.from_state) or EXPIRY_LABELS[event.end_reason]
         label = sm.STAGE_LABELS[EngagementState.EXPIRED]
-        return [
-            (party, Notice(kind, label, sentence.format(org=org, title=name, reason=reason), _link(party, event)))
-            for party, sentence in EXPIRED_SENTENCES.items()
-        ]
+        notices = []
+        for party, sentence in EXPIRED_SENTENCES.items():
+            body = sentence.format(org=org, title=name, reason=reason)
+            notices.append((party, Notice(kind, label, body, engagement_path(party, event.engagement_id))))
+        return notices
     if event.command == C.RESUME.value and event.from_state is EngagementState.ON_HOLD:
         kind = f"engagement.{sm.RESUME_NOTICE.lower()}"
         label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
         body = RESUMED_SENTENCE.format(title=name)
-        return [(party, Notice(kind, label, body, _link(party, event))) for party in (DEV, ORG)]
+        return [(party, Notice(kind, label, body, engagement_path(party, event.engagement_id))) for party in (DEV, ORG)]
     return []
-
-
-def _link(party: EngagementParty, event: EngagementEvent) -> str:
-    return engagement_path(party, event.engagement_id)
 
 
 def emailed(event: EngagementEvent) -> bool:
