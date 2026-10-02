@@ -564,6 +564,21 @@ describe("the side states' sheets", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it("keeps a sheet open with what was typed when one party's steps per hour ran out (429)", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "tooMany", status: 429 }));
+    renderActions(devAsked(), { runImpl, question });
+    fireEvent.click(screen.getByRole("button", { name: "Answer the question" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Your answer"), { target: { value: "Two co-ops." } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the answer" })));
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    const alert = within(dialog).getByRole("alert");
+    expect(alert.textContent).toBe("You have taken many steps on this engagement in the last hour. Try again later.");
+    expect(document.activeElement).toBe(alert);
+    expect((within(dialog).getByLabelText("Your answer") as HTMLTextAreaElement).value).toBe("Two co-ops.");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("closes on a spent question limit (409) and says so after the refresh", async () => {
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "questionLimit", status: 409 }));
     renderActions(orgReviewing(), { runImpl });

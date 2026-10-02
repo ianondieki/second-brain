@@ -138,11 +138,12 @@ export function Actions(props: ActionsProps) {
       setMode({ kind: "stepUp", item, request });
       return;
     }
-    // A form or sheet stays open with its refusal when the input was refused (a hold's date past what is left of
-    // the engagement's days on hold too); everything else goes back to the buttons.
+    // A form or sheet stays open with its refusal, and what was typed, when the input was refused (a hold's date past
+    // what is left of the engagement's days on hold too) or one party's steps per hour ran out (429); everything else
+    // goes back to the buttons.
     const keepForm =
       (mode.kind === "form" || mode.kind === "sheet") &&
-      (outcome.status === 422 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
+      (outcome.status === 422 || outcome.status === 429 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
     if (!keepForm) setMode({ kind: "list" });
     setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
     if (outcome.status === 409 || outcome.status === 404) router.refresh();
