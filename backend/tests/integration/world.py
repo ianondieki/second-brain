@@ -422,6 +422,9 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         await add_problem(conn, user_id, niche_id, moderation_state="held")
         invited_brief = await add_problem(conn, user_id, niche_id, org_id=org_id, status="pending_review")
         public_brief = await add_problem(conn, user_id, niche_id, org_id=org_id)
+        # Only a listed E2 organisation's Brief is published (revision 0006, problem_briefs_status_guard): the tenant
+        # is E2 while its Brief is written, then pending again, so its directory rows stay private (as if E2 lapsed).
+        await _insert(conn, "UPDATE organizations SET verification = 'e2' WHERE id = :org", org=org_id)
         for brief_id, visibility, status in (
             (invited_brief, "invited", "draft"),
             (public_brief, "public", "published"),
@@ -435,6 +438,7 @@ async def build(conn: AsyncConnection, tag: str) -> World:
                 visibility=visibility,
                 status=status,
             )
+        await _insert(conn, "UPDATE organizations SET verification = 'pending' WHERE id = :org", org=org_id)
         await _insert(
             conn,
             "INSERT INTO brief_invitations (id, brief_id, org_id, user_id) VALUES (:id, :brief, :org, :user)",
@@ -717,7 +721,8 @@ TENANT_ROWS: dict[str, Rows] = {
         "t.problem_id::text",
         "t.org_id",
         NO_USER,
-        "t.visibility = 'public' AND t.status IN ('published', 'closed')",  # closed stays readable (revision 0006)
+        "t.visibility = 'public' AND t.status IN ('published', 'closed') AND EXISTS (SELECT 1 FROM problems p"
+        " WHERE p.id = t.problem_id AND p.status = 'published' AND p.moderation_state = 'clear')",  # revision 0006
     ),
     "brief_invitations": _rows("brief_invitations", "t.id::text", "t.org_id", "t.user_id"),
     "proposal_confidential": _rows("proposal_confidential", "t.version_id::text", NO_ORG, "t.owner_id"),

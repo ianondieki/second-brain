@@ -7,11 +7,12 @@ moderated text). Design: ``docs/platform/tasks/P19-M.md`` and the coordinator's 
 three narrowings or replacements of earlier objects, each restored on downgrade: one new table with its policies,
 triggers and grants; bridge_app's table-wide UPDATE on ``in_app_notifications`` (revision 0001) narrowed to
 ``UPDATE (read_at)``; the SELECT policy of ``problem_briefs`` (revision 0002) widened to closed public Briefs;
-``app_moderate_problem`` (revision 0002) replaced to publish a Brief with its problem; and two new triggers,
-``problem_briefs_status_guard`` on ``problem_briefs`` and ``problems_brief_text_guard`` on ``problems``. No enum
-type; the notes' triggers reuse ``tracker_engagement_visible()`` (revision 0003) and ``block_mutation()`` (revision
-0002). Nothing else of revisions 0001 to 0005 is changed or dropped. The upgrade is additive; the downgrade is
-destructive (it drops the notes: see ``downgrade()``).
+``app_moderate_problem`` (revision 0002) replaced to publish a Brief with its problem; two new triggers,
+``problem_briefs_status_guard`` on ``problem_briefs`` and ``problems_brief_text_guard`` on ``problems``; and one new
+definer helper, ``app_brief_problem_is_public``, for that policy. No enum type; the notes' triggers also reuse
+``tracker_engagement_visible()`` (revision 0003) and ``block_mutation()`` (revision 0002). Nothing else of revisions
+0001 to 0005 is changed or dropped. The upgrade is additive; the downgrade is destructive (it drops the notes: see
+``downgrade()``).
 
 ``engagement_notes`` (ORG_OR_USER through the engagement, like every tracker table): the text a side-state command
 carries, a sibling row of the event it explains (``event_seq``), never part of the hash chain (the chain and its
@@ -60,16 +61,20 @@ moderation, never by its organisation ahead of it, so nothing of a Brief awaitin
 visibility) is readable beyond its organisation and staff:
 
 - ``app_moderate_problem`` (replaced; same signature, grants and refusals): approving a Brief's problem (``clear``,
-  ``published``) also publishes the Brief when it is a draft of an E2 organisation (the E2 guard on ``published``);
-  a rejection, a closed Brief and a Brief of an organisation that is not E2 are left as they are (the problem is still
-  decided; such a Brief's problem stays unreadable to other users, as the problems policy reads it through its Brief).
+  ``published``) also publishes the Brief when it is a draft of an E2 organisation that is not delisted (the E2
+  guard on ``published``); any other decision returns a published Brief to ``draft``. A closed Brief, and on approval
+  a Brief of an organisation that is not a listed E2 one, are left as they are (the problem is still decided; such a
+  Brief's problem stays unreadable to other users, as the problems policy reads it through its Brief).
 - ``problem_briefs_status_guard`` (AFTER INSERT OR UPDATE, after RLS, SECURITY INVOKER, every role): a Brief enters
-  ``published`` only while its problem is published and clear, and ``closed`` only from ``published``, so closing
-  never makes a Brief that was never approved readable. The policy's E2 guard on ``published`` (bridge_app) stays.
-- The SELECT policy reads a public Brief while ``published`` or ``closed``: a closed Brief leaves the feed (which
-  reads ``published`` only) but its problem page, readable through the Brief, and the proposals' links to it stay.
-  An invited Brief is read by its invited users while ``published`` only, as before (invited Briefs are not offered
-  yet).
+  ``published`` only while its problem is published and clear and its organisation is E2 and not delisted, and
+  ``closed`` only from ``published``, so closing never makes a Brief that was never approved readable. The policy's
+  E2 guard on ``published`` (bridge_app) stays.
+- The SELECT policy reads a public Brief while ``published`` or ``closed`` and while its problem is published and
+  clear (``app_brief_problem_is_public``: SECURITY DEFINER, because a policy of ``problem_briefs`` reading
+  ``problems``, whose own policy reads ``problem_briefs``, is an infinite recursion): a closed Brief leaves the feed
+  (which reads ``published`` only) but its problem page and the proposals' links to it stay; a Brief whose problem
+  is rejected, held or back in review is not read beyond its organisation and staff. An invited Brief is read by its
+  invited users while ``published`` only, as before (invited Briefs are not offered yet).
 - ``problems_brief_text_guard`` (BEFORE UPDATE OF title, statement, affected_group on ``problems``, SECURITY INVOKER,
   every role; the P19-B security review): a published ``org_brief`` problem keeps the text staff approved unless the
   same statement returns it to review (``status = 'pending_review'``); refused with SQLSTATE 55000
@@ -189,8 +194,8 @@ POLICIES: tuple[Policy, ...] = (
     Policy("engagement_notes", "INSERT", check=NOTE_INSERT),
 )
 
-# problem_briefs' SELECT policy (revision 0002's bridge_app_select): the public branch also reads closed Briefs. The
-# revision 0002 text is restored on downgrade.
+# problem_briefs' SELECT policy (revision 0002's bridge_app_select): the public branch also reads closed Briefs, and
+# only while the Brief's problem is published and clear. The revision 0002 text is restored on downgrade.
 _SIGNED_IN = "app_user_id() IS NOT NULL"
 _ORG_MEMBER = "app_is_member(org_id) AND (app_org_id() IS NULL OR org_id = app_org_id())"
 _STAFF = "app_is_staff('{admin,moderator}')"
@@ -202,8 +207,9 @@ BRIEFS_SELECT_0002 = (
     f"({_SIGNED_IN} AND visibility = 'public' AND status = 'published') OR ({_ORG_MEMBER}){_BRIEF_INVITED} OR {_STAFF}"
 )
 BRIEFS_SELECT = (
-    f"({_SIGNED_IN} AND visibility = 'public' AND status IN ('published', 'closed')) OR ({_ORG_MEMBER})"
-    f"{_BRIEF_INVITED} OR {_STAFF}"
+    f"({_SIGNED_IN} AND visibility = 'public' AND status IN ('published', 'closed')"
+    " AND app_brief_problem_is_public(problem_id))"
+    f" OR ({_ORG_MEMBER}){_BRIEF_INVITED} OR {_STAFF}"
 )
 
 FUNCTIONS_SQL = r"""
@@ -252,25 +258,39 @@ BEGIN
 END;
 $$;
 
+-- Whether a Brief's problem is published and clear: the public read of problem_briefs needs it, and a policy of
+-- problem_briefs cannot read problems (whose own policy reads problem_briefs: infinite recursion). Briefs' problems
+-- only (source org_brief). SECURITY DEFINER: reads the problem whatever the caller sees; returns the boolean only.
+CREATE FUNCTION app_brief_problem_is_public(p_problem uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (SELECT 1 FROM public.problems p
+                    WHERE p.id = p_problem AND p.source = 'org_brief' AND p.status = 'published'
+                      AND p.moderation_state = 'clear')
+$$;
+
 -- A Brief enters 'published' only while its problem is published and clear (staff approved it; app_moderate_problem()
--- publishes a draft Brief of an E2 organisation with its problem), so nothing of a Brief awaiting review is readable
--- beyond its organisation and staff; and it enters 'closed' only from 'published', so closing never makes a Brief
--- that was never approved readable (a closed public Brief stays readable). Checked when a Brief enters either status,
--- for every role (the owner and the definer functions too); the E2 guard on 'published' stays the INSERT and UPDATE
--- policies' and app_moderate_problem()'s. AFTER: runs after RLS, so a caller the policies refuse learns nothing here.
--- SECURITY INVOKER: an editor reads their organisation's problem under their own RLS (a problem the caller cannot
--- read is not published for them: refused).
+-- publishes a draft Brief of a listed E2 organisation with its problem) and its organisation is E2 and not delisted,
+-- so nothing of a Brief awaiting review is readable beyond its organisation and staff; and it enters 'closed' only
+-- from 'published', so closing never makes a Brief that was never approved readable (a closed public Brief stays
+-- readable). Checked when a Brief enters either status, for every role (the owner and the definer functions too); the
+-- INSERT and UPDATE policies' E2 guard on 'published' stays. AFTER: runs after RLS, so a caller the policies refuse
+-- learns nothing here. SECURITY INVOKER: an editor reads their organisation's problem and row under their own RLS (a
+-- row the caller cannot read is not published for them: refused).
 CREATE FUNCTION problem_briefs_status_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
-    IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status <> 'published') AND NOT EXISTS (
-        SELECT 1 FROM public.problems p
-         WHERE p.id = NEW.problem_id AND p.status = 'published' AND p.moderation_state = 'clear'
+    IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status <> 'published') AND NOT (
+        EXISTS (SELECT 1 FROM public.problems p
+                 WHERE p.id = NEW.problem_id AND p.status = 'published' AND p.moderation_state = 'clear')
+        AND EXISTS (SELECT 1 FROM public.organizations o
+                     WHERE o.id = NEW.org_id AND o.verification = 'e2' AND o.delisted_at IS NULL)
     ) THEN
-        RAISE EXCEPTION 'problem_briefs: a Brief is published only once its problem is published and clear'
-            USING ERRCODE = 'check_violation';
+        RAISE EXCEPTION 'problem_briefs: a Brief is published only once its problem is published and clear, for a'
+            ' listed E2 organisation' USING ERRCODE = 'check_violation';
     END IF;
     IF NEW.status = 'closed' AND (TG_OP = 'INSERT' OR OLD.status NOT IN ('published', 'closed')) THEN
         RAISE EXCEPTION 'problem_briefs: only a published Brief is closed' USING ERRCODE = 'check_violation';
@@ -300,9 +320,9 @@ END;
 $$;
 
 -- Revision 0002's moderation decision on a problem, plus (REQ-DIR-05): approving a Brief's problem (clear, published)
--- publishes the Brief with it when the Brief is a draft of an E2 organisation (the E2 guard on 'published'). A
--- rejection, a closed Brief and a Brief of an organisation that is not E2 are left as they are. Same signature,
--- grants and refusals (CREATE OR REPLACE keeps the grants).
+-- publishes the Brief with it when the Brief is a draft of an E2 organisation that is not delisted (the E2 guard on
+-- 'published'); any other decision (a rejection, a hold) returns a published Brief to draft. A closed Brief stays
+-- closed. Same signature, grants and refusals (CREATE OR REPLACE keeps the grants).
 CREATE OR REPLACE FUNCTION app_moderate_problem(p_problem uuid, p_state moderation_state, p_status problem_status)
     RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -326,11 +346,16 @@ BEGIN
         RAISE EXCEPTION 'app_moderate_problem: no such problem, or it is the moderator''s own'
             USING ERRCODE = 'no_data_found';
     END IF;
-    IF p_status = 'published' AND p_state = 'clear' AND v_source = 'org_brief' THEN
+    IF v_source = 'org_brief' AND p_status = 'published' AND p_state = 'clear' THEN
         UPDATE public.problem_briefs b
            SET status = 'published', updated_at = now()
          WHERE b.problem_id = p_problem AND b.status = 'draft'
-           AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = b.org_id AND o.verification = 'e2');
+           AND EXISTS (SELECT 1 FROM public.organizations o
+                        WHERE o.id = b.org_id AND o.verification = 'e2' AND o.delisted_at IS NULL);
+    ELSIF v_source = 'org_brief' THEN
+        UPDATE public.problem_briefs b
+           SET status = 'draft', updated_at = now()
+         WHERE b.problem_id = p_problem AND b.status = 'published';
     END IF;
 END;
 $$;
@@ -362,6 +387,10 @@ END;
 $$;
 """
 
+# EXECUTE grants (EXECUTE revoked from PUBLIC first): a policy runs its functions with the caller's privileges.
+FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
+    "app_brief_problem_is_public(uuid)": ("bridge_app",),  # the public read of problem_briefs
+}
 TRIGGER_FUNCTIONS = (
     "engagement_notes_latest_event()",
     "engagement_notes_redaction_guard()",
@@ -413,6 +442,9 @@ def _grant_sql() -> str:
         f"GRANT UPDATE ({IN_APP_UPDATABLE_COLUMNS}) ON TABLE in_app_notifications TO bridge_app;",
     ]
     grants += [f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;" for signature in TRIGGER_FUNCTIONS]
+    for signature, roles in FUNCTION_GRANTS.items():
+        grants.append(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;")
+        grants.append(f"GRANT EXECUTE ON FUNCTION {signature} TO {', '.join(roles)};")
     return "\n".join(grants)
 
 
@@ -445,14 +477,15 @@ def downgrade() -> None:
         "REVOKE UPDATE ON TABLE in_app_notifications FROM bridge_app;"
         " GRANT UPDATE ON TABLE in_app_notifications TO bridge_app;"
     )
-    # Revision 0002's Brief rules as they were: the policy, the moderation function (its grants stay), no guards.
+    # Revision 0002's Brief rules as they were: the policy (first: it uses the helper), the moderation function (its
+    # grants stay), no guards, no helper.
+    _run_sql(f"ALTER POLICY bridge_app_select ON problem_briefs USING ({BRIEFS_SELECT_0002});")
+    _run_sql(APP_MODERATE_PROBLEM_0002)
     _run_sql(
         "DROP TRIGGER problem_briefs_status_guard ON problem_briefs;"
         " DROP TRIGGER problems_brief_text_guard ON problems;"
     )
-    _run_sql("\n".join(f"DROP FUNCTION {signature};" for signature in TRIGGER_FUNCTIONS))
-    _run_sql(f"ALTER POLICY bridge_app_select ON problem_briefs USING ({BRIEFS_SELECT_0002});")
-    _run_sql(APP_MODERATE_PROBLEM_0002)
+    _run_sql("\n".join(f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS)))
 
 
 def _create_tables() -> None:

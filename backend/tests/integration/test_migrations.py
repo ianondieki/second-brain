@@ -418,6 +418,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
     "engagement_notes_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
     "engagement_notes_latest_event()": (True, set()),  # locks the engagement and reads the chain's head
+    "app_brief_problem_is_public(uuid)": (True, {"bridge_app"}),  # the public read of problem_briefs (no recursion)
     "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
     "problems_brief_text_guard()": (False, set()),
 }
@@ -1131,6 +1132,7 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
             await conn.execute(sa.text("SELECT app_llm_calls_since('m', now())"))  # revision 0004
+            await conn.execute(sa.text("SELECT app_brief_problem_is_public(uuid7())"))  # revision 0006
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
