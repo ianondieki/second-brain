@@ -748,4 +748,40 @@ describe("the side states' sheets", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Request information" }));
   });
+
+  it("counts the hold's range from the API's today, a platform day moved ahead of the real one", async () => {
+    // A test clock 30 days on: the API's today, not the browser's, bounds the date.
+    const { runImpl } = renderActions(orgReviewing(), { today: "2026-11-01", limits: { questions_left: 2, holds_left: 2, hold_days_left: 45 } });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
+    expect([date.min, date.max]).toEqual(["2026-11-02", "2026-12-16"]);
+    expect(dialog.textContent).toContain("From tomorrow to 16 Dec 2026");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
+    fireEvent.change(date, { target: { value: "2026-11-01" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(within(dialog).getByText("Choose a resume date from 2 Nov 2026 to 16 Dec 2026.")).toBeTruthy();
+    expect(runImpl).not.toHaveBeenCalled();
+    fireEvent.change(date, { target: { value: "2026-11-02" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(runImpl.mock.calls[0][0].body).toMatchObject({ resume_at: "2026-11-02" });
+  });
+
+  it("draws and checks no range without the API's today, leaving the date to the API's refusal", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "invalidResumeAt", status: 422 }));
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
+    expect(date.hasAttribute("min")).toBe(false);
+    expect(date.hasAttribute("max")).toBe(false);
+    expect(dialog.textContent).toContain("At most 60 days ahead.");
+    expect(dialog.textContent).not.toContain("From tomorrow to");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
+    fireEvent.change(date, { target: { value: "2030-01-01" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(runImpl).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByRole("alert").textContent).toBe("Choose a resume date from tomorrow, no more than 60 days ahead.");
+  });
 });
+

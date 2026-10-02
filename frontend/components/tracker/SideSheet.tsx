@@ -8,7 +8,7 @@ import { SheetHandle, sheetClass } from "@/components/ui/ConfirmDialog";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
-import { formatDate, nairobiToday, type SheetCommand, type SheetInput, type SideLimits } from "./model";
+import { formatDate, type SheetCommand, type SheetInput, type SideLimits } from "./model";
 import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
@@ -29,8 +29,11 @@ export interface SideSheetProps {
   /** resume: the day the hold was due to end ("12 Oct 2026"). */
   resumeOn?: string | null;
   locale?: string;
-  /** Today in Nairobi on the app's clock ("2026-10-02"), for the hold's date range. */
-  today?: string;
+  /**
+   * Today in Nairobi on the platform's clock (the API's `today`, "2026-10-02"), for the hold's date range. Absent (an
+   * older API): no range is drawn or checked here, and the API's refusal says what it takes.
+   */
+  today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`); each figure shown only when sent. */
   limits?: SideLimits | null;
   onSubmit: (input: SheetInput) => void;
@@ -52,7 +55,7 @@ export function SideSheet(props: SideSheetProps) {
   const titleId = useId();
   const id = useId();
   const locale = props.locale ?? "en";
-  const today = props.today ?? nairobiToday();
+  const today = props.today ?? null;
   const [text, setText] = useState("");
   const [resumeAt, setResumeAt] = useState("");
   const [errors, setErrors] = useState<{ text?: string; date?: string }>({});
@@ -70,10 +73,14 @@ export function SideSheet(props: SideSheetProps) {
   const withText = props.command !== "cancel_request";
   // A hold's date, as the API checks it: after today, at most 60 days ahead and within the days on hold the
   // engagement has left (side_limits.hold_days_left, when sent).
-  const earliest = addDays(today, 1);
-  const latest = addDays(today, Math.max(1, Math.min(HOLD_MAX_DAYS, props.limits?.hold_days_left ?? HOLD_MAX_DAYS)));
-  const outOfRange = (day: string) => !/^\d{4}-\d{2}-\d{2}$/.test(day) || day < earliest || day > latest;
-  const rangeError = t("sheet.pause.dateRange", { date: formatDate(earliest, locale), value: formatDate(latest, locale) });
+  const earliest = today ? addDays(today, 1) : undefined;
+  const latest = today
+    ? addDays(today, Math.max(1, Math.min(HOLD_MAX_DAYS, props.limits?.hold_days_left ?? HOLD_MAX_DAYS)))
+    : undefined;
+  const outOfRange = (day: string) =>
+    earliest !== undefined && latest !== undefined && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < earliest || day > latest);
+  const rangeError =
+    earliest && latest ? t("sheet.pause.dateRange", { date: formatDate(earliest, locale), value: formatDate(latest, locale) }) : "";
   const left = (figure: number | null | undefined, key: "sheet.questionsLeft" | "sheet.holdsLeft" | "sheet.holdDaysLeft") =>
     figure == null ? null : (
       <li key={key} data-left={key.slice(6)}>
@@ -214,7 +221,7 @@ export function SideSheet(props: SideSheetProps) {
               id={ids.date}
               type="date"
               label={t("sheet.pause.date")}
-              hint={t("sheet.pause.dateHint", { date: formatDate(latest, locale) })}
+              hint={latest ? t("sheet.pause.dateHint", { date: formatDate(latest, locale) }) : t("sheet.pause.dateHintNoDay")}
               min={earliest}
               max={latest}
               value={resumeAt}
