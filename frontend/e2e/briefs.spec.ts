@@ -204,7 +204,7 @@ test.describe("a Problem Brief", () => {
 
     // The pitch starts with the organisation chosen, and says why.
     await devPage.goto(`/dev/ideas/${draft.id}`);
-    await devPage.getByRole("link", { name: "Pitch to companies" }).click();
+    await devPage.getByRole("link", { name: "Pitch to companies" }).first().click(); // the page offers it twice (the primary and the section link)
     await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/${draft.id}/pitch\\?org=${orgId}$`), SERVER_STEP);
     await hydrated(devPage);
     await expect(devPage.getByRole("checkbox", { name: new RegExp(scene.org.replace(/[()]/g, "\\$&")) })).toBeChecked();
