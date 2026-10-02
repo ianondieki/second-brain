@@ -40,6 +40,7 @@ from bridge.models import Base, Tenancy
 from bridge.models.base import RLS_TENANCIES
 from tests.integration import world as w
 from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
+from tests.integration.engagements import tracker
 
 TABLES = Base.metadata.tables
 TIER2_ROLES = ("tier2_reader", "provenance_worker", "tier2_embed_worker", "tier2_moderation", "dsr_exporter")
@@ -413,6 +414,9 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "payments_guard()": (False, set()),
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
+    # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
+    "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
+    "problems_brief_text_guard()": (False, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -2256,12 +2260,54 @@ V5_TRIGGERS = {
 }
 
 
-# Revision 0006: the notes are a tracker table (the visibility check first) and append-only for every role.
+# Revision 0006: the notes are a tracker table (the visibility check first) and append-only for every role; the
+# Brief status and text guards.
 V6_TRIGGERS = {
     ("engagement_notes", "engagement_notes_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT),
     ("engagement_notes", "engagement_notes_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE),
     ("engagement_notes", "engagement_notes_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
+    # After RLS: a Brief is published only with its problem, and closed only once published.
+    ("problem_briefs", "problem_briefs_status_guard"): ("problem_briefs_status_guard", ROW | ON_INSERT | ON_UPDATE),
+    # UPDATE OF title, statement, affected_group: a published Brief keeps its moderated text.
+    ("problems", "problems_brief_text_guard"): ("problems_brief_text_guard", ROW | BEFORE | ON_UPDATE),
 }
+
+
+async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
+    """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
+    published org_brief problem, for every role. Its organisation's editor (bridge_app) is refused with SQLSTATE 55000
+    and holds no UPDATE on status to return it to review; the owner's same UPDATE with status = 'pending_review'
+    passes. Unchanged text, the other columns, a Brief awaiting review and a developer's own problem stay editable."""
+    async with rolled_back(owner_engine) as conn:
+        p = await tracker.parties(conn)
+        niche = uuid7()
+        await conn.execute(
+            sa.text("INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Briefs')"),
+            {"id": niche, "slug": niche.hex},
+        )
+        published = await w.add_problem(conn, p.reviewer, niche, org_id=p.org)
+        pending = await w.add_problem(conn, p.reviewer, niche, org_id=p.org, status="pending_review")
+        own = await w.add_problem(conn, p.developer, niche)
+        by_id = {"id": published}
+        await tracker.act(conn, p.reviewer, p.org)
+        for column in ("title", "statement", "affected_group"):
+            savepoint = await conn.begin_nested()
+            with pytest.raises(sa.exc.DBAPIError, match="moderated text of a published Brief") as refused:
+                await conn.execute(sa.text(f"UPDATE problems SET {column} = 'Changed' WHERE id = :id"), by_id)
+            await savepoint.rollback()
+            assert getattr(refused.value.orig, "sqlstate", None) == "55000", column
+        back_to_review = "UPDATE problems SET title = 'Changed', status = 'pending_review' WHERE id = :id"
+        await expect_error(conn, back_to_review, "permission denied", by_id)  # status is a moderation decision
+        unchanged = "UPDATE problems SET title = title, statement = statement, niche_id = niche_id WHERE id = :id"
+        assert (await conn.execute(sa.text(unchanged), by_id)).rowcount == 1
+        edit = "UPDATE problems SET title = 'Edited', affected_group = 'Farmers' WHERE id = :id"
+        assert (await conn.execute(sa.text(edit), {"id": pending})).rowcount == 1
+        await tracker.act(conn, p.developer)
+        assert (await conn.execute(sa.text(edit), {"id": own})).rowcount == 1
+        await tracker.as_owner(conn)  # every role: the owner too, unless it returns the Brief to review
+        await expect_error(conn, "UPDATE problems SET title = 'Changed' WHERE id = :id", "moderated text", by_id)
+        returned = await conn.execute(sa.text(back_to_review + " RETURNING CAST(status AS text)"), by_id)
+        assert returned.scalar_one() == "pending_review"
 
 
 async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine) -> None:

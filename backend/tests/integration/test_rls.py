@@ -19,7 +19,9 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - ``aggregate_worker`` reads 0 rows of every tenant table (no privilege at all) and reads ``signal_events``.
 - Engagement notes (revision 0006, REQ-ENG-10): both parties and staff admin read them, nobody else does; only the
   actor of the engagement's latest event writes its one note, of the kind its transition is; nothing is ever updated
-  or deleted. In-app notifications (REQ-NOT-03): a user marks only their own read and changes nothing else.
+  or deleted. In-app notifications (REQ-NOT-03): a user marks only their own read and changes nothing else. Problem
+  Briefs (REQ-DIR-05): a draft Brief awaiting review is unreadable to developers; approval publishes it; a closed
+  public Brief stays readable.
 - A cross-tenant API access returns 404.
 """
 
@@ -945,6 +947,83 @@ async def test_a_user_marks_only_their_own_notifications_read(app_engine: AsyncE
                 await conn.execute(text(f"UPDATE in_app_notifications SET {assignment}"))
             await savepoint.rollback()
         await conn.rollback()
+
+
+BRIEF = (
+    "INSERT INTO problem_briefs (problem_id, org_id, visibility, budget_band, deadline, status)"
+    " VALUES (:p, :org, 'public', 'band_b', :deadline, CAST(:status AS brief_status))"
+)
+BRIEF_STATUS = "SELECT CAST(status AS text) FROM problem_briefs WHERE problem_id = :p"
+MODERATE = "SELECT app_moderate_problem(:p, CAST(:state AS moderation_state), CAST(:status AS problem_status))"
+BRIEF_AND_PROBLEM_READ = (
+    "SELECT (SELECT count(*) FROM problem_briefs WHERE problem_id = :p) + (SELECT count(*) FROM problems WHERE id = :p)"
+)
+
+
+async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed(owner_engine: AsyncEngine) -> None:
+    """REQ-DIR-05 (P19-B; revision 0006). Given an E2 organisation's reviewer posting a public Brief as a draft with
+    its problem awaiting review, Then a developer reads neither, and the organisation can neither publish nor close it
+    ahead of moderation; When staff approve the problem, Then the Brief is published and the developer reads both;
+    When the organisation closes it, Then the developer still reads both, and a later approval leaves it closed. A
+    rejected problem, and an approved problem of an E1 organisation, leave their Brief a draft nobody else reads."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        niche, e1_org = uuid7(), uuid7()
+        await t.run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Briefs')", id=niche, s=niche.hex)
+        await t.run(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source, verification)"
+            " VALUES (:id, 'company', 'Pending E2 Ltd', :slug, 'seed', 'e1')",
+            id=e1_org,
+            slug=f"e1-{e1_org.hex}",
+        )
+        await t.member(conn, e1_org, p.outsider, "{reviewer}")
+        brief, rejected, early = [
+            await w.add_problem(conn, p.reviewer, niche, org_id=p.org, status="pending_review") for _ in range(3)
+        ]
+        e1_brief = await w.add_problem(conn, p.outsider, niche, org_id=e1_org, status="pending_review")
+        deadline = date(2027, 3, 31)
+        await t.act(conn, p.reviewer, p.org)
+        for problem in (brief, rejected):
+            await t.run(conn, BRIEF, p=problem, org=p.org, deadline=deadline, status="draft")
+        ahead = "a Brief is published only once its problem is published and clear"
+        await t.expect(conn, BRIEF, ahead, p=early, org=p.org, deadline=deadline, status="published")
+        await t.expect(conn, "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p", ahead, p=brief)
+        closing = "only a published Brief is closed"
+        await t.expect(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", closing, p=brief)
+        await t.expect(conn, BRIEF, closing, p=early, org=p.org, deadline=deadline, status="closed")
+        await t.act(conn, p.outsider, e1_org)
+        await t.run(conn, BRIEF, p=e1_brief, org=e1_org, deadline=deadline, status="draft")
+        await t.act(conn, p.developer)
+        for problem in (brief, rejected, e1_brief):
+            assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) == 0, "a Brief awaiting review is read"
+        await t.act(conn, p.staff)
+        for problem, state, status in (
+            (brief, "clear", "published"),
+            (rejected, "rejected", "rejected"),
+            (e1_brief, "clear", "published"),
+        ):
+            await t.run(conn, MODERATE, p=problem, state=state, status=status)
+        statuses = {problem: await t.run(conn, BRIEF_STATUS, p=problem) for problem in (brief, rejected, e1_brief)}
+        assert statuses == {brief: "published", rejected: "draft", e1_brief: "draft"}
+        await t.act(conn, p.developer)
+        reads = {problem: await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) for problem in statuses}
+        assert reads == {brief: 2, rejected: 0, e1_brief: 0}
+        await t.act(conn, p.outsider, e1_org)  # the E2 guard on 'published' holds once the problem is published
+        await t.expect(
+            conn,
+            "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p",
+            "row-level security",
+            p=e1_brief,
+        )
+        await t.act(conn, p.reviewer, p.org)
+        closed = await t.rowcount(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", p=brief)
+        assert closed == 1
+        await t.act(conn, p.developer)
+        assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 2  # the problem page and the links stay
+        await t.act(conn, p.staff)
+        await t.run(conn, MODERATE, p=brief, state="clear", status="published")  # say, clearing a later hold
+        assert await t.run(conn, BRIEF_STATUS, p=brief) == "closed"
 
 
 # ---------------------------------------------------------------- cross-tenant API access returns 404

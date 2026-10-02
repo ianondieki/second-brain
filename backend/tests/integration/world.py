@@ -645,7 +645,8 @@ NO_ORG, NO_USER = "CAST(NULL AS uuid)", "CAST(NULL AS uuid)"
 # Readable by every signed-in user (docs/spec/06 6.1, 6.2): the rules restated from the spec, not from the policies.
 _PUBLIC_PROBLEM = (
     "t.status = 'published' AND t.moderation_state = 'clear' AND (t.org_id IS NULL OR EXISTS (SELECT 1"
-    " FROM problem_briefs b WHERE b.problem_id = t.id AND b.visibility = 'public' AND b.status = 'published'))"
+    " FROM problem_briefs b WHERE b.problem_id = t.id AND b.visibility = 'public'"
+    " AND b.status IN ('published', 'closed')))"
 )
 _PUBLIC_PROPOSAL = "p.status = 'published' AND p.moderation_state = 'clear'"
 
@@ -716,7 +717,7 @@ TENANT_ROWS: dict[str, Rows] = {
         "t.problem_id::text",
         "t.org_id",
         NO_USER,
-        "t.visibility = 'public' AND t.status = 'published'",
+        "t.visibility = 'public' AND t.status IN ('published', 'closed')",  # closed stays readable (revision 0006)
     ),
     "brief_invitations": _rows("brief_invitations", "t.id::text", "t.org_id", "t.user_id"),
     "proposal_confidential": _rows("proposal_confidential", "t.version_id::text", NO_ORG, "t.owner_id"),
