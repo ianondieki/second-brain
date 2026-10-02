@@ -1238,6 +1238,17 @@
             "description": "Why a decision is refused (the route's code); null when both are open",
             "title": "Blocked"
           },
+          "brief_org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>'); null for any other subject, or when the organisation is not in the directory"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",

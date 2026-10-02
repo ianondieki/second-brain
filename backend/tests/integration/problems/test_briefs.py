@@ -367,6 +367,8 @@ async def test_an_org_negative_brief_is_held_for_the_moderator(
     staff = await moderators()
     [case] = await cases_about(staff, held["id"])
     assert {"new_org_brief", "names_real_org_negative"} <= set(case["reasons"])
+    assert case["brief_org"] == {"id": str(world.org.id), "slug": f"p10-{world.org.id.hex}", "name": TELCO}
+    assert (await staff.get(f"/api/admin/moderation/cases/{case['id']}")).json()["brief_org"]["name"] == TELCO
     assert {f["name"] for f in case["fields"]} == {"title", "statement", "affected_group"}
 
 

@@ -2960,6 +2960,8 @@ export interface components {
              * @description Why a decision is refused (the route's code); null when both are open
              */
             blocked: ("already_decided" | "unsupported_subject" | "subject_gone" | "own_content" | "cannot_approve_vulnerability") | null;
+            /** @description The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>'); null for any other subject, or when the organisation is not in the directory */
+            brief_org?: components["schemas"]["OrgRef"] | null;
             /**
              * Created At
              * Format: date-time
