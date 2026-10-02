@@ -23,6 +23,7 @@ function UnreadMark() {
 async function NotificationRow({ item }: { item: Notification }) {
   const [t, locale] = await Promise.all([getTranslations("notifications"), getLocale()]);
   const unread = item.read_at === null;
+  const time = t("time", { time: formatTime(locale, item.created_at) });
   const words = (
     <>
       {unread ? <span className="sr-only">{t("unread")}</span> : null}
@@ -51,12 +52,18 @@ async function NotificationRow({ item }: { item: Notification }) {
           )}
         </span>
       }
+      // Phones give the body the row's width: the time sits under the title there (only one of the two is ever shown,
+      // so a screen reader hears it once), beside the title from 640 px.
       figure={
         <time dateTime={item.created_at} className="text-sm whitespace-nowrap text-ink-soft">
-          {t("time", { time: formatTime(locale, item.created_at) })}
+          {time}
         </time>
       }
+      figureFrom="sm"
     >
+      <time dateTime={item.created_at} className="pl-[18px] text-sm text-ink-soft sm:hidden">
+        {time}
+      </time>
       {item.body ? <p className="max-w-[62ch] pl-[18px] text-sm [overflow-wrap:anywhere] text-ink-soft">{item.body}</p> : null}
     </RowBase>
   );

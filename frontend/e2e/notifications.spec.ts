@@ -114,7 +114,7 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     await expect(rows.nth(1)).toContainText(`${org.orgName} started reviewing "${amina.title}"`);
     await expect(rows.nth(0)).toHaveAttribute("data-unread", "true");
     await expect(rows.nth(1)).toHaveAttribute("data-unread", "true");
-    await expect(rows.nth(0).locator("time")).toContainText(/^\d{2}:\d{2} EAT$/);
+    await expect(rows.nth(0).locator("time:visible")).toHaveText(/^\d{2}:\d{2} EAT$/);
     await expect(page.locator("[data-primary]")).toHaveCount(0);
     await checkScreen(page, { strict: true });
     await shot(page, info, "list");
