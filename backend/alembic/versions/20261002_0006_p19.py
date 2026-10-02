@@ -30,8 +30,13 @@ for a hold.
   is neither a side state nor terminal; ``info_answer`` leaves ``INFO_REQUESTED`` and ``resume`` leaves ``ON_HOLD``,
   each for such a state (the state it was entered from: the chain enforces that). One note per event (UNIQUE
   (engagement_id, event_seq)). Who may enter or leave a side state is the event's policy and the state machine's.
-- Append-only: no UPDATE or DELETE grant, and ``engagement_notes_no_update_delete`` and ``_no_truncate``
-  (``block_mutation()``) refuse them for every role, the owner included. ``engagement_notes_0_visible``
+- Append-only, but for its redaction (D-54, default (a)): no UPDATE or DELETE grant; ``engagement_notes_no_delete``
+  and ``_no_truncate`` (``block_mutation()``) refuse DELETE and TRUNCATE for every role, the owner included; and
+  ``engagement_notes_redaction_guard`` admits an UPDATE only from the table's owner or a SECURITY DEFINER function it
+  owns (``current_user``), only once, and only when it sets ``body`` to the fixed marker ``'[redacted]'`` with
+  ``redacted_at`` and ``redacted_by`` in the same statement and changes nothing else. bridge_app holds no privilege on
+  ``redacted_at`` or ``redacted_by``. The staff-only redaction function D-54 foresees does not exist yet.
+  ``engagement_notes_0_visible``
   (``tracker_engagement_visible()``) fires first on INSERT, so a note naming an engagement the caller cannot see gets
   the tracker's one refusal before any unique or foreign key check could tell anything about it.
 - ``created_at`` is the database's clock (default ``app_clock_now()``, the shared clock): bridge_app's INSERT is
@@ -81,8 +86,9 @@ Operating rules for the code that uses this schema:
 - Insert a Brief as a draft; never set ``published`` yourself (``app_moderate_problem`` does it on approval); close
   only a published Brief; never edit a published Brief's title, statement or affected group (SQLSTATE 55000: map it
   to 409).
-- A note is free text a party typed and is never changed or deleted: keep it out of event payloads, logs and audit
-  details. Its erasure under a data-subject request (REQ-SEC-02, AC-SEC-3) is not decided here (see the P19-M report).
+- A note is free text a party typed and is never deleted: keep it out of event payloads, logs and audit details. Its
+  erasure under a data-subject request (REQ-SEC-02, AC-SEC-3) is D-54: by default (a) its body may later be redacted
+  by a staff-only SECURITY DEFINER function (not written yet), which the redaction guard already admits.
 
 Revision ID: 0006
 Revises: 0005
@@ -105,7 +111,7 @@ depends_on: str | Sequence[str] | None = None
 RLS_TABLES = ("engagement_notes",)
 
 # Table privileges of bridge_app on this revision's table; anything not listed is not granted. Append-only: SELECT and
-# INSERT only, the INSERT without created_at (the database's clock).
+# INSERT only, the INSERT without created_at (the database's clock) and the redaction columns (D-54: the owner's).
 APP_GRANTS: dict[str, str] = {
     "engagement_notes": "SELECT, INSERT (id, engagement_id, event_seq, kind, body, resume_at, created_by)",
 }
@@ -115,6 +121,7 @@ IN_APP_UPDATABLE_COLUMNS = "read_at"
 
 # CHECK expressions, verbatim from the ORM model (bridge.engagements.models.EngagementNote).
 NOTE_KINDS = ("info_request", "info_answer", "hold", "resume")
+REDACTED = "'[redacted]'"  # D-54: the one body a note may be changed to
 
 
 class Policy(NamedTuple):
@@ -190,6 +197,29 @@ BRIEFS_SELECT = (
 )
 
 FUNCTIONS_SQL = r"""
+-- D-54 (default (a)): a note changes only by its redaction, once: its body becomes the fixed marker '[redacted]' with
+-- redacted_at and redacted_by set in the same statement, and nothing else changes. Only the table's owner, or a
+-- SECURITY DEFINER function it owns (a staff-only redaction function: none exists yet), may do it; bridge_app holds no
+-- UPDATE on the table at all. DELETE and TRUNCATE stay refused for every role (block_mutation()). SECURITY INVOKER, so
+-- current_user is the writer (as org_claims_status_guard() of revision 0002).
+CREATE FUNCTION engagement_notes_redaction_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+       OR OLD.redacted_at IS NOT NULL OR NEW.body IS DISTINCT FROM '[redacted]'
+       OR NEW.redacted_at IS NULL OR NEW.redacted_by IS NULL
+       OR (NEW.id, NEW.engagement_id, NEW.event_seq, NEW.kind, NEW.resume_at, NEW.created_by, NEW.created_at)
+          IS DISTINCT FROM (OLD.id, OLD.engagement_id, OLD.event_seq, OLD.kind, OLD.resume_at, OLD.created_by,
+                            OLD.created_at) THEN
+        RAISE EXCEPTION 'engagement_notes: a note changes only by its redaction, once, by the owner (D-54)'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
 -- A Brief enters 'published' only while its problem is published and clear (staff approved it; app_moderate_problem()
 -- publishes a draft Brief of an E2 organisation with its problem), so nothing of a Brief awaiting review is readable
 -- beyond its organisation and staff; and it enters 'closed' only from 'published', so closing never makes a Brief
@@ -300,17 +330,24 @@ END;
 $$;
 """
 
-TRIGGER_FUNCTIONS = ("problem_briefs_status_guard()", "problems_brief_text_guard()")
+TRIGGER_FUNCTIONS = (
+    "engagement_notes_redaction_guard()",
+    "problem_briefs_status_guard()",
+    "problems_brief_text_guard()",
+)
 
 # Every tracker table's triggers (revision 0003): the visibility check fires first on INSERT (<table>_0_visible sorts
-# first by name), and the append-only refusals hold for every role.
+# first by name), and the append-only refusals hold for every role (an UPDATE only as the owner's redaction, D-54).
 TRIGGERS_SQL = r"""
 CREATE TRIGGER engagement_notes_0_visible
     BEFORE INSERT ON engagement_notes
     FOR EACH ROW EXECUTE FUNCTION tracker_engagement_visible();
-CREATE TRIGGER engagement_notes_no_update_delete
-    BEFORE UPDATE OR DELETE ON engagement_notes
+CREATE TRIGGER engagement_notes_no_delete
+    BEFORE DELETE ON engagement_notes
     FOR EACH ROW EXECUTE FUNCTION block_mutation();
+CREATE TRIGGER engagement_notes_redaction_guard
+    BEFORE UPDATE ON engagement_notes
+    FOR EACH ROW EXECUTE FUNCTION engagement_notes_redaction_guard();
 CREATE TRIGGER engagement_notes_no_truncate
     BEFORE TRUNCATE ON engagement_notes
     FOR EACH STATEMENT EXECUTE FUNCTION block_mutation();
@@ -365,8 +402,8 @@ def downgrade() -> None:
             " database up, get the human's decision (CLAUDE.md: destructive migration), then run with"
             " -x allow_note_loss=true"
         )
-    # Dropping the table drops its policies, triggers, indexes and grants (the trigger functions are revision 0002's
-    # and 0003's and stay).
+    # Dropping the table drops its policies, triggers, indexes and grants (block_mutation() and
+    # tracker_engagement_visible() are revision 0002's and 0003's and stay; this revision's functions go below).
     op.drop_table("engagement_notes")
     _run_sql(
         "REVOKE UPDATE ON TABLE in_app_notifications FROM bridge_app;"
@@ -392,6 +429,8 @@ def _create_tables() -> None:
         sa.Column("resume_at", sa.Date(), nullable=True),
         sa.Column("created_by", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("app_clock_now()"), nullable=False),
+        sa.Column("redacted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("redacted_by", sa.Uuid(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.CheckConstraint(
             f"kind IN ({', '.join(repr(kind) for kind in NOTE_KINDS)})", name=op.f("ck_engagement_notes_kind_known")
@@ -402,7 +441,12 @@ def _create_tables() -> None:
         sa.CheckConstraint(
             "(kind = 'hold') = (resume_at IS NOT NULL)", name=op.f("ck_engagement_notes_resume_at_only_for_hold")
         ),
+        sa.CheckConstraint(
+            f"(redacted_at IS NULL) = (redacted_by IS NULL) AND (redacted_at IS NULL OR body = {REDACTED})",
+            name=op.f("ck_engagement_notes_redaction_complete"),
+        ),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], name=op.f("fk_engagement_notes_created_by_users")),
+        sa.ForeignKeyConstraint(["redacted_by"], ["users.id"], name=op.f("fk_engagement_notes_redacted_by_users")),
         sa.ForeignKeyConstraint(
             ["engagement_id"], ["engagements.id"], name=op.f("fk_engagement_notes_engagement_id_engagements")
         ),

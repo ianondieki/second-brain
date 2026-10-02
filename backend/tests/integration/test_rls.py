@@ -905,18 +905,49 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         for sql in (
             "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
             "UPDATE engagement_notes SET resume_at = NULL WHERE engagement_id = :e",
+            REDACT + " WHERE engagement_id = :e",  # D-54: the app cannot redact
             "DELETE FROM engagement_notes WHERE engagement_id = :e",
             "TRUNCATE engagement_notes",
         ):
-            await t.expect(conn, sql, "permission denied", e=engagement)
+            await t.expect(conn, sql, "permission denied", e=engagement, by=p.staff)
         await t.as_owner(conn)  # the triggers hold for every role
-        for sql in (
-            "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
-            "DELETE FROM engagement_notes WHERE engagement_id = :e",
-            "TRUNCATE engagement_notes",
+        for sql, refusal in (
+            ("UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e", "only by its redaction"),
+            ("DELETE FROM engagement_notes WHERE engagement_id = :e", "append-only"),
+            ("TRUNCATE engagement_notes", "append-only"),
         ):
-            await t.expect(conn, sql, "append-only", e=engagement)
+            await t.expect(conn, sql, refusal, e=engagement)
         assert await t.run(conn, COUNT_NOTES, e=engagement) == 4
+
+
+REDACT = "UPDATE engagement_notes SET body = '[redacted]', redacted_at = now(), redacted_by = :by"
+
+
+async def test_a_note_is_redacted_once_by_the_owner_and_never_otherwise_changed(owner_engine: AsyncEngine) -> None:
+    """D-54 (default (a)): the owner, or a SECURITY DEFINER function it owns, redacts a note's body once, setting the
+    marker with redacted_at and redacted_by in one statement; any other change, a second redaction and a redaction
+    that touches another column are refused; the app holds no UPDATE on notes at all (tested above)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        await t.act(conn, p.owner, p.org)
+        await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+        await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner, body="Call me on +254 700 000 000"))
+        await t.as_owner(conn)
+        guard, where = "only by its redaction", " WHERE engagement_id = :e"
+        for sql in (
+            "UPDATE engagement_notes SET body = '[redacted]'" + where,  # without who and when
+            "UPDATE engagement_notes SET redacted_at = now(), redacted_by = :by" + where,  # without the marker
+            REDACT + ", kind = 'info_answer'" + where,  # and something else
+            REDACT + ", created_by = :by" + where,
+        ):
+            await t.expect(conn, sql, guard, e=engagement, by=p.staff)
+        assert await t.rowcount(conn, REDACT + where, e=engagement, by=p.staff) == 1
+        redacted = "SELECT body, redacted_by FROM engagement_notes WHERE engagement_id = :e"
+        assert tuple((await conn.execute(text(redacted), {"e": engagement})).one()) == ("[redacted]", p.staff)
+        for sql in (REDACT + where, "UPDATE engagement_notes SET body = 'Restored'" + where):  # once, for good
+            await t.expect(conn, sql, guard, e=engagement, by=p.staff)
 
 
 async def test_a_user_marks_only_their_own_notifications_read(app_engine: AsyncEngine, world: w.World) -> None:

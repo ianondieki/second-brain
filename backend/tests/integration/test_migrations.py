@@ -415,6 +415,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
     # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
+    "engagement_notes_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
     "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
     "problems_brief_text_guard()": (False, set()),
 }
@@ -1655,12 +1656,12 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
 
 # Revision 0005: columns bridge_app reads but neither inserts nor updates: the research columns only
 # app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
-# Revision 0006: a note's time, the database's clock too.
+# Revision 0006: a note's time, the database's clock too, and its redaction (D-54), the owner's.
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problems": {"research_run_id", "named_orgs"},
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
-    "engagement_notes": {"created_at"},
+    "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
 }
 
 
@@ -2264,7 +2265,12 @@ V5_TRIGGERS = {
 # Brief status and text guards.
 V6_TRIGGERS = {
     ("engagement_notes", "engagement_notes_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT),
-    ("engagement_notes", "engagement_notes_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE),
+    ("engagement_notes", "engagement_notes_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
+    # D-54: an UPDATE only as the owner's one redaction of the body.
+    ("engagement_notes", "engagement_notes_redaction_guard"): (
+        "engagement_notes_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
+    ),
     ("engagement_notes", "engagement_notes_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
     # After RLS: a Brief is published only with its problem, and closed only once published.
     ("problem_briefs", "problem_briefs_status_guard"): ("problem_briefs_status_guard", ROW | ON_INSERT | ON_UPDATE),
