@@ -84,6 +84,35 @@ class ConfirmPaymentBody(CommandBody):
     amount_received_kes_minor: int = Field(ge=0, le=MAX_KES_MINOR)
 
 
+# Side states (REQ-ENG-10 part; docs/spec/06 6.9 side branches). Each text becomes the event's note
+# (engagement_notes): read by both parties on the tracker, never in the hash chain. Blank text is 422 invalid_note.
+class RequestInfoBody(CommandBody):
+    """The organisation's question (stages 1-2): the review clock pauses until the developer answers."""
+
+    question: str = Field(min_length=1, max_length=2000, pattern=NO_NUL)
+
+
+class AnswerInfoBody(CommandBody):
+    """The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause."""
+
+    answer: str = Field(min_length=1, max_length=2000, pattern=NO_NUL)
+
+
+class PauseBody(CommandBody):
+    """Put the engagement on hold before the agreement, with a reason and the date it resumes."""
+
+    reason: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
+    resume_at: date = Field(
+        description="The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead"
+    )
+
+
+class ResumeBody(CommandBody):
+    """Resume a hold before its date, with a reason; due dates move by the business days on hold."""
+
+    reason: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
+
+
 class DueOut(BaseModel):
     due_on: date
     business_days_left: int
@@ -122,6 +151,9 @@ class EngagementSummary(BaseModel):
     lock_version: int
     whose_turn: list[EngagementParty]
     updated_at: datetime
+    paused_from: EngagementState | None = Field(
+        description="In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+    )
 
 
 class EngagementList(BaseModel):
@@ -201,6 +233,18 @@ class PaymentOut(BaseModel):
     confirmed_amount_kes_minor: int | None
 
 
+class NoteOut(BaseModel):
+    """The text a side-state command carried, in event order: the organisation's question (``info_request``), the
+    developer's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason
+    (``resume``). ``by`` is the party that wrote it."""
+
+    kind: Literal["info_request", "info_answer", "hold", "resume"]
+    body: str
+    resume_at: date | None
+    by: EngagementParty
+    at: datetime
+
+
 class DocumentRefOut(BaseModel):
     kind: SignatureDocumentKind
     ref: UUID
@@ -218,6 +262,7 @@ class EngagementDetail(EngagementSummary):
     signatures: list[SignatureOut]
     payments: list[PaymentOut]
     documents: list[DocumentRefOut]
+    notes: list[NoteOut] = Field(description="The side states' questions, answers and reasons, in event order")
 
 
 class HistoryEventOut(BaseModel):

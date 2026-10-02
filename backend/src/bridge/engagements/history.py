@@ -35,6 +35,7 @@ from bridge.engagements.models import (
     Engagement,
     EngagementEndorsement,
     EngagementEvent,
+    EngagementNote,
     Milestone,
     PaymentRecord,
     Signature,
@@ -52,11 +53,12 @@ from bridge.engagements.schemas import (
     HistoryEventOut,
     HistoryOut,
     MilestoneOut,
+    NoteOut,
     PaymentOut,
     PendingOut,
     SignatureOut,
 )
-from bridge.engagements.service import Loaded, Party, app_now, load, load_holidays, load_many
+from bridge.engagements.service import Loaded, Party, app_now, entering_event, load, load_holidays, load_many
 from bridge.errors import forbidden, not_found
 from bridge.legal.models import LegalTemplate, NdaTemplate
 from bridge.models.enums import (
@@ -188,6 +190,7 @@ def _summary(
         lock_version=engagement.lock_version,
         whose_turn=list(sm.whose_turn(engagement.state, loaded.facts)),
         updated_at=engagement.updated_at,
+        paused_from=loaded.facts.paused_from,
     )
 
 
@@ -279,11 +282,18 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         ).scalars()
     )
     review_due = await review_due_dates(db, engagement.id, milestones)
-    endorsements = [
+    endorsements = [  # the current stage's since it was entered from the main path (a pause continues it)
         e
         for e in await _endorsements(db, engagement.id)
-        if e.stage is engagement.state and e.stage_round == loaded.stage_round
+        if e.stage is engagement.state and loaded.first_round <= e.stage_round <= loaded.stage_round
     ]
+    notes = (
+        await db.execute(
+            select(EngagementNote)
+            .where(EngagementNote.engagement_id == engagement.id)
+            .order_by(EngagementNote.event_seq)
+        )
+    ).scalars()
     names = await _names(
         db,
         [engagement.contact_user_id, *(s.signer_user_id for s in signatures), *(e.user_id for e in endorsements)],
@@ -367,6 +377,16 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             for p in payments
         ],
         documents=documents_out,
+        notes=[
+            NoteOut(
+                kind=n.kind,  # the database's CHECK holds it to the four kinds
+                body=n.body,
+                resume_at=n.resume_at,
+                by=EngagementParty.DEVELOPER if n.created_by == engagement.developer_id else EngagementParty.ORG,
+                at=n.created_at,
+            )
+            for n in notes
+        ],
     )
 
 
@@ -536,7 +556,11 @@ async def contact_reveal(db: AsyncSession, party: Party) -> ContactRevealOut:
         raise forbidden(
             "not_the_contact", "Only the organisation's named contact sees the developer's contact details."
         )
-    if engagement.state not in sm.CONTACT_REVEALED:
+    state = engagement.state
+    if state in sm.RETURNING:  # paused: the stage it returns to decides (a hold does not hide a revealed contact)
+        paused = await entering_event(db, engagement.id, state)
+        state = paused.from_state if paused is not None and paused.from_state is not None else state
+    if state not in sm.CONTACT_REVEALED:
         raise forbidden("contact_not_revealed", "Contact details are shared once the organisation approves to proceed.")
     developer = await db.get(User, engagement.developer_id)
     if developer is None:
