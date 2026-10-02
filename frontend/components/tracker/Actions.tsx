@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -81,8 +81,19 @@ export function Actions(props: ActionsProps) {
   const router = useRouter();
   const { runImpl = runCommand } = props;
   const [mode, setMode] = useState<Mode>({ kind: "list" });
-  const [busy, setBusy] = useState(false);
+  const [running, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  // A step that ran stays busy until the refreshed tracker is on screen; only then does "Done" say it is up to date
+  // (and a press can no longer land on a button the refresh is about to replace).
+  const [refreshing, startRefresh] = useTransition();
+  const [okPending, setOkPending] = useState(false);
+  const [pressed, setPressed] = useState<string | null>(null);
+  const busy = running || refreshing;
+  if (okPending && !refreshing) {
+    setOkPending(false);
+    setMode({ kind: "list" });
+    setNotice({ tone: "ok" });
+  }
   // Tests wait for this before pressing a button: the server's HTML shows the buttons before they work.
   const hydrated = useHydrated();
   const noticeRef = useRef<HTMLDivElement>(null);
@@ -134,9 +145,8 @@ export function Actions(props: ActionsProps) {
     const outcome = await runImpl(request);
     setBusy(false);
     if (outcome.ok) {
-      setMode({ kind: "list" });
-      setNotice({ tone: "ok" });
-      router.refresh();
+      setOkPending(true);
+      startRefresh(() => router.refresh());
       return;
     }
     if (outcome.refusal === "stepUp" && !retried) {
@@ -160,6 +170,7 @@ export function Actions(props: ActionsProps) {
 
   function press(item: ActionItem) {
     setNotice(null);
+    setPressed(keyOf(item));
     opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
     else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
@@ -213,7 +224,7 @@ export function Actions(props: ActionsProps) {
                     data-action-key={keyOf(item)}
                     data-milestone={item.milestone?.seq}
                   >
-                    {busy && item.primary ? t("busy") : label(item)}
+                    {busy && keyOf(item) === pressed ? t("busy") : label(item)}
                   </Button>
                 )}
               </li>
@@ -244,14 +255,12 @@ export function Actions(props: ActionsProps) {
 
       {mode.kind === "form" ? (
         <Suspense fallback={<p className="text-ink-soft">{t("busy")}</p>}>
+          {/* members, myUserId, recorded and today come from the props of the same names. */}
           <CommandForm
+            {...props}
             command={mode.item.command}
             busy={busy}
             notice={message}
-            members={props.members}
-            myUserId={props.myUserId}
-            recorded={props.recorded}
-            today={props.today ?? undefined}
             onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
           />
@@ -260,17 +269,13 @@ export function Actions(props: ActionsProps) {
 
       {mode.kind === "sheet" ? (
         <Suspense fallback={null}>
+          {/* counterpart, question, resumeOn, locale, today and limits come from the props of the same names. */}
           <SideSheet
+            {...props}
             command={mode.item.command}
             busy={busy}
             problem={message}
             notice={notice}
-            counterpart={props.counterpart}
-            question={props.question}
-            resumeOn={props.resumeOn}
-            locale={props.locale}
-            today={props.today}
-            limits={props.limits}
             onClose={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
           />

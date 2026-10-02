@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { Suspense, use, useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { NextIntlClientProvider } from "next-intl";
@@ -855,6 +856,64 @@ describe("the side states' sheets", () => {
     expect(runImpl).toHaveBeenCalledTimes(1);
     expect(date.getAttribute("aria-invalid")).toBe("true");
     expect(dialog.textContent).toContain("Choose a resume date from tomorrow, no more than 60 days ahead.");
+  });
+});
+
+// The tracker says it is up to date only once it is: the refresh runs in a transition, the pressed button stays
+// "Working…" and every button blocked until the refreshed tracker lands, then "Done" (a press in between would land on
+// a button the refresh is about to replace).
+describe("Done waits for the refreshed tracker", () => {
+  function Suspends({ promise }: { promise: Promise<void> }) {
+    use(promise);
+    return <p>refreshed</p>;
+  }
+
+  function Harness({ engagement, gate, runImpl }: { engagement: Detail; gate: Promise<void>; runImpl: Run }) {
+    const [refreshed, setRefreshed] = useState(false);
+    refresh.mockImplementation(() => setRefreshed(true));
+    return (
+      <Suspense fallback={<p>loading</p>}>
+        {refreshed ? <Suspends promise={gate} /> : null}
+        <Actions
+          engagementId={engagement.id}
+          lockVersion={engagement.lock_version}
+          items={actionItems(engagement)}
+          counterpart="Achieng Otieno"
+          enrolled
+          runImpl={runImpl}
+        />
+      </Suspense>
+    );
+  }
+
+  it("keeps the step busy while the refresh is pending, then says Done", async () => {
+    let open: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const runImpl = vi.fn<Run>(async () => ({ ok: true }));
+    renderWithIntl(<Harness engagement={orgReview()} gate={gate} runImpl={runImpl} />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start the review" })));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // Pending: no Done, the pressed button says Working… and every button is blocked.
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("refreshed")).toBeNull();
+    const working = screen.getByRole("button", { name: "Working…" });
+    expect(working.getAttribute("data-command")).toBe("start_review");
+    for (const button of screen.getAllByRole("button")) expect(button.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(document.querySelector("[data-command-form]")).toBeNull();
+    await act(async () => open());
+    expect(screen.getByText("refreshed")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Done. The tracker is up to date.");
+    expect(screen.getByRole("button", { name: "Start the review" }).hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("changes nothing on a refusal: no transition, the notice at once", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "notAllowed", status: 403 }));
+    renderWithIntl(<Harness engagement={orgReview()} gate={new Promise<void>(() => {})} runImpl={runImpl} />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start the review" })));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("This step is not yours to take.");
+    expect(screen.getByRole("button", { name: "Start the review" }).hasAttribute("aria-disabled")).toBe(false);
   });
 });
 
