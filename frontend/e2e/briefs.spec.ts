@@ -108,7 +108,7 @@ test.describe("a Problem Brief", () => {
     await page.getByLabel("Problem statement").fill(
       "Field teams learn that a generator tank is empty only after the site stops serving calls, often at night.",
     );
-    await expect(page.locator("[data-meter]")).toContainText("Words: 19.");
+    await expect(page.locator("[data-meter]")).toContainText("Words: 19 of 120.");
     await page.getByLabel("Who is affected (optional)").fill("Subscribers served by off-grid tower sites");
     await page.getByLabel("Niche").selectOption({ label: "Networks & Telecommunications" });
     await page.getByLabel("County").selectOption("KE-30");
@@ -136,7 +136,7 @@ test.describe("a Problem Brief", () => {
     await expect(staffPage).toHaveURL(/\/admin\//, SERVER_STEP);
     await staffPage.goto("/admin/moderation");
     const row = staffPage.locator("[data-case]").filter({ hasText: title });
-    await expect(row).toContainText("Problem Brief");
+    await expect(row).toContainText(`Brief by ${scene.org}`);
     await expect(row).toContainText("New Brief from an organisation");
     expect(await row.locator("[data-chip]").count()).toBeLessThanOrEqual(2);
     await row.getByRole("link", { name: title }).click();
@@ -218,6 +218,9 @@ test.describe("a Problem Brief", () => {
 
     await devPage.goto("/dev/discover?view=briefs");
     await expect(devPage.locator(`[data-brief="${briefId}"]`)).toHaveCount(0);
+    // Its problem page stays readable (revision 0006), for the proposals that answer it.
+    await devPage.goto(`/problems/${briefId}`);
+    await expect(devPage.getByRole("heading", { level: 1 })).toHaveText(title, SERVER_STEP);
     await devContext.close();
   });
 });
