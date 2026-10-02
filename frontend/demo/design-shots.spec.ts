@@ -7,7 +7,7 @@
  *
  * The P19 shots make what the seed lacks and tidy up after themselves (SHOT_KEEP=1 keeps it, for the JS budget and
  * Lighthouse runs on the same pages): one Problem Brief from Telco A's reviewer, approved by the staff moderator and
- * closed at the end; one draft idea of Amina's for the teaser checks, deleted at the end; and two new test accounts
+ * closed at the end; one draft idea of Brian's for the teaser checks, deleted at the end; and two new test accounts
  * (an organisation and a developer who pitched to it, reviewed and approved to proceed) whose notifications the bell
  * and the Notifications page show. The test accounts need E2E_DATABASE_OWNER_URL (frontend/.env.e2e), as the e2e does.
  */
@@ -208,9 +208,11 @@ const TEASER = {
     " statements to set each co-op's booking quota.",
 };
 let teaserDraft: string | null = null;
+/** Whose draft it is: Brian, so Amina's demo ideas stay as seeded and her daily overlap checks stay unused. */
+const TEASER_WHO = "devBrian" as const;
 
 /**
- * Amina's draft for the teaser checks: one a kept run left (SHOT_KEEP=1), else made on the first visit (title and
+ * The teaser checks' draft: one a kept run left (SHOT_KEEP=1), else made on the first visit (title and
  * summary, saved); opened on the others.
  */
 async function openTeaserDraft(page: Page) {
@@ -292,7 +294,7 @@ async function tidyUp(browser: Browser) {
   }
   const id = teaserDraft?.split("/")[3];
   if (id) {
-    await asPerson(browser, "dev", async ({ request }) => {
+    await asPerson(browser, TEASER_WHO, async ({ request }) => {
       const { csrf_token } = await getJson<{ csrf_token: string }>(request, "/api/auth/csrf");
       const response = await request.delete(`/api/me/proposals/${id}`, { headers: { "X-CSRF-Token": csrf_token } });
       expect(response.ok(), `delete the teaser draft: ${response.status()}`).toBeTruthy();
@@ -508,7 +510,7 @@ const SHOTS: Shot[] = [
 
   // --- P19 (docs/platform/tasks/P19-F.md), into docs/demo/screenshots/p19/ ------------------------------------------
   // The editor's step 1 with both teaser checks answered on the fake LLM (the second names the summary).
-  { name: "editor-checks", set: "p19", path: "/dev/ideas", who: "dev", prepare: async (page) => {
+  { name: "editor-checks", set: "p19", path: "/dev/ideas", who: TEASER_WHO, prepare: async (page) => {
       await openTeaserDraft(page);
       await runCheck(page, "Check overlap", "/originality");
       await runCheck(page, "Check what it gives away", "/disclosure-check");

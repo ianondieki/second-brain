@@ -26,7 +26,7 @@ test.beforeAll(() => {
 });
 
 /** Saved under the name the committed shot has in docs/demo/screenshots/p19/ (the light theme, the default). */
-async function shot(page: Page, info: TestInfo, name: "notifications-light" | "notifications-empty-org-light") {
+async function shot(page: Page, info: TestInfo, name: "notifications-light" | "notifications-empty-light") {
   const dir = process.env.E2E_SHOTS_DIR;
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
@@ -73,7 +73,7 @@ test("a new account's bell has no count and its page is one sentence and one act
     await expect(page.getByRole("navigation", { name: "Organisation" })).toBeVisible();
     await expectEmptyState(page, "Nothing yet: your tracker updates and approvals will land here.", "Go to your home page");
     await checkScreen(page, { strict: true });
-    await shot(page, info, "notifications-empty-org-light");
+    await shot(page, info, "notifications-empty-light");
   } finally {
     await context.close();
   }
