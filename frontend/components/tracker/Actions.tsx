@@ -190,9 +190,16 @@ export function Actions(props: ActionsProps) {
   const listed = mode.kind === "list" || mode.kind === "sheet";
   return (
     <div ref={root} className="flex flex-col gap-4">
+      {/* "Working…" said politely while a step runs (the button's label alone is not announced); a sheet, which makes
+          this inert, says it inside itself. Left out with no buttons, so the region stays empty for the card's :empty. */}
+      {props.items.length > 0 || busy ? (
+        <span aria-live="polite" data-working="" className="sr-only">
+          {busy ? t("busy") : ""}
+        </span>
+      ) : null}
       {listNotice}
       {props.items.length === 0 && listed ? null : (
-    <section aria-labelledby="actions-heading" data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
+    <section aria-labelledby="actions-heading" aria-busy={busy} data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
       <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
         {listed ? t("title") : label(mode.item)}
       </h2>
