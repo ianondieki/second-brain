@@ -265,7 +265,7 @@ class EngagementNote(IdMixin, Base):
         CheckConstraint("btrim(body) <> '' AND char_length(body) <= 2000", name="body_length"),
         CheckConstraint("(kind = 'hold') = (resume_at IS NOT NULL)", name="resume_at_only_for_hold"),
         CheckConstraint(
-            f"(redacted_at IS NULL) = (redacted_by IS NULL) AND (redacted_at IS NULL OR body = {NOTE_REDACTED!r})",
+            f"(redacted_at IS NOT NULL) = (body = {NOTE_REDACTED!r}) AND (redacted_at IS NULL) = (redacted_by IS NULL)",
             name="redaction_complete",
         ),
         VIA_ENGAGEMENT,
@@ -278,7 +278,8 @@ class EngagementNote(IdMixin, Base):
     resume_at: Mapped[date | None] = mapped_column(Date)  # a hold's resume date (Africa/Nairobi), only for a hold
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
-    # D-54: set together, only by the owner's redaction (body becomes NOTE_REDACTED); never the app's.
+    # D-54: set together, exactly when the body is NOTE_REDACTED, only by the owner's redaction (the future staff
+    # function sets redacted_at = app_clock_now(), redacted_by = app_user_id()); never the app's.
     redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
 

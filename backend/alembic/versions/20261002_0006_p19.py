@@ -49,7 +49,11 @@ for a hold.
   ``engagement_notes_redaction_guard`` admits an UPDATE only from the table's owner or a SECURITY DEFINER function it
   owns (``current_user``), only once, and only when it sets ``body`` to the fixed marker ``'[redacted]'`` with
   ``redacted_at`` and ``redacted_by`` in the same statement and changes nothing else. bridge_app holds no privilege on
-  ``redacted_at`` or ``redacted_by``. The staff-only redaction function D-54's default foresees does not exist yet.
+  ``redacted_at`` or ``redacted_by``, and the CHECK ``redaction_complete`` ties them together: a note's body is the
+  marker exactly when it is redacted, with ``redacted_at`` and ``redacted_by`` set together, so no party can write a
+  note that looks redacted. The staff-only redaction function D-54's default foresees does not exist yet; when it is
+  written it must set ``redacted_at = app_clock_now()`` and ``redacted_by = app_user_id()`` (the staff member bound to
+  the request), never values its caller passes.
 - ``engagement_notes_0_visible`` (``tracker_engagement_visible()``) fires first on INSERT, so a note naming an
   engagement the caller cannot see gets the tracker's one refusal before any unique or foreign key check, or the
   latest-event lock, could tell anything about it.
@@ -563,7 +567,7 @@ def _create_tables() -> None:
             "(kind = 'hold') = (resume_at IS NOT NULL)", name=op.f("ck_engagement_notes_resume_at_only_for_hold")
         ),
         sa.CheckConstraint(
-            f"(redacted_at IS NULL) = (redacted_by IS NULL) AND (redacted_at IS NULL OR body = {REDACTED})",
+            f"(redacted_at IS NOT NULL) = (body = {REDACTED}) AND (redacted_at IS NULL) = (redacted_by IS NULL)",
             name=op.f("ck_engagement_notes_redaction_complete"),
         ),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], name=op.f("fk_engagement_notes_created_by_users")),

@@ -935,6 +935,8 @@ async def test_a_note_is_redacted_once_by_the_owner_and_never_otherwise_changed(
         engagement = await t.engage(conn, p)
         await t.act(conn, p.owner, p.org)
         await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+        faked = _note(engagement, 2, "info_request", p.owner, body="[redacted]")  # a party cannot fake a redaction
+        await t.expect(conn, NOTE, "ck_engagement_notes_redaction_complete", **faked)
         await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner, body="Call me on +254 700 000 000"))
         await t.as_owner(conn)
         guard, where = "only by its redaction", " WHERE engagement_id = :e"
