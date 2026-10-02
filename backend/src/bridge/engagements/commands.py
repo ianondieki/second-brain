@@ -7,9 +7,16 @@
    the version the caller last read (409 ``stale``);
 2. ask the state machine (``decide``) with the engagement's facts: a command not in the table for this state is 409;
 3. apply the command's own effects (the contact, a decline's details, an NDA, an agreement version, a signature, a
-   milestone step, a payment), then record the party's endorsement and append the event: the database projects the
-   state, sets the times and extends the hash chain (revision 0003), and the engagement is re-read;
+   milestone step, a payment, a side state's text and dates), then record the party's endorsement and append the
+   event: the database projects the state, sets the times and extends the hash chain (revision 0003); a side-state
+   command's note follows its event (revision 0006: the event's seq read back, written as its actor); the engagement
+   is re-read;
 4. close the tag when the engagement ends, and queue the other party's notification (outbox, same transaction).
+
+Side states (REQ-ENG-10 part): entering ``INFO_REQUESTED`` or ``ON_HOLD`` records the date of the deadline it pauses in
+the event's payload (``paused_due_on``; a hold also its ``resume_at``); leaving it for the state it was entered from
+sets that deadline moved by the business days paused (``state_machine.resumed_deadline``). A note's text never enters
+the payload, a log or an audit detail.
 
 The caller commits. Nothing here chooses a state the table did not; the database refuses anything outside its
 backstop, and such a refusal maps to 404/403/409 (``service.db_refusal``). ``step_up_method`` is only ever the
@@ -41,6 +48,7 @@ from bridge.engagements.models import (
     Engagement,
     EngagementEndorsement,
     EngagementEvent,
+    EngagementNote,
     Milestone,
     PaymentRecord,
     Signature,
@@ -52,6 +60,7 @@ from bridge.engagements.service import (
     api_error,
     app_now,
     db_refusal,
+    entering_event,
     load,
     load_holidays,
     lock_engagement,
@@ -151,6 +160,17 @@ class Inputs:
     payment: PaymentInput | None = None
     amount_received: int | None = None
     milestone_id: UUID | None = None
+    note: str | None = None  # a question, an answer or a reason (side states)
+    resume_at: date | None = None  # a hold's resume date
+
+
+@dataclass(frozen=True, slots=True)
+class NoteInput:
+    """The note a side-state command writes after its event (``engagement_notes``)."""
+
+    kind: str
+    body: str
+    resume_at: date | None = None
 
 
 @dataclass(slots=True)
@@ -174,6 +194,9 @@ class Step:
     named_deadline: date | None = None
     notice_text: str | None = None
     keep_endorsement: bool = False  # a re-submitted milestone keeps the developer's first endorsement
+    sets_deadline: bool = False  # the effect chose the event's stage deadline (``deadline``), not the policy
+    deadline: datetime | None = None
+    note: NoteInput | None = None
 
 
 def verified_step_up(party: Party, settings: Settings) -> StepUpMethod:
@@ -274,6 +297,8 @@ async def _apply(step: Step) -> None:
         if decision.endorse is sm.Endorse.BEFORE:
             await _endorse(step, endorsement_id, decision.from_state)
     event = await _append(step)
+    if step.note is not None:
+        await _write_note(step, event, step.note)
     await db.refresh(step.engagement)  # the database projected the event: state, stage times, lock_version
     if endorsement_id is not None and decision.endorse is sm.Endorse.AFTER:
         await _endorse(step, endorsement_id, decision.to_state)
@@ -315,7 +340,9 @@ async def _endorse(step: Step, endorsement_id: UUID, stage: EngagementState) -> 
 async def _append(step: Step) -> EngagementEvent:
     decision = step.decision
     deadline = None
-    if decision.changes_state or decision.renews_deadline:
+    if step.sets_deadline:
+        deadline = step.deadline
+    elif decision.changes_state or decision.renews_deadline:
         deadline = sm.stage_deadline(decision.to_state, step.now, step.holidays, step.policy, named=step.named_deadline)
     event = EngagementEvent(
         id=uuid7(),
@@ -332,6 +359,26 @@ async def _append(step: Step) -> EngagementEvent:
     step.db.add(event)
     await step.db.flush()
     return event
+
+
+async def _write_note(step: Step, event: EngagementEvent, note: NoteInput) -> None:
+    """The note of a side-state event, right after it (revision 0006): its seq is the database's, read back; written
+    as the event's actor, its time the database's clock."""
+    seq = await step.db.scalar(select(EngagementEvent.seq).where(EngagementEvent.id == event.id))
+    if seq is None:  # the event was just flushed in this transaction
+        raise RuntimeError("the event of a note is not readable")
+    step.db.add(
+        EngagementNote(
+            id=uuid7(),
+            engagement_id=step.engagement.id,
+            event_seq=seq,
+            kind=note.kind,
+            body=note.body,
+            resume_at=note.resume_at,
+            created_by=step.party.user_id,
+        )
+    )
+    await step.db.flush()
 
 
 async def _open_tag(step: Step) -> Tag | None:
@@ -689,6 +736,54 @@ async def _confirm_payment(step: Step) -> None:
     step.payload.update(payment_id=str(row.id), amount_kes_minor=received)
 
 
+def _paused_deadline(step: Step) -> None:
+    """Entering a side state: the stage's deadline is paused; its date stays in the chain for the return."""
+    deadline = step.engagement.stage_deadline_at
+    if deadline is not None:
+        step.payload["paused_due_on"] = local_date(deadline).isoformat()
+
+
+async def returning_deadline(db: AsyncSession, engagement: Engagement, now: datetime) -> datetime | None:
+    """The deadline the stage an engagement in a side state returns to has on ``now``'s Nairobi date: the one it had
+    when it was paused, moved by the business days since (the side state's entering event and its payload)."""
+    paused = await entering_event(db, engagement.id, engagement.state)
+    if paused is None:  # every side state has its entering event; refuse rather than guess
+        raise sm.Conflict("no_return_state", "The state this engagement returns to is not known. Reload and retry.")
+    paused_on, today = local_date(paused.created_at), local_date(now)
+    raw = dict(paused.payload).get("paused_due_on")
+    due_on = date.fromisoformat(raw) if isinstance(raw, str) else None
+    holidays = await load_holidays(db, today, since=min(paused_on, due_on or paused_on))
+    return sm.resumed_deadline(due_on, paused_on, today, holidays)
+
+
+async def _request_info(step: Step) -> None:
+    question = sm.check_note(step.inputs.note, sm.QUESTION_MAX_CHARS)
+    _paused_deadline(step)
+    step.sets_deadline, step.deadline = True, None  # the clock is paused until the answer
+    step.note = NoteInput("info_request", question)
+
+
+async def _hold(step: Step) -> None:
+    reason = sm.check_note(step.inputs.note, sm.REASON_MAX_CHARS)
+    resume_at = step.inputs.resume_at
+    if resume_at is None:  # the router always sends one
+        raise sm.Invalid("invalid_resume_at", "Choose the date the engagement resumes.")
+    sm.check_resume_at(resume_at, step.now, step.policy)
+    _paused_deadline(step)
+    step.payload["resume_at"] = resume_at.isoformat()
+    step.sets_deadline, step.deadline = True, sm.end_of_day(resume_at)  # "due" reads the resume date
+    step.note = NoteInput("hold", reason, resume_at)
+
+
+async def _return(step: Step) -> None:
+    """Answering the organisation's question, or resuming a hold early: back to the state it was entered from."""
+    answer = step.decision.command is C.ANSWER_INFO
+    text = sm.check_note(step.inputs.note, sm.QUESTION_MAX_CHARS if answer else sm.REASON_MAX_CHARS)
+    step.sets_deadline = True
+    step.deadline = await returning_deadline(step.db, step.engagement, step.now)
+    step.note = NoteInput("info_answer" if answer else "resume", text)
+
+
 Effect = Callable[[Step], Awaitable[None]]
 EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.ACCEPT_INTEREST: _accept_interest,
@@ -714,6 +809,10 @@ EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.SIGN_CERTIFICATE: _sign,
     C.RECORD_PAYMENT: _record_payment,
     C.CONFIRM_PAYMENT: _confirm_payment,
+    C.REQUEST_INFO: _request_info,
+    C.ANSWER_INFO: _return,
+    C.PAUSE: _hold,
+    C.RESUME: _return,
 }
 
 

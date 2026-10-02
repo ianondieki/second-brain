@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -130,14 +130,34 @@ async def app_now(db: AsyncSession) -> datetime:
     return now
 
 
-async def load_holidays(db: AsyncSession, today: date) -> frozenset[date]:
-    """Observed Kenyan public holidays from ``today`` over the window any deadline needs (REQ-BD-01)."""
+async def load_holidays(db: AsyncSession, today: date, *, since: date | None = None) -> frozenset[date]:
+    """Observed Kenyan public holidays from ``today`` (or from ``since``, a past date a count starts at: the day a
+    stage was paused or entered) over the window any deadline needs (REQ-BD-01)."""
+    start = min(today, since) if since is not None else today
     rows = await db.execute(
         select(Holiday.observed_on).where(
-            Holiday.country == "KE", Holiday.observed_on >= today, Holiday.observed_on <= today + HOLIDAY_WINDOW
+            Holiday.country == "KE", Holiday.observed_on >= start, Holiday.observed_on <= today + HOLIDAY_WINDOW
         )
     )
     return frozenset(rows.scalars().all())
+
+
+async def entering_event(
+    db: AsyncSession, engagement_id: UUID, state: EngagementState, *, from_main_path: bool = False
+) -> EngagementEvent | None:
+    """The latest event that entered ``state`` (a state change; the genesis too). ``from_main_path``: not a return
+    from a side state, so the stage's own start (its count and deadline began there)."""
+    query = select(EngagementEvent).where(
+        EngagementEvent.engagement_id == engagement_id,
+        EngagementEvent.to_state == state,
+        EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
+    )
+    if from_main_path:
+        query = query.where(
+            or_(EngagementEvent.from_state.is_(None), EngagementEvent.from_state.not_in(list(sm.RETURNING)))
+        )
+    found: EngagementEvent | None = await db.scalar(query.order_by(EngagementEvent.seq.desc()).limit(1))
+    return found
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +173,8 @@ class Loaded:
     """Everything a command or the detail view reads about one engagement (under the caller's RLS)."""
 
     facts: sm.Facts
-    stage_round: int
+    stage_round: int  # how many times the engagement entered its state (the database's stage_round of endorsements)
+    first_round: int = 1  # the round its latest entry from the main path began: a return from a side state continues it
     nda: DocumentRef | None = None
     certificate: DocumentRef | None = None
     latest_agreement: Agreement | None = None
@@ -193,16 +214,21 @@ async def load_many(
     if not engagements:
         return {}
     ids = [e.id for e in engagements]
-    # How many times each engagement entered each state (the database's stage_round for endorsements).
+    # Every state change in chain order: how many times each engagement entered its state (the database's
+    # stage_round for endorsements), which round its latest entry from the main path began, and, in a side state,
+    # the state it was entered from.
     entered = await db.execute(
-        select(EngagementEvent.engagement_id, EngagementEvent.to_state, func.count())
+        select(EngagementEvent.engagement_id, EngagementEvent.from_state, EngagementEvent.to_state)
         .where(
             EngagementEvent.engagement_id.in_(ids),
             EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
         )
-        .group_by(EngagementEvent.engagement_id, EngagementEvent.to_state)
+        .order_by(EngagementEvent.engagement_id, EngagementEvent.seq)
     )
-    rounds = {(eid, state): int(count) for eid, state, count in entered.tuples()}
+    changes: dict[UUID, list[tuple[EngagementState | None, EngagementState]]] = defaultdict(list)
+    for eid, from_state, to_state in entered.tuples():
+        changes[eid].append((from_state, to_state))
+    rounds = {e.id: _rounds(changes[e.id], e.state) for e in engagements}
     endorsements = await db.execute(
         select(
             EngagementEndorsement.engagement_id,
@@ -215,9 +241,12 @@ async def load_many(
             EngagementEndorsement.milestone_id.is_(None),
         )
     )
-    endorsed: dict[tuple[UUID, EngagementState, int], set[EngagementParty]] = defaultdict(set)
+    endorsed: dict[UUID, set[EngagementParty]] = defaultdict(set)
+    states = {e.id: e.state for e in engagements}
     for eid, stage, stage_round, party in endorsements.tuples():
-        endorsed[(eid, stage, stage_round)].add(party)
+        first, current, _ = rounds[eid]
+        if stage is states[eid] and first <= stage_round <= current:  # this entry's, a pause in between included
+            endorsed[eid].add(party)
     agreements: dict[UUID, list[Agreement]] = defaultdict(list)
     for agreement in (
         await db.execute(
@@ -286,8 +315,8 @@ async def load_many(
     return {
         e.id: _loaded(
             e,
-            round_=rounds.get((e.id, e.state), 0),
-            endorsed=frozenset(endorsed.get((e.id, e.state, rounds.get((e.id, e.state), 0)), ())),
+            rounds=rounds[e.id],
+            endorsed=frozenset(endorsed.get(e.id, ())),
             agreements=agreements.get(e.id, []),
             milestones=milestones,
             payment=payments.get(e.id),
@@ -300,10 +329,28 @@ async def load_many(
     }
 
 
+def _rounds(
+    changes: Sequence[tuple[EngagementState | None, EngagementState]], state: EngagementState
+) -> tuple[int, int, EngagementState | None]:
+    """(first round, current round, paused from) of an engagement in ``state`` from its state changes in chain order:
+    a return from a side state (docs/spec/06 6.9: ON_HOLD, INFO_REQUESTED) enters the stage again in the database's
+    count but continues it, so what was endorsed before the pause still counts."""
+    first = current = 0
+    for from_state, to_state in changes:
+        if to_state is state:
+            current += 1
+            if from_state not in sm.RETURNING:
+                first = current
+    paused_from = None
+    if state in sm.RETURNING and changes and changes[-1][1] is state:
+        paused_from = changes[-1][0]
+    return first, current, paused_from
+
+
 def _loaded(
     engagement: Engagement,
     *,
-    round_: int,
+    rounds: tuple[int, int, EngagementState | None],
     endorsed: frozenset[EngagementParty],
     agreements: Sequence[Agreement],
     milestones: Mapping[UUID, Sequence[Milestone]],
@@ -318,7 +365,8 @@ def _loaded(
     final = next((a for a in agreements if a.status is AgreementStatus.FINAL), None)
     signed_agreement = next((a for a in agreements if a.status is AgreementStatus.SIGNED), None)
     own_milestones = list(milestones.get(signed_agreement.id, ())) if signed_agreement is not None else []
-    loaded = Loaded(sm.Facts(), round_, latest_agreement=latest, final_agreement=final)
+    first_round, stage_round, paused_from = rounds
+    loaded = Loaded(sm.Facts(), stage_round, first_round, latest_agreement=latest, final_agreement=final)
     loaded.signed_agreement, loaded.milestones, loaded.final_payment = signed_agreement, own_milestones, payment
     if engagement.state is EngagementState.NDA_PENDING:
         loaded.nda = document
@@ -339,6 +387,7 @@ def _loaded(
         developer_d2=developer_d2,
         payment_recorded=payment is not None,
         deals_enabled=deals_enabled,
+        paused_from=paused_from,
     )
     return loaded
 
