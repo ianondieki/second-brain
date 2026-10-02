@@ -317,6 +317,15 @@ describe("forms for commands with a body", () => {
     expect(screen.queryByText("Fill in this field.")).toBeNull();
   });
 
+  it("starts the contact-by date on the platform's day the API sends, not the browser's", async () => {
+    const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve"], lock_version: 5 });
+    renderActions(engagement, { members: [{ user_id: "u-rita", display_name: "Rita Wanjiru" }], myUserId: "u-rita", today: "2031-03-04" });
+    fireEvent.click(screen.getByRole("button", { name: "Approve to proceed (non-binding)" }));
+    const by = (await screen.findByLabelText("Contact by")) as HTMLInputElement;
+    expect(by.value).toBe("2031-03-04");
+    expect(by.min).toBe("2031-03-04");
+  });
+
   it("approves naming a contact person from the organisation's members", async () => {
     const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve", "decline"], lock_version: 5 });
     const { runImpl } = renderActions(engagement, {

@@ -48,7 +48,10 @@ export interface ActionsProps {
   resumeOn?: string | null;
   /** The page's language, for the dates and counts the sheets write. */
   locale?: string;
-  /** Today in Nairobi on the platform's clock (the API's `today`), for a hold's date range; null: the API decides. */
+  /**
+   * Today in Nairobi on the platform's clock (the API's `today`): the forms' default and earliest dates (a contact-by
+   * date) and a hold's date range; null: the browser's day for the forms, and the API decides a hold's date.
+   */
   today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`). */
   limits?: SideLimits | null;
@@ -242,6 +245,7 @@ export function Actions(props: ActionsProps) {
             members={props.members}
             myUserId={props.myUserId}
             recorded={props.recorded}
+            today={props.today ?? undefined}
             onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
           />
