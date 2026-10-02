@@ -70,7 +70,7 @@ describe("provenance", () => {
   it("words the missing sources by who described the problem", () => {
     for (const [source, sentence] of [
       ["developer", "No cited sources: a developer described this problem."],
-      ["org_brief", "No cited sources: a verified organisation described this problem in its brief."],
+      ["org_brief", "No cited sources: a verified organisation described this problem in its Brief."],
       ["research_agent", "No source to show here; the problem card lists every source it cites."],
     ] as const) {
       const item = trendingProblem({ sources: [], problem: { ...trendingProblem().problem, source } });

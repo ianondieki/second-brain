@@ -21,6 +21,7 @@ import { closable, postsBriefs, problemsHref, STATE_CHIP, type BriefState } from
 import { orgContext } from "../../data";
 import { OrgRefusal } from "../../OrgRefusal";
 import { getCounties } from "../../scout-data";
+import { StateNote } from "../Notes";
 import { CloseBrief } from "./CloseBrief";
 
 export async function generateMetadata({ params, searchParams }: PageProps<"/org/problems/[id]">): Promise<Metadata> {
@@ -95,10 +96,13 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
   return frame(
     brief.title,
     <>
-      <Callout tone={STATE_TONE[brief.state]} className="mt-6" data-state-note={brief.state}>
-        <p>{t(`stateNote.${brief.state}`, { org: org.org_name })}</p>
-        {brief.state === "published" ? <StandaloneLink href={problemHref(brief.id)}>{t("asDevelopers")}</StandaloneLink> : null}
-      </Callout>
+      {/* Takes focus when Close is confirmed (the page reads again with the closed note; its trigger is gone). */}
+      <StateNote state={brief.state}>
+        <Callout tone={STATE_TONE[brief.state]} className="mt-6" data-state-note={brief.state}>
+          <p>{t(`stateNote.${brief.state}`, { org: org.org_name })}</p>
+          {brief.state === "published" ? <StandaloneLink href={problemHref(brief.id)}>{t("asDevelopers")}</StandaloneLink> : null}
+        </Callout>
+      </StateNote>
 
       <Card as="section" variant="flat" aria-labelledby="brief-problem" className="mt-8">
         <h2 id="brief-problem" className="sr-only">

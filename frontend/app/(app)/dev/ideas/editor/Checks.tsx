@@ -71,6 +71,9 @@ const SHARED = [
 type Shared = (typeof SHARED)[number];
 const isShared = (why: string): why is Shared => (SHARED as readonly string[]).includes(why);
 
+/** The checks' daily limits (the overlap check's ten a day; the teaser check's rate). */
+const LIMITS: ReadonlySet<string> = new Set(["originality_limit", "disclosure_rate_limited"]);
+
 /**
  * "Teaser checks" (REQ-PROP-04, REQ-REPO-01): "Check overlap" answers with a band in words, never a score; "Check what
  * it gives away" warns when the teaser reads like how the project works. Each answers in place, in its own polite
@@ -92,8 +95,9 @@ export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = che
   const chips = (answer: { ai_drafted: boolean; demo_fallback: boolean }) =>
     chipsOf(answer).map((chip) => ({ label: a(chip), quiet: chip === "demoFallback" }));
 
+  // A daily limit is a fact, not a failure: it reads as a note (no error mark).
   const problem = (why: CheckProblem | "noText" | "notSaved"): CheckAnswerProps => ({
-    tone: "problem",
+    tone: LIMITS.has(why) ? "note" : "problem",
     sentence: isShared(why) ? a(`problem.${why}`) : c(`problem.${why}`),
   });
 
@@ -113,7 +117,10 @@ export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = che
       );
       return {
         tone: "note",
-        sentence: answer.fields.length ? c("disclosure.flagged", { fields }) : c("disclosure.flaggedAny"),
+        sentence:
+          answer.fields.length === 0
+            ? c("disclosure.flaggedAny")
+            : c(answer.fields.length === 1 ? "disclosure.flaggedOne" : "disclosure.flaggedMany", { fields }),
         // The model's own reason only when it wrote one (labelled); otherwise the fixed advice.
         detail: answer.ai_drafted && answer.why ? answer.why : c("disclosure.advice"),
         chips: chips(answer),

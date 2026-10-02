@@ -99,7 +99,7 @@ test.describe("a Problem Brief", () => {
     await nav.getByRole("link", { name: "Problems" }).click();
     await expect(page).toHaveURL(/\/org\/problems$/, SERVER_STEP);
     await expect(nav.getByRole("link", { name: "Problems" })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator("[data-primary]")).toHaveText("Post a brief");
+    await expect(page.locator("[data-primary]")).toHaveText("Post a Brief");
     await checkScreen(page, { strict: true });
 
     await page.locator("[data-primary]").click();
@@ -109,7 +109,7 @@ test.describe("a Problem Brief", () => {
     await checkScreen(page, { strict: true });
 
     // Checked before anything is sent.
-    await page.getByRole("button", { name: "Post the brief" }).click();
+    await page.getByRole("button", { name: "Post the Brief" }).click();
     await expect(page.getByText("Write a title.")).toBeVisible();
     await expect(page.getByLabel("Title")).toBeFocused();
 
@@ -126,11 +126,12 @@ test.describe("a Problem Brief", () => {
     const band = (await page.getByRole("group", { name: "Budget band" }).locator("label").first().innerText()).trim();
     await page.getByLabel(/Proposals wanted by/).fill(nairobiDay(30));
     await checkScreen(page, { strict: true });
-    await page.getByRole("button", { name: "Post the brief" }).click();
+    await page.getByRole("button", { name: "Post the Brief" }).click();
 
     // The list, the new Brief first, in review.
     await expect(page).toHaveURL(/\/org\/problems\?posted=1$/, SERVER_STEP);
     await expect(page.getByRole("status")).toHaveText("Brief sent for review. Staff read every Brief before developers see it.");
+    await expect(page.getByRole("status")).toBeFocused(); // the form that had focus is gone
     const first = page.locator("[data-brief]").first();
     await expect(first).toContainText(title);
     await expect(first.locator("[data-chip]")).toHaveText("In review");
@@ -154,7 +155,7 @@ test.describe("a Problem Brief", () => {
     await checkScreen(staffPage, { strict: true });
     await hydrated(staffPage);
     await staffPage.getByRole("button", { name: "Approve" }).click();
-    await expect(staffPage.getByRole("status").filter({ hasText: "Approved. The problem is published." })).toBeVisible(SERVER_STEP);
+    await expect(staffPage.getByRole("status").filter({ hasText: "Approved. The Brief is published to developers." })).toBeVisible(SERVER_STEP);
     await staffContext.close();
 
     // --- A developer finds it under Discover › Briefs and starts a proposal from it ---------------------------------
@@ -172,7 +173,7 @@ test.describe("a Problem Brief", () => {
     await expect(card.locator("[data-brief-terms]")).toContainText("Proposals by ");
     expect(await card.locator("[data-chip], [data-label]").count()).toBeLessThanOrEqual(2); // AC-UX-1
     await checkScreen(devPage, { strict: true });
-    await card.getByRole("link", { name: "Start a proposal from this brief" }).click();
+    await card.getByRole("link", { name: "Start a proposal from this Brief" }).click();
     await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/new\\?problem=${briefId}$`), SERVER_STEP);
     await expect(devPage.getByText(title).first()).toBeVisible(SERVER_STEP); // the Brief is linked from the start
 
@@ -219,17 +220,18 @@ test.describe("a Problem Brief", () => {
     await page.goto(`/org/problems/${briefId}`);
     await expect(page.locator("[data-state-note='published']")).toBeVisible(SERVER_STEP);
     await checkScreen(page, { strict: true });
-    // "Close this brief" is a lone button, not a form with data-hydrated: press it until its dialog opens (a press
+    // "Close this Brief" is a lone button, not a form with data-hydrated: press it until its dialog opens (a press
     // before hydration does nothing).
     const sheet = page.locator("dialog[open]");
     await expect(async () => {
-      await page.getByRole("button", { name: "Close this brief" }).click();
+      await page.getByRole("button", { name: "Close this Brief" }).click();
       await expect(sheet).toBeVisible({ timeout: 1_000 });
     }).toPass(SERVER_STEP);
     await expect(sheet).toContainText("It leaves Discover");
-    await sheet.getByRole("button", { name: "Close the brief" }).click();
+    await sheet.getByRole("button", { name: "Close the Brief" }).click();
     await expect(page.locator("[data-state-note='closed']")).toBeVisible(SERVER_STEP);
-    await expect(page.getByRole("button", { name: "Close this brief" })).toHaveCount(0);
+    await expect(page.locator("[data-state-focus]")).toBeFocused(); // Close's button is gone
+    await expect(page.getByRole("button", { name: "Close this Brief" })).toHaveCount(0);
 
     await devPage.goto("/dev/discover?view=briefs");
     await expect(devPage.locator(`[data-brief="${briefId}"]`)).toHaveCount(0);

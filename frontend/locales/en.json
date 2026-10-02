@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
-    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)"
+    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers); ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg"
   },
   "app": {
     "name": "Wazo",
@@ -366,7 +366,9 @@
     "pages": "More notifications",
     "older": "Older notifications",
     "newest": "Newest notifications",
-    "staleCursor": "That page of notifications is no longer available."
+    "staleCursor": "That page of notifications is no longer available.",
+    "emptyStaff": "Nothing yet: moderation and research notices will land here.",
+    "emptyOrg": "Nothing yet: new proposals, scout matches and engagement updates for your organisation will land here."
   },
   "help": {
     "pageTitle": "Help",
@@ -446,7 +448,8 @@
       "unavailable": "Could not be read just now",
       "briefs": "Problem Briefs",
       "briefsMetaReview": "{count, plural, one {# in review} other {# in review}}",
-      "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}"
+      "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}",
+      "briefsValue": "{count} open"
     }
   },
   "inbox": {
@@ -1058,7 +1061,8 @@
       "hidden": "Hidden until decided",
       "public": "Public while checked",
       "rejected": "Hidden: rejected",
-      "gone": "No longer exists"
+      "gone": "No longer exists",
+      "briefHidden": "Hidden until approved"
     },
     "outcome": {
       "approved": "Approved",
@@ -1108,7 +1112,8 @@
       "decisionHeading": "Decision",
       "leadHidden": "Approve to make it public, or reject to keep it hidden.",
       "leadPublic": "Approve to keep it public, or reject to take it down.",
-      "textHeadingDecided": "Text as reviewed"
+      "textHeadingDecided": "Text as reviewed",
+      "leadBrief": "Developers do not see this Brief until it is approved. Approve to publish it to developers, or reject to keep it hidden."
     },
     "decision": {
       "approve": "Approve",
@@ -1124,7 +1129,9 @@
       "rejected": "Rejected. It is hidden now.",
       "changed": "The author published a new version while you were reviewing it. The text above is the new version: read it again, then decide.",
       "next": "Review the next case",
-      "back": "Back to Moderation"
+      "back": "Back to Moderation",
+      "approvedBrief": "Approved. The Brief is published to developers.",
+      "rejectConfirmBrief": "Reject this Brief? Developers never see it, and it no longer counts against the organisation's plan."
     },
     "blocked": {
       "already_decided": "This case has already been decided.",
@@ -1319,7 +1326,10 @@
     "budgetOpen": "Not given",
     "deadline": "Proposals wanted by",
     "noDeadline": "No deadline",
-    "briefEnded": "This brief is closed or past its deadline, so the organisation is no longer asking for proposals. You can still start one from the problem."
+    "briefEnded": {
+      "closed": "The organisation closed this Brief, so it is no longer asking for proposals. You can still start one from the problem.",
+      "pastDeadline": "This Brief’s deadline passed on {date}, so the organisation is no longer asking for proposals. You can still start one from the problem."
+    }
   },
   "ideaFields": {
     "title": "Title",
@@ -1787,17 +1797,18 @@
       "high_overlap": "High overlap: your teaser reads close to another published idea. That is not a judgement; it is worth a look at what makes yours different."
     },
     "disclosure": {
-      "flagged": "This reads like how, not what: {fields}.",
       "flaggedAny": "This reads like how it works, not what it does.",
       "advice": "Methods, tools and code belong in the full details, which stay confidential.",
       "clear": "Nothing gives away how it works.",
-      "demo": "No AI model is connected in this demo, and the quick check found nothing that gives away how it works.",
-      "unchecked": "The teaser could not be checked this time. Look over the text, then try again."
+      "demo": "No AI model is connected in this demo. The quick check looks only for common giveaways, such as code, file names and tool names, and found none.",
+      "unchecked": "The teaser could not be checked this time. Look over the text, then try again.",
+      "flaggedOne": "Your {fields} reads like how it works, not what it does.",
+      "flaggedMany": "Your {fields} read like how it works, not what it does."
     },
     "problem": {
       "noText": "Write the teaser first, then check it.",
       "notSaved": "Your latest changes are not saved, so nothing was checked. Fix any marked fields, then try again.",
-      "originality_limit": "You have used today’s checks; tomorrow brings more.",
+      "originality_limit": "You have used today’s overlap checks; they come back at midnight Nairobi time.",
       "originality_busy": "The overlap check is still running. Try again in a moment.",
       "disclosure_busy": "The teaser check is still running. Try again in a moment.",
       "disclosure_rate_limited": "You have run many teaser checks today. Try again tomorrow.",
@@ -1871,7 +1882,7 @@
     "sourcesTitle": "Newest sources",
     "noSources": {
       "developer": "No cited sources: a developer described this problem.",
-      "org_brief": "No cited sources: a verified organisation described this problem in its brief.",
+      "org_brief": "No cited sources: a verified organisation described this problem in its Brief.",
       "research_agent": "No source to show here; the problem card lists every source it cites."
     },
     "sourceUnnamed": "Source",
@@ -1891,7 +1902,7 @@
     "briefNoBudget": "Budget open",
     "briefDeadline": "Proposals by {date}",
     "briefNoDeadline": "No deadline",
-    "startBrief": "Start a proposal from this brief"
+    "startBrief": "Start a proposal from this Brief"
   },
   "recommendations": {
     "title": "Recommended for you",
@@ -2554,14 +2565,14 @@
     "pageTitle": "Problems",
     "title": "Problems",
     "lead": "Problem Briefs {org} has posted. Developers see a Brief once staff approve it, and answer it with proposals.",
-    "newTitle": "Post a brief",
+    "newTitle": "Post a Brief",
     "newLead": "Describe a problem you would like developers to solve. Staff read every Brief before developers see it.",
     "back": "Back to Problems",
-    "post": "Post a brief",
+    "post": "Post a Brief",
     "cap": "Open Briefs on your plan: {used} of {limit}",
     "capUnlimited": "Your plan allows any number of open Briefs.",
-    "capFull": "Every open Brief your plan allows is in use. Close one, or upgrade your plan, to post another.",
-    "capFullTop": "Every open Brief your plan allows is in use. Close one to post another.",
+    "capFull": "Every open Brief your plan allows is in use ({used} of {limit}). Close one, or move to {plan} to post another.",
+    "capFullTop": "Every open Brief your plan allows is in use ({used} of {limit}). Close one to post another.",
     "upgrade": "Upgrade your plan",
     "listLabel": "Your Briefs, newest first",
     "empty": "{org} has not posted a Brief yet: post one and developers can answer it with proposals.",
@@ -2576,7 +2587,7 @@
     "proposals": "{count, plural, one {# proposal} other {# proposals}}",
     "deadline": "Proposals by {date}",
     "noDeadline": "No deadline",
-    "anywhere": "Anywhere in Kenya",
+    "anywhere": "Kenya",
     "posted": "Brief sent for review. Staff read every Brief before developers see it.",
     "older": "Older Briefs",
     "staleCursor": "This page of Briefs is no longer available.",
@@ -2601,7 +2612,8 @@
       "budget": "Budget band",
       "deadline": "Proposals wanted by",
       "proposals": "Proposals so far"
-    }
+    },
+    "upgradeTo": "Upgrade to {plan}"
   },
   "briefForm": {
     "group": {
@@ -2627,7 +2639,7 @@
     "deadline": "Proposals wanted by (optional)",
     "deadlineHint": "Leave it empty for no deadline. After this day the Brief leaves Discover.",
     "invitedNote": "Every Brief is public once staff approve it. Briefs for invited developers only come later.",
-    "submit": "Post the brief",
+    "submit": "Post the Brief",
     "posting": "Posting…",
     "cancel": "Cancel",
     "upgrade": "Upgrade your plan",
@@ -2674,10 +2686,10 @@
       "frozen": "A published Brief's text cannot be changed. Close it and post a new one."
     },
     "close": {
-      "open": "Close this brief",
+      "open": "Close this Brief",
       "title": "Close this Brief?",
       "body": "It leaves Discover and frees its place on your plan. Proposals that already answer it keep their link. A closed Brief cannot be opened again.",
-      "confirm": "Close the brief",
+      "confirm": "Close the Brief",
       "closing": "Closing…",
       "cancel": "Keep it open"
     }

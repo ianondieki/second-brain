@@ -105,15 +105,24 @@ export function fieldKey(name: string): FieldName {
 
 /**
  * Whether the subject can be seen outside the queue now (docs/spec/07 item 6: shown as a mark and words): a held
- * subject is hidden until decided, a clear one is public, a rejected one hidden; "gone" when it no longer exists.
- * Null for subjects decided elsewhere (claim disputes).
+ * subject is hidden until decided, a clear one is public, a rejected one hidden; "gone" when it no longer exists. An
+ * organisation's Problem Brief is never public before approval, clear or held (revision 0006 publishes it on approval):
+ * "briefHidden", hidden until approved. Null for subjects decided elsewhere (claim disputes).
  */
-export type Visibility = "hidden" | "public" | "rejected" | "gone";
+export type Visibility = "hidden" | "briefHidden" | "public" | "rejected" | "gone";
 
-export function visibility(item: Pick<Case, "subject_type" | "subject_state" | "blocked">): Visibility | null {
+/** A problem an organisation posted as a Problem Brief (its organisation named, or filed with `new_org_brief`). */
+export function isBriefCase(item: Pick<Case, "subject_type"> & Partial<Pick<Case, "reasons" | "brief_org">>): boolean {
+  return caseKind(item.subject_type) === "problem" && (Boolean(item.brief_org) || Boolean(item.reasons?.includes("new_org_brief")));
+}
+
+export function visibility(
+  item: Pick<Case, "subject_type" | "subject_state" | "blocked"> & Partial<Pick<Case, "reasons" | "brief_org">>,
+): Visibility | null {
   const kind = caseKind(item.subject_type);
   if (kind !== "proposal" && kind !== "problem") return null;
   if (item.blocked === "subject_gone" || item.subject_state === null) return "gone";
+  if (isBriefCase(item) && item.subject_state !== "rejected") return "briefHidden";
   if (item.subject_state === "held") return "hidden";
   return item.subject_state === "clear" ? "public" : "rejected";
 }
@@ -121,6 +130,7 @@ export function visibility(item: Pick<Case, "subject_type" | "subject_state" | "
 /** The tracker chip each visibility wears (a mark, a word and a colour). */
 export const VISIBILITY_CHIP = {
   hidden: "onHold",
+  briefHidden: "onHold",
   public: "current",
   rejected: "ended",
   gone: "ended",

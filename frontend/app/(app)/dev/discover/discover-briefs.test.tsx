@@ -13,7 +13,7 @@ import { discoverHref, parseDiscover, startProposalHref, VIEWS } from "./discove
 
 // REQ-DIR-05 (docs/spec/06 6.2, 6.5; docs/spec/07 items 1, 2, 4): Discover's Briefs view lists verified organisations'
 // open Problem Briefs as cards (title, "Posted by <organisation>", niche and county, budget band and deadline on one
-// line, statement, proposals, "Start a proposal from this brief" with the organisation named for the pitch).
+// line, statement, proposals, "Start a proposal from this Brief" with the organisation named for the pitch).
 
 afterEach(cleanup);
 
@@ -76,7 +76,7 @@ describe("a Brief on Discover", () => {
     expect(card.querySelector("[data-brief-terms]")?.textContent).toBe("Budget: KES 100,000 – 1,000,000Proposals by 30 Nov 2026");
     expect(within(card).getByText(/Field teams learn about empty generator tanks/)).toBeTruthy();
     expect(within(card).getByText("2 proposals")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Start a proposal from this brief" }).getAttribute("href")).toBe(
+    expect(within(card).getByRole("link", { name: "Start a proposal from this Brief" }).getAttribute("href")).toBe(
       `/dev/ideas/new?problem=${BRIEF_ID}`,
     );
     expect(card.querySelectorAll("[data-primary]")).toHaveLength(0); // the card's way in is a link, not the screen's primary

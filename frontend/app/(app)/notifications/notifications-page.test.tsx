@@ -175,11 +175,31 @@ describe("the Notifications page", () => {
     listAnswers([]);
     await open();
     const empty = document.querySelector<HTMLElement>("[data-empty-state]")!;
-    expect(within(empty).getByText("Nothing yet: your tracker updates and approvals will land here.")).toBeTruthy();
+    expect(within(empty).getAllByRole("paragraph").map((p) => p.textContent)).toEqual([
+      "Nothing yet: new proposals, scout matches and engagement updates for your organisation will land here.",
+    ]);
     const links = within(empty).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([["Go to your home page", "/org"]]);
     expect(screen.queryByRole("button", { name: "Mark all as read" })).toBeNull();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+  });
+
+  it.each([
+    ["a developer", DEV_ME, "Nothing yet: your tracker updates and approvals will land here.", "/dev"],
+    [
+      "staff",
+      { ...DEV_ME, side: "staff", user: { staff_role: "moderator" } },
+      "Nothing yet: moderation and research notices will land here.",
+      "/admin",
+    ],
+  ])("says what lands here for %s when there is nothing", async (_, me, sentence, home) => {
+    api.me.mockResolvedValue(me);
+    api.unread.mockResolvedValue(0);
+    listAnswers([]);
+    await open();
+    const empty = document.querySelector<HTMLElement>("[data-empty-state]")!;
+    expect(within(empty).getAllByRole("paragraph").map((p) => p.textContent)).toEqual([sentence]);
+    expect(within(empty).getByRole("link").getAttribute("href")).toBe(home);
   });
 
   it("pages with the API's cursor: Older notifications, then back to the newest", async () => {

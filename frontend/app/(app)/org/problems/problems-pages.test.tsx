@@ -100,14 +100,16 @@ describe("the Problems list", () => {
       kind: "ok",
       value: briefList({
         items: [brief(), brief({ id: "01a0f070-0000-7000-8000-000000000002", title: "Closed one", state: "closed", proposal_count: 3, deadline: null })],
+        plan: { plan: "org_starter", problem_briefs: 5, used: 1 },
       }),
     };
     await listPage();
     const nav = screen.getByRole("navigation", { name: "Organisation" });
     expect(within(nav).getByRole("link", { name: "Problems" }).getAttribute("aria-current")).toBe("page");
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Post a brief" }).getAttribute("href")).toBe("/org/problems/new");
-    expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 1");
+    expect(screen.getByRole("link", { name: "Post a Brief" }).getAttribute("href")).toBe("/org/problems/new");
+    expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 5");
+    expect(document.querySelector("[data-plan-full]")).toBeNull();
     const cards = screen.getAllByRole("article");
     expect(cards).toHaveLength(2);
     // Heading order (axe): the page's h1, the list's (hidden) h2 naming the region, then each Brief's title as an h3.
@@ -130,9 +132,32 @@ describe("the Problems list", () => {
     expect(within(cards[1]).getByText("No deadline")).toBeTruthy();
   });
 
-  it("says a new Brief went for review", async () => {
+  it("names the place Kenya when a Brief has no county, as the problem page does", async () => {
+    state.list = { kind: "ok", value: briefList({ items: [brief({ county_code: null })] }) };
+    await listPage();
+    expect(within(screen.getByRole("article")).getByText("Kenya")).toBeTruthy();
+  });
+
+  it("says a new Brief went for review, in a live region that takes focus", async () => {
     await listPage({ posted: "1" });
-    expect(screen.getByRole("status").textContent).toBe(en.briefs.posted);
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe(en.briefs.posted);
+    expect(document.activeElement).toBe(status); // the form that had focus is gone
+  });
+
+  it("with every open Brief in use, says so once with the next plan, and Post a Brief is no longer primary", async () => {
+    await listPage(); // the fixture's claimed plan: 1 of 1
+    const full = document.querySelector<HTMLElement>("[data-plan-full]")!;
+    expect(full.textContent).toContain(
+      "Every open Brief your plan allows is in use (1 of 1). Close one, or move to Starter to post another.",
+    );
+    const links = within(full).getAllByRole("link");
+    expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Upgrade to Starter", `/billing/upgrade?plan=org_starter&org=${ORG_ID}&next=%2Forg%2Fproblems`],
+    ]);
+    expect(document.querySelector("[data-plan-cap]")).toBeNull(); // one fact, said once
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+    expect(screen.getByRole("link", { name: "Post a Brief" }).hasAttribute("data-primary")).toBe(false);
   });
 
   it("is one sentence and Post a brief when there is none yet", async () => {
@@ -143,7 +168,7 @@ describe("the Problems list", () => {
       `${ORG_NAME} has not posted a Brief yet: post one and developers can answer it with proposals.`,
     ]);
     const links = within(empty).getAllByRole("link");
-    expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([["Post a brief", "/org/problems/new"]]);
+    expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([["Post a Brief", "/org/problems/new"]]);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
   });
 
@@ -160,7 +185,7 @@ describe("the Problems list", () => {
   it("does not offer Post a brief above a list to a member who cannot post", async () => {
     state.membership = finance;
     await listPage();
-    expect(screen.queryByRole("link", { name: "Post a brief" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Post a Brief" })).toBeNull();
     expect(screen.getAllByRole("article")).toHaveLength(1);
   });
 });
@@ -186,7 +211,7 @@ describe("a Brief's page", () => {
     expect(screen.getByText("Rural subscribers")).toBeTruthy();
     expect(screen.getByText("2 proposals")).toBeTruthy();
     expect(screen.getByRole("link", { name: "See it as developers do" }).getAttribute("href")).toBe(`/problems/${BRIEF_ID}`);
-    expect(screen.getByRole("button", { name: "Close this brief" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close this Brief" })).toBeTruthy();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 
@@ -194,13 +219,13 @@ describe("a Brief's page", () => {
     for (const briefState of ["in_review", "closed", "rejected"] as const) {
       state.one = { kind: "ok", value: brief({ state: briefState }) };
       await briefPage();
-      expect(screen.queryByRole("button", { name: "Close this brief" }), briefState).toBeNull();
+      expect(screen.queryByRole("button", { name: "Close this Brief" }), briefState).toBeNull();
       cleanup();
     }
     state.one = { kind: "ok", value: brief({ state: "published" }) };
     state.membership = finance;
     await briefPage();
-    expect(screen.queryByRole("button", { name: "Close this brief" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close this Brief" })).toBeNull();
   });
 
   it("says another organisation's or an unknown Brief is not available", async () => {
@@ -211,16 +236,33 @@ describe("a Brief's page", () => {
 });
 
 describe("the Post a brief page", () => {
-  it("shows the form with what the plan allows and, when it is full, the next plan up", async () => {
+  it("shows the form with what the plan allows while there is room", async () => {
+    state.list = { kind: "ok", value: briefList({ plan: { plan: "org_starter", problem_briefs: 5, used: 1 } }) };
     await newPage();
     expect(document.querySelector("[data-brief-form]")).not.toBeNull();
-    expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 1");
-    const full = document.querySelector<HTMLElement>("[data-plan-full]")!;
-    expect(full.textContent).toContain(en.briefs.capFull);
-    expect(within(full).getByRole("link").getAttribute("href")).toBe(
-      `/billing/upgrade?plan=org_starter&org=${ORG_ID}&next=%2Forg%2Fproblems%2Fnew`,
-    );
+    expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 5");
+    expect(document.querySelector("[data-plan-full]")).toBeNull();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
+  });
+
+  it("with every open Brief in use, shows the one notice with the next plan instead of the form", async () => {
+    await newPage();
+    expect(document.querySelector("[data-brief-form]")).toBeNull();
+    expect(document.querySelector("[data-plan-cap]")).toBeNull();
+    const notices = document.querySelectorAll<HTMLElement>("[data-plan-full]");
+    expect(notices).toHaveLength(1);
+    expect(within(notices[0]).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
+      `/billing/upgrade?plan=org_starter&org=${ORG_ID}&next=%2Forg%2Fproblems%2Fnew`,
+    ]);
+    expect(document.querySelectorAll("[data-upgrade]")).toHaveLength(1);
+  });
+
+  it("at the top of the ladder says to close one, with no upgrade link", async () => {
+    state.list = { kind: "ok", value: briefList({ plan: { plan: "org_starter", problem_briefs: 5, used: 5 } }) };
+    await newPage();
+    const full = document.querySelector<HTMLElement>("[data-plan-full]")!;
+    expect(full.textContent).toBe("Every open Brief your plan allows is in use (5 of 5). Close one to post another.");
+    expect(within(full).queryAllByRole("link")).toHaveLength(0);
   });
 
   it("says an organisation that is not legally verified cannot post yet, instead of the form", async () => {

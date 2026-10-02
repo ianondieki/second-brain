@@ -25,6 +25,7 @@ import {
   caseHref,
   caseKind,
   caseKindLabel,
+  isBriefCase,
   caseReasons,
   caseTitle,
   fieldKey,
@@ -153,12 +154,20 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           <CaseDecision
             caseId={item.id}
             versionId={item.subject_version_id}
-            kind={kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
+            kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
             actions={result ? [] : item.actions}
             blocked={item.blocked}
             decided={result && line ? { outcome: result, line } : null}
             nextHref={nextId ? caseHref(nextId) : null}
-            lead={actionable ? (seen === "public" ? t("case.leadPublic") : t("case.leadHidden")) : null}
+            lead={
+              actionable
+                ? seen === "briefHidden"
+                  ? t("case.leadBrief")
+                  : seen === "public"
+                    ? t("case.leadPublic")
+                    : t("case.leadHidden")
+                : null
+            }
           />
         </ClientStrings>
       </Section>

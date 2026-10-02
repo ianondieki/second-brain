@@ -189,7 +189,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="briefs"
               label={t("stats.briefs")}
-              value={briefs === null ? unknown.value : briefs.open}
+              value={briefs === null ? unknown.value : t("stats.briefsValue", { count: briefs.open })}
               meta={
                 briefs === null
                   ? unknown.meta
