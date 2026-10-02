@@ -17,7 +17,8 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
+    "reviewP19": "[[COPY-REVIEW]] P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names the policy.yaml daily limit of ten)"
   },
   "app": {
     "name": "Wazo",
@@ -1732,6 +1733,40 @@
       "architecture": "Architecture",
       "pricing": "Pricing",
       "notes": "Notes"
+    }
+  },
+  "ideaChecks": {
+    "title": "Teaser checks",
+    "hint": "Optional. Two quick looks at your public teaser. Nothing here stops you publishing.",
+    "overlapButton": "Check overlap",
+    "disclosureButton": "Check what it gives away",
+    "checkingOverlap": "Comparing your teaser with other published ideas…",
+    "checkingDisclosure": "Reading your teaser for how it works…",
+    "lastToday": "From your last check today.",
+    "overlap": {
+      "none": "No overlap with other published ideas (compared with {count}).",
+      "noneEmpty": "No other published ideas to compare with yet.",
+      "some_overlap": "Some overlap with another published idea. Saying what makes yours different can help.",
+      "high_overlap": "High overlap: your teaser reads close to another published idea. That is not a judgement; it is worth a look at what makes yours different."
+    },
+    "disclosure": {
+      "flagged": "This reads like how, not what: {fields}.",
+      "flaggedAny": "This reads like how it works, not what it does.",
+      "advice": "Methods, tools and code belong in the full details, which stay confidential.",
+      "clear": "Nothing gives away how it works.",
+      "demo": "No AI model is connected in this demo, and the quick check found nothing that gives away how it works.",
+      "unchecked": "The teaser could not be checked this time. Look over the text, then try again."
+    },
+    "problem": {
+      "noText": "Write the teaser first, then check it.",
+      "notSaved": "Your latest changes are not saved, so nothing was checked. Fix any marked fields, then try again.",
+      "originality_limit": "You have used today’s ten checks; tomorrow brings ten more.",
+      "originality_busy": "The overlap check is still running. Try again in a moment.",
+      "disclosure_busy": "The teaser check is still running. Try again in a moment.",
+      "disclosure_rate_limited": "You have run many teaser checks today. Try again tomorrow.",
+      "notOwner": "Only the idea’s owner can check it.",
+      "hidden": "This idea was deleted, so it cannot be checked.",
+      "unavailable": "The check could not finish just now. Try again later."
     }
   },
   "devHome": {
