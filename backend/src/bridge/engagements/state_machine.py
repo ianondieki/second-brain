@@ -24,6 +24,7 @@ about who acts). Input that can never be right (an unknown decline reason, a con
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -847,9 +848,17 @@ def check_resume_at(resume_at: date, now: datetime, policy: TrackerPolicy, *, da
         )
 
 
+_KEPT_CONTROLS: Final = frozenset("\n\t")
+# Controls, format characters (bidi overrides, zero widths), surrogates and private use.
+_DROPPED: Final = frozenset({"Cc", "Cf", "Cs", "Co"})
+
+
 def check_note(text: str | None, limit: int) -> str:
-    """The text a side-state command carries (a question, an answer, a reason), trimmed: 1 to ``limit`` characters."""
-    value = (text or "").strip()
+    """The text a side-state command carries (a question, an answer, a reason) as stored, plain text as teasers are:
+    control and format characters dropped but line feeds and tabs (a right-to-left override or a zero-width space
+    never reaches the other party), then trimmed: 1 to ``limit`` characters."""
+    value = "".join(ch for ch in (text or "") if ch in _KEPT_CONTROLS or unicodedata.category(ch) not in _DROPPED)
+    value = value.strip()
     if not 0 < len(value) <= limit:
         raise Invalid("invalid_note", f"Write 1 to {limit} characters.")
     return value

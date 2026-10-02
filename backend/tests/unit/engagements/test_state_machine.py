@@ -565,6 +565,11 @@ def test_a_note_is_one_to_its_limit_of_characters_once_trimmed() -> None:
             sm.check_note(wrong, sm.REASON_MAX_CHARS)
         assert (refused.value.status, refused.value.code) == (422, "invalid_note")
     assert sm.QUESTION_MAX_CHARS == 2000  # engagement_notes' body CHECK (revision 0006)
+    # Format and control characters are dropped (a right-to-left override, a zero-width space), line feeds and tabs
+    # kept; a text of nothing else is empty.
+    assert sm.check_note("Budget\u202e cycle\u200b\n\tnext month\x07", 500) == "Budget cycle\n\tnext month"
+    with pytest.raises(sm.Invalid):
+        sm.check_note("\u200b\u202e\u2060", 500)
 
 
 def test_a_resumed_stage_keeps_its_deadline_moved_by_the_business_days_paused() -> None:
