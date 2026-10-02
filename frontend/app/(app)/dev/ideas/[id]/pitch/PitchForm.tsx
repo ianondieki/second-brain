@@ -55,8 +55,11 @@ export interface PitchFormProps {
   chosen?: PickerRow[];
   /** The URL's `sel`. Only ids shown on this page as available rows (here or under "chosen") become choices. */
   initialSelected: string[];
-  /** The organisation chosen because the idea answers its Problem Brief (`?org=`, REQ-DIR-05), by name: said once. */
-  preselected?: string;
+  /**
+   * The organisation chosen because the idea answers its Problem Brief (`?org=`, REQ-DIR-05): the page says why while
+   * it stays chosen.
+   */
+  preselected?: { id: string; name: string };
   /** The search and niche fields, drawn on the server; submitted with the form as a GET, choices included. */
   filters: ReactNode;
   /** A search or a niche narrows the list: offer to clear it (keeping the choices). */
@@ -202,10 +205,10 @@ export function PitchForm({
       <p className="mt-3 text-ink" data-cap="">
         {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: capNow.limit ?? 0 })}
       </p>
-      {preselected ? (
+      {preselected && selected.has(orgKey(preselected.id)) ? (
         <p className="mt-3 flex max-w-[62ch] items-start gap-2 text-ink" data-preselected="">
           <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
-          <span>{t("preselected", { org: preselected })}</span>
+          <span>{t("preselected", { org: preselected.name })}</span>
         </p>
       ) : null}
         {/* Nothing changes the list while a Pitch is under way. */}

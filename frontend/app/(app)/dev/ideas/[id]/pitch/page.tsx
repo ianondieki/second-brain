@@ -137,7 +137,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
           groups={groups}
           chosen={chosen}
           initialSelected={query.selected}
-          preselected={preselected?.name}
+          preselected={preselected ? { id: preselected.id, name: preselected.name } : undefined}
           filters={<Filters query={query} niches={niches} />}
           narrowed={narrowed}
           cursor={query.cursor}

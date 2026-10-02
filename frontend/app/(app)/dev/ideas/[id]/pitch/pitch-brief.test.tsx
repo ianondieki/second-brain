@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test/intl";
@@ -56,7 +56,7 @@ describe("a pitch started from a Brief", () => {
         },
       ],
       initialSelected: [TELCO],
-      preselected: "Telco A (fixture)",
+      preselected: { id: TELCO, name: "Telco A (fixture)" },
       filters: <input aria-label="Search by name, niche or county" name="q" />,
       narrowed: false,
       ...overrides,
@@ -72,6 +72,14 @@ describe("a pitch started from a Brief", () => {
       "Telco A (fixture) is already chosen: your idea answers its Brief. Untick it if you would rather not pitch to them.",
     );
     expect(document.querySelectorAll("[data-primary]").length).toBeLessThanOrEqual(1);
+  });
+
+  it("says it only while the organisation stays chosen", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Telco A \(fixture\)/ }));
+    expect(document.querySelector("[data-preselected]")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Telco A \(fixture\)/ }));
+    expect(document.querySelector("[data-preselected]")).not.toBeNull();
   });
 
   it("says nothing when no organisation was chosen this way", () => {
