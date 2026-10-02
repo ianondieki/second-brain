@@ -2050,14 +2050,14 @@
       "NO_DEV_RESPONSE": "Muda umeisha: msanidi programu hakujibu kwa wakati."
     },
     "side": {
-      "info": "Maelezo yaliombwa tarehe {date}: <quote>{question}</quote>",
+      "info": "Maelezo yaliombwa tarehe <nowrap>{date}</nowrap>: <quote>{question}</quote>",
       "infoClockYou": "Muda wa hatua hii unasubiri hadi ujibu. Usipojibu kufikia <nowrap>{date}</nowrap>, ushirikiano utaisha.",
       "infoClockThem": "Muda wa hatua hii unasubiri hadi {name} ajibu. Asipojibu kufikia <nowrap>{date}</nowrap>, ushirikiano utaisha.",
-      "hold": "Ushirikiano umesimamishwa na {name} hadi {date}: <quote>{reason}</quote>",
-      "holdYou": "Umesimamisha ushirikiano huu hadi {date}: <quote>{reason}</quote>",
-      "holdNoNote": "Ushirikiano umesimamishwa hadi {date}.",
+      "hold": "Ushirikiano umesimamishwa na {name} hadi <nowrap>{date}</nowrap>: <quote>{reason}</quote>",
+      "holdYou": "Umesimamisha ushirikiano huu hadi <nowrap>{date}</nowrap>: <quote>{reason}</quote>",
+      "holdNoNote": "Ushirikiano umesimamishwa hadi <nowrap>{date}</nowrap>.",
       "holdClock": "Ushirikiano utaendelea wenyewe siku hiyo, na tarehe za mwisho zitasogezwa kwa siku za kazi ulizosimamishwa.",
-      "answered": "Swali lilijibiwa tarehe {date}: <quote>{answer}</quote>"
+      "answered": "Swali lilijibiwa tarehe <nowrap>{date}</nowrap>: <quote>{answer}</quote>"
     },
     "endorsements": {
       "title": "Uidhinishaji wa hatua hii",

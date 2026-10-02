@@ -541,4 +541,13 @@ describe("the deadline line of list rows in a side state", () => {
     const { container } = renderWithIntl(<EngagementRow item={asked} mine="developer" href="/x" />);
     expect(container.querySelector("[data-due]")?.textContent).toBe("10 business days left, due 16 Oct 2026");
   });
+
+  it("keeps the banner's dates whole on one line", () => {
+    const hold = { kind: "hold" as const, body: "Budget", by: "org" as const, at: "2026-10-02T08:00:00Z", resume_at: "2026-10-09", seq: 4 };
+    renderWithIntl(
+      <WhoseTurn detail={detail({ ...held, notes: [hold], awaiting: [], my_party: "developer" })} />,
+    );
+    const side = document.querySelector("[data-side='hold']")!;
+    expect([...side.querySelectorAll(".whitespace-nowrap")].map((n) => n.textContent)).toEqual(["9 Oct 2026"]);
+  });
 });
