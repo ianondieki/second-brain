@@ -17,8 +17,9 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
   reads them; nobody else sees anything. Each row names its actor as the caller (a system row names nobody).
 - Event payloads hold only ids, codes, dates, amounts and digests: string values match ``[A-Za-z0-9_.:+-]{0,128}``
   and keys ``[a-z][a-z0-9_]*`` (free text and personal data go to a mutable details store, as for the audit log).
-- Endorsements, signatures, events and notes are append-only; a payment record changes once, by the developer's
-  confirmation. The platform records payments and never moves money.
+- Endorsements, signatures, events and notes are append-only (a note's body may be redacted once by the owner,
+  D-54); a payment record changes once, by the developer's confirmation. The platform records payments and never
+  moves money.
 - A note (revision 0006) is the text a side-state command carries, a sibling of the event it explains, never part of
   the chain: written by that event's actor as themselves, in the event's transaction (the event is still the
   engagement's latest), one per event, its kind matching the event's transition.
@@ -239,6 +240,7 @@ class EngagementEndorsement(IdMixin, Base):
 # docs/spec/06 6.9 side branches: the organisation's question and the developer's answer (INFO_REQUESTED), the reason
 # of a pause (ON_HOLD, with its resume date) and of an early resume.
 NOTE_KINDS = ("info_request", "info_answer", "hold", "resume")
+NOTE_REDACTED = "[redacted]"  # D-54: the one body a note may be changed to, by the owner's redaction
 
 
 class EngagementNote(IdMixin, Base):
@@ -246,9 +248,10 @@ class EngagementNote(IdMixin, Base):
     question, on the event entering ``INFO_REQUESTED``), ``info_answer`` (the developer's answer, on the event leaving
     it), ``hold`` (the reason of a pause, on the event entering ``ON_HOLD``, with ``resume_at``) and ``resume`` (the
     reason of an early resume, on the event leaving it). A sibling of the event it explains (``event_seq``), never
-    part of the hash chain. INSERT-only (grants and triggers). Write it in the event's transaction, after the event
-    (its ``seq`` is the database's: read it back), as the event's actor; a system event takes no note.
-    ``created_at`` is the database's clock (``app_clock_now()``): leave it out."""
+    part of the hash chain. INSERT-only for the app (grants and triggers); D-54: the owner (or a definer function it
+    owns) may redact a note once, setting ``body`` to ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. Write
+    it in the event's transaction, after the event (its ``seq`` is the database's: read it back), as the event's
+    actor; a system event takes no note. ``created_at`` is the database's clock (``app_clock_now()``): leave it out."""
 
     __tablename__ = "engagement_notes"
     __table_args__ = (
@@ -261,6 +264,10 @@ class EngagementNote(IdMixin, Base):
         CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NOTE_KINDS)})", name="kind_known"),
         CheckConstraint("btrim(body) <> '' AND char_length(body) <= 2000", name="body_length"),
         CheckConstraint("(kind = 'hold') = (resume_at IS NOT NULL)", name="resume_at_only_for_hold"),
+        CheckConstraint(
+            f"(redacted_at IS NOT NULL) = (body = {NOTE_REDACTED!r}) AND (redacted_at IS NULL) = (redacted_by IS NULL)",
+            name="redaction_complete",
+        ),
         VIA_ENGAGEMENT,
     )
 
@@ -271,6 +278,10 @@ class EngagementNote(IdMixin, Base):
     resume_at: Mapped[date | None] = mapped_column(Date)  # a hold's resume date (Africa/Nairobi), only for a hold
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    # D-54: set together, exactly when the body is NOTE_REDACTED, only by the owner's redaction (the future staff
+    # function sets redacted_at = app_clock_now(), redacted_by = app_user_id()); never the app's.
+    redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
 
 
 class Agreement(IdMixin, TimestampsMixin, Base):

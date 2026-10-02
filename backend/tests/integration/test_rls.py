@@ -850,6 +850,7 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
         await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner))
         rls, hidden = "row-level security", "no engagement of the caller's with that id"
+        stale = "only while its event is the engagement's latest"  # engagement_notes_1_latest_event
         for actor, org, params, refusal in (
             (p.owner, p.org, _note(engagement, 2, "info_request", p.signatory), rls),  # as someone else
             (p.owner, p.org, _note(engagement, 2, "hold", p.owner, resume_at=RESUME_AT), rls),  # not the kind's
@@ -860,7 +861,7 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
             (p.outsider, None, _note(engagement, 2, "info_request", p.outsider), hidden),
             (p.other_member, p.other_org, _note(engagement, 2, "info_request", p.other_member), hidden),
             (p.owner, p.org, _note(engagement, 2, "info_request", p.owner), "duplicate key"),  # one note per event
-            (p.owner, p.org, _note(engagement, 1, "info_request", p.owner), rls),  # the genesis takes none
+            (p.owner, p.org, _note(engagement, 1, "info_request", p.owner), stale),  # the genesis takes none
         ):
             await t.act(conn, actor, org)
             await t.expect(conn, NOTE, refusal, **params)
@@ -882,10 +883,11 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         )
         await t.append(conn, engagement, p.developer, "developer", "resume", "ON_HOLD", "SUBMITTED")  # seq 5
         late = _note(engagement, 4, "hold", p.developer, resume_at=RESUME_AT)
-        await t.expect(conn, NOTE, rls, **late)  # its event is no longer the latest
+        await t.expect(conn, NOTE, stale, **late)  # its event is no longer the latest
         await t.run(conn, NOTE, **_note(engagement, 5, "resume", p.developer, body="Budget approved early."))
-        await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses
-        await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
+        await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses, its event written inside a savepoint
+        async with conn.begin_nested():  # (and after the rolled-back savepoints above): still this transaction's
+            await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
         await t.run(conn, NOTE, **_note(engagement, 6, "hold", p.owner, resume_at=RESUME_AT, body="Board meets."))
         await t.act(conn, p.developer)  # seq 7: the job resumes it, bound to the developer; a system event takes none
         await t.append(conn, engagement, None, "system", "resume", "ON_HOLD", "SUBMITTED")
@@ -905,18 +907,51 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         for sql in (
             "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
             "UPDATE engagement_notes SET resume_at = NULL WHERE engagement_id = :e",
+            REDACT + " WHERE engagement_id = :e",  # D-54: the app cannot redact
             "DELETE FROM engagement_notes WHERE engagement_id = :e",
             "TRUNCATE engagement_notes",
         ):
-            await t.expect(conn, sql, "permission denied", e=engagement)
+            await t.expect(conn, sql, "permission denied", e=engagement, by=p.staff)
         await t.as_owner(conn)  # the triggers hold for every role
-        for sql in (
-            "UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e",
-            "DELETE FROM engagement_notes WHERE engagement_id = :e",
-            "TRUNCATE engagement_notes",
+        for sql, refusal in (
+            ("UPDATE engagement_notes SET body = 'Edited' WHERE engagement_id = :e", "only by its redaction"),
+            ("DELETE FROM engagement_notes WHERE engagement_id = :e", "append-only"),
+            ("TRUNCATE engagement_notes", "append-only"),
         ):
-            await t.expect(conn, sql, "append-only", e=engagement)
+            await t.expect(conn, sql, refusal, e=engagement)
         assert await t.run(conn, COUNT_NOTES, e=engagement) == 4
+
+
+REDACT = "UPDATE engagement_notes SET body = '[redacted]', redacted_at = now(), redacted_by = :by"
+
+
+async def test_a_note_is_redacted_once_by_the_owner_and_never_otherwise_changed(owner_engine: AsyncEngine) -> None:
+    """D-54 (default (a)): the owner, or a SECURITY DEFINER function it owns, redacts a note's body once, setting the
+    marker with redacted_at and redacted_by in one statement; any other change, a second redaction and a redaction
+    that touches another column are refused; the app holds no UPDATE on notes at all (tested above)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        await t.act(conn, p.owner, p.org)
+        await t.append(conn, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+        faked = _note(engagement, 2, "info_request", p.owner, body="[redacted]")  # a party cannot fake a redaction
+        await t.expect(conn, NOTE, "ck_engagement_notes_redaction_complete", **faked)
+        await t.run(conn, NOTE, **_note(engagement, 2, "info_request", p.owner, body="Call me on +254 700 000 000"))
+        await t.as_owner(conn)
+        guard, where = "only by its redaction", " WHERE engagement_id = :e"
+        for sql in (
+            "UPDATE engagement_notes SET body = '[redacted]'" + where,  # without who and when
+            "UPDATE engagement_notes SET redacted_at = now(), redacted_by = :by" + where,  # without the marker
+            REDACT + ", kind = 'info_answer'" + where,  # and something else
+            REDACT + ", created_by = :by" + where,
+        ):
+            await t.expect(conn, sql, guard, e=engagement, by=p.staff)
+        assert await t.rowcount(conn, REDACT + where, e=engagement, by=p.staff) == 1
+        redacted = "SELECT body, redacted_by FROM engagement_notes WHERE engagement_id = :e"
+        assert tuple((await conn.execute(text(redacted), {"e": engagement})).one()) == ("[redacted]", p.staff)
+        for sql in (REDACT + where, "UPDATE engagement_notes SET body = 'Restored'" + where):  # once, for good
+            await t.expect(conn, sql, guard, e=engagement, by=p.staff)
 
 
 async def test_a_user_marks_only_their_own_notifications_read(app_engine: AsyncEngine, world: w.World) -> None:
@@ -961,69 +996,98 @@ BRIEF_AND_PROBLEM_READ = (
 
 
 async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed(owner_engine: AsyncEngine) -> None:
-    """REQ-DIR-05 (P19-B; revision 0006). Given an E2 organisation's reviewer posting a public Brief as a draft with
-    its problem awaiting review, Then a developer reads neither, and the organisation can neither publish nor close it
-    ahead of moderation; When staff approve the problem, Then the Brief is published and the developer reads both;
-    When the organisation closes it, Then the developer still reads both, and a later approval leaves it closed. A
-    rejected problem, and an approved problem of an E1 organisation, leave their Brief a draft nobody else reads."""
+    """REQ-DIR-05 (P19-B; revision 0006). Given an E2 organisation's reviewer posting public Briefs as drafts with their
+    problems awaiting review, Then a developer reads none, and the organisation can neither publish nor close one ahead
+    of moderation; When staff approve, Then a listed E2 organisation's Brief is published and read, while an E1 or a
+    delisted organisation's stays a draft nobody else reads (whoever tries to publish it); When staff reject a
+    published Brief's problem, Then the Brief returns to draft and is read by nobody else. Only moderation publishes:
+    an organisation that returns its Brief to draft cannot republish it. A closed Brief is terminal for every role,
+    stays read and closed after a later approval, and is read by nobody else once its problem is rejected."""
     async with t.as_app(owner_engine) as conn:
         p = await t.parties(conn)
-        niche, e1_org = uuid7(), uuid7()
+        niche, e1_org, delisted_org = uuid7(), uuid7(), uuid7()
         await t.run(conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Briefs')", id=niche, s=niche.hex)
-        await t.run(
-            conn,
-            "INSERT INTO organizations (id, kind, legal_name, slug, source, verification)"
-            " VALUES (:id, 'company', 'Pending E2 Ltd', :slug, 'seed', 'e1')",
-            id=e1_org,
-            slug=f"e1-{e1_org.hex}",
-        )
+        for org, verification, delisted in ((e1_org, "e1", False), (delisted_org, "e2", True)):
+            await t.run(
+                conn,
+                "INSERT INTO organizations (id, kind, legal_name, slug, source, verification, delisted_at)"
+                " VALUES (:id, 'company', 'Brief Ltd', :slug, 'seed', CAST(:verification AS org_verification),"
+                " CASE WHEN :delisted THEN now() END)",
+                id=org,
+                slug=f"brief-{org.hex}",
+                verification=verification,
+                delisted=delisted,
+            )
         await t.member(conn, e1_org, p.outsider, "{reviewer}")
-        brief, rejected, early = [
+        await t.member(conn, delisted_org, p.viewer, "{reviewer}")
+        brief, second, early = [
             await w.add_problem(conn, p.reviewer, niche, org_id=p.org, status="pending_review") for _ in range(3)
         ]
         e1_brief = await w.add_problem(conn, p.outsider, niche, org_id=e1_org, status="pending_review")
+        delisted_brief = await w.add_problem(conn, p.viewer, niche, org_id=delisted_org, status="pending_review")
         deadline = date(2027, 3, 31)
         await t.act(conn, p.reviewer, p.org)
-        for problem in (brief, rejected):
+        for problem in (brief, second):
             await t.run(conn, BRIEF, p=problem, org=p.org, deadline=deadline, status="draft")
-        ahead = "a Brief is published only once its problem is published and clear"
-        await t.expect(conn, BRIEF, ahead, p=early, org=p.org, deadline=deadline, status="published")
-        await t.expect(conn, "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p", ahead, p=brief)
+        ahead = "a Brief is published only once its problem is published and clear, for a listed E2 organisation"
+        moderation_only, terminal = "only moderation publishes a Brief", "a closed Brief stays closed"
+        publish, close, unpublish = (
+            f"UPDATE problem_briefs SET status = '{status}' WHERE problem_id = :p"
+            for status in ("published", "closed", "draft")
+        )
+        await t.expect(conn, BRIEF, moderation_only, p=early, org=p.org, deadline=deadline, status="published")
+        await t.expect(conn, publish, moderation_only, p=brief)
         closing = "only a published Brief is closed"
-        await t.expect(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", closing, p=brief)
+        await t.expect(conn, close, closing, p=brief)
         await t.expect(conn, BRIEF, closing, p=early, org=p.org, deadline=deadline, status="closed")
-        await t.act(conn, p.outsider, e1_org)
-        await t.run(conn, BRIEF, p=e1_brief, org=e1_org, deadline=deadline, status="draft")
+        for actor, org, problem in ((p.outsider, e1_org, e1_brief), (p.viewer, delisted_org, delisted_brief)):
+            await t.act(conn, actor, org)
+            await t.run(conn, BRIEF, p=problem, org=org, deadline=deadline, status="draft")
+        everyone = (brief, second, e1_brief, delisted_brief)
         await t.act(conn, p.developer)
-        for problem in (brief, rejected, e1_brief):
+        for problem in everyone:
             assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) == 0, "a Brief awaiting review is read"
         await t.act(conn, p.staff)
-        for problem, state, status in (
-            (brief, "clear", "published"),
-            (rejected, "rejected", "rejected"),
-            (e1_brief, "clear", "published"),
-        ):
-            await t.run(conn, MODERATE, p=problem, state=state, status=status)
-        statuses = {problem: await t.run(conn, BRIEF_STATUS, p=problem) for problem in (brief, rejected, e1_brief)}
-        assert statuses == {brief: "published", rejected: "draft", e1_brief: "draft"}
+        for problem in everyone:
+            await t.run(conn, MODERATE, p=problem, state="clear", status="published")
+        statuses = {problem: await t.run(conn, BRIEF_STATUS, p=problem) for problem in everyone}
+        assert statuses == {brief: "published", second: "published", e1_brief: "draft", delisted_brief: "draft"}
+        await t.run(conn, MODERATE, p=second, state="rejected", status="rejected")
+        assert await t.run(conn, BRIEF_STATUS, p=second) == "draft"  # a published Brief returns to draft
         await t.act(conn, p.developer)
-        reads = {problem: await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) for problem in statuses}
-        assert reads == {brief: 2, rejected: 0, e1_brief: 0}
-        await t.act(conn, p.outsider, e1_org)  # the E2 guard on 'published' holds once the problem is published
-        await t.expect(
-            conn,
-            "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p",
-            "row-level security",
-            p=e1_brief,
-        )
+        reads = {problem: await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) for problem in everyone}
+        assert reads == {brief: 2, second: 0, e1_brief: 0, delisted_brief: 0}
+        # The policy's helper tells a developer nothing the policy hides: e1_brief's problem is approved and clear,
+        # but its Brief is a draft.
+        public = {
+            problem: await t.run(conn, "SELECT app_brief_problem_is_public(:p)", p=problem) for problem in everyone
+        }
+        assert public == {brief: True, second: False, e1_brief: False, delisted_brief: False}
+        await t.act(conn, p.outsider, e1_org)  # the policies' E2 guard on 'published'
+        await t.expect(conn, publish, "row-level security", p=e1_brief)
+        await t.as_owner(conn)  # and the status guard's, for every role
+        for problem in (e1_brief, delisted_brief):
+            await t.expect(conn, publish, ahead, p=problem)
+        await t.act(conn, p.reviewer, p.org)  # the published -> draft -> published route is not the organisation's
+        assert await t.rowcount(conn, unpublish, p=brief) == 1
+        await t.expect(conn, publish, moderation_only, p=brief)
+        await t.act(conn, p.staff)
+        await t.run(conn, MODERATE, p=brief, state="clear", status="published")  # moderation publishes it again
+        assert await t.run(conn, BRIEF_STATUS, p=brief) == "published"
         await t.act(conn, p.reviewer, p.org)
-        closed = await t.rowcount(conn, "UPDATE problem_briefs SET status = 'closed' WHERE problem_id = :p", p=brief)
-        assert closed == 1
+        assert await t.rowcount(conn, close, p=brief) == 1
+        for sql in (publish, unpublish):
+            await t.expect(conn, sql, terminal, p=brief)
+        await t.as_owner(conn)  # closed is terminal for every role
+        await t.expect(conn, publish, terminal, p=brief)
         await t.act(conn, p.developer)
         assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 2  # the problem page and the links stay
         await t.act(conn, p.staff)
         await t.run(conn, MODERATE, p=brief, state="clear", status="published")  # say, clearing a later hold
-        assert await t.run(conn, BRIEF_STATUS, p=brief) == "closed"
+        await t.run(conn, MODERATE, p=brief, state="rejected", status="rejected")
+        assert await t.run(conn, BRIEF_STATUS, p=brief) == "closed"  # closed stays closed whatever moderation decides
+        await t.act(conn, p.developer)
+        assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 0  # but is read only while its problem is public
 
 
 # ---------------------------------------------------------------- cross-tenant API access returns 404

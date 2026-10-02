@@ -14,6 +14,7 @@ readers, marking read) in ``test_rls.py``.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import threading
@@ -415,6 +416,13 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
     # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
+    "engagement_notes_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
+    "engagement_notes_latest_event()": (True, set()),  # locks the engagement and reads the chain's head
+    "app_brief_problem_is_public(uuid)": (True, {"bridge_app"}),
+    "app_xid_is_current(xid)": (
+        False,
+        {"bridge_app"},
+    ),  # the notes' INSERT policy: an event of this transaction  # the public read of problem_briefs (no recursion)
     "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
     "problems_brief_text_guard()": (False, set()),
 }
@@ -706,6 +714,79 @@ def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> Non
 
 
 # --- Harness ------------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def notes_race_url(admin_url: URL) -> Iterator[URL]:
+    """A database of its own at head (the race commits; scratch_url belongs to the round trip, which an async test
+    reordered ahead of it would leave at head)."""
+    name = f"bridge_race_{uuid4().hex[:12]}"
+    url = create_database(admin_url, name)
+    try:
+        run_alembic(url, lambda config: command.upgrade(config, "head"))
+        yield url
+    finally:
+        drop_database(admin_url, name)
+
+
+async def test_a_note_waits_for_an_append_in_flight_and_is_refused_once_it_commits(notes_race_url: URL) -> None:
+    """Revision 0006 (the notes' review): the race the INSERT policy alone left open. The organisation's request
+    (seq 2) is committed without its note while the note's transaction is already open; the developer's answer (seq 3)
+    is appended and holds the engagement's row lock; the note for seq 2 then waits on that lock
+    (engagement_notes_1_latest_event, FOR NO KEY UPDATE) and, once the answer commits, is refused: its event is no
+    longer the latest. The policy's own check had passed under the snapshot taken before the answer committed."""
+    owner, app = role_engine(notes_race_url, "bridge_owner"), role_engine(notes_race_url, "bridge_app")
+    try:
+        async with owner.begin() as conn:
+            p = await tracker.parties(conn)
+            await tracker.act(conn, p.developer)
+            engagement = await tracker.engage(conn, p)
+        async with app.connect() as noter, app.connect() as asker, app.connect() as answerer:
+            await noter.begin()
+            await tracker.act(noter, p.owner, p.org)  # the note's transaction starts before its event
+            async with asker.begin():
+                await tracker.act(asker, p.owner, p.org)
+                await tracker.append(asker, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+            await answerer.begin()
+            await tracker.act(answerer, p.developer)
+            await tracker.append(
+                answerer, engagement, p.developer, "developer", "answer_info", "INFO_REQUESTED", "SUBMITTED"
+            )
+            note = asyncio.create_task(
+                noter.execute(
+                    sa.text(
+                        "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+                        " VALUES (:id, :e, 2, 'info_request', 'Which counties?', :by)"
+                    ),
+                    {"id": uuid7(), "e": engagement, "by": p.owner},
+                )
+            )
+            await asyncio.sleep(0.5)
+            assert not note.done(), "the note did not wait for the append in flight"
+            await answerer.commit()
+            with pytest.raises(sa.exc.DBAPIError, match="only while its event is the engagement's latest"):
+                await note
+            await noter.rollback()
+            # The policy's half (ev.xmin): a note from any transaction but its event's is refused, even while the event
+            # is the latest, whether the note's transaction was opened before the event's (the actor's own earlier
+            # transaction) or after it.
+            other = (
+                "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+                " VALUES (uuid7(), :e, 4, 'info_request', 'Which counties?', :by)"
+            )
+            await noter.begin()
+            await tracker.act(noter, p.owner, p.org)  # opened before the event
+            async with asker.begin():
+                await tracker.act(asker, p.owner, p.org)
+                await tracker.append(asker, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+            await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
+            await noter.rollback()
+            async with noter.begin():
+                await tracker.act(noter, p.owner, p.org)  # opened after it
+                await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
+    finally:
+        await owner.dispose()
+        await app.dispose()
 
 
 async def test_role_engines_keep_their_role_across_transactions(
@@ -1073,6 +1154,8 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
             await conn.execute(sa.text("SELECT app_llm_calls_since('m', now())"))  # revision 0004
+            await conn.execute(sa.text("SELECT app_brief_problem_is_public(uuid7())"))  # revision 0006
+            await conn.execute(sa.text("SELECT app_xid_is_current(CAST('3' AS xid))"))
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
@@ -1655,12 +1738,12 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
 
 # Revision 0005: columns bridge_app reads but neither inserts nor updates: the research columns only
 # app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
-# Revision 0006: a note's time, the database's clock too.
+# Revision 0006: a note's time, the database's clock too, and its redaction (D-54), the owner's.
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problems": {"research_run_id", "named_orgs"},
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
-    "engagement_notes": {"created_at"},
+    "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
 }
 
 
@@ -2264,7 +2347,17 @@ V5_TRIGGERS = {
 # Brief status and text guards.
 V6_TRIGGERS = {
     ("engagement_notes", "engagement_notes_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT),
-    ("engagement_notes", "engagement_notes_no_update_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE | ON_UPDATE),
+    # Second on INSERT (name order): a note only while its event is the latest, under the engagement's row lock.
+    ("engagement_notes", "engagement_notes_1_latest_event"): (
+        "engagement_notes_latest_event",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("engagement_notes", "engagement_notes_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
+    # D-54: an UPDATE only as the owner's one redaction of the body.
+    ("engagement_notes", "engagement_notes_redaction_guard"): (
+        "engagement_notes_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
+    ),
     ("engagement_notes", "engagement_notes_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
     # After RLS: a Brief is published only with its problem, and closed only once published.
     ("problem_briefs", "problem_briefs_status_guard"): ("problem_briefs_status_guard", ROW | ON_INSERT | ON_UPDATE),
