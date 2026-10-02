@@ -71,7 +71,7 @@ test("a new account's bell has no count and its page is one sentence and one act
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications");
     // The organisation's own navigation stays (PortalNavFor).
     await expect(page.getByRole("navigation", { name: "Organisation" })).toBeVisible();
-    await expectEmptyState(page, "Nothing yet: your tracker updates and approvals will land here.", "Go to your home page");
+    await expectEmptyState(page, "Nothing yet: new proposals, scout matches and engagement updates for your organisation will land here.", "Go to your home page");
     await checkScreen(page, { strict: true });
     await shot(page, info, "notifications-empty-light");
   } finally {

@@ -75,7 +75,7 @@ test("the owner checks the teaser from the keyboard, the answers are polite, and
   await card.getByRole("button", { name: DISCLOSURE }).focus();
   await page.keyboard.press("Space");
   await expect(answer(page, "disclosure")).toContainText(
-    "No AI model is connected in this demo, and the quick check found nothing that gives away how it works.",
+    "No AI model is connected in this demo. The quick check looks only for common giveaways, such as code, file names and tool names, and found none.",
     SERVER_STEP,
   );
   await expect(answer(page, "disclosure").locator("[data-chip]")).toHaveText(["Demo fallback"]);
@@ -99,7 +99,7 @@ test("a teaser that says how it works is named by the rules, and warns without b
   await newIdea(page, "We use a gradient-boosted model over M-Pesa statements to score each co-op.");
   await page.getByRole("button", { name: DISCLOSURE }).click();
   await expect(answer(page, "disclosure").locator("p").first()).toHaveText(
-    "This reads like how, not what: summary.",
+    "Your summary reads like how it works, not what it does.",
     SERVER_STEP,
   );
   await expect(answer(page, "disclosure")).toContainText(
@@ -125,7 +125,7 @@ test("the eleventh overlap check of the day is refused in words", async ({ page 
   await expect(answer(page, "overlap")).toHaveText(/^No (overlap|other published ideas)/);
   await button.click();
   await expect(answer(page, "overlap")).toHaveText(
-    "You have used today’s checks; tomorrow brings more.",
+    "You have used today’s overlap checks; they come back at midnight Nairobi time.",
     SERVER_STEP,
   );
   await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0); // the editor keeps an empty live alert region
