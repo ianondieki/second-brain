@@ -38,4 +38,13 @@ describe("homeStats", () => {
     const { summary } = await import("@/test/engagement");
     expect(homeStats([summary({ due: null })], []).nextDue).toBeNull();
   });
+
+  it("never shows a hold's resume day as the next deadline", async () => {
+    const { homeStats } = await import("./home");
+    const { summary } = await import("@/test/engagement");
+    const held = summary({ id: "h", state: "ON_HOLD", whose_turn: [], due: { due_on: "2026-10-09", business_days_left: 5, overdue: false } });
+    expect(homeStats([held], []).nextDue).toBeNull();
+    const theirs = summary({ id: "t", state: "UNDER_REVIEW", whose_turn: ["org"], due: { due_on: "2026-10-20", business_days_left: 12, overdue: false } });
+    expect(homeStats([held, theirs], []).nextDueId).toBe("t");
+  });
 });
