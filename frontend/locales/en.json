@@ -2004,6 +2004,7 @@
       "current": "Current",
       "pending": "Pending",
       "onHold": "On hold",
+      "awaitingAnswer": "Waiting for an answer",
       "overdue": "Overdue",
       "ended": "Ended"
     },

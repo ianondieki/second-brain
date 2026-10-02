@@ -442,8 +442,17 @@ describe("the stepper through a side state", () => {
     expect(items).toHaveLength(5);
     expect(items[0].getAttribute("aria-current")).toBe("step");
     expect(items[0].getAttribute("data-state")).toBe("onHold");
-    expect(items[0].textContent).toContain("On hold");
+    // Its own word: an open question is the developer's turn, not a hold (the mark says the clock is paused).
+    expect(items[0].textContent).toContain("Waiting for an answer");
+    expect(items[0].textContent).not.toContain("On hold");
     expect(items[0].textContent).toContain("Now: Information requested");
+  });
+
+  it("says On hold for a hold, once", () => {
+    const steps = stepperSteps({ state: "ON_HOLD", stage_group: null, due: null, paused_from: "NEGOTIATION" });
+    renderWithIntl(<Stepper steps={steps} />);
+    const current = screen.getByRole("list", { name: "Stages" }).querySelector("[aria-current='step']")!;
+    expect(current.textContent).toBe("AgreementOn hold");
   });
 });
 

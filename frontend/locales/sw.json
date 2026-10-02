@@ -2004,6 +2004,7 @@
       "current": "Inaendelea",
       "pending": "Inasubiri",
       "onHold": "Imesimamishwa",
+      "awaitingAnswer": "Inasubiri jibu",
       "overdue": "Imechelewa",
       "ended": "Imeisha"
     },

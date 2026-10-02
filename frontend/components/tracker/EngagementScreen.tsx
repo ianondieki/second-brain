@@ -143,7 +143,10 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
           actor={actors}
           detail={
             <>
-              <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
+              {/* On hold the chip already says it: no "Now: On hold" under "On hold". */}
+              {detail.state === "ON_HOLD" ? null : (
+                <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
+              )}
               {!isFinished(detail.state) ? (
                 <span className="block text-ink-soft lg:hidden">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
               ) : null}
