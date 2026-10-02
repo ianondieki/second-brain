@@ -140,8 +140,8 @@ JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, li
 |---|---|---|
 | `/dev/engagements/<id>` and `?tab=history` (the tracker with the side states, both sides' chunks the same) | 149,979 | ok (21 B left) |
 | `/org/engagements/<id>` | 149,979 | ok (21 B left) |
-| `/dev/ideas/<draft>/edit` (page load) | 149,774 | ok (226 B left; the `aaae794` reading, unchanged code on that route since) |
-| … after pressing "Check overlap" | 154,264 | on demand, reported apart (D-28 addendum); the assistant's press reads 155,801 on the same build |
+| `/dev/ideas/<draft>/edit` (page load) | 149,819 | ok (181 B left; 149,774 on `aaae794`, the magnifier icon since) |
+| … after pressing "Check overlap" | 154,340 | on demand, reported apart (D-28 addendum); the assistant's press read 155,801 on `aaae794` |
 | `/dev/ideas/<published, with a chosen problem>/edit` | 152,306 | over since P18: see below |
 | `/dev/discover?view=briefs` | 142,335 | ok |
 | `/problems/<brief>` | 141,925 | ok |

@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-01, session 4): none. P18 merged as `cf0da47` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `dcf6de1`); integration head before it `9142360`.
+**Open branches** (2026-10-02, session 5): none. P19 merged as `[[MERGE]]` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `[[HEAD]]`); integration head before it `cf0da47`. P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
 
 **Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
 (not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
@@ -415,6 +415,16 @@ up|reset --yes`; `make demo-reset` alone fails on TLS here), `npm ci`, the Playw
 Lighthouse 12 in a scratchpad `npm` folder, a fontTools venv for the font instancing; the demo stack is up at the end
 of the session (`demo.py reset --yes` before showing it). D-53 decided by the owner the same day: (a) now, (d) before
 the pitch (Lighthouse on the laptop and the intended host, readings into the scorecard; (b) if still over 2.5 s).
+
+**Session 5 (2026-10-02, the same container as session 4; P19 "improve further and add more features").** The
+plan `tasks/P19.md` (four tracks, the responsiveness score replaced by the in-app channel), revisions 0006 and 0007
+by db-migrations, five implementers in worktrees (≤3 at once), reviewer, security-reviewer and ux-reviewer rounds
+until PASS on every track, the gate (full Playwright 184 + the clock scenarios, the walkthrough with the P19 beats,
+66 design shots, CodeQL exactly D-42, pr.yml [[CI]], Lighthouse [[LH-SHORT]], JS budget every route under except the
+pre-existing editor-with-problem variant) and the merge into the integration branch as `[[MERGE]]`. The report is
+"P19 report" below; the cards `tasks/P19-*.md` carry every decision. Linux setup unchanged from session 4 (the stack
+is up at the end; `demo.py reset --yes` before showing it: the gate's runs moved its clock). Decisions for the owner:
+D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiveness score deferred.
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
@@ -446,6 +456,85 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### P19 report (final, 2026-10-02): side states, Problem Briefs, the bell, the teaser checks
+
+**What was built** (`docs/platform/tasks/P19.md`, cards P19-M, -A, -B, -C, -D, -F; branch
+`claude/fervent-mccarthy-0zyqn2`, merged as `[[MERGE]]`):
+
+- **Tracker side states** (REQ-ENG-10, AC-TRACK-4): an organisation asks a question (`INFO_REQUESTED`: the review
+  waits on the developer's clock, two questions per stage, the organisation may withdraw its own), the developer
+  answers (the stage's business days resume where they were), either party pauses before the agreement (`ON_HOLD`,
+  a date up to 60 days ahead on the platform clock, two holds per stage, 60 days per engagement, never free), the
+  other resumes early, and the expiry job ends engagements nobody acts on (`EXPIRED` with the reason in words: no
+  review, no decision, contact not made, or an unanswered question past its answer-by day; tags expire with it
+  through `app_close_tag`). Notes are append-only `engagement_notes` rows chain-pinned to their event (revision
+  0006), with contact details refused before first contact, control characters stripped, and a per-party throttle
+  of ten side-state commands an hour (429). The bell and the emails say what happened (N03, N20 and the expiry rows
+  of the matrix). Frontend: the banner for every state, the stepper's chip, four sheets (bottom sheets on phones),
+  the History pairing each note with its event on `seq`, the rows and tiles, the hold range taken from the API's
+  `today`.
+- **Problem Briefs** (REQ-DIR-05): a verified organisation posts a problem it wants proposals for (120 words, no
+  contact details, a budget band, a deadline), it waits in the moderation queue hidden until approved (revision 0006
+  publishes it on approval, text frozen after), it is listed under Discover › Briefs with "Posted by <organisation>",
+  on the problem page with its budget and deadline, in the ranker and trending while open, and a developer starts a
+  proposal from it with the organisation pre-chosen in the pitch picker. The plan counts open Briefs (deadline not
+  passed, not closed); a full plan is said once with one upgrade link; a daily cap per organisation; suspended or
+  delisted organisations cannot post and their Briefs leave the feeds. The API says why a Brief is no longer open
+  (`ended`: closed or past its deadline, on the platform day).
+- **In-app notifications** (REQ-NOT-03, the in-app channel): the bell in the top bar with its unread count (started
+  alongside the session read, inside Suspense), the Notifications page grouped by day with the newest first, opening
+  a row marks it read and lands on the tracker, "Mark all as read"; every tracker notice, the daily update and the
+  proposal's registration write a row; empty states by side.
+- **Teaser checks** (REQ-PROP-04 originality, REQ-PROP-02 over-disclosure): "Check overlap" compares the teaser's
+  embedding with other published teasers and answers in a band of words, never a score (ten a day per user, the
+  limit worded without the number); "Check what it gives away" reads the teaser for how-it-works language through the
+  LLM layer, with a quick rule-based check labelled "Demo fallback" when no provider is set; both optional, in place,
+  in a polite live region, loaded on the first press so the editor stays under its budget.
+- **Schema**: revisions 0006 (`engagement_notes`, the in-app `read_at` update policy, the brief rules and
+  `app_moderate_problem`) and 0007 (`app_close_tag`, `app_engagements_due_for_expiry`); `bridge.demo clock` runs an
+  expiry pass after moving the clock.
+- **The demo story** gains the checks, the Brief (posted, approved, found, started from), the question, Brian's bell,
+  his answer and a hold; `docs/demo/README.md` (00–18 with 05b, 09b, 11b, 13b, 14b–d), the overview and the video
+  script follow. `docs/demo/screenshots/p19/`: 66 (38 P19 screens from the shots agent, 28 for the tracker side states) shots at 1440 and 375, light and dark, strict axe 0.
+
+**Replaced from the plan.** The responsiveness score (the fifth track) was dropped: the demo's data cannot show it
+honestly (one organisation, a handful of engagements); the in-app channel took its place (`tasks/P19.md`).
+
+**Review results.** `reviewer`: P19-M (0006 round 2 PASS, 0007 PASS), P19-A backend rounds 1–2 (BLOCKER: the
+hardened 0006 refused the ORM's note insert; fixed with a core insert of the granted columns) then PASS, P19-A
+frontend rounds 1–3 (round 2 MAJOR: the hold day from `updated_at`, which the projection trigger writes on the real
+clock; fixed by the API's `today`) then PASS, P19-B PASS with MINORs carried, P19-C backend (CHANGES_REQUIRED on
+tests, then PASS) and frontend PASS, P19-D PASS, the briefs ux round (two MAJORs: the disclosure sentence with
+"The problem it solves", the Brief's closed/past-deadline guess on the browser clock; fixed) then PASS.
+`security-reviewer`: P19-A rounds 1–3 (MAJOR same-day pause/resume loops: a hold costs at least a day, holds per
+stage, the hourly throttle) then PASS; P19-B PASS; P19-D PASS (the degraded mode recorded). `ux-reviewer`: the
+briefs/bell/editor screens round 1 (three MAJORs: a full plan said twice, a Brief's case reading "public", the posted
+note unannounced) and round 2 PASS; the tracker screens round 1 (two MAJORs: a 429 closing the sheet and losing the
+text, on-hold rows showing a due date) and round 2 PASS (two MINORs carried the same day: the busy state announced, the failure copy saying nothing was sent).
+
+**Checks.** Frontend: eslint, tsc, vitest 1,618 (164 files); backend: ruff, ruff format, mypy --strict, pytest unit
+2,823, integration 1,744 on d874dcf (the four later backend commits add tests and change none of the suites' behaviour; their files ran green in the worktrees) (engagements, reminders, notifications, problems, demo, feature flags, RLS,
+privileges, migrations; PGTZ=UTC); the legacy suite unchanged. Playwright on the compose stack: 184 passed, 4 skipped, 0 failed (`2a7d253`, two workers, a fresh reset) and the four test-clock scenarios green scenarios ×
+mobile-360 and desktop green, the test-clock scenarios (`make check-e2e-clock`, a new `pr.yml` step) green, the
+walkthrough green on a fresh reset; `pr.yml` [[CI]]; CodeQL run 262 on `2a7d253`: exactly the eight D-42 findings (7 Python, 1 JavaScript); a ninth, the briefs spec's hand-made regex escape, appeared on 4dc3754 and was removed. JS budget (gzipped bodies, 360 px): the
+tracker 149,979 B, the editor draft 149,819 (154,340 after pressing "Check overlap", on demand, D-28 addendum) B, the other P19 routes 141–147 KB. Lighthouse 12 mobile:
+[[LH]].
+
+**Deviations and decisions.** The Discover tab reads "Gap" (the four tabs do not fit 360 px with "Opportunity
+gap"; `[[COPY-REVIEW]]`). The pitch picker lists the Brief's organisation first. Sheets at 1440 px are centred
+modals like the confirm dialogs. Erasure of free-text engagement notes under AC-SEC-3 is D-54 (default: a staff
+definer function in Phase 8). No model identifier in any artefact; no spend, no new vendor, no CDN, no UI library.
+
+**Open items (not blocking).** The editor of an idea with a chosen problem loads the picker's panels at page load
+and reads 152,260 B, over the budget since P18 (P19 added 328 B; recorded in the scorecard with the fix for the
+next phase: a static linked list, the search and the new-problem fields behind "Link another problem"). The
+responsiveness score waits for real data. No screen edits a Brief's band or deadline after posting (the API has
+PATCH). The "org admin" recipient gap for N01/N03 is on the REQ-NOT-03 card. Swahili for the new strings is
+`[[SW-REVIEW]]` (G5).
+
+**Next session.** The owner's decisions: D-54, D-42, D-50, D-51, the open gates. Then, by `PLAN.md`, Phase 7's UX
+pass with D-51's splits and Phase 8 hardening; the next-phase card for the editor's budget.
 
 ### P18 report (final, 2026-10-01): the fundable-product design roll-out ("Wazo", D-52)
 
