@@ -4,7 +4,8 @@ Given two people with notifications, When one lists them, Then only theirs, newe
 ``unread=1`` keeps the unread ones and ``unread-count`` counts them; marking one read is idempotent (the first moment
 stays); somebody else's id answers 404 like an unknown one; "read all" marks only the caller's unread rows. The same
 endpoints serve every signed-in person (a developer, an organisation's member). Reads write no audit row; a link that
-is not a platform path is never served; the list sends as many statements with 20 rows as with 2.
+is not a platform path is never served; the list sends as many statements with 20 rows as with 2. A page may end
+inside a run of rows written in one moment: the id orders them, so the next page neither skips nor repeats one.
 """
 
 from __future__ import annotations
@@ -142,6 +143,61 @@ async def test_twenty_a_page_and_the_cursor_walks_the_rest(developers: Developer
     smaller = await ok(await client.get(URL, params={"limit": 7}))
     assert len(smaller["items"]) == 7
     assert smaller["next_cursor"]
+
+
+_TIED = text(
+    "INSERT INTO in_app_notifications (id, user_id, kind, title, created_at)"
+    " VALUES (:id, :user, 'engagement.n03', 'Tied', now() - interval '1 day')"
+)
+
+
+async def tied(owner_engine: AsyncEngine, user_id: UUID, n: int) -> list[UUID]:
+    """``n`` notifications in one transaction, so one ``created_at``; random ids, so insertion order is no hint."""
+    ids = [uuid4() for _ in range(n)]
+    async with owner_engine.begin() as conn:
+        for row_id in ids:
+            await conn.execute(_TIED, {"id": row_id, "user": user_id})
+    return ids
+
+
+async def walk(client: httpx.AsyncClient, params: dict[str, Any]) -> list[list[str]]:
+    """Every page's ids, following ``next_cursor`` to the end."""
+    pages: list[list[str]] = []
+    cursor = None
+    while len(pages) < 20:
+        page = await ok(await client.get(URL, params=params | ({"cursor": cursor} if cursor else {})))
+        pages.append([item["id"] for item in page["items"]])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            return pages
+    raise AssertionError("the cursor never ends")
+
+
+@pytest.mark.parametrize(
+    ("newer", "same_moment", "older", "limit", "sizes"),
+    [(1, 5, 1, 3, [3, 3, 1]), (0, 5, 0, 3, [3, 2]), (0, 23, 0, None, [20, 3]), (2, 21, 0, None, [20, 3])],
+    ids=["3-a-page-around-a-tie", "3-a-page-inside-a-tie", "20-a-page-inside-23-tied", "20-a-page-after-2-newer"],
+)
+async def test_a_page_ending_inside_a_tie_neither_skips_nor_repeats(
+    developers: Developers,
+    owner_engine: AsyncEngine,
+    newer: int,
+    same_moment: int,
+    older: int,
+    limit: int | None,
+    sizes: list[int],
+) -> None:
+    client = await developers()
+    me = user_of(client)
+    before = [await add(owner_engine, me, f"Older {n}", ago=2 * 86400 + n) for n in range(older)]
+    ties = await tied(owner_engine, me, same_moment)
+    after = [await add(owner_engine, me, f"Newer {n}", ago=60.0 - n) for n in range(newer)]
+
+    pages = await walk(client, {} if limit is None else {"limit": limit})
+    assert [len(page) for page in pages] == sizes
+    listed = [row_id for page in pages for row_id in page]
+    expected = [*reversed(after), *sorted(ties, reverse=True), *before]
+    assert listed == [str(row_id) for row_id in expected]  # newest first, a tie by id, none twice, none skipped
 
 
 async def test_the_unread_filter_and_the_count(developers: Developers, owner_engine: AsyncEngine) -> None:
