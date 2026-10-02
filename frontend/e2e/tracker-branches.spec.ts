@@ -84,6 +84,11 @@ interface Due {
   business_days_left: number;
 }
 
+/** Calendar days from one ISO day to another ("2026-10-09" to "2026-10-26": 17). */
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
 /** The engagement's countdown as the API sends it (Kenyan business days from the app's today to the due day). */
 async function dueOf(request: APIRequestContext, id: string): Promise<Due> {
   const response = await request.get(`/api/engagements/${id}`);
@@ -299,7 +304,16 @@ test.describe("on the test clock", () => {
       const ask = await openSheet(orgPage, "Request information");
       await ask.getByLabel("Your question").fill("Which co-ops ran the pilot?");
       await send(orgPage, "Send the question");
-      await advance(orgPage.request, 16); // past ten business days, whatever the holidays
+      // To the day after the answer-by date the API sends (ten Kenyan business days from the question, holidays
+      // included). A fixed count is not enough: on a fresh demo the question falls on Friday 9 Oct 2026 and Mashujaa
+      // Day (Tuesday 20 Oct) puts the answer-by date seventeen days on, so a sixteen-day move left it rightly unexpired.
+      const asked = (await (await orgPage.request.get(`/api/engagements/${dev.engagementId}`)).json()) as {
+        due: Due | null;
+        today?: string | null;
+      };
+      expect(asked.due, "the question's answer-by date").not.toBeNull();
+      const today = asked.today ?? (await appToday(orgPage.request));
+      await advance(orgPage.request, daysBetween(today, asked.due!.due_on) + 1);
       runClockJob();
       await expect
         .poll(
