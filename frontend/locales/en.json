@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
-    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)"
+    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers); (4) P19-F F-A (REQ-ENG-10 tracker side states): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit. refusal.containsContact is the orchestrator's sentence verbatim; the numbers (60 days, two questions, ten business days) follow policy.yaml and are pinned by state-machine-parity.test.ts"
   },
   "app": {
     "name": "Wazo",
@@ -2009,7 +2009,8 @@
       "both": "Awaiting: you and {name}",
       "none": "Nothing is waiting on either side right now.",
       "ended": "This engagement has ended.",
-      "closed": "This engagement is closed."
+      "closed": "This engagement is closed.",
+      "onHold": "This engagement is on hold."
     },
     "endedBecause": "Reason: {reason}",
     "nextYou": "Your next step: {step}",
@@ -2026,6 +2027,22 @@
       "NO_DECISION": "No decision in time",
       "CONTACT_NOT_MADE": "First contact not made in time",
       "NO_DEV_RESPONSE": "No answer from the developer in time"
+    },
+    "expired": {
+      "NO_REVIEW": "Expired: the organisation did not start a review in time.",
+      "NO_DECISION": "Expired: the organisation did not decide in time.",
+      "CONTACT_NOT_MADE": "Expired: first contact was not made in time.",
+      "NO_DEV_RESPONSE": "Expired: the developer did not answer in time."
+    },
+    "side": {
+      "info": "Information requested on {date}: <quote>{question}</quote>",
+      "infoClockYou": "The stage's deadline waits while you answer. Unanswered by <nowrap>{date}</nowrap>, the engagement expires.",
+      "infoClockThem": "The stage's deadline waits until {name} answers. Unanswered by <nowrap>{date}</nowrap>, the engagement expires.",
+      "hold": "Paused by {name} until {date}: <quote>{reason}</quote>",
+      "holdYou": "You paused this engagement until {date}: <quote>{reason}</quote>",
+      "holdNoNote": "Paused until {date}.",
+      "holdClock": "It resumes by itself that day, and due dates move on by the business days it was paused.",
+      "answered": "Question answered on {date}: <quote>{answer}</quote>"
     },
     "endorsements": {
       "title": "Endorsements for this stage",
@@ -2149,7 +2166,13 @@
       "title": "History",
       "chainOk": "The history passed its integrity check when this page loaded.",
       "chainBroken": "The history did not pass its integrity check when this page loaded: some events may have been altered.",
-      "actor": "{name}, {role}"
+      "actor": "{name}, {role}",
+      "note": {
+        "info_request": "Question",
+        "info_answer": "Answer",
+        "hold": "Reason, until {date}",
+        "resume": "Reason for resuming early"
+      }
     },
     "event": {
       "create": "Engagement opened",
@@ -2176,6 +2199,12 @@
       "sign_certificate": "Acceptance certificate signed",
       "record_payment": "Final payment recorded",
       "confirm_payment": "Payment confirmed",
+      "request_info": "Information requested",
+      "answer_info": "Question answered",
+      "cancel_request": "Question withdrawn",
+      "pause": "Put on hold",
+      "resume": "Resumed",
+      "expire": "Expired",
       "other": "Step recorded"
     },
     "tabs": {
@@ -2241,7 +2270,12 @@
       "accept_delivery": "Accept the delivery",
       "sign_certificate": "Sign the acceptance certificate",
       "record_payment": "Record the final payment",
-      "confirm_payment": "Confirm the payment"
+      "confirm_payment": "Confirm the payment",
+      "request_info": "Request information",
+      "answer_info": "Answer the question",
+      "cancel_request": "Withdraw the question",
+      "pause": "Pause this engagement",
+      "resume": "Resume now"
     },
     "milestone": {
       "start_milestone": "Start milestone {number}",
@@ -2253,6 +2287,42 @@
       "withdraw": "Withdraw this proposal from {name}? The engagement ends and {name} can no longer open the full proposal.",
       "decline_interest": "Decline the interest of {name}? The engagement ends.",
       "decline": "Decline this proposal? The engagement ends and {name} sees the reason."
+    },
+    "sheet": {
+      "count": "{count} of {max} characters",
+      "noContact": "Keep contact details and links out: they are shared once first contact is made.",
+      "requestInfo": {
+        "lead": "Ask {name} one question. The stage's deadline waits until they answer, and they have ten business days to do so.",
+        "limit": "Your organisation may ask two questions at this stage; a withdrawn question counts too.",
+        "label": "Your question",
+        "submit": "Send the question"
+      },
+      "answerInfo": {
+        "asked": "{name} asked on {date}:",
+        "lead": "Once you send it, the stage carries on where it stopped, its deadline moved by the business days the question was open.",
+        "label": "Your answer",
+        "submit": "Send the answer"
+      },
+      "pause": {
+        "lead": "Nothing is due while it is on hold. When it resumes, due dates move by the business days it was paused.",
+        "reason": "Reason",
+        "reasonHint": "One line that both parties see.",
+        "date": "Resumes on",
+        "dateHint": "From tomorrow to {date}, at most 60 days ahead. All the holds of one engagement together may last 60 days.",
+        "resumes": "It resumes by itself on {date}.",
+        "submit": "Pause until then"
+      },
+      "resume": {
+        "lead": "The engagement carries on from where it was paused, with due dates moved by the business days it was on hold. It was due to resume on {date}.",
+        "leadNoDate": "The engagement carries on from where it was paused, with due dates moved by the business days it was on hold.",
+        "reason": "Reason for resuming now",
+        "reasonHint": "One line that both parties see.",
+        "submit": "Resume now"
+      },
+      "cancelRequest": {
+        "body": "Withdraw your question to {name}? The stage's deadline starts again where it stopped. The question still counts towards the two this stage allows.",
+        "submit": "Withdraw the question"
+      }
     },
     "refusal": {
       "stale": "This engagement changed since you opened it. It is refreshed now: check it and try again.",
@@ -2268,6 +2338,11 @@
       "invalidContactBy": "Choose a contact-by date from today, no more than five business days ahead.",
       "attestation": "Give the date the internal work started and confirm the statement.",
       "reasonText": "Explain the reason in more detail.",
+      "containsContact": "Contact details stay out of the tracker until the organisation approves; please remove the email, phone number or link.",
+      "invalidNote": "That text was not accepted. Write it again in plain words, within the box's limit.",
+      "invalidResumeAt": "Choose a resume date from tomorrow, no more than 60 days ahead.",
+      "questionLimit": "Your organisation has asked all the questions this stage allows. Decide, or decline.",
+      "holdLimit": "This engagement has little or no time on hold left: all its holds together may last 60 days. Choose an earlier resume date.",
       "notFound": "This engagement is no longer available to you.",
       "network": "We could not reach the server. Check your connection and try again.",
       "generic": "Something went wrong. Try again."

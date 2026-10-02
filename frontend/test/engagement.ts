@@ -29,6 +29,7 @@ export function summary(overrides: Partial<Summary> = {}): Summary {
     ended_at: null,
     lock_version: 3,
     whose_turn: ["org"],
+    paused_from: null,
     updated_at: "2026-09-23T11:05:00Z",
     ...overrides,
   };
@@ -47,6 +48,7 @@ export function detail(overrides: Partial<Detail> = {}): Detail {
     signatures: [],
     payments: [],
     documents: [],
+    notes: [],
     ...overrides,
   };
 }
