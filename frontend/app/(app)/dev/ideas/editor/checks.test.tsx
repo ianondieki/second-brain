@@ -57,6 +57,10 @@ describe("closed", () => {
     const fake = checksCalls();
     await renderEditor({ id: PROPOSAL_ID, initial: READY, checks: fake });
     const card = screen.getByRole("region", { name: "Teaser checks" });
+    // A magnifier beside the heading, never a tick: nothing has passed before a check runs.
+    const heading = within(card).getByRole("heading", { name: "Teaser checks" });
+    expect(heading.querySelector("svg")?.getAttribute("data-icon")).toBe("look");
+    expect(heading.querySelectorAll("svg")).toHaveLength(1);
     const buttons = within(card).getAllByRole("button");
     expect(buttons.map((button) => button.textContent)).toEqual([OVERLAP, DISCLOSURE]);
     for (const button of buttons) {
@@ -158,7 +162,7 @@ describe("check what it gives away", () => {
     const status = region("disclosure");
     expect(status.getAttribute("role")).toBe("status");
     expect(status.querySelector("p")!.textContent).toBe(
-      "Your summary and the problem it solves read like how it works, not what it does.",
+      "This reads like how it works, not what it does: summary and the problem it solves.",
     );
     expect(status.textContent).toContain("Methods, tools and code belong in the full details, which stay confidential.");
     expect(status.textContent).not.toContain(BY_RULES.why);
@@ -166,9 +170,18 @@ describe("check what it gives away", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // Every field label reads after the sentence, an article in it or not (P19 reviewer round, MAJOR 1).
+  it.each([
+    [["problem_statement"], "This reads like how it works, not what it does: the problem it solves."],
+    [["title", "problem_statement"], "This reads like how it works, not what it does: title and the problem it solves."],
+  ] as const)("names %j after the sentence, so the label reads", async (fields, sentence) => {
+    await check(DISCLOSURE, checksCalls({ disclosure: vi.fn(async () => ({ ok: true as const, value: { ...BY_RULES, fields: [...fields] } })) }));
+    expect(region("disclosure").querySelector("p")!.textContent).toBe(sentence);
+  });
+
   it("shows the model's reason, labelled AI-drafted", async () => {
     await check(DISCLOSURE, checksCalls({ disclosure: vi.fn(async () => ({ ok: true as const, value: BY_MODEL })) }));
-    expect(region("disclosure").querySelector("p")!.textContent).toBe("Your expected impact reads like how it works, not what it does.");
+    expect(region("disclosure").querySelector("p")!.textContent).toBe("This reads like how it works, not what it does: expected impact.");
     expect(region("disclosure").textContent).toContain(BY_MODEL.why);
     expect(chips("disclosure")).toEqual(["AI-drafted"]);
   });

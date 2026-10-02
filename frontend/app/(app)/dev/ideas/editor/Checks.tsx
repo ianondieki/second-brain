@@ -117,10 +117,8 @@ export function Checks({ memory, state, getId, saveAll, lastOverlap, calls = che
       );
       return {
         tone: "note",
-        sentence:
-          answer.fields.length === 0
-            ? c("disclosure.flaggedAny")
-            : c(answer.fields.length === 1 ? "disclosure.flaggedOne" : "disclosure.flaggedMany", { fields }),
+        // The fields after the sentence ("…: summary and the problem it solves"), so every label reads, article or not.
+        sentence: answer.fields.length ? c("disclosure.flagged", { fields }) : c("disclosure.flaggedAny"),
         // The model's own reason only when it wrote one (labelled); otherwise the fixed advice.
         detail: answer.ai_drafted && answer.why ? answer.why : c("disclosure.advice"),
         chips: chips(answer),

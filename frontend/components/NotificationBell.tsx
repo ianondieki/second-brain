@@ -23,15 +23,17 @@ function BellIcon(props: IconProps) {
 /**
  * The top bar's bell (docs/spec/07 item 1: portal switcher, bell, avatar menu): a link to /notifications, 44 px, with
  * the unread count as a small badge on the bell (none at 0 or when the count is unknown, "99+" above 99) and in the
- * link's accessible name ("Notifications, 3 unread"). Server-rendered with the page, never polled; no client JS.
+ * link's accessible name ("Notifications, 3 unread"), and aria-current="page" on /notifications itself. Server-rendered
+ * with the page, never polled; no client JS.
  */
-export async function NotificationBell({ count }: { count: number | null }) {
+export async function NotificationBell({ count, current = false }: { count: number | null; current?: boolean }) {
   const t = await getTranslations("notifications.bell");
   const unread = count !== null && count > 0 ? count : 0;
   return (
     <Link
       href={NOTIFICATIONS_HREF}
       prefetch={false}
+      aria-current={current ? "page" : undefined}
       data-notification-bell=""
       className={cn(
         "relative inline-flex size-11 shrink-0 items-center justify-center rounded-control text-ink",
@@ -57,12 +59,12 @@ export async function NotificationBell({ count }: { count: number | null }) {
 }
 
 /** The bell with this request's unread count (GET /api/me/notifications/unread-count, shared per request). */
-export async function UnreadNotificationBell() {
+export async function UnreadNotificationBell({ current = false }: { current?: boolean }) {
   let count: number | null = null;
   try {
     count = await getUnreadCount();
   } catch {
     count = null; // a count that cannot be read never holds the top bar up: the bell shows none
   }
-  return <NotificationBell count={count} />;
+  return <NotificationBell count={count} current={current} />;
 }

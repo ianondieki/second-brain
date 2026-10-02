@@ -9,11 +9,16 @@ import { PostedNote, StateNote } from "./Notes";
 afterEach(cleanup);
 
 describe("the posted note", () => {
-  it("is a status that takes focus once the page runs", () => {
+  it("is a status that takes focus once the page runs, then leaves the address so a reload does not repeat it", () => {
+    window.history.replaceState(null, "", "/org/problems?org=01a0ee62-0000-7000-8000-00000000000a&posted=1#top");
     render(<PostedNote text="Brief sent for review." />);
     const status = screen.getByRole("status");
     expect(status.textContent).toBe("Brief sent for review.");
     expect(document.activeElement).toBe(status);
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+      "/org/problems?org=01a0ee62-0000-7000-8000-00000000000a#top",
+    );
+    expect(screen.getByRole("status")).toBe(status); // still shown: no refetch, no shift
   });
 });
 
@@ -25,6 +30,8 @@ describe("the state note", () => {
       </StateNote>,
     );
     const box = document.querySelector<HTMLElement>("[data-state-focus]")!;
+    expect(box.getAttribute("role")).toBe("status");
+    expect(box.getAttribute("tabindex")).toBe("-1");
     expect(document.activeElement).not.toBe(box);
     rerender(
       <StateNote state="closed">

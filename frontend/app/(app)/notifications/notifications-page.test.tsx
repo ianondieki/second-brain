@@ -169,6 +169,13 @@ describe("the Notifications page", () => {
     expect(screen.getByRole("button", { name: "Mark all as read" })).toHaveProperty("disabled", false);
   });
 
+  it("marks the bell as the current page (ux round 2)", async () => {
+    listAnswers([note("a", "2026-10-02T08:30:00Z")]);
+    const props = await open();
+    expect(props.bellCurrent).toBe(true);
+    expect(document.querySelector("[data-notification-bell]")?.getAttribute("aria-current")).toBe("page");
+  });
+
   it("is one sentence and one action home when there is nothing", async () => {
     api.me.mockResolvedValue(ORG_ME);
     api.unread.mockResolvedValue(0);
