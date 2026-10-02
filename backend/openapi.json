@@ -1173,7 +1173,7 @@
       "CaseField": {
         "properties": {
           "name": {
-            "description": "A Tier-1 field: title, problem_statement, impact_claims, summary, statement",
+            "description": "A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group",
             "title": "Name",
             "type": "string"
           },

@@ -2937,7 +2937,7 @@ export interface components {
         CaseField: {
             /**
              * Name
-             * @description A Tier-1 field: title, problem_statement, impact_claims, summary, statement
+             * @description A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group
              */
             name: string;
             /** Text */
