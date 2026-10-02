@@ -80,7 +80,8 @@ visibility) is readable beyond its organisation and staff:
   ``published`` (bridge_app) stays.
 - The SELECT policy reads a public Brief while ``published`` or ``closed`` and while its problem is published and
   clear (``app_brief_problem_is_public``: SECURITY DEFINER, because a policy of ``problem_briefs`` reading
-  ``problems``, whose own policy reads ``problem_briefs``, is an infinite recursion): a closed Brief leaves the feed
+  ``problems``, whose own policy reads ``problem_briefs``, is an infinite recursion; it is true only for a public,
+  published or closed Brief, so it tells nobody about a draft's approval): a closed Brief leaves the feed
   (which reads ``published`` only) but its problem page and the proposals' links to it stay; a Brief whose problem
   is rejected, held or back in review is not read beyond its organisation and staff. An invited Brief is read by its
   invited users while ``published`` only, as before (invited Briefs are not offered yet).
@@ -294,16 +295,21 @@ BEGIN
 END;
 $$;
 
--- Whether a Brief's problem is published and clear: the public read of problem_briefs needs it, and a policy of
--- problem_briefs cannot read problems (whose own policy reads problem_briefs: infinite recursion). Briefs' problems
--- only (source org_brief). SECURITY DEFINER: reads the problem whatever the caller sees; returns the boolean only.
+-- Whether a Brief is publicly readable as far as its problem goes: a public Brief, published or closed, whose problem
+-- (source org_brief) is published and clear. The public read of problem_briefs needs the problem half, and a policy of
+-- problem_briefs cannot read problems (whose own policy reads problem_briefs: infinite recursion). The Brief half
+-- keeps the function from telling any signed-in user that staff approved a problem whose Brief is still a draft (or
+-- invited): it is true only for what the public branch of the policy shows anyway. SECURITY DEFINER: reads the rows
+-- whatever the caller sees; returns the boolean only.
 CREATE FUNCTION app_brief_problem_is_public(p_problem uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT EXISTS (SELECT 1 FROM public.problems p
+                     JOIN public.problem_briefs b ON b.problem_id = p.id
                     WHERE p.id = p_problem AND p.source = 'org_brief' AND p.status = 'published'
-                      AND p.moderation_state = 'clear')
+                      AND p.moderation_state = 'clear' AND b.visibility = 'public'
+                      AND b.status IN ('published', 'closed'))
 $$;
 
 -- A Brief enters 'published' only by moderation: from the table's owner, that is app_moderate_problem() (current_user;

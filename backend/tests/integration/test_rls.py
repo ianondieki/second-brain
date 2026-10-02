@@ -1055,6 +1055,12 @@ async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed
         await t.act(conn, p.developer)
         reads = {problem: await t.run(conn, BRIEF_AND_PROBLEM_READ, p=problem) for problem in everyone}
         assert reads == {brief: 2, second: 0, e1_brief: 0, delisted_brief: 0}
+        # The policy's helper tells a developer nothing the policy hides: e1_brief's problem is approved and clear,
+        # but its Brief is a draft.
+        public = {
+            problem: await t.run(conn, "SELECT app_brief_problem_is_public(:p)", p=problem) for problem in everyone
+        }
+        assert public == {brief: True, second: False, e1_brief: False, delisted_brief: False}
         await t.act(conn, p.outsider, e1_org)  # the policies' E2 guard on 'published'
         await t.expect(conn, publish, "row-level security", p=e1_brief)
         await t.as_owner(conn)  # and the status guard's, for every role
