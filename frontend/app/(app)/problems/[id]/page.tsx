@@ -46,8 +46,9 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
             problem={problem}
             action={
               developer ? (
-                <ButtonLink href={startProposalHref(problem.id)} variant="primary">
-                  {td("start")}
+                // A Problem Brief names its organisation, so the pitch can start with it chosen (REQ-DIR-05).
+                <ButtonLink href={startProposalHref(problem.id, problem.brief?.org?.id ?? problem.org?.id)} variant="primary">
+                  {problem.source === "org_brief" ? td("startBrief") : td("start")}
                 </ButtonLink>
               ) : undefined
             }
