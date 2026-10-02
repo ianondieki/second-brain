@@ -42,7 +42,11 @@ const SCENES: Record<string, Scene> = {
   },
 };
 
-/** The fixture organisation's id, and its earlier runs' Briefs closed so its claimed plan has room again. */
+/**
+ * The fixture organisation's id, with its earlier runs' Briefs out of the way so its claimed plan has room again.
+ * Revision 0006's guard closes only published Briefs (for the owner too), so those are closed, and a draft left by a
+ * failed run (its problem still pending review) is freed by archiving its problem, which no longer counts as open.
+ */
 function prepareOrg(org: string): string {
   const id = ownerSql(
     "SELECT o.id FROM organizations o WHERE o.legal_name = :'org' AND o.verification = 'e2'" +
@@ -52,7 +56,12 @@ function prepareOrg(org: string): string {
   );
   expect(id, `${org}, E2, from the demo seed (python -m bridge.seed --demo)`).toMatch(/^[0-9a-f-]{36}$/);
   // Test data only: this organisation's Briefs that an earlier run (or a failed one) left open.
-  ownerSql("UPDATE problem_briefs SET status = 'closed' WHERE org_id = CAST(:'id' AS uuid) AND status <> 'closed';", { id });
+  ownerSql(
+    "UPDATE problem_briefs SET status = 'closed' WHERE org_id = CAST(:'id' AS uuid) AND status = 'published';" +
+      " UPDATE problems SET status = 'archived' WHERE org_id = CAST(:'id' AS uuid) AND source = 'org_brief'" +
+      " AND status = 'pending_review';",
+    { id },
+  );
   return id;
 }
 
@@ -164,7 +173,7 @@ test.describe("a Problem Brief", () => {
     expect(await card.locator("[data-chip], [data-label]").count()).toBeLessThanOrEqual(2); // AC-UX-1
     await checkScreen(devPage, { strict: true });
     await card.getByRole("link", { name: "Start a proposal from this brief" }).click();
-    await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/new\\?problem=${briefId}&org=${orgId}$`), SERVER_STEP);
+    await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/new\\?problem=${briefId}$`), SERVER_STEP);
     await expect(devPage.getByText(title).first()).toBeVisible(SERVER_STEP); // the Brief is linked from the start
 
     // The idea, published through the API with the Brief linked (the editor's own steps are proposal-wizard.spec's).
