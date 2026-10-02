@@ -10,12 +10,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
+from sqlalchemy.exc import DBAPIError
 
 from bridge.matching.config import get_weights
 from bridge.models.enums import BriefStatus, ModerationState, ProblemSource, ProblemStatus
 from bridge.problems.brief_rules import MAX_LENGTHS, MESSAGES, band_out, brief_state, text_errors
+from bridge.problems.briefs import _db_refusal
 from bridge.problems.service import label_for
 from bridge.proposals import sanitise
 
@@ -99,3 +102,23 @@ def test_a_band_is_shown_by_its_code_and_label() -> None:
 
 def test_every_contact_code_has_a_brief_sentence() -> None:
     assert set(sanitise.CODES) <= set(MESSAGES)
+
+
+class _Orig(Exception):
+    def __init__(self, sqlstate: str) -> None:
+        super().__init__(sqlstate)
+        self.sqlstate = sqlstate
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "status", "code"),
+    [("42501", 403, "verification_required"), ("23503", 422, "invalid_brief"), ("23514", 422, "invalid_brief")],
+)
+def test_database_refusals_answer_as_the_api(sqlstate: str, status: int, code: str) -> None:
+    refusal = _db_refusal(DBAPIError("INSERT", None, _Orig(sqlstate)))
+    assert refusal is not None
+    assert (refusal.status_code, cast(dict[str, Any], refusal.detail)["code"]) == (status, code)
+
+
+def test_other_database_errors_are_not_mapped() -> None:
+    assert _db_refusal(DBAPIError("INSERT", None, _Orig("40001"))) is None
