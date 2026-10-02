@@ -464,7 +464,8 @@
     "stage": {
       "SUBMITTED": "New",
       "UNDER_REVIEW": "In review",
-      "INFO_REQUESTED": "Information asked for",
+      "INFO_REQUESTED": "Information requested",
+      "ON_HOLD": "On hold",
       "DECLINED": "Declined",
       "WITHDRAWN": "Withdrawn",
       "TERMINATED": "Ended",

@@ -464,7 +464,8 @@
     "stage": {
       "SUBMITTED": "Mpya",
       "UNDER_REVIEW": "Inakaguliwa",
-      "INFO_REQUESTED": "Taarifa imeombwa",
+      "INFO_REQUESTED": "Maelezo yameombwa",
+      "ON_HOLD": "Imesimamishwa",
       "DECLINED": "Imekataliwa",
       "WITHDRAWN": "Imeondolewa",
       "TERMINATED": "Imesitishwa",
