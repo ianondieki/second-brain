@@ -325,3 +325,40 @@ async def test_the_developer_may_withdraw_while_paused(owner_engine: AsyncEngine
     async with owner_engine.connect() as conn:
         status = await conn.execute(text("SELECT status::text FROM tags WHERE id = :id"), {"id": world.tag})
         assert status.scalar_one() == "withdrawn"
+
+
+async def test_no_contact_details_travel_in_a_note_before_first_contact(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The contact gate (AC-TRACK-9; THREAT_MODEL I): before CONTACT_MADE (the stage, or the stage a side state
+    returns to) a question, an answer or a reason carrying an email, a phone number or a link is refused (422
+    ``contains_contact``) and nothing is written; from CONTACT_MADE on, the parties may share them."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    today = await db_today(owner_engine)
+    async with seats(app_engine, deals_on(), world) as s:
+        for text_value in ("Write to jane [at] telco (dot) co.ke", "Call 0712 345 678", "See https://telco.example"):
+            refused = await t.post(s.reviewer, "request-info", {"question": text_value})
+            assert code(refused) == (422, "contains_contact"), text_value
+        await t.ok(s.reviewer, "request-info", {"question": QUESTION})
+        refused = await t.post(s.dev, "answer-info", {"answer": "Email me: brian@dev.example.com"})
+        assert code(refused) == (422, "contains_contact")
+        await t.ok(s.dev, "answer-info", {"answer": ANSWER})
+        await t.ok(s.reviewer, "start-review")
+        held = await t.post(
+            s.dev, "pause", {"reason": "WhatsApp +254 712 345 678", "resume_at": str(today + timedelta(days=5))}
+        )
+        assert code(held) == (422, "contains_contact")
+        await t.ok(s.dev, "pause", {"reason": REASON, "resume_at": str(today + timedelta(days=5))})
+        assert code(await t.post(s.signatory, "resume", {"reason": "Mail ceo@telco.example"})) == (
+            422,
+            "contains_contact",
+        )
+        await t.ok(s.signatory, "resume", {"reason": "Ready."})
+        await walk_to(t, s, world, today, "CONTACT_MADE")
+        shared = await t.ok(
+            s.dev, "pause", {"reason": "Call me on 0712 345 678", "resume_at": str(today + timedelta(days=5))}
+        )
+    assert shared["state"] == "ON_HOLD"  # after first contact the parties exchange details anyway
+    assert [n["kind"] for n in shared["notes"]] == ["info_request", "info_answer", "hold", "resume", "hold"]

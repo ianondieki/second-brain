@@ -7,7 +7,7 @@ step-up is refused without TOTP; the document a party signs is the stage's own; 
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
@@ -285,3 +285,37 @@ async def test_accepting_an_interest_needs_the_named_contact() -> None:
 
     with pytest.raises(sm.Conflict, match="contact"):
         await commands._accept_interest(step(sm.Command.ACCEPT_INTEREST, engagement=Unnamed()))
+
+
+def test_a_note_before_first_contact_carries_no_contact_details() -> None:
+    """THREAT_MODEL I (AC-TRACK-9): before CONTACT_MADE (the stage, or the one a side state returns to) the text of a
+    question, an answer or a reason holds no email, phone number or link; from CONTACT_MADE on it may."""
+    S = EngagementState
+
+    def note(command: sm.Command, from_state: EngagementState, to_state: EngagementState, text: str) -> str:
+        base = step(command)
+        decision = replace(base.decision, from_state=from_state, to_state=to_state, resumes=to_state not in sm.PAUSED)
+        return commands._note_text(step(command, decision=decision, inputs=commands.Inputs(note=text)), 500)
+
+    early = (
+        (sm.Command.REQUEST_INFO, S.SUBMITTED, S.INFO_REQUESTED, "Mail jane@telco.example"),
+        (sm.Command.ANSWER_INFO, S.INFO_REQUESTED, S.UNDER_REVIEW, "Call 0712 345 678"),
+        (sm.Command.PAUSE, S.INTEREST_CONFIRMED, S.ON_HOLD, "See <b>www.telco.example</b>"),
+        (sm.Command.RESUME, S.ON_HOLD, S.UNDER_REVIEW, "jane [at] telco (dot) co.ke"),
+    )
+    for command, from_state, to_state, text in early:
+        with pytest.raises(sm.Invalid) as refused:
+            note(command, from_state, to_state, text)
+        assert (refused.value.status, refused.value.code) == (422, "contains_contact"), command
+    assert note(sm.Command.REQUEST_INFO, S.UNDER_REVIEW, S.INFO_REQUESTED, "  KES 250,000 for 3 depots?  ") == (
+        "KES 250,000 for 3 depots?"
+    )
+    assert note(sm.Command.PAUSE, S.CONTACT_MADE, S.ON_HOLD, "Call 0712 345 678") == "Call 0712 345 678"
+    assert note(sm.Command.RESUME, S.ON_HOLD, S.NEGOTIATION, "Mail jane@telco.example") == "Mail jane@telco.example"
+    assert {
+        S.ORG_INTEREST,
+        S.SUBMITTED,
+        S.UNDER_REVIEW,
+        S.INTEREST_CONFIRMED,
+        S.PROCUREMENT_ROUTE,
+    } == sm.BEFORE_CONTACT

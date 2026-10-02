@@ -188,6 +188,9 @@ MAIN_PATH: Final = (
     S.CLOSED,
 )
 CONTACT_REVEALED: Final = frozenset(MAIN_PATH[MAIN_PATH.index(S.INTEREST_CONFIRMED) :])
+# Until first contact is made only the named contact may learn the developer's details (AC-TRACK-9), so the text the
+# side states carry (read by every member) may hold no contact details in these stages (THREAT_MODEL I).
+BEFORE_CONTACT: Final = frozenset({*MAIN_PATH[: MAIN_PATH.index(S.CONTACT_MADE)], S.PROCUREMENT_ROUTE})
 # Stage labels (docs/spec/06 6.9 "Label"). [[COPY-REVIEW]]
 STAGE_LABELS: Final[Mapping[EngagementState, str]] = {
     S.ORG_INTEREST: "Organisation interested",

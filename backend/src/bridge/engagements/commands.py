@@ -26,6 +26,7 @@ second factor this request verified through the session (TOTP; passkeys are not 
 from __future__ import annotations
 
 import ipaddress
+import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -89,6 +90,7 @@ from bridge.models.enums import (
     TagStatus,
 )
 from bridge.proposals.models import Proposal, Tag
+from bridge.proposals.sanitise import contact_findings, detection_skeleton, plain_text
 from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
@@ -769,15 +771,31 @@ async def returning_deadline(db: AsyncSession, engagement: Engagement, now: date
     return sm.resumed_deadline(due_on, paused_on, today, holidays)
 
 
+def _note_text(step: Step, limit: int) -> str:
+    """The note's text, trimmed (1 to ``limit`` characters), with no contact details before first contact: the stage
+    the command starts from, or the one a side state returns to, is before CONTACT_MADE (the Tier-1 detectors of
+    ``proposals.sanitise``, on the raw text and on its plain text)."""
+    text = sm.check_note(step.inputs.note, limit)
+    stage = step.decision.to_state if step.decision.resumes else step.decision.from_state
+    if stage in sm.BEFORE_CONTACT:
+        raw = unicodedata.normalize("NFKC", text)
+        if contact_findings(detection_skeleton(raw)) or contact_findings(detection_skeleton(plain_text(raw))):
+            raise sm.Invalid(
+                "contains_contact",
+                "Contact details and links are shared once first contact is made. Remove them from the text.",
+            )
+    return text
+
+
 async def _request_info(step: Step) -> None:
-    question = sm.check_note(step.inputs.note, sm.QUESTION_MAX_CHARS)
+    question = _note_text(step, sm.QUESTION_MAX_CHARS)
     _paused_deadline(step)
     step.sets_deadline, step.deadline = True, None  # the clock is paused until the answer
     step.note = NoteInput("info_request", question)
 
 
 async def _hold(step: Step) -> None:
-    reason = sm.check_note(step.inputs.note, sm.REASON_MAX_CHARS)
+    reason = _note_text(step, sm.REASON_MAX_CHARS)
     resume_at = step.inputs.resume_at
     if resume_at is None:  # the router always sends one
         raise sm.Invalid("invalid_resume_at", "Choose the date the engagement resumes.")
@@ -791,7 +809,7 @@ async def _hold(step: Step) -> None:
 async def _return(step: Step) -> None:
     """Answering the organisation's question, or resuming a hold early: back to the state it was entered from."""
     answer = step.decision.command is C.ANSWER_INFO
-    text = sm.check_note(step.inputs.note, sm.QUESTION_MAX_CHARS if answer else sm.REASON_MAX_CHARS)
+    text = _note_text(step, sm.QUESTION_MAX_CHARS if answer else sm.REASON_MAX_CHARS)
     step.sets_deadline = True
     step.deadline = await returning_deadline(step.db, step.engagement, step.now)
     step.note = NoteInput("info_answer" if answer else "resume", text)
