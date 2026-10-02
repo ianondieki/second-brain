@@ -55,6 +55,11 @@ describe("the action buttons", () => {
     expect(screen.getByRole("button", { name: "Start the review" }).hasAttribute("data-primary")).toBe(true);
   });
 
+  it("says when its buttons work (hydrated), for the tests that press them", () => {
+    renderActions(orgReview());
+    expect(document.querySelector("[data-actions]")?.getAttribute("data-hydrated")).toBe("true");
+  });
+
   it("renders nothing for a party with no actions", () => {
     const { container } = renderActions(detail({ actions: [] }));
     expect(container.textContent).toBe("");

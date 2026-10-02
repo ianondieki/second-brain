@@ -5,7 +5,7 @@ import { expect, test, type Browser, type Page, type TestInfo } from "@playwrigh
 
 import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import { actionsReady, OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 import { loginReturningTo } from "./support/login";
 
 // REQ-ENG-03 (AC-TRACK-3, AC-TRACK-4 prototype part), REQ-UX-01: the engagement tracker walked by both parties in
@@ -38,6 +38,7 @@ async function shot(page: Page, info: TestInfo, name: string) {
 /** Presses one of the caller's buttons and waits until the step ran and the tracker refreshed without it. */
 async function step(page: Page, name: string) {
   const actions = page.locator("[data-actions]");
+  await actionsReady(page);
   await actions.getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
   await expect(actions.getByRole("button", { name, exact: true })).toHaveCount(0, SERVER_STEP);
@@ -46,6 +47,7 @@ async function step(page: Page, name: string) {
 /** Opens a form step, lets `fill` complete it, submits it, and waits for the refreshed tracker. */
 async function formStep(page: Page, name: string, fill: () => Promise<void>) {
   const actions = page.locator("[data-actions]");
+  await actionsReady(page);
   await actions.getByRole("button", { name, exact: true }).click();
   await expect(actions.locator("[data-command-form]")).toBeVisible();
   await fill();
@@ -170,6 +172,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     // An old second factor: the endorsement asks for a fresh code inline, then runs once more (ADR-002).
     org.person.staleSecondFactor();
     await orgPage.reload();
+    await actionsReady(orgPage);
     await orgPage.locator("[data-actions]").getByRole("button", { name: "Mark first contact made" }).click();
     await expect(orgPage.getByLabel("Authenticator code")).toBeVisible(SERVER_STEP);
     await checkScreen(orgPage, { strict: true });
@@ -292,6 +295,7 @@ test("the developer withdraws after confirming, and the organisation's buttons g
   const { dev, orgPage, devPage, close } = await scene(page, browser, info);
   try {
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
+    await actionsReady(devPage);
     await devPage.locator("[data-actions]").getByRole("button", { name: "Withdraw" }).click();
     await expect(devPage.getByText(/Withdraw this proposal from/)).toBeVisible();
     await checkScreen(devPage, { strict: true });

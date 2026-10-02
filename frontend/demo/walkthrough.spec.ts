@@ -41,7 +41,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 
 import { DEMO_PASSWORD, DemoStaff, signInThroughScreens } from "../e2e/support/moderation-scene";
 import { demoTotpSecret } from "../e2e/support/totp";
-import { ownerSql } from "../e2e/support/tracker-scene";
+import { actionsReady, ownerSql } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
 // The config sets it: docs/demo/screenshots/ (committed) locally, test-results/walkthrough/screenshots/ in CI.
@@ -462,6 +462,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await expect(page.locator("[data-whose-turn]")).toContainText("Awaiting: you");
     await expect(page.locator("[data-primary]")).toHaveText("Start the review");
     await pause(page, 1.5);
+    await actionsReady(page);
     await page.locator("[data-actions]").getByRole("button", { name: "Start the review", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Done. The tracker is up to date." })).toBeVisible(SLOW);
     await expect(page.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");

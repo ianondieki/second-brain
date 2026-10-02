@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
@@ -82,6 +83,8 @@ export function Actions(props: ActionsProps) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  // Tests wait for this before pressing a button: the server's HTML shows the buttons before they work.
+  const hydrated = useHydrated();
   const noticeRef = useRef<HTMLDivElement>(null);
   // The step-up retries its step once, and only while its form is still open (not after Cancel or a refresh).
   const stepUpOpen = useRef(false);
@@ -175,7 +178,7 @@ export function Actions(props: ActionsProps) {
     <div ref={root} className="flex flex-col gap-4">
       {listNotice}
       {props.items.length === 0 && listed ? null : (
-    <section aria-labelledby="actions-heading" data-actions="" className="flex flex-col gap-4">
+    <section aria-labelledby="actions-heading" data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
       <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
         {listed ? t("title") : label(mode.item)}
       </h2>

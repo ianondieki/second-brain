@@ -13,7 +13,7 @@ import {
   upgradeOrg,
 } from "./support/scout-scene";
 import { checkScreen, expectEmptyState, settled } from "./support/screen";
-import { tag } from "./support/tracker-scene";
+import { actionsReady, tag } from "./support/tracker-scene";
 import { appToday } from "./support/clock";
 import { loginReturningTo } from "./support/login";
 
@@ -235,6 +235,7 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     await expect(actions.getByRole("button", { name: "Accept the interest" })).toBeVisible();
     await checkScreen(page, { strict: true });
     await shot(page, info, "scout-dev-stage0");
+    await actionsReady(page);
     await actions.getByRole("button", { name: "Accept the interest" }).click();
     await expect(actions.getByLabel("Authenticator code")).toBeVisible();
     await checkScreen(page, { strict: true });

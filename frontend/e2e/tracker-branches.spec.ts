@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext, type Browser, type Page, type Tes
 
 import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import { actionsReady, OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 
 // REQ-ENG-10 part (AC-TRACK-4 part; docs/spec/06 6.9 side branches): the tracker's side states walked by both parties
 // in their own browsers against the compose stack: a question and its answer, a hold and an early resume, a question
@@ -55,12 +55,14 @@ const actions = (page: Page) => page.locator("[data-actions]");
 
 /** Presses one of the caller's buttons and waits until the step ran and the tracker refreshed. */
 async function step(page: Page, name: string) {
+  await actionsReady(page);
   await actions(page).getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
 }
 
 /** Opens a side state's sheet (a modal dialog; a bottom sheet on phones) from the caller's buttons. */
 async function openSheet(page: Page, name: string) {
+  await actionsReady(page);
   await actions(page).getByRole("button", { name, exact: true }).click();
   const sheet = page.locator("dialog[open][data-side-sheet]");
   await expect(sheet).toBeVisible();
