@@ -22,7 +22,10 @@ parties are told (``bridge.engagements.notify``, queued in the same transaction)
 Finding the engagements: no application role reads every tenant's engagements, so the run asks
 ``app_engagements_due_for_expiry(now)`` (revision 0007; ids only, a superset of what is due, called with no user
 bound) and decides each listed engagement again in a session bound to its developer. An expired tagged engagement's
-tag closes as ``expired`` (``app_close_tag(tag, 'expired')``); an organisation's interest has no tag. One
+tag closes as ``expired`` (``app_close_tag(tag, 'expired')``) when the organisation let it lapse (``NO_REVIEW``,
+``NO_DECISION``, ``CONTACT_NOT_MADE``: an expired tag counts against its responsiveness); an unanswered question
+(``NO_DEV_RESPONSE``, the developer's silence) closes the tag keeping its status; an organisation's interest has no
+tag. One
 engagement's failure is logged and never stops the run (the next run retries it). The organisation's
 responsiveness score is not recomputed here (its data source comes later; P19 card).
 """
@@ -49,10 +52,14 @@ from bridge.engagements.policy import TrackerPolicy, get_policy
 from bridge.engagements.service import app_now, entering_event, lock_engagement
 from bridge.ids import uuid7
 from bridge.logging import get_logger
-from bridge.models.enums import EngagementActorRole, EngagementState, TagStatus
+from bridge.models.enums import EngagementActorRole, EngagementEndReason, EngagementState, TagStatus
 
 S = EngagementState
 Action = Literal["expire", "resume"]
+# The expiries that are the organisation's lapse, the only ones that mark the tag 'expired' (revision 0007).
+ORGANISATION_LAPSES: Final = frozenset(
+    {EngagementEndReason.NO_REVIEW, EngagementEndReason.NO_DECISION, EngagementEndReason.CONTACT_NOT_MADE}
+)
 # Revision 0007: the engagements the clock may act on at a time (ids only; called with no user bound).
 _DUE: Final = text("SELECT developer_id, engagement_id FROM app_engagements_due_for_expiry(:now)")
 
@@ -157,8 +164,12 @@ async def act_on(
     db.add(event)
     await db.flush()
     await db.refresh(engagement)  # the database projected the event
-    if engagement.state is S.EXPIRED:  # revision 0007: a tagged engagement's tag expires with it (AC-PROP-3)
-        await close_tag(db, engagement, status=TagStatus.EXPIRED)
+    if engagement.state is S.EXPIRED:
+        # Revision 0007 (AC-PROP-3): the tag expires with the engagement only when the organisation let it lapse (an
+        # expired tag counts against the organisation's responsiveness); the developer's silence (NO_DEV_RESPONSE: an
+        # unanswered question) closes it keeping its status (the one-argument app_close_tag).
+        expired = engagement.end_reason in ORGANISATION_LAPSES
+        await close_tag(db, engagement, status=TagStatus.EXPIRED if expired else None)
     await notify.enqueue(db, engagement, event)
     return Outcome(engagement_id, action, engagement.state)
 

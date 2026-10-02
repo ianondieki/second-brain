@@ -290,7 +290,8 @@ async def test_an_unanswered_question_expires_after_ten_business_days(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
     """policy.yaml info_requested.expire_bd: a question left unanswered past its answer-by date ends the engagement
-    EXPIRED (NO_DEV_RESPONSE), the tag expires, both parties are told under N03."""
+    EXPIRED (NO_DEV_RESPONSE), the tag closes keeping its status (not the organisation's lapse), both parties are
+    told under N03."""
     world = await build(owner_engine)
     off = await holidays_of(owner_engine)
     async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
@@ -304,7 +305,8 @@ async def test_an_unanswered_question_expires_after_ten_business_days(
         ended = await t.detail(s.dev)
     assert report.of(t.engagement) == Outcome(t.engagement, "expire", S.EXPIRED)
     assert (ended["state"], ended["end_reason"]) == ("EXPIRED", "NO_DEV_RESPONSE")
-    assert await tag_closed(owner_engine, world) == ("expired", True)
+    # The developer's silence never counts against the organisation: the tag closes, still delivered.
+    assert await tag_closed(owner_engine, world) == ("delivered", True)
     await run_notifications(owner_engine, app_engine, t.engagement, FakeEmailProvider())
     assert await told(owner_engine, world.reviewer, t.engagement, "engagement.n03") == [
         f'The engagement on "{PROPOSAL_TITLE}" expired: the organisation\'s question was not answered in time.'
