@@ -310,3 +310,18 @@ async def test_the_status_email_follows_the_preference_and_a_verified_address(
     assert provider.outbox == []
     assert [kind for kind, _, _ in await in_app(owner_engine, world.developer, engagement)] == ["engagement.n03"]
     assert [kind for kind, _, _ in await in_app(owner_engine, world.reviewer, engagement)] == ["engagement.n03"]
+
+
+async def test_the_developer_may_withdraw_while_paused(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Withdrawing stays the developer's before the agreement, a question open or a hold included: the engagement
+    ends and the tag is withdrawn (the database accepts leaving a side state for an exit)."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    async with seats(app_engine, deals_on(), world) as s:
+        await t.ok(s.reviewer, "request-info", {"question": QUESTION})
+        withdrawn = await t.ok(s.dev, "withdraw")
+    assert (withdrawn["state"], withdrawn["paused_from"], withdrawn["actions"]) == ("WITHDRAWN", None, [])
+    async with owner_engine.connect() as conn:
+        status = await conn.execute(text("SELECT status::text FROM tags WHERE id = :id"), {"id": world.tag})
+        assert status.scalar_one() == "withdrawn"

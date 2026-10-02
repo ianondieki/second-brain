@@ -110,11 +110,28 @@ def test_terms_stay_within_the_policy() -> None:
         (sm.Command.APPROVE, commands._approve),
         (sm.Command.PROPOSE_TERMS, commands._propose_terms),
         (sm.Command.RECORD_PAYMENT, commands._record_payment),
+        (sm.Command.REQUEST_INFO, commands._request_info),
+        (sm.Command.PAUSE, commands._hold),
+        (sm.Command.ANSWER_INFO, commands._return),
+        (sm.Command.RESUME, commands._return),
     ],
 )
 async def test_a_command_with_a_body_needs_it(command: sm.Command, effect: commands.Effect) -> None:
     with pytest.raises(sm.Invalid):
         await effect(step(command))
+
+
+async def test_a_hold_needs_its_resume_date() -> None:
+    held = step(sm.Command.PAUSE, inputs=commands.Inputs(note="Budget cycle"))
+    with pytest.raises(sm.Invalid) as refused:
+        await commands._hold(held)
+    assert refused.value.code == "invalid_resume_at"
+
+
+def test_a_paused_deadline_reads_back_only_as_a_date() -> None:
+    assert commands._iso_date("2026-10-20") == date(2026, 10, 20)
+    for wrong in (None, 20261020, "20 Oct 2026", ""):
+        assert commands._iso_date(wrong) is None
 
 
 async def test_a_confirmation_needs_the_amount_received() -> None:

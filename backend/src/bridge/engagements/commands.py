@@ -750,6 +750,13 @@ def _paused_deadline(step: Step) -> None:
         step.payload["paused_due_on"] = local_date(deadline).isoformat()
 
 
+def _iso_date(value: object) -> date | None:
+    try:
+        return date.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:  # the chain holds what _paused_deadline wrote; anything else reads as no deadline
+        return None
+
+
 async def returning_deadline(db: AsyncSession, engagement: Engagement, now: datetime) -> datetime | None:
     """The deadline the stage an engagement in a side state returns to has on ``now``'s Nairobi date: the one it had
     when it was paused, moved by the business days since (the side state's entering event and its payload)."""
@@ -757,8 +764,7 @@ async def returning_deadline(db: AsyncSession, engagement: Engagement, now: date
     if paused is None:  # every side state has its entering event; refuse rather than guess
         raise sm.Conflict("no_return_state", "The state this engagement returns to is not known. Reload and retry.")
     paused_on, today = local_date(paused.created_at), local_date(now)
-    raw = dict(paused.payload).get("paused_due_on")
-    due_on = date.fromisoformat(raw) if isinstance(raw, str) else None
+    due_on = _iso_date(dict(paused.payload).get("paused_due_on"))
     holidays = await load_holidays(db, today, since=min(paused_on, due_on or paused_on))
     return sm.resumed_deadline(due_on, paused_on, today, holidays)
 

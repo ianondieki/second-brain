@@ -230,3 +230,5 @@ def test_a_paused_engagement_reads_as_paused_and_never_overdue() -> None:
     assert "paused until 15 Oct 2026" in message.html
     active = compose_digest(facts(held, engagement(last_developer_update_on=MONDAY)), NO_HOLIDAYS)
     assert active.summary == "1 active engagement, 1 on track, 1 paused"
+    undated = compose_digest(facts(engagement(S.ON_HOLD, awaiting=frozenset())), NO_HOLIDAYS)
+    assert undated.paused == ("“Solar cold rooms” by Wanjiru (On hold): paused until it resumes.",)
