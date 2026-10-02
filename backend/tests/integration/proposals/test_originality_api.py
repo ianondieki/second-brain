@@ -277,3 +277,53 @@ async def test_a_failure_after_the_count_still_leaves_its_audit_event(
     assert await count_checks(owner_engine, user_of(client)) == 1
     [payload] = await audit_rows(owner_engine, user_of(client), "proposal.originality_checked")
     assert (payload["band"], payload["compared"] >= 0) == ("none", True)
+
+
+async def test_the_owners_own_published_teaser_never_counts(
+    developers: Developers, proposal_world: ProposalWorld
+) -> None:
+    owner = await developers()
+    install(owner, provider="fake")
+    teaser = unique_teaser(proposal_world.tag + "self")
+    copy = await new_draft(owner, proposal_world, **teaser)
+    before = (await check(owner, copy)).json()
+    await published(owner, proposal_world, **teaser)  # the same text, published by the same owner
+    after = (await check(owner, copy)).json()
+    assert (after["band"], after["compared"]) == ("none", before["compared"])
+
+
+async def test_held_and_hidden_teasers_are_outside_the_pool(
+    developers: Developers, proposal_world: ProposalWorld
+) -> None:
+    author, submitter = await developers(), await developers()
+    for client in (author, submitter):
+        install(client, provider="fake")
+    held = unique_teaser(proposal_world.tag + "held") | {"title": f"Why {proposal_world.org_brand} overcharges"}
+    hidden = unique_teaser(proposal_world.tag + "hid")
+    mine_held = await new_draft(submitter, proposal_world, **held)
+    mine_hidden = await new_draft(submitter, proposal_world, **hidden)
+    baseline = (await check(submitter, mine_held)).json()["compared"]
+
+    out = await published(author, proposal_world, **held)
+    assert out["moderation"]["state"] == "held"  # the pre-screen holds it
+    gone = await published(author, proposal_world, **hidden)
+    assert (await author.delete(f"/api/me/proposals/{gone['proposal_id']}")).status_code == 200
+    for proposal_id in (mine_held, mine_hidden):
+        body = (await check(submitter, proposal_id)).json()
+        assert (body["band"], body["compared"]) == ("none", baseline)
+
+
+async def test_a_non_demo_author_keeps_the_free_provider_out(
+    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld
+) -> None:
+    """D-37: the submitter is a demo account, the matched author is not: nothing goes to the free provider."""
+    author, submitter = await developers(), await developers()
+    await make_demo(owner_engine, user_of(submitter))
+    teaser = unique_teaser(proposal_world.tag + "d37")
+    install(author, provider="fake")
+    await published(author, proposal_world, **teaser)
+    adapter = install(submitter, OverlapExplanation(injection_suspected=False, sentence=SENTENCE))
+    proposal_id = await new_draft(submitter, proposal_world, **teaser)
+    body = (await check(submitter, proposal_id)).json()
+    assert (body["band"], body["demo_fallback"], body["explanation"]) == ("high_overlap", True, None)
+    assert adapter.requests == []
