@@ -123,7 +123,9 @@ test("the organisation asks a question, the developer answers it, both read it i
     await expect(ask.getByRole("button", { name: "Working…" })).toHaveAttribute("aria-disabled", "true");
     await expect(ask.getByRole("button", { name: "Cancel" })).toHaveAttribute("aria-disabled", "true");
     await orgPage.keyboard.press("Escape");
-    await ask.getByRole("button", { name: "Cancel" }).click();
+    // Cancel is aria-disabled while the request is in flight: a forced click (Playwright would otherwise wait for it
+    // to be enabled, which only the release below allows) must do nothing.
+    await ask.getByRole("button", { name: "Cancel" }).click({ force: true });
     await expect(ask).toBeVisible();
     release();
     await expect(orgPage.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
@@ -161,7 +163,12 @@ test("the organisation asks a question, the developer answers it, both read it i
     await orgPage.goto(`/org/engagements/${dev.engagementId}?tab=history`);
     await expect(devPage.locator("[data-event='request_info'] [data-note='info_request']")).toContainText("Which co-ops ran the pilot?");
     await expect(devPage.locator("[data-event='answer_info'] [data-note='info_answer']")).toContainText(answer);
-    expect(await orgPage.locator("[data-event]").allTextContents()).toEqual(await devPage.locator("[data-event]").allTextContents());
+    // Both parties read the same events and notes; the developer is their handle to the organisation until contact
+    // is agreed (docs/spec/06 6.9) and their own name to themselves, so only the names differ.
+    const orgHistory = await orgPage.locator("[data-event]").allTextContents();
+    const devHistory = await devPage.locator("[data-event]").allTextContents();
+    expect(orgHistory.map((text) => text.replace(dev.handle, dev.name))).toEqual(devHistory);
+    expect(orgHistory.join("\n")).not.toContain(dev.name);
     await checkScreen(devPage, { strict: true });
   } finally {
     await close();
@@ -211,7 +218,10 @@ test("a question with contact details is refused in words; the organisation with
     const ask = await openSheet(orgPage, "Request information");
     await ask.getByLabel("Your question").fill("Please write to desk@example.com or call 0712 345 678 about the pilot.");
     await ask.getByRole("button", { name: "Send the question", exact: true }).click();
-    await expect(ask.getByRole("alert")).toHaveText(CONTACT_REFUSAL, SERVER_STEP);
+    // The refusal sits on the field (aria-invalid, aria-describedby), which keeps the focus; the text is kept to edit.
+    await expect(ask.getByText(CONTACT_REFUSAL)).toBeVisible(SERVER_STEP);
+    await expect(ask.getByLabel("Your question")).toHaveAttribute("aria-invalid", "true");
+    await expect(ask.getByLabel("Your question")).toBeFocused();
     await expect(ask.getByLabel("Your question")).toHaveValue(/0712 345 678/); // kept, to be edited
     await checkScreen(orgPage, { strict: true });
     await ask.getByLabel("Your question").fill("How many co-ops ran the pilot?");

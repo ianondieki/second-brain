@@ -151,6 +151,10 @@ export interface DevSide {
   person: Person;
   title: string;
   engagementId: string;
+  /** The developer's display name (what they and, once contact is agreed, the organisation see). */
+  name: string;
+  /** The published version's pseudonymous handle (what the organisation sees until then). */
+  handle: string;
 }
 
 /**
@@ -214,5 +218,6 @@ export async function pitchFromDeveloper(
   };
   const engagement = list.items.find((e) => e.proposal_id === draft.id);
   expect(engagement?.state, "the pitch opened an engagement").toBe("SUBMITTED");
-  return { person, title, engagementId: engagement!.id };
+  const teaser = (await (await request.get(`/api/proposals/${draft.id}`)).json()) as { owner_handle: string };
+  return { person, title, engagementId: engagement!.id, name, handle: teaser.owner_handle };
 }
