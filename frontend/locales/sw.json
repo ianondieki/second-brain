@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] P19-C (REQ-NOT-03, spec 07 item 1): shell.bell.* (the top bar's bell), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers) [[SW-REVIEW]] rasimu ya Kiswahili"
+    "reviewP19": "[[COPY-REVIEW]] P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers) [[SW-REVIEW]] rasimu ya Kiswahili"
   },
   "app": {
     "name": "Wazo",
@@ -36,11 +36,6 @@
     "account": "Akaunti",
     "security": "Usalama wa kuingia",
     "notifications": "Mipangilio ya arifa",
-    "bell": {
-      "label": "Arifa",
-      "unread": "Arifa, {count} hazijasomwa",
-      "overflow": "{count}+"
-    },
     "help": "Msaada",
     "billing": "Mpango na malipo",
     "theme": {
@@ -350,6 +345,11 @@
     }
   },
   "notifications": {
+    "bell": {
+      "label": "Arifa",
+      "unread": "Arifa, {count, plural, one {# haijasomwa} other {# hazijasomwa}}",
+      "overflow": "{count}+"
+    },
     "pageTitle": "Arifa",
     "title": "Arifa",
     "lead": "Taarifa kutoka kwa ushirikiano na mapendekezo yako, za karibuni kwanza.",

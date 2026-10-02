@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
@@ -63,6 +64,14 @@ describe("NotificationBell", () => {
     await renderTree(<NotificationBell count={null} />);
     expect(screen.getByRole("link", { name: "Notifications" })).toBeTruthy();
     expect(badge()).toBeNull();
+  });
+});
+
+describe("the bell's name in Swahili", () => {
+  it("says one and many in their own forms", () => {
+    const t = createTranslator({ locale: "sw", messages: sw, namespace: "notifications.bell" });
+    expect(t("unread", { count: 1 })).toBe("Arifa, 1 haijasomwa");
+    expect(t("unread", { count: 3 })).toBe("Arifa, 3 hazijasomwa");
   });
 });
 

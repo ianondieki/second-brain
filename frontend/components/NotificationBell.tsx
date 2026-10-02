@@ -26,7 +26,7 @@ function BellIcon(props: IconProps) {
  * link's accessible name ("Notifications, 3 unread"). Server-rendered with the page, never polled; no client JS.
  */
 export async function NotificationBell({ count }: { count: number | null }) {
-  const t = await getTranslations("shell.bell");
+  const t = await getTranslations("notifications.bell");
   const unread = count !== null && count > 0 ? count : 0;
   return (
     <Link
