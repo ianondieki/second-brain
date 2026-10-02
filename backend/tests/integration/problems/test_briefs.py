@@ -173,6 +173,7 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
             "budget_band": {"code": "500k_2m", "label": "KES 500,000 to 2 million"},
             "deadline": body["deadline"],
             "open": True,
+            "ended": None,
         }
         assert item["proposal_count"] == 0
         page = await developer.get(f"/api/problems/{brief_id}")
@@ -205,7 +206,7 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
         assert (await reviewer.get(f"/api/problems/{brief_id}")).status_code == 200  # the problem stays
         kept = await developer.get(f"/api/problems/{brief_id}")
         assert (kept.status_code, kept.json()["brief"]["org"]) == (200, org_ref)  # readable once closed (0006)
-        assert kept.json()["brief"]["open"] is False  # closed: no longer asking for proposals
+        assert (kept.json()["brief"]["open"], kept.json()["brief"]["ended"]) == (False, "closed")  # closed by the org
         teaser = (await developer.get(f"/api/proposals/{proposal['id']}")).json()
         assert brief_id in [p["id"] for p in teaser["problems"]]  # the proposal's link stays
         [row] = await rows(owner_engine, "SELECT status FROM problems WHERE id = :id", id=UUID(brief_id))
@@ -444,7 +445,7 @@ async def test_the_lists_page_filter_and_a_passed_deadline_leaves_the_view(
     kept = await developer.get(f"/api/problems/{posted[0]}")
     assert kept.status_code == 200
     assert kept.json()["brief"]["deadline"] < (await today(owner_engine)).isoformat()
-    assert kept.json()["brief"]["open"] is False  # its deadline has passed
+    assert (kept.json()["brief"]["open"], kept.json()["brief"]["ended"]) == (False, "past_deadline")  # platform day
 
 
 async def test_an_organisation_no_longer_e2_cannot_change_its_published_brief(
