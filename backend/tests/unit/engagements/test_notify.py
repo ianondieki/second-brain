@@ -12,6 +12,7 @@ from bridge.engagements import notify
 from bridge.engagements import state_machine as sm
 from bridge.engagements.models import EngagementEvent
 from bridge.models.enums import EngagementActorRole, EngagementEndReason, EngagementParty, EngagementState
+from bridge.notifications import status
 
 ENGAGEMENT = UUID("01900000-0000-7000-8000-00000000000b")
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
@@ -151,7 +152,8 @@ def test_a_side_state_tells_the_other_party_and_goes_by_email(
     composed = notify.compose(built, "Telco A", "Cold-chain alerts")
     assert composed is not None
     party, notice = composed
-    assert (party, notice.kind, notice.title) == (told, kind, sm.STAGE_LABELS[to_state])
+    title = notify.EVENT_TITLES.get(sm.Command(command)) or sm.STAGE_LABELS[to_state]
+    assert (party, notice.kind, notice.title) == (told, kind, title)
     assert words in notice.body
     assert '"Cold-chain alerts"' in notice.body
     assert notify.emailed(built)
@@ -197,8 +199,8 @@ def test_a_hold_resumed_on_its_date_tells_both_parties() -> None:
     built = side("resume", R.SYSTEM, S.ON_HOLD, S.CONTACT_MADE)
     told = notify.compose_system(built, "Telco A", "Cold-chain alerts")
     assert [(party, notice.kind, notice.title) for party, notice in told] == [
-        (DEV, "engagement.n20", "First contact"),
-        (ORG, "engagement.n20", "First contact"),
+        (DEV, "engagement.n20", "Resumed"),
+        (ORG, "engagement.n20", "Resumed"),
     ]
     assert told[0][1].body.startswith('"Cold-chain alerts" is no longer on hold')
 
@@ -215,3 +217,37 @@ def test_other_system_events_and_party_events_tell_nobody_by_email() -> None:
     genesis.from_state = None
     assert notify.compose_system(genesis, "Org", "Title") == []
     assert not notify.emailed(event("start_review", R.REVIEWER, S.UNDER_REVIEW))
+
+
+@pytest.mark.parametrize(
+    ("command", "role", "from_state", "to_state", "title"),
+    [
+        ("request_info", R.REVIEWER, S.UNDER_REVIEW, S.INFO_REQUESTED, "Information requested"),
+        ("answer_info", R.DEVELOPER, S.INFO_REQUESTED, S.UNDER_REVIEW, "Question answered"),
+        ("cancel_request", R.SIGNATORY, S.INFO_REQUESTED, S.UNDER_REVIEW, "Question withdrawn"),
+        ("pause", R.DEVELOPER, S.NEGOTIATION, S.ON_HOLD, "On hold"),
+        ("resume", R.OWNER, S.ON_HOLD, S.NEGOTIATION, "Resumed"),
+    ],
+)
+def test_a_side_state_notice_is_titled_by_what_happened(
+    command: str, role: EngagementActorRole, from_state: EngagementState, to_state: EngagementState, title: str
+) -> None:
+    """The bell and the status email say what happened, not the stage a return lands on ("Under review" said nothing
+    new); the email's subject starts with the same title."""
+    built = side(command, role, from_state, to_state, payload={"resume_at": "2026-10-20"})
+    composed = notify.compose(built, "Telco A", "Cold-chain alerts")
+    assert composed is not None
+    _, notice = composed
+    assert notice.title == title
+    rendered = status.render(
+        status.StatusFacts(
+            engagement_id=ENGAGEMENT,
+            label=notice.title,
+            title="Cold-chain alerts",
+            sentence=notice.body,
+            path=notice.link,
+            base_url="https://bridge.example.test",
+            product="Wazo",
+        )
+    )
+    assert rendered.subject == f'{title}: "Cold-chain alerts"'

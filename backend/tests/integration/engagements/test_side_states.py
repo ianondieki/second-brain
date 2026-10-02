@@ -183,7 +183,7 @@ async def test_a_question_pauses_the_review_clock_until_the_developer_answers(
     ]
     assert "asked you a question" in developer_notices[1][2]
     [(kind, title, body)] = await in_app(owner_engine, world.reviewer, engagement)
-    assert (kind, title) == ("engagement.n03", "Under review")
+    assert (kind, title) == ("engagement.n03", "Question answered")
     assert "answered your question" in body
     developer_email, reviewer_email = (
         await email_of(owner_engine, world.developer),
@@ -260,12 +260,12 @@ async def test_a_hold_reads_its_resume_date_and_an_early_resume_moves_the_deadli
         ("On hold", f"{resume_at.day} {resume_at:%b %Y}. Due dates move by the time on hold.")
     ]
     developer_notices = [n for n in await in_app(owner_engine, world.developer, engagement) if n[0] == "engagement.n20"]
-    assert [title for _, title, _ in developer_notices] == ["Terms and agreement drafting"]
+    assert [title for _, title, _ in developer_notices] == ["Resumed"]
     assert "resumed" in developer_notices[0][2]
     held_to = sorted(m.to for m in provider.outbox if m.subject == 'On hold: "RLS proposal"')
     acted = (world.owner, world.reviewer, world.signatory)  # the named contact and every member who acted on it
     assert held_to == sorted([await email_of(owner_engine, person) for person in acted])
-    resumed_to = [m.to for m in provider.outbox if m.subject == 'Terms and agreement drafting: "RLS proposal"']
+    resumed_to = [m.to for m in provider.outbox if m.subject == 'Resumed: "RLS proposal"']
     assert resumed_to == [await email_of(owner_engine, world.developer)]
 
 
