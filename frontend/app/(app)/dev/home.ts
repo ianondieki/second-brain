@@ -32,8 +32,10 @@ export interface HomeStats {
 export function homeStats(engagements: readonly Summary[], ideas: readonly MyProposalItem[]): HomeStats {
   const live = ideas.filter((idea) => idea.status !== "hidden" && idea.status !== "archived");
   const active = engagements.filter((item) => !isFinished(item.state));
-  // The soonest deadline the developer owes comes first; with none owed, the soonest on any side.
-  const byDue = (items: readonly Summary[]) => items.filter((item) => item.due).sort((a, b) => a.due!.due_on.localeCompare(b.due!.due_on));
+  // The soonest deadline the developer owes comes first; with none owed, the soonest on any side. A hold has none: its
+  // `due` is the day it resumes (REQ-ENG-10), never a deadline.
+  const byDue = (items: readonly Summary[]) =>
+    items.filter((item) => item.due && item.state !== "ON_HOLD").sort((a, b) => a.due!.due_on.localeCompare(b.due!.due_on));
   const owed = byDue(active.filter((item) => item.whose_turn.includes("developer")));
   const withDue = owed.length > 0 ? owed : byDue(active);
   return {

@@ -39,6 +39,11 @@ export interface ExpressInterestProps {
   enrolled: boolean;
   /** "?org=<id>" kept on the tracker link for members of several organisations. */
   query: string;
+  /**
+   * Today in Nairobi on the platform's clock (the match's `today`), which the API checks the contact-by date against:
+   * the default and earliest date. Absent (an older API): the browser's day as the default and no earliest date.
+   */
+  today?: string | null;
   post?: (body: Body) => Promise<{ ok: true; engagementId: string } | { ok: false; refusal: InterestRefusal }>;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -77,8 +82,8 @@ export function ExpressInterest(props: ExpressInterestProps) {
     members.find((m) => m.user_id === props.myUserId)?.user_id ?? members[0]?.user_id ?? "",
   );
   const [channel, setChannel] = useState<Channel>("email");
-  const today = nairobiToday();
-  const [by, setBy] = useState(today);
+  const today = props.today ?? null;
+  const [by, setBy] = useState(today ?? nairobiToday());
   const [errors, setErrors] = useState<{ person?: string; by?: string }>({});
   const notice = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLParagraphElement>(null);
@@ -235,7 +240,7 @@ export function ExpressInterest(props: ExpressInterestProps) {
         type="date"
         label={t("by")}
         hint={t("byHint")}
-        min={today}
+        min={today ?? undefined}
         value={by}
         error={errors.by}
         onChange={(e) => {

@@ -602,6 +602,36 @@ describe("the side states' sheets", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [{ ok: false, refusal: "network", status: 0 } as const, "We could not reach the server. Check your connection and try again."],
+    [{ ok: false, refusal: "generic", status: 503 } as const, "Something went wrong. Try again."],
+  ])("keeps a sheet open with what was typed on a failed send (%j), to try again", async (outcome, words) => {
+    const runImpl = vi.fn<Run>(async () => outcome);
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "Which co-ops?" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(within(dialog).getByRole("alert").textContent).toBe(words);
+    expect((within(dialog).getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Which co-ops?");
+    expect(refresh).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    expect(runImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a form open with what was filled in on a network failure", async () => {
+    const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "network", status: 0 }));
+    renderActions(orgReview(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    fireEvent.change(await screen.findByLabelText("Reason"), { target: { value: "BUDGET" } });
+    const form = document.querySelector("[data-command-form]") as HTMLElement;
+    await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Decline" })));
+    expect(document.querySelector("[data-command-form]")).toBe(form);
+    expect((screen.getByLabelText("Reason") as HTMLSelectElement).value).toBe("BUDGET");
+    expect(screen.getByRole("alert").textContent).toContain("We could not reach the server.");
+  });
+
   it("closes on a spent question limit (409) and says so after the refresh", async () => {
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "questionLimit", status: 409 }));
     renderActions(orgReviewing(), { runImpl });

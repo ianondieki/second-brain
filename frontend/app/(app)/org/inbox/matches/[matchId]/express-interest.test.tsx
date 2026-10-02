@@ -26,7 +26,7 @@ const OTHER = "0192a7c4-0000-7000-8000-0000000000c2";
 type Post = NonNullable<Parameters<typeof ExpressInterest>[0]["post"]>;
 type Result = Awaited<ReturnType<Post>>;
 
-function renderInterest(post: Post, query = "") {
+function renderInterest(post: Post, query = "", today?: string | null) {
   const confirmImpl = vi.fn(async () => ({ ok: true as const }));
   renderWithIntl(
     <ExpressInterest
@@ -41,6 +41,7 @@ function renderInterest(post: Post, query = "") {
       myUserId={ME}
       enrolled
       query={query}
+      today={today}
       post={post}
       confirmImpl={confirmImpl}
     />,
@@ -58,6 +59,26 @@ async function send() {
 }
 
 describe("Express interest", () => {
+  it("starts the contact-by date on the platform's day the API sends (REQ-ENG-10), the earliest it takes", async () => {
+    const post = vi.fn<Post>(async () => ({ ok: true, engagementId: "eng-1" }));
+    renderInterest(post, "", "2031-03-04");
+    await open();
+    const by = screen.getByLabelText(en.expressInterest.by) as HTMLInputElement;
+    expect(by.value).toBe("2031-03-04");
+    expect(by.min).toBe("2031-03-04");
+    await send();
+    expect(post.mock.calls[0][0]).toMatchObject({ contact_by: "2031-03-04" });
+  });
+
+  it("without the platform's day, defaults to the browser's day and sets no earliest date", async () => {
+    const post = vi.fn<Post>(async () => ({ ok: true, engagementId: "eng-1" }));
+    renderInterest(post, "", null);
+    await open();
+    const by = screen.getByLabelText(en.expressInterest.by) as HTMLInputElement;
+    expect(by.value).toBe(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date()));
+    expect(by.hasAttribute("min")).toBe(false);
+  });
+
   it("sends the match's interest with the signed-in contact by default, then opens the tracker", async () => {
     const post = vi.fn<Post>(async () => ({ ok: true, engagementId: "eng-1" }));
     renderInterest(post, "?org=org-1");
