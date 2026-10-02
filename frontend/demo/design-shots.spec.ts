@@ -131,25 +131,48 @@ interface BriefScene {
   orgId: string;
   id: string;
   title: string;
-  /** Posted by this run (or left in review by a failed one): closed at the end. */
+  /** The scene's own Brief (this run's or a failed run's): closed at the end. */
   ours: boolean;
   published: boolean;
 }
 let briefPosted: Promise<BriefScene> | null = null;
 let briefPublished: Promise<BriefScene> | null = null;
 
-/** Telco A's open Brief: one that is already published, else one in review, else a new one from its reviewer. */
+/** Approves the Brief of this title in the moderation queue, through its screens, as the staff moderator. */
+async function approveInQueue(browser: Browser, title: string) {
+  await asPerson(browser, "moderator", async (context) => {
+    const page = await context.newPage();
+    await page.goto("/admin/moderation");
+    await page.locator("[data-case]").filter({ hasText: title }).getByRole("link", { name: title }).click();
+    await page.waitForURL(/\/admin\/moderation\/cases\//);
+    await page.locator('main [data-hydrated="true"]').first().waitFor();
+    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("status").filter({ hasText: "Approved. The problem is published." }).waitFor();
+  });
+}
+
+/**
+ * Telco A's Brief for the shots: this scene's own when it is open (published or in review), else a new one from its
+ * reviewer. Briefs an e2e run left open (titles with a run tag) are closed first, as the e2e's own set-up does, so
+ * the claimed plan has room and the shots show the scene's words.
+ */
 function postedBrief(browser: Browser): Promise<BriefScene> {
   briefPosted ??= asPerson(browser, "org", async ({ request }) => {
     const me = await getJson<{ memberships: Array<{ org_id: string; org_name: string }> }>(request, "/api/auth/me");
     const orgId = me.memberships.find((m) => m.org_name === TELCO_A)?.org_id;
     expect(orgId, `${TELCO_A} from the demo seed`).toBeTruthy();
-    const list = await getJson<{ items: Array<{ id: string; title: string; state: string }>; budget_bands: Array<{ code: string }> }>(
-      request,
-      `/api/orgs/${orgId}/briefs`,
-    );
-    const open = list.items.find((b) => b.state === "published") ?? list.items.find((b) => b.state === "in_review");
-    if (open) return { orgId: orgId!, id: open.id, title: open.title, ours: open.state === "in_review", published: open.state === "published" };
+    type Listed = { id: string; title: string; state: string };
+    const read = () =>
+      getJson<{ items: Listed[]; budget_bands: Array<{ code: string }> }>(request, `/api/orgs/${orgId}/briefs`);
+    let list = await read();
+    const isOpen = (b: Listed) => b.state === "published" || b.state === "in_review";
+    for (const leftover of list.items.filter((b) => isOpen(b) && b.title !== BRIEF.title)) {
+      if (leftover.state === "in_review") await approveInQueue(browser, leftover.title); // only a published Brief closes
+      await post(request, `/api/orgs/${orgId}/briefs/${leftover.id}/close`, {});
+    }
+    list = await read();
+    const open = list.items.find((b) => isOpen(b) && b.title === BRIEF.title);
+    if (open) return { orgId: orgId!, id: open.id, title: open.title, ours: true, published: open.state === "published" };
     const niches = await getJson<Array<{ id: string; slug: string; children: Array<{ id: string; slug: string }> }>>(
       request,
       "/api/directory/niches",
@@ -171,15 +194,7 @@ function postedBrief(browser: Browser): Promise<BriefScene> {
 function publishedBrief(browser: Browser): Promise<BriefScene> {
   briefPublished ??= postedBrief(browser).then(async (scene) => {
     if (scene.published) return scene;
-    await asPerson(browser, "moderator", async (context) => {
-      const page = await context.newPage();
-      await page.goto("/admin/moderation");
-      await page.locator("[data-case]").filter({ hasText: scene.title }).getByRole("link", { name: scene.title }).click();
-      await page.waitForURL(/\/admin\/moderation\/cases\//);
-      await page.locator('main [data-hydrated="true"]').first().waitFor();
-      await page.getByRole("button", { name: "Approve" }).click();
-      await page.getByRole("status").filter({ hasText: "Approved. The problem is published." }).waitFor();
-    });
+    await approveInQueue(browser, scene.title);
     return { ...scene, published: true };
   });
   return briefPublished;
@@ -194,8 +209,16 @@ const TEASER = {
 };
 let teaserDraft: string | null = null;
 
-/** Amina's draft for the teaser checks: made on the first visit (title and summary, saved), opened on the others. */
+/**
+ * Amina's draft for the teaser checks: one a kept run left (SHOT_KEEP=1), else made on the first visit (title and
+ * summary, saved); opened on the others.
+ */
 async function openTeaserDraft(page: Page) {
+  if (!teaserDraft) {
+    const { items } = await getJson<{ items: Array<{ id: string; title: string | null; status: string }> }>(page.request, "/api/me/proposals");
+    const kept = items.find((item) => item.status === "draft" && item.title === TEASER.title);
+    if (kept) teaserDraft = `/dev/ideas/${kept.id}/edit`;
+  }
   if (teaserDraft) {
     await page.goto(teaserDraft, { waitUntil: "networkidle" });
     return;
@@ -216,6 +239,7 @@ async function runCheck(page: Page, name: string, endpoint: string) {
     card.getByRole("button", { name }).click(),
   ]);
   await expect(card.getByRole("button", { name })).not.toHaveAttribute("aria-disabled", "true");
+  await page.mouse.move(0, 0); // no hover left on the button in the shot
 }
 
 interface BellScene {
@@ -496,12 +520,14 @@ const SHOTS: Shot[] = [
   { name: "org-brief-new", set: "p19", path: "/org/problems/new", who: "org", prepare: async (page) => {
       await page.locator("form[data-brief-form][data-hydrated='true']").waitFor();
     } },
-  // The queue while the Brief waits: "Brief by Telco A (fixture)" (nothing to show when a run left one published).
-  { name: "admin-moderation-brief", set: "p19", path: "/admin/moderation", who: "moderator", prepare: async (page, browser) => {
+  // The queue while the Brief waits, scrolled to its row: "Brief by Telco A (fixture)" (none once it is published).
+  { name: "admin-moderation-brief", set: "p19", path: "/admin/moderation", who: "moderator", viewportOnly: true, prepare: async (page, browser) => {
       const brief = await postedBrief(browser);
       if (brief.published) return false;
       await page.reload({ waitUntil: "networkidle" });
-      await page.locator("[data-case]").filter({ hasText: brief.title }).waitFor();
+      const row = page.locator("[data-case]").filter({ hasText: brief.title });
+      await row.waitFor();
+      await row.evaluate((element) => element.scrollIntoView({ block: "center" }));
     } },
   { name: "org-problems", set: "p19", path: "/org/problems", who: "org", prepare: async (page, browser) => {
       await publishedBrief(browser);
