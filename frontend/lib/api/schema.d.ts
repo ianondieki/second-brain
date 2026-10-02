@@ -3261,10 +3261,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -4492,6 +4494,21 @@ export interface components {
             website: string | null;
         };
         /**
+         * OrgRef
+         * @description The organisation that posted a Problem Brief: its directory name and slug, never a person or a contact.
+         */
+        OrgRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /**
          * OrgRole
          * @enum {string}
          */
@@ -4817,10 +4834,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -4861,12 +4880,14 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             /** Named Orgs */
             named_orgs: string[];
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -4902,10 +4923,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)

@@ -110,17 +110,31 @@ class NicheOut(BaseModel):
     label: str = Field(description="Two-level label, e.g. 'ICT › Networks & Telecommunications'")
 
 
+class OrgRef(BaseModel):
+    """The organisation that posted a Problem Brief: its directory name and slug, never a person or a contact."""
+
+    id: UUID
+    slug: str
+    name: str
+
+
 class ProblemRef(BaseModel):
     id: UUID
     title: str
     source: ProblemSource
     label: str | None = Field(
         description="'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>'"
-        " for a published research card (a demo seed card says it is a seeded example)"
+        " for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>'"
+        " for an organisation's Problem Brief"
     )
     niche: NicheOut | None
     seeded_example: bool = Field(description="A demo seed card made from a fixed answer, never a live AI result")
     published_at: datetime | None = Field(description="When the problem was published (null while it is not)")
+    org: OrgRef | None = Field(
+        default=None,
+        description="The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for"
+        " any other problem, or when the organisation is not in the directory",
+    )
 
 
 class TeaserOut(BaseModel):

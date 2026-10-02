@@ -2416,7 +2416,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -2428,6 +2428,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -5581,6 +5592,31 @@
         "title": "OrgOut",
         "type": "object"
       },
+      "OrgRef": {
+        "description": "The organisation that posted a Problem Brief: its directory name and slug, never a person or a contact.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "title": "OrgRef",
+        "type": "object"
+      },
       "OrgRole": {
         "enum": [
           "owner",
@@ -6387,7 +6423,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -6399,6 +6435,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -6509,7 +6556,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "named_orgs": {
@@ -6528,6 +6575,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -6624,7 +6682,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -6636,6 +6694,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [

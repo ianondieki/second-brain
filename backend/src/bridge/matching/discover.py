@@ -44,7 +44,7 @@ from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import Board, ProblemFact, ProblemSignals, board, load
 from bridge.matching.trending import Trend
 from bridge.models.enums import ProblemSource, ProblemStatus
-from bridge.problems.service import label_for, published_facts
+from bridge.problems.service import label_for, org_ref, published_facts
 from bridge.proposals.schemas import NicheOut, ProblemRef
 from bridge.proposals.serializers import teaser_items
 
@@ -98,7 +98,14 @@ def plural(n: int, one: str, many: str) -> str:
 
 
 def problem_out(p: ProblemFact, tree: Niches) -> DiscoverProblem:
-    label = label_for(ProblemSource(p.source), ProblemStatus(p.status), p.published_at, p.seeded_example)
+    by = org_ref(p.org_id, p.org_slug, p.org_name) if p.source == ProblemSource.ORG_BRIEF else None
+    label = label_for(
+        ProblemSource(p.source),
+        ProblemStatus(p.status),
+        p.published_at,
+        p.seeded_example,
+        org_name=None if by is None else by.name,
+    )
     published_at, seeded_example = published_facts(ProblemStatus(p.status), p.published_at, p.seeded_example)
     return DiscoverProblem(
         id=p.id,
@@ -111,6 +118,7 @@ def problem_out(p: ProblemFact, tree: Niches) -> DiscoverProblem:
         county_code=p.county_code,
         published_at=published_at,
         seeded_example=seeded_example,
+        org=by,
     )
 
 
@@ -124,6 +132,7 @@ def problem_ref(p: ProblemFact, tree: Niches) -> ProblemRef:
         niche=out.niche,
         seeded_example=out.seeded_example,
         published_at=out.published_at,
+        org=out.org,
     )
 
 

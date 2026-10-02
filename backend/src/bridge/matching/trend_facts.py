@@ -59,8 +59,10 @@ _AGGREGATES = text(
 _PROBLEMS = text(
     "SELECT p.id, p.source::text AS source, p.title, p.statement, p.niche_id, n.parent_id, p.country,"
     " rc.name AS country_name, p.county_code, r.name AS county_name, p.created_by, p.published_at, p.confidence,"
-    " p.status::text AS status FROM problems p LEFT JOIN niches n ON n.id = p.niche_id"
+    " p.status::text AS status, o.id AS org_id, o.slug::text AS org_slug, o.legal_name AS org_name"
+    " FROM problems p LEFT JOIN niches n ON n.id = p.niche_id"
     " LEFT JOIN regions r ON r.code = p.county_code LEFT JOIN regions rc ON rc.code = p.country"
+    " LEFT JOIN organizations o ON o.id = p.org_id"
     " WHERE p.status = 'published' AND p.moderation_state = 'clear' AND (p.source <> 'org_brief' OR EXISTS"
     " (SELECT 1 FROM problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published'))"
 )
@@ -93,6 +95,10 @@ class ProblemFact:
     confidence: Decimal | None
     status: str
     seeded_example: bool = False
+    # A Brief's organisation as the reader's RLS shows it (listed in the directory): its label and reference.
+    org_id: UUID | None = None
+    org_slug: str | None = None
+    org_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
