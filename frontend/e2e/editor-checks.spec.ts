@@ -79,7 +79,7 @@ test("the owner checks the teaser from the keyboard, the answers are polite, and
     SERVER_STEP,
   );
   await expect(answer(page, "disclosure").locator("[data-chip]")).toHaveText(["Demo fallback"]);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0); // the editor keeps an empty live alert region
   await expect(page.locator("[data-primary]")).toHaveText("Continue");
   await checkAndShoot(page, info, "checks-answers");
 
@@ -128,5 +128,5 @@ test("the eleventh overlap check of the day is refused in words", async ({ page 
     "You have used today’s checks; tomorrow brings more.",
     SERVER_STEP,
   );
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0); // the editor keeps an empty live alert region
 });

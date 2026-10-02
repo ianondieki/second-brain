@@ -87,10 +87,12 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     const org = await signUpOrg(orgPage.request);
     const amina = await pitchFromDeveloper(page.request, org.orgId);
     const tracker = `/dev/engagements/${amina.engagementId}`;
+    // Publishing and pitching already left Amina a notice or two: count from there.
+    const before = await unreadCount(page.request);
 
     // The organisation starts the review, then approves to proceed (non-binding), naming its contact.
     await orgCommand(orgPage.request, amina.engagementId, "start-review");
-    await expect.poll(() => unreadCount(page.request), WORKER).toBe(1);
+    await expect.poll(() => unreadCount(page.request), WORKER).toBe(before + 1);
     const me = (await (await orgPage.request.get("/api/auth/me")).json()) as { user: { id: string } };
     const contactBy = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
     await orgCommand(orgPage.request, amina.engagementId, "approve", {
@@ -98,20 +100,20 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
       contact_channel: "email",
       contact_by: contactBy,
     });
-    await expect.poll(() => unreadCount(page.request), WORKER).toBe(2);
+    await expect.poll(() => unreadCount(page.request), WORKER).toBe(before + 2);
 
     // The bell says it on any page, in words and on the badge.
     await page.goto("/dev");
-    await expect(bell(page)).toHaveAccessibleName("Notifications, 2 unread");
-    await expect(bell(page).locator("[data-unread-badge]")).toHaveText("2");
+    await expect(bell(page)).toHaveAccessibleName(`Notifications, ${before + 2} unread`);
+    await expect(bell(page).locator("[data-unread-badge]")).toHaveText(String(before + 2));
     await bell(page).click();
     await expect(page).toHaveURL(/\/notifications$/, SERVER_STEP);
     await expect(page.getByRole("navigation", { name: "Developer" })).toBeVisible();
 
-    // Both rows under Today, the newer (the approval) first, each unread.
+    // The two new rows under Today, the newer (the approval) first, each unread; the earlier notices follow them.
     const today = page.getByRole("region", { name: "Today" });
     const rows = today.locator("[data-notification]");
-    await expect(rows).toHaveCount(2);
+    await expect(rows).toHaveCount(before + 2);
     await expect(rows.nth(0)).toContainText(`${org.orgName} approved "${amina.title}" to proceed`);
     await expect(rows.nth(1)).toContainText(`${org.orgName} started reviewing "${amina.title}"`);
     await expect(rows.nth(0)).toHaveAttribute("data-unread", "true");
@@ -124,7 +126,7 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     // Opening the approval marks it read and lands on the tracker; the bell there counts one.
     await rows.nth(0).getByRole("link").click();
     await expect(page).toHaveURL(new RegExp(`${tracker}$`), SERVER_STEP);
-    await expect(bell(page)).toHaveAccessibleName("Notifications, 1 unread");
+    await expect(bell(page)).toHaveAccessibleName(`Notifications, ${before + 1} unread`);
 
     await bell(page).click();
     await expect(page).toHaveURL(/\/notifications$/, SERVER_STEP);
