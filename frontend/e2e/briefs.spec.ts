@@ -209,7 +209,7 @@ test.describe("a Problem Brief", () => {
     await devPage.getByRole("link", { name: "Pitch to companies" }).first().click(); // the page offers it twice (the primary and the section link)
     await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/${draft.id}/pitch\\?org=${orgId}$`), SERVER_STEP);
     // The picker is a plain GET form (no data-hydrated): its checkboxes are enabled once it is live, as pitch.spec waits.
-    const chosen = devPage.getByRole("checkbox", { name: new RegExp(scene.org.replace(/[()]/g, "\\$&")) });
+    const chosen = devPage.getByRole("checkbox", { name: scene.org }); // the accessible name starts with the organisation
     await expect(chosen).toBeEnabled(SERVER_STEP);
     await expect(chosen).toBeChecked();
     await expect(devPage.locator("[data-preselected]")).toHaveText(
