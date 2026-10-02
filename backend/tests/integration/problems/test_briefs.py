@@ -496,3 +496,18 @@ async def test_a_brief_past_its_deadline_frees_its_plan_slot(
         assert (await reviewer.get(path(world.org.id))).json()["plan"]["used"] == 0
         await post(reviewer, world.org.id, await form(owner_engine, world.niche, deadline=None))
         assert (await reviewer.get(path(world.org.id))).json()["plan"]["used"] == 1  # no deadline: open until closed
+
+
+async def test_a_suspended_or_delisted_organisation_posts_no_brief(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """E2 is not enough: a suspended or a delisted organisation gets 403 org_unavailable and nothing is created."""
+    world = await telco_world(owner_engine)
+    for column in ("suspended_at", "delisted_at"):
+        async with owner_engine.begin() as conn:
+            org = await add_org(conn, column.split("_")[0])
+            await run(conn, f"UPDATE organizations SET {column} = now() WHERE id = :id", id=org.id)
+        async with clients(app_engine, SETTINGS, org.reviewer) as (reviewer,):
+            response = await reviewer.post(path(org.id), json=await form(owner_engine, world.niche))
+        assert (response.status_code, response.json()["detail"]["code"]) == (403, "org_unavailable"), column
+        assert await briefs_count(owner_engine, org.id) == 0

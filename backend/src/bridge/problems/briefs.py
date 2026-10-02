@@ -5,7 +5,8 @@ A verified organisation posts a Problem Brief: a ProblemCard (a ``problems`` row
 
 - Who: the organisation's owner, admin, signatory or reviewer post, change and close (the RLS editor set); any member
   reads. Only an E2 (legally verified) organisation posts: anything else is 403 ``verification_required`` (the
-  database refuses a published Brief of an organisation that is not E2 as well).
+  database refuses a published Brief of an organisation that is not E2 as well); a suspended or delisted one is 403
+  ``org_unavailable`` (as an engagement's opening refuses it).
 - How many: the plan's ``problem_briefs`` limit counts open Briefs (not closed, its deadline unset or not passed,
   its problem not rejected or archived), under a per-organisation advisory lock so parallel posts cannot pass it (402
   ``plan_limit``, the next plan up).
@@ -70,6 +71,7 @@ NEW_BRIEF_REASON: Final = "new_org_brief"  # every Brief waits for staff review
 # [[COPY-REVIEW]] the refusals' sentences (the field sentences are bridge.problems.brief_rules.MESSAGES).
 NOT_VERIFIED: Final = "Only organisations with legal verification (E2) can post Problem Briefs."
 NOT_AVAILABLE: Final = "Invited-only Briefs are not available yet. Post a public Brief."
+UNAVAILABLE: Final = "Your organisation cannot post Problem Briefs while it is suspended or delisted."
 CLOSED: Final = "This Brief is closed. Post a new one to ask again."
 NOT_PUBLISHED: Final = "This Brief is still in review: it can be closed once it is published."
 FROZEN: Final = "A published Brief keeps the text staff approved. Post a new Brief to change it."
@@ -159,9 +161,19 @@ async def _choice_errors(
 
 
 async def _require_e2(db: AsyncSession, org_id: UUID) -> None:
-    verification = await db.scalar(select(Organization.verification).where(Organization.id == org_id))
-    if verification != OrgVerification.E2:
+    """403 unless the organisation is E2 (``verification_required``), and neither suspended nor delisted
+    (``org_unavailable``; its members still read it under RLS)."""
+    org = (
+        await db.execute(
+            select(Organization.verification, Organization.suspended_at, Organization.delisted_at).where(
+                Organization.id == org_id
+            )
+        )
+    ).one_or_none()
+    if org is None or org.verification is not OrgVerification.E2:
         raise forbidden("verification_required", NOT_VERIFIED)
+    if org.suspended_at is not None or org.delisted_at is not None:
+        raise forbidden("org_unavailable", UNAVAILABLE)
 
 
 def _db_refusal(exc: DBAPIError) -> ApiError | None:
