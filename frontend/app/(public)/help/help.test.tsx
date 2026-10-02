@@ -20,8 +20,8 @@ vi.mock("next-intl/server", () => ({
   getMessages: async () => en,
 }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({}) }));
-const me = vi.hoisted(() => ({ get: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ getMe: me.get }));
+const me = vi.hoisted(() => ({ get: vi.fn(), unread: vi.fn(async () => null) }));
+vi.mock("@/lib/api/server", () => ({ getMe: me.get, getUnreadCount: me.unread }));
 
 afterEach(() => {
   cleanup();
@@ -94,6 +94,7 @@ describe("the help page", () => {
     const page = await HelpPage();
     expect(isValidElement(page) && page.type).toBe(SignedInShell);
     expect((page as ReactElement<{ homeHref: string }>).props.homeHref).toBe("/org");
+    expect(me.unread).toHaveBeenCalled(); // the bell's count, started beside /api/auth/me (P19-C)
   });
 
   it("offers the tour again to a portal, not to the staff console", async () => {

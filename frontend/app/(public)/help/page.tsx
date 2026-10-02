@@ -11,7 +11,7 @@ import { ShowTourAgain } from "@/components/tour/ShowTourAgain";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { getMe } from "@/lib/api/server";
+import { getMe, getUnreadCount } from "@/lib/api/server";
 import { homeOf, isPending, type Home, type Me } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
@@ -24,6 +24,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** The signed-in person (and their home), or null for a visitor (and when the API cannot say: help must open regardless). */
 async function signedIn(): Promise<{ me: Me; home: Home } | null> {
+  // The bell's count, started beside /api/auth/me as requireMe does; with no session cookie it asks nothing.
+  void getUnreadCount();
   try {
     const me = await getMe();
     return me && !isPending(me) ? { me, home: homeOf(me) } : null;

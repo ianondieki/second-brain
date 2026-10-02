@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 
 import type { StaffRole } from "@/components/AdminNav";
-import { forwardHeaders, getMe, serverApi } from "@/lib/api/server";
+import { forwardHeaders, getMe, getUnreadCount, serverApi } from "@/lib/api/server";
 import { apiErrorCode } from "@/lib/api/error-code";
 import { isPending, type Me } from "@/lib/auth/routing";
 
@@ -18,6 +18,7 @@ export interface StaffContext {
  * has already answered them like an unknown address). Cached per request: the layout and the page share the calls.
  */
 export const staffContext = cache(async function staffContext(): Promise<StaffContext> {
+  void getUnreadCount(); // the top bar's bell, started beside /api/auth/me as requireMe does (it never throws)
   const me = await getMe();
   if (!me || isPending(me) || !me.user.staff_role) notFound();
   const { data, error, response } = await serverApi().GET("/api/admin/me", {

@@ -1,8 +1,8 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
-import { UnreadNotificationBell } from "./NotificationBell";
+import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -24,7 +24,10 @@ export function SignedInShell({ homeHref, children, nav, wide = false }: SignedI
       <TopBar homeHref={homeHref}>
         {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar. */}
         <div className="flex items-center gap-1" data-top-bar-controls="">
-          <UnreadNotificationBell />
+          {/* A slow count never holds the page: until it answers, the bell is there without one. */}
+          <Suspense fallback={<NotificationBell count={null} />}>
+            <UnreadNotificationBell />
+          </Suspense>
           <AccountMenu />
         </div>
       </TopBar>
