@@ -21,6 +21,11 @@ export type Refusal =
   | "invalidContactBy"
   | "attestation"
   | "reasonText"
+  | "containsContact"
+  | "invalidNote"
+  | "invalidResumeAt"
+  | "questionLimit"
+  | "holdLimit"
   | "notFound"
   | "network"
   | "generic";
@@ -41,6 +46,14 @@ const BY_CODE: Record<string, Refusal> = {
   invalid_contact_by: "invalidContactBy",
   attestation_required: "attestation",
   reason_text_required: "reasonText",
+  // The side states (REQ-ENG-10 part): a text with contact details before first contact, a blank or refused text, a
+  // resume date out of range, and the caps on questions and days on hold (policy.yaml).
+  contains_contact: "containsContact",
+  invalid_note: "invalidNote",
+  invalid_resume_at: "invalidResumeAt",
+  info_request_limit: "questionLimit",
+  hold_limit: "holdLimit",
+  illegal_transition: "conflict",
 };
 
 export function refusalOf(status: number, error: unknown): Refusal {

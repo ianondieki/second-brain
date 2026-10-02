@@ -7,7 +7,18 @@ import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 import sw from "@/locales/sw.json";
 
-import { CONTACT_REVEALED_STATES, DUAL_ENDORSEMENT_STATES, MAIN_PATH_GROUP, MILESTONE_STEPS } from "./model";
+import {
+  COMMAND_SEGMENT,
+  CONTACT_REVEALED_STATES,
+  DUAL_ENDORSEMENT_STATES,
+  HOLD_MAX_DAYS,
+  MAIN_PATH_GROUP,
+  MILESTONE_SEGMENT,
+  MILESTONE_STEPS,
+  PAUSED_STATES,
+  QUESTION_MAX_CHARS,
+  REASON_MAX_CHARS,
+} from "./model";
 
 // docs/spec/06 6.9: the state machine (backend/src/bridge/engagements/state_machine.py) is the only definition of the
 // stages. The frozen API sends the current stage's group, not the table, so the tracker keeps three small copies; this
@@ -80,6 +91,28 @@ describe("the tracker's copies of the state machine", () => {
   });
 });
 
+describe("the side states (REQ-ENG-10 part)", () => {
+  it("keep the stage marked in RETURNING's states: those an engagement leaves only for the stage it came from", () => {
+    const line = /^RETURNING: Final = frozenset\(\{([^}]*)\}\)$/m.exec(source);
+    expect(line, "RETURNING").not.toBeNull();
+    const returning = [...line![1].matchAll(/S\.(\w+)/g)].map((m) => m[1]).sort();
+    expect([...PAUSED_STATES].sort()).toEqual(returning);
+  });
+
+  it("build a request for every command of the table", () => {
+    const start = source.indexOf("class Command(StrEnum):");
+    const body = source.slice(start, source.indexOf("\n\n\n", start));
+    const commands = [...body.matchAll(/^ {4}\w+ = "(\w+)"$/gm)].map((m) => m[1]).sort();
+    expect(commands.length).toBeGreaterThanOrEqual(28);
+    expect([...Object.keys(COMMAND_SEGMENT), ...Object.keys(MILESTONE_SEGMENT)].sort()).toEqual(commands);
+  });
+
+  it("limit questions, answers and reasons as QUESTION_MAX_CHARS and REASON_MAX_CHARS do", () => {
+    expect(Number(/^QUESTION_MAX_CHARS: Final = (\d+)$/m.exec(source)?.[1])).toBe(QUESTION_MAX_CHARS);
+    expect(Number(/^REASON_MAX_CHARS: Final = (\d+)$/m.exec(source)?.[1])).toBe(REASON_MAX_CHARS);
+  });
+});
+
 describe("policy the copy states in words", () => {
   const policy = readFileSync(repo("backend/config/policy.yaml"), "utf-8");
   const days = Number(/^\s*contact_by_max_bd:\s*(\d+)\s*$/m.exec(policy)?.[1]);
@@ -92,5 +125,42 @@ describe("policy the copy states in words", () => {
     expect(en.trackerActions.refusal.invalidContactBy).toContain(`${EN[days]} business days`);
     expect(sw.trackerActions.approve.byHint).toContain(`siku ${SW[days]} za kazi`);
     expect(sw.trackerActions.refusal.invalidContactBy).toContain(`siku ${SW[days]} za kazi`);
+  });
+
+  /** A number under a policy.yaml section ("on_hold" → "max_days"). */
+  function setting(section: string, key: string): number {
+    const at = policy.search(new RegExp(`^${section}:\\s*$`, "m"));
+    expect(at, section).toBeGreaterThanOrEqual(0);
+    const rest = policy.slice(at);
+    const end = rest.slice(1).search(/^\S/m);
+    const value = new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, "m").exec(end > 0 ? rest.slice(0, end + 1) : rest)?.[1];
+    expect(value, `${section}.${key}`).toBeDefined();
+    return Number(value);
+  }
+
+  it("name a hold's longest date and the engagement's days on hold (on_hold) in both languages", () => {
+    const most = setting("on_hold", "max_days");
+    const total = setting("on_hold", "hold_days_total");
+    expect(HOLD_MAX_DAYS).toBe(most);
+    expect(en.trackerActions.sheet.pause.dateHint).toContain(`at most ${most} days ahead`);
+    expect(en.trackerActions.sheet.pause.dateHint).toContain(`together may last ${total} days`);
+    expect(en.trackerActions.refusal.invalidResumeAt).toContain(`${most} days ahead`);
+    expect(en.trackerActions.refusal.holdLimit).toContain(`${total} days`);
+    expect(sw.trackerActions.sheet.pause.dateHint).toContain(`isizidi siku ${most} mbele`);
+    expect(sw.trackerActions.sheet.pause.dateHint).toContain(`visizidi siku ${total}`);
+    expect(sw.trackerActions.refusal.invalidResumeAt).toContain(`siku ${most} mbele`);
+    expect(sw.trackerActions.refusal.holdLimit).toContain(`siku ${total}`);
+  });
+
+  it("name the questions a stage allows and the days to answer one (info_requested) in both languages", () => {
+    const questions = setting("info_requested", "info_requests_per_stage");
+    const answerBd = setting("info_requested", "expire_bd");
+    expect(en.trackerActions.sheet.requestInfo.limit).toContain(`${EN[questions]} questions`);
+    expect(en.trackerActions.sheet.cancelRequest.body).toContain(`the ${EN[questions]} this stage allows`);
+    expect(en.trackerActions.sheet.requestInfo.lead).toContain(`${EN[answerBd]} business days`);
+    const SW_PLURAL = ["", "moja", "mawili", "matatu", "manne", "matano"];
+    expect(sw.trackerActions.sheet.requestInfo.limit).toContain(`maswali ${SW_PLURAL[questions]}`);
+    expect(sw.trackerActions.sheet.cancelRequest.body).toContain(`katika ${SW_PLURAL[questions]} yanayoruhusiwa`);
+    expect(sw.trackerActions.sheet.requestInfo.lead).toContain(`siku ${SW[answerBd]} za kazi`);
   });
 });

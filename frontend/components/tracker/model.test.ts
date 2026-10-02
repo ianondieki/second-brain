@@ -4,6 +4,7 @@ import { detail, history, inImplementation, summary } from "@/test/engagement";
 
 import {
   actionItems,
+  addDays,
   awaitsMe,
   commandRequest,
   documentKinds,
@@ -11,8 +12,11 @@ import {
   endorsementRows,
   formatDate,
   kesAmount,
+  longDate,
   milestoneTargets,
+  notesByEvent,
   offersContactReveal,
+  sideBanner,
   stageChip,
   stageLeft,
   stepperSteps,
@@ -264,5 +268,111 @@ describe("the contact reveal", () => {
     for (const state of ["DECLINED", "WITHDRAWN", "EXPIRED", "TERMINATED"] as const) {
       expect(offersContactReveal({ ...approved, state }, "u-rita"), state).toBe(false);
     }
+  });
+});
+
+// REQ-ENG-10 part (docs/spec/06 6.9 side branches): a question, a hold and an expiry are said on the stage where they
+// occurred, never as extra steps; the stage stays marked through the API's `paused_from`.
+describe("side states", () => {
+  const asked = { kind: "info_request" as const, body: "Which co-ops ran the pilot?", by: "org" as const, at: "2026-10-01T07:00:00Z", resume_at: null };
+  const answered = { kind: "info_answer" as const, body: "Kipkelion and Olenguruone.", by: "developer" as const, at: "2026-10-05T09:00:00Z", resume_at: null };
+  const held = { kind: "hold" as const, body: "Budget committee meets on the 20th.", by: "org" as const, at: "2026-10-02T08:00:00Z", resume_at: "2026-10-21" };
+
+  it("keeps the stage it paused from marked, with the On hold chip, for a question and a hold", () => {
+    const question = stepperSteps({ state: "INFO_REQUESTED", stage_group: null, due: null, paused_from: "UNDER_REVIEW" });
+    expect(chips(question)).toEqual(["onHold", "pending", "pending", "pending", "pending"]);
+    const hold = stepperSteps({ state: "ON_HOLD", stage_group: null, due: null, paused_from: "NEGOTIATION" });
+    expect(chips(hold)).toEqual(["completed", "completed", "onHold", "pending", "pending"]);
+  });
+
+  it("marks a question left past its answer-by date overdue, never a hold", () => {
+    const late = { due_on: "2026-10-15", business_days_left: -1, overdue: true };
+    expect(stageChip(summary({ state: "INFO_REQUESTED", due: late }))).toBe("overdue");
+    expect(stageChip(summary({ state: "INFO_REQUESTED" }))).toBe("onHold");
+    expect(stageChip(summary({ state: "ON_HOLD", due: late }))).toBe("onHold");
+  });
+
+  it("ends an expiry in the group it stopped in, through an open question", () => {
+    const events = history().events;
+    const chain = [
+      ...events,
+      { ...events[1], id: "e3", seq: 3, command: "request_info", from_state: "UNDER_REVIEW" as const, to_state: "INFO_REQUESTED" as const },
+      { ...events[1], id: "e4", seq: 4, command: "expire", actor_role: "system" as const, from_state: "INFO_REQUESTED" as const, to_state: "EXPIRED" as const },
+    ];
+    expect(stageLeft("EXPIRED", chain)).toBe("UNDER_REVIEW");
+    const steps = stepperSteps({ state: "EXPIRED", stage_group: null, due: null, left: stageLeft("EXPIRED", chain) });
+    expect(chips(steps)).toEqual(["ended", "pending", "pending", "pending", "pending"]);
+  });
+
+  it("says what the banner shows for each side state", () => {
+    expect(sideBanner(detail({ state: "INFO_REQUESTED", notes: [asked] }))).toEqual({ kind: "info", question: asked });
+    expect(sideBanner(detail({ state: "ON_HOLD", notes: [asked, answered, held] }))).toEqual({ kind: "hold", hold: held });
+    expect(sideBanner(detail({ state: "EXPIRED", end_reason: "NO_REVIEW" }))).toEqual({ kind: "expired", reason: "NO_REVIEW" });
+    expect(sideBanner(detail())).toBeNull();
+  });
+
+  it("says a question was answered only while the stage the answer resumed lasts", () => {
+    const resumed = detail({ state: "UNDER_REVIEW", stage_entered_at: answered.at, notes: [asked, answered] });
+    expect(sideBanner(resumed)).toEqual({ kind: "answered", answer: answered });
+    expect(sideBanner({ ...resumed, state: "INTEREST_CONFIRMED", stage_entered_at: "2026-10-07T09:00:00Z" })).toBeNull();
+    expect(sideBanner({ ...resumed, state: "DECLINED" })).toBeNull();
+  });
+
+  it("gives each side-state event its note, in order, leaving the system's resume without one", () => {
+    const base = history().events[1];
+    const events = [
+      { ...base, id: "q1", seq: 3, command: "request_info" },
+      { ...base, id: "a1", seq: 4, command: "answer_info" },
+      { ...base, id: "h1", seq: 5, command: "pause" },
+      { ...base, id: "r1", seq: 6, command: "resume", actor_role: "system" as const },
+      { ...base, id: "h2", seq: 7, command: "pause" },
+      { ...base, id: "r2", seq: 8, command: "resume" },
+    ];
+    const second = { ...held, body: "Board approval", resume_at: "2026-11-02" };
+    const early = { kind: "resume" as const, body: "Approved early", by: "developer" as const, at: "2026-10-25T08:00:00Z", resume_at: null };
+    const found = notesByEvent(events, [asked, answered, held, second, early]);
+    expect(found.get("q1")).toBe(asked);
+    expect(found.get("a1")).toBe(answered);
+    expect(found.get("h1")).toBe(held);
+    expect(found.has("r1")).toBe(false);
+    expect(found.get("h2")).toBe(second);
+    expect(found.get("r2")).toBe(early);
+  });
+
+  it("builds the side states' requests on their routes, with their texts", () => {
+    expect(commandRequest("request_info", "e1", 4, { input: { question: "Which co-ops?" } })).toEqual({
+      path: "/api/engagements/{engagement_id}/request-info",
+      params: { engagement_id: "e1" },
+      body: { question: "Which co-ops?", lock_version: 4 },
+    });
+    expect(commandRequest("answer_info", "e1", 5, { input: { answer: "Two." } }).path).toBe("/api/engagements/{engagement_id}/answer-info");
+    expect(commandRequest("cancel_request", "e1", 5).body).toEqual({ lock_version: 5 });
+    expect(commandRequest("pause", "e1", 6, { input: { reason: "Budget", resume_at: "2026-10-21" } }).body).toEqual({
+      reason: "Budget",
+      resume_at: "2026-10-21",
+      lock_version: 6,
+    });
+    expect(commandRequest("resume", "e1", 7, { input: { reason: "Approved" } }).path).toBe("/api/engagements/{engagement_id}/resume");
+  });
+
+  it("makes answering the awaited, primary step and keeps the organisation's withdrawal secondary", () => {
+    const dev = actionItems(
+      detail({ state: "INFO_REQUESTED", actions: ["answer_info", "withdraw"], awaiting: [{ command: "answer_info", party: "developer" }] }),
+    );
+    expect(dev.map((i) => [i.command, i.primary])).toEqual([
+      ["answer_info", true],
+      ["withdraw", false],
+    ]);
+    const org = actionItems(
+      detail({ state: "INFO_REQUESTED", my_party: "org", actions: ["cancel_request"], awaiting: [{ command: "answer_info", party: "developer" }] }),
+    );
+    expect(org).toEqual([{ command: "cancel_request", primary: false }]);
+  });
+
+  it("writes a hold's dates", () => {
+    expect(addDays("2026-10-02", 60)).toBe("2026-12-01");
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(longDate("2026-10-12")).toBe("Monday, 12 October 2026");
+    expect(longDate("2026-10-12", "sw")).toBe("Jumatatu, 12 Oktoba 2026");
   });
 });
