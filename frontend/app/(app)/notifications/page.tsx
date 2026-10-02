@@ -12,6 +12,7 @@ import { homeOf } from "@/lib/auth/routing";
 
 import { MarkAllRead } from "./MarkAllRead";
 import { NotificationList, type Notification } from "./NotificationList";
+import { FreshOnReturn } from "./ReadLink";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("notifications");
@@ -65,6 +66,7 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   } else {
     body = (
       <>
+        <FreshOnReturn />
         <NotificationList items={page.items} now={new Date()} />
         {cursor || page.next ? (
           <nav aria-label={t("pages")} className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">

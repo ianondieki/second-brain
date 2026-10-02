@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithIntl } from "@/test/intl";
 
 import { MarkAllRead } from "./MarkAllRead";
-import { ReadLink } from "./ReadLink";
+import { FreshOnReturn, ReadLink } from "./ReadLink";
 
 // P19-C: opening a row marks it read, then navigates (so the bell on the next page counts it); "Mark all as read"
 // marks every one, then reads the page and the bell again. Both writes are idempotent; neither blocks the person.
@@ -73,12 +73,63 @@ describe("opening a row", () => {
     expect(event).toBe(true);
   });
 
-  it("records it but leaves a new-tab press to the browser", () => {
+  it("records it but leaves a new-tab press to the browser, then reads this page again", async () => {
     const link = row(true);
     const notCancelled = fireEvent.click(link, { ctrlKey: true });
     expect(calls.markRead).toHaveBeenCalledWith("n1");
     expect(notCancelled).toBe(true);
     expect(router.push).not.toHaveBeenCalled();
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1)); // the row and the bell show it read
+  });
+
+  it("records it on a middle click (auxclick), which opens a new tab", async () => {
+    const link = row(true);
+    fireEvent(link, new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }));
+    expect(calls.markRead).toHaveBeenCalledWith("n1");
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("leaves the page as it is when a new-tab read could not be recorded", async () => {
+    calls.markRead.mockResolvedValue(false);
+    fireEvent(row(true), new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }));
+    await waitFor(() => expect(calls.markRead).toHaveBeenCalled());
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("posts nothing for a middle click on a read one, or a right button's auxclick", () => {
+    fireEvent(row(false), new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }));
+    cleanup();
+    fireEvent(row(true), new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 2 }));
+    expect(calls.markRead).not.toHaveBeenCalled();
+  });
+});
+
+describe("back on the list after opening a row", () => {
+  it("reads the list and the bell again once, so the opened row shows read", async () => {
+    fireEvent.click(row(true));
+    await waitFor(() => expect(router.push).toHaveBeenCalled());
+    cleanup();
+    renderWithIntl(<FreshOnReturn />); // Back: the page mounts again from the router's cache
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderWithIntl(<FreshOnReturn />);
+    expect(router.refresh).toHaveBeenCalledTimes(1); // once, not on every later visit
+  });
+
+  it("does not read the page again on a first visit, or when the open was not recorded", async () => {
+    renderWithIntl(<FreshOnReturn />); // whatever an earlier test left is taken here
+    cleanup();
+    router.refresh.mockClear();
+    renderWithIntl(<FreshOnReturn />);
+    expect(router.refresh).not.toHaveBeenCalled();
+    cleanup();
+    calls.markRead.mockResolvedValue(false);
+    fireEvent.click(row(true));
+    await waitFor(() => expect(router.push).toHaveBeenCalled());
+    cleanup();
+    renderWithIntl(<FreshOnReturn />);
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 });
 
