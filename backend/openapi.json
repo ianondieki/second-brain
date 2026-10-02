@@ -2385,6 +2385,73 @@
         "title": "DirectoryPage",
         "type": "object"
       },
+      "DisclosureCheckOut": {
+        "properties": {
+          "ai_drafted": {
+            "title": "Ai Drafted",
+            "type": "boolean"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "fields": {
+            "description": "The teaser fields to look at again",
+            "items": {
+              "$ref": "#/components/schemas/TeaserField"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "flagged": {
+            "description": "True when the teaser reads like how it works; a warning only",
+            "title": "Flagged",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DisclosureSource"
+          },
+          "version_id": {
+            "description": "The version that was checked",
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain words for the owner (AI-drafted when ai_drafted)",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "flagged",
+          "fields",
+          "why",
+          "source",
+          "ai_drafted",
+          "version_id"
+        ],
+        "title": "DisclosureCheckOut",
+        "type": "object"
+      },
+      "DisclosureSource": {
+        "enum": [
+          "rules",
+          "model",
+          "none"
+        ],
+        "title": "DisclosureSource",
+        "type": "string"
+      },
       "DiscoverProblem": {
         "properties": {
           "country": {
@@ -5673,6 +5740,66 @@
         "title": "OrgVerification",
         "type": "string"
       },
+      "OriginalityBand": {
+        "description": "Coarse bands only, never numeric scores (docs/spec/06 6.3).",
+        "enum": [
+          "none",
+          "some_overlap",
+          "high_overlap"
+        ],
+        "title": "OriginalityBand",
+        "type": "string"
+      },
+      "OriginalityOut": {
+        "properties": {
+          "ai_drafted": {
+            "description": "True when a model wrote the explanation (label it 'AI-drafted')",
+            "title": "Ai Drafted",
+            "type": "boolean"
+          },
+          "band": {
+            "$ref": "#/components/schemas/OriginalityBand",
+            "description": "Coarse band only; never a score"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "compared": {
+            "description": "How many other owners' published teasers were compared (never which)",
+            "title": "Compared",
+            "type": "integer"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AI-drafted; one plain sentence, or null",
+            "title": "Explanation"
+          }
+        },
+        "required": [
+          "band",
+          "compared",
+          "explanation",
+          "ai_drafted",
+          "checked_at"
+        ],
+        "title": "OriginalityOut",
+        "type": "object"
+      },
       "OtherClaimOut": {
         "properties": {
           "claimant": {
@@ -8453,6 +8580,16 @@
         ],
         "title": "TeaserCard",
         "type": "object"
+      },
+      "TeaserField": {
+        "enum": [
+          "title",
+          "problem_statement",
+          "impact_claims",
+          "summary"
+        ],
+        "title": "TeaserField",
+        "type": "string"
       },
       "TeaserIn": {
         "additionalProperties": false,
@@ -20653,6 +20790,364 @@
         "summary": "Remove Attachment",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/disclosure-check": {
+      "post": {
+        "description": "A warning when the public teaser gives away how the project works. Nothing is saved.",
+        "operationId": "check_disclosure_api_me_proposals__proposal_id__disclosure_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisclosureCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Check Disclosure",
+        "tags": [
+          "originality"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/originality": {
+      "get": {
+        "description": "Today's last originality check of this proposal (Nairobi day), or null.",
+        "operationId": "last_originality_api_me_proposals__proposal_id__originality_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OriginalityOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Last Originality Api Me Proposals  Proposal Id  Originality Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Last Originality",
+        "tags": [
+          "originality"
+        ]
+      },
+      "post": {
+        "description": "How much this teaser overlaps with other developers' published teasers: a coarse band, never a score.",
+        "operationId": "check_originality_api_me_proposals__proposal_id__originality_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OriginalityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Check Originality",
+        "tags": [
+          "originality"
         ]
       }
     },

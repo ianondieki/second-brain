@@ -1587,6 +1587,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/proposals/{proposal_id}/disclosure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Disclosure
+         * @description A warning when the public teaser gives away how the project works. Nothing is saved.
+         */
+        post: operations["check_disclosure_api_me_proposals__proposal_id__disclosure_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/originality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Last Originality
+         * @description Today's last originality check of this proposal (Nairobi day), or null.
+         */
+        get: operations["last_originality_api_me_proposals__proposal_id__originality_get"];
+        put?: never;
+        /**
+         * Check Originality
+         * @description How much this teaser overlaps with other developers' published teasers: a coarse band, never a score.
+         */
+        post: operations["check_originality_api_me_proposals__proposal_id__originality_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/proposals/{proposal_id}/pitch/orgs": {
         parameters: {
             query?: never;
@@ -3248,6 +3292,44 @@ export interface components {
              */
             next_cursor: string | null;
         };
+        /** DisclosureCheckOut */
+        DisclosureCheckOut: {
+            /** Ai Drafted */
+            ai_drafted: boolean;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /**
+             * Fields
+             * @description The teaser fields to look at again
+             */
+            fields: components["schemas"]["TeaserField"][];
+            /**
+             * Flagged
+             * @description True when the teaser reads like how it works; a warning only
+             */
+            flagged: boolean;
+            source: components["schemas"]["DisclosureSource"];
+            /**
+             * Version Id
+             * Format: uuid
+             * @description The version that was checked
+             */
+            version_id: string;
+            /**
+             * Why
+             * @description Plain words for the owner (AI-drafted when ai_drafted)
+             */
+            why: string | null;
+        };
+        /**
+         * DisclosureSource
+         * @enum {string}
+         */
+        DisclosureSource: "rules" | "model" | "none";
         /** DiscoverProblem */
         DiscoverProblem: {
             /** Country */
@@ -4520,6 +4602,43 @@ export interface components {
          * @enum {string}
          */
         OrgVerification: "unclaimed" | "pending" | "e1" | "e2" | "rejected";
+        /**
+         * OriginalityBand
+         * @description Coarse bands only, never numeric scores (docs/spec/06 6.3).
+         * @enum {string}
+         */
+        OriginalityBand: "none" | "some_overlap" | "high_overlap";
+        /** OriginalityOut */
+        OriginalityOut: {
+            /**
+             * Ai Drafted
+             * @description True when a model wrote the explanation (label it 'AI-drafted')
+             */
+            ai_drafted: boolean;
+            /** @description Coarse band only; never a score */
+            band: components["schemas"]["OriginalityBand"];
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Compared
+             * @description How many other owners' published teasers were compared (never which)
+             */
+            compared: number;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /**
+             * Explanation
+             * @description AI-drafted; one plain sentence, or null
+             */
+            explanation: string | null;
+        };
         /** OtherClaimOut */
         OtherClaimOut: {
             claimant: components["schemas"]["PersonOut"];
@@ -5596,6 +5715,11 @@ export interface components {
             /** Version No */
             version_no: number;
         };
+        /**
+         * TeaserField
+         * @enum {string}
+         */
+        TeaserField: "title" | "problem_statement" | "impact_claims" | "summary";
         /**
          * TeaserIn
          * @description Tier 1: shown to every signed-in user once published (plain text; no contact details or links).
@@ -14997,6 +15121,297 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    check_disclosure_api_me_proposals__proposal_id__disclosure_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisclosureCheckOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    last_originality_api_me_proposals__proposal_id__originality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OriginalityOut"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    check_originality_api_me_proposals__proposal_id__originality_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OriginalityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
