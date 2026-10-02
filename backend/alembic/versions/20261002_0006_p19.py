@@ -21,6 +21,12 @@ answer), ``hold`` (the reason of a pause, with ``resume_at``, the Africa/Nairobi
 reason of an early resume). The body is 1 to 2000 characters and not blank; ``resume_at`` is set for a hold and only
 for a hold.
 
+- Keys: ``engagement_id`` references ``engagements`` without ON DELETE CASCADE, as every tracker table does (an
+  engagement is never deleted: its genesis event refuses it, and a cascade would meet the notes' own DELETE refusal);
+  ``(engagement_id, event_seq)`` references ``engagement_events (engagement_id, seq)`` (``fk_engagement_notes_event``;
+  ``event_seq`` is bigint like ``seq``), so a note always names an event of its own engagement; ``created_by`` and
+  ``redacted_by`` reference ``users``.
+
 - Read: exactly who reads the engagement's events (its developer, the members of its organisation narrowed by
   ``app.org_id``, staff admin); nobody else sees a row.
 - Written (bridge_app: SELECT and INSERT only) by the party who wrote the event, as themselves
@@ -42,10 +48,10 @@ for a hold.
   ``engagement_notes_redaction_guard`` admits an UPDATE only from the table's owner or a SECURITY DEFINER function it
   owns (``current_user``), only once, and only when it sets ``body`` to the fixed marker ``'[redacted]'`` with
   ``redacted_at`` and ``redacted_by`` in the same statement and changes nothing else. bridge_app holds no privilege on
-  ``redacted_at`` or ``redacted_by``. The staff-only redaction function D-54 foresees does not exist yet.
-  ``engagement_notes_0_visible``
-  (``tracker_engagement_visible()``) fires first on INSERT, so a note naming an engagement the caller cannot see gets
-  the tracker's one refusal before any unique or foreign key check could tell anything about it.
+  ``redacted_at`` or ``redacted_by``. The staff-only redaction function D-54's default foresees does not exist yet.
+- ``engagement_notes_0_visible`` (``tracker_engagement_visible()``) fires first on INSERT, so a note naming an
+  engagement the caller cannot see gets the tracker's one refusal before any unique or foreign key check, or the
+  latest-event lock, could tell anything about it.
 - ``created_at`` is the database's clock (default ``app_clock_now()``, the shared clock): bridge_app's INSERT is
   column-scoped without it, so a note is never forward- or back-dated.
 
@@ -82,7 +88,7 @@ visibility) is readable beyond its organisation and staff:
   same statement returns it to review (``status = 'pending_review'``); refused with SQLSTATE 55000
   (object_not_in_prerequisite_state). bridge_app holds no UPDATE on ``status`` or ``moderation_state`` (moderation
   decisions are staff's, revision 0002), so for the app the text of a published Brief is frozen; returning one to
-  review is the owner's or a definer function's (none exists yet: see the P19-M report).
+  review is the owner's or a definer function's (none exists yet).
 
 ``originality_checks`` needs nothing: bridge_app holds SELECT and INSERT on it (revision 0002) under Tenancy.USER
 (``user_id = app_user_id()``), so the owner counts their own checks of the day directly (P19-D; no function, no
