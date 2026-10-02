@@ -54,8 +54,16 @@ export const STATE_CHIP: Record<BriefState, ChipKind> = {
 
 export const BRIEF_STATES = ["in_review", "published", "rejected", "closed"] as const satisfies readonly BriefState[];
 
-/** Whether a Brief can still be closed (a closed one cannot; a rejected one leaves nothing to close). */
+/**
+ * Whether a Brief can be closed: a published one only (revision 0006 closes from published; a Brief in review is
+ * 409 brief_not_published, a closed or rejected one has nothing to close).
+ */
 export function closable(brief: Pick<Brief, "state">): boolean {
+  return brief.state === "published";
+}
+
+/** Whether a Brief holds a place on the plan (in review or published), as Home counts them. */
+export function holdsPlace(brief: Pick<Brief, "state">): boolean {
   return brief.state === "in_review" || brief.state === "published";
 }
 
@@ -70,11 +78,11 @@ export interface BriefStats {
 
 /** Home's "Problem Briefs" tile from the first page of the list (the plan's own count for "open"). */
 export function briefStats(list: Pick<BriefList, "items" | "plan">): BriefStats {
-  const open = list.items.filter(closable);
+  const live = list.items.filter(holdsPlace);
   return {
     open: list.plan.used,
-    inReview: open.filter((brief) => brief.state === "in_review").length,
-    proposals: open.reduce((sum, brief) => sum + brief.proposal_count, 0),
+    inReview: live.filter((brief) => brief.state === "in_review").length,
+    proposals: live.reduce((sum, brief) => sum + brief.proposal_count, 0),
   };
 }
 

@@ -79,7 +79,7 @@ describe("the brief form", () => {
     expect(screen.getByRole("button", { name: "Post the brief" }).hasAttribute("data-primary")).toBe(true);
     expect(document.querySelector("[data-invited-note]")?.textContent).toBe(en.briefForm.invitedNote);
     fireEvent.change(screen.getByLabelText("Problem statement"), { target: { value: "Generators run dry" } });
-    expect(document.querySelector("[data-meter]")?.textContent).toBe("Words: 3. Characters: 18 of 1200.");
+    expect(document.querySelector("[data-meter]")?.textContent).toBe("Words: 3 of 120. Characters: 18 of 1200.");
     // The budget bands as radio cards, with "No band yet" chosen until one is.
     expect((screen.getByLabelText(/No band yet/) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByLabelText(BAND.label)).toBeTruthy();
@@ -110,6 +110,27 @@ describe("the brief form", () => {
     expect(screen.getByText(en.briefForm.error.deadlinePast)).toBeTruthy();
     expect(document.activeElement?.id).toBe("brief-statement");
     expect(document.querySelector("[data-meter]")?.className).toContain("text-error");
+  });
+
+  it("refuses a statement over 120 words with the meter and the field's sentence", async () => {
+    const api = calls();
+    renderForm(api);
+    fill();
+    fireEvent.change(screen.getByLabelText("Problem statement"), { target: { value: Array(121).fill("dry").join(" ") } });
+    const meter = document.querySelector("[data-meter]")!;
+    expect(meter.textContent).toBe("Words: 121 of 120. Characters: 483 of 1200.");
+    expect(meter.className).toContain("text-error");
+    await submit();
+    expect(api.create).not.toHaveBeenCalled();
+    expect(screen.getByText("Keep this to 120 words or fewer.")).toBeTruthy();
+    expect(document.activeElement?.id).toBe("brief-statement");
+  });
+
+  it("words the API's too_long on a statement within its characters as too many words", async () => {
+    renderForm(calls({ create: vi.fn(async () => refused("invalid", { fields: [{ field: "statement", code: "too_long" }] })) }));
+    fill();
+    await submit();
+    expect(screen.getByText("Keep this to 120 words or fewer.")).toBeTruthy();
   });
 
   it("posts the API's BriefIn and opens the list with the new Brief first", async () => {
@@ -162,6 +183,8 @@ describe("the brief form", () => {
     ["verification", `${ORG_NAME} can post Briefs once its legal verification is complete.`],
     ["forbidden", `Only an owner, admin, signatory or reviewer of ${ORG_NAME} can post or close a Brief.`],
     ["visibility", en.briefForm.refusal.visibility],
+    ["dailyLimit", en.briefForm.refusal.dailyLimit],
+    ["orgUnavailable", en.briefForm.refusal.orgUnavailable],
     ["mfaSetup", en.briefForm.refusal.mfaSetup],
     ["mfaCode", en.briefForm.refusal.mfaCode],
     ["network", en.briefForm.refusal.network],
@@ -240,6 +263,16 @@ describe("closing a Brief", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("says a Brief still in review cannot be closed yet (409 brief_not_published)", async () => {
+    renderClose(calls({ close: vi.fn(async () => refused("notPublished")) }));
+    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
+    expect(within(document.querySelector("dialog")!).getByRole("alert").textContent).toContain(
+      en.briefForm.refusal.notPublished,
+    );
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("keeps any other refusal in the dialog, in words", async () => {

@@ -57,8 +57,8 @@ describe("the Problems section's links", () => {
     expect(postsBriefs({ org_id: ORG, org_name: "A", roles: [] })).toBe(false);
   });
 
-  it("closes only a Brief in review or published", () => {
-    expect(closable(brief({ state: "in_review" }))).toBe(true);
+  it("closes only a published Brief (one in review is 409 brief_not_published)", () => {
+    expect(closable(brief({ state: "in_review" }))).toBe(false);
     expect(closable(brief({ state: "published" }))).toBe(true);
     expect(closable(brief({ state: "closed" }))).toBe(false);
     expect(closable(brief({ state: "rejected" }))).toBe(false);
@@ -86,6 +86,9 @@ describe("the brief form's checks", () => {
     expect(checkBrief(draft({ title: `  ${"a".repeat(90)}  ` }), today).title).toBeUndefined();
     expect(checkBrief(draft({ statement: "b".repeat(1201) }), today).statement).toBe("tooLong");
     expect(checkBrief(draft({ affected: "c".repeat(201) }), today).affected).toBe("tooLong");
+    // At most 120 words, within the 1,200 characters.
+    expect(checkBrief(draft({ statement: Array(120).fill("dry").join(" ") }), today).statement).toBeUndefined();
+    expect(checkBrief(draft({ statement: Array(121).fill("dry").join(" ") }), today).statement).toBe("tooManyWords");
     expect(checkBrief(draft({ title: "🐄".repeat(90) }), today).title).toBeUndefined(); // code points, not UTF-16
   });
 
@@ -140,6 +143,10 @@ describe("a Briefs refusal", () => {
     [403, "role_required", "forbidden"],
     [422, "visibility_not_available", "visibility"],
     [409, "brief_closed", "closed"],
+    [409, "brief_not_published", "notPublished"],
+    [409, "brief_frozen", "frozen"],
+    [429, "briefs_daily_limit", "dailyLimit"],
+    [403, "org_unavailable", "orgUnavailable"],
     [404, "not_found", "notFound"],
     [403, "mfa_enrolment_required", "mfaSetup"],
     [401, "mfa_required", "mfaCode"],

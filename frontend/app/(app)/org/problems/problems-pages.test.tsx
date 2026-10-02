@@ -183,12 +183,14 @@ describe("a Brief's page", () => {
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 
-  it("offers no Close once closed, or to a member who cannot post", async () => {
-    state.one = { kind: "ok", value: brief({ state: "closed" }) };
-    await briefPage();
-    expect(screen.queryByRole("button", { name: "Close this brief" })).toBeNull();
-    cleanup();
-    state.one = { kind: "ok", value: brief() };
+  it("offers no Close while in review, once closed, or to a member who cannot post", async () => {
+    for (const briefState of ["in_review", "closed", "rejected"] as const) {
+      state.one = { kind: "ok", value: brief({ state: briefState }) };
+      await briefPage();
+      expect(screen.queryByRole("button", { name: "Close this brief" }), briefState).toBeNull();
+      cleanup();
+    }
+    state.one = { kind: "ok", value: brief({ state: "published" }) };
     state.membership = finance;
     await briefPage();
     expect(screen.queryByRole("button", { name: "Close this brief" })).toBeNull();

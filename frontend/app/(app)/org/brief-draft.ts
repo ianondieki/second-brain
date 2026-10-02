@@ -15,6 +15,8 @@ export type BriefPlan = Schemas["BriefPlanOut"];
 
 /** The ProblemCard's lengths, in characters, as the API checks them (bridge/problems/brief_rules.py MAX_LENGTHS). */
 export const BRIEF_LIMITS = { title: 90, statement: 1200, affected: 200 } as const;
+/** The statement's words, as the API counts them (docs/spec/06 6.5; bridge/problems/research/checks.py). */
+export const MAX_STATEMENT_WORDS = 120;
 
 // ------------------------------------------------------------------------------------------------ the draft
 
@@ -66,7 +68,14 @@ export function todayInNairobi(now: Date = new Date()): string {
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A field's problem, worded under `briefForm.error.*` (the length ones with their limit). */
-export type DraftProblem = "titleRequired" | "statementRequired" | "nicheRequired" | "tooLong" | "deadlinePast" | "deadlineInvalid";
+export type DraftProblem =
+  | "titleRequired"
+  | "statementRequired"
+  | "nicheRequired"
+  | "tooLong"
+  | "tooManyWords"
+  | "deadlinePast"
+  | "deadlineInvalid";
 export type DraftErrors = Partial<Record<DraftField, DraftProblem>>;
 
 /** What must be fixed before the form is sent (the API checks everything again, contact details included). */
@@ -76,6 +85,7 @@ export function checkBrief(draft: BriefDraft, today: string): DraftErrors {
   else if (charCount(draft.title) > BRIEF_LIMITS.title) errors.title = "tooLong";
   if (!draft.statement.trim()) errors.statement = "statementRequired";
   else if (charCount(draft.statement) > BRIEF_LIMITS.statement) errors.statement = "tooLong";
+  else if (wordCount(draft.statement) > MAX_STATEMENT_WORDS) errors.statement = "tooManyWords";
   if (charCount(draft.affected) > BRIEF_LIMITS.affected) errors.affected = "tooLong";
   if (!draft.niche) errors.niche = "nicheRequired";
   if (draft.deadline) {
@@ -105,7 +115,11 @@ export function bodyOf(draft: BriefDraft): BriefBody {
 /** Why a Brief was not posted or closed (`briefForm.refusal.*`). */
 export type BriefRefusal =
   | "planLimit"
+  | "dailyLimit"
   | "verification"
+  | "orgUnavailable"
+  | "notPublished"
+  | "frozen"
   | "forbidden"
   | "visibility"
   | "invalid"
@@ -153,6 +167,10 @@ const CODES: Record<string, BriefRefusal> = {
   visibility_not_available: "visibility",
   invalid_brief: "invalid",
   brief_closed: "closed",
+  brief_not_published: "notPublished",
+  brief_frozen: "frozen",
+  briefs_daily_limit: "dailyLimit",
+  org_unavailable: "orgUnavailable",
   mfa_enrolment_required: "mfaSetup",
   mfa_required: "mfaCode",
 };

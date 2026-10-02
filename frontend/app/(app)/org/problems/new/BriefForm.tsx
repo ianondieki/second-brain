@@ -24,6 +24,7 @@ import {
   checkBrief,
   DRAFT_FIELDS,
   EMPTY_DRAFT,
+  MAX_STATEMENT_WORDS,
   wordCount,
   type BriefDraft,
   type BudgetBand,
@@ -128,14 +129,19 @@ export function BriefForm(props: BriefFormProps) {
   /** A field's words: the form's own check first, else the API's code for it. */
   function errorFor(field: DraftField): string | undefined {
     const problem = errors[field];
-    if (problem) return t(`error.${problem}`, { max: LIMIT[field] ?? 0 });
+    if (problem) return t(`error.${problem}`, { max: problem === "tooManyWords" ? MAX_STATEMENT_WORDS : (LIMIT[field] ?? 0) });
     const issue = issues.find((item) => item.field === field);
-    return issue ? t(`fieldError.${issue.code}`, { max: LIMIT[field] ?? 0 }) : undefined;
+    if (!issue) return undefined;
+    // The API's too_long for a statement within its characters is about its words.
+    if (issue.code === "too_long" && field === "statement" && chars <= BRIEF_LIMITS.statement) {
+      return t("error.tooManyWords", { max: MAX_STATEMENT_WORDS });
+    }
+    return t(`fieldError.${issue.code}`, { max: LIMIT[field] ?? 0 });
   }
 
   const words = wordCount(draft.statement);
   const chars = charCount(draft.statement);
-  const over = chars > BRIEF_LIMITS.statement;
+  const over = chars > BRIEF_LIMITS.statement || words > MAX_STATEMENT_WORDS;
   const upgrade = refused?.refusal === "planLimit" ? refused.upgradePlan : null;
 
   return (
@@ -162,7 +168,7 @@ export function BriefForm(props: BriefFormProps) {
           rows={6}
           meter={
             <span className={cn(over && "font-semibold text-error")} data-meter="">
-              {t("meter", { count: words, current: chars, max: BRIEF_LIMITS.statement })}
+              {t("meter", { count: words, max: MAX_STATEMENT_WORDS, current: chars, limit: BRIEF_LIMITS.statement })}
             </span>
           }
           onChange={(e) => change("statement", e.target.value)}
