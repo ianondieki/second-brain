@@ -6967,6 +6967,17 @@
             "title": "Ai Generated",
             "type": "boolean"
           },
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Problem Brief's organisation, budget band and deadline; null for other problems"
+          },
           "citations": {
             "items": {
               "$ref": "#/components/schemas/CitationOut"

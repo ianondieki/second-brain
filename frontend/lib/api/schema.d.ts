@@ -5143,6 +5143,8 @@ export interface components {
              * @description A model drafted the card (false for a demo seed card, written in code)
              */
             ai_generated: boolean;
+            /** @description A Problem Brief's organisation, budget band and deadline; null for other problems */
+            brief?: components["schemas"]["BriefFacts"] | null;
             /** Citations */
             citations: components["schemas"]["CitationOut"][];
             /** Confidence */

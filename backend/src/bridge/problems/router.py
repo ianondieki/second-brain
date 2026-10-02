@@ -5,8 +5,9 @@
   text in the title or statement; paged with ``limit``, ``cursor`` and ``next_cursor`` (``bridge.pagination``).
 - ``GET /api/problems/{problem_id}``: one published, clear problem card with its cited sources (URL, publisher, source
   type, dates, verbatim quote) and its label: "AI-drafted, human-reviewed on <date>" for a research card
-  (``[[COPY-REVIEW]]``; a card the demo seed made says so instead), "Developer-reported" for a developer's. Anything
-  else, a research ``candidate`` included (AC-RES-2), is 404.
+  (``[[COPY-REVIEW]]``; a card the demo seed made says so instead), "Developer-reported" for a developer's, "Posted
+  by <organisation>" for a Problem Brief, which also carries ``brief`` (the organisation, budget band and deadline;
+  REQ-DIR-05). Anything else, a research ``candidate`` or a Brief under review included (AC-RES-2), is 404.
 """
 
 from __future__ import annotations
@@ -22,7 +23,8 @@ from pydantic import BaseModel, Field
 from bridge import pagination
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, not_found
-from bridge.problems import service
+from bridge.problems import brief_rules, service
+from bridge.problems.brief_schemas import BriefFacts
 from bridge.proposals.schemas import ProblemRef
 
 router = APIRouter(prefix="/api/problems", tags=["problems"], responses=ERROR_RESPONSES)
@@ -57,6 +59,9 @@ class ProblemDetail(ProblemCard):
     confidence: Decimal | None
     named_orgs: list[str]
     citations: list[CitationOut]
+    brief: BriefFacts | None = Field(
+        default=None, description="A Problem Brief's organisation, budget band and deadline; null for other problems"
+    )
 
 
 @router.get("")
@@ -112,4 +117,5 @@ async def get_problem(problem_id: UUID, live: CurrentSession, db: Db) -> Problem
             )
             for c in citations
         ],
+        brief=None if row.brief_status is None else brief_rules.facts(ref.org, row.budget_band, row.deadline),
     )
