@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getProblem } from "@/components/problem/data";
+import { getCountyNames, getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
 import { ProblemStart } from "@/components/problem/ProblemStart";
 import { PortalNavFor } from "@/components/PortalNavFor";
@@ -29,7 +29,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("problem");
-  const problem = await getProblem((await params).id);
+  const [problem, counties] = await Promise.all([getProblem((await params).id), getCountyNames()]);
   // Developers come here from Discover and can start a proposal from the problem; other sides go back home.
   const developer = home === "/dev";
   const back = developer
@@ -43,6 +43,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
           <BackLink href={back.href}>{back.label}</BackLink>
           <ProblemCard
             problem={problem}
+            countyName={problem.county_code ? counties.get(problem.county_code) : null}
             action={
               developer ? <ProblemStart problem={problem} /> : undefined
             }

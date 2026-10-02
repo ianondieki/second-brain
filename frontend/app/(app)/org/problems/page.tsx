@@ -11,7 +11,6 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RowList } from "@/components/ui/RowList";
-import { Section } from "@/components/ui/Section";
 
 import { getBriefs } from "../brief-data";
 import { briefHref, newBriefHref, postsBriefs, problemsHref } from "../briefs";
@@ -108,8 +107,11 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
       <p className="mt-6 text-sm text-ink" data-plan-cap={plan.problem_briefs ?? "unlimited"}>
         {plan.problem_briefs === null ? t("capUnlimited") : t("cap", { used: plan.used, limit: plan.problem_briefs })}
       </p>
-      {/* The list under its own h2: the brief cards' titles are h3s, so the heading order stays whole (axe heading-order). */}
-      <Section title={t("listLabel")} headingId="briefs-heading" className="mt-6">
+      {/* The list's name as a hidden h2, so the Briefs' h3 titles follow the page's h1 in order (axe heading-order). */}
+      <section aria-labelledby="briefs-list" className="mt-6">
+        <h2 id="briefs-list" className="sr-only">
+          {t("listLabel")}
+        </h2>
         <RowList cards data-briefs="">
           {items.map((brief) => (
             <BriefItem
@@ -120,7 +122,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
             />
           ))}
         </RowList>
-      </Section>
+      </section>
       {next ? (
         <p className="mt-6">
           <Link href={problemsHref(memberships, org.org_id, { cursor: next })} className={standaloneLinkClass}>

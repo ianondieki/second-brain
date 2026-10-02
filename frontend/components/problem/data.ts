@@ -25,3 +25,19 @@ export const getProblem = cache(async function getProblem(problemId: string): Pr
   if (response.status === 401) redirect("/login");
   throw new Error(`GET /api/problems/{problem_id} answered ${response.status}`);
 });
+
+/**
+ * Kenya's counties by code (GET /api/directory/filter-options), so a card's region reads "Nairobi City, Kenya" rather
+ * than its code. Empty when the list cannot be read: the card then shows the code, never an error.
+ */
+export const getCountyNames = cache(async function getCountyNames(): Promise<ReadonlyMap<string, string>> {
+  try {
+    const { data } = await serverApi().GET("/api/directory/filter-options", {
+      headers: await forwardHeaders(),
+      signal: AbortSignal.timeout(5000),
+    });
+    return new Map((data?.counties ?? []).map((county) => [county.code, county.name]));
+  } catch {
+    return new Map();
+  }
+});

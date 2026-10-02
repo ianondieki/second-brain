@@ -113,14 +113,14 @@ export interface OrgSide {
 
 /**
  * A new E2 organisation whose first member (owner, admin and signatory, Master Enterprise Terms accepted) is signed
- * in on `request` with two-step sign-in on.
+ * in on `request` with two-step sign-in on. `orgName` names it (the design screenshots); by default a unique name.
  */
-export async function signUpOrg(request: APIRequestContext): Promise<OrgSide> {
+export async function signUpOrg(request: APIRequestContext, { orgName: named }: { orgName?: string } = {}): Promise<OrgSide> {
   const id = tag();
   const domain = `buyer-${id}.example.com`;
   const email = `rita-${id}@${domain}`;
   const name = "Rita Wanjiru";
-  const orgName = `Maziwa Buyers ${id} Limited`;
+  const orgName = named ?? `Maziwa Buyers ${id} Limited`;
   await signUp(request, { email, display_name: name, side: "org", org: { legal_name: orgName, kind: "company" } });
   const person = await turnOnTotp(request, email, name);
   const me = (await (await request.get("/api/auth/me")).json()) as { memberships: Array<{ org_id: string; org_name: string }> };
@@ -147,9 +147,14 @@ export interface DevSide {
 
 /**
  * A developer signed in on `request`, D1 and D2, two-step sign-in on, with one published proposal pitched to
- * `orgId`: the engagement it opened (SUBMITTED).
+ * `orgId`: the engagement it opened (SUBMITTED). `title` names the proposal (the design screenshots); by default a
+ * unique title.
  */
-export async function pitchFromDeveloper(request: APIRequestContext, orgId: string): Promise<DevSide> {
+export async function pitchFromDeveloper(
+  request: APIRequestContext,
+  orgId: string,
+  { title: named }: { title?: string } = {},
+): Promise<DevSide> {
   const id = tag();
   const email = `dev-${id}@example.com`;
   const name = "Achieng Otieno";
@@ -165,7 +170,7 @@ export async function pitchFromDeveloper(request: APIRequestContext, orgId: stri
     children?: Array<{ id: string }>;
   }>;
   const niche = niches.find((n) => n.children?.length)?.children?.[0]?.id ?? niches[0].id;
-  const title = `Maziwa baridi ${id}`;
+  const title = named ?? `Maziwa baridi ${id}`;
   const draft = await post<{ id: string }>(
     request,
     "/api/me/proposals",

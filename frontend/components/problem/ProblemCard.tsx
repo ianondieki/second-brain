@@ -17,7 +17,16 @@ import { confidenceWords, formatDate, problemLabel, type ProblemDetail } from ".
  * the organisations it names, and every cited source with its verbatim quote. The page supplies the heading level's
  * context: the title is the page's h1. P12-F's Discover links here (components/problem/problem.ts problemHref).
  */
-export async function ProblemCard({ problem, action }: { problem: ProblemDetail; action?: ReactNode }) {
+export async function ProblemCard({
+  problem,
+  action,
+  countyName,
+}: {
+  problem: ProblemDetail;
+  action?: ReactNode;
+  /** The county's name for the problem's county code (the code is shown when it is not given). */
+  countyName?: string | null;
+}) {
   const t = await getTranslations("problem");
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
@@ -55,7 +64,7 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
           {problem.affected_group ? <Description label={t("affected")}>{problem.affected_group}</Description> : null}
           {problem.niche ? <Description label={t("niche")}>{problem.niche.label}</Description> : null}
           <Description label={t("region")}>
-            {problem.county_code ? t("regionCounty", { county: problem.county_code, country }) : country}
+            {problem.county_code ? t("regionCounty", { county: countyName ?? problem.county_code, country }) : country}
           </Description>
           {/* A Problem Brief's terms (REQ-DIR-05): the band the organisation gave and the day it wants proposals by. */}
           {brief ? (
