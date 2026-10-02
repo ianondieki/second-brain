@@ -62,7 +62,9 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   if (page.kind === "staleCursor" || (cursor && page.items.length === 0)) {
     body = <EmptyState sentence={t("staleCursor")} action={t("newest")} href={NOTIFICATIONS_PATH} />;
   } else if (page.items.length === 0) {
-    body = <EmptyState sentence={t("empty")} action={t("home")} href={home} />;
+    // What lands here differs by side: staff get moderation and research notices, organisations their proposals.
+    const sentence = home === "/admin" ? t("emptyStaff") : home === "/org" ? t("emptyOrg") : t("empty");
+    body = <EmptyState sentence={sentence} action={t("home")} href={home} />;
   } else {
     body = (
       <>
