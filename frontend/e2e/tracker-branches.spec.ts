@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Browser, type Page, type TestInfo } from "@playwright/test";
 
+import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
 import { OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 
@@ -74,18 +75,6 @@ async function send(page: Page, submit: string) {
   await sheet.getByRole("button", { name: submit, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
   await expect(page.locator("dialog[open]")).toHaveCount(0);
-}
-
-/** The app's day in Nairobi (the shared test clock, else the real day), as "2026-10-02". */
-async function appToday(request: APIRequestContext): Promise<string> {
-  const response = await request.get("/api/test-clock");
-  const now = response.ok() ? new Date(((await response.json()) as { now: string }).now) : new Date();
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(now);
-}
-
-function plusDays(day: string, days: number): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 interface Due {

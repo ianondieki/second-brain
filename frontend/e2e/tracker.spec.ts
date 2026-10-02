@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 
+import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
 import { OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 import { loginReturningTo } from "./support/login";
@@ -58,9 +59,6 @@ async function banner(page: Page) {
   return page.locator("[data-whose-turn]");
 }
 
-function isoDaysAhead(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-}
 
 interface Scene {
   dev: DevSide;
@@ -160,6 +158,8 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await formStep(orgPage, "Approve to proceed (non-binding)", async () => {
       await expect(orgPage.getByLabel("Contact person")).toHaveValue(/.+/);
       await orgPage.getByLabel("How they will make contact").selectOption("email");
+      // The platform's day, which the API checks the contact-by date against (the test clock may run ahead).
+      await orgPage.getByLabel("Contact by").fill(await appToday(orgPage.request));
     });
     await expect(orgPage.getByRole("list", { name: "Stages" }).locator("[aria-current='step']")).toContainText(
       "Contact and NDA",
@@ -204,7 +204,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
       await orgPage.getByLabel("Intellectual property").selectOption("non_exclusive_licence");
       await orgPage.getByLabel("Deliverable").fill("Pilot at two co-ops");
       await orgPage.getByLabel("Amount (KES)").fill("250000");
-      await orgPage.getByLabel("Due date").fill(isoDaysAhead(60));
+      await orgPage.getByLabel("Due date").fill(plusDays(await appToday(orgPage.request), 60));
     });
     await devPage.reload();
     await expect(devPage.locator("[data-agreement='draft']")).toContainText("Non-exclusive licence");

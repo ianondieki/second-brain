@@ -14,6 +14,7 @@ import {
 } from "./support/scout-scene";
 import { checkScreen, expectEmptyState, settled } from "./support/screen";
 import { tag } from "./support/tracker-scene";
+import { appToday } from "./support/clock";
 import { loginReturningTo } from "./support/login";
 
 // REQ-SCOUT-02 frontend (P10-F), the M2 walkthrough's step 1 (docs/platform/prototype-m2-plan.md §3), with
@@ -207,6 +208,9 @@ test("a scout finds a proposal; interest, acceptance and the full proposal follo
     org.person.staleSecondFactor();
     await orgPage.getByRole("button", { name: "Express interest" }).click();
     await expect(orgPage.locator("form[data-interest-form][data-hydrated='true']")).toBeVisible();
+    // The contact-by date counts from the platform's day, which the API checks it against (the test clock may run
+    // ahead of the real one; the form's default is the browser's day).
+    await orgPage.locator("form[data-interest-form]").getByLabel("Contact by").fill(await appToday(orgPage.request));
     await checkScreen(orgPage, { strict: true });
     await shot(orgPage, info, "scout-interest-form");
     await orgPage.getByRole("button", { name: "Send interest" }).click();
