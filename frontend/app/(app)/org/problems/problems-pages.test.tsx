@@ -110,6 +110,11 @@ describe("the Problems list", () => {
     expect(document.querySelector("[data-plan-cap]")?.textContent).toBe("Open Briefs on your plan: 1 of 1");
     const cards = screen.getAllByRole("article");
     expect(cards).toHaveLength(2);
+    // Heading order (axe): the page's h1, then each Brief's title as an h2.
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Tower sites go dark when fuel runs out",
+      "Closed one",
+    ]);
     for (const card of cards) expect(card.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2); // AC-UX-1
     expect(cards[0].querySelector("[data-chip]")?.textContent).toBe("In review");
     expect(within(cards[0]).getByText("0 proposals")).toBeTruthy();
