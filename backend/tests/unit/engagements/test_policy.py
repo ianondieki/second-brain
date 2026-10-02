@@ -41,8 +41,13 @@ def test_the_shipped_policy_has_the_spec_deadlines() -> None:
     assert policy.stage(EngagementState.UNDER_REVIEW).expire_bd == 30
     confirmed = policy.stage(EngagementState.INTEREST_CONFIRMED)
     assert (confirmed.escalate_bd, confirmed.expire_bd) == (3, 10)
+    assert policy.stage(EngagementState.ORG_INTEREST).expire_bd == 5
     assert policy.stage(EngagementState.NDA_PENDING).remind_bd == (2, 4)
     assert policy.stage(EngagementState.CLOSED) == p.StagePolicy()
+    # REQ-ENG-10: a hold resumes at most 60 days ahead; only the four expiring stages carry expire_bd.
+    assert policy.on_hold_max_days == 60
+    expiring = {state for state in p.STAGE_KEYS if policy.stage(state).expire_bd is not None}
+    assert expiring == set(p.EXPIRING_STAGES)
     assert policy.contact_by_max_bd == 5
     assert policy.decline_other_min_chars == 20
     assert policy.deemed_acceptance_days_max == 90
@@ -84,6 +89,18 @@ def _broken(change: str) -> dict[str, Any]:
         data["decline"]["other_max_chars"] = 100
     elif change == "deemed":
         data["agreement"]["deemed_acceptance_days_max"] = 91
+    elif change == "on_hold_missing":
+        del data["on_hold"]
+    elif change == "on_hold_keys":
+        data["on_hold"]["max_weeks"] = 8
+    elif change == "on_hold_too_long":
+        data["on_hold"]["max_days"] = 61
+    elif change == "expire_missing":
+        del data["stages"]["UNDER_REVIEW"]["expire_bd"]
+    elif change == "expire_stray":
+        data["stages"]["NEGOTIATION"]["expire_bd"] = 14
+    elif change == "expire_before_due":
+        data["stages"]["SUBMITTED"]["expire_bd"] = 9
     return data
 
 
@@ -106,6 +123,12 @@ def _broken(change: str) -> dict[str, Any]:
         "window_order",
         "decline_order",
         "deemed",
+        "on_hold_missing",
+        "on_hold_keys",
+        "on_hold_too_long",
+        "expire_missing",
+        "expire_stray",
+        "expire_before_due",
     ],
 )
 def test_a_broken_policy_is_refused(change: str) -> None:
