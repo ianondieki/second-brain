@@ -150,6 +150,16 @@ JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, li
 
 The editor's page load grew from 146,247 B (P13-F) to 149,774 B: the next import on that route must be weighed first.
 
+Found while re-measuring after the ux round (build `bf64671`): the editor of an idea that already has a chosen problem
+(the usual case once an idea is published) also loads the problem picker's panels chunk at page load (2,470 B, the
+linked list and its search), and reads **152,260 B, over the budget by 2,260 B**. The chunk and its loading rule are
+P16's (`editor/ProblemPicker.tsx`), and the shared chunks grew in P18, so this variant has been over since P18
+(about 151.9 KB then); P19's checks card added 328 B to the editor's own chunk (6,068 → 6,396 B) and the draft editor
+(the measured route) stays under. Deferring the panels alone is not enough (it leaves about 150.3 KB). The fix is a
+task of its own for the next phase: split the picker so an idea with chosen problems renders its linked list
+statically and loads the search and the new-problem fields on "Link another problem" (about 2 KB), and move the
+editor's attachments step behind its own import (the rest). Recorded in PROGRESS.md's P19 report as an open item.
+
 Lighthouse 12 (mobile default, simulated Slow 4G; `--force-dark-mode` for dark), one run per cell on the compose stack
 (`aaae794`) unless noted:
 
