@@ -144,12 +144,15 @@ export function Actions(props: ActionsProps) {
       setMode({ kind: "stepUp", item, request });
       return;
     }
-    // A form or sheet stays open with its refusal, and what was typed, when the input was refused (a hold's date past
-    // what is left of the engagement's days on hold too) or one party's steps per hour ran out (429); everything else
-    // goes back to the buttons.
+    // A form or sheet stays open with its refusal, and what was typed, unless the engagement moved on (409 other than
+    // a hold's date past the days left, 404: back to the buttons, refreshed) or the step is not the caller's (403):
+    // a refused input (422), the steps per hour spent (429), no connection (0) or a server failure (5xx) say "try
+    // again" in place.
     const keepForm =
       (mode.kind === "form" || mode.kind === "sheet") &&
-      (outcome.status === 422 || outcome.status === 429 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
+      ((outcome.status !== 409 && outcome.status !== 404 && outcome.status !== 403) ||
+        outcome.refusal === "paymentMismatch" ||
+        outcome.refusal === "holdLimit");
     if (!keepForm) setMode({ kind: "list" });
     setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
     if (outcome.status === 409 || outcome.status === 404) router.refresh();
