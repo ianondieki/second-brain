@@ -3549,6 +3549,17 @@
             "title": "Proposal Title",
             "type": "string"
           },
+          "side_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideLimitsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caps left for the current stage's side states; null once ended or none apply"
+          },
           "signatures": {
             "items": {
               "$ref": "#/components/schemas/SignatureOut"
@@ -5909,6 +5920,18 @@
               }
             ],
             "title": "Resume At"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The seq of the event the note explains (History pairs them); always set by the API",
+            "title": "Seq"
           }
         },
         "required": [
@@ -8858,6 +8881,54 @@
           "new_password"
         ],
         "title": "SetPasswordRequest",
+        "type": "object"
+      },
+      "SideLimitsOut": {
+        "description": "What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null\nwhere it does not apply.",
+        "properties": {
+          "hold_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calendar days on hold the engagement has left over all its holds",
+            "title": "Hold Days Left"
+          },
+          "holds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Holds this stage may still have (before the agreement, from stage 2)",
+            "title": "Holds Left"
+          },
+          "questions_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Questions the organisation may still ask (stages 1-2 only)",
+            "title": "Questions Left"
+          }
+        },
+        "required": [
+          "questions_left",
+          "holds_left",
+          "hold_days_left"
+        ],
+        "title": "SideLimitsOut",
         "type": "object"
       },
       "SignatureDocumentKind": {

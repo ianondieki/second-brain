@@ -4036,6 +4036,8 @@ export interface components {
             proposal_id: string;
             /** Proposal Title */
             proposal_title: string;
+            /** @description The caps left for the current stage's side states; null once ended or none apply */
+            side_limits?: components["schemas"]["SideLimitsOut"] | null;
             /** Signatures */
             signatures: components["schemas"]["SignatureOut"][];
             /** Stage Deadline At */
@@ -4963,6 +4965,11 @@ export interface components {
             kind: "info_request" | "info_answer" | "hold" | "resume";
             /** Resume At */
             resume_at: string | null;
+            /**
+             * Seq
+             * @description The seq of the event the note explains (History pairs them); always set by the API
+             */
+            seq?: number | null;
         };
         /** NotificationOut */
         NotificationOut: {
@@ -6103,6 +6110,28 @@ export interface components {
             current_password?: string | null;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * SideLimitsOut
+         * @description What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null
+         *     where it does not apply.
+         */
+        SideLimitsOut: {
+            /**
+             * Hold Days Left
+             * @description Calendar days on hold the engagement has left over all its holds
+             */
+            hold_days_left: number | null;
+            /**
+             * Holds Left
+             * @description Holds this stage may still have (before the agreement, from stage 2)
+             */
+            holds_left: number | null;
+            /**
+             * Questions Left
+             * @description Questions the organisation may still ask (stages 1-2 only)
+             */
+            questions_left: number | null;
         };
         /**
          * SignatureDocumentKind
