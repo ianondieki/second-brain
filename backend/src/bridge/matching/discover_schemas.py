@@ -1,5 +1,6 @@
-"""Response bodies of Discover and "Recommended for you" (REQ-TREND-02, REQ-PERS-01, REQ-PERS-03). Tier 1 and
-public facts only: no Tier-2 field, no organisation name or id, and no organisation count on a project."""
+"""Response bodies of Discover and "Recommended for you" (REQ-TREND-02, REQ-PERS-01, REQ-PERS-03, REQ-DIR-05). Tier 1
+and public facts only: no Tier-2 field, no organisation count on a project, and no organisation name or id except the
+one that posted a Problem Brief (its own public "Posted by", ``ProblemRef.org``)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from bridge.problems.brief_schemas import BriefFacts
 from bridge.proposals.schemas import NicheOut, ProblemRef
 from bridge.proposals.serializers import TeaserItem
 
@@ -62,6 +64,17 @@ class TrendingOut(BaseModel):
     generated_at: datetime
     problems: list[TrendingProblem]
     projects: list[TrendingProject]
+
+
+class DiscoverBrief(BaseModel):
+    problem: DiscoverProblem = Field(description="The Brief's problem card ('Posted by <organisation>', with org)")
+    brief: BriefFacts
+    proposal_count: int = Field(description="Published proposals that link this Brief")
+
+
+class DiscoverBriefsOut(BaseModel):
+    items: list[DiscoverBrief] = Field(description="Published, open Briefs, newest first")
+    next_cursor: str | None = Field(description="Pass as ?cursor= for the next page; null on the last page")
 
 
 class OpportunityGapOut(BaseModel):

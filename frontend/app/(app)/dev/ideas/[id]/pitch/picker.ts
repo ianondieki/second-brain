@@ -58,6 +58,7 @@ export function pitchHref(proposalId: string, query: PickerQuery = { selected: [
   if (query.q) params.set("q", query.q);
   if (query.niche) params.set("niche", query.niche);
   if (query.cursor) params.set("cursor", query.cursor);
+  if (query.org) params.set("org", query.org);
   for (const id of query.selected) params.append("sel", id);
   const text = params.toString();
   return `/dev/ideas/${encodeURIComponent(proposalId)}/pitch${text ? `?${text}` : ""}`;
@@ -71,6 +72,11 @@ export interface PickerQuery {
   niche?: string;
   cursor?: string;
   selected: string[];
+  /**
+   * The organisation whose Problem Brief the idea answers (`?org=`, REQ-DIR-05): chosen from the start, first, and
+   * the page says why. Its id only; the picker shows and sends it like any other choice, or not at all.
+   */
+  org?: string;
 }
 
 const NICHE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -98,6 +104,12 @@ export function parsePickerQuery(params: SearchParams): PickerQuery {
   const cursor = first(params.cursor);
   if (cursor && cursor.length <= 2000) out.cursor = cursor;
   const seen = new Set<string>();
+  const org = first(params.org);
+  if (org && isOrgId(org)) {
+    out.org = orgKey(org);
+    seen.add(out.org);
+    out.selected.push(out.org);
+  }
   for (const id of all(params.sel)) {
     const lower = orgKey(id);
     if (!isOrgId(id) || seen.has(lower)) continue;

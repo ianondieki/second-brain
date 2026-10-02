@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
+import { Children, isValidElement, Suspense, type ReactElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
@@ -7,6 +8,7 @@ import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import { DevNav } from "./DevNav";
+import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
 
 // docs/spec/07 item 1 (REQ-UX-01): every signed-in screen has the top bar with the account menu, the portal's
@@ -20,6 +22,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
   usePathname: () => "/dev",
 }));
+vi.mock("@/lib/api/server", () => ({ getUnreadCount: async () => 2 }));
 
 afterEach(cleanup);
 
@@ -40,6 +43,32 @@ describe("SignedInShell", () => {
     expect(within(header).getByRole("link", { name: "Plan & billing" })).toBeTruthy();
     expect(header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(main).getByRole("heading", { level: 1, name: "My ideas" })).toBeTruthy();
+  });
+
+  it("puts the bell, with the unread count read on the server, before the account menu (P19-C)", async () => {
+    await renderShell({ homeHref: "/dev" });
+    const header = screen.getByRole("banner");
+    const bell = within(header).getByRole("link", { name: "Notifications, 2 unread" });
+    expect(bell.getAttribute("href")).toBe("/notifications");
+    const account = within(header).getByRole("button", { name: "Account" });
+    expect(bell.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("holds the bell in a Suspense boundary whose fallback is the bell without a count", () => {
+    function find(node: ReactNode): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
+      for (const child of Children.toArray(node)) {
+        if (!isValidElement(child)) continue;
+        if (child.type === Suspense) return child as never;
+        const found = find((child.props as { children?: ReactNode }).children);
+        if (found) return found;
+      }
+      return null;
+    }
+    const boundary = find(SignedInShell({ homeHref: "/dev", children: null }));
+    expect(boundary).not.toBeNull();
+    expect(boundary!.props.fallback.type).toBe(NotificationBell);
+    expect(boundary!.props.fallback.props.count).toBeNull();
+    expect(boundary!.props.children.type).toBe(UnreadNotificationBell);
   });
 
   it("is the skip link's target: main#main takes focus without joining the tab order", async () => {

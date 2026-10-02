@@ -46,3 +46,14 @@ export function ConfidentialIcon({ open = false, ...props }: IconProps & { open?
     </Svg>
   );
 }
+
+/** Problems (the organisation's Problem Briefs): a clipboard with the brief's lines on it. */
+export function BriefIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7.25 3.75h-1.5a1.5 1.5 0 0 0-1.5 1.5v11a1.5 1.5 0 0 0 1.5 1.5h8.5a1.5 1.5 0 0 0 1.5-1.5v-11a1.5 1.5 0 0 0-1.5-1.5h-1.5" />
+      <rect x="7.25" y="2.75" width="5.5" height="2.5" rx="1" />
+      <path d="M7.5 9.25h5M7.5 12.25h5M7.5 15.25h3" />
+    </Svg>
+  );
+}

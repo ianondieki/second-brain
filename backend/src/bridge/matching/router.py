@@ -2,9 +2,12 @@
 6.7). Signed-in users only; everything is computed on read under the caller's Row-Level Security.
 
 - ``GET /api/discover/trending``: Trending Problems (sources, Why chips, a self-explaining badge) and Trending
-  Projects, each beside the problem it solves; no organisation name, id or project-side organisation count.
+  Projects, each beside the problem it solves; no organisation count on a project, and no organisation name or id
+  but a Brief's own ("Posted by <organisation>", ``ProblemRef.org``).
 - ``GET /api/discover/opportunity-gap``: the top decile of trending problems with fewer than 3 proposals.
-  Both take ``niche`` (a slug; a parent includes its children) and ``county`` (an ISO 3166-2 code).
+- ``GET /api/discover/briefs``: verified organisations' published, open Problem Briefs (REQ-DIR-05), newest first,
+  with the organisation, budget band, deadline and the proposals linking each; paged with ``limit`` and ``cursor``.
+  All three take ``niche`` (a slug; a parent includes its children) and ``county`` (an ISO 3166-2 code).
 - ``GET /api/me/recommendations``: the developer's ranked cards with score, label, pursuit decision, Why chips and
   the feature vector; ``personalised`` is false without the ``profiling`` consent (404 without a developer profile).
 - ``GET|PUT /api/me/niches``: the developer's liked niches (PUT sets all of them: 3 to 5 active niche ids; 422
@@ -18,10 +21,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
+from bridge import pagination
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, not_found
 from bridge.matching import discover
 from bridge.matching.discover_schemas import (
+    DiscoverBriefsOut,
     LikedNichesIn,
     LikedNichesOut,
     OpportunityGapOut,
@@ -56,6 +61,19 @@ async def discover_opportunity_gap(
 ) -> OpportunityGapOut:
     """Problems in the top trend decile with fewer than 3 proposals."""
     return await discover.opportunity_gap(db, get_ranking(), niche=niche, county=county)
+
+
+@router.get("/api/discover/briefs")
+async def discover_briefs(
+    live: CurrentSession,
+    db: Db,
+    niche: NicheSlug = None,
+    county: CountyCode = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: pagination.Cursor = None,
+) -> DiscoverBriefsOut:
+    """Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first."""
+    return await discover.briefs_view(db, niche=niche, county=county, limit=limit, after=pagination.decode(cursor))
 
 
 @router.get("/api/me/recommendations")

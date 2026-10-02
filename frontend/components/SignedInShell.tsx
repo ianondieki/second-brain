@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
+import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -14,14 +15,21 @@ export interface SignedInShellProps {
 }
 
 /**
- * Signed-in screens: top bar with the account menu (Plan & billing, Notifications, Help, Sign out), the portal
- * navigation when given, and one column of content.
+ * Signed-in screens: top bar with the notification bell and the account menu (Plan & billing, Notification settings,
+ * Help, Sign out), the portal navigation when given, and one column of content.
  */
 export function SignedInShell({ homeHref, children, nav, wide = false }: SignedInShellProps) {
   return (
     <>
       <TopBar homeHref={homeHref}>
-        <AccountMenu />
+        {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar. */}
+        <div className="flex items-center gap-1" data-top-bar-controls="">
+          {/* A slow count never holds the page: until it answers, the bell is there without one. */}
+          <Suspense fallback={<NotificationBell count={null} />}>
+            <UnreadNotificationBell />
+          </Suspense>
+          <AccountMenu />
+        </div>
       </TopBar>
       <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
         {nav}

@@ -17,7 +17,8 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili"
   },
   "app": {
     "name": "Wazo",
@@ -34,7 +35,7 @@
     "signOutRetry": "Jaribu kutoka tena",
     "account": "Akaunti",
     "security": "Usalama wa kuingia",
-    "notifications": "Arifa",
+    "notifications": "Mipangilio ya arifa",
     "help": "Msaada",
     "billing": "Mpango na malipo",
     "theme": {
@@ -343,6 +344,30 @@
       "home": "Nenda kwenye ukurasa wako wa mwanzo"
     }
   },
+  "notifications": {
+    "bell": {
+      "label": "Arifa",
+      "unread": "Arifa, {count, plural, one {# haijasomwa} other {# hazijasomwa}}",
+      "overflow": "{count}+"
+    },
+    "pageTitle": "Arifa",
+    "title": "Arifa",
+    "lead": "Taarifa kutoka kwa ushirikiano na mapendekezo yako, za karibuni kwanza.",
+    "today": "Leo",
+    "yesterday": "Jana",
+    "time": "{time} EAT",
+    "unread": "Haijasomwa",
+    "markAllRead": "Weka zote kuwa zimesomwa",
+    "markingAllRead": "Inaweka kuwa zimesomwa…",
+    "allRead": "Arifa zako zote zimewekwa kuwa zimesomwa.",
+    "markAllFailed": "Hakuna kilichowekwa kuwa kimesomwa; jaribu tena baada ya muda mfupi.",
+    "empty": "Bado hakuna kitu: taarifa za kifuatiliaji chako na idhini zitaonekana hapa.",
+    "home": "Nenda kwenye ukurasa wako wa mwanzo",
+    "pages": "Arifa zaidi",
+    "older": "Arifa za zamani zaidi",
+    "newest": "Arifa za karibuni zaidi",
+    "staleCursor": "Ukurasa huo wa arifa haupatikani tena."
+  },
   "help": {
     "pageTitle": "Msaada",
     "lead": "Majibu mafupi kuhusu kuwasilisha wazo, kinachobaki siri, vikumbusho na msaada.",
@@ -417,10 +442,11 @@
       "matchesMeta": "jipya zaidi {date}",
       "engagements": "Ushirikiano",
       "engagementsMeta": "{count, plural, one {# unaendelea} other {# unaendelea}}",
-      "needsUs": "Unatusubiri",
-      "needsUsMeta": "Vinatusubiri",
       "unknown": "—",
-      "unavailable": "Haikuweza kusomwa sasa hivi"
+      "unavailable": "Haikuweza kusomwa sasa hivi",
+      "briefs": "Maelezo ya matatizo",
+      "briefsMetaReview": "{count, plural, one {# yanakaguliwa} other {# yanakaguliwa}}",
+      "briefsMetaProposals": "Mapendekezo: {count}"
     }
   },
   "inbox": {
@@ -747,7 +773,8 @@
     "discover": "Gundua",
     "companies": "Makampuni",
     "ideas": "Mawazo yangu",
-    "engagements": "Ushirikiano"
+    "engagements": "Ushirikiano",
+    "problems": "Matatizo"
   },
   "companies": {
     "pageTitle": "Makampuni",
@@ -1009,7 +1036,9 @@
       "proposal": "Pendekezo",
       "problem": "Tatizo",
       "org_claim": "Mzozo wa dai",
-      "other": "Kesi nyingine"
+      "other": "Kesi nyingine",
+      "brief": "Maelezo ya tatizo",
+      "briefBy": "Maelezo ya {org}"
     },
     "untitled": {
       "proposal": "Pendekezo lisilo na kichwa",
@@ -1053,7 +1082,8 @@
       "false_affiliation": "Inadai uhusiano ambao huenda haipo",
       "third_party_personal_data": "Ina data binafsi ya mtu mwingine",
       "malicious_links": "Ina kiungo cha kutiliwa shaka",
-      "other": "Sababu nyingine kutoka kwa ukaguzi"
+      "other": "Sababu nyingine kutoka kwa ukaguzi",
+      "new_org_brief": "Maelezo mapya ya tatizo kutoka kwa shirika"
     },
     "field": {
       "title": "Kichwa",
@@ -1061,7 +1091,8 @@
       "impact_claims": "Madai ya matokeo",
       "summary": "Muhtasari",
       "statement": "Maelezo",
-      "other": "Sehemu nyingine"
+      "other": "Sehemu nyingine",
+      "affected_group": "Wanaoathirika"
     },
     "case": {
       "pageTitle": "Kesi ya udhibiti",
@@ -1255,7 +1286,8 @@
       "aiDrafted": "Imeandaliwa na AI, imekaguliwa na mtu tarehe {date}",
       "seeded": "Mfano wa maonyesho (si matokeo halisi ya AI), umekaguliwa na mtu tarehe {date}",
       "developer": "Imeripotiwa na msanidi programu",
-      "demoBadge": "Data ya mfano"
+      "demoBadge": "Data ya mfano",
+      "org_brief": "Imechapishwa na {org}"
     },
     "affected": "Wanaoathirika",
     "niche": "Fani",
@@ -1282,7 +1314,12 @@
     "noDate": "Hakuna tarehe ya kuchapishwa",
     "unknownPublisher": "Mchapishaji hajatajwa",
     "open": "Isome kwa {publisher}",
-    "external": "(inafungua tovuti nyingine)"
+    "external": "(inafungua tovuti nyingine)",
+    "budget": "Kiwango cha bajeti",
+    "budgetOpen": "Haijatolewa",
+    "deadline": "Mapendekezo yanahitajika kufikia",
+    "noDeadline": "Hakuna tarehe ya mwisho",
+    "briefEnded": "Maelezo haya yamefungwa au tarehe yake ya mwisho imepita, kwa hiyo shirika halitafuti mapendekezo tena. Bado unaweza kuanza pendekezo kutoka tatizo hili."
   },
   "ideaFields": {
     "title": "Kichwa",
@@ -1474,7 +1511,8 @@
     "heldPending": "{name} bado linathibitisha maelezo yake. Pendekezo lako limehifadhiwa na wataliona watakapothibitishwa.",
     "emailNote": "Rekodi ya wasilisho hili inaenda kwenye anwani yako ya barua pepe.",
     "pitchMore": "Wasilisha kwa kampuni nyingine",
-    "orgUnlisted": "Kampuni ambayo haijaorodheshwa tena"
+    "orgUnlisted": "Kampuni ambayo haijaorodheshwa tena",
+    "preselected": "{org} imekwisha kuchaguliwa: wazo lako linajibu maelezo yake ya tatizo. Ondoa alama kama hupendi kuwatumia."
   },
   "tagWithdraw": {
     "open": "Ondoa",
@@ -1734,6 +1772,39 @@
       "notes": "Maelezo mengine"
     }
   },
+  "ideaChecks": {
+    "title": "Ukaguzi wa muhtasari wa umma",
+    "hint": "Si lazima. Kaguzi mbili za haraka za muhtasari wako wa umma. Hakuna kitu hapa kinachokuzuia kuchapisha.",
+    "overlapButton": "Kagua mfanano",
+    "disclosureButton": "Kagua kinachofichua",
+    "checkingOverlap": "Tunalinganisha muhtasari wako na mawazo mengine yaliyochapishwa…",
+    "checkingDisclosure": "Tunasoma muhtasari wako kuona kama unaeleza jinsi unavyofanya kazi…",
+    "lastToday": "Kutoka ukaguzi wako wa mwisho leo.",
+    "overlap": {
+      "none": "Hakuna mfanano na mawazo mengine yaliyochapishwa (yamelinganishwa na {count}).",
+      "noneEmpty": "Bado hakuna mawazo mengine yaliyochapishwa ya kulinganisha nayo.",
+      "some_overlap": "Kuna mfanano kiasi na wazo jingine lililochapishwa. Kueleza kinachofanya lako kuwa tofauti kunaweza kusaidia.",
+      "high_overlap": "Mfanano mkubwa: muhtasari wako unakaribiana na wazo jingine lililochapishwa. Huu si uamuzi; inafaa kuangalia kinachofanya lako kuwa tofauti."
+    },
+    "disclosure": {
+      "flagged": "Hii inaeleza jinsi, si nini: {fields}.",
+      "flaggedAny": "Hii inaeleza jinsi unavyofanya kazi, si unachofanya.",
+      "advice": "Mbinu, zana na msimbo zinafaa kwenye maelezo kamili, ambayo yanabaki siri.",
+      "clear": "Hakuna kinachofichua jinsi unavyofanya kazi.",
+      "demo": "Onyesho hili halina modeli ya AI iliyounganishwa, na ukaguzi wa haraka haukupata chochote kinachofichua jinsi unavyofanya kazi.",
+      "unchecked": "Muhtasari haukuweza kukaguliwa safari hii. Pitia maandishi, kisha ujaribu tena."
+    },
+    "problem": {
+      "noText": "Andika muhtasari wa umma kwanza, kisha uukague.",
+      "notSaved": "Mabadiliko yako ya karibuni hayajahifadhiwa, kwa hivyo hakuna kilichokaguliwa. Rekebisha sehemu zilizowekwa alama, kisha ujaribu tena.",
+      "originality_limit": "Umetumia ukaguzi wa leo; kesho utapata zaidi.",
+      "originality_busy": "Ukaguzi wa mfanano bado unaendelea. Jaribu tena baada ya muda mfupi.",
+      "disclosure_busy": "Ukaguzi wa muhtasari bado unaendelea. Jaribu tena baada ya muda mfupi.",
+      "disclosure_rate_limited": "Umefanya ukaguzi mwingi wa muhtasari leo. Jaribu tena kesho.",
+      "hidden": "Wazo hili limefutwa, kwa hivyo haliwezi kukaguliwa.",
+      "unavailable": "Ukaguzi haukuweza kukamilika sasa hivi. Jaribu tena baadaye."
+    }
+  },
   "devHome": {
     "lead": "Kinachokusubiri sasa, kisha mengine yote.",
     "newProposal": "Pendekezo jipya",
@@ -1770,7 +1841,8 @@
     "views": {
       "problems": "Matatizo",
       "projects": "Miradi",
-      "gap": "Pengo la fursa"
+      "gap": "Pengo",
+      "briefs": "Maelezo"
     },
     "filters": "Vichujio",
     "filtersChosen": "Vichujio (vilivyochaguliwa: {count})",
@@ -1811,7 +1883,15 @@
     "projectsEmpty": "Bado hakuna mradi unaovuma wala mpya.",
     "gapEmpty": "Kwa sasa hakuna tatizo linalopanda lenye upungufu wa mapendekezo.",
     "filteredEmpty": "Bado hakuna kitu hapa kwa nyanja na kaunti hii.",
-    "toProblems": "Tazama matatizo yanayovuma"
+    "toProblems": "Tazama matatizo yanayovuma",
+    "briefsTitle": "Maelezo ya matatizo",
+    "briefsLead": "Matatizo ambayo mashirika yaliyothibitishwa yamechapisha yenyewe, mapya kwanza, pamoja na bajeti na tarehe ya mwisho.",
+    "briefsEmpty": "Kwa sasa hakuna shirika lenye maelezo yaliyo wazi.",
+    "briefBudget": "Bajeti: {band}",
+    "briefNoBudget": "Bajeti iko wazi",
+    "briefDeadline": "Mapendekezo kufikia {date}",
+    "briefNoDeadline": "Hakuna tarehe ya mwisho",
+    "startBrief": "Anza pendekezo kutoka maelezo haya"
   },
   "recommendations": {
     "title": "Yanayopendekezwa kwako",
@@ -2468,6 +2548,138 @@
     "orgTracker": {
       "title": "Kifuatiliaji kimoja kwa pande zote mbili",
       "body": "Kutoka mtazamo wa kwanza hadi makubaliano yaliyosainiwa: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+    }
+  },
+  "briefs": {
+    "pageTitle": "Matatizo",
+    "title": "Matatizo",
+    "lead": "Maelezo ya matatizo ambayo {org} imechapisha. Wasanidi programu huyaona baada ya wafanyakazi kuyaidhinisha, na huyajibu kwa mapendekezo.",
+    "newTitle": "Chapisha maelezo ya tatizo",
+    "newLead": "Eleza tatizo ambalo ungependa wasanidi programu walitatue. Wafanyakazi husoma kila maelezo kabla wasanidi programu hawajayaona.",
+    "back": "Rudi kwenye Matatizo",
+    "post": "Chapisha maelezo",
+    "cap": "Maelezo yaliyo wazi kwenye mpango wako: {used} kati ya {limit}",
+    "capUnlimited": "Mpango wako unaruhusu maelezo yaliyo wazi bila kikomo.",
+    "capFull": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zimetumika. Funga moja, au pandisha mpango wako, ili uchapishe mengine.",
+    "capFullTop": "Nafasi zote za maelezo yaliyo wazi kwenye mpango wako zimetumika. Funga moja ili uchapishe mengine.",
+    "upgrade": "Pandisha mpango wako",
+    "listLabel": "Maelezo yako, mapya kwanza",
+    "empty": "{org} bado haijachapisha maelezo ya tatizo: chapisha moja na wasanidi programu wataweza kuyajibu kwa mapendekezo.",
+    "emptyViewer": "{org} bado haijachapisha maelezo ya tatizo.",
+    "openInbox": "Fungua Kikasha",
+    "state": {
+      "in_review": "Yanakaguliwa",
+      "published": "Yamechapishwa",
+      "rejected": "Hayakuidhinishwa",
+      "closed": "Yamefungwa"
+    },
+    "proposals": "Mapendekezo: {count}",
+    "deadline": "Mapendekezo kufikia {date}",
+    "noDeadline": "Hakuna tarehe ya mwisho",
+    "anywhere": "Popote nchini Kenya",
+    "posted": "Maelezo yametumwa kukaguliwa. Wafanyakazi husoma kila maelezo kabla wasanidi programu hawajayaona.",
+    "older": "Maelezo ya zamani zaidi",
+    "staleCursor": "Ukurasa huu wa maelezo haupatikani tena.",
+    "newest": "Rudi kwenye mapya zaidi",
+    "notFound": "Maelezo haya hayapatikani.",
+    "notEditor": "Ni mmiliki, msimamizi, mtia saini au mkaguzi wa {org} pekee anayeweza kuchapisha maelezo ya tatizo.",
+    "notVerified": "{org} itaweza kuchapisha maelezo ya matatizo uthibitisho wake wa kisheria ukikamilika.",
+    "stateNote": {
+      "in_review": "Wafanyakazi husoma kila maelezo kabla wasanidi programu hawajayaona. Hadi wakati huo, ni {org} na wafanyakazi pekee wanaoweza kuyaona.",
+      "published": "Wasanidi programu wanaona maelezo haya kwenye Gundua na wanaweza kuyajibu kwa mapendekezo.",
+      "rejected": "Wafanyakazi hawakuidhinisha maelezo haya, kwa hiyo wasanidi programu hawayaoni.",
+      "closed": "Maelezo haya yamefungwa: yameondoka kwenye Gundua. Mapendekezo yaliyokwisha kuyajibu yanabaki yameunganishwa nayo."
+    },
+    "asDevelopers": "Yaone kama wasanidi programu wanavyoyaona",
+    "notGiven": "Haijatolewa",
+    "postedOn": "Yaliwasilishwa {date}",
+    "facts": {
+      "statement": "Tatizo",
+      "affected": "Wanaoathirika",
+      "niche": "Fani",
+      "region": "Eneo",
+      "budget": "Kiwango cha bajeti",
+      "deadline": "Mapendekezo yanahitajika kufikia",
+      "proposals": "Mapendekezo hadi sasa"
+    }
+  },
+  "briefForm": {
+    "group": {
+      "problem": "Tatizo",
+      "fit": "Linapohusika",
+      "terms": "Bajeti na muda"
+    },
+    "title": "Kichwa",
+    "titleHint": "Mstari mmoja ambao msanidi programu anaweza kuuelewa kwa haraka. Hadi herufi {max}.",
+    "statement": "Maelezo ya tatizo",
+    "statementHint": "Nini kinaharibika, kwa nani na mara ngapi. Eleza tatizo ni nini, si jinsi ya kulitatua. Bila namba za simu, barua pepe wala anwani za tovuti: maelezo ni ya umma yakishaidhinishwa.",
+    "meter": "Maneno: {count} kati ya {max}. Herufi: {current} kati ya {limit}.",
+    "affected": "Wanaoathirika (si lazima)",
+    "affectedHint": "Kwa mfano: wanachama wa SACCO katika matawi ya vijijini.",
+    "niche": "Fani",
+    "nicheChoose": "Chagua fani",
+    "nicheAllIn": "Zote za {name}",
+    "county": "Kaunti",
+    "countyAny": "Popote nchini Kenya",
+    "band": "Kiwango cha bajeti",
+    "bandNone": "Bado hakuna kiwango",
+    "bandNoneHint": "Wasanidi programu wanaona kwamba bajeti iko wazi.",
+    "deadline": "Mapendekezo yanahitajika kufikia (si lazima)",
+    "deadlineHint": "Iache tupu kama hakuna tarehe ya mwisho. Baada ya siku hii maelezo yanaondoka kwenye Gundua.",
+    "invitedNote": "Kila maelezo ni ya umma wafanyakazi wakishayaidhinisha. Maelezo kwa wasanidi programu walioalikwa pekee yatakuja baadaye.",
+    "submit": "Chapisha maelezo",
+    "posting": "Inachapisha…",
+    "cancel": "Ghairi",
+    "upgrade": "Pandisha mpango wako",
+    "error": {
+      "titleRequired": "Andika kichwa.",
+      "statementRequired": "Eleza tatizo.",
+      "nicheRequired": "Chagua fani.",
+      "tooLong": "Isizidi herufi {max}.",
+      "deadlinePast": "Chagua leo au tarehe ya baadaye.",
+      "deadlineInvalid": "Weka tarehe kwa siku, mwezi na mwaka.",
+      "tooManyWords": "Yasizidi maneno {max}."
+    },
+    "fieldError": {
+      "blank": "Andika sehemu hii ya maelezo.",
+      "too_long": "Isizidi herufi {max}.",
+      "contains_url": "Ondoa anwani ya tovuti: maelezo ni ya umma yakishaidhinishwa.",
+      "contains_domain": "Ondoa jina la tovuti au kikoa: maelezo ni ya umma yakishaidhinishwa.",
+      "contains_email": "Ondoa anwani ya barua pepe: maelezo ni ya umma yakishaidhinishwa.",
+      "contains_phone": "Ondoa namba ya simu: maelezo ni ya umma yakishaidhinishwa.",
+      "contains_payment_number": "Ondoa namba ya till au paybill: maelezo ni ya umma yakishaidhinishwa.",
+      "unknown_niche": "Chagua fani kutoka kwenye orodha.",
+      "unknown_county": "Chagua kaunti kutoka kwenye orodha.",
+      "unknown_budget_band": "Chagua kiwango cha bajeti kutoka kwenye orodha.",
+      "deadline_past": "Chagua leo au tarehe ya baadaye.",
+      "other": "Angalia sehemu hii ya maelezo."
+    },
+    "refusal": {
+      "planLimit": "Maelezo yaliyo wazi kwenye mpango wako: {limit}, yote yanatumika. Funga moja, au hamia {plan} ili uchapishe zaidi.",
+      "planLimitNext": "Maelezo yaliyo wazi kwenye mpango wako: {limit}, yote yanatumika. Funga moja, au pandisha mpango wako ili uchapishe zaidi.",
+      "planLimitTop": "Maelezo yaliyo wazi kwenye mpango wako: {limit}, yote yanatumika. Funga moja ili uchapishe mengine.",
+      "verification": "{org} itaweza kuchapisha maelezo ya matatizo uthibitisho wake wa kisheria ukikamilika.",
+      "forbidden": "Ni mmiliki, msimamizi, mtia saini au mkaguzi wa {org} pekee anayeweza kuchapisha au kufunga maelezo.",
+      "visibility": "Maelezo kwa wasanidi programu walioalikwa pekee bado hayapatikani. Yachapishe kama maelezo ya umma.",
+      "invalid": "Baadhi ya sehemu za maelezo zinahitaji kurekebishwa. Angalia sehemu zilizowekwa alama.",
+      "closed": "Maelezo haya yamekwisha kufungwa.",
+      "notFound": "Maelezo haya hayapo tena.",
+      "mfaSetup": "Washa uthibitishaji wa hatua mbili ili kuchapisha au kufunga maelezo.",
+      "mfaCode": "Weka msimbo kutoka kwenye programu yako ya uthibitishaji, kisha ujaribu tena.",
+      "network": "Hatukuweza kufikia seva. Angalia muunganisho wako na ujaribu tena.",
+      "generic": "Kuna kitu kilienda vibaya, kwa hiyo hakuna kilichobadilika. Jaribu tena.",
+      "dailyLimit": "Shirika lako limechapisha maelezo mengi kadiri linavyoweza leo. Jaribu tena kesho.",
+      "orgUnavailable": "Shirika lako haliwezi kuchapisha wala kufunga maelezo kwa sasa.",
+      "notPublished": "Maelezo haya bado yanakaguliwa, kwa hiyo hayawezi kufungwa bado.",
+      "frozen": "Maandishi ya maelezo yaliyochapishwa hayawezi kubadilishwa. Yafunge na uchapishe mapya."
+    },
+    "close": {
+      "open": "Funga maelezo haya",
+      "title": "Ufunge maelezo haya?",
+      "body": "Yanaondoka kwenye Gundua na kuachia nafasi yake kwenye mpango wako. Mapendekezo yaliyokwisha kuyajibu yanabaki yameunganishwa nayo. Maelezo yaliyofungwa hayawezi kufunguliwa tena.",
+      "confirm": "Funga maelezo",
+      "closing": "Inafunga…",
+      "cancel": "Yaache wazi"
     }
   }
 }

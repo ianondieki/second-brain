@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
+from bridge.main import create_app
 from tests.integration.api import make_client
 from tests.integration.proposals.helpers import Developers, rows, user_of
 from tests.integration.proposals.tier2_scene import SceneFactory, viewer_client
@@ -24,6 +25,13 @@ EXPECTED = {
     ("GET", "/api/me/proposals/{proposal_id}/tier2"),
     ("POST", "/api/me/proposals/{proposal_id}/assistant/consent"),  # REQ-PROP-05: Tier 2 to an LLM
     ("POST", "/api/me/proposals/{proposal_id}/assistant/suggestions"),
+}
+# Tier-1-only routes next to the Tier-2 ones: they read the teaser only, so the flag must not gate them (REQ-PROP-04,
+# REQ-PROP-02).
+TIER1_ONLY = {
+    ("POST", "/api/me/proposals/{proposal_id}/originality"),
+    ("GET", "/api/me/proposals/{proposal_id}/originality"),
+    ("POST", "/api/me/proposals/{proposal_id}/disclosure-check"),
 }
 WRITES = (
     "SELECT (SELECT count(*) FROM document_views WHERE proposal_id = :p)"
@@ -38,6 +46,13 @@ def tier2_routes(schema: dict[str, Any]) -> set[tuple[str, str]]:
         for method, operation in operations.items()
         if "tier2" in operation.get("tags", [])
     }
+
+
+def test_the_teaser_checks_are_not_tier2_routes() -> None:
+    schema = create_app(get_settings()).openapi()
+    routes = {(method.upper(), path) for path, operations in schema["paths"].items() for method in operations}
+    assert routes >= TIER1_ONLY
+    assert not tier2_routes(schema) & TIER1_ONLY
 
 
 async def test_tier2_flag(

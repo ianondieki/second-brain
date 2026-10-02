@@ -5,11 +5,13 @@
 are the user's own under RLS). The ledger row's unique ``dedupe_key`` makes it idempotent: a second call, or a
 concurrent one, finds the key taken and writes nothing (``SqlDeliveryStore.add``: a savepoint, so the caller's
 transaction stays usable). A daily message keys it with ``deliveries.daily_key(kind, IN_APP, ...)``, so at most one
-in-app summary exists per user, kind and Nairobi date. Links are platform paths only, never another site.
+in-app summary exists per user, kind and Nairobi date. Links are platform paths only, never another site
+(``is_platform_path``: the bell's API serves nothing else either).
 """
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Final
 from uuid import UUID
@@ -26,12 +28,20 @@ IN_APP_ADDRESS: Final = "in-app"  # notification_deliveries.to_address of an in-
 IN_APP_PROVIDER: Final = "in_app"
 MAX_TITLE_CHARS: Final = 200  # in_app_notifications.title
 MAX_LINK_CHARS: Final = 500  # in_app_notifications.link
+# One '/', then no second '/', no backslash (browsers read "/\x" as "//x") and no space or control character (they
+# drop tabs and newlines, so "/\t/x" would be "//x" too): a path on this site, never a way to another one.
+_PLATFORM_PATH: Final = re.compile(r"/(?![/\\])[^\\\x00-\x20\x7f]*")
+
+
+def is_platform_path(link: str) -> bool:
+    """Whether ``link`` is a path on this platform (what an in-app notification may link to)."""
+    return len(link) <= MAX_LINK_CHARS and _PLATFORM_PATH.fullmatch(link) is not None
 
 
 def _check(title: str, link: str | None) -> None:
     if not title.strip() or len(title) > MAX_TITLE_CHARS:
         raise ValueError(f"an in-app title is 1-{MAX_TITLE_CHARS} characters")
-    if link is not None and (not link.startswith("/") or link.startswith("//") or len(link) > MAX_LINK_CHARS):
+    if link is not None and not is_platform_path(link):
         raise ValueError("an in-app link is a platform path starting with a single '/'")
 
 

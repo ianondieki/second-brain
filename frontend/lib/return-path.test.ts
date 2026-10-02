@@ -13,6 +13,8 @@ describe("safeReturnPath", () => {
       "/org/inbox?org=0199a000-0000-7000-8000-00000000000b",
       "/billing/upgrade?plan=dev_pro_monthly",
       "/problems/0199a000-0000-7000-8000-000000000101",
+      "/notifications",
+      "/notifications?cursor=AbC_12-x",
     ]) {
       expect(safeReturnPath(path), path).toBe(path);
     }

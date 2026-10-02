@@ -43,7 +43,9 @@ from bridge.audit.service import record as audit
 from bridge.errors import ApiError, not_found
 from bridge.matching.tasks import defer_on_new
 from bridge.models.enums import AuditActor, ModerationCaseStatus, ModerationSource, ModerationState
+from bridge.problems.service import org_ref
 from bridge.proposals.prescreen import SECURITY_VULNERABILITY, RulesPreScreen, ScreenInput
+from bridge.proposals.schemas import OrgRef
 from bridge.proposals.service import signal
 
 UNRESOLVED: Final = ("open", "held", "escalated")
@@ -56,7 +58,7 @@ Blocked = Literal[
 # screens again for a vulnerability.
 TIER1_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "proposal": ("title", "problem_statement", "impact_claims", "summary"),
-    "problem": ("title", "statement"),
+    "problem": ("title", "statement", "affected_group"),  # a Brief's affected group is public text too (REQ-DIR-05)
 }
 
 
@@ -68,7 +70,9 @@ class CasePreview(BaseModel):
 
 
 class CaseField(BaseModel):
-    name: str = Field(description="A Tier-1 field: title, problem_statement, impact_claims, summary, statement")
+    name: str = Field(
+        description="A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group"
+    )
     text: str
 
 
@@ -94,6 +98,11 @@ class CaseOut(BaseModel):
     blocked: Blocked | None = Field(description="Why a decision is refused (the route's code); null when both are open")
     decided_at: datetime | None
     decided_by: StaffRef | None
+    brief_org: OrgRef | None = Field(
+        default=None,
+        description="The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>');"
+        " null for any other subject, or when the organisation is not in the directory",
+    )
 
 
 class CaseList(BaseModel):
@@ -118,10 +127,12 @@ _CASES_SELECT: Final = (
     " m.decided_at, m.decided_by, d.display_name AS decider_name, (p.id IS NOT NULL OR pr.id IS NOT NULL) AS found,"
     " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, p.current_version_id AS subject_version_id,"
     " coalesce(p.owner_id = :staff, pr.created_by = :staff, false) AS own,"
-    " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement"
+    " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement,"
+    " pr.affected_group, bo.id AS brief_org_id, bo.slug::text AS brief_org_slug, bo.legal_name AS brief_org_name"
     " FROM moderation_cases m"
     " LEFT JOIN proposals p ON m.subject_type = 'proposal' AND p.id = m.subject_id"
     " LEFT JOIN problems pr ON m.subject_type = 'problem' AND pr.id = m.subject_id"
+    " LEFT JOIN organizations bo ON pr.source = 'org_brief' AND bo.id = pr.org_id"
     " LEFT JOIN users d ON d.id = m.decided_by"
 )
 _OPEN_CASES = text(
@@ -200,6 +211,7 @@ async def _case_out(row: Any, *, unresolved: bool) -> CaseOut:
         blocked=blocked,
         decided_at=row.decided_at,
         decided_by=None if row.decided_by is None else StaffRef(id=row.decided_by, display_name=row.decider_name),
+        brief_org=org_ref(row.brief_org_id, row.brief_org_slug, row.brief_org_name),
     )
 
 
@@ -232,7 +244,7 @@ _CLOSE = text(
 # The TIER1_FIELDS of each subject (a unit test keeps the two in step).
 _CURRENT_TEXT = {
     "proposal": text("SELECT title, problem_statement, impact_claims, summary FROM proposals WHERE id = :id"),
-    "problem": text("SELECT title, statement FROM problems WHERE id = :id"),
+    "problem": text("SELECT title, statement, affected_group FROM problems WHERE id = :id"),
 }
 
 

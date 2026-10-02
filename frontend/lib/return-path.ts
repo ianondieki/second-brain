@@ -5,10 +5,10 @@
 // never leave the site (no open redirect). Pure: the proxy, the pages and the forms all use it.
 
 /** The signed-in portals: a signed-out visit below one of them goes to /login with its return path. */
-export const SIGNED_IN_PREFIXES = ["/dev", "/org", "/billing", "/settings", "/problems"] as const;
+export const SIGNED_IN_PREFIXES = ["/dev", "/org", "/billing", "/settings", "/problems", "/notifications"] as const;
 
 const RETURN_PATH =
-  /^\/(dev|org|billing|settings|problems)(\/[A-Za-z0-9._~\-/]*)?(\?[A-Za-z0-9._~\-=&%]*)?$/;
+  /^\/(dev|org|billing|settings|problems|notifications)(\/[A-Za-z0-9._~\-/]*)?(\?[A-Za-z0-9._~\-=&%]*)?$/;
 
 /** The return path when `value` is one of this site's signed-in pages written plainly, else undefined. */
 export function safeReturnPath(value: unknown): string | undefined {

@@ -7,7 +7,7 @@ import { AccountMenu } from "./AccountMenu";
 import { AccountMenuScope } from "./AccountMenuScope";
 
 // REQ-BIL-08, REQ-UX-01: the top bar's avatar menu (docs/spec/07 item 1) holds Plan & billing, Sign-in security,
-// Notifications, Help and Sign out, as a disclosure (Profile and Language are not built: a recorded deviation).
+// Notification settings, Help and Sign out, as a disclosure (Profile and Language are not built: a recorded deviation).
 
 const search = vi.hoisted(() => ({ value: "" }));
 vi.mock("next/navigation", () => ({
@@ -31,7 +31,7 @@ function renderMenu() {
 }
 
 describe("AccountMenu", () => {
-  it("opens to Plan & billing, Sign-in security, Notifications, Help and Sign out", async () => {
+  it("opens to Plan & billing, Sign-in security, Notification settings, Help and Sign out", async () => {
     const toggle = renderMenu();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull(); // hidden while closed
@@ -41,13 +41,13 @@ describe("AccountMenu", () => {
     expect(panel?.hidden).toBe(false);
     expect(screen.getByRole("link", { name: "Plan & billing" }).getAttribute("href")).toBe("/billing");
     expect(screen.getByRole("link", { name: "Sign-in security" }).getAttribute("href")).toBe("/settings/security");
-    expect(screen.getByRole("link", { name: "Notifications" }).getAttribute("href")).toBe("/settings/notifications");
+    expect(screen.getByRole("link", { name: "Notification settings" }).getAttribute("href")).toBe("/settings/notifications");
     expect(screen.getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Plan & billing",
       "Sign-in security",
-      "Notifications",
+      "Notification settings",
       "Help",
       "Sign out",
     ]);
@@ -98,7 +98,7 @@ describe("AccountMenu", () => {
     expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull();
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Sign-in security",
-      "Notifications",
+      "Notification settings",
       "Help",
       "Sign out",
     ]);
