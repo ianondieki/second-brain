@@ -57,6 +57,10 @@ describe("closed", () => {
     const fake = checksCalls();
     await renderEditor({ id: PROPOSAL_ID, initial: READY, checks: fake });
     const card = screen.getByRole("region", { name: "Teaser checks" });
+    // A magnifier beside the heading, never a tick: nothing has passed before a check runs.
+    const heading = within(card).getByRole("heading", { name: "Teaser checks" });
+    expect(heading.querySelector("svg")?.getAttribute("data-icon")).toBe("look");
+    expect(heading.querySelectorAll("svg")).toHaveLength(1);
     const buttons = within(card).getAllByRole("button");
     expect(buttons.map((button) => button.textContent)).toEqual([OVERLAP, DISCLOSURE]);
     for (const button of buttons) {

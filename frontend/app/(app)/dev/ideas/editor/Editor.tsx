@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { EyeIcon, SparkIcon } from "@/components/ui/icons";
+import { EyeIcon, LookIcon, SparkIcon } from "@/components/ui/icons";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
@@ -580,7 +580,8 @@ export function Editor(props: EditorProps) {
           <Card as="section" variant="flat" aria-labelledby="checks-title" className="flex flex-col gap-4">
             <div>
               <h3 id="checks-title" className="flex items-center gap-2 font-semibold text-ink">
-                <CheckIcon className="size-5 shrink-0 text-accent" />
+                {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
+                <LookIcon className="size-5 shrink-0 text-accent" data-icon="look" />
                 {checksT("title")}
               </h3>
               <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{checksT("hint")}</p>
