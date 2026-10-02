@@ -716,14 +716,26 @@ def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> Non
 # --- Harness ------------------------------------------------------------------------------------------------------
 
 
-async def test_a_note_waits_for_an_append_in_flight_and_is_refused_once_it_commits(scratch_url: URL) -> None:
+@pytest.fixture
+def notes_race_url(admin_url: URL) -> Iterator[URL]:
+    """A database of its own at head (the race commits; scratch_url belongs to the round trip, which an async test
+    reordered ahead of it would leave at head)."""
+    name = f"bridge_race_{uuid4().hex[:12]}"
+    url = create_database(admin_url, name)
+    try:
+        run_alembic(url, lambda config: command.upgrade(config, "head"))
+        yield url
+    finally:
+        drop_database(admin_url, name)
+
+
+async def test_a_note_waits_for_an_append_in_flight_and_is_refused_once_it_commits(notes_race_url: URL) -> None:
     """Revision 0006 (the notes' review): the race the INSERT policy alone left open. The organisation's request
     (seq 2) is committed without its note while the note's transaction is already open; the developer's answer (seq 3)
     is appended and holds the engagement's row lock; the note for seq 2 then waits on that lock
     (engagement_notes_1_latest_event, FOR NO KEY UPDATE) and, once the answer commits, is refused: its event is no
     longer the latest. The policy's own check had passed under the snapshot taken before the answer committed."""
-    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
-    owner, app = role_engine(scratch_url, "bridge_owner"), role_engine(scratch_url, "bridge_app")
+    owner, app = role_engine(notes_race_url, "bridge_owner"), role_engine(notes_race_url, "bridge_app")
     try:
         async with owner.begin() as conn:
             p = await tracker.parties(conn)
