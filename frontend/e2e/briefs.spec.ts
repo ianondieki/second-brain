@@ -129,9 +129,10 @@ test.describe("a Problem Brief", () => {
     await page.getByRole("button", { name: "Post the Brief" }).click();
 
     // The list, the new Brief first, in review.
-    await expect(page).toHaveURL(/\/org\/problems\?posted=1$/, SERVER_STEP);
+    await expect(page).toHaveURL(/\/org\/problems(\?posted=1)?$/, SERVER_STEP);
     await expect(page.getByRole("status")).toHaveText("Brief sent for review. Staff read every Brief before developers see it.");
     await expect(page.getByRole("status")).toBeFocused(); // the form that had focus is gone
+    await expect(page).toHaveURL(/\/org\/problems$/); // posted leaves the address: a reload does not repeat the note
     const first = page.locator("[data-brief]").first();
     await expect(first).toContainText(title);
     await expect(first.locator("[data-chip]")).toHaveText("In review");
