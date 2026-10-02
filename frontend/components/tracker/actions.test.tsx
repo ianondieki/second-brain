@@ -136,7 +136,7 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "123456" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
     expect(runImpl).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("alert").textContent).toContain("Something went wrong");
+    expect(screen.getByRole("alert").textContent).toBe("Nothing was sent. Try again in a moment.");
     expect(screen.queryByLabelText("Authenticator code")).toBeNull();
   });
 
@@ -604,8 +604,8 @@ describe("the side states' sheets", () => {
   });
 
   it.each([
-    [{ ok: false, refusal: "network", status: 0 } as const, "We could not reach the server. Check your connection and try again."],
-    [{ ok: false, refusal: "generic", status: 503 } as const, "Something went wrong. Try again."],
+    [{ ok: false, refusal: "network", status: 0 } as const, "We could not reach the server; nothing was sent. Try again."],
+    [{ ok: false, refusal: "generic", status: 503 } as const, "Nothing was sent. Try again in a moment."],
   ])("keeps a sheet open with what was typed on a failed send (%j), to try again", async (outcome, words) => {
     const runImpl = vi.fn<Run>(async () => outcome);
     renderActions(orgReviewing(), { runImpl });
@@ -630,7 +630,7 @@ describe("the side states' sheets", () => {
     await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Decline" })));
     expect(document.querySelector("[data-command-form]")).toBe(form);
     expect((screen.getByLabelText("Reason") as HTMLSelectElement).value).toBe("BUDGET");
-    expect(screen.getByRole("alert").textContent).toContain("We could not reach the server.");
+    expect(screen.getByRole("alert").textContent).toBe("We could not reach the server; nothing was sent. Try again.");
   });
 
   it("closes on a spent question limit (409) and says so after the refresh", async () => {
