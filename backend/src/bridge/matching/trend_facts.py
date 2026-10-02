@@ -3,10 +3,10 @@
 Two sources only, both as ``bridge_app`` under the caller's Row-Level Security:
 
 - the tables every signed-in user may read: published problems clear of moderation (a Brief's only when the Brief is
-  published, visible to the caller and its deadline has not passed, Africa/Nairobi on the platform clock: a Brief
-  past its deadline leaves Trending and the ranker, REQ-DIR-05), their cited sources' dates and publishers, and
-  published, clear proposals with the problems their current version links (Tier 1 and ids only; never a Tier-2
-  table, a grant, a tag or a view);
+  published, visible to the caller, its deadline has not passed, Africa/Nairobi on the platform clock, and its
+  organisation is listed: a Brief past its deadline or of a delisted organisation leaves Trending and the ranker,
+  REQ-DIR-05), their cited sources' dates and publishers, and published, clear proposals with the problems their
+  current version links (Tier 1 and ids only; never a Tier-2 table, a grant, a tag or a view);
 - cross-organisation signals only through ``app_trend_aggregates`` (revision 0005, D-46): counts per item, kind and
   day, with no hash and no organisation id; items below 3 distinct actors never come back.
 
@@ -65,7 +65,9 @@ _PROBLEMS = text(
     " FROM problems p LEFT JOIN niches n ON n.id = p.niche_id"
     " LEFT JOIN regions r ON r.code = p.county_code LEFT JOIN regions rc ON rc.code = p.country"
     " LEFT JOIN organizations o ON o.id = p.org_id"
-    " WHERE p.status = 'published' AND p.moderation_state = 'clear' AND (p.source <> 'org_brief' OR EXISTS"
+    " WHERE p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND (p.org_id IS NULL OR (o.verification IN ('unclaimed', 'e1', 'e2') AND o.delisted_at IS NULL))"
+    " AND (p.source <> 'org_brief' OR EXISTS"
     " (SELECT 1 FROM problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published'"
     " AND (b.deadline IS NULL OR b.deadline >= :today)))"
 )

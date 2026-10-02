@@ -34,7 +34,7 @@ from sqlalchemy.orm import aliased
 
 from bridge import pagination
 from bridge.directory.models import Niche
-from bridge.directory.service import niche_label
+from bridge.directory.service import listed, niche_label
 from bridge.matching.config import get_weights
 from bridge.matching.discover_schemas import (
     DiscoverBrief,
@@ -343,6 +343,7 @@ async def briefs_view(
             Problem.moderation_state == ModerationState.CLEAR,
             ProblemBrief.status == BriefStatus.PUBLISHED,
             ProblemBrief.visibility == BriefVisibility.PUBLIC,
+            listed(),  # a delisted organisation's Briefs leave the view (its members read it under RLS too)
             or_(ProblemBrief.deadline.is_(None), ProblemBrief.deadline >= await briefs.today(db)),
         )
     )

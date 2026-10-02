@@ -511,3 +511,49 @@ async def test_a_suspended_or_delisted_organisation_posts_no_brief(
             response = await reviewer.post(path(org.id), json=await form(owner_engine, world.niche))
         assert (response.status_code, response.json()["detail"]["code"]) == (403, "org_unavailable"), column
         assert await briefs_count(owner_engine, org.id) == 0
+
+
+async def test_a_delisted_organisations_brief_leaves_the_feeds_and_its_page(
+    owner_engine: AsyncEngine,
+    app_engine: AsyncEngine,
+    developers: Developers,
+    moderators: Staff,
+    proposal_world: ProposalWorld,
+) -> None:
+    """A published Brief's problem needs a listed organisation: once it is delisted, the Brief leaves the Briefs view,
+    Trending, the ranker, the problem list and the proposals' links, and its page is 404 (to its members too); the
+    organisation's own list still shows it."""
+    world = await telco_world(owner_engine)
+    developer = await developers()
+    liked = {"liked": [str(world.niche), str(world.sibling), str(world.elsewhere)]}
+    assert (await developer.put("/api/me/niches", json=liked)).status_code == 200
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        brief_id = (await post(reviewer, world.org.id, await form(owner_engine, world.niche)))["id"]
+        await approve(moderators, brief_id)
+        draft = draft_body(proposal_world, link=False, niche_id=str(world.niche))
+        draft["problem_ids"] = [brief_id]
+        proposal = await create(developer, draft)
+        assert (await publish(developer, proposal["id"])).status_code == 200
+        niche = {"niche": f"p10-niche-{world.tag}"}
+
+        async def seen() -> dict[str, bool]:
+            trending = (await developer.get("/api/discover/trending", params=niche)).json()["problems"]
+            listed = (await developer.get("/api/problems", params=niche)).json()["items"]
+            teaser = (await developer.get(f"/api/proposals/{proposal['id']}")).json()["problems"]
+            return {
+                "view": brief_id in await feed(developer, world),
+                "trending": brief_id in {p["problem"]["id"] for p in trending},
+                "ranked": brief_id in await recommended_ids(developer),
+                "list": brief_id in {p["id"] for p in listed},
+                "link": brief_id in {p["id"] for p in teaser},
+                "page": (await developer.get(f"/api/problems/{brief_id}")).status_code == 200,
+                "members_page": (await reviewer.get(f"/api/problems/{brief_id}")).status_code == 200,
+            }
+
+        before = await seen()
+        assert all(before.values()), before
+        async with owner_engine.begin() as conn:
+            await run(conn, "UPDATE organizations SET delisted_at = now() WHERE id = :id", id=world.org.id)
+        after = await seen()
+        assert not any(after.values()), after
+        assert (await reviewer.get(path(world.org.id, f"/{brief_id}"))).json()["state"] == "published"

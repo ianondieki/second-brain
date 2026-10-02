@@ -12,7 +12,8 @@ human-reviewed on <date>" (docs/spec/06 6.5; the date its review published it, A
 made from a fixed answer written in code (every source's ``excerpt_ref`` starts with ``example:``, which only the
 seed's path writes) says it is a seeded example, never a live AI result; an organisation's Problem Brief is "Posted by
 <organisation>" (REQ-DIR-05), and its reference carries the organisation (``org``: id, slug and directory name, never a
-person) when the reader may see it in the directory.
+person) when the reader may see it in the directory. A Brief's problem is published only while its organisation is
+listed (not delisted): a delisted organisation's Brief leaves the picker, its page and the proposals' links.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from bridge.directory.models import Niche
-from bridge.directory.service import niche_label
+from bridge.directory.service import LISTED_LEVELS, niche_label
 from bridge.ids import uuid7
 from bridge.models.enums import ModerationState, ProblemSource, ProblemStatus
 from bridge.pagination import MomentCursor
@@ -53,8 +54,22 @@ def niche_out(niche_id: UUID | None, slug: str | None, name: str | None, parent_
     return NicheOut(id=niche_id, slug=slug, label=niche_label(name, parent_name))
 
 
+_Poster = aliased(Organization)
+
+
+def _listed_poster() -> ColumnElement[bool]:
+    """No organisation (a research card or a developer's problem), or a listed one: a Brief's problem leaves every
+    public read once its organisation is delisted (its own members included, who still read their Briefs' list)."""
+    listed = select(_Poster.id).where(
+        _Poster.id == Problem.org_id, _Poster.verification.in_(LISTED_LEVELS), _Poster.delisted_at.is_(None)
+    )
+    return or_(Problem.org_id.is_(None), exists(listed))
+
+
 def _published_and_clear() -> ColumnElement[bool]:
-    return and_(Problem.status == ProblemStatus.PUBLISHED, Problem.moderation_state == ModerationState.CLEAR)
+    return and_(
+        Problem.status == ProblemStatus.PUBLISHED, Problem.moderation_state == ModerationState.CLEAR, _listed_poster()
+    )
 
 
 def _with_niche(stmt: Select[Any]) -> Select[Any]:
