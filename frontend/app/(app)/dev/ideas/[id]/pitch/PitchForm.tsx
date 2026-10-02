@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/components/ui/cn";
-import { ClockIcon, SendIcon } from "@/components/ui/status-icons";
+import { ClockIcon, InfoIcon, SendIcon } from "@/components/ui/status-icons";
 import { upgradeHref } from "@/lib/billing/upgrade";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -55,6 +55,8 @@ export interface PitchFormProps {
   chosen?: PickerRow[];
   /** The URL's `sel`. Only ids shown on this page as available rows (here or under "chosen") become choices. */
   initialSelected: string[];
+  /** The organisation chosen because the idea answers its Problem Brief (`?org=`, REQ-DIR-05), by name: said once. */
+  preselected?: string;
   /** The search and niche fields, drawn on the server; submitted with the form as a GET, choices included. */
   filters: ReactNode;
   /** A search or a niche narrows the list: offer to clear it (keeping the choices). */
@@ -99,6 +101,7 @@ export function PitchForm({
   groups,
   chosen = [],
   initialSelected,
+  preselected,
   filters,
   narrowed,
   cursor,
@@ -199,6 +202,12 @@ export function PitchForm({
       <p className="mt-3 text-ink" data-cap="">
         {left === null ? t("capUnlimited") : t("capLeft", { count: left, limit: capNow.limit ?? 0 })}
       </p>
+      {preselected ? (
+        <p className="mt-3 flex max-w-[62ch] items-start gap-2 text-ink" data-preselected="">
+          <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+          <span>{t("preselected", { org: preselected })}</span>
+        </p>
+      ) : null}
         {/* Nothing changes the list while a Pitch is under way. */}
         <fieldset disabled={busy} className="m-0 mt-6 max-w-3xl min-w-0 border-0 p-0">
           <div role="search">{filters}</div>

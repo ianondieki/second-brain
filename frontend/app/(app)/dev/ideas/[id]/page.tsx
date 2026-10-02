@@ -87,6 +87,8 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
     countyCode ? countyName(countyCode) : null,
   ]);
   const canPitch = status === "published" && tags !== null && pitchesLeft(tags.cap) !== 0;
+  // An idea that answers an organisation's Problem Brief pitches with that organisation chosen first (REQ-DIR-05).
+  const briefOrg = (idea.current ?? version)?.problems.find((problem) => problem.source === "org_brief" && problem.org)?.org?.id;
   const p = await getTranslations("ideaPitches");
 
   return (
@@ -115,7 +117,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
       {status !== "hidden" ? (
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           {canPitch ? (
-            <ButtonLink href={pitchHref(idea.id)} variant="primary">
+            <ButtonLink href={pitchHref(idea.id, { selected: [], org: briefOrg })} variant="primary">
               {p("pitch")}
             </ButtonLink>
           ) : null}
