@@ -83,7 +83,7 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   // Unknown (the count did not answer in time): the unread rows on this page decide whether the action is open.
   const count = unread ?? (page.kind === "page" ? page.items.filter((item) => item.read_at === null).length : 0);
   return (
-    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
+    <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide bellCurrent>
       <div className="max-w-3xl">
         <PageHeader
           title={t("title")}

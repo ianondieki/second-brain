@@ -39,6 +39,13 @@ describe("NotificationBell", () => {
     expect(bell.getAttribute("href")).toBe("/notifications");
     expect(badge()).toBeNull();
     expect(bell.className.split(" ")).toContain("size-11"); // a 44 px target (docs/spec/07 item 6)
+    expect(bell.hasAttribute("aria-current")).toBe(false);
+  });
+
+  it("is the current page on /notifications itself, from the shell's word", async () => {
+    unread.read.mockResolvedValue(2);
+    await renderTree(<UnreadNotificationBell current />);
+    expect(screen.getByRole("link", { name: "Notifications, 2 unread" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("at 3 reads 'Notifications, 3 unread' and shows 3 on the badge, hidden from the accessible name's double", async () => {
