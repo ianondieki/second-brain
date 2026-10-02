@@ -12,7 +12,7 @@ The job runs over this test's developer only (``user_ids``): other tests' engage
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +25,7 @@ from bridge.engagements import expiry, notify
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, business_days_between, local_date
 from bridge.engagements.expiry import Outcome, Report, run_expiry
+from bridge.ids import uuid7
 from bridge.models.enums import EngagementEndReason, EngagementState
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration import world as w
@@ -337,3 +338,42 @@ async def test_the_holds_of_an_engagement_add_up_to_sixty_days(
     assert spent["state"] == "NEGOTIATION"
     assert "pause" not in spent["actions"]
     assert (refused.status_code, refused.json()["detail"]["code"]) == (409, "hold_limit")
+
+
+async def test_the_e2e_sequence_a_question_on_a_friday_before_a_holiday(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The flaky e2e's sequence (frontend/e2e/tracker-branches.spec.ts, AC-TRACK-4): a question, the shared clock
+    moved sixteen days through the test clock, one job pass. Asked on a Friday with a holiday the next Tuesday, the
+    answer-by date is seventeen days on, so that pass rightly finds nothing due on the platform clock (the job reads
+    the same clock as the API and the test clock); moved to the day after the answer-by date the API sends, one pass
+    expires it."""
+    world = await build(owner_engine)
+    holiday = uuid7()
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        t = Tracker(await open_engagement(app_engine, world))
+        today = await db_today(owner_engine)
+        await advance((4 - today.weekday()) % 7)  # to Friday on the platform clock
+        friday = await db_today(owner_engine)
+        assert friday.weekday() == 4
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO holidays (id, country, holiday_on, observed_on, name)"
+                    " VALUES (:id, 'KE', :day, :day, 'P19 flake fixture')"
+                ),
+                {"id": holiday, "day": friday + timedelta(days=4)},
+            )
+        try:
+            asked = await t.ok(s.reviewer, "request-info", {"question": "Which co-ops ran the pilot?"})
+            answer_by = date.fromisoformat(asked["due"]["due_on"])
+            assert answer_by == friday + timedelta(days=17)  # a Monday: 10 BD past a Friday, one a holiday
+            await advance(16)
+            assert (await tick(app_engine, world)).outcomes == ()  # rightly not due yet
+            assert (await t.detail(s.dev))["state"] == "INFO_REQUESTED"
+            await advance((answer_by - await db_today(owner_engine)).days + 1)
+            report = await tick(app_engine, world)
+        finally:
+            async with owner_engine.begin() as conn:
+                await conn.execute(text("DELETE FROM holidays WHERE id = :id"), {"id": holiday})
+    assert report.of(t.engagement) == Outcome(t.engagement, "expire", S.EXPIRED)

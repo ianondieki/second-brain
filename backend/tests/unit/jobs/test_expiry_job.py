@@ -101,3 +101,17 @@ def test_a_report_finds_an_engagements_outcome() -> None:
     report = expiry.Report(at(MONDAY), (expiry.Outcome(engagement, "expire", S.EXPIRED),))
     assert report.of(engagement) == expiry.Outcome(engagement, "expire", S.EXPIRED)
     assert report.of(UUID(int=0)) is None
+
+
+def test_sixteen_days_do_not_always_pass_ten_business_days() -> None:
+    """The flaky e2e's arithmetic (AC-TRACK-4): a question asked on a Friday before Mashujaa Day (Tuesday 20 Oct
+    2026) is answered by Monday 2 Nov, seventeen days on; moving the clock sixteen days leaves it unanswered but not
+    expired, and the job expires it once the answer-by day has ended. The job decides on the platform clock it is
+    given; how far to move the clock is the answer-by date's to say (``due.due_on``), never a fixed count."""
+    friday = date(2026, 10, 16)
+    asked_at = at(friday, 11)
+    answer_by = sm.question_deadline(asked_at, {date(2026, 10, 20)}, POLICY)
+    assert answer_by == sm.end_of_day(date(2026, 11, 2))
+    sixteen_days_later = asked_at + timedelta(days=16)
+    assert expiry.due_action(S.INFO_REQUESTED, sixteen_days_later, answer_by, None, set(), POLICY) is None
+    assert expiry.due_action(S.INFO_REQUESTED, at(date(2026, 11, 3), 0), answer_by, None, set(), POLICY) == "expire"

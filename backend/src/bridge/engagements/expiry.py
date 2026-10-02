@@ -146,7 +146,9 @@ async def act_on(
 ) -> Outcome:
     """Lock one engagement (the session is bound to its developer), decide again on the shared clock and, when it is
     still due, append the system's event, close an expired engagement's tag and queue both parties' notice. The
-    caller commits."""
+    caller commits. ``now`` None reads ``app_clock_now()`` under the lock: the platform clock, the database's real
+    time plus the test clock's committed offset, the same clock the API checks dates on and the test-clock route
+    moves (never the host's or the job's own time)."""
     engagement = await lock_engagement(db, engagement_id)
     now = now or await app_now(db)
     action = await _action(db, engagement, now, holidays, policy)
