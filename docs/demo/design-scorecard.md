@@ -134,25 +134,34 @@ run of the same build). The runner makes its own Brief (Telco A's reviewer, appr
 Brian's and two test accounts for the bell, and closes or deletes them at the end.
 
 JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; production build of
-`aaae794` on the compose stack, signed in as the shots' accounts):
+`7d254d2` on the compose stack, signed in as the demo accounts; the gate's final build):
 
 | Route | Bytes | |
 |---|---|---|
-| `/dev/ideas/<draft>/edit` (page load) | 149,774 | ok (226 B left) |
+| `/dev/engagements/<id>` and `?tab=history` (the tracker with the side states, both sides' chunks the same) | 149,979 | ok (21 B left) |
+| `/org/engagements/<id>` | 149,979 | ok (21 B left) |
+| `/dev/ideas/<draft>/edit` (page load) | 149,774 | ok (226 B left; the `aaae794` reading, unchanged code on that route since) |
 | … after pressing "Check overlap" | 154,264 | on demand, reported apart (D-28 addendum); the assistant's press reads 155,801 on the same build |
+| `/dev/ideas/<published, with a chosen problem>/edit` | 152,306 | over since P18: see below |
 | `/dev/discover?view=briefs` | 142,335 | ok |
 | `/problems/<brief>` | 141,925 | ok |
 | `/dev` (the bell) | 144,088 | ok |
-| `/org` | 143,684 | ok |
-| `/org/problems` | 141,925 | ok |
-| `/org/problems/new` | 147,135 | ok |
 | `/notifications` | 143,187 | ok |
+| `/org` | 143,684 | ok |
+| `/org/problems` | 142,462 | ok |
+| `/org/problems/new` | 147,135 | ok |
+| `/org/engagements`, `/org/inbox`, `/dev/engagements` | 141,925 | ok |
+
+The tracker went from 149,321 B (P18) to 149,979 B with the side states' banner, stepper chips, rows, the lazily loaded
+sheets and the busy announcement: the four sheets and their forms load on the first press; everything else on that
+route now needs an offset or `next/dynamic`.
 
 The editor's page load grew from 146,247 B (P13-F) to 149,774 B: the next import on that route must be weighed first.
 
-Found while re-measuring after the ux round (build `bf64671`): the editor of an idea that already has a chosen problem
-(the usual case once an idea is published) also loads the problem picker's panels chunk at page load (2,470 B, the
-linked list and its search), and reads **152,260 B, over the budget by 2,260 B**. The chunk and its loading rule are
+Found while re-measuring after the ux round (build `bf64671`, 152,260 B; 152,306 B on the final build `7d254d2`): the
+editor of an idea that already has a chosen problem (the usual case once an idea is published) also loads the problem
+picker's panels chunk at page load (2,470 B, the linked list and its search), and reads **over the budget by about
+2,300 B**. The chunk and its loading rule are
 P16's (`editor/ProblemPicker.tsx`), and the shared chunks grew in P18, so this variant has been over since P18
 (about 151.9 KB then); P19's checks card added 328 B to the editor's own chunk (6,068 → 6,396 B) and the draft editor
 (the measured route) stays under. Deferring the panels alone is not enough (it leaves about 150.3 KB). The fix is a
