@@ -133,6 +133,14 @@ describe("the brief form", () => {
     expect(screen.getByText("Keep this to 120 words or fewer.")).toBeTruthy();
   });
 
+  it("focuses the chosen budget band when the API refuses it (a fieldset takes no focus)", async () => {
+    renderForm(calls({ create: vi.fn(async () => refused("invalid", { fields: [{ field: "band", code: "unknown_budget_band" }] })) }));
+    fill();
+    fireEvent.click(screen.getByLabelText(BAND.label));
+    await submit();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(BAND.label)));
+  });
+
   it("posts the API's BriefIn and opens the list with the new Brief first", async () => {
     const api = calls();
     renderForm(api);

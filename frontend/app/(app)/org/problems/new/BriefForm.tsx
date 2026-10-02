@@ -98,7 +98,11 @@ export function BriefForm(props: BriefFormProps) {
 
   function focusFirst(fields: readonly DraftField[]) {
     const first = DRAFT_FIELDS.find((field) => fields.includes(field));
-    if (first) document.getElementById(`brief-${first}`)?.focus();
+    if (!first) return;
+    const target = document.getElementById(`brief-${first}`);
+    // A fieldset of radios takes no focus itself: its chosen radio does (or its first one).
+    const radio = target?.tagName === "FIELDSET" ? (target.querySelector<HTMLInputElement>("input:checked") ?? target.querySelector("input")) : null;
+    (radio ?? target)?.focus();
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
