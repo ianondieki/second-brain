@@ -80,7 +80,7 @@ describe("the organisation Home's tiles", () => {
     expect(tile("needs-us")).toBeNull();
     const briefs = tile("briefs")!;
     expect(briefs.getAttribute("href")).toBe("/org/problems");
-    expect(briefs.textContent).toBe("Problem Briefs11 in review");
+    expect(briefs.textContent).toBe("Problem Briefs1 open1 in review");
   });
 
   it("count the proposals answering published Briefs when none is in review", async () => {
@@ -89,7 +89,7 @@ describe("the organisation Home's tiles", () => {
       value: briefList({ items: [brief({ state: "published", proposal_count: 3 })], plan: { plan: "org_claimed", problem_briefs: 1, used: 1 } }),
     };
     await home();
-    expect(tile("briefs")!.textContent).toBe("Problem Briefs13 proposals");
+    expect(tile("briefs")!.textContent).toBe("Problem Briefs1 open3 proposals");
   });
 
   it("say the Briefs could not be read rather than a confident zero", async () => {

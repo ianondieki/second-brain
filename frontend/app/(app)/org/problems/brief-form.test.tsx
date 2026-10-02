@@ -10,7 +10,7 @@ import { CloseBrief } from "./[id]/CloseBrief";
 import type { BriefCalls } from "./calls";
 import { BriefForm } from "./new/BriefForm";
 
-// REQ-DIR-05 (docs/spec/06 6.2 last bullet; docs/spec/07 items 2, 4, 6): "Post a brief" checks its fields before
+// REQ-DIR-05 (docs/spec/06 6.2 last bullet; docs/spec/07 items 2, 4, 6): "Post a Brief" checks its fields before
 // anything is sent, sends the API's BriefIn, opens the list once posted, and words every refusal (402 with the next
 // plan up, 403 verification or role, 422 fields or visibility) in one sentence with at most one action; "Close this
 // brief" confirms first and reads the page again.
@@ -76,7 +76,7 @@ describe("the brief form", () => {
   it("has one primary action, the quiet note on invited Briefs and a statement meter", () => {
     renderForm(calls());
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Post the brief" }).hasAttribute("data-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: "Post the Brief" }).hasAttribute("data-primary")).toBe(true);
     expect(document.querySelector("[data-invited-note]")?.textContent).toBe(en.briefForm.invitedNote);
     fireEvent.change(screen.getByLabelText("Problem statement"), { target: { value: "Generators run dry" } });
     expect(document.querySelector("[data-meter]")?.textContent).toBe("Words: 3 of 120. Characters: 18 of 1200.");
@@ -248,7 +248,7 @@ describe("closing a Brief", () => {
     const api = calls();
     renderClose(api);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close this Brief" }));
     expect(api.close).not.toHaveBeenCalled();
     const dialog = document.querySelector("dialog")!;
     expect(dialog.hasAttribute("open")).toBe(true);
@@ -260,23 +260,23 @@ describe("closing a Brief", () => {
   it("closes it and reads the page again", async () => {
     const api = calls();
     renderClose(api);
-    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
+    fireEvent.click(screen.getByRole("button", { name: "Close this Brief" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the Brief" })));
     expect(api.close).toHaveBeenCalledWith(ORG_ID, BRIEF_ID);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("reads the page again when someone closed it meanwhile (409)", async () => {
     renderClose(calls({ close: vi.fn(async () => refused("closed")) }));
-    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
+    fireEvent.click(screen.getByRole("button", { name: "Close this Brief" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the Brief" })));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("says a Brief still in review cannot be closed yet (409 brief_not_published)", async () => {
     renderClose(calls({ close: vi.fn(async () => refused("notPublished")) }));
-    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
+    fireEvent.click(screen.getByRole("button", { name: "Close this Brief" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the Brief" })));
     expect(within(document.querySelector("dialog")!).getByRole("alert").textContent).toContain(
       en.briefForm.refusal.notPublished,
     );
@@ -285,8 +285,8 @@ describe("closing a Brief", () => {
 
   it("keeps any other refusal in the dialog, in words", async () => {
     renderClose(calls({ close: vi.fn(async () => refused("forbidden")) }));
-    fireEvent.click(screen.getByRole("button", { name: "Close this brief" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the brief" })));
+    fireEvent.click(screen.getByRole("button", { name: "Close this Brief" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Close the Brief" })));
     const dialog = document.querySelector("dialog")!;
     expect(within(dialog).getByRole("alert").textContent).toContain(
       `Only an owner, admin, signatory or reviewer of ${ORG_NAME} can post or close a Brief.`,

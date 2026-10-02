@@ -71,22 +71,24 @@ describe("a Brief's label", () => {
 describe("starting a proposal from a problem page", () => {
   it("offers the Brief's own action while the organisation is still asking for proposals", async () => {
     render(await ProblemStart({ problem: detail() }));
-    const start = screen.getByRole("link", { name: "Start a proposal from this brief" });
+    const start = screen.getByRole("link", { name: "Start a proposal from this Brief" });
     expect(start.getAttribute("href")).toBe(`/dev/ideas/new?problem=${BRIEF_ID}`);
     expect(start.hasAttribute("data-primary")).toBe(true);
     expect(document.querySelector("[data-brief-ended]")).toBeNull();
   });
 
   it.each([
-    ["closed or past its deadline", false],
-    ["of an API that does not say", undefined],
-  ])("offers the plain action for a Brief %s, and says so quietly", async (_, open) => {
-    render(await ProblemStart({ problem: detail({ brief: { org: ORG, budget_band: BAND, deadline: "2026-09-30", open } }) }));
+    ["past its deadline, on which day", "2020-01-31", false, "This Brief’s deadline passed on 31 Jan 2020, so the organisation is no longer asking for proposals. You can still start one from the problem."],
+    ["closed before its deadline", "2999-12-31", false, en.problem.briefEnded.closed],
+    ["closed with no deadline", null, false, en.problem.briefEnded.closed],
+    ["of an API that does not say", null, undefined, en.problem.briefEnded.closed],
+  ] as const)("offers the plain action for a Brief %s, and says which quietly", async (_, deadline, open, sentence) => {
+    render(await ProblemStart({ problem: detail({ brief: { org: ORG, budget_band: BAND, deadline, open } }) }));
     expect(screen.getByRole("link", { name: "Start a proposal from this problem" }).getAttribute("href")).toBe(
       `/dev/ideas/new?problem=${BRIEF_ID}`,
     );
-    expect(screen.queryByRole("link", { name: "Start a proposal from this brief" })).toBeNull();
-    expect(document.querySelector("[data-brief-ended]")?.textContent).toBe(en.problem.briefEnded);
+    expect(screen.queryByRole("link", { name: "Start a proposal from this Brief" })).toBeNull();
+    expect(document.querySelector("[data-brief-ended]")?.textContent).toBe(sentence);
   });
 
   it("offers the plain action, with no note, for any other problem", async () => {
