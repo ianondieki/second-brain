@@ -3,8 +3,10 @@
 Two sources only, both as ``bridge_app`` under the caller's Row-Level Security:
 
 - the tables every signed-in user may read: published problems clear of moderation (a Brief's only when the Brief is
-  published and visible to the caller), their cited sources' dates and publishers, and published, clear proposals with
-  the problems their current version links (Tier 1 and ids only; never a Tier-2 table, a grant, a tag or a view);
+  published, visible to the caller and its deadline has not passed, Africa/Nairobi on the platform clock: a Brief
+  past its deadline leaves Trending and the ranker, REQ-DIR-05), their cited sources' dates and publishers, and
+  published, clear proposals with the problems their current version links (Tier 1 and ids only; never a Tier-2
+  table, a grant, a tag or a view);
 - cross-organisation signals only through ``app_trend_aggregates`` (revision 0005, D-46): counts per item, kind and
   day, with no hash and no organisation id; items below 3 distinct actors never come back.
 
@@ -64,7 +66,8 @@ _PROBLEMS = text(
     " LEFT JOIN regions r ON r.code = p.county_code LEFT JOIN regions rc ON rc.code = p.country"
     " LEFT JOIN organizations o ON o.id = p.org_id"
     " WHERE p.status = 'published' AND p.moderation_state = 'clear' AND (p.source <> 'org_brief' OR EXISTS"
-    " (SELECT 1 FROM problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published'))"
+    " (SELECT 1 FROM problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published'"
+    " AND (b.deadline IS NULL OR b.deadline >= :today)))"
 )
 _SOURCES = text(
     "SELECT problem_id, publisher, url, source_type, published_date, excerpt_ref FROM problem_sources"
@@ -175,7 +178,7 @@ async def load(db: AsyncSession, cfg: RankingConfig) -> Facts:
     now: datetime = (await db.execute(_NOW)).scalar_one()
     aggregates = await _aggregates(db, _window(now, cfg.trending.window_days), now)
     recent_aggregates = await _aggregates(db, _window(now, cfg.trending.badge_days), now)
-    problem_rows = (await db.execute(_PROBLEMS)).all()
+    problem_rows = (await db.execute(_PROBLEMS, {"today": nairobi_day(now)})).all()
     source_rows = (await db.execute(_SOURCES, {"ids": [r.id for r in problem_rows]})).all()
     refs: dict[UUID, list[str | None]] = defaultdict(list)
     sources = []

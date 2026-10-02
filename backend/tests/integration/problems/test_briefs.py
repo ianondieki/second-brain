@@ -449,3 +449,30 @@ async def test_an_organisation_no_longer_e2_cannot_change_its_published_brief(
         assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "verification_required")
         assert (await reviewer.get(one)).json()["budget_band"]["code"] == "500k_2m"
         assert (await reviewer.post(f"{one}/close")).json()["state"] == "closed"
+
+
+async def test_a_brief_past_its_deadline_leaves_trending_and_the_ranker(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, moderators: Staff
+) -> None:
+    """Approved, a Brief is new this week on Trending and ranked; once its deadline has passed (Africa/Nairobi, the
+    platform clock) it is neither, and its page stays."""
+    world = await telco_world(owner_engine)
+    developer = await developers()
+    liked = {"liked": [str(world.niche), str(world.sibling), str(world.elsewhere)]}
+    assert (await developer.put("/api/me/niches", json=liked)).status_code == 200
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        brief_id = (await post(reviewer, world.org.id, await form(owner_engine, world.niche)))["id"]
+    await approve(moderators, brief_id)
+
+    async def trending() -> set[str]:
+        response = await developer.get("/api/discover/trending", params={"niche": f"p10-niche-{world.tag}"})
+        assert response.status_code == 200, response.text
+        return {item["problem"]["id"] for item in response.json()["problems"]}
+
+    assert brief_id in await trending()
+    assert brief_id in await recommended_ids(developer)
+    async with owner_engine.begin() as conn:
+        await run(conn, "UPDATE problem_briefs SET deadline = deadline - 31 WHERE problem_id = :id", id=UUID(brief_id))
+    assert brief_id not in await trending()
+    assert brief_id not in await recommended_ids(developer)
+    assert (await developer.get(f"/api/problems/{brief_id}")).status_code == 200
