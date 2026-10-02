@@ -418,7 +418,11 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
     "engagement_notes_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
     "engagement_notes_latest_event()": (True, set()),  # locks the engagement and reads the chain's head
-    "app_brief_problem_is_public(uuid)": (True, {"bridge_app"}),  # the public read of problem_briefs (no recursion)
+    "app_brief_problem_is_public(uuid)": (True, {"bridge_app"}),
+    "app_xid_is_current(xid)": (
+        False,
+        {"bridge_app"},
+    ),  # the notes' INSERT policy: an event of this transaction  # the public read of problem_briefs (no recursion)
     "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
     "problems_brief_text_guard()": (False, set()),
 }
@@ -751,17 +755,23 @@ async def test_a_note_waits_for_an_append_in_flight_and_is_refused_once_it_commi
             with pytest.raises(sa.exc.DBAPIError, match="only while its event is the engagement's latest"):
                 await note
             await noter.rollback()
-            # The policy's half: a note in a later transaction than its event is refused, even while it is the latest.
+            # The policy's half (ev.xmin): a note from any transaction but its event's is refused, even while the event
+            # is the latest, whether the note's transaction was opened before the event's (the actor's own earlier
+            # transaction) or after it.
+            other = (
+                "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+                " VALUES (uuid7(), :e, 4, 'info_request', 'Which counties?', :by)"
+            )
+            await noter.begin()
+            await tracker.act(noter, p.owner, p.org)  # opened before the event
             async with asker.begin():
                 await tracker.act(asker, p.owner, p.org)
                 await tracker.append(asker, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+            await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
+            await noter.rollback()
             async with noter.begin():
-                await tracker.act(noter, p.owner, p.org)
-                late = (
-                    "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
-                    " VALUES (uuid7(), :e, 4, 'info_request', 'Which counties?', :by)"
-                )
-                await expect_error(noter, late, "row-level security", {"e": engagement, "by": p.owner})
+                await tracker.act(noter, p.owner, p.org)  # opened after it
+                await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
     finally:
         await owner.dispose()
         await app.dispose()
@@ -1133,6 +1143,7 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
             await conn.execute(sa.text("SELECT app_llm_calls_since('m', now())"))  # revision 0004
             await conn.execute(sa.text("SELECT app_brief_problem_is_public(uuid7())"))  # revision 0006
+            await conn.execute(sa.text("SELECT app_xid_is_current(CAST('3' AS xid))"))
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))

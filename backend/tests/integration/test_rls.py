@@ -885,8 +885,9 @@ async def test_engagement_notes_are_written_by_the_events_actor_and_read_by_both
         late = _note(engagement, 4, "hold", p.developer, resume_at=RESUME_AT)
         await t.expect(conn, NOTE, stale, **late)  # its event is no longer the latest
         await t.run(conn, NOTE, **_note(engagement, 5, "resume", p.developer, body="Budget approved early."))
-        await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses
-        await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
+        await t.act(conn, p.owner, p.org)  # seq 6: the organisation pauses, its event written inside a savepoint
+        async with conn.begin_nested():  # (and after the rolled-back savepoints above): still this transaction's
+            await t.append(conn, engagement, p.owner, "owner", "pause", "SUBMITTED", "ON_HOLD")
         await t.run(conn, NOTE, **_note(engagement, 6, "hold", p.owner, resume_at=RESUME_AT, body="Board meets."))
         await t.act(conn, p.developer)  # seq 7: the job resumes it, bound to the developer; a system event takes none
         await t.append(conn, engagement, None, "system", "resume", "ON_HOLD", "SUBMITTED")

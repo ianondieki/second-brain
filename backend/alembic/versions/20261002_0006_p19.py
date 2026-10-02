@@ -32,12 +32,13 @@ for a hold.
 - Written (bridge_app: SELECT and INSERT only) by the party who wrote the event, as themselves
   (``created_by = app_user_id()``), in the event's transaction: the event exists (composite foreign key to
   ``engagement_events (engagement_id, seq)``), names the caller as its actor (a system event, written by a job, takes
-  no note), was appended in the note's transaction (its time is at or after the transaction's start on the shared
-  clock: ``now()`` plus the test clock's offset), is still the engagement's latest event, and its transition is the
-  kind's: ``info_request`` enters ``INFO_REQUESTED`` and ``hold`` enters ``ON_HOLD``, each from a state that
-  is neither a side state nor terminal; ``info_answer`` leaves ``INFO_REQUESTED`` and ``resume`` leaves ``ON_HOLD``,
-  each for such a state (the state it was entered from: the chain enforces that). One note per event (UNIQUE
-  (engagement_id, event_seq)). Who may enter or leave a side state is the event's policy and the state machine's.
+  no note), was inserted by the note's own transaction (``app_xid_is_current(ev.xmin)``: the event's xmin is the
+  transaction's id or one of its savepoints'; a transaction opened before or after the event's cannot note it), is
+  still the engagement's latest event, and its transition is the kind's: ``info_request`` enters ``INFO_REQUESTED``
+  and ``hold`` enters ``ON_HOLD``, each from a state that is neither a side state nor terminal; ``info_answer`` leaves
+  ``INFO_REQUESTED`` and ``resume`` leaves ``ON_HOLD``, each for such a state (the state it was entered from: the
+  chain enforces that). One note per event (UNIQUE (engagement_id, event_seq)). Who may enter or leave a side state
+  is the event's policy and the state machine's.
   "Still the latest" is checked twice: by the policy, and by ``engagement_notes_1_latest_event`` (SECURITY DEFINER,
   BEFORE INSERT, every role, right after the visibility check), which locks the engagement's row FOR NO KEY UPDATE
   (it waits for any append in flight: the chain holds FOR UPDATE until commit) and then compares ``event_seq`` with
@@ -97,7 +98,8 @@ grant).
 Operating rules for the code that uses this schema:
 
 - Append the event first, read its ``seq`` back (the database's), then insert the note with that ``seq`` in the same
-  transaction, as the event's actor; leave ``created_at`` out. A refused note rolls the event back with it.
+  transaction, as the event's actor; leave ``created_at`` out. A refused note rolls the event back with it (savepoints
+  are fine: the transaction is recognised with its savepoints).
 - Map the tracker's refusal for an engagement the caller cannot see ("no engagement of the caller's with that id",
   insufficient_privilege) to 404, as for the other tracker tables.
 - Mark read with ``UPDATE in_app_notifications SET read_at = ... WHERE read_at IS NULL`` (RLS scopes it to the user);
@@ -176,16 +178,17 @@ NOTE_VISIBLE = "EXISTS (SELECT 1 FROM engagements e WHERE e.id = engagement_note
 # Side and terminal states: a note explains entering a side state from the main path, or leaving it back to it.
 _OFF_MAIN_PATH = "('INFO_REQUESTED', 'ON_HOLD', 'DISPUTED', 'DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED')"
 # The note's event (read under the caller's RLS, so its engagement is visible): appended by the caller as themselves in
-# this transaction, still the engagement's latest event, and of the kind's transition. A NULL from_state (the genesis)
-# matches no kind. "In this transaction": the chain stamps an event with app_clock_now() (clock_timestamp() plus the
-# test clock's offset), which is never before now() (the transaction's start) plus that offset; an equality with
-# app_clock_now() would never hold, as the clock moves on between the event and its note.
+# this very transaction (app_xid_is_current(xmin): its own id or a savepoint's; a transaction opened earlier or later
+# never matches), still the engagement's latest event, and of the kind's transition. A NULL from_state (the genesis)
+# matches no kind. Not "xmin = pg_current_xact_id()::xid": a row written inside a savepoint carries the savepoint's id,
+# and after a savepoint is rolled back (SQLAlchemy's begin_nested on a caught refusal issues only ROLLBACK TO) every
+# later statement of the transaction runs in a new one, so that equality would refuse the note.
 NOTE_INSERT = (
     "created_by = app_user_id()"
     " AND EXISTS (SELECT 1 FROM engagement_events ev"
     " WHERE ev.engagement_id = engagement_notes.engagement_id AND ev.seq = engagement_notes.event_seq"
     " AND ev.actor_user_id = app_user_id()"
-    " AND ev.created_at >= now() + coalesce((SELECT c.clock_offset FROM test_clock c WHERE c.enabled), interval '0')"
+    " AND app_xid_is_current(ev.xmin)"
     " AND CASE engagement_notes.kind"
     f" WHEN 'info_request' THEN ev.to_state = 'INFO_REQUESTED' AND ev.from_state NOT IN {_OFF_MAIN_PATH}"
     f" WHEN 'info_answer' THEN ev.from_state = 'INFO_REQUESTED' AND ev.to_state NOT IN {_OFF_MAIN_PATH}"
@@ -221,6 +224,31 @@ BRIEFS_SELECT = (
 )
 
 FUNCTIONS_SQL = r"""
+-- Whether p_xid is the current transaction's id or one of its subtransactions' (savepoints'), so a row whose xmin it is
+-- was inserted by this transaction. pg_current_xact_id() is the top-level id (assigned now if none was); a
+-- subtransaction's id is assigned after it, so its full 64-bit id is rebuilt from the top-level one and the 32-bit
+-- distance (an id up to 2^31 behind is another, older transaction's: false), and pg_xact_status() is 'in progress'
+-- for this transaction's own ids. Applied to a visible row it is true only for this transaction's rows (another
+-- transaction's uncommitted rows are invisible); otherwise false, also for an id too old to look up (NULL) or one that
+-- rebuilds into the future (only an ancient, wrapped xmin can). SECURITY INVOKER; EXECUTE bridge_app (the notes'
+-- INSERT policy).
+CREATE FUNCTION app_xid_is_current(p_xid xid) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_top bigint := CAST(CAST(pg_catalog.pg_current_xact_id() AS text) AS bigint);
+    v_ahead bigint := (CAST(CAST(p_xid AS text) AS bigint) - v_top % 4294967296 + 4294967296) % 4294967296;
+BEGIN
+    IF p_xid IS NULL OR v_ahead >= 2147483648 THEN
+        RETURN false;
+    END IF;
+    RETURN coalesce(pg_catalog.pg_xact_status(CAST(CAST(v_top + v_ahead AS text) AS xid8)) = 'in progress', false);
+EXCEPTION WHEN invalid_parameter_value THEN  -- "transaction ID ... is in the future"
+    RETURN false;
+END;
+$$;
+
 -- A note is written only while its event is the engagement's latest (the policy says so too, under its snapshot).
 -- Locks the engagement's row FOR NO KEY UPDATE, so an append in flight (the chain holds FOR UPDATE until commit) is
 -- waited for, then reads the chain's head anew: a note is never written once a later event has committed. Fires
@@ -406,6 +434,7 @@ $$;
 
 # EXECUTE grants (EXECUTE revoked from PUBLIC first): a policy runs its functions with the caller's privileges.
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
+    "app_xid_is_current(xid)": ("bridge_app",),  # the notes' INSERT policy
     "app_brief_problem_is_public(uuid)": ("bridge_app",),  # the public read of problem_briefs
 }
 TRIGGER_FUNCTIONS = (
