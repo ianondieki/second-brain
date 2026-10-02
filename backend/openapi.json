@@ -4866,6 +4866,19 @@
               }
             ]
           },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day Express interest's contact-by date counts from",
+            "title": "Today"
+          },
           "why": {
             "anyOf": [
               {

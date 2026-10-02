@@ -80,6 +80,7 @@ async def test_members_read_matches_and_nothing_changes_on_get(
         body = detail.json()
         assert body["rule_breakdown"]["deterministic"] == 90
         assert (body["engagement_id"], body["interest"]) == (None, {"allowed": True, "reason": None})
+        assert body["today"] == str(await db_today(owner_engine))  # the platform clock's day (Express interest)
         by_reviewer = (await reviewer.get(f"/api/orgs/{world.org.id}/matches/{match}")).json()
         assert by_reviewer["interest"] == {"allowed": False, "reason": "role_required"}
         for _ in range(2):
