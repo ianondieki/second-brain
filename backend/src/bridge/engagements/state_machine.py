@@ -837,10 +837,17 @@ def check_contact_by(contact_by: date, now: datetime, holidays: Collection[date]
         )
 
 
+def platform_day(now: datetime) -> date:
+    """The day the side-state rules count from: the Africa/Nairobi date of the platform clock's ``now``
+    (``app_clock_now()``, the test clock where it is on). ``check_resume_at`` and the detail's ``today`` both read it,
+    so the web app's check and the API's never disagree."""
+    return local_date(now)
+
+
 def check_resume_at(resume_at: date, now: datetime, policy: TrackerPolicy, *, days_left: int | None = None) -> None:
     """A hold's resume date (docs/spec/06 6.9 ON_HOLD): after today and at most ``on_hold_max_days`` days ahead (422),
     and within the ``days_left`` the engagement's earlier holds left (policy.yaml ``hold_days_total``; 409)."""
-    today = local_date(now)
+    today = platform_day(now)
     latest = today + timedelta(days=policy.on_hold_max_days)
     if not today < resume_at <= latest:
         raise Invalid(

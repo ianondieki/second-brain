@@ -3618,6 +3618,19 @@
           "state": {
             "$ref": "#/components/schemas/EngagementState"
           },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
+            "title": "Today"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",

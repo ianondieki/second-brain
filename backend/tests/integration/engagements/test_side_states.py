@@ -467,7 +467,7 @@ async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
 ) -> None:
     """THREAT_MODEL D: policy.yaml side_states.actions_per_hour caps one party's side-state commands on one engagement
     within any hour (here 3): the fourth is 429 too_many_actions and writes nothing; the other party is counted
-    apart."""
+    apart, and the organisation's members together."""
     tight = replace(get_policy(), side_actions_per_hour=3, holds_per_stage=10)
     monkeypatch.setattr(commands, "get_policy", lambda: tight)
     monkeypatch.setattr(service, "get_policy", lambda: tight)
@@ -486,6 +486,10 @@ async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
         assert (await t.detail(s.dev))["lock_version"] == before["lock_version"]  # nothing written
         resumed = await t.ok(s.owner, "resume", {"reason": "Ready."})  # the organisation's own count
         assert code(await t.post(s.dev, "pause", pause)) == (429, "too_many_actions")
+        # The organisation's members share one budget (THREAT_MODEL D): the owner spends it, the reviewer is refused.
+        await t.ok(s.owner, "pause", pause)
+        await t.ok(s.owner, "resume", {"reason": "Ready again."})
+        assert code(await t.post(s.reviewer, "pause", pause)) == (429, "too_many_actions")
     assert resumed["state"] == "NEGOTIATION"
 
 
@@ -504,3 +508,15 @@ async def test_the_question_cap_is_per_stage(owner_engine: AsyncEngine, app_engi
         asked = await t.post(s.reviewer, "request-info", {"question": "And under review?"})
     assert asked.status_code == 200, asked.text
     assert asked.json()["paused_from"] == "UNDER_REVIEW"
+
+
+async def test_the_detail_says_today_on_the_platform_clock(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """The web app checks a hold's date against the API's ``today`` (the platform clock's Nairobi day), never the
+    database's real time: with the test clock moved 30 days, ``today`` is the moved day."""
+    world = await build(owner_engine)
+    t = Tracker(await open_engagement(app_engine, world))
+    async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
+        before = await db_today(owner_engine)
+        assert (await t.detail(s.dev))["today"] == str(before)
+        await advance(30)
+        assert (await t.detail(s.owner))["today"] == str(before + timedelta(days=30))

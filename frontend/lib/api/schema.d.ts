@@ -4058,6 +4058,11 @@ export interface components {
             stage_label: string;
             state: components["schemas"]["EngagementState"];
             /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
+             */
+            today?: string | null;
+            /**
              * Updated At
              * Format: date-time
              */
