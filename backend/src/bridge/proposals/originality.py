@@ -21,9 +21,17 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterable, Mapping
-from typing import Final
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Final, Protocol
+from uuid import UUID
 
+from pgvector.sqlalchemy import Vector as PgVector
+from sqlalchemy import bindparam, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bridge.llm.embeddings import EMBED_DIM, Embedder, EmbedderUnavailable, Vector
+from bridge.logging import get_logger
 from bridge.models.enums import OriginalityBand
 from bridge.proposals.originality_policy import OriginalityPolicy
 from bridge.proposals.sanitise import TIER1_FIELDS, plain_text
@@ -37,6 +45,8 @@ ROWS: Final = 8
 _SALTS: Final = tuple(i.to_bytes(4, "big") + b"bridge-mh-v1" for i in range(NUM_HASHES))
 _BAND_PERSON: Final = b"bridge-lsh-v1"
 _WORD: Final = re.compile(r"\w+")
+
+log = get_logger(__name__)
 
 if BANDS * ROWS != NUM_HASHES:  # pragma: no cover - a constant mistake
     raise RuntimeError("BANDS * ROWS must equal NUM_HASHES")
@@ -106,3 +116,219 @@ def band_for(jaccard_value: float, cosine_value: float | None, policy: Originali
     if cosine_value is not None and cosine_value >= policy.cosine_some:
         return OriginalityBand.SOME_OVERLAP
     return OriginalityBand.NONE
+
+
+# --- the pool: other owners' published, clear teasers ---------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedTeaser:
+    """Another owner's published teaser: its Tier-1 fields only. Never returned to the submitter."""
+
+    proposal_id: UUID
+    owner_id: UUID
+    fields: Mapping[str, str]
+
+    def __repr__(self) -> str:  # never print another owner's text
+        return f"PublishedTeaser(proposal={self.proposal_id}, fields={sorted(self.fields)})"
+
+
+class TeaserPool(Protocol):
+    """Published, clear teasers of owners other than ``owner_id``, never ``proposal_id`` itself."""
+
+    async def size(self, *, owner_id: UUID, proposal_id: UUID) -> int: ...
+
+    async def by_buckets(
+        self, buckets: Sequence[tuple[int, int]], *, owner_id: UUID, proposal_id: UUID, limit: int
+    ) -> list[PublishedTeaser]:
+        """Teasers sharing at least one ``(band, bucket)``, most shared buckets first."""
+        ...
+
+    async def nearest(
+        self, vector: Vector, *, model: str, version: str, owner_id: UUID, proposal_id: UUID, limit: int
+    ) -> list[tuple[PublishedTeaser, float]]:
+        """The closest teaser embeddings of the same model and version, with their cosine similarity."""
+        ...
+
+
+# The pool predicate, the same in each query: published, clear of moderation, another owner's, never this proposal.
+_SIZE = text(
+    "SELECT count(*) FROM proposals p WHERE p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND p.published_at IS NOT NULL AND p.owner_id <> :owner AND p.id <> :self"
+)
+_BY_BUCKETS = text(
+    "SELECT p.id, p.owner_id, p.title, p.problem_statement, p.impact_claims, p.summary FROM proposals p"
+    " JOIN (SELECT b.proposal_id, count(*) AS hits FROM proposal_lsh_bands b"
+    " JOIN unnest(CAST(:bands AS smallint[]), CAST(:buckets AS bigint[])) AS q(band, bucket)"
+    " ON b.band = q.band AND b.bucket = q.bucket GROUP BY b.proposal_id) h ON h.proposal_id = p.id"
+    " WHERE p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND p.published_at IS NOT NULL AND p.owner_id <> :owner AND p.id <> :self"
+    " ORDER BY h.hits DESC, p.id LIMIT :limit"
+)
+_NEAREST = text(
+    "SELECT p.id, p.owner_id, p.title, p.problem_statement, p.impact_claims, p.summary,"
+    " 1 - (p.teaser_embedding <=> :vector) AS similarity FROM proposals p"
+    " WHERE p.status = 'published' AND p.moderation_state = 'clear'"
+    " AND p.published_at IS NOT NULL AND p.owner_id <> :owner AND p.id <> :self"
+    " AND p.teaser_embedding IS NOT NULL AND p.embed_model = :model AND p.embed_version = :version"
+    " ORDER BY p.teaser_embedding <=> :vector, p.id LIMIT :limit"
+).bindparams(bindparam("vector", type_=PgVector(EMBED_DIM)))
+
+
+def _teaser(row: Any) -> PublishedTeaser:
+    fields = {name: str(value) for name in TIER1_FIELDS if (value := getattr(row, name))}
+    return PublishedTeaser(row.id, row.owner_id, fields)
+
+
+class SqlTeaserPool:
+    """The pool read with the caller's session: RLS shows other owners' proposals only when published and clear, and
+    their buckets only then (the explicit predicate says the same, in case a staff session ever calls this)."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def size(self, *, owner_id: UUID, proposal_id: UUID) -> int:
+        return int((await self._db.execute(_SIZE, {"owner": owner_id, "self": proposal_id})).scalar_one())
+
+    async def by_buckets(
+        self, buckets: Sequence[tuple[int, int]], *, owner_id: UUID, proposal_id: UUID, limit: int
+    ) -> list[PublishedTeaser]:
+        if not buckets:
+            return []
+        params = {
+            "bands": [band for band, _ in buckets],
+            "buckets": [bucket for _, bucket in buckets],
+            "owner": owner_id,
+            "self": proposal_id,
+            "limit": limit,
+        }
+        return [_teaser(row) for row in (await self._db.execute(_BY_BUCKETS, params)).all()]
+
+    async def nearest(
+        self, vector: Vector, *, model: str, version: str, owner_id: UUID, proposal_id: UUID, limit: int
+    ) -> list[tuple[PublishedTeaser, float]]:
+        params = {
+            "vector": vector,
+            "model": model,
+            "version": version,
+            "owner": owner_id,
+            "self": proposal_id,
+            "limit": limit,
+        }
+        return [(_teaser(row), float(row.similarity)) for row in (await self._db.execute(_NEAREST, params)).all()]
+
+
+# --- the check ------------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Assessment:
+    """The band and the pool's size; ``matches`` (at most ``max_explained``) go to the explainer only."""
+
+    band: OriginalityBand
+    compared: int
+    matches: tuple[PublishedTeaser, ...] = ()
+
+    def __repr__(self) -> str:
+        return f"Assessment(band={self.band.value}, compared={self.compared}, matches={len(self.matches)})"
+
+
+async def embed_one(embedder: Embedder, value: str) -> Vector | None:
+    """The text's vector, or None when there is no text or the configured embedder cannot run here."""
+    if not value:
+        return None
+    try:
+        [vector] = await embedder.embed([value])
+    except EmbedderUnavailable as exc:
+        log.warning("proposals.originality.embedder_unavailable", reason=str(exc))
+        return None
+    return vector
+
+
+async def assess(
+    pool: TeaserPool,
+    embedder: Embedder,
+    fields: Mapping[str, object],
+    *,
+    owner_id: UUID,
+    proposal_id: UUID,
+    policy: OriginalityPolicy,
+) -> Assessment:
+    """The band of the submitter's Tier-1 text against the pool. Plain code; no model."""
+    text_ = submission_text(fields)
+    compared = await pool.size(owner_id=owner_id, proposal_id=proposal_id)
+    mine = shingles(text_)
+    if compared == 0 or not mine:
+        return Assessment(OriginalityBand.NONE, compared)
+    ranked: dict[UUID, tuple[float, PublishedTeaser]] = {}
+
+    def keep(teaser: PublishedTeaser, rank: float) -> None:
+        if rank > ranked.get(teaser.proposal_id, (-1.0, teaser))[0]:
+            ranked[teaser.proposal_id] = (rank, teaser)
+
+    def theirs(teaser: PublishedTeaser) -> bool:  # defence in depth: the pool already excludes the submitter's own
+        return teaser.owner_id != owner_id and teaser.proposal_id != proposal_id
+
+    best_jaccard = 0.0
+    found = await pool.by_buckets(
+        lsh_bands(signature(mine)), owner_id=owner_id, proposal_id=proposal_id, limit=policy.max_candidates
+    )
+    for teaser in filter(theirs, found):
+        value = jaccard(mine, shingles(submission_text(teaser.fields)))
+        best_jaccard = max(best_jaccard, value)
+        if value >= policy.jaccard_high:
+            keep(teaser, 1.0 + value)  # a near-copy ranks above any embedding match
+    best_cosine: float | None = None
+    vector = await embed_one(embedder, text_)
+    if vector is not None:
+        near = await pool.nearest(
+            vector,
+            model=embedder.model,
+            version=embedder.version,
+            owner_id=owner_id,
+            proposal_id=proposal_id,
+            limit=policy.max_explained,
+        )
+        for teaser, similarity in near:
+            if not theirs(teaser):
+                continue
+            best_cosine = similarity if best_cosine is None else max(best_cosine, similarity)
+            if similarity >= policy.cosine_some:
+                keep(teaser, similarity)
+    band = band_for(best_jaccard, best_cosine, policy)
+    ordered = sorted(ranked.values(), key=lambda item: (-item[0], str(item[1].proposal_id)))
+    matches = tuple(teaser for _, teaser in ordered[: policy.max_explained]) if band is not OriginalityBand.NONE else ()
+    return Assessment(band, compared, matches)
+
+
+# --- the index, written at publish ----------------------------------------------------------------------------------
+
+_DROP_BANDS = text("DELETE FROM proposal_lsh_bands WHERE proposal_id = :id")
+_ADD_BAND = text("INSERT INTO proposal_lsh_bands (proposal_id, band, bucket) VALUES (:id, :band, :bucket)")
+_SET_EMBEDDING = text(
+    "UPDATE proposals SET teaser_embedding = :vector, embed_model = :model, embed_version = :version WHERE id = :id"
+).bindparams(bindparam("vector", type_=PgVector(EMBED_DIM)))
+
+
+async def index_teaser(
+    db: AsyncSession, embedder: Embedder, *, proposal_id: UUID, fields: Mapping[str, object]
+) -> None:
+    """Replace the proposal's LSH buckets and teaser embedding with those of its published Tier-1 text (the owner's
+    transaction, at publish). With no embedder here the stale vector is cleared, never kept for new text."""
+    value = submission_text(fields)
+    await db.execute(_DROP_BANDS, {"id": proposal_id})
+    rows = [
+        {"id": proposal_id, "band": band, "bucket": bucket} for band, bucket in lsh_bands(signature(shingles(value)))
+    ]
+    if rows:
+        await db.execute(_ADD_BAND, rows)
+    vector = await embed_one(embedder, value)
+    await db.execute(
+        _SET_EMBEDDING,
+        {
+            "id": proposal_id,
+            "vector": vector,
+            "model": embedder.model if vector is not None else None,
+            "version": embedder.version if vector is not None else None,
+        },
+    )
