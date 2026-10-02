@@ -66,9 +66,11 @@ visibility) is readable beyond its organisation and staff:
   a Brief of an organisation that is not a listed E2 one, are left as they are (the problem is still decided; such a
   Brief's problem stays unreadable to other users, as the problems policy reads it through its Brief).
 - ``problem_briefs_status_guard`` (AFTER INSERT OR UPDATE, after RLS, SECURITY INVOKER, every role): a Brief enters
-  ``published`` only while its problem is published and clear and its organisation is E2 and not delisted, and
-  ``closed`` only from ``published``, so closing never makes a Brief that was never approved readable. The policy's
-  E2 guard on ``published`` (bridge_app) stays.
+  ``published`` only from the owner, that is from ``app_moderate_problem`` (``current_user``: no organisation
+  republishes a Brief it returned to draft), and only while its problem is published and clear and its organisation
+  is E2 and not delisted; it enters ``closed`` only from ``published``, so closing never makes a Brief that was never
+  approved readable; and ``closed`` is terminal (no change away from it, for any role). The policy's E2 guard on
+  ``published`` (bridge_app) stays.
 - The SELECT policy reads a public Brief while ``published`` or ``closed`` and while its problem is published and
   clear (``app_brief_problem_is_public``: SECURITY DEFINER, because a policy of ``problem_briefs`` reading
   ``problems``, whose own policy reads ``problem_briefs``, is an infinite recursion): a closed Brief leaves the feed
@@ -94,9 +96,9 @@ Operating rules for the code that uses this schema:
   insufficient_privilege) to 404, as for the other tracker tables.
 - Mark read with ``UPDATE in_app_notifications SET read_at = ... WHERE read_at IS NULL`` (RLS scopes it to the user);
   never write another column.
-- Insert a Brief as a draft; never set ``published`` yourself (``app_moderate_problem`` does it on approval); close
-  only a published Brief; never edit a published Brief's title, statement or affected group (SQLSTATE 55000: map it
-  to 409).
+- Insert a Brief as a draft; never set ``published`` yourself (``app_moderate_problem`` does it on approval: the
+  database refuses it to the app); close only a published Brief, for good; never edit a published Brief's title,
+  statement or affected group (SQLSTATE 55000: map it to 409).
 - A note is free text a party typed and is never deleted: keep it out of event payloads, logs and audit details. Its
   erasure under a data-subject request (REQ-SEC-02, AC-SEC-3) is D-54: by default (a) its body may later be redacted
   by a staff-only SECURITY DEFINER function (not written yet), which the redaction guard already admits.
@@ -270,19 +272,28 @@ AS $$
                       AND p.moderation_state = 'clear')
 $$;
 
--- A Brief enters 'published' only while its problem is published and clear (staff approved it; app_moderate_problem()
--- publishes a draft Brief of a listed E2 organisation with its problem) and its organisation is E2 and not delisted,
--- so nothing of a Brief awaiting review is readable beyond its organisation and staff; and it enters 'closed' only
--- from 'published', so closing never makes a Brief that was never approved readable (a closed public Brief stays
--- readable). Checked when a Brief enters either status, for every role (the owner and the definer functions too); the
--- INSERT and UPDATE policies' E2 guard on 'published' stays. AFTER: runs after RLS, so a caller the policies refuse
--- learns nothing here. SECURITY INVOKER: an editor reads their organisation's problem and row under their own RLS (a
--- row the caller cannot read is not published for them: refused).
+-- A Brief enters 'published' only by moderation: from the table's owner, that is app_moderate_problem() (current_user;
+-- an organisation never publishes, nor republishes a Brief it returned to draft), and only while its problem is
+-- published and clear and its organisation is E2 and not delisted, so nothing of a Brief awaiting review is readable
+-- beyond its organisation and staff. It enters 'closed' only from 'published', so closing never makes a Brief that was
+-- never approved readable (a closed public Brief stays readable while its problem is public), and 'closed' is
+-- terminal. Checked for every role (the owner and the definer functions too); the INSERT and UPDATE policies' E2 guard
+-- on 'published' stays. AFTER: runs after RLS, so a caller the policies refuse learns nothing here. SECURITY INVOKER:
+-- current_user is the writer, and the owner reads the problem and organisation unhindered.
 CREATE FUNCTION problem_briefs_status_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
+    IF TG_OP = 'UPDATE' AND OLD.status = 'closed' AND NEW.status <> 'closed' THEN
+        RAISE EXCEPTION 'problem_briefs: a closed Brief stays closed' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status <> 'published')
+       AND current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c
+                             WHERE c.oid = TG_RELID) THEN
+        RAISE EXCEPTION 'problem_briefs: only moderation publishes a Brief (app_moderate_problem)'
+            USING ERRCODE = 'check_violation';
+    END IF;
     IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status <> 'published') AND NOT (
         EXISTS (SELECT 1 FROM public.problems p
                  WHERE p.id = NEW.problem_id AND p.status = 'published' AND p.moderation_state = 'clear')

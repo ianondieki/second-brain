@@ -997,8 +997,9 @@ async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed
     problems awaiting review, Then a developer reads none, and the organisation can neither publish nor close one ahead
     of moderation; When staff approve, Then a listed E2 organisation's Brief is published and read, while an E1 or a
     delisted organisation's stays a draft nobody else reads (whoever tries to publish it); When staff reject a
-    published Brief's problem, Then the Brief returns to draft and is read by nobody else; a closed Brief stays read
-    and closed after a later approval, and is read by nobody else once its problem is rejected."""
+    published Brief's problem, Then the Brief returns to draft and is read by nobody else. Only moderation publishes:
+    an organisation that returns its Brief to draft cannot republish it. A closed Brief is terminal for every role,
+    stays read and closed after a later approval, and is read by nobody else once its problem is rejected."""
     async with t.as_app(owner_engine) as conn:
         p = await t.parties(conn)
         niche, e1_org, delisted_org = uuid7(), uuid7(), uuid7()
@@ -1026,11 +1027,13 @@ async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed
         for problem in (brief, second):
             await t.run(conn, BRIEF, p=problem, org=p.org, deadline=deadline, status="draft")
         ahead = "a Brief is published only once its problem is published and clear, for a listed E2 organisation"
-        publish, close = (
-            f"UPDATE problem_briefs SET status = '{s}' WHERE problem_id = :p" for s in ("published", "closed")
+        moderation_only, terminal = "only moderation publishes a Brief", "a closed Brief stays closed"
+        publish, close, unpublish = (
+            f"UPDATE problem_briefs SET status = '{status}' WHERE problem_id = :p"
+            for status in ("published", "closed", "draft")
         )
-        await t.expect(conn, BRIEF, ahead, p=early, org=p.org, deadline=deadline, status="published")
-        await t.expect(conn, publish, ahead, p=brief)
+        await t.expect(conn, BRIEF, moderation_only, p=early, org=p.org, deadline=deadline, status="published")
+        await t.expect(conn, publish, moderation_only, p=brief)
         closing = "only a published Brief is closed"
         await t.expect(conn, close, closing, p=brief)
         await t.expect(conn, BRIEF, closing, p=early, org=p.org, deadline=deadline, status="closed")
@@ -1056,8 +1059,18 @@ async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed
         await t.as_owner(conn)  # and the status guard's, for every role
         for problem in (e1_brief, delisted_brief):
             await t.expect(conn, publish, ahead, p=problem)
+        await t.act(conn, p.reviewer, p.org)  # the published -> draft -> published route is not the organisation's
+        assert await t.rowcount(conn, unpublish, p=brief) == 1
+        await t.expect(conn, publish, moderation_only, p=brief)
+        await t.act(conn, p.staff)
+        await t.run(conn, MODERATE, p=brief, state="clear", status="published")  # moderation publishes it again
+        assert await t.run(conn, BRIEF_STATUS, p=brief) == "published"
         await t.act(conn, p.reviewer, p.org)
         assert await t.rowcount(conn, close, p=brief) == 1
+        for sql in (publish, unpublish):
+            await t.expect(conn, sql, terminal, p=brief)
+        await t.as_owner(conn)  # closed is terminal for every role
+        await t.expect(conn, publish, terminal, p=brief)
         await t.act(conn, p.developer)
         assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 2  # the problem page and the links stay
         await t.act(conn, p.staff)
