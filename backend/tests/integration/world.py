@@ -204,7 +204,16 @@ async def add_problem(
 async def add_tracker_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID) -> None:
     """Revision 0003: one row of each tracker table on an engagement in SUBMITTED (its genesis event is the
     database's), written as the owner like every fixture: an endorsement of the current stage, a draft agreement with
-    a milestone, a signature and an unconfirmed payment record."""
+    a milestone, a signature and an unconfirmed payment record; revision 0006: a note on the genesis event (the
+    owner is not held to the notes' INSERT policy, which ``test_rls`` exercises as bridge_app)."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+        " VALUES (:id, :engagement, 1, 'info_request', 'Which counties does the pilot cover?', :user)",
+        id=uuid7(),
+        engagement=engagement_id,
+        user=developer_id,
+    )
     await _insert(
         conn,
         "INSERT INTO engagement_endorsements (id, engagement_id, stage, party, user_id, role, method)"
@@ -738,6 +747,7 @@ TENANT_ROWS: dict[str, Rows] = {
             "milestones",
             "signatures",
             "payment_records",
+            "engagement_notes",  # revision 0006
         )
     },
     # revision 0005: the scout's rows are its organisation's; a payment is its user's or its organisation's
