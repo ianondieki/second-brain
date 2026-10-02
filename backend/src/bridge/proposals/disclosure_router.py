@@ -1,12 +1,12 @@
-"""The teaser over-disclosure check's API (REQ-REPO-01, warn only; ``bridge.proposals.disclosure`` holds the rules).
+"""The teaser over-disclosure check's API (REQ-PROP-02 over-disclosure, warn only; ``bridge.proposals.disclosure``).
 
 ``POST /api/me/proposals/{id}/disclosure-check``: whether the saved teaser (the draft, else the current version)
-reads like how the project works rather than what it does. Owner only, like the originality check: 403
-``not_owner`` for another owner's published proposal, 404 for one the caller cannot see, 409 ``proposal_hidden`` once
-deleted. Not behind the Tier-2 gate: only the four Tier-1 fields are read. The rules answer first without a model;
-otherwise the ``over_disclosure_check`` task runs, at most one per user at a time (429 ``disclosure_busy``) and
-within the assistant's daily limit (429 ``disclosure_rate_limited``); a refused call answers with the assistant's
-fixed refusals (429 ``assistant_budget``, 503 ``assistant_paused`` or ``assistant_off``). Nothing is written to the
+reads like how the project works rather than what it does. Owner only, like the originality check: 404 for anyone
+else's proposal, published or not (AC-SEC-1/b), 409 ``proposal_hidden`` once deleted. Not behind the Tier-2 gate:
+only the four Tier-1 fields are read. The rules answer first without a model; otherwise the ``over_disclosure_check``
+task runs, at most one per user at a time (429 ``disclosure_busy``) and within the assistant's daily limit (429
+``disclosure_rate_limited``, counted under the per-user lock); a refused call answers with the assistant's fixed
+refusals (429 ``assistant_budget``, 503 ``assistant_paused`` or ``assistant_off``). Nothing is written to the
 proposal and nothing blocks publishing.
 """
 

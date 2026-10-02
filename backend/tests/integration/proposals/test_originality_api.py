@@ -1,10 +1,11 @@
 """REQ-PROP-04 through the API: the originality check of a draft against other owners' published teasers.
 
-Publish writes the 16 LSH bands and the teaser embedding (the fake embedder); a check is owner only (403 for another
-developer's published proposal, 404 for one nobody else can see), counts one ``originality_checks`` row per call and
-answers 429 ``originality_limit`` on the 11th of a Nairobi day; with the fake provider an overlap is labelled "demo
-fallback" with no sentence; the explainer is never called for the band ``none``; with a free provider and demo
-accounts it is, on Tier-1 text only. Nothing in a response carries a score, Tier-2 text or another owner's text.
+Publish writes the 16 LSH bands and the teaser embedding (the fake embedder). A check is owner only (404 for anyone
+else's proposal, published or not: AC-SEC-1/b), counts one ``originality_checks`` row per call with its audit event in
+the same commit, and answers 429 ``originality_limit`` on the 11th of a Nairobi day. With the fake provider an overlap
+is labelled "demo fallback" with no sentence; the explainer is never called for the band ``none``; with a free
+provider and demo accounts it is, on Tier-1 text only. The pool is other owners' published, clear teasers only.
+Nothing in a response carries a score, Tier-2 text or another owner's text.
 """
 
 from __future__ import annotations
@@ -90,10 +91,10 @@ async def test_owner_only(developers: Developers, proposal_world: ProposalWorld)
     out = await published(owner, proposal_world, **unique_teaser(proposal_world.tag + "own"))
     draft = await create(owner, draft_body(proposal_world))
     refused = await check(stranger, out["proposal_id"])
-    assert refused.status_code == 403, refused.text
-    assert refused.json()["detail"]["code"] == "not_owner"
-    assert (await stranger.get(PATH.format(out["proposal_id"]))).status_code == 403
-    assert (await check(stranger, draft["id"])).status_code == 404  # a draft is invisible to anyone else
+    assert refused.status_code == 404, refused.text  # a published teaser is visible, yet not theirs to check
+    assert refused.json()["detail"]["code"] == "not_found"
+    assert (await stranger.get(PATH.format(out["proposal_id"]))).status_code == 404
+    assert (await check(stranger, draft["id"])).status_code == 404
     assert (await check(owner, "01900000-0000-7000-8000-00000000dead")).status_code == 404
     assert (await check(owner, out["proposal_id"])).status_code == 200  # the owner checks a published one too
 

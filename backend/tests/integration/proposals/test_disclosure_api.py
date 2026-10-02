@@ -95,7 +95,7 @@ async def test_owner_only(developers: Developers, proposal_world: ProposalWorld)
     out = await published(owner, proposal_world)
     draft = await create(owner, draft_body(proposal_world))
     refused = await stranger.post(PATH.format(out["proposal_id"]))
-    assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "not_owner")
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (404, "not_found")
     assert (await stranger.post(PATH.format(draft["id"]))).status_code == 404
 
 

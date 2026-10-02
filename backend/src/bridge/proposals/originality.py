@@ -52,7 +52,6 @@ _BAND_PERSON: Final = b"bridge-lsh-v1"
 _WORD: Final = re.compile(r"\w+")
 
 # [[COPY-REVIEW]] shown to the owner.
-NOT_YOURS: Final = "Only the owner of this proposal can check its originality."
 LIMIT: Final = "You have run today's originality checks. Try again tomorrow."
 BUSY: Final = "The originality check for this proposal is still running. Try again in a moment."
 
@@ -346,7 +345,6 @@ async def index_teaser(
 
 # --- the route's database steps -------------------------------------------------------------------------------------
 
-_VISIBLE = text("SELECT 1 FROM proposals WHERE id = :id")
 _TEASER = text("SELECT title, problem_statement, impact_claims, summary FROM proposal_versions WHERE id = :version")
 _OWNER_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _CHECKS_TODAY = text("SELECT count(*) FROM originality_checks WHERE user_id = :user AND created_at >= :since")
@@ -357,15 +355,10 @@ _RECORD = text(
 
 
 async def owned_by(db: AsyncSession, user_id: UUID, proposal_id: UUID) -> Owned:
-    """The caller's draft or published proposal (its draft version, else its current one). 403 ``not_owner`` for a
-    proposal the caller can see but does not own (another owner's published teaser), 404 for one they cannot see,
-    409 ``proposal_hidden`` for a deleted one of theirs."""
-    try:
-        return await owned(db, user_id, proposal_id)
-    except ApiError as exc:
-        if exc.status_code == 404 and (await db.execute(_VISIBLE, {"id": proposal_id})).first() is not None:
-            raise ApiError(403, "not_owner", NOT_YOURS) from None
-        raise
+    """The caller's draft or published proposal (its draft version, else its current one): ``assistant.owned``. 404
+    for anyone else's proposal, published or not, as for every owner-only route (AC-SEC-1/b: a route never tells a
+    stranger whether a proposal is theirs to see); 409 ``proposal_hidden`` for a deleted one of theirs."""
+    return await owned(db, user_id, proposal_id)
 
 
 async def load_teaser(db: AsyncSession, own: Owned) -> dict[str, str]:

@@ -4,8 +4,8 @@ Informational, never blocking: nothing here changes the proposal or stands in th
 Tier-2 gate: only Tier-1 text is read (the saved draft's four teaser fields), so the route carries no ``tier2`` tag.
 
 - ``POST /api/me/proposals/{id}/originality``: check the saved draft (or the current version when there is no draft)
-  against other owners' published, clear teasers. Owner only: 403 ``not_owner`` for another owner's published
-  proposal, 404 for one the caller cannot see, 409 ``proposal_hidden`` once deleted. 429 ``originality_busy`` while a
+  against other owners' published, clear teasers. Owner only: 404 for anyone else's proposal, published or
+  not (AC-SEC-1/b), 409 ``proposal_hidden`` once deleted. 429 ``originality_busy`` while a
   check of this proposal is running (per API process) and 429 ``originality_limit`` past ``policy.yaml``
   ``originality.daily_limit`` checks per Nairobi day (one ``originality_checks`` row each, the band only). The
   answer: the band, how many teasers were compared, and at most one checked, AI-drafted sentence (none for the band
