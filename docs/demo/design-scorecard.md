@@ -177,6 +177,10 @@ Lighthouse 12 (mobile default, simulated Slow 4G; `--force-dark-mode` for dark),
 | `/org/problems` | 99 / 98 / 1.9 s (heading-order; 100 / 100 / 1.9 s on the fixed build) | 99 / 98 / 1.9 s (99 / 100 / 1.9 s fixed) |
 | `/dev/discover?view=briefs` | 99 / 100 / 1.8 s | 93 / 100 / 2.8 s once, then 99 / 100 / 2.0 and 2.1 s |
 | `/notifications` | 99 / 100 / 2.1 s | 99 / 100 / 1.9 s |
+| `/dev/engagements/<id>` with a side state (final build `7d254d2`) | 99 / 100 / 2.2 s | 99 / 100 / 2.2 s |
+| `/org/engagements/<id>` with a side state (final build) | 99 / 100 / 2.2 s | 97 / 100 / 2.5 s (2.53) |
+| `/notifications` (final build) | 99 / 100 / 1.9 s | 98 / 100 / 2.5 s (2.50) |
+| `/org/problems` (final build) | 97 / 100 / 2.5 s (2.54) | 100 / 100 / 1.9 s |
 
 CLS 0 everywhere.
 
