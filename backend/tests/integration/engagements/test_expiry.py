@@ -244,7 +244,7 @@ async def test_a_hold_resumes_by_itself_on_its_date(owner_engine: AsyncEngine, a
             body.endswith("is no longer on hold: it resumed on its date. Due dates moved by the time on hold.")
             for body in notices
         ), person
-    resumed_mail = [m.to for m in provider.outbox if m.subject == 'Terms and agreement drafting: "RLS proposal"']
+    resumed_mail = [m.to for m in provider.outbox if m.subject == 'Resumed: "RLS proposal"']
     everyone = (world.developer, world.owner, world.reviewer, world.signatory)  # the developer, the org's people
     async with owner_engine.connect() as conn:
         addresses = await conn.execute(text("SELECT email FROM users WHERE id = ANY(:ids)"), {"ids": list(everyone)})
