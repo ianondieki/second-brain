@@ -158,7 +158,7 @@ describe("check what it gives away", () => {
     const status = region("disclosure");
     expect(status.getAttribute("role")).toBe("status");
     expect(status.querySelector("p")!.textContent).toBe(
-      "This reads like how, not what: summary and the problem it solves.",
+      "Your summary and the problem it solves read like how it works, not what it does.",
     );
     expect(status.textContent).toContain("Methods, tools and code belong in the full details, which stay confidential.");
     expect(status.textContent).not.toContain(BY_RULES.why);
@@ -168,7 +168,7 @@ describe("check what it gives away", () => {
 
   it("shows the model's reason, labelled AI-drafted", async () => {
     await check(DISCLOSURE, checksCalls({ disclosure: vi.fn(async () => ({ ok: true as const, value: BY_MODEL })) }));
-    expect(region("disclosure").querySelector("p")!.textContent).toBe("This reads like how, not what: expected impact.");
+    expect(region("disclosure").querySelector("p")!.textContent).toBe("Your expected impact reads like how it works, not what it does.");
     expect(region("disclosure").textContent).toContain(BY_MODEL.why);
     expect(chips("disclosure")).toEqual(["AI-drafted"]);
   });
@@ -182,7 +182,7 @@ describe("check what it gives away", () => {
   it("labels the demo fallback and does not claim the teaser was read by a model", async () => {
     await check(DISCLOSURE, checksCalls({ disclosure: vi.fn(async () => ({ ok: true as const, value: DEMO_CLEAR })) }));
     expect(region("disclosure").querySelector("p")!.textContent).toBe(
-      "No AI model is connected in this demo, and the quick check found nothing that gives away how it works.",
+      "No AI model is connected in this demo. The quick check looks only for common giveaways, such as code, file names and tool names, and found none.",
     );
     expect(chips("disclosure")).toEqual(["Demo fallback"]);
     expect(region("disclosure").textContent).not.toContain(DEMO_CLEAR.why);
@@ -252,7 +252,7 @@ describe("refusals", () => {
   const OVERLAP_PATH = `POST /api/me/proposals/${PROPOSAL_ID}/originality`;
   const DISCLOSURE_PATH = `POST /api/me/proposals/${PROPOSAL_ID}/disclosure-check`;
   const CASES: Array<[string, string, FakeAnswer, string]> = [
-    ["the daily limit", OVERLAP, { status: 429, body: refusal("originality_limit") }, "You have used today’s checks; tomorrow brings more."],
+    ["the daily limit", OVERLAP, { status: 429, body: refusal("originality_limit") }, "You have used today’s overlap checks; they come back at midnight Nairobi time."],
     ["429 originality_busy", OVERLAP, { status: 429, body: refusal("originality_busy") }, "The overlap check is still running. Try again in a moment."],
     ["409 proposal_hidden", OVERLAP, { status: 409, body: refusal("proposal_hidden") }, "This idea was deleted, so it cannot be checked."],
     // Another owner's idea answers 404 like an unknown one (bridge/proposals/originality.owned_by).
@@ -276,10 +276,26 @@ describe("refusals", () => {
     await check(name, http.calls);
     await waitFor(() => expect(region(kind).textContent).toBe(sentence));
     expect(region(kind).getAttribute("role")).toBe("status");
-    expect(region(kind).querySelector("[data-check-answer='problem']")).not.toBeNull();
+    // A daily limit is a fact, not a failure: a note, without the error mark.
+    const limit = _ === "the daily limit" || _ === "429 disclosure_rate_limited";
+    expect(region(kind).querySelector(`[data-check-answer='${limit ? "note" : "problem"}']`)).not.toBeNull();
+    if (limit) expect(region(kind).querySelector(".text-error")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(document.body.textContent).not.toContain(SERVER_MESSAGE);
     expect(document.activeElement).toBe(screen.getByRole("button", { name }));
+  });
+
+  it("says the overlap limit under Check overlap only, while the teaser check still runs", async () => {
+    const http = httpChecks({
+      [OVERLAP_PATH]: [{ status: 429, body: refusal("originality_limit") }],
+      [DISCLOSURE_PATH]: [{ status: 200, body: CLEAR }],
+    });
+    await check(OVERLAP, http.calls);
+    await waitFor(() => expect(region("overlap").textContent).toContain("today’s overlap checks"));
+    expect(region("disclosure").textContent).toBe("");
+    await press(DISCLOSURE);
+    await waitFor(() => expect(region("disclosure").textContent).toBe("Nothing gives away how it works."));
+    expect(region("overlap").textContent).toContain("today’s overlap checks");
   });
 
   it("over HTTP: one POST to each route, nothing else", async () => {
