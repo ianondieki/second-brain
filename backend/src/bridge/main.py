@@ -31,6 +31,7 @@ from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.router import router as engagements_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
+from bridge.llm.embeddings import embedder_from_settings
 from bridge.logging import configure_logging
 from bridge.matching.matches import router as matches_router
 from bridge.matching.router import router as discover_router
@@ -83,6 +84,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The LLM registry and provider adapters; requests get RoutedLLMClient over the SQL stores (bridge.llm.deps).
         app.state.llm_runtime = llm_runtime(settings)
         try:
+            # The teaser embedder runs in the request (publish, the originality check): with EMBEDDER=bge-m3 it loads
+            # here, so missing weights stop the API at startup instead of degrading the check (P19-D).
+            app.state.embedder = embedder_from_settings(settings, app.state.llm_runtime.registry.embeddings)
+            if settings.embedder == "bge-m3":
+                await app.state.embedder.embed(["startup check"])
             yield
         finally:
             await app.state.llm_runtime.aclose()
