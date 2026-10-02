@@ -11,7 +11,9 @@
 - ``clock [--days N] [--hours N]``: the shared dev/test clock (revision 0003), moved forward by N days and hours when
   given, through ``app_set_test_clock``, the function the test-clock router calls: only forward, at most 366 days in
   all, and only where the seed enabled the clock (an explicit ``APP_ENV`` of dev or test). Every tracker deadline,
-  reminder and evidence time follows it. Needs ``DATABASE_OWNER_URL``.
+  reminder and evidence time follows it. After a move it runs one pass of the tracker's clock job
+  (``bridge.engagements.expiry``, as the worker does every 15 minutes, as ``DATABASE_URL``'s app role), so an
+  expiry or the end of a hold shows at once; the worker sends both parties' notices. Needs ``DATABASE_OWNER_URL``.
 
 Every command refuses outside ``APP_ENV`` dev and test (``bridge.seed.demo.demo_refusal``), like the demo seed: the
 fixed credentials exist nowhere else.
@@ -31,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from bridge.auth import totp
 from bridge.config import Settings, get_settings
+from bridge.db import create_engine, create_session_factory
+from bridge.engagements.expiry import run_expiry
 from bridge.seed.demo import demo_refusal, exported_cert_id, registration_status, totp_code
 from bridge.seed.demo.data import DEMO_LOGINS_DOC, all_accounts
 
@@ -88,7 +92,27 @@ async def _clock(settings: Settings, days: int, hours: int) -> int:
         await engine.dispose()
     state = "enabled" if row.enabled else "disabled (run python -m bridge.seed with APP_ENV dev or test)"
     print(f"test clock {state}; offset {row.clock_offset}; app time now {row.now.isoformat()}")
+    if days or hours:
+        print(await _expiry_pass(settings))
     return 0
+
+
+def _app_engine(settings: Settings) -> AsyncEngine:
+    return create_engine(settings.database_url.get_secret_value())
+
+
+async def _expiry_pass(settings: Settings) -> str:
+    """One pass of the tracker's clock job on the moved clock (REQ-ENG-10): what it expired and resumed."""
+    engine = _app_engine(settings)
+    try:
+        report = await run_expiry(create_session_factory(engine))
+    finally:
+        await engine.dispose()
+    expired = sum(1 for o in report.outcomes if o.action == "expire")
+    resumed = sum(1 for o in report.outcomes if o.action == "resume")
+    failed = sum(1 for o in report.outcomes if o.error)
+    line = f"tracker clock: {expired} engagement(s) expired, {resumed} hold(s) resumed"
+    return line + (f", {failed} failed (see the logs; the worker retries)" if failed else "")
 
 
 async def _cert_id(settings: Settings, wait: float) -> str | None:
