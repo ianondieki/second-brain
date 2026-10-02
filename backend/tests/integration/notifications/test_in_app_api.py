@@ -306,7 +306,7 @@ async def test_another_member_of_the_same_organisation_sees_none_of_them(
 
 
 @pytest.mark.parametrize("limit", [0, -1, 51, "x"])
-async def test_a_limit_outside_one_to_fifty_is_422(developers: Developers, limit: object) -> None:
+async def test_a_limit_outside_one_to_fifty_is_422(developers: Developers, limit: int | str) -> None:
     client = await developers()
     response = await client.get(URL, params={"limit": limit})
     assert response.status_code == 422, response.text
