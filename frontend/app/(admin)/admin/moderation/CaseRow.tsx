@@ -42,6 +42,8 @@ export async function CaseRow({ item }: { item: Case }) {
   const t = await getTranslations("adminModeration");
   const locale = await getLocale();
   const kind = caseKind(item.subject_type);
+  const label = caseKindLabel(item);
+  const kindText = label.key === "briefBy" ? t("kind.briefBy", { org: label.org }) : t(`kind.${label.key}`);
   const title = caseTitle(item) ?? t(`untitled.${kind}`);
   const seen = visibility(item);
   const result = outcome(item);
@@ -79,7 +81,7 @@ export async function CaseRow({ item }: { item: Case }) {
       </DataCell>
       {/* Plain text, not a badge: the row keeps at most two status marks (docs/spec/07 item 2). */}
       <DataCell label={t("columns.kind")} nowrap>
-        <span className="font-medium text-ink">{t(`kind.${caseKindLabel(item)}`)}</span>
+        <span className="font-medium text-ink">{kindText}</span>
       </DataCell>
       <DataCell label={t("columns.when")} figure className="text-ink-soft">
         {decided ?? t("filed", { date: formatMoment(locale, item.created_at) })}

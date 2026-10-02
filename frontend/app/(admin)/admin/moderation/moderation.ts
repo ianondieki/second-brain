@@ -36,13 +36,18 @@ export function caseKind(subjectType: string): CaseKind {
 }
 
 /**
- * What the queue calls a case's subject (`adminModeration.kind.*`): its kind, or "brief" for a problem an
- * organisation posted as a Problem Brief (filed with `new_org_brief`, REQ-DIR-05), so staff can tell it from a
- * developer's problem in the list. The case carries no organisation name; the case page shows the Brief's text.
+ * What the queue calls a case's subject (`adminModeration.kind.*`): "Brief by <organisation>" for a problem an
+ * organisation posted as a Problem Brief (REQ-DIR-05; the case's `brief_org`, its directory name), "Problem Brief"
+ * when the case says it is one (`new_org_brief`) but the organisation is not in the directory, else its kind, so staff
+ * can tell a Brief from a developer's problem in the list.
  */
-export function caseKindLabel(item: Pick<Case, "subject_type" | "reasons">): CaseKind | "brief" {
+export type CaseKindLabel = { key: CaseKind | "brief" } | { key: "briefBy"; org: string };
+
+export function caseKindLabel(item: Pick<Case, "subject_type" | "reasons" | "brief_org">): CaseKindLabel {
   const kind = caseKind(item.subject_type);
-  return kind === "problem" && item.reasons.includes("new_org_brief") ? "brief" : kind;
+  if (kind !== "problem") return { key: kind };
+  if (item.brief_org) return { key: "briefBy", org: item.brief_org.name };
+  return { key: item.reasons.includes("new_org_brief") ? "brief" : kind };
 }
 
 /** The subject's title as it is now (its Tier-1 title field, else the preview's), or null when it has none. */
