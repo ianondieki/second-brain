@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
   usePathname: () => "/dev",
 }));
+vi.mock("@/lib/api/server", () => ({ getUnreadCount: async () => 2 }));
 
 afterEach(cleanup);
 
@@ -40,6 +41,15 @@ describe("SignedInShell", () => {
     expect(within(header).getByRole("link", { name: "Plan & billing" })).toBeTruthy();
     expect(header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(main).getByRole("heading", { level: 1, name: "My ideas" })).toBeTruthy();
+  });
+
+  it("puts the bell, with the unread count read on the server, before the account menu (P19-C)", async () => {
+    await renderShell({ homeHref: "/dev" });
+    const header = screen.getByRole("banner");
+    const bell = within(header).getByRole("link", { name: "Notifications, 2 unread" });
+    expect(bell.getAttribute("href")).toBe("/notifications");
+    const account = within(header).getByRole("button", { name: "Account" });
+    expect(bell.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("is the skip link's target: main#main takes focus without joining the tab order", async () => {

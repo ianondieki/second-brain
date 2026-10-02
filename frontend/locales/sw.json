@@ -17,7 +17,8 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; tier2Share.confirm translates the docs/spec/04 4.2 approved logging phrasing [[SW-REVIEW]] draft Swahili",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
+    "reviewP19": "[[COPY-REVIEW]] P19-C (REQ-NOT-03, spec 07 item 1): shell.bell.* (the top bar's bell), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers) [[SW-REVIEW]] rasimu ya Kiswahili"
   },
   "app": {
     "name": "Wazo",
@@ -34,7 +35,12 @@
     "signOutRetry": "Jaribu kutoka tena",
     "account": "Akaunti",
     "security": "Usalama wa kuingia",
-    "notifications": "Arifa",
+    "notifications": "Mipangilio ya arifa",
+    "bell": {
+      "label": "Arifa",
+      "unread": "Arifa, {count} hazijasomwa",
+      "overflow": "{count}+"
+    },
     "help": "Msaada",
     "billing": "Mpango na malipo",
     "theme": {
@@ -342,6 +348,25 @@
       "logIn": "Ingia",
       "home": "Nenda kwenye ukurasa wako wa mwanzo"
     }
+  },
+  "notifications": {
+    "pageTitle": "Arifa",
+    "title": "Arifa",
+    "lead": "Taarifa kutoka kwa ushirikiano na mapendekezo yako, za karibuni kwanza.",
+    "today": "Leo",
+    "yesterday": "Jana",
+    "time": "{time} EAT",
+    "unread": "Haijasomwa",
+    "markAllRead": "Weka zote kuwa zimesomwa",
+    "markingAllRead": "Inaweka kuwa zimesomwa…",
+    "allRead": "Arifa zako zote zimewekwa kuwa zimesomwa.",
+    "markAllFailed": "Hakuna kilichowekwa kuwa kimesomwa; jaribu tena baada ya muda mfupi.",
+    "empty": "Bado hakuna kitu: taarifa za kifuatiliaji chako na idhini zitaonekana hapa.",
+    "home": "Nenda kwenye ukurasa wako wa mwanzo",
+    "pages": "Arifa zaidi",
+    "older": "Arifa za zamani zaidi",
+    "newest": "Arifa za karibuni zaidi",
+    "staleCursor": "Ukurasa huo wa arifa haupatikani tena."
   },
   "help": {
     "pageTitle": "Msaada",

@@ -76,8 +76,31 @@ export async function getSignedIn(): Promise<Me | null> {
   }
 }
 
+/**
+ * How many of the signed-in person's notifications are unread (GET /api/me/notifications/unread-count), for the top
+ * bar's bell (docs/spec/07 item 1), or null when there is no session or no answer in time: the bell then shows no
+ * count rather than holding the page. Read on the server with the page, never polled; cached per request, so the bell
+ * and the Notifications page share one call.
+ */
+export const getUnreadCount = cache(async function getUnreadCount(): Promise<number | null> {
+  try {
+    const cookie = await sessionCookie();
+    if (!cookie) return null;
+    const { data } = await serverApi().GET("/api/me/notifications/unread-count", {
+      headers: { cookie },
+      signal: AbortSignal.timeout(3000),
+      cache: "no-store",
+    });
+    return data ? data.count : null;
+  } catch {
+    return null;
+  }
+});
+
 /** Signed-in pages: no session goes to /login, a session still owing its second factor goes to /auth/mfa. */
 export async function requireMe(): Promise<Me> {
+  // Started beside GET /api/auth/me, so the bell's count costs the page no extra wait (it never throws).
+  void getUnreadCount();
   const me = await getMe();
   if (!me) redirect("/login");
   if (isPending(me)) redirect("/auth/mfa");
