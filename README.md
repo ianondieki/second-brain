@@ -191,7 +191,10 @@ the name or address), not by name, until the engagement reaches Interest confirm
 it.
 
 **Time and reminders.** `make demo-clock DAYS=3` moves the app's clock forward (deadlines, due dates and reminders
-follow it; it never moves back until `make demo-reset`). `make demo-reminders` sends the day's developer nudges and the
+follow it; it never moves back until `make demo-reset`). Each move also runs the tracker's clock once, so engagements
+nobody acted on expire and holds whose resume date has come resume straight away (`make demo-clock DAYS=30` expires
+both of Brian's open engagements: Telco A never started its review, SACCO B never made first contact).
+`make demo-reminders` sends the day's developer nudges and the
 weekly organisation digests at once (it runs `python -m bridge.reminders run --now` in the worker, which refuses
 production); they appear in Mailpit. The worker also sends them on its own after 07:30 and 08:30 Nairobi time.
 `make demo-scouts` runs the due scouts now; the seed ran Telco A's weekly scout once (its match is in the Inbox and

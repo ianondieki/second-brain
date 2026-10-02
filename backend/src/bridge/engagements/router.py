@@ -11,10 +11,12 @@ Reads (parties only; anyone else gets 404):
 - ``GET /api/engagements/{id}/contact``: the developer's contact details, for the named contact once approved.
 
 Commands: ``POST /api/engagements/{id}/<command>`` (and ``.../milestones/{milestone_id}/<step>``), one per row of
-the state machine's table, each with ``lock_version``. Refusals: 404 (not a party), 403 (wrong party or role, a
-missing fresh second factor for signing or endorsing, D2 for the developer's agreement signature, the deals flag), 409
-(a transition not in the table, a precondition, a stale ``lock_version``), 422 (an invalid body). A command's
-response is the engagement as the caller now sees it.
+the state machine's table, each with ``lock_version``; the side states (REQ-ENG-10 part) are ``request-info``,
+``answer-info``, ``pause`` and ``resume``, each with its text (a question, an answer, a reason), and
+``cancel-request`` (the organisation withdraws its open question). Refusals: 404 (not a
+party), 403 (wrong party or role, a missing fresh second factor for signing or endorsing, D2 for the developer's
+agreement signature, the deals flag), 409 (a transition not in the table, a precondition, a stale ``lock_version``),
+422 (an invalid body). A command's response is the engagement as the caller now sees it.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from bridge.engagements.commands import (
 )
 from bridge.engagements.models import Engagement
 from bridge.engagements.schemas import (
+    AnswerInfoBody,
     ApproveBody,
     CommandBody,
     ConfirmPaymentBody,
@@ -49,7 +52,10 @@ from bridge.engagements.schemas import (
     EngagementDetail,
     EngagementList,
     HistoryOut,
+    PauseBody,
     PaymentBody,
+    RequestInfoBody,
+    ResumeBody,
     TermsBody,
 )
 from bridge.engagements.service import Party, resolve_party
@@ -149,6 +155,7 @@ SIMPLE_COMMANDS: tuple[tuple[str, sm.Command], ...] = (
     ("deliver", sm.Command.DELIVER),
     ("accept-delivery", sm.Command.ACCEPT_DELIVERY),
     ("sign-certificate", sm.Command.SIGN_CERTIFICATE),
+    ("cancel-request", sm.Command.CANCEL_REQUEST),  # the organisation withdraws its open question
 )
 MILESTONE_COMMANDS: tuple[tuple[str, sm.Command], ...] = (
     ("start", sm.Command.START_MILESTONE),
@@ -236,3 +243,35 @@ async def confirm_payment(
     """The developer confirms the amount received; it must equal the recorded amount (409 otherwise)."""
     inputs = Inputs(amount_received=body.amount_received_kes_minor)
     return await _run(request, db, settings, party, sm.Command.CONFIRM_PAYMENT, body, inputs)
+
+
+@router.post(f"{PREFIX}/request-info")
+async def request_info(
+    body: RequestInfoBody, request: Request, party: PartyDep, db: Db, settings: SettingsDep
+) -> EngagementDetail:
+    """The organisation asks the developer a question (stages 1-2); the review clock pauses until the answer."""
+    inputs = Inputs(note=body.question)
+    return await _run(request, db, settings, party, sm.Command.REQUEST_INFO, body, inputs)
+
+
+@router.post(f"{PREFIX}/answer-info")
+async def answer_info(
+    body: AnswerInfoBody, request: Request, party: PartyDep, db: Db, settings: SettingsDep
+) -> EngagementDetail:
+    """The developer answers; the engagement returns to its stage with the deadline moved by the pause."""
+    return await _run(request, db, settings, party, sm.Command.ANSWER_INFO, body, Inputs(note=body.answer))
+
+
+@router.post(f"{PREFIX}/pause")
+async def pause(body: PauseBody, request: Request, party: PartyDep, db: Db, settings: SettingsDep) -> EngagementDetail:
+    """Either party puts the engagement on hold before the agreement, until ``resume_at`` (at most 60 days)."""
+    inputs = Inputs(note=body.reason, resume_at=body.resume_at)
+    return await _run(request, db, settings, party, sm.Command.PAUSE, body, inputs)
+
+
+@router.post(f"{PREFIX}/resume")
+async def resume(
+    body: ResumeBody, request: Request, party: PartyDep, db: Db, settings: SettingsDep
+) -> EngagementDetail:
+    """Either party resumes a hold early; due dates move by the business days on hold."""
+    return await _run(request, db, settings, party, sm.Command.RESUME, body, Inputs(note=body.reason))

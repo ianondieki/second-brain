@@ -867,6 +867,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/answer-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Info
+         * @description The developer answers; the engagement returns to its stage with the deadline moved by the pause.
+         */
+        post: operations["answer_info_api_engagements__engagement_id__answer_info_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/approve": {
         parameters: {
             query?: never;
@@ -881,6 +901,26 @@ export interface paths {
          * @description Approve to proceed (non-binding), naming the contact person, channel and contact-by date (stage 3; EM2).
          */
         post: operations["approve_api_engagements__engagement_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/cancel-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Engagement Cancel Request
+         * @description Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).
+         */
+        post: operations["engagement_cancel_request_api_engagements__engagement_id__cancel_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1158,6 +1198,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause
+         * @description Either party puts the engagement on hold before the agreement, until ``resume_at`` (at most 60 days).
+         */
+        post: operations["pause_api_engagements__engagement_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/propose-terms": {
         parameters: {
             query?: never;
@@ -1212,6 +1272,46 @@ export interface paths {
          * @description Run 'reopen_negotiation' (docs/spec/06 6.9; the state machine's table).
          */
         post: operations["engagement_reopen_negotiation_api_engagements__engagement_id__reopen_negotiation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/request-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Info
+         * @description The organisation asks the developer a question (stages 1-2); the review clock pauses until the answer.
+         */
+        post: operations["request_info_api_engagements__engagement_id__request_info_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume
+         * @description Either party resumes a hold early; due dates move by the business days on hold.
+         */
+        post: operations["resume_api_engagements__engagement_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2650,6 +2750,19 @@ export interface components {
             /** Publisher */
             publisher: string;
         };
+        /**
+         * AnswerInfoBody
+         * @description The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause.
+         */
+        AnswerInfoBody: {
+            /** Answer */
+            answer: string;
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+        };
         /** ApiErrorBody */
         ApiErrorBody: {
             /** Detail */
@@ -3449,7 +3562,7 @@ export interface components {
          * Command
          * @enum {string}
          */
-        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment";
+        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
         /** CommandBody */
         CommandBody: {
             /**
@@ -3900,6 +4013,11 @@ export interface components {
             /** My Roles */
             my_roles: components["schemas"]["EngagementActorRole"][];
             /**
+             * Notes
+             * @description The side states' questions, answers and reasons, in event order
+             */
+            notes: components["schemas"]["NoteOut"][];
+            /**
              * Org Id
              * Format: uuid
              */
@@ -3907,6 +4025,8 @@ export interface components {
             /** Org Name */
             org_name: string;
             origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
             /** Payments */
             payments: components["schemas"]["PaymentOut"][];
             /**
@@ -3916,6 +4036,8 @@ export interface components {
             proposal_id: string;
             /** Proposal Title */
             proposal_title: string;
+            /** @description The caps left for the current stage's side states; null once ended or none apply */
+            side_limits?: components["schemas"]["SideLimitsOut"] | null;
             /** Signatures */
             signatures: components["schemas"]["SignatureOut"][];
             /** Stage Deadline At */
@@ -4007,6 +4129,8 @@ export interface components {
             /** Org Name */
             org_name: string;
             origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -4819,6 +4943,34 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /**
+         * NoteOut
+         * @description The text a side-state command carried, in event order: the organisation's question (``info_request``), the
+         *     developer's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason
+         *     (``resume``). ``by`` is the party that wrote it.
+         */
+        NoteOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Body */
+            body: string;
+            by: components["schemas"]["EngagementParty"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "info_request" | "info_answer" | "hold" | "resume";
+            /** Resume At */
+            resume_at: string | null;
+            /**
+             * Seq
+             * @description The seq of the event the note explains (History pairs them); always set by the API
+             */
+            seq?: number | null;
+        };
         /** NotificationOut */
         NotificationOut: {
             /** Body */
@@ -5080,6 +5232,25 @@ export interface components {
             id: string;
             level: components["schemas"]["ClaimLevel"];
             status: components["schemas"]["ClaimStatus"];
+        };
+        /**
+         * PauseBody
+         * @description Put the engagement on hold before the agreement, with a reason and the date it resumes.
+         */
+        PauseBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Resume At
+             * Format: date
+             * @description The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead
+             */
+            resume_at: string;
         };
         /** PaymentBody */
         PaymentBody: {
@@ -5715,6 +5886,19 @@ export interface components {
          */
         RenderKind: "html" | "pdf" | "attachment";
         /**
+         * RequestInfoBody
+         * @description The organisation's question (stages 1-2): the review clock pauses until the developer answers.
+         */
+        RequestInfoBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Question */
+            question: string;
+        };
+        /**
          * ResearchRunStatus
          * @enum {string}
          */
@@ -5730,6 +5914,19 @@ export interface components {
             median_days: number;
             /** Text */
             text: string;
+        };
+        /**
+         * ResumeBody
+         * @description Resume a hold before its date, with a reason; due dates move by the business days on hold.
+         */
+        ResumeBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Reason */
+            reason: string;
         };
         /** RolesUpdate */
         RolesUpdate: {
@@ -5913,6 +6110,28 @@ export interface components {
             current_password?: string | null;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * SideLimitsOut
+         * @description What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null
+         *     where it does not apply.
+         */
+        SideLimitsOut: {
+            /**
+             * Hold Days Left
+             * @description Calendar days on hold the engagement has left over all its holds
+             */
+            hold_days_left: number | null;
+            /**
+             * Holds Left
+             * @description Holds this stage may still have (before the agreement, from stage 2)
+             */
+            holds_left: number | null;
+            /**
+             * Questions Left
+             * @description Questions the organisation may still ask (stages 1-2 only)
+             */
+            questions_left: number | null;
         };
         /**
          * SignatureDocumentKind
@@ -11180,6 +11399,104 @@ export interface operations {
             };
         };
     };
+    answer_info_api_engagements__engagement_id__answer_info_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerInfoBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     approve_api_engagements__engagement_id__approve_post: {
         parameters: {
             query?: never;
@@ -11192,6 +11509,104 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ApproveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    engagement_cancel_request_api_engagements__engagement_id__cancel_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandBody"];
             };
         };
         responses: {
@@ -12643,6 +13058,104 @@ export interface operations {
             };
         };
     };
+    pause_api_engagements__engagement_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PauseBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     propose_terms_api_engagements__engagement_id__propose_terms_post: {
         parameters: {
             query?: never;
@@ -12851,6 +13364,202 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CommandBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    request_info_api_engagements__engagement_id__request_info_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestInfoBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    resume_api_engagements__engagement_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeBody"];
             };
         };
         responses: {

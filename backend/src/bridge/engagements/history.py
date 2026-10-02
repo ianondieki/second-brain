@@ -19,6 +19,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -35,6 +36,7 @@ from bridge.engagements.models import (
     Engagement,
     EngagementEndorsement,
     EngagementEvent,
+    EngagementNote,
     Milestone,
     PaymentRecord,
     Signature,
@@ -52,11 +54,13 @@ from bridge.engagements.schemas import (
     HistoryEventOut,
     HistoryOut,
     MilestoneOut,
+    NoteOut,
     PaymentOut,
     PendingOut,
+    SideLimitsOut,
     SignatureOut,
 )
-from bridge.engagements.service import Loaded, Party, app_now, load, load_holidays, load_many
+from bridge.engagements.service import Loaded, Party, app_now, entering_event, load, load_holidays, load_many
 from bridge.errors import forbidden, not_found
 from bridge.legal.models import LegalTemplate, NdaTemplate
 from bridge.models.enums import (
@@ -188,6 +192,7 @@ def _summary(
         lock_version=engagement.lock_version,
         whose_turn=list(sm.whose_turn(engagement.state, loaded.facts)),
         updated_at=engagement.updated_at,
+        paused_from=loaded.facts.paused_from,
     )
 
 
@@ -279,11 +284,18 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         ).scalars()
     )
     review_due = await review_due_dates(db, engagement.id, milestones)
-    endorsements = [
+    endorsements = [  # the current stage's since it was entered from the main path (a pause continues it)
         e
         for e in await _endorsements(db, engagement.id)
-        if e.stage is engagement.state and e.stage_round == loaded.stage_round
+        if e.stage is engagement.state and loaded.first_round <= e.stage_round <= loaded.stage_round
     ]
+    notes = (
+        await db.execute(
+            select(EngagementNote)
+            .where(EngagementNote.engagement_id == engagement.id)
+            .order_by(EngagementNote.event_seq)
+        )
+    ).scalars()
     names = await _names(
         db,
         [engagement.contact_user_id, *(s.signer_user_id for s in signatures), *(e.user_id for e in endorsements)],
@@ -304,7 +316,7 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             name=names.get(engagement.contact_user_id),
             role=role,
             channel=engagement.contact_channel,
-            contact_by=engagement.contact_by,
+            contact_by=await _contact_by(db, engagement),
         )
     documents_out = [
         DocumentRefOut(kind=ref.kind, ref=ref.ref, sha256=ref.sha256.hex())
@@ -367,7 +379,57 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
             for p in payments
         ],
         documents=documents_out,
+        notes=[
+            NoteOut(
+                kind=n.kind,  # the database's CHECK holds it to the four kinds
+                body=n.body,
+                resume_at=n.resume_at,
+                by=EngagementParty.DEVELOPER if n.created_by == engagement.developer_id else EngagementParty.ORG,
+                at=n.created_at,
+                seq=n.event_seq,
+            )
+            for n in notes
+        ],
+        side_limits=_side_limits(engagement.state, loaded.facts),
     )
+
+
+_ASKING: Final = frozenset({EngagementState.SUBMITTED, EngagementState.UNDER_REVIEW})
+
+
+def _side_limits(state: EngagementState, facts: sm.Facts) -> SideLimitsOut | None:
+    """The caps left for the current stage (in a side state, the stage it returns to): questions in stages 1-2, holds
+    and days on hold before the agreement; null once ended or where none applies."""
+    stage = facts.paused_from if state in sm.RETURNING else state
+    if stage is None or state in sm.TERMINAL:
+        return None
+
+    def left(value: int | None) -> int | None:
+        return None if value is None else max(value, 0)
+
+    holding = stage in sm.PAUSABLE
+    limits = SideLimitsOut(
+        questions_left=left(facts.questions_left) if stage in _ASKING else None,
+        holds_left=left(facts.holds_left) if holding else None,
+        hold_days_left=left(facts.hold_days_left) if holding else None,
+    )
+    return None if limits == SideLimitsOut(questions_left=None, holds_left=None, hold_days_left=None) else limits
+
+
+async def _contact_by(db: AsyncSession, engagement: Engagement) -> date:
+    """The contact-by date as the tracker shows it: the date the organisation named (kept on the row, quoted by EM2),
+    moved like every due date by a hold at stage 3 (docs/spec/06 6.9: due dates shift by the hold's length). While the
+    stage's deadline is the named date it entered with, the deadline now is that date moved; otherwise (a date that
+    had passed when the stage was entered) the named date stands."""
+    named = engagement.contact_by
+    assert named is not None  # the caller checked
+    deadline = engagement.stage_deadline_at
+    if engagement.state is not EngagementState.INTEREST_CONFIRMED or deadline is None:
+        return named
+    entered = await entering_event(db, engagement.id, EngagementState.INTEREST_CONFIRMED, from_main_path=True)
+    if entered is None or entered.stage_deadline_at is None or local_date(entered.stage_deadline_at) != named:
+        return named
+    return max(named, local_date(deadline))
 
 
 def _milestone(m: Milestone, review_due_on: date | None) -> MilestoneOut:
@@ -536,7 +598,11 @@ async def contact_reveal(db: AsyncSession, party: Party) -> ContactRevealOut:
         raise forbidden(
             "not_the_contact", "Only the organisation's named contact sees the developer's contact details."
         )
-    if engagement.state not in sm.CONTACT_REVEALED:
+    state = engagement.state
+    if state in sm.RETURNING:  # paused: the stage it returns to decides (a hold does not hide a revealed contact)
+        paused = await entering_event(db, engagement.id, state)
+        state = paused.from_state if paused is not None and paused.from_state is not None else state
+    if state not in sm.CONTACT_REVEALED:
         raise forbidden("contact_not_revealed", "Contact details are shared once the organisation approves to proceed.")
     developer = await db.get(User, engagement.developer_id)
     if developer is None:

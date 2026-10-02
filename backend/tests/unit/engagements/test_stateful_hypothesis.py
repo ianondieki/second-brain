@@ -1,6 +1,8 @@
 """AC-TRACK-2, the state machine's half (REQ-ENG-01): random sequences of (actor, command) applied through ``decide``
-to a model of an engagement never reach a state off the main path or its two exits, never take a step the
-database's backstop would refuse, and never leave a dual-endorsement stage or a signing stage without both parties.
+to a model of an engagement never reach a state off the main path, its two exits and the two side states built
+(REQ-ENG-10 part: INFO_REQUESTED, ON_HOLD), never take a step the database's backstop would refuse (a side state is
+entered from the main path and always left for the state it was entered from), and never leave a dual-endorsement
+stage or a signing stage without both parties (a pause keeps what the stage had: endorsements and signatures).
 (The chain's half, "always a verifiable chain", runs against the database in the integration suite.)
 """
 
@@ -59,19 +61,28 @@ class Model:
     facts: sm.Facts
     ip_terms: IpTerms = IpTerms.NON_EXCLUSIVE_LICENCE
     history: list[tuple[S, S]] = field(default_factory=list)
+    paused: sm.Facts | None = None  # the facts of the stage a side state was entered from (the service reloads them)
 
     def enter(self, state: S, **facts: object) -> None:
         if state is not self.state:  # a same-state event (a new terms version) is no transition
             self.history.append((self.state, state))
         self.state = state
-        changes: dict[str, object] = {"endorsed": frozenset(), "signed": frozenset(), **facts}
+        changes: dict[str, object] = {"endorsed": frozenset(), "signed": frozenset(), "paused_from": None, **facts}
         self.facts = replace(self.facts, **changes)  # type: ignore[arg-type]
 
 
 def apply(model: Model, command: sm.Command, decision: sm.Decision, milestone: int, terms: IpTerms) -> None:
     f = model.facts
     party = decision.party
-    if command is sm.Command.PROPOSE_TERMS:
+    if decision.to_state in sm.PAUSED:  # a question or a hold: the stage's facts wait for the return
+        model.paused = f
+        model.enter(decision.to_state, paused_from=model.state)
+    elif decision.resumes:
+        assert model.paused is not None
+        assert decision.to_state is f.paused_from  # back to the state it was entered from (revision 0003)
+        model.history.append((model.state, decision.to_state))
+        model.state, model.facts, model.paused = decision.to_state, model.paused, None
+    elif command is sm.Command.PROPOSE_TERMS:
         model.ip_terms = terms
         model.enter(S.NEGOTIATION, draft_by=party, draft_status=AgreementStatus.DRAFT, ip_terms=terms)
     elif command is sm.Command.MARK_FINAL:
@@ -105,6 +116,8 @@ def apply(model: Model, command: sm.Command, decision: sm.Decision, milestone: i
 
 
 EXITS = frozenset({sm.Command.WITHDRAW, sm.Command.DECLINE, sm.Command.DECLINE_INTEREST})
+# Side branches are taken now and then (mode 1, like the exits), so the sequences still walk deep into the path.
+DETOURS = frozenset({sm.Command.REQUEST_INFO, sm.Command.PAUSE})
 steps = st.lists(
     st.tuples(
         st.integers(0, len(ACTORS) - 1),
@@ -145,13 +158,22 @@ def step_once(model: Model, actor: sm.Actor, command: sm.Command, milestone: int
         assert all(m is MilestoneState.ACCEPTED for m in model.facts.milestones)
     if command is sm.Command.CONFIRM_PAYMENT:
         assert model.facts.payment_recorded
+    if state_before in sm.PAUSED:  # a side state only resumes, or the developer withdraws
+        assert decision.resumes or decision.to_state is S.WITHDRAWN, (state_before, command)
     apply(model, command, decision, milestone, terms)
-    assert model.state in set(sm.MAIN_PATH) | {S.DECLINED, S.WITHDRAWN}
+    assert model.state in set(sm.MAIN_PATH) | {S.DECLINED, S.WITHDRAWN} | sm.PAUSED
+    assert (model.state in sm.PAUSED) is (model.facts.paused_from is not None)
 
 
 def check_history(model: Model) -> None:
+    entered_from: S | None = None
     for before, after in model.history:
-        if after in PREDECESSORS:
+        if after in sm.PAUSED:
+            assert before in set(sm.MAIN_PATH) - sm.TERMINAL, (before, after)
+            entered_from = before
+        elif before in sm.PAUSED and after not in sm.TERMINAL:
+            assert after is entered_from, (before, after, entered_from)  # the chain's return-to-origin rule
+        elif after in PREDECESSORS:
             assert before in PREDECESSORS[after], (before, after)
         else:
             assert after in {S.DECLINED, S.WITHDRAWN}
@@ -167,7 +189,10 @@ def test_random_sequences_never_leave_the_legal_paths(
         actor, command = ACTORS[actor_index], random_command
         if mode != 0:  # a legal step by anyone who has one (exits only now and then)
             legal = [
-                (a, c) for a in ACTORS for c in sm.available(a, model.state, model.facts) if mode == 1 or c not in EXITS
+                (a, c)
+                for a in ACTORS
+                for c in sm.available(a, model.state, model.facts)
+                if mode == 1 or c not in EXITS | DETOURS
             ]
             if not legal:
                 continue

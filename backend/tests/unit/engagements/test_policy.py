@@ -41,8 +41,16 @@ def test_the_shipped_policy_has_the_spec_deadlines() -> None:
     assert policy.stage(EngagementState.UNDER_REVIEW).expire_bd == 30
     confirmed = policy.stage(EngagementState.INTEREST_CONFIRMED)
     assert (confirmed.escalate_bd, confirmed.expire_bd) == (3, 10)
+    assert policy.stage(EngagementState.ORG_INTEREST).expire_bd == 5
     assert policy.stage(EngagementState.NDA_PENDING).remind_bd == (2, 4)
     assert policy.stage(EngagementState.CLOSED) == p.StagePolicy()
+    # REQ-ENG-10: a hold resumes at most 60 days ahead; only the four expiring stages carry expire_bd.
+    assert policy.on_hold_max_days == 60
+    assert policy.hold_days_total == 60  # all holds of one engagement together
+    assert (policy.holds_per_stage, policy.side_actions_per_hour) == (2, 10)
+    assert (policy.info_requests_per_stage, policy.info_expire_bd) == (2, 10)
+    expiring = {state for state in p.STAGE_KEYS if policy.stage(state).expire_bd is not None}
+    assert expiring == set(p.EXPIRING_STAGES)
     assert policy.contact_by_max_bd == 5
     assert policy.decline_other_min_chars == 20
     assert policy.deemed_acceptance_days_max == 90
@@ -84,6 +92,36 @@ def _broken(change: str) -> dict[str, Any]:
         data["decline"]["other_max_chars"] = 100
     elif change == "deemed":
         data["agreement"]["deemed_acceptance_days_max"] = 91
+    elif change == "on_hold_missing":
+        del data["on_hold"]
+    elif change == "on_hold_keys":
+        data["on_hold"]["max_weeks"] = 8
+    elif change == "on_hold_too_long":
+        data["on_hold"]["max_days"] = 61
+    elif change == "expire_missing":
+        del data["stages"]["UNDER_REVIEW"]["expire_bd"]
+    elif change == "expire_stray":
+        data["stages"]["NEGOTIATION"]["expire_bd"] = 14
+    elif change == "expire_before_due":
+        data["stages"]["SUBMITTED"]["expire_bd"] = 9
+    elif change == "hold_total_zero":
+        data["on_hold"]["hold_days_total"] = 0
+    elif change == "info_missing":
+        del data["info_requested"]
+    elif change == "info_keys":
+        data["info_requested"]["answer_bd"] = 10
+    elif change == "info_requests_zero":
+        data["info_requested"]["info_requests_per_stage"] = 0
+    elif change == "info_expire_long":
+        data["info_requested"]["expire_bd"] = 61
+    elif change == "holds_zero":
+        data["on_hold"]["holds_per_stage"] = 0
+    elif change == "side_missing":
+        del data["side_states"]
+    elif change == "side_keys":
+        data["side_states"]["actions_per_day"] = 50
+    elif change == "side_zero":
+        data["side_states"]["actions_per_hour"] = 0
     return data
 
 
@@ -106,6 +144,21 @@ def _broken(change: str) -> dict[str, Any]:
         "window_order",
         "decline_order",
         "deemed",
+        "on_hold_missing",
+        "on_hold_keys",
+        "on_hold_too_long",
+        "expire_missing",
+        "expire_stray",
+        "expire_before_due",
+        "hold_total_zero",
+        "info_missing",
+        "info_keys",
+        "info_requests_zero",
+        "info_expire_long",
+        "holds_zero",
+        "side_missing",
+        "side_keys",
+        "side_zero",
     ],
 )
 def test_a_broken_policy_is_refused(change: str) -> None:

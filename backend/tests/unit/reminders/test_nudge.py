@@ -249,3 +249,19 @@ def test_the_product_name_reaches_the_nudge_html() -> None:
     message = render_nudge(nudge, fallback_wording(nudge, "x"), to="dev@example.com", base_url=BASE_URL, product="Acme")
     assert message.html is not None
     assert ">Acme<" in message.html  # the frame's wordmark and footer line
+
+
+def test_an_open_question_needs_the_developer_and_a_hold_waits_for_its_date() -> None:
+    """REQ-ENG-10 (part): the organisation's question is the developer's to answer (no due date: the clock is
+    paused); a hold waits for its resume date; neither has a health line or anything overdue."""
+    asked = engagement(S.INFO_REQUESTED, awaiting=frozenset({DEV}))
+    held = engagement(S.ON_HOLD, title="Water meters", awaiting=frozenset(), stage_deadline_on=days(10))
+    nudge = compose_nudge(facts(asked, held), NO_HOLIDAYS)
+    assert nudge.needs_you == ("“Solar cold rooms” with Telco A (fixture): answer the questions asked.",)
+    assert nudge.waiting == ("“Water meters” with Telco A (fixture): on hold until 15 Oct 2026.",)
+    assert nudge.health == ()
+    assert nudge.next_step == "Answer the questions asked for “Solar cold rooms”."
+    assert not nudge.empty
+    assert "n1: “Solar cold rooms”: answer the questions asked" in nudge.fact_lines
+    assert "w1: “Water meters”: on hold until 15 Oct 2026" in nudge.fact_lines
+    assert compose_nudge(facts(held), NO_HOLIDAYS).empty  # a hold alone is quiet

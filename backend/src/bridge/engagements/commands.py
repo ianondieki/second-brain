@@ -7,9 +7,16 @@
    the version the caller last read (409 ``stale``);
 2. ask the state machine (``decide``) with the engagement's facts: a command not in the table for this state is 409;
 3. apply the command's own effects (the contact, a decline's details, an NDA, an agreement version, a signature, a
-   milestone step, a payment), then record the party's endorsement and append the event: the database projects the
-   state, sets the times and extends the hash chain (revision 0003), and the engagement is re-read;
+   milestone step, a payment, a side state's text and dates), then record the party's endorsement and append the
+   event: the database projects the state, sets the times and extends the hash chain (revision 0003); a side-state
+   command's note follows its event (revision 0006: the event's seq read back, written as its actor); the engagement
+   is re-read;
 4. close the tag when the engagement ends, and queue the other party's notification (outbox, same transaction).
+
+Side states (REQ-ENG-10 part): entering ``INFO_REQUESTED`` or ``ON_HOLD`` records the date of the deadline it pauses in
+the event's payload (``paused_due_on``; a hold also its ``resume_at``); leaving it for the state it was entered from
+sets that deadline moved by the business days paused (``state_machine.resumed_deadline``). A note's text never enters
+the payload, a log or an audit detail.
 
 The caller commits. Nothing here chooses a state the table did not; the database refuses anything outside its
 backstop, and such a refusal maps to 404/403/409 (``service.db_refusal``). ``step_up_method`` is only ever the
@@ -21,11 +28,11 @@ from __future__ import annotations
 import ipaddress
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +48,7 @@ from bridge.engagements.models import (
     Engagement,
     EngagementEndorsement,
     EngagementEvent,
+    EngagementNote,
     Milestone,
     PaymentRecord,
     Signature,
@@ -52,6 +60,7 @@ from bridge.engagements.service import (
     api_error,
     app_now,
     db_refusal,
+    entering_event,
     load,
     load_holidays,
     lock_engagement,
@@ -63,6 +72,7 @@ from bridge.models.enums import (
     AgreementStatus,
     ContactChannel,
     EndorsementMethod,
+    EngagementActorRole,
     EngagementEndReason,
     EngagementOrigin,
     EngagementParty,
@@ -80,6 +90,7 @@ from bridge.models.enums import (
     TagStatus,
 )
 from bridge.proposals.models import Proposal, Tag
+from bridge.proposals.sanitise import contact_codes
 from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
@@ -97,6 +108,7 @@ CONTACT_ROLE_ORDER: Final = (
 )
 _DIGEST = text("SELECT app_subject_digest(:user_id, convert_to(:data, 'UTF8'))")
 _CLOSE_TAG = text("SELECT app_close_tag(:tag_id)")
+_CLOSE_TAG_AS = text("SELECT app_close_tag(:tag_id, CAST(:status AS tag_status))")
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +163,17 @@ class Inputs:
     payment: PaymentInput | None = None
     amount_received: int | None = None
     milestone_id: UUID | None = None
+    note: str | None = None  # a question, an answer or a reason (side states)
+    resume_at: date | None = None  # a hold's resume date
+
+
+@dataclass(frozen=True, slots=True)
+class NoteInput:
+    """The note a side-state command writes after its event (``engagement_notes``)."""
+
+    kind: str
+    body: str
+    resume_at: date | None = None
 
 
 @dataclass(slots=True)
@@ -174,6 +197,9 @@ class Step:
     named_deadline: date | None = None
     notice_text: str | None = None
     keep_endorsement: bool = False  # a re-submitted milestone keeps the developer's first endorsement
+    sets_deadline: bool = False  # the effect chose the event's stage deadline (``deadline``), not the policy
+    deadline: datetime | None = None
+    note: NoteInput | None = None
 
 
 def verified_step_up(party: Party, settings: Settings) -> StepUpMethod:
@@ -236,10 +262,13 @@ async def execute(
     except sm.TrackerError as error:
         raise api_error(error) from error
     now = await app_now(db)
+    policy = get_policy()
+    if command in sm.SIDE_COMMANDS:
+        await _throttle(db, party, now, policy)
     step = Step(
         db=db,
         settings=settings,
-        policy=get_policy(),
+        policy=policy,
         party=party,
         engagement=engagement,
         decision=decision,
@@ -263,6 +292,30 @@ async def execute(
     return engagement
 
 
+async def _throttle(db: AsyncSession, party: Party, now: datetime, policy: TrackerPolicy) -> None:
+    """429 ``too_many_actions`` once the caller's party ran ``side_states.actions_per_hour`` side-state commands on
+    this engagement within the hour before ``now`` (the chain's events, on the shared clock), so neither party floods
+    the other with notices (THREAT_MODEL D). Counted per party: the organisation's members together."""
+    roles = [EngagementActorRole.DEVELOPER] if party.is_developer else list(notify.ORG_ROLES)
+    recent = await db.scalar(
+        select(func.count())
+        .select_from(EngagementEvent)
+        .where(
+            EngagementEvent.engagement_id == party.engagement_id,
+            EngagementEvent.command.in_([command.value for command in sm.SIDE_COMMANDS]),
+            EngagementEvent.actor_role.in_(roles),
+            EngagementEvent.created_at > now - timedelta(hours=1),
+        )
+    )
+    if (recent or 0) >= policy.side_actions_per_hour:
+        raise ApiError(
+            429,
+            "too_many_actions",
+            f"Your side has asked, answered, paused or resumed {policy.side_actions_per_hour} times on this"
+            " engagement in the last hour. Try again later.",
+        )
+
+
 async def _apply(step: Step) -> None:
     decision, db = step.decision, step.db
     await EFFECTS[decision.command](step)
@@ -274,6 +327,8 @@ async def _apply(step: Step) -> None:
         if decision.endorse is sm.Endorse.BEFORE:
             await _endorse(step, endorsement_id, decision.from_state)
     event = await _append(step)
+    if step.note is not None:
+        await _write_note(step, event, step.note)
     await db.refresh(step.engagement)  # the database projected the event: state, stage times, lock_version
     if endorsement_id is not None and decision.endorse is sm.Endorse.AFTER:
         await _endorse(step, endorsement_id, decision.to_state)
@@ -315,7 +370,9 @@ async def _endorse(step: Step, endorsement_id: UUID, stage: EngagementState) -> 
 async def _append(step: Step) -> EngagementEvent:
     decision = step.decision
     deadline = None
-    if decision.changes_state or decision.renews_deadline:
+    if step.sets_deadline:
+        deadline = step.deadline
+    elif decision.changes_state or decision.renews_deadline:
         deadline = sm.stage_deadline(decision.to_state, step.now, step.holidays, step.policy, named=step.named_deadline)
     event = EngagementEvent(
         id=uuid7(),
@@ -334,12 +391,31 @@ async def _append(step: Step) -> EngagementEvent:
     return event
 
 
-async def _open_tag(step: Step) -> Tag | None:
+async def _write_note(step: Step, event: EngagementEvent, note: NoteInput) -> None:
+    """The note of a side-state event, right after it (revision 0006): its seq is the database's, read back; written
+    as the event's actor. Only the columns bridge_app may insert are sent: ``created_at`` is the database's clock and
+    the redaction columns are the owner's (D-54), so a plain INSERT names neither (an ORM add would send NULLs)."""
+    seq = await step.db.scalar(select(EngagementEvent.seq).where(EngagementEvent.id == event.id))
+    if seq is None:  # the event was just flushed in this transaction
+        raise RuntimeError("the event of a note is not readable")
+    await step.db.execute(
+        insert(EngagementNote).values(
+            id=uuid7(),
+            engagement_id=step.engagement.id,
+            event_seq=seq,
+            kind=note.kind,
+            body=note.body,
+            resume_at=note.resume_at,
+            created_by=step.party.user_id,
+        )
+    )
+
+
+async def open_tag(db: AsyncSession, engagement: Engagement) -> Tag | None:
     """The developer's open tag behind a ``tagged`` engagement (an organisation's interest has none)."""
-    engagement = step.engagement
     if engagement.origin is not EngagementOrigin.TAGGED:
         return None
-    found: Tag | None = await step.db.scalar(
+    found: Tag | None = await db.scalar(
         select(Tag).where(
             Tag.proposal_id == engagement.proposal_id,
             Tag.org_id == engagement.org_id,
@@ -348,6 +424,23 @@ async def _open_tag(step: Step) -> Tag | None:
         )
     )
     return found
+
+
+async def close_tag(db: AsyncSession, engagement: Engagement, *, status: TagStatus | None = None) -> None:
+    """The engagement ended (DECLINED, EXPIRED or CLOSED): its tag closes (``app_close_tag``), freeing the developer's
+    one open tag with this organisation. ``status`` (revision 0007): ``expired`` when the system expired a tagged
+    engagement, in a session bound to its developer; otherwise the tag keeps its status (the one-argument call)."""
+    tag = await open_tag(db, engagement)
+    if tag is None:  # an organisation's interest (no tag), or the tag closed already
+        return
+    if status is None:
+        await db.execute(_CLOSE_TAG, {"tag_id": tag.id})
+    else:
+        await db.execute(_CLOSE_TAG_AS, {"tag_id": tag.id, "status": status.value})
+
+
+async def _open_tag(step: Step) -> Tag | None:
+    return await open_tag(step.db, step.engagement)
 
 
 async def _withdraw_tag(step: Step) -> None:
@@ -360,11 +453,7 @@ async def _withdraw_tag(step: Step) -> None:
 
 
 async def _close_tag(step: Step) -> None:
-    """The engagement ended (DECLINED or CLOSED): its tag closes (``app_close_tag``), freeing the developer's one open
-    tag with this organisation."""
-    tag = await _open_tag(step)
-    if tag is not None:
-        await step.db.execute(_CLOSE_TAG, {"tag_id": tag.id})
+    await close_tag(step.db, step.engagement)
 
 
 # ------------------------------------------------------------------------------------------------ the effects
@@ -689,6 +778,83 @@ async def _confirm_payment(step: Step) -> None:
     step.payload.update(payment_id=str(row.id), amount_kes_minor=received)
 
 
+def _paused_deadline(step: Step) -> None:
+    """Entering a side state: the stage's deadline is paused; its date stays in the chain for the return."""
+    deadline = step.engagement.stage_deadline_at
+    if deadline is not None:
+        step.payload["paused_due_on"] = local_date(deadline).isoformat()
+
+
+def _iso_date(value: object) -> date | None:
+    try:
+        return date.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:  # the chain holds what _paused_deadline wrote; anything else reads as no deadline
+        return None
+
+
+async def returning_deadline(db: AsyncSession, engagement: Engagement, now: datetime) -> datetime | None:
+    """The deadline the stage an engagement in a side state returns to has on ``now``'s Nairobi date: the one it had
+    when it was paused, moved by the business days since (the side state's entering event and its payload)."""
+    paused = await entering_event(db, engagement.id, engagement.state)
+    if paused is None:  # every side state has its entering event; refuse rather than guess
+        raise sm.Conflict("no_return_state", "The state this engagement returns to is not known. Reload and retry.")
+    paused_on, today = local_date(paused.created_at), local_date(now)
+    due_on = _iso_date(dict(paused.payload).get("paused_due_on"))
+    holidays = await load_holidays(db, today, since=min(paused_on, due_on or paused_on))
+    return sm.resumed_deadline(due_on, paused_on, today, holidays)
+
+
+def _note_text(step: Step, limit: int) -> str:
+    """The note's text, trimmed (1 to ``limit`` characters), with no contact details before first contact: the stage
+    the command starts from, or the one a side state returns to, is before CONTACT_MADE (the Tier-1 detectors of
+    ``proposals.sanitise.contact_codes``, on the raw text and on its plain text, entities decoded)."""
+    text = sm.check_note(step.inputs.note, limit)
+    stage = step.decision.to_state if step.decision.resumes else step.decision.from_state
+    if stage in sm.BEFORE_CONTACT and contact_codes(text):
+        raise sm.Invalid(
+            "contains_contact",
+            "Contact details and links are shared once first contact is made. Remove them from the text.",
+        )
+    return text
+
+
+async def _request_info(step: Step) -> None:
+    question = _note_text(step, sm.QUESTION_MAX_CHARS)
+    _paused_deadline(step)
+    # The stage's clock is paused until the answer; the question's own deadline is the answer-by date (policy.yaml
+    # info_requested.expire_bd), past which the expiry job ends the engagement (NO_DEV_RESPONSE).
+    step.sets_deadline, step.deadline = True, sm.question_deadline(step.now, step.holidays, step.policy)
+    step.note = NoteInput("info_request", question)
+
+
+async def _hold(step: Step) -> None:
+    reason = _note_text(step, sm.REASON_MAX_CHARS)
+    resume_at = step.inputs.resume_at
+    if resume_at is None:  # the router always sends one
+        raise sm.Invalid("invalid_resume_at", "Choose the date the engagement resumes.")
+    sm.check_resume_at(resume_at, step.now, step.policy, days_left=step.loaded.facts.hold_days_left)
+    _paused_deadline(step)
+    step.payload["resume_at"] = resume_at.isoformat()
+    step.sets_deadline, step.deadline = True, sm.end_of_day(resume_at)  # "due" reads the resume date
+    step.note = NoteInput("hold", reason, resume_at)
+
+
+async def _return(step: Step) -> None:
+    """Answering the organisation's question, or resuming a hold early: back to the state it was entered from."""
+    answer = step.decision.command is C.ANSWER_INFO
+    text = _note_text(step, sm.QUESTION_MAX_CHARS if answer else sm.REASON_MAX_CHARS)
+    step.sets_deadline = True
+    step.deadline = await returning_deadline(step.db, step.engagement, step.now)
+    step.note = NoteInput("info_answer" if answer else "resume", text)
+
+
+async def _cancel_request(step: Step) -> None:
+    """The organisation withdraws its open question: back to the stage, the days it waited moved like an answer's.
+    No note (the notes' kinds are a question, an answer, a hold and a resume; the History shows the command)."""
+    step.sets_deadline = True
+    step.deadline = await returning_deadline(step.db, step.engagement, step.now)
+
+
 Effect = Callable[[Step], Awaitable[None]]
 EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.ACCEPT_INTEREST: _accept_interest,
@@ -714,6 +880,11 @@ EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.SIGN_CERTIFICATE: _sign,
     C.RECORD_PAYMENT: _record_payment,
     C.CONFIRM_PAYMENT: _confirm_payment,
+    C.REQUEST_INFO: _request_info,
+    C.ANSWER_INFO: _return,
+    C.CANCEL_REQUEST: _cancel_request,
+    C.PAUSE: _hold,
+    C.RESUME: _return,
 }
 
 

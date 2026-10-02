@@ -11,7 +11,8 @@ rendered by code: the model's choice among fixed variants, or the fixed fallback
 either way.
 
 A nudge is ``empty`` (nothing is sent) when nothing needs the developer, every engagement is on track and no draft
-waits: waiting on the other party alone is quiet.
+waits: waiting on the other party alone is quiet. A paused engagement (REQ-ENG-10 part) has no health line: an open
+question needs the developer (no due date, the clock is paused), a hold waits for its resume date.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from datetime import date
 from typing import Final, Literal
 from uuid import UUID
 
-from bridge.models.enums import EngagementParty, MilestoneState
+from bridge.models.enums import EngagementParty, EngagementState, MilestoneState
 from bridge.notifications.brand import PRODUCT_DEFAULT
 from bridge.notifications.email import EmailMessage
 from bridge.reminders.health import Assessment, EngagementFact, Health, Reason, ReasonCode, assess
@@ -45,7 +46,7 @@ from bridge.web_paths import DEV_ENGAGEMENTS
 
 KIND: Final = "em7"
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
-M = MilestoneState
+M, S = MilestoneState, EngagementState
 WORDING_HEADER: Final = "X-Bridge-Wording"  # "model" or "fallback": which wording the email carries
 # [[COPY-REVIEW]]
 AI_LABEL: Final = (
@@ -232,6 +233,12 @@ def compose_nudge(facts: DeveloperFacts, holidays: Collection[date], policy: Rem
     needs_you: list[tuple[str, str]] = []
     waiting: list[tuple[str, str]] = []
     health: list[tuple[HealthRow, str]] = []
+    paused = [e for e in facts.engagements if e.paused]
+    for e in paused:
+        needs_you += _needs_you(e, facts.today, policy.upcoming_days)
+        if e.state is S.ON_HOLD and e.stage_deadline_on is not None:
+            until = f"on hold until {eat_date(e.stage_deadline_on)}"
+            waiting.append((f"{_title(e)} with {_org(e)}: {until}.", f"{_title(e)}: {until}"))
     for e, a in pairs:
         needs_you += _needs_you(e, facts.today, policy.upcoming_days)
         if ORG in e.awaiting:
@@ -246,7 +253,7 @@ def compose_nudge(facts: DeveloperFacts, holidays: Collection[date], policy: Rem
         line = f"{_title(e)} with {_org(e)}: {HEALTH_LABELS[a.health]}" + (f". {why}." if why else ".")
         health.append((HealthRow(e.id, a.health, line), f"{_title(e)}: {HEALTH_LABELS[a.health].lower()}"))
     drafts = tuple(quote(title, fallback="Untitled draft") for title in facts.drafts)
-    step = _next_step(pairs, drafts)
+    step = _next_step([*pairs, *((e, Assessment(Health.ON_TRACK, ())) for e in paused)], drafts)
     briefs = [
         *zip(_ids("n", needs_you), (brief for _, brief in needs_you), strict=True),
         *zip(_ids("w", waiting), (brief for _, brief in waiting), strict=True),

@@ -22,6 +22,8 @@ tenant table without a fixture fails the run. Tables read on the request path by
   or deleted. In-app notifications (REQ-NOT-03): a user marks only their own read and changes nothing else. Problem
   Briefs (REQ-DIR-05): a draft Brief awaiting review is unreadable to developers; approval publishes it; a closed
   public Brief stays readable.
+- The expiry job's list (revision 0007, ``app_engagements_due_for_expiry``): only a session with no user bound reads
+  it, and it learns only developer and engagement ids, of the engagements the clock may act on.
 - A cross-tenant API access returns 404.
 """
 
@@ -30,9 +32,11 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from dataclasses import replace
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, NamedTuple
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -1088,6 +1092,63 @@ async def test_a_brief_is_published_by_moderation_and_stays_readable_once_closed
         assert await t.run(conn, BRIEF_STATUS, p=brief) == "closed"  # closed stays closed whatever moderation decides
         await t.act(conn, p.developer)
         assert await t.run(conn, BRIEF_AND_PROBLEM_READ, p=brief) == 0  # but is read only while its problem is public
+
+
+# --- revision 0007: the engagements the expiry job may act on --------------------------------------------------------
+
+DUE = "SELECT developer_id, engagement_id FROM app_engagements_due_for_expiry(:now)"
+NAIROBI = ZoneInfo("Africa/Nairobi")
+ENTERED = "SELECT stage_entered_at FROM engagements WHERE id = :id"
+
+
+async def _due(conn: AsyncConnection, now: datetime, *engagements: UUID) -> set[tuple[UUID, UUID]]:
+    """The (developer, engagement) pairs of ``engagements`` the job's list holds at ``now`` (the database is shared)."""
+    result = await conn.execute(text(DUE), {"now": now})
+    assert list(result.keys()) == ["developer_id", "engagement_id"]  # ids only
+    return {(row.developer_id, row.engagement_id) for row in result if row.engagement_id in engagements}
+
+
+async def test_only_the_expiry_job_lists_the_engagements_due_and_learns_only_ids(owner_engine: AsyncEngine) -> None:
+    """Given a submitted engagement and one on hold, When the expiry job (no user bound) asks for the engagements the
+    clock may act on, Then it gets each one's developer and id once its stage deadline (without one, its stage entry)
+    has come, a hold from 00:00 Africa/Nairobi on its resume date, and an engagement that ended never; a session bound
+    to a developer, a member or staff is refused, and so is a missing time."""
+    tick = timedelta(microseconds=1)
+    resume_day = datetime(2027, 1, 29, tzinfo=NAIROBI)  # 00:00 EAT on the resume date
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        submitted = await t.engage(conn, p)  # a fixture: no stage deadline
+        entered = await t.run(conn, ENTERED, id=submitted)
+        await t.tag(conn, p.proposal, p.other_org, p.developer)
+        held = await t.engage(conn, replace(p, org=p.other_org))
+        until = resume_day.replace(hour=23, minute=59, second=59)  # a hold's deadline: the end of its resume date
+        await t.append(conn, held, p.developer, "developer", "pause", "SUBMITTED", "ON_HOLD", deadline=until)
+        assert await t.run(conn, ENTERED, id=held) < resume_day
+
+        await t.act(conn, None)  # the job's session
+        assert await _due(conn, entered - tick, submitted) == set()  # without a deadline: listed from its entry
+        assert await _due(conn, entered, submitted) == {(p.developer, submitted)}
+        await t.act(conn, p.developer)  # a deadline ten days out (a same-state event renews it)
+        deadline = entered + timedelta(days=10)
+        await t.append(conn, submitted, None, "system", "remind", "SUBMITTED", "SUBMITTED", deadline=deadline)
+        await t.act(conn, None)
+        assert await _due(conn, deadline - tick, submitted) == set()
+        assert await _due(conn, deadline, submitted) == {(p.developer, submitted)}
+        assert await _due(conn, resume_day - tick, held) == set()
+        assert await _due(conn, resume_day, held) == {(p.developer, held)}  # not only once its deadline has passed
+
+        await t.act(conn, p.developer)  # the job expires the submitted one: an ended engagement is never listed
+        await t.append(conn, submitted, None, "system", "expire", "SUBMITTED", "EXPIRED", reason="NO_REVIEW")
+        await t.act(conn, None)
+        later = resume_day + timedelta(days=365)
+        assert await _due(conn, later, submitted, held) == {(p.developer, held)}
+
+        for caller, org in ((p.developer, None), (p.owner, p.org), (p.signatory, None), (p.staff, None)):
+            await t.act(conn, caller, org)
+            await t.expect(conn, DUE, "the engagements.expire job only, with no user bound", now=later)
+        await t.act(conn, None)
+        await t.expect(conn, DUE, "name the time", now=None)
 
 
 # ---------------------------------------------------------------- cross-tenant API access returns 404

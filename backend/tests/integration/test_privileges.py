@@ -12,6 +12,8 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   domain proven and set verification and create the membership, and only the verified E2 claimant or a member records
   the Master Enterprise Terms (the current version by the claimant for E2 approval).
 - Registration: the database sets ``registered_at``; only ``provenance_worker`` bound to the owner fills the hashes.
+- A tag expires (revision 0007, AC-PROP-3) only through ``app_close_tag(tag, 'expired')``: by its developer, once the
+  engagement made from it has expired, once per engagement; a closed tag keeps its status (the owner may relabel one).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, NamedTuple, cast
@@ -39,6 +42,7 @@ from bridge.llm.ledger import CallStatus
 from bridge.models.enums import VersionStatus
 from bridge.proposals.models import ProposalVersion
 from tests.integration import world as w
+from tests.integration.engagements import tracker
 
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 OTHER_ROLES = ("bridge_owner", "aggregate_worker", "audit_reader")
@@ -1984,6 +1988,121 @@ async def test_one_open_tag_per_developer_and_org_and_a_closed_tag_never_reopens
         assert await run(conn, close, id=held) is True  # the developer closes their own held tag
         await act(conn, members[e1])
         assert await run(conn, "SELECT app_held_tag_count(:id)", id=e1) == 0  # closed tags are not counted
+
+
+CLOSE_AS = "SELECT app_close_tag(:id, CAST(:status AS tag_status))"
+TAG_STATE = (  # "<status> open|closed"
+    "SELECT status::text || CASE WHEN closed_at IS NULL THEN ' open' ELSE ' closed' END FROM tags WHERE id = :id"
+)
+NOT_EXPIRED = "a tag expires only once the engagement made from it has expired"
+NOT_THE_DEVELOPER = "only the developer withdraws or expires their tag"
+NOT_A_PARTY = "the developer or a member of the tagged organisation only"
+
+
+async def _expire(conn: AsyncConnection, engagement: UUID, from_state: str, reason: str) -> None:
+    """The expiry job's event: the system's, written by a session bound to a party (the connection's)."""
+    await tracker.append(conn, engagement, None, "system", "expire", from_state, "EXPIRED", reason=reason)
+    assert await tracker.state_of(conn, engagement) == "EXPIRED"
+
+
+async def test_a_tag_expires_only_with_the_engagement_made_from_it(owner_engine: AsyncEngine) -> None:
+    """Revision 0007 (AC-PROP-3): app_close_tag(tag, 'expired') is the one way a tag becomes expired. Only its
+    developer (the expiry job is bound to them) gives a tag a status, only withdrawn or expired; expired only once the
+    tagged engagement of the tag's proposal and organisation is EXPIRED, only for an open delivered tag, and once per
+    engagement (a later tag of the pair cannot borrow the expiry). An organisation's own interest that expired (the
+    developer's silence) never expires the developer's tag. The developer's UPDATE still sets withdrawn only."""
+    async with as_app(owner_engine) as conn:
+        p = await tracker.parties(conn)
+        pitched = await run(conn, "SELECT id FROM tags WHERE proposal_id = :p AND org_id = :o", p=p.proposal, o=p.org)
+        await act(conn, p.developer)
+        engagement = await tracker.engage(conn, p)
+        expire_directly = "UPDATE tags SET status = 'expired' WHERE id = :id"
+
+        await expect(conn, CLOSE_AS, NOT_EXPIRED, id=pitched, status="expired")  # SUBMITTED: not yet
+        for status in ("delivered", "released", "held_unclaimed", "held_pending_verification"):
+            await expect(conn, CLOSE_AS, "closes as withdrawn or expired", id=pitched, status=status)
+        await expect(conn, expire_directly, "row-level security", id=pitched)
+        assert await run(conn, TAG_STATE, id=pitched) == "delivered open"
+
+        await _expire(conn, engagement, "SUBMITTED", "NO_REVIEW")
+        for member in (p.owner, p.signatory, p.reviewer):  # may close it, never give it a status
+            await act(conn, member)
+            for status in ("expired", "withdrawn"):
+                await expect(conn, CLOSE_AS, NOT_THE_DEVELOPER, id=pitched, status=status)
+        for caller in (p.finance, p.viewer, p.outsider, p.other_member, None):
+            await act(conn, caller)
+            await expect(conn, CLOSE_AS, NOT_A_PARTY, id=pitched, status="expired")
+        await act(conn, p.developer)
+        await expect(conn, expire_directly, "row-level security", id=pitched)  # the policy is revision 0002's
+        assert await run(conn, CLOSE_AS, id=pitched, status="expired") is True
+        assert await run(conn, TAG_STATE, id=pitched) == "expired closed"
+        assert await run(conn, CLOSE_AS, id=pitched, status="expired") is False  # idempotent
+
+        # A later tag of the same proposal and organisation (no engagement of its own: one per pair).
+        later = await tracker.tag(conn, p.proposal, p.org, p.developer)
+        await expect(conn, CLOSE_AS, "already expired another tag", id=later, status="expired")
+        assert await run(conn, CLOSE_AS, id=later, status="withdrawn") is True
+        assert await run(conn, TAG_STATE, id=later) == "withdrawn closed"
+
+        # An organisation's interest (origin org_browse) on a pair the developer had also tagged: it expires for the
+        # developer's silence (NO_DEV_RESPONSE), so the tag closes with its status kept.
+        await as_owner(conn)
+        browsing = await add_org(conn, verification="e2")
+        signatory = await w.add_user(conn, _email("browsing-signatory"), "Signatory")
+        await tracker.member(conn, browsing, signatory, "{signatory}")
+        await act(conn, p.developer)
+        tagged = await tracker.tag(conn, p.proposal, browsing, p.developer)
+        await act(conn, signatory)
+        interest = await tracker.engage(conn, replace(p, org=browsing), origin="org_browse", state="ORG_INTEREST")
+        await _expire(conn, interest, "ORG_INTEREST", "NO_DEV_RESPONSE")
+        await act(conn, p.developer)
+        await expect(conn, CLOSE_AS, NOT_EXPIRED, id=tagged, status="expired")
+        assert await run(conn, "SELECT app_close_tag(:id)", id=tagged) is True
+        assert await run(conn, TAG_STATE, id=tagged) == "delivered closed"
+
+
+async def test_a_closed_tag_keeps_its_status_and_only_the_owner_relabels_one(owner_engine: AsyncEngine) -> None:
+    """Revision 0007: app_close_tag never relabels a closed tag (a withdrawn tag never becomes expired); an engagement
+    that ended otherwise (WITHDRAWN) never expires its tag; a tag an expiry closed before revision 0007 (status kept,
+    delivered) is relabelled expired only by the owner role, directly (RLS does not bind it; tags_guard() lets a
+    closed tag move between closing statuses), never through the function without a bound developer."""
+    async with as_app(owner_engine) as conn:
+        p = await tracker.parties(conn)
+        pitched = await run(conn, "SELECT id FROM tags WHERE proposal_id = :p AND org_id = :o", p=p.proposal, o=p.org)
+        await act(conn, p.developer)
+        engagement = await tracker.engage(conn, p)
+        await _expire(conn, engagement, "SUBMITTED", "NO_REVIEW")
+        assert await run(conn, "SELECT app_close_tag(:id)", id=pitched) is True  # as the job did before 0007
+        assert await run(conn, CLOSE_AS, id=pitched, status="expired") is False
+        assert await run(conn, TAG_STATE, id=pitched) == "delivered closed"
+
+        await act(conn, None)
+        await as_owner(conn)  # the owner role with no developer bound: the function refuses it
+        await expect(conn, CLOSE_AS, NOT_A_PARTY, id=pitched, status="expired")
+        await run(conn, "UPDATE tags SET status = 'expired' WHERE id = :id", id=pitched)  # the owner's repair
+        await expect(conn, "UPDATE tags SET status = 'delivered' WHERE id = :id", "never reopens", id=pitched)
+        assert await run(conn, TAG_STATE, id=pitched) == "expired closed"
+
+        # Withdrawn before its engagement expired: it stays withdrawn.
+        other = replace(p, org=p.other_org)
+        await act(conn, p.developer)
+        withdrawn = await tracker.tag(conn, p.proposal, p.other_org, p.developer)
+        lapsed = await tracker.engage(conn, other)
+        await run(conn, "UPDATE tags SET status = 'withdrawn' WHERE id = :id", id=withdrawn)
+        await _expire(conn, lapsed, "SUBMITTED", "NO_REVIEW")
+        assert await run(conn, CLOSE_AS, id=withdrawn, status="expired") is False
+        assert await run(conn, TAG_STATE, id=withdrawn) == "withdrawn closed"
+
+        # An engagement the developer withdrew never expires its tag; the developer withdraws it instead.
+        await as_owner(conn)
+        third = await add_org(conn, verification="e2")
+        await act(conn, p.developer)
+        open_tag = await tracker.tag(conn, p.proposal, third, p.developer)
+        ended = await tracker.engage(conn, replace(p, org=third))
+        await tracker.append(conn, ended, p.developer, "developer", "withdraw", "SUBMITTED", "WITHDRAWN")
+        await expect(conn, CLOSE_AS, NOT_EXPIRED, id=open_tag, status="expired")
+        assert await run(conn, CLOSE_AS, id=open_tag, status="withdrawn") is True
+        assert await run(conn, TAG_STATE, id=open_tag) == "withdrawn closed"
 
 
 async def test_the_provenance_worker_reads_every_chain_head_and_nothing_more(owner_engine: AsyncEngine) -> None:

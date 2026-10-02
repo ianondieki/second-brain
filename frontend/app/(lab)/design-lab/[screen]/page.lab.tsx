@@ -33,7 +33,7 @@ export default async function LabScreen({ params, searchParams }: Props) {
       {screen === "landing" ? <LandingScreen /> : null}
       {screen === "home" ? <HomeScreen /> : null}
       {screen === "certificate" ? <CertificateScreen /> : null}
-      {screen === "tracker" ? <TrackerScreen /> : null}
+      {screen === "tracker" ? <TrackerScreen variant={one(query.variant)} /> : null}
       {screen === "proposal" ? <ProposalScreen /> : null}
       {screen === "checkout" ? <CheckoutScreen succeeded={one(query.variant) === "success"} /> : null}
     </div>

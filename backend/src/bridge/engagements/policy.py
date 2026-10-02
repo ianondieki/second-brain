@@ -37,7 +37,16 @@ STAGE_KEYS = (
     EngagementState.PAYMENT_FINAL,
 )
 _STAGE_FIELDS = frozenset({"due_bd", "expire_bd", "escalate_bd", "auto_confirm_bd", "remind_bd"})
+# The stages an engagement expires from when nobody acts (docs/spec/06 6.9; the expiry job, REQ-ENG-10): each needs
+# expire_bd, no other stage may carry one (nothing would read it), and it never falls before the stage's deadline.
+EXPIRING_STAGES = (
+    EngagementState.ORG_INTEREST,
+    EngagementState.SUBMITTED,
+    EngagementState.UNDER_REVIEW,
+    EngagementState.INTEREST_CONFIRMED,
+)
 _MAX_BD = 60
+_MAX_HOLD_DAYS = 60  # docs/spec/06 6.9 side branches: ON_HOLD resumes at most 60 days ahead
 
 
 class PolicyError(ValueError):
@@ -66,6 +75,12 @@ class TrackerPolicy:
     exclusivity_max_chars: int
     decline_other_min_chars: int
     decline_other_max_chars: int
+    on_hold_max_days: int  # a hold's resume date is at most this many calendar days after the day it starts
+    hold_days_total: int  # all the holds of one engagement together, in calendar days
+    holds_per_stage: int  # holds each time the engagement is in a stage
+    info_requests_per_stage: int  # questions the organisation may ask each time the engagement is in stage 1 or 2
+    info_expire_bd: int  # an unanswered question ends the engagement EXPIRED (NO_DEV_RESPONSE) after this many BD
+    side_actions_per_hour: int  # one party's side-state commands on one engagement within any hour
 
     def stage(self, state: EngagementState) -> StagePolicy:
         """The policy of an open main-path stage; an empty one for any other state (no deadline)."""
@@ -110,6 +125,13 @@ def parse_policy(data: Any) -> TrackerPolicy:
     for state, stage in stages.items():
         if state is not EngagementState.IN_IMPLEMENTATION and stage.due_bd is None:
             raise PolicyError(f"policy.yaml: stages.{state.value}.due_bd is required")
+        if (stage.expire_bd is not None) != (state in EXPIRING_STAGES):
+            raise PolicyError(
+                f"policy.yaml: expire_bd is required on {[s.value for s in EXPIRING_STAGES]} and only there"
+                f" (stages.{state.value})"
+            )
+        if stage.expire_bd is not None and stage.due_bd is not None and stage.expire_bd < stage.due_bd:
+            raise PolicyError(f"policy.yaml: stages.{state.value}.expire_bd is before its due_bd")
     contact = _section(data, "contact", {"contact_by_max_bd"})
     milestones = _section(
         data,
@@ -118,6 +140,9 @@ def parse_policy(data: Any) -> TrackerPolicy:
     )
     agreement = _section(data, "agreement", {"deemed_acceptance_days_max", "exclusivity_max_chars"})
     decline = _section(data, "decline", {"other_min_chars", "other_max_chars"})
+    on_hold = _section(data, "on_hold", {"max_days", "hold_days_total", "holds_per_stage"})
+    side = _section(data, "side_states", {"actions_per_hour"})
+    info = _section(data, "info_requested", {"info_requests_per_stage", "expire_bd"})
     policy = TrackerPolicy(
         stages=stages,
         contact_by_max_bd=_bd(contact["contact_by_max_bd"], "contact.contact_by_max_bd"),
@@ -133,6 +158,12 @@ def parse_policy(data: Any) -> TrackerPolicy:
         exclusivity_max_chars=_bd(agreement["exclusivity_max_chars"], "agreement.exclusivity_max_chars", high=500),
         decline_other_min_chars=_bd(decline["other_min_chars"], "decline.other_min_chars", high=200),
         decline_other_max_chars=_bd(decline["other_max_chars"], "decline.other_max_chars", high=4000),
+        on_hold_max_days=_bd(on_hold["max_days"], "on_hold.max_days", high=_MAX_HOLD_DAYS),
+        hold_days_total=_bd(on_hold["hold_days_total"], "on_hold.hold_days_total", high=365),
+        info_requests_per_stage=_bd(info["info_requests_per_stage"], "info_requested.info_requests_per_stage", high=10),
+        info_expire_bd=_bd(info["expire_bd"], "info_requested.expire_bd"),
+        holds_per_stage=_bd(on_hold["holds_per_stage"], "on_hold.holds_per_stage", high=10),
+        side_actions_per_hour=_bd(side["actions_per_hour"], "side_states.actions_per_hour", high=100),
     )
     if policy.review_window_bd_default > policy.review_window_bd_max:
         raise PolicyError("policy.yaml: milestones.review_window_bd_default exceeds review_window_bd_max")

@@ -21,6 +21,12 @@ export type Refusal =
   | "invalidContactBy"
   | "attestation"
   | "reasonText"
+  | "containsContact"
+  | "invalidNote"
+  | "invalidResumeAt"
+  | "questionLimit"
+  | "holdLimit"
+  | "tooMany"
   | "notFound"
   | "network"
   | "generic";
@@ -41,6 +47,14 @@ const BY_CODE: Record<string, Refusal> = {
   invalid_contact_by: "invalidContactBy",
   attestation_required: "attestation",
   reason_text_required: "reasonText",
+  // The side states (REQ-ENG-10 part): a text with contact details before first contact, a blank or refused text, a
+  // resume date out of range, the caps on questions and holds (policy.yaml), and one party's side-state steps per hour.
+  contains_contact: "containsContact",
+  invalid_note: "invalidNote",
+  invalid_resume_at: "invalidResumeAt",
+  info_request_limit: "questionLimit",
+  hold_limit: "holdLimit",
+  too_many_actions: "tooMany",
 };
 
 export function refusalOf(status: number, error: unknown): Refusal {

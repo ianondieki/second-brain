@@ -210,6 +210,30 @@
         "title": "AllowedDomainOut",
         "type": "object"
       },
+      "AnswerInfoBody": {
+        "description": "The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause.",
+        "properties": {
+          "answer": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+            "title": "Answer",
+            "type": "string"
+          },
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lock_version",
+          "answer"
+        ],
+        "title": "AnswerInfoBody",
+        "type": "object"
+      },
       "ApiErrorBody": {
         "properties": {
           "detail": {
@@ -2276,7 +2300,12 @@
           "accept_delivery",
           "sign_certificate",
           "record_payment",
-          "confirm_payment"
+          "confirm_payment",
+          "request_info",
+          "answer_info",
+          "cancel_request",
+          "pause",
+          "resume"
         ],
         "title": "Command",
         "type": "string"
@@ -3473,6 +3502,14 @@
             "title": "My Roles",
             "type": "array"
           },
+          "notes": {
+            "description": "The side states' questions, answers and reasons, in event order",
+            "items": {
+              "$ref": "#/components/schemas/NoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "org_id": {
             "format": "uuid",
             "title": "Org Id",
@@ -3484,6 +3521,17 @@
           },
           "origin": {
             "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
           },
           "payments": {
             "items": {
@@ -3500,6 +3548,17 @@
           "proposal_title": {
             "title": "Proposal Title",
             "type": "string"
+          },
+          "side_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideLimitsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caps left for the current stage's side states; null once ended or none apply"
           },
           "signatures": {
             "items": {
@@ -3583,6 +3642,7 @@
           "lock_version",
           "whose_turn",
           "updated_at",
+          "paused_from",
           "my_party",
           "my_roles",
           "actions",
@@ -3592,7 +3652,8 @@
           "agreements",
           "signatures",
           "payments",
-          "documents"
+          "documents",
+          "notes"
         ],
         "title": "EngagementDetail",
         "type": "object"
@@ -3756,6 +3817,17 @@
           "origin": {
             "$ref": "#/components/schemas/EngagementOrigin"
           },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -3839,7 +3911,8 @@
           "ended_at",
           "lock_version",
           "whose_turn",
-          "updated_at"
+          "updated_at",
+          "paused_from"
         ],
         "title": "EngagementSummary",
         "type": "object"
@@ -5811,6 +5884,66 @@
         "title": "NicheRef",
         "type": "object"
       },
+      "NoteOut": {
+        "description": "The text a side-state command carried, in event order: the organisation's question (``info_request``), the\ndeveloper's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason\n(``resume``). ``by`` is the party that wrote it.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "by": {
+            "$ref": "#/components/schemas/EngagementParty"
+          },
+          "kind": {
+            "enum": [
+              "info_request",
+              "info_answer",
+              "hold",
+              "resume"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "resume_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume At"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The seq of the event the note explains (History pairs them); always set by the API",
+            "title": "Seq"
+          }
+        },
+        "required": [
+          "kind",
+          "body",
+          "resume_at",
+          "by",
+          "at"
+        ],
+        "title": "NoteOut",
+        "type": "object"
+      },
       "NotificationOut": {
         "properties": {
           "body": {
@@ -6445,6 +6578,37 @@
           "created_at"
         ],
         "title": "OtherClaimOut",
+        "type": "object"
+      },
+      "PauseBody": {
+        "description": "Put the engagement on hold before the agreement, with a reason and the date it resumes.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Reason",
+            "type": "string"
+          },
+          "resume_at": {
+            "description": "The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead",
+            "format": "date",
+            "title": "Resume At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "reason",
+          "resume_at"
+        ],
+        "title": "PauseBody",
         "type": "object"
       },
       "PaymentBody": {
@@ -8057,6 +8221,30 @@
         "title": "RenderKind",
         "type": "string"
       },
+      "RequestInfoBody": {
+        "description": "The organisation's question (stages 1-2): the review clock pauses until the developer answers.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "question"
+        ],
+        "title": "RequestInfoBody",
+        "type": "object"
+      },
       "ResearchRunStatus": {
         "enum": [
           "running",
@@ -8089,6 +8277,30 @@
           "text"
         ],
         "title": "Responsiveness",
+        "type": "object"
+      },
+      "ResumeBody": {
+        "description": "Resume a hold before its date, with a reason; due dates move by the business days on hold.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "reason"
+        ],
+        "title": "ResumeBody",
         "type": "object"
       },
       "RolesUpdate": {
@@ -8669,6 +8881,54 @@
           "new_password"
         ],
         "title": "SetPasswordRequest",
+        "type": "object"
+      },
+      "SideLimitsOut": {
+        "description": "What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null\nwhere it does not apply.",
+        "properties": {
+          "hold_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calendar days on hold the engagement has left over all its holds",
+            "title": "Hold Days Left"
+          },
+          "holds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Holds this stage may still have (before the agreement, from stage 2)",
+            "title": "Holds Left"
+          },
+          "questions_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Questions the organisation may still ask (stages 1-2 only)",
+            "title": "Questions Left"
+          }
+        },
+        "required": [
+          "questions_left",
+          "holds_left",
+          "hold_days_left"
+        ],
+        "title": "SideLimitsOut",
         "type": "object"
       },
       "SignatureDocumentKind": {
@@ -16087,6 +16347,130 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/answer-info": {
+      "post": {
+        "description": "The developer answers; the engagement returns to its stage with the deadline moved by the pause.",
+        "operationId": "answer_info_api_engagements__engagement_id__answer_info_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Answer Info",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/approve": {
       "post": {
         "description": "Approve to proceed (non-binding), naming the contact person, channel and contact-by date (stage 3; EM2).",
@@ -16206,6 +16590,130 @@
           }
         },
         "summary": "Approve",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/cancel-request": {
+      "post": {
+        "description": "Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).",
+        "operationId": "engagement_cancel_request_api_engagements__engagement_id__cancel_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Engagement Cancel Request",
         "tags": [
           "engagements"
         ]
@@ -17962,6 +18470,130 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/pause": {
+      "post": {
+        "description": "Either party puts the engagement on hold before the agreement, until ``resume_at`` (at most 60 days).",
+        "operationId": "pause_api_engagements__engagement_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Pause",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/propose-terms": {
       "post": {
         "description": "A new agreement version (draft): IP terms, milestones, deemed-acceptance clause, optional exclusivity.",
@@ -18329,6 +18961,254 @@
           }
         },
         "summary": "Engagement Reopen Negotiation",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/request-info": {
+      "post": {
+        "description": "The organisation asks the developer a question (stages 1-2); the review clock pauses until the answer.",
+        "operationId": "request_info_api_engagements__engagement_id__request_info_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Request Info",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/resume": {
+      "post": {
+        "description": "Either party resumes a hold early; due dates move by the business days on hold.",
+        "operationId": "resume_api_engagements__engagement_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Resume",
         "tags": [
           "engagements"
         ]

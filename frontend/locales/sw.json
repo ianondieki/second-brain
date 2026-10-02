@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili; ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg"
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili; ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10, upande wa ufuatiliaji): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit (rasimu ya Kiswahili); round 2 (rasimu ya Kiswahili): trackerActions.refusal.containsContact (hadi mawasiliano ya kwanza, kama sheet.noContact), trackerActions.refusal.tooMany, trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft, trackerActions.sheet.pause.dateRange"
   },
   "app": {
     "name": "Wazo",
@@ -2020,7 +2020,8 @@
       "both": "Inasubiri: wewe na {name}",
       "none": "Hakuna kinachosubiri upande wowote kwa sasa.",
       "ended": "Ushirikiano huu umeisha.",
-      "closed": "Ushirikiano huu umefungwa."
+      "closed": "Ushirikiano huu umefungwa.",
+      "onHold": "Ushirikiano huu umesimamishwa."
     },
     "endedBecause": "Sababu: {reason}",
     "nextYou": "Hatua yako inayofuata: {step}",
@@ -2037,6 +2038,22 @@
       "NO_DECISION": "Hakuna uamuzi kwa wakati",
       "CONTACT_NOT_MADE": "Mawasiliano ya kwanza hayakufanyika kwa wakati",
       "NO_DEV_RESPONSE": "Msanidi programu hakujibu kwa wakati"
+    },
+    "expired": {
+      "NO_REVIEW": "Muda umeisha: shirika halikuanza tathmini kwa wakati.",
+      "NO_DECISION": "Muda umeisha: shirika halikufanya uamuzi kwa wakati.",
+      "CONTACT_NOT_MADE": "Muda umeisha: mawasiliano ya kwanza hayakufanyika kwa wakati.",
+      "NO_DEV_RESPONSE": "Muda umeisha: msanidi programu hakujibu kwa wakati."
+    },
+    "side": {
+      "info": "Maelezo yaliombwa tarehe {date}: <quote>{question}</quote>",
+      "infoClockYou": "Muda wa hatua hii unasubiri hadi ujibu. Usipojibu kufikia <nowrap>{date}</nowrap>, ushirikiano utaisha.",
+      "infoClockThem": "Muda wa hatua hii unasubiri hadi {name} ajibu. Asipojibu kufikia <nowrap>{date}</nowrap>, ushirikiano utaisha.",
+      "hold": "Ushirikiano umesimamishwa na {name} hadi {date}: <quote>{reason}</quote>",
+      "holdYou": "Umesimamisha ushirikiano huu hadi {date}: <quote>{reason}</quote>",
+      "holdNoNote": "Ushirikiano umesimamishwa hadi {date}.",
+      "holdClock": "Ushirikiano utaendelea wenyewe siku hiyo, na tarehe za mwisho zitasogezwa kwa siku za kazi ulizosimamishwa.",
+      "answered": "Swali lilijibiwa tarehe {date}: <quote>{answer}</quote>"
     },
     "endorsements": {
       "title": "Uidhinishaji wa hatua hii",
@@ -2160,7 +2177,13 @@
       "title": "Historia",
       "chainOk": "Historia ilipita ukaguzi wake wa uadilifu ukurasa huu ulipopakia.",
       "chainBroken": "Historia haikupita ukaguzi wake wa uadilifu ukurasa huu ulipopakia: huenda baadhi ya matukio yamebadilishwa.",
-      "actor": "{name}, {role}"
+      "actor": "{name}, {role}",
+      "note": {
+        "info_request": "Swali",
+        "info_answer": "Jibu",
+        "hold": "Sababu, hadi {date}",
+        "resume": "Sababu ya kuendelea mapema"
+      }
     },
     "event": {
       "create": "Ushirikiano umefunguliwa",
@@ -2187,6 +2210,12 @@
       "sign_certificate": "Cheti cha kukubali kimesainiwa",
       "record_payment": "Malipo ya mwisho yamerekodiwa",
       "confirm_payment": "Malipo yamethibitishwa",
+      "request_info": "Maelezo yameombwa",
+      "answer_info": "Swali limejibiwa",
+      "cancel_request": "Swali limeondolewa",
+      "pause": "Imesimamishwa",
+      "resume": "Imeendelea tena",
+      "expire": "Muda umeisha",
       "other": "Hatua imerekodiwa"
     },
     "tabs": {
@@ -2252,7 +2281,12 @@
       "accept_delivery": "Kubali uwasilishaji",
       "sign_certificate": "Saini cheti cha kukubali",
       "record_payment": "Rekodi malipo ya mwisho",
-      "confirm_payment": "Thibitisha malipo"
+      "confirm_payment": "Thibitisha malipo",
+      "request_info": "Omba maelezo",
+      "answer_info": "Jibu swali",
+      "cancel_request": "Ondoa swali",
+      "pause": "Simamisha ushirikiano huu",
+      "resume": "Endelea sasa"
     },
     "milestone": {
       "start_milestone": "Anza hatua {number}",
@@ -2264,6 +2298,46 @@
       "withdraw": "Ungependa kuondoa pendekezo hili kwa {name}? Ushirikiano utaisha na {name} haitaweza tena kufungua pendekezo kamili.",
       "decline_interest": "Ungependa kukataa nia ya {name}? Ushirikiano utaisha.",
       "decline": "Ungependa kukataa pendekezo hili? Ushirikiano utaisha na {name} ataona sababu."
+    },
+    "sheet": {
+      "count": "Herufi {count} kati ya {max}",
+      "noContact": "Usiweke maelezo ya mawasiliano wala viungo: yanatolewa mawasiliano ya kwanza yakishafanyika.",
+      "questionsLeft": "Maswali yaliyobaki katika hatua hii: {count}",
+      "holdsLeft": "Vipindi vya kusimamisha vilivyobaki katika hatua hii: {count}",
+      "holdDaysLeft": "Siku za kusimamishwa zilizobaki kwa ushirikiano huu: {count}",
+      "requestInfo": {
+        "lead": "Muulize {name} swali moja. Muda wa hatua hii unasubiri hadi ajibu, na ana siku kumi za kazi kujibu.",
+        "limit": "Shirika lako linaweza kuuliza maswali mawili katika hatua hii; swali lililoondolewa nalo linahesabiwa.",
+        "label": "Swali lako",
+        "submit": "Tuma swali"
+      },
+      "answerInfo": {
+        "asked": "{name} aliuliza tarehe {date}:",
+        "lead": "Ukilituma, hatua inaendelea ilipoishia, na tarehe yake ya mwisho inasogezwa kwa siku za kazi swali lilipokuwa wazi.",
+        "label": "Jibu lako",
+        "submit": "Tuma jibu"
+      },
+      "pause": {
+        "lead": "Hakuna kinachodaiwa wakati umesimamishwa. Ukiendelea, tarehe za mwisho zinasogezwa kwa siku za kazi ulizosimamishwa.",
+        "reason": "Sababu",
+        "reasonHint": "Mstari mmoja ambao pande zote mbili zinauona.",
+        "date": "Tarehe ya kuendelea",
+        "dateHint": "Kuanzia kesho hadi {date}, isizidi siku 60 mbele. Vipindi vyote vya kusimamishwa kwa ushirikiano mmoja kwa pamoja visizidi siku 60.",
+        "dateRange": "Chagua tarehe ya kuendelea kuanzia {date} hadi {value}.",
+        "resumes": "Ushirikiano utaendelea wenyewe {date}.",
+        "submit": "Simamisha hadi hapo"
+      },
+      "resume": {
+        "lead": "Ushirikiano unaendelea ulipoishia, na tarehe za mwisho zinasogezwa kwa siku za kazi ulizosimamishwa. Ulipangwa kuendelea tarehe {date}.",
+        "leadNoDate": "Ushirikiano unaendelea ulipoishia, na tarehe za mwisho zinasogezwa kwa siku za kazi ulizosimamishwa.",
+        "reason": "Sababu ya kuendelea sasa",
+        "reasonHint": "Mstari mmoja ambao pande zote mbili zinauona.",
+        "submit": "Endelea sasa"
+      },
+      "cancelRequest": {
+        "body": "Ungependa kuondoa swali lako kwa {name}? Muda wa hatua hii unaanza tena ulipoishia. Swali hili bado linahesabiwa katika mawili yanayoruhusiwa katika hatua hii.",
+        "submit": "Ondoa swali"
+      }
     },
     "refusal": {
       "stale": "Ushirikiano huu umebadilika tangu ulipoufungua. Umesasishwa sasa: ukague kisha ujaribu tena.",
@@ -2279,6 +2353,12 @@
       "invalidContactBy": "Chagua tarehe ya mawasiliano kuanzia leo, isiyozidi siku tano za kazi mbele.",
       "attestation": "Toa tarehe kazi ya ndani ilipoanza na uthibitishe kauli.",
       "reasonText": "Eleza sababu kwa undani zaidi.",
+      "containsContact": "Maelezo ya mawasiliano hayawekwi kwenye ufuatiliaji hadi mawasiliano ya kwanza yafanyike; tafadhali ondoa barua pepe, nambari ya simu au kiungo.",
+      "invalidNote": "Maandishi hayo hayakukubaliwa. Yaandike tena kwa maneno ya kawaida, ndani ya kikomo cha kisanduku.",
+      "invalidResumeAt": "Chagua tarehe ya kuendelea kuanzia kesho, isizidi siku 60 mbele.",
+      "questionLimit": "Shirika lako limeuliza maswali yote yanayoruhusiwa katika hatua hii. Fanya uamuzi, au kataa.",
+      "holdLimit": "Ushirikiano huu umebakiwa na siku chache au hakuna za kusimamishwa: vipindi vyote kwa pamoja visizidi siku 60. Chagua tarehe ya mapema zaidi ya kuendelea.",
+      "tooMany": "Umechukua hatua nyingi kwenye ushirikiano huu katika saa iliyopita. Jaribu tena baadaye.",
       "notFound": "Ushirikiano huu haupatikani tena kwako.",
       "network": "Hatukuweza kufikia seva. Kagua muunganisho wako kisha ujaribu tena.",
       "generic": "Hitilafu imetokea. Jaribu tena."

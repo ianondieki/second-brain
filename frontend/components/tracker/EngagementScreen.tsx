@@ -33,9 +33,12 @@ import {
   documentKinds,
   DUAL_ENDORSEMENT_STATES,
   isFinished,
+  formatDate,
   kesAmount,
+  nairobiToday,
   offersContactReveal,
   shortHash,
+  sideBanner,
   stageLeft,
   stepperSteps,
   type Detail,
@@ -81,16 +84,23 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const t = await getTranslations("tracker");
   const locale = await getLocale();
   const finished = isFinished(detail.state) && detail.state !== "CLOSED";
-  // An ended or paused engagement has no stage group: its history says which stage it left. The history and, for an
-  // approver, the organisation's members are read together.
+  // An ended engagement has no stage group: its history says which stage it left (a paused one has `paused_from`).
+  // The history and, for an approver, the organisation's members are read together.
   const [history, members] = await Promise.all([
-    tab === "history" || (finished || detail.stage_group === null) ? engagementHistory(detail.id) : null,
+    tab === "history" || finished || (detail.stage_group === null && !detail.paused_from)
+      ? engagementHistory(detail.id)
+      : null,
     detail.actions.includes("approve") ? orgMembers(detail.org_id) : undefined,
   ]);
   const steps = stepperSteps({ ...detail, left: stageLeft(detail.state, history?.events) });
   const href = `${basePath}/${encodeURIComponent(detail.id)}`;
   const items = actionItems(detail);
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
+  // The side state's facts the sheets quote: the open question (answer_info) and a hold's end (resume).
+  const side = sideBanner(detail);
+  const question =
+    side?.kind === "info" && side.question ? { body: side.question.body, date: formatDay(locale, side.question.at) } : null;
+  const holdEnd = side?.kind === "hold" ? (side.hold?.resume_at ?? detail.due?.due_on ?? null) : null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
   const line = counterpartLine(detail);
   // The party who acts now: the developer, the organisation, or both (the tracker's timeline shows them at the step).
@@ -156,6 +166,11 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
           members={members}
           myUserId={me.user.id}
           recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
+          question={question}
+          resumeOn={holdEnd ? formatDate(holdEnd, locale) : null}
+          locale={locale}
+          today={appToday(detail)}
+          limits={detail.side_limits}
         />
       </Card>
       </div>
@@ -178,10 +193,21 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
         {tab === "documents" ? <DocumentsTab detail={detail} doc={doc} href={href} query={query} /> : null}
-        {tab === "history" && history ? <HistoryList history={history} /> : null}
+        {tab === "history" && history ? <HistoryList history={history} notes={detail.notes} /> : null}
       </div>
     </ClientStrings>
   );
+}
+
+/**
+ * Today in Nairobi as the app counts it: the later of the server's day and the day of the engagement's last change
+ * (written on the app's clock, which a dev/test clock may have moved ahead; in production the two agree). The API
+ * decides a hold's date again.
+ */
+function appToday(detail: Detail): string {
+  const server = nairobiToday();
+  const changed = nairobiToday(new Date(detail.updated_at));
+  return changed > server ? changed : server;
 }
 
 async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {

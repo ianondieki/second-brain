@@ -13,16 +13,20 @@ import {
   commandRequest,
   isEndingCommand,
   isFormCommand,
+  isSheetCommand,
   type ActionItem,
   type CommandRequest,
   type FormCommand,
   type FormInput,
+  type SheetCommand,
+  type SideLimits,
 } from "./model";
 import { StepUp } from "./StepUp";
 
 // The forms load when one opens (docs/spec/07 item 5: the tracker stays within the JS budget); they never render on
 // the server, so React.lazy adds no layout shift.
 const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
+const SideSheet = lazy(() => import("./SideSheet").then((m) => ({ default: m.SideSheet })));
 
 export interface ActionsProps {
   engagementId: string;
@@ -38,6 +42,16 @@ export interface ActionsProps {
   myUserId?: string;
   /** The recorded final payment ("250,000"), for the developer's confirmation hint. */
   recorded?: string | null;
+  /** answer_info: the organisation's open question and the day it was asked. */
+  question?: { body: string; date: string } | null;
+  /** resume: the day the hold was due to end. */
+  resumeOn?: string | null;
+  /** The page's language, for the dates and counts the sheets write. */
+  locale?: string;
+  /** Today in Nairobi on the app's clock, for a hold's date range. */
+  today?: string;
+  /** What the policy's caps leave this stage (the API's `side_limits`). */
+  limits?: SideLimits | null;
   runImpl?: typeof runCommand;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -45,6 +59,7 @@ export interface ActionsProps {
 type Mode =
   | { kind: "list" }
   | { kind: "form"; item: ActionItem & { command: FormCommand } }
+  | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
   | { kind: "confirm"; item: ActionItem }
   | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
 
@@ -123,8 +138,11 @@ export function Actions(props: ActionsProps) {
       setMode({ kind: "stepUp", item, request });
       return;
     }
-    // A form stays open with its refusal when the input was refused; everything else goes back to the buttons.
-    const keepForm = mode.kind === "form" && (outcome.status === 422 || outcome.refusal === "paymentMismatch");
+    // A form or sheet stays open with its refusal when the input was refused (a hold's date past what is left of
+    // the engagement's days on hold too); everything else goes back to the buttons.
+    const keepForm =
+      (mode.kind === "form" || mode.kind === "sheet") &&
+      (outcome.status === 422 || outcome.refusal === "paymentMismatch" || outcome.refusal === "holdLimit");
     if (!keepForm) setMode({ kind: "list" });
     setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
     if (outcome.status === 409 || outcome.status === 404) router.refresh();
@@ -134,6 +152,7 @@ export function Actions(props: ActionsProps) {
     setNotice(null);
     opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
+    else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
     else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
     else void run(item, requestFor(item));
   }
@@ -144,18 +163,20 @@ export function Actions(props: ActionsProps) {
     </Alert>
   ) : null;
 
-  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons.
+  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons. A sheet
+  // stays over the list (the page behind it inert) and shows its own refusals.
   const listNotice = mode.kind === "list" ? message : null;
+  const listed = mode.kind === "list" || mode.kind === "sheet";
   return (
     <div ref={root} className="flex flex-col gap-4">
       {listNotice}
-      {props.items.length === 0 && mode.kind === "list" ? null : (
+      {props.items.length === 0 && listed ? null : (
     <section aria-labelledby="actions-heading" data-actions="" className="flex flex-col gap-4">
       <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
-        {mode.kind === "list" ? t("title") : label(mode.item)}
+        {listed ? t("title") : label(mode.item)}
       </h2>
 
-      {mode.kind === "list" ? (
+      {listed ? (
         <>
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {props.items.map((item) => (
@@ -222,6 +243,24 @@ export function Actions(props: ActionsProps) {
             recorded={props.recorded}
             onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
+          />
+        </Suspense>
+      ) : null}
+
+      {mode.kind === "sheet" ? (
+        <Suspense fallback={null}>
+          <SideSheet
+            command={mode.item.command}
+            busy={busy}
+            problem={message}
+            counterpart={props.counterpart}
+            question={props.question}
+            resumeOn={props.resumeOn}
+            locale={props.locale}
+            today={props.today}
+            limits={props.limits}
+            onClose={cancel}
+            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
           />
         </Suspense>
       ) : null}

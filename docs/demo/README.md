@@ -8,7 +8,8 @@ that signs in through the real login and two-step screens, one person at a time,
 ## Record it
 
 The walkthrough changes the demo's data (Amina upgrades, Telco A accepts an NDA and starts a review, a moderation case
-is decided, the clock moves a day), so start from a fresh demo each time:
+is decided, the clock moves a day), so start from a fresh demo each time, and reset after demoing an expiry
+(`make demo-clock DAYS=30` ends Brian's pitch to Telco A, which the walkthrough needs still submitted):
 
 1. `make demo-reset` (without make: `python infra/demo/demo.py reset --yes`).
 2. `make demo-walkthrough` (on macOS and Linux `make demo-walkthrough DEMO_PY=python3`). It writes the Playwright

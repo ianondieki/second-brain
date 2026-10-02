@@ -754,14 +754,23 @@ async def test_the_clock_helper_moves_the_shared_clock_forward_only_where_enable
     owner_url = demo_url.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
     settings = get_settings().model_copy(update={"database_owner_url": SecretStr(owner_url)})
     monkeypatch.setattr(demo_command, "get_settings", lambda: settings)
+    monkeypatch.setattr(demo_command, "_app_engine", lambda _: role_engine(demo_url, "bridge_app"))
     try:
         assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "2", "--hours", "3"]) == 0
-        assert "offset 2 days, 3:00:00" in capsys.readouterr().out
+        moved = capsys.readouterr().out
+        assert "offset 2 days, 3:00:00" in moved
+        assert "tracker clock: 0 engagement(s) expired, 0 hold(s) resumed" in moved  # nothing is due yet
         offset = await rows(owner, "SELECT extract(epoch FROM clock_offset) FROM test_clock")
         assert int(offset[0][0]) == (2 * 24 + 3) * 3600
         assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "400"]) == 1  # at most 366 days
         unchanged = await rows(owner, "SELECT extract(epoch FROM clock_offset) FROM test_clock")
         assert int(unchanged[0][0]) == (2 * 24 + 3) * 3600  # the refused move left the offset as it was
+        # A month on, the pass expires at once what nobody moved: Brian's pitch to Telco A (SUBMITTED, 20 BD) and
+        # SACCO B's approval of Brian's other proposal (INTEREST_CONFIRMED, 10 BD); negotiation does not expire.
+        assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "30"]) == 0
+        assert "tracker clock: 2 engagement(s) expired, 0 hold(s) resumed" in capsys.readouterr().out
+        ended = await rows(owner, "SELECT state::text, end_reason::text FROM engagements WHERE state = 'EXPIRED'")
+        assert sorted(tuple(row) for row in ended) == [("EXPIRED", "CONTACT_NOT_MADE"), ("EXPIRED", "NO_REVIEW")]
         async with owner.begin() as conn:
             await conn.execute(text("UPDATE test_clock SET enabled = false"))
         assert await asyncio.to_thread(demo_command.main, ["clock", "--days", "1"]) == 1  # not where disabled
