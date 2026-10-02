@@ -11,13 +11,15 @@ import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
 
-import { editorOptions, linkableProblem, myIdea } from "../data";
+import { chipsOf, overlapKey } from "../checks";
+import { editorOptions, lastOverlap, linkableProblem, myIdea } from "../data";
 import {
   BASE_PATH,
   ideaHref,
   type Step,
 } from "../ideas";
 import { editableVersion, stateFromVersion, stateWithProblem } from "../versions";
+import { CheckAnswer } from "./CheckAnswer";
 import { Editor } from "./Editor";
 
 /**
@@ -31,10 +33,11 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("ideaEditor");
   const ideas = await getTranslations("ideas");
-  const [idea, options, problem] = await Promise.all([
+  const [idea, options, problem, overlap] = await Promise.all([
     id ? myIdea(id) : Promise.resolve(null),
     editorOptions(),
     !id && problemId ? linkableProblem(problemId) : Promise.resolve(null),
+    id ? lastOverlap(id) : Promise.resolve(null),
   ]);
 
   if (id && !idea) {
@@ -48,10 +51,22 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
   if (idea && (idea.status === "hidden" || idea.status === "archived")) redirect(ideaHref(idea.id));
 
   const version = idea ? editableVersion(idea) : null;
+  // Today's last overlap check, drawn here so the page ships no script for it (the checks card loads on a press).
+  const checks = await getTranslations("ideaChecks");
+  const assistant = await getTranslations("ideaAssistant");
+  const lastCheck = overlap && (
+    <CheckAnswer
+      tone={overlap.band === "none" ? "clear" : "note"}
+      sentence={checks(overlapKey(overlap), { count: overlap.compared })}
+      detail={overlap.explanation}
+      chips={chipsOf(overlap).map((chip) => ({ label: assistant(chip), quiet: chip === "demoFallback" }))}
+      caption={checks("lastToday")}
+    />
+  );
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
       <BackLink href={idea ? ideaHref(idea.id) : BASE_PATH}>{idea ? t("backToIdea") : ideas("back")}</BackLink>
-      <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant"])}>
+      <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant", "ideaChecks"])}>
         <Editor
           id={idea?.id ?? null}
           hasDraft={idea?.draft != null}
@@ -62,6 +77,7 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
           counties={options.counties}
           attestations={options.attestations}
           problems={options.problems}
+          lastOverlap={lastCheck || undefined}
         />
       </ClientStrings>
     </SignedInShell>
