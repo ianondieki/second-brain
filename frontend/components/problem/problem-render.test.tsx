@@ -122,6 +122,15 @@ describe("ProblemCard (REQ-RES-02, docs/spec/06 6.5)", () => {
     citations: [{ ...citation(SAFE), retrieved_at: "2026-09-29T00:00:00Z" }],
   };
 
+  it("names the county in the region, and falls back to its code when the name is not known", async () => {
+    render(await resolve(await ProblemCard({ problem: { ...problem, county_code: "KE-30" }, countyName: "Nairobi City" })));
+    expect(screen.getByText("Nairobi City, Kenya")).toBeTruthy();
+    expect(screen.queryByText(/KE-30/)).toBeNull();
+    cleanup();
+    render(await resolve(await ProblemCard({ problem: { ...problem, county_code: "KE-30" } })));
+    expect(screen.getByText("KE-30, Kenya")).toBeTruthy();
+  });
+
   it("says a seeded card is a seeded example, never AI-drafted", async () => {
     render(await resolve(await ProblemCard({ problem })));
     expect(document.querySelector("[data-label]")?.textContent).toBe(
