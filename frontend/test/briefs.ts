@@ -59,7 +59,7 @@ export function discoverBrief(extra: Partial<DiscoverBrief> = {}): DiscoverBrief
       seeded_example: false,
       org,
     },
-    brief: { org, budget_band: BAND, deadline: "2026-11-30" },
+    brief: { org, budget_band: BAND, deadline: "2026-11-30", open: true },
     proposal_count: 2,
     ...extra,
   };

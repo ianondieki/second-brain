@@ -4,15 +4,15 @@ import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getProblem } from "@/components/problem/data";
 import { ProblemCard } from "@/components/problem/ProblemCard";
+import { ProblemStart } from "@/components/problem/ProblemStart";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
-import { ButtonLink } from "@/components/ui/ButtonLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 
-import { DISCOVER_PATH, startProposalHref } from "../../dev/discover/discover";
+import { DISCOVER_PATH } from "../../dev/discover/discover";
 
 export async function generateMetadata({ params }: PageProps<"/problems/[id]">): Promise<Metadata> {
   const t = await getTranslations("problem");
@@ -29,7 +29,6 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("problem");
-  const td = await getTranslations("discover");
   const problem = await getProblem((await params).id);
   // Developers come here from Discover and can start a proposal from the problem; other sides go back home.
   const developer = home === "/dev";
@@ -45,12 +44,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
           <ProblemCard
             problem={problem}
             action={
-              developer ? (
-                // A Problem Brief names its organisation, so the pitch can start with it chosen (REQ-DIR-05).
-                <ButtonLink href={startProposalHref(problem.id, problem.brief?.org?.id ?? problem.org?.id)} variant="primary">
-                  {problem.source === "org_brief" ? td("startBrief") : td("start")}
-                </ButtonLink>
-              ) : undefined
+              developer ? <ProblemStart problem={problem} /> : undefined
             }
           />
         </>
