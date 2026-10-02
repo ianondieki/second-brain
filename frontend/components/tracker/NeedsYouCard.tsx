@@ -9,7 +9,7 @@ import { LinkPending } from "@/components/ui/LinkPending";
 
 import { Chip, ChipMark } from "./Chip";
 import { isFinished, stageChip, type Party, type Summary } from "./model";
-import { DueText } from "./When";
+import { DueLine } from "./When";
 
 /**
  * One engagement that waits on the viewer, as a prominent card (D-52): the other party's avatar, the idea, the stage,
@@ -39,7 +39,7 @@ export function NeedsYouCard({ item, mine, href, action }: { item: Summary; mine
           </p>
           {item.due && !isFinished(item.state) ? (
             <p className="mt-2">
-              <DueText due={item.due} className={item.due.overdue ? "text-sm font-semibold text-error" : "text-sm text-ink-soft"} />
+              <DueLine item={item} mine={mine} />
             </p>
           ) : null}
         </div>

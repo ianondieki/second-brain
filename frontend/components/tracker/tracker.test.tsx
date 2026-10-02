@@ -2,11 +2,12 @@ import { cleanup, screen, within } from "@testing-library/react";
 import { documentLinkClass } from "./document-link";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { detail, history, inImplementation } from "@/test/engagement";
+import { detail, history, inImplementation, summary } from "@/test/engagement";
 import { renderWithIntl } from "@/test/intl";
 
 import { Chip } from "./Chip";
 import { Agreements, Payments, Signatures } from "./Deal";
+import { EngagementCard } from "./EngagementCard";
 import { EngagementRow } from "./EngagementRow";
 import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
@@ -485,5 +486,50 @@ describe("the side states' texts on the History tab", () => {
     expect(rows[4].textContent).toContain("Information requested");
     expect(question.textContent).toBe("QuestionWhich co-ops?\n<i>Two</i> or more?");
     expect(question.querySelector("i, a")).toBeNull();
+  });
+});
+
+// ux round: a list row never states a deadline nobody has. A hold says when it resumes; an open question, on the
+// organisation's side, is the developer's answer-by date.
+describe("the deadline line of list rows in a side state", () => {
+  const held = summary({
+    state: "ON_HOLD",
+    stage_label: "On hold",
+    stage_group: null,
+    paused_from: "NEGOTIATION",
+    whose_turn: [],
+    due: { due_on: "2026-10-09", business_days_left: 5, overdue: false },
+  });
+  const asked = summary({
+    state: "INFO_REQUESTED",
+    stage_label: "Information requested",
+    stage_group: null,
+    paused_from: "UNDER_REVIEW",
+    whose_turn: ["developer"],
+    due: { due_on: "2026-10-16", business_days_left: 10, overdue: false },
+  });
+
+  it.each(["developer", "org"] as const)("says when a hold resumes, never a countdown (%s)", (mine) => {
+    const { container } = renderWithIntl(<EngagementRow item={held} mine={mine} href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("Resumes 9 Oct 2026");
+    expect(container.textContent).not.toContain("business days left");
+    cleanup();
+    const card = renderWithIntl(<EngagementCard item={held} mine={mine} href="/x" />);
+    expect(card.container.querySelector("[data-due]")?.textContent).toBe("Resumes 9 Oct 2026");
+  });
+
+  it("names the developer as the one who owes an open question's answer, for the organisation", () => {
+    const { container } = renderWithIntl(<EngagementRow item={asked} mine="org" href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("Answer from Achieng Otieno due by 16 Oct 2026");
+    cleanup();
+    const late = renderWithIntl(
+      <EngagementRow item={{ ...asked, due: { due_on: "2026-10-16", business_days_left: -1, overdue: true } }} mine="org" href="/x" />,
+    );
+    expect(late.container.querySelector("[data-due='overdue']")?.textContent).toBe("Answer from Achieng Otieno was due 16 Oct 2026");
+  });
+
+  it("keeps the countdown for the developer, whose answer it is", () => {
+    const { container } = renderWithIntl(<EngagementRow item={asked} mine="developer" href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("10 business days left, due 16 Oct 2026");
   });
 });
