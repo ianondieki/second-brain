@@ -219,6 +219,7 @@ describe("refusals", () => {
     [422, { detail: { code: "invalid_resume_at" } }, "invalidResumeAt"],
     [409, { detail: { code: "info_request_limit" } }, "questionLimit"],
     [409, { detail: { code: "hold_limit" } }, "holdLimit"],
+    [429, { detail: { code: "too_many_actions" } }, "tooMany"],
     [403, { detail: { code: "not_your_action" } }, "notAllowed"],
     [403, { detail: { code: "role_required" } }, "notAllowed"],
     [500, "oops", "generic"],
@@ -556,7 +557,7 @@ describe("the side states' sheets", () => {
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
     const alert = within(dialog).getByRole("alert");
     expect(alert.textContent).toBe(
-      "Contact details stay out of the tracker until the organisation approves; please remove the email, phone number or link.",
+      "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.",
     );
     expect(document.activeElement).toBe(alert);
     expect((within(dialog).getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Call me on 0712 345 678");

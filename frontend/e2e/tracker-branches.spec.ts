@@ -23,7 +23,7 @@ import { OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type
 const SERVER_STEP = { timeout: 20_000 };
 const DONE = "Done. The tracker is up to date.";
 const CONTACT_REFUSAL =
-  "Contact details stay out of the tracker until the organisation approves; please remove the email, phone number or link.";
+  "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.";
 
 test.beforeAll(() => {
   expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL sets the test-only verification levels").toBeTruthy();
