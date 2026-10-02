@@ -76,6 +76,7 @@ export const TRACKER_VARIANTS: Record<string, Detail> = {
     due: { due_on: "2026-10-20", business_days_left: 11, overdue: false },
     notes: [QUESTION, ANSWER],
     side_limits: { questions_left: 1, holds_left: 2, hold_days_left: 60 },
+    today: "2026-10-05",
   },
 };
 

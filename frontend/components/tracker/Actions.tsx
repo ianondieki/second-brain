@@ -48,8 +48,8 @@ export interface ActionsProps {
   resumeOn?: string | null;
   /** The page's language, for the dates and counts the sheets write. */
   locale?: string;
-  /** Today in Nairobi on the app's clock, for a hold's date range. */
-  today?: string;
+  /** Today in Nairobi on the platform's clock (the API's `today`), for a hold's date range; null: the API decides. */
+  today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`). */
   limits?: SideLimits | null;
   runImpl?: typeof runCommand;
