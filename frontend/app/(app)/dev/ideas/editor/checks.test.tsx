@@ -252,7 +252,7 @@ describe("refusals", () => {
   const OVERLAP_PATH = `POST /api/me/proposals/${PROPOSAL_ID}/originality`;
   const DISCLOSURE_PATH = `POST /api/me/proposals/${PROPOSAL_ID}/disclosure-check`;
   const CASES: Array<[string, string, FakeAnswer, string]> = [
-    ["the daily limit", OVERLAP, { status: 429, body: refusal("originality_limit") }, "You have used today’s ten checks; tomorrow brings ten more."],
+    ["the daily limit", OVERLAP, { status: 429, body: refusal("originality_limit") }, "You have used today’s checks; tomorrow brings more."],
     ["429 originality_busy", OVERLAP, { status: 429, body: refusal("originality_busy") }, "The overlap check is still running. Try again in a moment."],
     ["409 proposal_hidden", OVERLAP, { status: 409, body: refusal("proposal_hidden") }, "This idea was deleted, so it cannot be checked."],
     // Another owner's idea answers 404 like an unknown one (bridge/proposals/originality.owned_by).

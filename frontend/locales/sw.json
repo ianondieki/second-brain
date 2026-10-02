@@ -18,7 +18,7 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names the policy.yaml daily limit of ten) (rasimu ya Kiswahili)"
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili)"
   },
   "app": {
     "name": "Wazo",
@@ -1760,7 +1760,7 @@
     "problem": {
       "noText": "Andika muhtasari wa umma kwanza, kisha uukague.",
       "notSaved": "Mabadiliko yako ya karibuni hayajahifadhiwa, kwa hivyo hakuna kilichokaguliwa. Rekebisha sehemu zilizowekwa alama, kisha ujaribu tena.",
-      "originality_limit": "Umetumia ukaguzi kumi wa leo; kesho utapata kumi zaidi.",
+      "originality_limit": "Umetumia ukaguzi wa leo; kesho utapata zaidi.",
       "originality_busy": "Ukaguzi wa mfanano bado unaendelea. Jaribu tena baada ya muda mfupi.",
       "disclosure_busy": "Ukaguzi wa muhtasari bado unaendelea. Jaribu tena baada ya muda mfupi.",
       "disclosure_rate_limited": "Umefanya ukaguzi mwingi wa muhtasari leo. Jaribu tena kesho.",

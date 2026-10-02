@@ -125,7 +125,7 @@ test("the eleventh overlap check of the day is refused in words", async ({ page 
   await expect(answer(page, "overlap")).toHaveText(/^No (overlap|other published ideas)/);
   await button.click();
   await expect(answer(page, "overlap")).toHaveText(
-    "You have used today’s ten checks; tomorrow brings ten more.",
+    "You have used today’s checks; tomorrow brings more.",
     SERVER_STEP,
   );
   await expect(page.getByRole("alert")).toHaveCount(0);
