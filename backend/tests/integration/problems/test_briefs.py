@@ -17,10 +17,13 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge import pagination
 from bridge.config import get_settings
+from bridge.problems import briefs
+from bridge.problems.brief_policy import BriefsPolicy
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.scout_world import (
     MOMBASA_CODE,
@@ -557,3 +560,19 @@ async def test_a_delisted_organisations_brief_leaves_the_feeds_and_its_page(
         after = await seen()
         assert not any(after.values()), after
         assert (await reviewer.get(path(world.org.id, f"/{brief_id}"))).json()["state"] == "published"
+
+
+async def test_an_organisation_posts_a_limited_number_of_briefs_a_day(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """policy.yaml's briefs.daily_posts (2 here) caps posts per Nairobi day whatever the plan: the next is 429
+    briefs_daily_limit and creates nothing; a closed or rejected Brief still counted as a post."""
+    monkeypatch.setattr(briefs, "get_briefs_policy", lambda: BriefsPolicy(daily_posts=2))
+    world = await telco_world(owner_engine)
+    await subscribe(owner_engine, world.org.id, "org_growth")
+    async with clients(app_engine, SETTINGS, world.org.reviewer) as (reviewer,):
+        for _ in range(2):
+            await post(reviewer, world.org.id, await form(owner_engine, world.niche))
+        refused = await reviewer.post(path(world.org.id), json=await form(owner_engine, world.niche))
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (429, "briefs_daily_limit")
+    assert await briefs_count(owner_engine, world.org.id) == 2

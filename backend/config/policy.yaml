@@ -112,3 +112,9 @@ claims:
   # "claim queue (2 BD SLA)"). Read by bridge/admin/claims.py. A claim awaiting review is due by the end of the Nth
   # business day after the Nairobi day it was submitted (org_claims.created_at); disputes follow their moderation case.
   review_sla_bd: 2
+
+briefs:
+  # Problem Briefs (REQ-DIR-05; docs/spec/06 6.2, 6.12). Read by bridge/problems/brief_policy.py. Every Brief files a
+  # moderation case for staff, so an organisation posts at most this many Briefs per Nairobi day (database clock),
+  # whatever its plan allows open at once; the next post answers 429 briefs_daily_limit.
+  daily_posts: 20

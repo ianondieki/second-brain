@@ -9,7 +9,8 @@ A verified organisation posts a Problem Brief: a ProblemCard (a ``problems`` row
   ``org_unavailable`` (as an engagement's opening refuses it).
 - How many: the plan's ``problem_briefs`` limit counts open Briefs (not closed, its deadline unset or not passed,
   its problem not rejected or archived), under a per-organisation advisory lock so parallel posts cannot pass it (402
-  ``plan_limit``, the next plan up).
+  ``plan_limit``, the next plan up); and whatever the plan, at most ``briefs.daily_posts`` (policy.yaml) posts per
+  organisation and Nairobi day, under the same lock (each files a moderation case; 429 ``briefs_daily_limit``).
 - What: the text is public once approved, so it is cleaned to plain text, carries no contact details (the
   sanitiser's rule) and keeps the ProblemCard's lengths; the niche, county and budget band come from the lists; the
   deadline is today or later (Africa/Nairobi, on the platform clock). Refusals are 422 ``invalid_brief`` with a code
@@ -59,6 +60,7 @@ from bridge.models.enums import (
 )
 from bridge.problems import brief_rules
 from bridge.problems import service as problems
+from bridge.problems.brief_policy import get_briefs_policy
 from bridge.problems.brief_schemas import BriefIn, BriefList, BriefOut, BriefPatch, BriefPlanOut
 from bridge.problems.models import Problem, ProblemBrief
 from bridge.proposals.prescreen import PreScreen, ScreenInput, listed_org_names
@@ -71,6 +73,7 @@ NEW_BRIEF_REASON: Final = "new_org_brief"  # every Brief waits for staff review
 # [[COPY-REVIEW]] the refusals' sentences (the field sentences are bridge.problems.brief_rules.MESSAGES).
 NOT_VERIFIED: Final = "Only organisations with legal verification (E2) can post Problem Briefs."
 NOT_AVAILABLE: Final = "Invited-only Briefs are not available yet. Post a public Brief."
+DAILY_LIMIT: Final = "Your organisation has posted as many Briefs as it can today. Try again tomorrow."
 UNAVAILABLE: Final = "Your organisation cannot post Problem Briefs while it is suspended or delisted."
 CLOSED: Final = "This Brief is closed. Post a new one to ask again."
 NOT_PUBLISHED: Final = "This Brief is still in review: it can be closed once it is published."
@@ -81,6 +84,11 @@ _NOW = text("SELECT app_clock_now()")
 # One plan count at a time per organisation (as bridge.matching.scouts): released when the request commits or rolls
 # back, so parallel posts cannot pass the plan's problem_briefs limit.
 _PLAN_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
+# Briefs the organisation posted since the start of today in Nairobi (the database clock, as problems.created_at).
+_POSTED_TODAY = text(
+    "SELECT count(*) FROM problems WHERE org_id = :org AND source = 'org_brief'"
+    " AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi')"
+)
 _COUNTY = text("SELECT count(*) FROM regions WHERE code = :code AND kind = 'county'")
 _OPEN_BRIEFS = text(
     "SELECT count(*) FROM problem_briefs b JOIN problems p ON p.id = b.problem_id"
@@ -303,14 +311,17 @@ async def list_briefs(
 async def create(
     db: AsyncSession, settings: Settings, prescreen: PreScreen, org: OrgContext, body: BriefIn
 ) -> BriefOut:
-    """Post a Brief: 403 unless E2, 422 for an invited one, 402 beyond the plan, 422 for the form; then the problem
-    (pending review), the Brief, its moderation case and the audit event in one transaction."""
+    """Post a Brief: 403 unless E2 (and neither suspended nor delisted), 422 for an invited one, 402 beyond the plan,
+    429 beyond today's posts, 422 for the form; then the problem (pending review), the draft Brief, its moderation
+    case and the audit event in one transaction."""
     await _require_e2(db, org.org_id)
     if body.visibility is not BriefVisibility.PUBLIC:
         raise ApiError(422, "visibility_not_available", NOT_AVAILABLE)
     ent = await entitlements.for_subject(db, settings, org_id=org.org_id)
     await db.execute(_PLAN_LOCK, {"key": f"briefs.plan:{org.org_id}"})
     entitlements.check_count(settings, ent, PROBLEM_BRIEFS, used=await open_briefs(db, org.org_id))
+    if (await db.execute(_POSTED_TODAY, {"org": org.org_id})).scalar_one() >= get_briefs_policy().daily_posts:
+        raise ApiError(429, "briefs_daily_limit", DAILY_LIMIT)
     weights = get_weights()
     cleaned, errors = brief_rules.text_errors(
         {"title": body.title, "statement": body.statement, "affected_group": body.affected_group}

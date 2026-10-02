@@ -3,7 +3,8 @@
 - ``GET /api/orgs/{org_id}/briefs``: any member; the organisation's Briefs, newest first (every status, with the
   moderation facts and the published proposals linking each), what the plan allows and the budget band codes.
 - ``POST /api/orgs/{org_id}/briefs``: an owner, admin, signatory or reviewer of an E2 organisation (403
-  ``verification_required`` otherwise); 402 ``plan_limit`` beyond the plan's open Briefs (the next plan up), 422
+  ``verification_required`` otherwise, ``org_unavailable`` while suspended or delisted); 402 ``plan_limit`` beyond
+  the plan's open Briefs (the next plan up), 429 ``briefs_daily_limit`` beyond policy.yaml's posts a day, 422
   ``visibility_not_available`` for an invited Brief and ``invalid_brief`` (a code per field) for the form. The Brief
   waits for staff review (``pending_review``) before any developer sees it.
 - ``GET /api/orgs/{org_id}/briefs/{problem_id}``: any member; ``PATCH`` (budget band, deadline; 409 ``brief_closed``
