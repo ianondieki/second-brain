@@ -19,6 +19,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -56,6 +57,7 @@ from bridge.engagements.schemas import (
     NoteOut,
     PaymentOut,
     PendingOut,
+    SideLimitsOut,
     SignatureOut,
 )
 from bridge.engagements.service import Loaded, Party, app_now, entering_event, load, load_holidays, load_many
@@ -384,10 +386,34 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
                 resume_at=n.resume_at,
                 by=EngagementParty.DEVELOPER if n.created_by == engagement.developer_id else EngagementParty.ORG,
                 at=n.created_at,
+                seq=n.event_seq,
             )
             for n in notes
         ],
+        side_limits=_side_limits(engagement.state, loaded.facts),
     )
+
+
+_ASKING: Final = frozenset({EngagementState.SUBMITTED, EngagementState.UNDER_REVIEW})
+
+
+def _side_limits(state: EngagementState, facts: sm.Facts) -> SideLimitsOut | None:
+    """The caps left for the current stage (in a side state, the stage it returns to): questions in stages 1-2, holds
+    and days on hold before the agreement; null once ended or where none applies."""
+    stage = facts.paused_from if state in sm.RETURNING else state
+    if stage is None or state in sm.TERMINAL:
+        return None
+
+    def left(value: int | None) -> int | None:
+        return None if value is None else max(value, 0)
+
+    holding = stage in sm.PAUSABLE
+    limits = SideLimitsOut(
+        questions_left=left(facts.questions_left) if stage in _ASKING else None,
+        holds_left=left(facts.holds_left) if holding else None,
+        hold_days_left=left(facts.hold_days_left) if holding else None,
+    )
+    return None if limits == SideLimitsOut(questions_left=None, holds_left=None, hold_days_left=None) else limits
 
 
 async def _contact_by(db: AsyncSession, engagement: Engagement) -> date:

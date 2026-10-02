@@ -246,6 +246,18 @@ class NoteOut(BaseModel):
     resume_at: date | None
     by: EngagementParty
     at: datetime
+    seq: int | None = Field(
+        default=None, description="The seq of the event the note explains (History pairs them); always set by the API"
+    )
+
+
+class SideLimitsOut(BaseModel):
+    """What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null
+    where it does not apply."""
+
+    questions_left: int | None = Field(description="Questions the organisation may still ask (stages 1-2 only)")
+    holds_left: int | None = Field(description="Holds this stage may still have (before the agreement, from stage 2)")
+    hold_days_left: int | None = Field(description="Calendar days on hold the engagement has left over all its holds")
 
 
 class DocumentRefOut(BaseModel):
@@ -266,6 +278,9 @@ class EngagementDetail(EngagementSummary):
     payments: list[PaymentOut]
     documents: list[DocumentRefOut]
     notes: list[NoteOut] = Field(description="The side states' questions, answers and reasons, in event order")
+    side_limits: SideLimitsOut | None = Field(
+        default=None, description="The caps left for the current stage's side states; null once ended or none apply"
+    )
 
 
 class HistoryEventOut(BaseModel):

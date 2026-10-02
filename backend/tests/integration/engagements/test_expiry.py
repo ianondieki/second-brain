@@ -144,7 +144,7 @@ async def test_an_engagement_nobody_moves_expires_once(
         history = (await s.owner.get(t.path("/history"))).json()
     assert (ended["state"], ended["end_reason"], ended["stage_label"]) == ("EXPIRED", reason, "Expired")
     assert ended["ended_at"] is not None
-    assert (ended["due"], ended["actions"], ended["whose_turn"]) == (None, [], [])
+    assert (ended["due"], ended["actions"], ended["whose_turn"], ended["side_limits"]) == (None, [], [], None)
     [expired] = system_events(history)
     assert (expired["command"], expired["from_state"], expired["to_state"]) == ("expire", state.value, "EXPIRED")
     assert (expired["actor_user_id"], expired["end_reason"], expired["payload"]) == (None, reason, {})

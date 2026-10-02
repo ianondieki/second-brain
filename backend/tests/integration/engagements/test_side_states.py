@@ -164,6 +164,9 @@ async def test_a_question_pauses_the_review_clock_until_the_developer_answers(
     ]
     asked_seq, answered_seq = seq_of(history, "request_info"), seq_of(history, "answer_info")
     assert await note_rows(owner_engine, engagement) == [("info_request", asked_seq), ("info_answer", answered_seq)]
+    assert [n["seq"] for n in answered["notes"]] == [asked_seq, answered_seq]  # the History pairs them exactly
+    # UNDER_REVIEW's caps: one question left of two, both holds and all 60 days on hold.
+    assert answered["side_limits"] == {"questions_left": 1, "holds_left": 2, "hold_days_left": 60}
     asking = history["events"][asked_seq - 1]
     assert asking["payload"] == {"paused_due_on": str(local_date(due))}  # ids and dates only: no text
     assert datetime.fromisoformat(asking["stage_deadline_at"]) == answer_by
@@ -451,6 +454,8 @@ async def test_pause_and_resume_loops_are_refused_and_never_free(
         spent = await t.detail(s.dev)
     assert refused == (2, (409, "hold_limit"))
     assert "pause" not in spent["actions"]
+    # NEGOTIATION asks no questions; two same-day holds spent the stage's holds and a day each of the 60.
+    assert spent["side_limits"] == {"questions_left": None, "holds_left": 0, "hold_days_left": 58}
     assert [n["kind"] for n in spent["notes"]] == ["hold", "resume", "hold", "resume"]
     await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
     holds = [b for k, _, b in await in_app(owner_engine, world.owner, engagement) if k == "engagement.n20"]
