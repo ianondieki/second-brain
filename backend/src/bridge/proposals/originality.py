@@ -372,11 +372,17 @@ def nairobi_day_start(now: datetime) -> datetime:
     return datetime.combine(local_date(now), time(0), tzinfo=NAIROBI).astimezone(UTC)
 
 
+async def lock_teaser_checks(db: AsyncSession, user_id: UUID) -> None:
+    """The per-user transaction lock of the teaser checks' daily limits (originality and over-disclosure): held until
+    the caller commits, across API processes, so a count and the row it guards cannot interleave with another's."""
+    await db.execute(_OWNER_LOCK, {"key": f"proposals.teaser_checks:{user_id}"})
+
+
 async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: OriginalityPolicy, now: datetime) -> None:
-    """429 ``originality_limit`` once the user's checks since Nairobi midnight reach ``daily_limit``. Holds a per-user
-    lock until the caller commits, so two checks at once cannot both take the last one (the caller records its row
-    in the same transaction)."""
-    await db.execute(_OWNER_LOCK, {"key": f"proposals.originality:{user_id}"})
+    """429 ``originality_limit`` once the user's checks since Nairobi midnight reach ``daily_limit``. Takes the
+    per-user lock, so two checks at once cannot both take the last one (the caller records its row in the same
+    transaction)."""
+    await lock_teaser_checks(db, user_id)
     since = nairobi_day_start(now)
     count = int((await db.execute(_CHECKS_TODAY, {"user": user_id, "since": since})).scalar_one())
     if count >= policy.daily_limit:

@@ -72,9 +72,9 @@ async def check_disclosure(
         if not running.claim(user_id, policy.max_in_flight_per_user):
             raise ApiError(429, "disclosure_busy", disclosure.BUSY)
         try:
-            await disclosure.check_daily_limit(db, user_id, policy)
-            await db.commit()  # ends the read before the model call (the ledger writes on its own connection)
+            await disclosure.check_daily_limit(db, user_id, policy)  # the per-user lock, held through the call
             answer = await disclosure.ask_model(llm, user_id, fields, session_id=live.row.id, policy=policy)
+            await db.commit()  # the ledger row (own connection) is in: the lock may go
         finally:
             running.release(user_id)
     return DisclosureCheckOut(

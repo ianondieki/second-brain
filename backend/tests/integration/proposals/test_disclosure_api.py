@@ -7,6 +7,8 @@ owner only; the assistant's daily limit counts this task's ledger rows. Nothing 
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -24,6 +26,7 @@ from tests.integration.proposals.helpers import (
     published,
     user_of,
 )
+from tests.integration.proposals.test_assistant_limits_api import HeldAdapter
 
 PATH = "/api/me/proposals/{}/disclosure-check"
 HOW = "We use a gradient-boosted model over two years of readings to predict when a cooler fails."
@@ -116,3 +119,39 @@ async def test_the_assistants_daily_limit_counts_these_calls(
     assert refused.status_code == 429, refused.text
     assert refused.json()["detail"] == {"code": "disclosure_rate_limited", "message": disclosure.RATE_LIMITED}
     assert len(adapter.requests) == 2
+
+
+async def test_two_processes_with_one_call_left_let_only_one_through(
+    developers: Developers, owner_engine: AsyncEngine, proposal_world: ProposalWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two API processes (two apps, so two in-flight guards) for one user with one call left: the second waits on the
+    per-user lock while the first is at the model, then counts its ledger row and is refused."""
+    limited = AssistantPolicy(
+        max_calls_per_user_day=2, max_in_flight_per_user=1, tier2_overlap_words=8, max_reason_chars=300
+    )
+    monkeypatch.setattr(disclosure_router, "get_assistant_policy", lambda: limited)
+    first = await developers()
+    owner = user_of(first)
+    await make_demo(owner_engine, owner)
+    second = await developers(user_id=owner)
+    held = HeldAdapter(flagged(), flagged())
+    install(first, adapter=held)
+    other = install(second, flagged())
+    proposal_id = await new_draft(first, proposal_world)
+    held.release.set()
+    assert (await first.post(PATH.format(proposal_id))).status_code == 200  # one of two used
+    held.release.clear()
+    held.entered.clear()
+
+    racing = asyncio.create_task(first.post(PATH.format(proposal_id)))
+    await asyncio.wait_for(held.entered.wait(), timeout=20)
+    waiting = asyncio.create_task(second.post(PATH.format(proposal_id)))
+    done, _ = await asyncio.wait({waiting}, timeout=1.0)
+    assert not done  # blocked on the lock, not answered from a stale count
+    held.release.set()
+    won, lost = await asyncio.gather(racing, waiting)
+    assert won.status_code == 200, won.text
+    assert lost.status_code == 429, lost.text
+    assert lost.json()["detail"]["code"] == "disclosure_rate_limited"
+    assert other.requests == []
+    assert len(await llm_rows(owner_engine, owner)) == 2

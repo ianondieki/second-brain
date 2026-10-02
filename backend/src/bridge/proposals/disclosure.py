@@ -16,7 +16,8 @@ works. Warn only: nothing here blocks saving or publishing.
 
 Refused calls map to the assistant's fixed answers (``assistant.refusal``); a provider that is down answers "could not
 check". Calls count against the assistant's daily limit (``policy.yaml`` ``assistant.max_calls_per_user_day``, this
-task's ``llm_calls`` rows). No per-session opt-in: only Tier-1 text is sent (docs/spec/09 ground rules).
+task's ``llm_calls`` rows, counted under the teaser checks' per-user lock). No per-session opt-in: only Tier-1 text
+is sent (docs/spec/09 ground rules).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from bridge.llm.client import LLMClient
 from bridge.llm.errors import ConsentRequired, LLMBatchNotOwned, LLMConfigError, LLMError, Tier2NotAllowed
 from bridge.llm.types import CallContext, InputField, Instruction, LLMOutput, Message, Part, Result
 from bridge.logging import get_logger
-from bridge.proposals import assistant
+from bridge.proposals import assistant, originality
 from bridge.proposals.assistant_policy import AssistantPolicy
 from bridge.proposals.sanitise import TIER1_FIELDS, contact_findings, detection_skeleton, plain_text
 
@@ -193,7 +194,11 @@ def evaluate(result: Result[DisclosureVerdict], fields: Mapping[str, str], polic
 
 async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: AssistantPolicy) -> None:
     """429 ``disclosure_rate_limited`` once today's ``over_disclosure_check`` ledger rows reach the assistant's
-    daily limit (every status counts; the rules and the demo fallback write no row)."""
+    daily limit (every status counts; the rules and the demo fallback write no row). Takes the teaser checks'
+    per-user lock (``originality.lock_teaser_checks``); the caller keeps its transaction open through the model call,
+    whose ledger row is written on its own connection, so a second process waits and then counts that row: with one
+    call left, only one passes."""
+    await originality.lock_teaser_checks(db, user_id)
     if await assistant.calls_today(db, user_id, TASK) >= policy.max_calls_per_user_day:
         raise ApiError(429, "disclosure_rate_limited", RATE_LIMITED)
 
