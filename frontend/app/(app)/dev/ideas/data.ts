@@ -12,6 +12,7 @@ import {
   type ProblemCard,
   type ProblemRef,
 } from "./ideas";
+import type { Originality } from "./checks";
 import { isProposalId } from "./routes";
 
 // Server-side calls for the My ideas screens (signed in only). Each call is bounded, so a hung API ends in the
@@ -102,6 +103,24 @@ export async function linkableProblem(problemId: string): Promise<ProblemRef | n
   }
   if (response.status === 401) redirect("/login");
   return null;
+}
+
+/**
+ * Today's last overlap check of one of your ideas (GET /api/me/proposals/{id}/originality, REQ-PROP-04), so the
+ * editor shows it again after a reload; null when there is none today. Best effort: any refusal, a timeout or a lost
+ * connection leaves the editor without it (the check can simply be run again).
+ */
+export async function lastOverlap(id: string): Promise<Originality | null> {
+  if (!isProposalId(id)) return null;
+  try {
+    const { data } = await serverApi().GET("/api/me/proposals/{proposal_id}/originality", {
+      params: { path: { proposal_id: id } },
+      ...(await options()),
+    });
+    return data ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** A county's name by its code (KE-30 → Nairobi City), or the code when the list cannot be read. */
