@@ -548,20 +548,29 @@ describe("the side states' sheets", () => {
     });
   });
 
-  it("keeps a text with contact details open, with the reason in words (422 contains_contact)", async () => {
+  it("keeps a text with contact details open, the reason on the field, which keeps the focus (422 contains_contact)", async () => {
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "containsContact", status: 422 }));
     renderActions(orgReviewing(), { runImpl });
     fireEvent.click(screen.getByRole("button", { name: "Request information" }));
     const dialog = await sheet();
     fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "Call me on 0712 345 678" } });
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
-    const alert = within(dialog).getByRole("alert");
-    expect(alert.textContent).toBe(
-      "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.",
-    );
-    expect(document.activeElement).toBe(alert);
-    expect((within(dialog).getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Call me on 0712 345 678");
+    const field = within(dialog).getByLabelText("Your question") as HTMLTextAreaElement;
+    const sentence =
+      "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.";
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    const described = (field.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(described).toContain(sentence);
+    expect(document.activeElement).toBe(field);
+    expect(within(dialog).queryByRole("alert")).toBeNull(); // said once, on the field
+    expect(field.value).toBe("Call me on 0712 345 678");
     expect(refresh).not.toHaveBeenCalled();
+    // Editing the text clears the refusal; the next attempt says it again.
+    fireEvent.change(field, { target: { value: "Call me on 0712 345 679" } });
+    expect(field.hasAttribute("aria-invalid")).toBe(false);
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" })));
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(field);
   });
 
   it("keeps a sheet open with what was typed when one party's steps per hour ran out (429)", async () => {
@@ -628,7 +637,10 @@ describe("the side states' sheets", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
     fireEvent.change(within(dialog).getByLabelText("Resumes on"), { target: { value: "2026-11-30" } });
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
-    expect(within(dialog).getByRole("alert").textContent).toContain("all its holds together may last 60 days");
+    const date = within(dialog).getByLabelText("Resumes on");
+    expect(date.getAttribute("aria-invalid")).toBe("true");
+    expect(dialog.textContent).toContain("all its holds together may last 60 days");
+    expect(document.activeElement).toBe(date);
     expect(screen.getByRole("dialog")).toBe(dialog);
   });
 
@@ -796,7 +808,8 @@ describe("the side states' sheets", () => {
     fireEvent.change(date, { target: { value: "2030-01-01" } });
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
     expect(runImpl).toHaveBeenCalledTimes(1);
-    expect(within(dialog).getByRole("alert").textContent).toBe("Choose a resume date from tomorrow, no more than 60 days ahead.");
+    expect(date.getAttribute("aria-invalid")).toBe("true");
+    expect(dialog.textContent).toContain("Choose a resume date from tomorrow, no more than 60 days ahead.");
   });
 });
 
