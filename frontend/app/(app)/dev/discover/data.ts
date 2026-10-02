@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 
-import { trendQuery, type DiscoverQuery, type OpportunityGapOut, type TrendingOut } from "./discover";
+import { MAX_ITEMS, trendQuery, type DiscoverBriefsOut, type DiscoverQuery, type OpportunityGapOut, type TrendingOut } from "./discover";
 import type { LikedNiches, Recommendations } from "./recommendations";
 
 // Server-side calls for Discover, "Recommended for you" and the liked-niches page (REQ-TREND-02, REQ-PERS-01; signed
@@ -36,6 +36,16 @@ export async function opportunityGap(query: DiscoverQuery): Promise<OpportunityG
     ...(await options()),
   });
   if (!data) failed("GET /api/discover/opportunity-gap", response.status);
+  return data;
+}
+
+/** Verified organisations' published, open Problem Briefs, newest first (REQ-DIR-05). */
+export async function briefs(query: DiscoverQuery): Promise<DiscoverBriefsOut> {
+  const { data, response } = await serverApi().GET("/api/discover/briefs", {
+    params: { query: { ...trendQuery(query), limit: MAX_ITEMS } },
+    ...(await options()),
+  });
+  if (!data) failed("GET /api/discover/briefs", response.status);
   return data;
 }
 

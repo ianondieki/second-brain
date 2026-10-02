@@ -221,7 +221,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await nav(page, "Lists").getByRole("link", { name: "Projects" }).click();
     await expect(page.getByRole("region", { name: "Trending projects" }).locator("article").first()).toBeVisible(SLOW);
     await pause(page, 1.5);
-    await nav(page, "Lists").getByRole("link", { name: "Opportunity gap" }).click();
+    await nav(page, "Lists").getByRole("link", { name: "Gap" }).click();
     await expect(page.getByRole("region", { name: "Opportunity gap" }).locator("article").first()).toBeVisible(SLOW);
     await pause(page, 1.5);
 

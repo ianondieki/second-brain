@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
-import { opportunityGap, trending } from "./data";
+import { briefs, opportunityGap, trending } from "./data";
 import { NICHES_PATH, parseDiscover } from "./discover";
 import { DiscoverFilters, ViewSwitch } from "./DiscoverControls";
 import { DiscoverList } from "./DiscoverList";
@@ -22,7 +22,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /**
  * Developer › Discover (REQ-TREND-02; docs/spec/06 6.6, docs/spec/07 item 1): Trending problems with their sources and
- * Why chips, Trending projects beside the problems they solve, and the Opportunity gap, one list at a time, filtered
+ * Why chips, Trending projects beside the problems they solve, the Opportunity gap and the organisations' Problem
+ * Briefs (REQ-DIR-05), one list at a time, filtered
  * by niche and county. Rendered on the server from GET /api/discover/*; no script beyond the framework's. Developers
  * only; others go to their own home.
  */
@@ -35,13 +36,17 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
   const [lists, { niches, filterOptions }] = await Promise.all([
     query.view === "gap"
       ? opportunityGap(query).then((gap) => ({ kind: "gap" as const, gap }))
-      : trending(query).then((board) => ({ kind: "board" as const, board })),
+      : query.view === "briefs"
+        ? briefs(query).then((list) => ({ kind: "briefs" as const, briefs: list }))
+        : trending(query).then((board) => ({ kind: "board" as const, board })),
     directoryOptions(),
   ]);
   const empty =
     lists.kind === "gap"
       ? lists.gap.items.length === 0
-      : (query.view === "projects" ? lists.board.projects : lists.board.problems).length === 0;
+      : lists.kind === "briefs"
+        ? lists.briefs.items.length === 0
+        : (query.view === "projects" ? lists.board.projects : lists.board.problems).length === 0;
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>

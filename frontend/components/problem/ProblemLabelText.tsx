@@ -14,7 +14,13 @@ export function ProblemLabelText({ problem }: { problem: ListedProblem }) {
   const label = listedProblemLabel(problem, locale);
   if (!label) return null;
   const text =
-    label.key === "api" ? label.text : label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date });
+    label.key === "api"
+      ? label.text
+      : label.key === "developer"
+        ? t("label.developer")
+        : label.key === "org_brief"
+          ? t("label.org_brief", { org: label.org })
+          : t(`label.${label.key}`, { date: label.date });
   // A seeded example: the small "Demo data" badge, the sentence on demand (D-52).
   if (label.key === "seeded") return <DemoBadge label={t("label.demoBadge")} sentence={text} data-label={label.key} />;
   return <span data-label={label.key}>{text}</span>;

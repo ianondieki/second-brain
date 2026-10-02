@@ -10,7 +10,10 @@ returned by these public reads (AC-RES-2).
 Labels (``label_for``): a developer's problem is "Developer-reported"; a published research card is "AI-drafted,
 human-reviewed on <date>" (docs/spec/06 6.5; the date its review published it, Africa/Nairobi); a card the demo seed
 made from a fixed answer written in code (every source's ``excerpt_ref`` starts with ``example:``, which only the
-seed's path writes) says it is a seeded example, never a live AI result.
+seed's path writes) says it is a seeded example, never a live AI result; an organisation's Problem Brief is "Posted by
+<organisation>" (REQ-DIR-05), and its reference carries the organisation (``org``: id, slug and directory name, never a
+person) when the reader may see it in the directory. A Brief's problem is published only while its organisation is
+listed (not delisted): a delisted organisation's Brief leaves the picker, its page and the proposals' links.
 """
 
 from __future__ import annotations
@@ -26,15 +29,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from bridge.directory.models import Niche
-from bridge.directory.service import niche_label
+from bridge.directory.service import LISTED_LEVELS, niche_label
 from bridge.ids import uuid7
 from bridge.models.enums import ModerationState, ProblemSource, ProblemStatus
 from bridge.pagination import MomentCursor
-from bridge.problems.models import Problem, ProblemCitation
+from bridge.problems.models import Problem, ProblemBrief, ProblemCitation
 from bridge.proposals.models import ProposalProblem
-from bridge.proposals.schemas import NicheOut, ProblemRef
+from bridge.proposals.schemas import NicheOut, OrgRef, ProblemRef
+from bridge.tenancy.models import Organization
 
 LABELS: Final = {ProblemSource.DEVELOPER: "Developer-reported"}  # [[COPY-REVIEW]] docs/spec/06 6.3 wording
+POSTED_BY: Final = "Posted by {org}"  # [[COPY-REVIEW]] an organisation's Problem Brief (REQ-DIR-05)
 # [[COPY-REVIEW]] docs/spec/06 6.5's label, and the demo seed's (never presented as a live AI result).
 AI_DRAFTED: Final = "AI-drafted, human-reviewed on {date}"
 SEEDED_EXAMPLE: Final = "Seeded example for the demo (not a live AI result), human-reviewed on {date}"
@@ -49,12 +54,31 @@ def niche_out(niche_id: UUID | None, slug: str | None, name: str | None, parent_
     return NicheOut(id=niche_id, slug=slug, label=niche_label(name, parent_name))
 
 
+_Poster = aliased(Organization)
+
+
+def _listed_poster() -> ColumnElement[bool]:
+    """No organisation (a research card or a developer's problem), or a listed one: a Brief's problem leaves every
+    public read once its organisation is delisted (its own members included, who still read their Briefs' list)."""
+    listed = select(_Poster.id).where(
+        _Poster.id == Problem.org_id, _Poster.verification.in_(LISTED_LEVELS), _Poster.delisted_at.is_(None)
+    )
+    return or_(Problem.org_id.is_(None), exists(listed))
+
+
 def _published_and_clear() -> ColumnElement[bool]:
-    return and_(Problem.status == ProblemStatus.PUBLISHED, Problem.moderation_state == ModerationState.CLEAR)
+    return and_(
+        Problem.status == ProblemStatus.PUBLISHED, Problem.moderation_state == ModerationState.CLEAR, _listed_poster()
+    )
 
 
 def _with_niche(stmt: Select[Any]) -> Select[Any]:
-    return stmt.outerjoin(Niche, Niche.id == Problem.niche_id).outerjoin(_Parent, _Parent.id == Niche.parent_id)
+    """The problem's niche and parent niche, and a Brief's organisation (as the reader's RLS shows it: listed ones)."""
+    return (
+        stmt.outerjoin(Niche, Niche.id == Problem.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .outerjoin(Organization, Organization.id == Problem.org_id)
+    )
 
 
 def _seeded_example() -> ColumnElement[bool]:
@@ -86,13 +110,30 @@ _COLUMNS = (
     Problem.status,
     Problem.published_at,
     _seeded_example().label("seeded_example"),
+    Organization.id.label("org_id"),
+    Organization.slug.label("org_slug"),
+    Organization.legal_name.label("org_name"),
 )
 _REF_WIDTH: Final = len(_COLUMNS)
 
 
+def org_ref(org_id: UUID | None, slug: str | None, name: str | None) -> OrgRef | None:
+    if org_id is None or slug is None or name is None:
+        return None
+    return OrgRef(id=org_id, slug=slug, name=name)
+
+
 def label_for(
-    source: ProblemSource, status: ProblemStatus, published_at: datetime | None, seeded_example: bool
+    source: ProblemSource,
+    status: ProblemStatus,
+    published_at: datetime | None,
+    seeded_example: bool,
+    *,
+    org_name: str | None = None,
 ) -> str | None:
+    """The label a reference shows; ``org_name`` is a Brief's organisation as the reader sees it (none: no label)."""
+    if source is ProblemSource.ORG_BRIEF:
+        return None if org_name is None else POSTED_BY.format(org=org_name)
     if source is ProblemSource.RESEARCH_AGENT:
         if status is not ProblemStatus.PUBLISHED or published_at is None:
             return None
@@ -113,16 +154,36 @@ def published_facts(
 
 
 def _ref(row: Any) -> ProblemRef:
-    problem_id, title, source, niche_id, slug, name, parent_name, status, published_at, seeded = row
+    problem_id, title, source, niche_id, slug, name, parent_name, status, published_at, seeded, *org = row
     shown_at, shown_seeded = published_facts(ProblemStatus(status), published_at, bool(seeded))
+    by = org_ref(*org) if ProblemSource(source) is ProblemSource.ORG_BRIEF else None
     return ProblemRef(
         id=problem_id,
         title=title,
         source=source,
-        label=label_for(ProblemSource(source), ProblemStatus(status), published_at, bool(seeded)),
+        label=label_for(
+            ProblemSource(source),
+            ProblemStatus(status),
+            published_at,
+            bool(seeded),
+            org_name=None if by is None else by.name,
+        ),
         niche=niche_out(niche_id, slug, name, parent_name),
         seeded_example=shown_seeded,
         published_at=shown_at,
+        org=by,
+    )
+
+
+def published_after(after: MomentCursor) -> ColumnElement[bool]:
+    """The problems after ``after`` in the order ``published_at`` DESC NULLS LAST, then ``id`` DESC (a cursor of
+    ``bridge.pagination``)."""
+    if after.at is None:
+        return and_(Problem.published_at.is_(None), Problem.id < after.id)
+    return or_(
+        Problem.published_at.is_(None),
+        Problem.published_at < after.at,
+        and_(Problem.published_at == after.at, Problem.id < after.id),
     )
 
 
@@ -153,16 +214,8 @@ async def list_published(
     if q is not None:
         pattern = f"%{_escape_like(q)}%"
         stmt = stmt.where(or_(Problem.title.ilike(pattern, escape="\\"), Problem.statement.ilike(pattern, escape="\\")))
-    if after is not None and after.at is None:
-        stmt = stmt.where(Problem.published_at.is_(None), Problem.id < after.id)
-    elif after is not None:
-        stmt = stmt.where(
-            or_(
-                Problem.published_at.is_(None),
-                Problem.published_at < after.at,
-                and_(Problem.published_at == after.at, Problem.id < after.id),
-            )
-        )
+    if after is not None:
+        stmt = stmt.where(published_after(after))
     stmt = stmt.order_by(Problem.published_at.desc().nulls_last(), Problem.id.desc()).limit(limit)
     return [(_ref(row[:_REF_WIDTH]), row[_REF_WIDTH], row.published_at) for row in (await db.execute(stmt)).all()]
 
@@ -187,8 +240,9 @@ async def refs_for_version(db: AsyncSession, version_id: UUID, *, public: bool) 
 
 
 async def get_published(db: AsyncSession, problem_id: UUID) -> tuple[ProblemRef, Any, list[ProblemCitation]] | None:
-    """One published, clear problem (never a candidate, AC-RES-2): its reference, its row's display columns and its
-    cited sources, newest first; None when there is none the caller may see."""
+    """One published, clear problem (never a candidate, AC-RES-2): its reference, its row's display columns (a Brief's
+    ``brief_status``, ``budget_band`` and ``deadline`` too, when the caller may read the Brief) and its cited sources,
+    newest first; None when there is none the caller may see."""
     stmt = _with_niche(
         select(
             *_COLUMNS,
@@ -199,7 +253,10 @@ async def get_published(db: AsyncSession, problem_id: UUID) -> tuple[ProblemRef,
             Problem.ai_generated,
             Problem.confidence,
             Problem.named_orgs,
-        )
+            ProblemBrief.status.label("brief_status"),
+            ProblemBrief.budget_band,
+            ProblemBrief.deadline,
+        ).outerjoin(ProblemBrief, ProblemBrief.problem_id == Problem.id)
     ).where(Problem.id == problem_id, _published_and_clear())
     row = (await db.execute(stmt)).one_or_none()
     if row is None:

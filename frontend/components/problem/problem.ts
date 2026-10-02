@@ -11,19 +11,25 @@ export type Citation = Pick<
   "url" | "publisher" | "source_type" | "published_date" | "quote"
 >;
 
-export type ProblemLabel = { key: "aiDrafted" | "seeded"; date: string } | { key: "developer" } | null;
+export type ProblemLabel =
+  | { key: "aiDrafted" | "seeded"; date: string }
+  | { key: "developer" }
+  | { key: "org_brief"; org: string }
+  | null;
 
 /**
  * The card's label, in the page's language (the API also sends it in English as `label`): a published research
  * card is "AI-drafted, human-reviewed on <date>", or a seeded example when the demo seed made it (never presented as
- * a live AI result); a developer's problem is "Developer-reported"; anything else has none. `date` is the Nairobi
- * day it was published ("30 Sep 2026"), as the API computes it.
+ * a live AI result); a developer's problem is "Developer-reported"; an organisation's Problem Brief is "Posted by
+ * <organisation>" (REQ-DIR-05; the directory name the API sends, never a person); anything else has none. `date` is
+ * the Nairobi day it was published ("30 Sep 2026"), as the API computes it.
  */
 export function problemLabel(
-  problem: Pick<ProblemDetail, "source" | "seeded_example" | "published_at">,
+  problem: Pick<ProblemDetail, "source" | "seeded_example" | "published_at"> & { org?: { name: string } | null },
   locale: string,
 ): ProblemLabel {
   if (problem.source === "developer") return { key: "developer" };
+  if (problem.source === "org_brief") return problem.org ? { key: "org_brief", org: problem.org.name } : null;
   if (problem.source !== "research_agent" || !problem.published_at) return null;
   return { key: problem.seeded_example ? "seeded" : "aiDrafted", date: formatDay(locale, problem.published_at) };
 }
@@ -32,6 +38,8 @@ export function problemLabel(
 export type ListedProblem = Pick<ProblemDetail, "source" | "label"> & {
   seeded_example?: boolean;
   published_at?: string | null;
+  /** The organisation that posted a Problem Brief (REQ-DIR-05). */
+  org?: { name: string } | null;
 };
 
 /**
@@ -44,6 +52,7 @@ export type ListedProblem = Pick<ProblemDetail, "source" | "label"> & {
 export function listedProblemLabel(problem: ListedProblem, locale: string): ProblemLabel | { key: "api"; text: string } {
   if (!problem.label) return null;
   if (problem.source === "developer") return { key: "developer" };
+  if (problem.source === "org_brief" && problem.org) return { key: "org_brief", org: problem.org.name };
   if (typeof problem.seeded_example === "boolean" && problem.published_at !== undefined) {
     const label = problemLabel({ ...problem, seeded_example: problem.seeded_example, published_at: problem.published_at }, locale);
     if (label) return label;

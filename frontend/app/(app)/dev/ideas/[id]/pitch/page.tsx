@@ -105,6 +105,11 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   const offPage = query.selected.filter((id) => !onPage.has(orgKey(id)));
   const chosen = await Promise.all((await chosenOptions(idea.id, offPage)).map(pickerRow));
   const narrowed = Boolean(query.q || query.niche);
+  // Started from an organisation's Problem Brief (REQ-DIR-05): that organisation is chosen first, and the page says so
+  // while it is one the idea can be pitched to (otherwise its row says why not, as any other).
+  const preselected = query.org
+    ? [...chosen, ...groups.flatMap((group) => group.rows)].find((row) => row.available && orgKey(row.id) === query.org)
+    : undefined;
   if (groups.length === 0 && !query.cursor) {
     return header(
       narrowed ? (
@@ -132,6 +137,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
           groups={groups}
           chosen={chosen}
           initialSelected={query.selected}
+          preselected={preselected ? { id: preselected.id, name: preselected.name } : undefined}
           filters={<Filters query={query} niches={niches} />}
           narrowed={narrowed}
           cursor={query.cursor}

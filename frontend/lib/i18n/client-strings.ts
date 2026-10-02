@@ -49,6 +49,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "orgProposal",
   "trackerActions",
   "scoutForm",
+  "briefForm",
   "expressInterest",
   "tier2Share",
   "adminResearch",
