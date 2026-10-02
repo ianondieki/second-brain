@@ -8,7 +8,7 @@ import { SheetHandle, sheetClass } from "@/components/ui/ConfirmDialog";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
-import { formatDate, nairobiToday, type SheetCommand, type SheetInput } from "./model";
+import { formatDate, nairobiToday, type SheetCommand, type SheetInput, type SideLimits } from "./model";
 import { addDays, HOLD_MAX_DAYS, longDate, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
@@ -29,8 +29,10 @@ export interface SideSheetProps {
   /** resume: the day the hold was due to end ("12 Oct 2026"). */
   resumeOn?: string | null;
   locale?: string;
-  /** Today in Nairobi ("2026-10-02"), for the hold's date range. */
+  /** Today in Nairobi on the app's clock ("2026-10-02"), for the hold's date range. */
   today?: string;
+  /** What the policy's caps leave this stage (the API's `side_limits`); each figure shown only when sent. */
+  limits?: SideLimits | null;
   onSubmit: (input: SheetInput) => void;
   /** The sheet closed without sending (Cancel or Escape). */
   onClose: () => void;
@@ -66,6 +68,25 @@ export function SideSheet(props: SideSheetProps) {
   }, []);
 
   const withText = props.command !== "cancel_request";
+  // A hold's date, as the API checks it: after today, at most 60 days ahead and within the days on hold the
+  // engagement has left (side_limits.hold_days_left, when sent).
+  const earliest = addDays(today, 1);
+  const latest = addDays(today, Math.max(1, Math.min(HOLD_MAX_DAYS, props.limits?.hold_days_left ?? HOLD_MAX_DAYS)));
+  const outOfRange = (day: string) => !/^\d{4}-\d{2}-\d{2}$/.test(day) || day < earliest || day > latest;
+  const rangeError = t("sheet.pause.dateRange", { date: formatDate(earliest, locale), value: formatDate(latest, locale) });
+  const left = (figure: number | null | undefined, key: "sheet.questionsLeft" | "sheet.holdsLeft" | "sheet.holdDaysLeft") =>
+    figure == null ? null : (
+      <li key={key} data-left={key.slice(6)}>
+        {t(key, { count: figure })}
+      </li>
+    );
+  const lefts =
+    props.command === "request_info"
+      ? [left(props.limits?.questions_left, "sheet.questionsLeft")]
+      : props.command === "pause"
+        ? [left(props.limits?.holds_left, "sheet.holdsLeft"), left(props.limits?.hold_days_left, "sheet.holdDaysLeft")]
+        : [];
+  const leftList = lefts.some(Boolean) ? <ul className="flex flex-col gap-1 text-sm text-ink-soft">{lefts}</ul> : null;
   const multiLine = props.command === "request_info" || props.command === "answer_info";
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -74,7 +95,7 @@ export function SideSheet(props: SideSheetProps) {
     const value = text.trim();
     const next = {
       text: withText && !value ? t("form.required") : undefined,
-      date: props.command === "pause" && !resumeAt ? t("form.date") : undefined,
+      date: props.command !== "pause" ? undefined : !resumeAt ? t("form.date") : outOfRange(resumeAt) ? rangeError : undefined,
     };
     setErrors(next);
     if (next.text || next.date) {
@@ -129,7 +150,6 @@ export function SideSheet(props: SideSheetProps) {
     />
   ) : null;
 
-  const latest = addDays(today, HOLD_MAX_DAYS);
   return (
     <dialog
       ref={ref}
@@ -151,6 +171,7 @@ export function SideSheet(props: SideSheetProps) {
           <div className="flex flex-col gap-2">
             <p className="max-w-[60ch] text-ink">{t("sheet.requestInfo.lead", { name: props.counterpart })}</p>
             <p className="max-w-[60ch] text-sm text-ink-soft">{t("sheet.requestInfo.limit")}</p>
+            {leftList}
           </div>
         ) : null}
 
@@ -170,7 +191,12 @@ export function SideSheet(props: SideSheetProps) {
           </>
         ) : null}
 
-        {props.command === "pause" ? <p className="max-w-[60ch] text-ink">{t("sheet.pause.lead")}</p> : null}
+        {props.command === "pause" ? (
+          <div className="flex flex-col gap-2">
+            <p className="max-w-[60ch] text-ink">{t("sheet.pause.lead")}</p>
+            {leftList}
+          </div>
+        ) : null}
         {props.command === "resume" ? (
           <p className="max-w-[60ch] text-ink">
             {props.resumeOn ? t("sheet.resume.lead", { date: props.resumeOn }) : t("sheet.resume.leadNoDate")}
@@ -189,7 +215,7 @@ export function SideSheet(props: SideSheetProps) {
               type="date"
               label={t("sheet.pause.date")}
               hint={t("sheet.pause.dateHint", { date: formatDate(latest, locale) })}
-              min={addDays(today, 1)}
+              min={earliest}
               max={latest}
               value={resumeAt}
               error={errors.date}

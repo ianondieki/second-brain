@@ -19,6 +19,7 @@ import {
   type FormCommand,
   type FormInput,
   type SheetCommand,
+  type SideLimits,
 } from "./model";
 import { StepUp } from "./StepUp";
 
@@ -47,6 +48,10 @@ export interface ActionsProps {
   resumeOn?: string | null;
   /** The page's language, for the dates and counts the sheets write. */
   locale?: string;
+  /** Today in Nairobi on the app's clock, for a hold's date range. */
+  today?: string;
+  /** What the policy's caps leave this stage (the API's `side_limits`). */
+  limits?: SideLimits | null;
   runImpl?: typeof runCommand;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -252,6 +257,8 @@ export function Actions(props: ActionsProps) {
             question={props.question}
             resumeOn={props.resumeOn}
             locale={props.locale}
+            today={props.today}
+            limits={props.limits}
             onClose={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
           />

@@ -579,7 +579,7 @@ describe("the side states' sheets", () => {
   });
 
   it("pauses with a one-line reason and a resume date, said in words with its weekday", async () => {
-    const { runImpl } = renderActions(orgReviewing());
+    const { runImpl } = renderActions(orgReviewing(), { today: "2026-10-02" });
     fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
     const dialog = await sheet();
     expect(dialog.textContent).toContain("Nothing is due while it is on hold.");
@@ -607,7 +607,7 @@ describe("the side states' sheets", () => {
 
   it("keeps a hold open when its date passes the days on hold left (409 hold_limit)", async () => {
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "holdLimit", status: 409 }));
-    renderActions(orgReviewing(), { runImpl });
+    renderActions(orgReviewing(), { runImpl, today: "2026-10-02" });
     fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
     const dialog = await sheet();
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
@@ -663,5 +663,89 @@ describe("the side states' sheets", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(runImpl).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause this engagement" }));
+  });
+
+  it("refuses a resume date outside tomorrow to 60 days ahead in the field itself, sending nothing", async () => {
+    const { runImpl } = renderActions(orgReviewing(), { today: "2026-10-02" });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
+    expect([date.min, date.max]).toEqual(["2026-10-03", "2026-12-01"]);
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
+    for (const day of ["2026-10-02", "2026-12-02"]) {
+      fireEvent.change(date, { target: { value: day } });
+      await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+      expect(within(dialog).getByText("Choose a resume date from 3 Oct 2026 to 1 Dec 2026.")).toBeTruthy();
+      expect(date.getAttribute("aria-invalid")).toBe("true");
+      expect(document.activeElement).toBe(date);
+    }
+    expect(runImpl).not.toHaveBeenCalled();
+    fireEvent.change(date, { target: { value: "2026-12-01" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(runImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows what side_limits leaves and holds the date within the days on hold left", async () => {
+    const limits = { questions_left: null, holds_left: 1, hold_days_left: 10 };
+    const { runImpl } = renderActions(orgReviewing(), { today: "2026-10-02", limits });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = await sheet();
+    expect(within(dialog).getByText("Holds left at this stage: 1")).toBeTruthy();
+    expect(within(dialog).getByText("Days on hold left for this engagement: 10")).toBeTruthy();
+    expect(dialog.querySelector("[data-left='questionsLeft']")).toBeNull();
+    const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
+    expect(date.max).toBe("2026-10-12");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Board approval" } });
+    fireEvent.change(date, { target: { value: "2026-10-13" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pause until then" })));
+    expect(within(dialog).getByText("Choose a resume date from 3 Oct 2026 to 12 Oct 2026.")).toBeTruthy();
+    expect(runImpl).not.toHaveBeenCalled();
+  });
+
+  it("shows the questions left only when the API sends the figure", async () => {
+    renderActions(orgReviewing(), { limits: { questions_left: 1, holds_left: 2, hold_days_left: 60 } });
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    expect(within(dialog).getByText("Questions left at this stage: 1")).toBeTruthy();
+    expect(dialog.querySelector("[data-left='holdsLeft']")).toBeNull();
+    cleanup();
+    renderActions(orgReviewing());
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    expect((await sheet()).querySelector("[data-left]")).toBeNull();
+  });
+
+  it("blocks the sheet's buttons and Escape while its request is in flight", async () => {
+    let settle: (outcome: CommandOutcome) => void = () => {};
+    const runImpl = vi.fn<Run>(() => new Promise<CommandOutcome>((resolve) => (settle = resolve)));
+    renderActions(orgReviewing(), { runImpl });
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    fireEvent.change(within(dialog).getByLabelText("Your question"), { target: { value: "Which co-ops?" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send the question" }));
+    const send = within(dialog).getByRole("button", { name: "Working…" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    expect(send.getAttribute("aria-disabled")).toBe("true");
+    expect(cancel.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(send);
+    fireEvent.click(cancel);
+    const escape = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(runImpl).toHaveBeenCalledTimes(1);
+    await act(async () => settle({ ok: true }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes on Escape when nothing is in flight", async () => {
+    renderActions(orgReviewing());
+    fireEvent.click(screen.getByRole("button", { name: "Request information" }));
+    const dialog = await sheet();
+    const escape = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(false);
+    act(() => dialog.close()); // the browser closes the dialog after an unprevented cancel
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Request information" }));
   });
 });

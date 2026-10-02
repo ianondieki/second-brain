@@ -35,6 +35,7 @@ import {
   isFinished,
   formatDate,
   kesAmount,
+  nairobiToday,
   offersContactReveal,
   shortHash,
   sideBanner,
@@ -168,6 +169,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
           question={question}
           resumeOn={holdEnd ? formatDate(holdEnd, locale) : null}
           locale={locale}
+          today={appToday(detail)}
+          limits={detail.side_limits}
         />
       </Card>
       </div>
@@ -194,6 +197,17 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       </div>
     </ClientStrings>
   );
+}
+
+/**
+ * Today in Nairobi as the app counts it: the later of the server's day and the day of the engagement's last change
+ * (written on the app's clock, which a dev/test clock may have moved ahead; in production the two agree). The API
+ * decides a hold's date again.
+ */
+function appToday(detail: Detail): string {
+  const server = nairobiToday();
+  const changed = nairobiToday(new Date(detail.updated_at));
+  return changed > server ? changed : server;
 }
 
 async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {

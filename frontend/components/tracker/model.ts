@@ -22,6 +22,7 @@ export type History = Schemas["HistoryOut"];
 export type DocumentKind = Schemas["SignatureDocumentKind"];
 export type Due = Schemas["DueOut"];
 export type Note = Schemas["NoteOut"];
+export type SideLimits = Schemas["SideLimitsOut"];
 
 /** The 5-group stepper, in order (Review · Contact and NDA · Agreement · Implementation · Close). */
 export const GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"] as const;
