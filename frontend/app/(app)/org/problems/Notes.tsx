@@ -9,8 +9,8 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
  * "Brief sent for review" after posting (?posted=1): mounted once the page runs in the browser, so its words arrive in
  * a live region (role=status) and are announced, and focused, so the person continues from it rather than from the
  * form that is gone (WCAG 2.4.3, 4.1.3). Nothing in the server HTML: without script the list says it all. Once it has
- * focus, `posted` leaves the address (history.replaceState, which Next's router follows without fetching the page
- * again, so the note stays): a reload or a shared link never says it again.
+ * focus, `posted` leaves the address (history.replaceState with a null state, the call Next's router listens to and
+ * follows without fetching the page again, so the note stays): a reload or a shared link never says it again.
  */
 export function PostedNote({ text }: { text: string }) {
   const hydrated = useHydrated();
@@ -21,7 +21,8 @@ export function PostedNote({ text }: { text: string }) {
     const url = new URL(window.location.href);
     if (!url.searchParams.has("posted")) return;
     url.searchParams.delete("posted");
-    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    // A null state: a state carrying Next's own marker goes straight to the browser and the router never hears of it.
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, [hydrated]);
   if (!hydrated) return null;
   return (
