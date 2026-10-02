@@ -1,17 +1,20 @@
-"""Revisions 0001 to 0005 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
-REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+"""Revisions 0001 to 0006 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03; docs/spec/08 Migrations and
+Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0005, 0004, 0003 and 0002 leaves the revision before it exactly as it found
-it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role
+Migration round trip and drift (each of 0006, 0005, 0004, 0003 and 0002 leaves the revision before it exactly as it
+found it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role
 attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence triggers
-of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the listed-organisations
-policy and the Procrastinate schema. The tracker's behaviour (chain, projection, parties, payments, clock) is tested in
-``integration/engagements/``; schema v4's in ``integration/matching/``, ``integration/problems/`` and
-``integration/billing/``.
+of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes
+triggers, policies and in-app column grant, the listed-organisations policy and the Procrastinate schema. The tracker's
+behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``; schema v4's in
+``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the notes' writers and
+readers, marking read) in ``test_rls.py``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import threading
@@ -38,6 +41,7 @@ from bridge.models import Base, Tenancy
 from bridge.models.base import RLS_TENANCIES
 from tests.integration import world as w
 from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
+from tests.integration.engagements import tracker
 
 TABLES = Base.metadata.tables
 TIER2_ROLES = ("tier2_reader", "provenance_worker", "tier2_embed_worker", "tier2_moderation", "dsr_exporter")
@@ -186,6 +190,8 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "demo_fallback",
         "updated_at",
     },
+    # revision 0006: marking read only; never the recipient, the organisation or the text (table-wide since 0001)
+    "in_app_notifications": {"read_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -260,6 +266,8 @@ APP_GRANTS: dict[str, set[str]] = {
     "agent_matches": {S, I, U},
     "research_runs": {S, I, U},
     "payments": {S, I},
+    # revision 0006: the side states' notes (append-only: SELECT and INSERT only, the INSERT without created_at)
+    "engagement_notes": {S, I},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -407,6 +415,16 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "payments_guard()": (False, set()),
     "problems_research_guard()": (True, set()),
     "scout_agents_recipients()": (True, set()),
+    # revision 0006 (app_moderate_problem is replaced in place: same signature, definer and callers)
+    "engagement_notes_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
+    "engagement_notes_latest_event()": (True, set()),  # locks the engagement and reads the chain's head
+    "app_brief_problem_is_public(uuid)": (True, {"bridge_app"}),
+    "app_xid_is_current(xid)": (
+        False,
+        {"bridge_app"},
+    ),  # the notes' INSERT policy: an event of this transaction  # the public read of problem_briefs (no recursion)
+    "problem_briefs_status_guard()": (False, set()),  # SECURITY INVOKER: the caller's RLS reads the problem
+    "problems_brief_text_guard()": (False, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -621,10 +639,18 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     run_alembic(scratch_url, lambda config: command.upgrade(config, "0004"))
     at_0004 = schema_snapshot(scratch_url)
     assert set(at_0004["functions"]) - set(at_0003["functions"]), "0004 adds app_llm_calls_since"
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0005"))
+    at_0005 = schema_snapshot(scratch_url)
+    assert set(at_0005["policies"]) - set(at_0004["policies"]), "0005 adds the policies of its tables"
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    assert set(at_head["policies"]) - set(at_0004["policies"]), "0005 adds the policies of its tables"
+    assert set(at_head["policies"]) - set(at_0005["policies"]), "0006 adds the policies of engagement_notes"
+    assert set(at_0005["table_acl"]) - set(at_head["table_acl"]), "0006 narrows the in-app UPDATE to read_at"
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0005"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0006 leaves every object of 0005 exactly as it found it (the in-app grants included)
+        assert after[kind] == at_0005[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0004"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0005 leaves every object of 0004 exactly as it found it (the problems grants included)
@@ -688,6 +714,79 @@ def test_concurrent_appends_to_one_chain_are_serialised(scratch_url: URL) -> Non
 
 
 # --- Harness ------------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def notes_race_url(admin_url: URL) -> Iterator[URL]:
+    """A database of its own at head (the race commits; scratch_url belongs to the round trip, which an async test
+    reordered ahead of it would leave at head)."""
+    name = f"bridge_race_{uuid4().hex[:12]}"
+    url = create_database(admin_url, name)
+    try:
+        run_alembic(url, lambda config: command.upgrade(config, "head"))
+        yield url
+    finally:
+        drop_database(admin_url, name)
+
+
+async def test_a_note_waits_for_an_append_in_flight_and_is_refused_once_it_commits(notes_race_url: URL) -> None:
+    """Revision 0006 (the notes' review): the race the INSERT policy alone left open. The organisation's request
+    (seq 2) is committed without its note while the note's transaction is already open; the developer's answer (seq 3)
+    is appended and holds the engagement's row lock; the note for seq 2 then waits on that lock
+    (engagement_notes_1_latest_event, FOR NO KEY UPDATE) and, once the answer commits, is refused: its event is no
+    longer the latest. The policy's own check had passed under the snapshot taken before the answer committed."""
+    owner, app = role_engine(notes_race_url, "bridge_owner"), role_engine(notes_race_url, "bridge_app")
+    try:
+        async with owner.begin() as conn:
+            p = await tracker.parties(conn)
+            await tracker.act(conn, p.developer)
+            engagement = await tracker.engage(conn, p)
+        async with app.connect() as noter, app.connect() as asker, app.connect() as answerer:
+            await noter.begin()
+            await tracker.act(noter, p.owner, p.org)  # the note's transaction starts before its event
+            async with asker.begin():
+                await tracker.act(asker, p.owner, p.org)
+                await tracker.append(asker, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+            await answerer.begin()
+            await tracker.act(answerer, p.developer)
+            await tracker.append(
+                answerer, engagement, p.developer, "developer", "answer_info", "INFO_REQUESTED", "SUBMITTED"
+            )
+            note = asyncio.create_task(
+                noter.execute(
+                    sa.text(
+                        "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+                        " VALUES (:id, :e, 2, 'info_request', 'Which counties?', :by)"
+                    ),
+                    {"id": uuid7(), "e": engagement, "by": p.owner},
+                )
+            )
+            await asyncio.sleep(0.5)
+            assert not note.done(), "the note did not wait for the append in flight"
+            await answerer.commit()
+            with pytest.raises(sa.exc.DBAPIError, match="only while its event is the engagement's latest"):
+                await note
+            await noter.rollback()
+            # The policy's half (ev.xmin): a note from any transaction but its event's is refused, even while the event
+            # is the latest, whether the note's transaction was opened before the event's (the actor's own earlier
+            # transaction) or after it.
+            other = (
+                "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+                " VALUES (uuid7(), :e, 4, 'info_request', 'Which counties?', :by)"
+            )
+            await noter.begin()
+            await tracker.act(noter, p.owner, p.org)  # opened before the event
+            async with asker.begin():
+                await tracker.act(asker, p.owner, p.org)
+                await tracker.append(asker, engagement, p.owner, "owner", "request_info", "SUBMITTED", "INFO_REQUESTED")
+            await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
+            await noter.rollback()
+            async with noter.begin():
+                await tracker.act(noter, p.owner, p.org)  # opened after it
+                await expect_error(noter, other, "row-level security", {"e": engagement, "by": p.owner})
+    finally:
+        await owner.dispose()
+        await app.dispose()
 
 
 async def test_role_engines_keep_their_role_across_transactions(
@@ -896,6 +995,33 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
         )
     for privilege in ("UPDATE", "DELETE"):
         assert not await scalar(owner_engine, "SELECT has_table_privilege('bridge_app', 'consents', :p)", p=privilege)
+    for privilege in ("UPDATE", "DELETE", "TRUNCATE"):  # revision 0006: the notes, like the events they explain
+        assert not await scalar(
+            owner_engine, "SELECT has_table_privilege('bridge_app', 'engagement_notes', :p)", p=privilege
+        )
+    held = "SELECT has_any_column_privilege('bridge_app', 'engagement_notes', 'UPDATE')"
+    assert not await scalar(owner_engine, held)  # no column-scoped UPDATE either
+
+
+async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0006: the notes have one SELECT and one INSERT policy (append-only: nothing else). In-app notifications
+    keep revision 0001's policies: a user updates only their own rows and cannot hand one to another user (USING and
+    WITH CHECK), and the column grant, not a policy, keeps every column but read_at unchanged."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename IN ('engagement_notes', 'in_app_notifications')",
+    )
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == {
+        ("engagement_notes", "bridge_app_select", "SELECT"),
+        ("engagement_notes", "bridge_app_insert", "INSERT"),
+        ("in_app_notifications", "bridge_app_select", "SELECT"),
+        ("in_app_notifications", "bridge_app_insert", "INSERT"),
+        ("in_app_notifications", "bridge_app_update", "UPDATE"),
+    }
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    (update,) = (row for row in found if row.cmd == "UPDATE")
+    assert update.qual == update.with_check == "(user_id = app_user_id())"
 
 
 @pytest.mark.parametrize("role", sorted(ROLE_GRANTS))
@@ -1028,6 +1154,8 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             assert (await conn.execute(member, {"id": org_id})).scalar_one() is True
             await conn.execute(sa.text("SELECT uuid7(), app_user_id(), app_org_id()"))
             await conn.execute(sa.text("SELECT app_llm_calls_since('m', now())"))  # revision 0004
+            await conn.execute(sa.text("SELECT app_brief_problem_is_public(uuid7())"))  # revision 0006
+            await conn.execute(sa.text("SELECT app_xid_is_current(CAST('3' AS xid))"))
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
@@ -1610,10 +1738,12 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
 
 # Revision 0005: columns bridge_app reads but neither inserts nor updates: the research columns only
 # app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
+# Revision 0006: a note's time, the database's clock too, and its redaction (D-54), the owner's.
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problems": {"research_run_id", "named_orgs"},
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
+    "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
 }
 
 
@@ -2213,6 +2343,66 @@ V5_TRIGGERS = {
 }
 
 
+# Revision 0006: the notes are a tracker table (the visibility check first) and append-only for every role; the
+# Brief status and text guards.
+V6_TRIGGERS = {
+    ("engagement_notes", "engagement_notes_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT),
+    # Second on INSERT (name order): a note only while its event is the latest, under the engagement's row lock.
+    ("engagement_notes", "engagement_notes_1_latest_event"): (
+        "engagement_notes_latest_event",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("engagement_notes", "engagement_notes_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
+    # D-54: an UPDATE only as the owner's one redaction of the body.
+    ("engagement_notes", "engagement_notes_redaction_guard"): (
+        "engagement_notes_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
+    ),
+    ("engagement_notes", "engagement_notes_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
+    # After RLS: a Brief is published only with its problem, and closed only once published.
+    ("problem_briefs", "problem_briefs_status_guard"): ("problem_briefs_status_guard", ROW | ON_INSERT | ON_UPDATE),
+    # UPDATE OF title, statement, affected_group: a published Brief keeps its moderated text.
+    ("problems", "problems_brief_text_guard"): ("problems_brief_text_guard", ROW | BEFORE | ON_UPDATE),
+}
+
+
+async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
+    """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
+    published org_brief problem, for every role. Its organisation's editor (bridge_app) is refused with SQLSTATE 55000
+    and holds no UPDATE on status to return it to review; the owner's same UPDATE with status = 'pending_review'
+    passes. Unchanged text, the other columns, a Brief awaiting review and a developer's own problem stay editable."""
+    async with rolled_back(owner_engine) as conn:
+        p = await tracker.parties(conn)
+        niche = uuid7()
+        await conn.execute(
+            sa.text("INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'Briefs')"),
+            {"id": niche, "slug": niche.hex},
+        )
+        published = await w.add_problem(conn, p.reviewer, niche, org_id=p.org)
+        pending = await w.add_problem(conn, p.reviewer, niche, org_id=p.org, status="pending_review")
+        own = await w.add_problem(conn, p.developer, niche)
+        by_id = {"id": published}
+        await tracker.act(conn, p.reviewer, p.org)
+        for column in ("title", "statement", "affected_group"):
+            savepoint = await conn.begin_nested()
+            with pytest.raises(sa.exc.DBAPIError, match="moderated text of a published Brief") as refused:
+                await conn.execute(sa.text(f"UPDATE problems SET {column} = 'Changed' WHERE id = :id"), by_id)
+            await savepoint.rollback()
+            assert getattr(refused.value.orig, "sqlstate", None) == "55000", column
+        back_to_review = "UPDATE problems SET title = 'Changed', status = 'pending_review' WHERE id = :id"
+        await expect_error(conn, back_to_review, "permission denied", by_id)  # status is a moderation decision
+        unchanged = "UPDATE problems SET title = title, statement = statement, niche_id = niche_id WHERE id = :id"
+        assert (await conn.execute(sa.text(unchanged), by_id)).rowcount == 1
+        edit = "UPDATE problems SET title = 'Edited', affected_group = 'Farmers' WHERE id = :id"
+        assert (await conn.execute(sa.text(edit), {"id": pending})).rowcount == 1
+        await tracker.act(conn, p.developer)
+        assert (await conn.execute(sa.text(edit), {"id": own})).rowcount == 1
+        await tracker.as_owner(conn)  # every role: the owner too, unless it returns the Brief to review
+        await expect_error(conn, "UPDATE problems SET title = 'Changed' WHERE id = :id", "moderated text", by_id)
+        returned = await conn.execute(sa.text(back_to_review + " RETURNING CAST(status AS text)"), by_id)
+        assert returned.scalar_one() == "pending_review"
+
+
 async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine) -> None:
     """The complete set of triggers on Bridge tables (Procrastinate's own are left to its schema)."""
     found = await rows(
@@ -2221,7 +2411,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
-    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS
+    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
@@ -2322,8 +2512,8 @@ async def test_the_visibility_trigger_fires_first_on_every_tracker_table(owner_e
         " JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid"
         " WHERE NOT t.tgisinternal AND c.relname = ANY (:tables) AND t.tgtype & 7 = 7"  # ROW | BEFORE | INSERT
         ' ORDER BY c.relname, t.tgname COLLATE "C"',
-        tables=list(V3_TRACKER_TABLES),
+        tables=[*V3_TRACKER_TABLES, "engagement_notes"],
     )
     assert {row.table_name: row.function for row in found} == dict.fromkeys(
-        V3_TRACKER_TABLES, "tracker_engagement_visible"
+        (*V3_TRACKER_TABLES, "engagement_notes"), "tracker_engagement_visible"
     )
