@@ -25,7 +25,7 @@ from bridge.ids import uuid7
 from bridge.notifications.in_app import post_in_app
 from tests.integration.api import make_client
 from tests.integration.proposals.helpers import Developers, user_of
-from tests.integration.proposals.pitch_helpers import Members, add_org
+from tests.integration.proposals.pitch_helpers import Members, add_member, add_org
 from tests.integration.query_counts import LARGE, SMALL, counted
 
 URL = "/api/me/notifications"
@@ -282,6 +282,35 @@ async def test_an_organisations_member_uses_the_same_endpoints(
     assert await count(member) == 1
     assert (await ok(await member.post(f"{URL}/{row_id}/read")))["read_at"] is not None
     assert await count(member) == 0
+
+
+async def test_another_member_of_the_same_organisation_sees_none_of_them(
+    member_client: Members, owner_engine: AsyncEngine
+) -> None:
+    """An organisation's notification is one person's: a colleague neither lists, counts nor marks it."""
+    org = await add_org(owner_engine, f"Bellco {uuid4().hex[:6]}", verification="e2", niche_id=None)
+    assert org.member is not None
+    async with owner_engine.begin() as conn:
+        colleague_id = await add_member(conn, org.id, "{owner}")
+    first, colleague = await member_client(org.member), await member_client(colleague_id)
+    row_id = await add(owner_engine, org.member, "Approved", org_id=org.id, link=f"/org/engagements/{uuid4()}")
+
+    assert await ok(await colleague.get(URL)) == {"items": [], "next_cursor": None}
+    assert await count(colleague) == 0
+    refused = await colleague.post(f"{URL}/{row_id}/read")
+    assert refused.status_code == 404
+    assert refused.json()["detail"]["code"] == "not_found"
+    assert await ok(await colleague.post(f"{URL}/read-all")) == {"count": 0}
+    assert (await stored(owner_engine, row_id)).read_at is None
+    assert await count(first) == 1
+
+
+@pytest.mark.parametrize("limit", [0, -1, 51, "x"])
+async def test_a_limit_outside_one_to_fifty_is_422(developers: Developers, limit: object) -> None:
+    client = await developers()
+    response = await client.get(URL, params={"limit": limit})
+    assert response.status_code == 422, response.text
+    assert (await client.get(URL, params={"limit": 50})).status_code == 200
 
 
 @pytest.mark.parametrize(
