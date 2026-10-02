@@ -12,16 +12,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
+from bridge.engagements import commands, service
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
+from bridge.engagements.policy import get_policy
 from bridge.notifications.email import FakeEmailProvider
 from bridge.reminders.facts import developer_facts, org_facts
 from bridge.reminders.nudge import Nudge, compose_nudge
@@ -451,3 +455,30 @@ async def test_pause_and_resume_loops_are_refused_and_never_free(
     await run_notifications(owner_engine, app_engine, engagement, FakeEmailProvider())
     holds = [b for k, _, b in await in_app(owner_engine, world.owner, engagement) if k == "engagement.n20"]
     assert len(holds) == 2
+
+
+async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """THREAT_MODEL D: policy.yaml side_states.actions_per_hour caps one party's side-state commands on one engagement
+    within any hour (here 3): the fourth is 429 too_many_actions and writes nothing; the other party is counted
+    apart."""
+    tight = replace(get_policy(), side_actions_per_hour=3, holds_per_stage=10)
+    monkeypatch.setattr(commands, "get_policy", lambda: tight)
+    monkeypatch.setattr(service, "get_policy", lambda: tight)
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    today = await db_today(owner_engine)
+    pause = {"reason": REASON, "resume_at": str(today + timedelta(days=5))}
+    async with seats(app_engine, deals_on(), world) as s:
+        await walk_to(t, s, world, today, "NEGOTIATION")
+        await t.ok(s.dev, "pause", pause)
+        await t.ok(s.dev, "resume", {"reason": "Back."})
+        await t.ok(s.dev, "pause", pause)
+        before = await t.detail(s.dev)
+        assert code(await t.post(s.dev, "resume", {"reason": "Back."})) == (429, "too_many_actions")
+        assert (await t.detail(s.dev))["lock_version"] == before["lock_version"]  # nothing written
+        resumed = await t.ok(s.owner, "resume", {"reason": "Ready."})  # the organisation's own count
+        assert code(await t.post(s.dev, "pause", pause)) == (429, "too_many_actions")
+    assert resumed["state"] == "NEGOTIATION"

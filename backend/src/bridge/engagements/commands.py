@@ -28,11 +28,11 @@ from __future__ import annotations
 import ipaddress
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import insert, select, text
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,6 +72,7 @@ from bridge.models.enums import (
     AgreementStatus,
     ContactChannel,
     EndorsementMethod,
+    EngagementActorRole,
     EngagementEndReason,
     EngagementOrigin,
     EngagementParty,
@@ -261,10 +262,13 @@ async def execute(
     except sm.TrackerError as error:
         raise api_error(error) from error
     now = await app_now(db)
+    policy = get_policy()
+    if command in sm.SIDE_COMMANDS:
+        await _throttle(db, party, now, policy)
     step = Step(
         db=db,
         settings=settings,
-        policy=get_policy(),
+        policy=policy,
         party=party,
         engagement=engagement,
         decision=decision,
@@ -286,6 +290,30 @@ async def execute(
             raise
         raise mapped from exc
     return engagement
+
+
+async def _throttle(db: AsyncSession, party: Party, now: datetime, policy: TrackerPolicy) -> None:
+    """429 ``too_many_actions`` once the caller's party ran ``side_states.actions_per_hour`` side-state commands on
+    this engagement within the hour before ``now`` (the chain's events, on the shared clock), so neither party floods
+    the other with notices (THREAT_MODEL D). Counted per party: the organisation's members together."""
+    roles = [EngagementActorRole.DEVELOPER] if party.is_developer else list(notify.ORG_ROLES)
+    recent = await db.scalar(
+        select(func.count())
+        .select_from(EngagementEvent)
+        .where(
+            EngagementEvent.engagement_id == party.engagement_id,
+            EngagementEvent.command.in_([command.value for command in sm.SIDE_COMMANDS]),
+            EngagementEvent.actor_role.in_(roles),
+            EngagementEvent.created_at > now - timedelta(hours=1),
+        )
+    )
+    if (recent or 0) >= policy.side_actions_per_hour:
+        raise ApiError(
+            429,
+            "too_many_actions",
+            f"Your side has asked, answered, paused or resumed {policy.side_actions_per_hour} times on this"
+            " engagement in the last hour. Try again later.",
+        )
 
 
 async def _apply(step: Step) -> None:
