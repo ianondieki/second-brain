@@ -23,6 +23,7 @@ import hashlib
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, time
 from typing import Any, Final, Protocol
 from uuid import UUID
 
@@ -30,9 +31,13 @@ from pgvector.sqlalchemy import Vector as PgVector
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.engagements.calendar import NAIROBI, local_date
+from bridge.errors import ApiError
+from bridge.ids import uuid7
 from bridge.llm.embeddings import EMBED_DIM, Embedder, EmbedderUnavailable, Vector
 from bridge.logging import get_logger
 from bridge.models.enums import OriginalityBand
+from bridge.proposals.assistant import Owned, owned
 from bridge.proposals.originality_policy import OriginalityPolicy
 from bridge.proposals.sanitise import TIER1_FIELDS, plain_text
 
@@ -45,6 +50,11 @@ ROWS: Final = 8
 _SALTS: Final = tuple(i.to_bytes(4, "big") + b"bridge-mh-v1" for i in range(NUM_HASHES))
 _BAND_PERSON: Final = b"bridge-lsh-v1"
 _WORD: Final = re.compile(r"\w+")
+
+# [[COPY-REVIEW]] shown to the owner.
+NOT_YOURS: Final = "Only the owner of this proposal can check its originality."
+LIMIT: Final = "You have run today's originality checks. Try again tomorrow."
+BUSY: Final = "The originality check for this proposal is still running. Try again in a moment."
 
 log = get_logger(__name__)
 
@@ -332,3 +342,54 @@ async def index_teaser(
             "version": embedder.version if vector is not None else None,
         },
     )
+
+
+# --- the route's database steps -------------------------------------------------------------------------------------
+
+_VISIBLE = text("SELECT 1 FROM proposals WHERE id = :id")
+_TEASER = text("SELECT title, problem_statement, impact_claims, summary FROM proposal_versions WHERE id = :version")
+_OWNER_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
+_CHECKS_TODAY = text("SELECT count(*) FROM originality_checks WHERE user_id = :user AND created_at >= :since")
+_RECORD = text(
+    "INSERT INTO originality_checks (id, user_id, band, created_at)"
+    " VALUES (:id, :user, CAST(:band AS originality_band), :at)"
+)
+
+
+async def owned_by(db: AsyncSession, user_id: UUID, proposal_id: UUID) -> Owned:
+    """The caller's draft or published proposal (its draft version, else its current one). 403 ``not_owner`` for a
+    proposal the caller can see but does not own (another owner's published teaser), 404 for one they cannot see,
+    409 ``proposal_hidden`` for a deleted one of theirs."""
+    try:
+        return await owned(db, user_id, proposal_id)
+    except ApiError as exc:
+        if exc.status_code == 404 and (await db.execute(_VISIBLE, {"id": proposal_id})).first() is not None:
+            raise ApiError(403, "not_owner", NOT_YOURS) from None
+        raise
+
+
+async def load_teaser(db: AsyncSession, own: Owned) -> dict[str, str]:
+    """The version's four Tier-1 teaser fields with text. Nothing confidential is read: no Tier-2 key is needed."""
+    row = (await db.execute(_TEASER, {"version": own.version_id})).one()
+    return {name: str(value) for name in TIER1_FIELDS if (value := getattr(row, name))}
+
+
+def nairobi_day_start(now: datetime) -> datetime:
+    """Midnight in Nairobi of ``now``'s Nairobi date, in UTC."""
+    return datetime.combine(local_date(now), time(0), tzinfo=NAIROBI).astimezone(UTC)
+
+
+async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: OriginalityPolicy, now: datetime) -> None:
+    """429 ``originality_limit`` once the user's checks since Nairobi midnight reach ``daily_limit``. Holds a per-user
+    lock until the caller commits, so two checks at once cannot both take the last one (the caller records its row
+    in the same transaction)."""
+    await db.execute(_OWNER_LOCK, {"key": f"proposals.originality:{user_id}"})
+    since = nairobi_day_start(now)
+    count = int((await db.execute(_CHECKS_TODAY, {"user": user_id, "since": since})).scalar_one())
+    if count >= policy.daily_limit:
+        raise ApiError(429, "originality_limit", LIMIT)
+
+
+async def record_check(db: AsyncSession, user_id: UUID, band: OriginalityBand, now: datetime) -> None:
+    """One ``originality_checks`` row per check: the band only (the counter of the daily limit)."""
+    await db.execute(_RECORD, {"id": uuid7(), "user": user_id, "band": band.value, "at": now})

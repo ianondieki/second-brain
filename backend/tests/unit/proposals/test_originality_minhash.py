@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from bridge.models.enums import OriginalityBand
@@ -83,3 +85,14 @@ def test_submission_text_reads_the_four_tier1_fields_only() -> None:
 )
 def test_the_bands_at_the_thresholds(jaccard: float, cosine: float | None, band: OriginalityBand) -> None:
     assert o.band_for(jaccard, cosine, POLICY) is band
+
+
+@pytest.mark.parametrize(
+    ("now", "start"),
+    [
+        (datetime(2026, 10, 2, 20, 59, tzinfo=UTC), datetime(2026, 10, 1, 21, 0, tzinfo=UTC)),  # 23:59 in Nairobi
+        (datetime(2026, 10, 2, 21, 0, tzinfo=UTC), datetime(2026, 10, 2, 21, 0, tzinfo=UTC)),  # 00:00 the next day
+    ],
+)
+def test_the_daily_limit_counts_from_nairobi_midnight(now: datetime, start: datetime) -> None:
+    assert o.nairobi_day_start(now) == start
