@@ -80,6 +80,16 @@ describe("CaseDecision (REQ-MOD-01)", () => {
     expect(screen.getByRole("link", { name: "Back to Moderation" })).toBeTruthy();
   });
 
+  it("says an approved Brief is published to developers, and asks about a Brief in its own words (REQ-DIR-05)", async () => {
+    const decideImpl = vi.fn<typeof decideCase>(async () => approved);
+    renderWithIntl(<CaseDecision {...props} kind="brief" versionId={null} decideImpl={decideImpl} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(screen.getByRole("group", { name: en.adminModeration.decision.rejectConfirmBrief })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText("Approved. The Brief is published to developers.");
+  });
+
   it("asks once more before rejecting, with focus on the question, and Cancel returns focus to Reject", async () => {
     const decideImpl = vi.fn<typeof decideCase>(async () => ({
       ok: true,

@@ -7,7 +7,7 @@ import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import { CaseRow } from "./CaseRow";
-import { caseKindLabel, caseReasons, fieldKey, reasonTone, type Case } from "./moderation";
+import { caseKindLabel, caseReasons, fieldKey, isBriefCase, reasonTone, visibility, type Case } from "./moderation";
 
 // REQ-DIR-05 with REQ-MOD-01: every organisation's Problem Brief waits in the moderation queue. Its reason and its
 // "Who is affected" field read in words (not "Another reason" or "Other field"), and the queue names it a Problem
@@ -65,6 +65,16 @@ describe("a Brief's moderation case", () => {
     expect(caseKindLabel(briefCase({ subject_type: "proposal", brief_org: null }))).toEqual({ key: "proposal" });
   });
 
+  it("is hidden until approved, clear or held, and never reads as public (revision 0006)", () => {
+    expect(isBriefCase(briefCase())).toBe(true);
+    expect(isBriefCase(briefCase({ brief_org: null }))).toBe(true); // by its reason
+    expect(visibility(briefCase())).toBe("briefHidden");
+    expect(visibility(briefCase({ subject_state: "held" }))).toBe("briefHidden");
+    expect(visibility(briefCase({ subject_state: "rejected" }))).toBe("rejected");
+    // A developer's problem is still public while checked.
+    expect(visibility(briefCase({ brief_org: null, reasons: ["new_developer_problem"] }))).toBe("public");
+  });
+
   it("shows in the queue as Brief by <organisation> with its reason, within two marks", async () => {
     renderWithIntl(
       <table>
@@ -73,6 +83,8 @@ describe("a Brief's moderation case", () => {
     );
     const row = screen.getByRole("row");
     expect(within(row).getByText("Brief by Telco A (fixture)")).toBeTruthy();
+    expect(within(row).getByText("Hidden until approved")).toBeTruthy();
+    expect(within(row).queryByText("Public while checked")).toBeNull();
     const reason = row.querySelector("[data-chip='reason']")!;
     expect(reason.textContent).toBe("New Brief from an organisation");
     expect(reason.className).toContain("text-accent"); // information, not a warning
