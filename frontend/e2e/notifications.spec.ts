@@ -15,7 +15,8 @@ import { OWNER_DATABASE_URL, pitchFromDeveloper, post, signUpOrg } from "./suppo
 // axe (strict), at most one primary action (here none) and no horizontal scroll on each screen, in both projects.
 //
 // Needs E2E_DATABASE_OWNER_URL (tracker-scene: D1/D2, E2, signatory), an API with FEATURE_DEALS_ENABLED=true and
-// FEATURE_TIER2_ENABLED=true, and the worker running. E2E_SHOTS_DIR saves screenshots at 375 px and 1440 px.
+// FEATURE_TIER2_ENABLED=true, and the worker running. E2E_SHOTS_DIR saves screenshots at 375 px and 1440 px under
+// the committed names (docs/demo/screenshots/p19/).
 
 const SERVER_STEP = { timeout: 20_000 };
 const WORKER = { timeout: 60_000, intervals: [500, 1_000, 2_000] };
@@ -24,14 +25,15 @@ test.beforeAll(() => {
   expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL sets the test-only verification levels").toBeTruthy();
 });
 
-async function shot(page: Page, info: TestInfo, name: string) {
+/** Saved under the name the committed shot has in docs/demo/screenshots/p19/ (the light theme, the default). */
+async function shot(page: Page, info: TestInfo, name: "notifications-light" | "notifications-empty-org-light") {
   const dir = process.env.E2E_SHOTS_DIR;
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
   const size = page.viewportSize()!;
   const width = info.project.name.startsWith("mobile") ? 375 : 1440;
   await page.setViewportSize({ width, height: size.height });
-  await page.screenshot({ path: join(dir, `notifications-${name}-${width}.jpg`), fullPage: true, type: "jpeg", quality: 70, scale: "css" });
+  await page.screenshot({ path: join(dir, `${name}-${width}.jpg`), fullPage: true, type: "jpeg", quality: 70, scale: "css" });
   await page.setViewportSize(size);
 }
 
@@ -71,7 +73,7 @@ test("a new account's bell has no count and its page is one sentence and one act
     await expect(page.getByRole("navigation", { name: "Organisation" })).toBeVisible();
     await expectEmptyState(page, "Nothing yet: your tracker updates and approvals will land here.", "Go to your home page");
     await checkScreen(page, { strict: true });
-    await shot(page, info, "empty");
+    await shot(page, info, "notifications-empty-org-light");
   } finally {
     await context.close();
   }
@@ -117,7 +119,7 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     await expect(rows.nth(0).locator("time:visible")).toHaveText(/^\d{2}:\d{2} EAT$/);
     await expect(page.locator("[data-primary]")).toHaveCount(0);
     await checkScreen(page, { strict: true });
-    await shot(page, info, "list");
+    await shot(page, info, "notifications-light");
 
     // Opening the approval marks it read and lands on the tracker; the bell there counts one.
     await rows.nth(0).getByRole("link").click();
@@ -139,7 +141,6 @@ test("Amina's bell: the review and the approval, opened and marked read", async 
     await expect(rows.nth(1)).toHaveAttribute("data-unread", "false");
     expect(await unreadCount(page.request)).toBe(0);
     await checkScreen(page, { strict: true });
-    await shot(page, info, "all-read");
   } finally {
     await orgContext.close();
   }
