@@ -19,6 +19,7 @@ true when no model wrote the why.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any, Final
 from uuid import UUID
 
@@ -29,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.auth.deps import Db
 from bridge.directory.service import niche_label
+from bridge.engagements import state_machine as sm
+from bridge.engagements.service import app_now
 from bridge.errors import ERROR_RESPONSES, ApiError, forbidden, not_found
 from bridge.matching.schemas import FeedbackIn, InterestState, MatchDetail, MatchList, MatchOut
 from bridge.models.enums import OrgRole, OrgVerification
@@ -125,6 +128,12 @@ async def interest_state(db: AsyncSession, org: OrgContext, proposal_id: UUID, a
     return InterestState(allowed=reason is None, reason=reason)
 
 
+async def platform_today(db: AsyncSession) -> date:
+    """The platform clock's Nairobi day (``app_clock_now()``, the test clock where it is on), read as the engagement
+    detail's ``today`` is: the day ``express_interest`` checks a contact-by date against (``check_contact_by``)."""
+    return sm.platform_day(await app_now(db))
+
+
 async def _detail(db: AsyncSession, org: OrgContext, match_id: UUID) -> MatchDetail:
     row = await _row(db, org.org_id, match_id)
     engagement = (await db.execute(_ENGAGEMENT, {"proposal": row.proposal_id, "org": org.org_id})).scalar_one_or_none()
@@ -133,6 +142,7 @@ async def _detail(db: AsyncSession, org: OrgContext, match_id: UUID) -> MatchDet
         rule_breakdown=dict(row.rule_breakdown or {}) if row.available else {},
         engagement_id=engagement,
         interest=await interest_state(db, org, row.proposal_id, row.available),
+        today=await platform_today(db),
     )
 
 
