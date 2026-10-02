@@ -195,6 +195,10 @@ export function SideSheet(props: SideSheetProps) {
       <h2 id={titleId} className="text-lg text-ink">
         {t(`command.${props.command}`)}
       </h2>
+      {/* The page behind a modal sheet is inert: the sheet says "Working…" itself while its step runs. */}
+      <span aria-live="polite" data-working="" className="sr-only">
+        {props.busy ? t("busy") : ""}
+      </span>
       <form noValidate onSubmit={submit} data-command-form={props.command} className="mt-3 flex flex-col gap-5">
         {props.command === "request_info" ? (
           <div className="flex flex-col gap-2">

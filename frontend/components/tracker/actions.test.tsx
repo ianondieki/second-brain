@@ -899,12 +899,35 @@ describe("Done waits for the refreshed tracker", () => {
     const working = screen.getByRole("button", { name: "Working…" });
     expect(working.getAttribute("data-command")).toBe("start_review");
     for (const button of screen.getAllByRole("button")) expect(button.getAttribute("aria-disabled")).toBe("true");
+    // Said, not only shown: the region is busy and a polite live region reads "Working…".
+    expect(document.querySelector("[data-actions]")?.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector("[data-working]")?.getAttribute("aria-live")).toBe("polite");
+    expect(document.querySelector("[data-working]")?.textContent).toBe("Working…");
     fireEvent.click(screen.getByRole("button", { name: "Decline" }));
     expect(document.querySelector("[data-command-form]")).toBeNull();
     await act(async () => open());
     expect(screen.getByText("refreshed")).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain("Done. The tracker is up to date.");
     expect(screen.getByRole("button", { name: "Start the review" }).hasAttribute("aria-disabled")).toBe(false);
+    expect(document.querySelector("[data-actions]")?.getAttribute("aria-busy")).toBe("false");
+    expect(document.querySelector("[data-working]")?.textContent).toBe("");
+  });
+
+  it("says Working… inside a sheet, the page behind it being inert", async () => {
+    let settle: (outcome: CommandOutcome) => void = () => {};
+    const runImpl = vi.fn<Run>(() => new Promise<CommandOutcome>((resolve) => (settle = resolve)));
+    renderActions(detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["pause"], lock_version: 3 }), { runImpl, today: "2026-10-02" });
+    fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
+    const dialog = (await screen.findByRole("dialog")) as HTMLDialogElement;
+    const live = dialog.querySelector("[data-working]")!;
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    expect(live.textContent).toBe("");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Budget" } });
+    fireEvent.change(within(dialog).getByLabelText("Resumes on"), { target: { value: "2026-10-12" } });
+    fireEvent.submit(dialog.querySelector("form")!); // Enter in the Reason field
+    expect(live.textContent).toBe("Working…");
+    await act(async () => settle({ ok: false, refusal: "network", status: 0 }));
+    expect(live.textContent).toBe("");
   });
 
   it("changes nothing on a refusal: no transition, the notice at once", async () => {
