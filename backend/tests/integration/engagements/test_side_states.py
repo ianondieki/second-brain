@@ -482,3 +482,20 @@ async def test_one_party_runs_at_most_actions_per_hour_side_state_commands(
         resumed = await t.ok(s.owner, "resume", {"reason": "Ready."})  # the organisation's own count
         assert code(await t.post(s.dev, "pause", pause)) == (429, "too_many_actions")
     assert resumed["state"] == "NEGOTIATION"
+
+
+async def test_the_question_cap_is_per_stage(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """Two questions in SUBMITTED spend that stage's cap (409 info_request_limit); once the review starts,
+    UNDER_REVIEW has its own two."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    t = Tracker(engagement)
+    async with seats(app_engine, deals_on(), world) as s:
+        for _ in range(2):
+            await t.ok(s.reviewer, "request-info", {"question": QUESTION})
+            await t.ok(s.dev, "answer-info", {"answer": ANSWER})
+        assert code(await t.post(s.reviewer, "request-info", {"question": QUESTION})) == (409, "info_request_limit")
+        await t.ok(s.reviewer, "start-review")
+        asked = await t.post(s.reviewer, "request-info", {"question": "And under review?"})
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["paused_from"] == "UNDER_REVIEW"
