@@ -23,6 +23,7 @@ from bridge.proposals.schemas import NicheOut, OrgRef
 RAW_CAP = 2_000
 RAW_CAP_STATEMENT = 10_000
 BriefState = Literal["in_review", "published", "rejected", "closed"]
+BriefEnded = Literal["closed", "past_deadline"]
 
 
 def _without_default(schema: dict[str, Any]) -> None:
@@ -41,6 +42,13 @@ class BriefFacts(BaseModel):
         default=False,
         description="Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock):"
         " the organisation is still asking for proposals",
+        json_schema_extra=_without_default,
+    )
+    ended: BriefEnded | None = Field(
+        default=None,
+        description="Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it)"
+        " or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock);"
+        " null while it is open and for a Brief not published",
         json_schema_extra=_without_default,
     )
 

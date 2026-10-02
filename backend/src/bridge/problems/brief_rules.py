@@ -7,7 +7,9 @@
   1,200-character cap); title and statement are required. An error names the field and a code, never the refused text.
 - State: what the organisation's list shows, from the Brief's own status and its problem's.
 - Open: a Brief asks for proposals while it is published (not a draft, not closed) and its deadline is unset or
-  today or later (Africa/Nairobi on the platform clock).
+  today or later (Africa/Nairobi on the platform clock). Ended says why a published Brief no longer does, from the
+  same day: closed (its own status, by the organisation) or past_deadline; ``open`` is true exactly when a published
+  Brief has not ended, so the two never disagree (the web app reads why from the API, not from the browser's clock).
 - Budget band: a code from ``config/matching/weights_v1.yaml``; a stored code the configuration no longer has shows
   no band (never a made-up label).
 """
@@ -22,7 +24,7 @@ from bridge.errors import ApiError
 from bridge.matching.config import Weights, get_weights
 from bridge.matching.schemas import BudgetBandOut
 from bridge.models.enums import BriefStatus, ModerationState, OrgRole, ProblemStatus
-from bridge.problems.brief_schemas import BriefFacts, BriefState
+from bridge.problems.brief_schemas import BriefEnded, BriefFacts, BriefState
 from bridge.problems.research.checks import MAX_STATEMENT_WORDS
 from bridge.problems.research.text import word_count
 from bridge.proposals import sanitise
@@ -99,9 +101,20 @@ def band_out(code: str | None, weights: Weights) -> BudgetBandOut | None:
     return None if band is None else BudgetBandOut(code=band.code, label=band.label)
 
 
+def ended(status: BriefStatus, deadline: date | None, today: date) -> BriefEnded | None:
+    """Why the Brief no longer asks for proposals: ``closed`` when the organisation closed it (whatever its deadline),
+    ``past_deadline`` when it is published and its deadline is before ``today`` (the deadline day itself is open);
+    None while it is open, and for a Brief never published (a draft has not ended)."""
+    if status is BriefStatus.CLOSED:
+        return "closed"
+    if status is BriefStatus.PUBLISHED and deadline is not None and deadline < today:
+        return "past_deadline"
+    return None
+
+
 def is_open(status: BriefStatus, deadline: date | None, today: date) -> bool:
-    """Whether the Brief still asks for proposals: published, and its deadline unset or not passed."""
-    return status is BriefStatus.PUBLISHED and (deadline is None or deadline >= today)
+    """Whether the Brief still asks for proposals: published and nothing ended it (its deadline unset or not passed)."""
+    return status is BriefStatus.PUBLISHED and ended(status, deadline, today) is None
 
 
 def facts(
@@ -112,6 +125,7 @@ def facts(
         budget_band=band_out(budget_band, get_weights()),
         deadline=deadline,
         open=is_open(status, deadline, today),
+        ended=ended(status, deadline, today),  # the same status, deadline and day: never open and ended at once
     )
 
 

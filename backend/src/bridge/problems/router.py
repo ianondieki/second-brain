@@ -6,8 +6,9 @@
 - ``GET /api/problems/{problem_id}``: one published, clear problem card with its cited sources (URL, publisher, source
   type, dates, verbatim quote) and its label: "AI-drafted, human-reviewed on <date>" for a research card
   (``[[COPY-REVIEW]]``; a card the demo seed made says so instead), "Developer-reported" for a developer's, "Posted
-  by <organisation>" for a Problem Brief, which also carries ``brief`` (the organisation, budget band and deadline;
-  REQ-DIR-05). Anything else, a research ``candidate`` or a Brief under review included (AC-RES-2), is 404.
+  by <organisation>" for a Problem Brief, which also carries ``brief`` (the organisation, budget band and deadline,
+  whether it is open and, when not, why: ``ended``, decided on the platform's day; REQ-DIR-05). Anything else, a
+  research ``candidate`` or a Brief under review included (AC-RES-2), is 404.
 """
 
 from __future__ import annotations

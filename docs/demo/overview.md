@@ -1,4 +1,4 @@
-# Wazo — the prototype at a glance (P18, D-52)
+# Wazo — the prototype at a glance (P18 and P19, D-52)
 
 Wazo is the hosted developer ⇄ organisation platform in this repository: developers publish ideas with timestamped
 evidence of what they submitted and when, organisations find and review them under an Evaluation NDA, and both sides
@@ -16,15 +16,17 @@ no money moving and no real email.
 | What needs her | Amina | Home: four tiles, "Needs you" with the deadline and one action, recommendations with the reasons | `screenshots/01-dev-home-1440.jpg`, `hero/home-light.jpg` |
 | What is moving | Amina | Discover: trending problems as cards with sources and why each trends; projects; the opportunity gap | `screenshots/02-discover-trending-1440.jpg`, `screenshots/p18/discover-light-1440.jpg` |
 | Evidence | Amina, then anyone | The idea's certificate sheet with the seal and the QR to `/verify`; the public check, signed out | `screenshots/03-idea-certificate-1440.jpg`, `screenshots/04-verify-public-1440.jpg`, `hero/certificate-light.jpg` |
-| Writing | Amina | The editor's three steps and the labelled writing assistant | `screenshots/05-editor-assistant-1440.jpg`, `screenshots/p18/editor-1-light-1440.jpg` |
+| Writing | Amina | The editor's three steps and the labelled writing assistant; the teaser checks (overlap in words, what it gives away) | `screenshots/05-editor-assistant-1440.jpg`, `screenshots/05b-editor-checks-1440.jpg`, `screenshots/p18/editor-1-light-1440.jpg` |
 | The tracker | Amina | Whose turn, the five stages, the next actions, the agreement, signatures and history | `screenshots/06-dev-tracker-1440.jpg`, `hero/tracker-light.jpg` |
 | Paying | Amina | Plan & billing, then the simulated M-Pesa checkout with the drawn handset | `screenshots/07-billing-checkout-1440.jpg`, `screenshots/p18/checkout-light-375.jpg` |
 | Reading under NDA | Telco A's reviewer | The Inbox, the Evaluation NDA step, the full proposal marked with her name (light and dark) | `screenshots/08-org-inbox-nda-1440.jpg`, `screenshots/09-org-full-proposal-1440.jpg` |
+| Asking for proposals | Telco A's reviewer | Problems: a Problem Brief posted with a budget band and a deadline, in review | `screenshots/09b-org-brief-posted-1440.jpg`, `screenshots/p19/org-problems-light-1440.jpg` |
 | The scout | Telco A's owner | Scout matches and why each matched; the scout's settings | `screenshots/10-org-scout-matches-1440.jpg`, `screenshots/p18/org-scout-light-1440.jpg` |
-| Taking a step | Telco A's owner | The organisation's tracker: the review starts | `screenshots/11-org-tracker-step-1440.jpg` |
-| The staff console | staff admin, moderator | Research runs, claims, the moderation queue as calm dense tables | `screenshots/12-admin-research-1440.jpg`, `screenshots/13-admin-moderation-1440.jpg` |
+| Taking a step | Telco A's owner | The organisation's tracker: the review starts; a question for Brian, the review waiting on his clock | `screenshots/11-org-tracker-step-1440.jpg`, `screenshots/11b-org-tracker-question-1440.jpg` |
+| The staff console | staff admin, moderator | Research runs, claims, the moderation queue as calm dense tables; the Brief hidden until approved | `screenshots/12-admin-research-1440.jpg`, `screenshots/13-admin-moderation-1440.jpg`, `screenshots/13b-admin-moderation-brief-1440.jpg` |
+| The other side of the question | Brian (developer) | The bell and the Notifications page; the answer; a hold with its resume day; Discover › Briefs and a proposal from the Brief | `screenshots/14b-dev-notifications-1440.jpg`, `screenshots/14c-dev-tracker-on-hold-1440.jpg`, `screenshots/14d-discover-briefs-1440.jpg` |
 | A day later | — | Mailpit: the branded daily nudge beside the organisation digest | `screenshots/14-mailpit-reminders-1440.jpg`, `screenshots/p18/email-em7.jpg` |
-| On a phone | Amina, Telco A | Home, the tracker and the Inbox at 375 px | `screenshots/15-dev-home-375.jpg`, `screenshots/16-dev-tracker-375.jpg`, `screenshots/17-org-inbox-375.jpg` |
+| On a phone | Amina, Telco A | Home, the tracker, the Briefs and the Inbox at 375 px | `screenshots/15-dev-home-375.jpg`, `screenshots/16-dev-tracker-375.jpg`, `screenshots/18-discover-briefs-375.jpg`, `screenshots/17-org-inbox-375.jpg` |
 
 The hero set (`docs/demo/hero/`, 1440 × 900, light and dark) holds the four showpiece screens for a deck or a
 one-pager: the landing, Home, the tracker and the certificate.

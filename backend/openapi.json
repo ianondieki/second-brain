@@ -632,6 +632,22 @@
             "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
             "title": "Deadline"
           },
+          "ended": {
+            "anyOf": [
+              {
+                "enum": [
+                  "closed",
+                  "past_deadline"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it) or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock); null while it is open and for a Brief not published",
+            "title": "Ended"
+          },
           "open": {
             "description": "Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals",
             "title": "Open",

@@ -5,6 +5,8 @@
 - Its text is public: cleaned to plain text, no contact details (the sanitiser's rule, in a Brief's words), within
   the ProblemCard's lengths, title and statement not blank.
 - Its budget band is a code from ``weights_v1.yaml``; an unknown stored code shows no band.
+- Why it no longer asks for proposals is decided on the platform's day, beside ``open``: closed by the
+  organisation, or past its deadline (the deadline day itself is still open); never both open and ended.
 """
 
 from __future__ import annotations
@@ -17,7 +19,16 @@ from sqlalchemy.exc import DBAPIError
 
 from bridge.matching.config import get_weights
 from bridge.models.enums import BriefStatus, ModerationState, ProblemSource, ProblemStatus
-from bridge.problems.brief_rules import MAX_LENGTHS, MESSAGES, band_out, brief_state, is_open, text_errors
+from bridge.problems.brief_rules import (
+    MAX_LENGTHS,
+    MESSAGES,
+    band_out,
+    brief_state,
+    ended,
+    facts,
+    is_open,
+    text_errors,
+)
 from bridge.problems.briefs import _db_refusal
 from bridge.problems.service import label_for
 from bridge.proposals import sanitise
@@ -148,3 +159,46 @@ def test_a_brief_is_open_while_published_and_before_its_deadline(
     status: BriefStatus, deadline: date | None, expected: bool
 ) -> None:
     assert is_open(status, deadline, date(2026, 10, 2)) is expected
+
+
+TODAY = date(2026, 10, 2)
+
+
+@pytest.mark.parametrize(
+    ("status", "deadline", "expected"),
+    [
+        (BriefStatus.PUBLISHED, None, None),
+        (BriefStatus.PUBLISHED, TODAY, None),  # the deadline day itself is still open
+        (BriefStatus.PUBLISHED, date(2026, 10, 3), None),
+        (BriefStatus.PUBLISHED, date(2026, 10, 1), "past_deadline"),  # yesterday
+        (BriefStatus.CLOSED, date(2026, 10, 3), "closed"),  # closed by the organisation before its deadline
+        (BriefStatus.CLOSED, None, "closed"),
+        (BriefStatus.CLOSED, date(2026, 10, 1), "closed"),  # the organisation's close wins over the deadline
+        (BriefStatus.DRAFT, None, None),  # never published: nothing has ended
+        (BriefStatus.DRAFT, date(2026, 10, 1), None),
+    ],
+)
+def test_why_a_brief_no_longer_asks_for_proposals(
+    status: BriefStatus, deadline: date | None, expected: str | None
+) -> None:
+    assert ended(status, deadline, TODAY) == expected
+
+
+@pytest.mark.parametrize("status", list(BriefStatus))
+@pytest.mark.parametrize("deadline", [None, date(2026, 10, 1), TODAY, date(2026, 10, 3)])
+def test_the_brief_facts_say_open_or_why_not_from_the_same_day(status: BriefStatus, deadline: date | None) -> None:
+    shown = facts(None, None, deadline, status=status, today=TODAY)
+    assert (shown.open, shown.ended) == (is_open(status, deadline, TODAY), ended(status, deadline, TODAY))
+    if status is BriefStatus.PUBLISHED:
+        assert shown.open is (shown.ended is None)  # a published Brief is open exactly when nothing ended it
+    else:
+        assert shown.open is False
+
+
+def test_the_day_boundary_is_the_platform_day() -> None:
+    on_the_day = facts(None, None, TODAY, status=BriefStatus.PUBLISHED, today=TODAY)
+    assert (on_the_day.open, on_the_day.ended) == (True, None)
+    next_day = facts(None, None, TODAY, status=BriefStatus.PUBLISHED, today=date(2026, 10, 3))
+    assert (next_day.open, next_day.ended) == (False, "past_deadline")
+    closed = facts(None, None, date(2026, 10, 3), status=BriefStatus.CLOSED, today=TODAY)
+    assert (closed.open, closed.ended) == (False, "closed")
