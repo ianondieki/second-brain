@@ -39,7 +39,7 @@ const itemClass =
 // The popover floats over the page: the one elevation (shadow-overlay, docs/platform/design/p16-design-system.md).
 
 /**
- * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, Notifications, Help, then Sign out. A disclosure button with a list
+ * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, Notification settings, Help, then Sign out. A disclosure button with a list
  * of links (not an ARIA menu): Escape closes it and returns focus to the button, as does a press outside it. Plain
  * links, so the top bar ships no router code (this is on every signed-in page, docs/spec/07 item 5).
  */

@@ -94,6 +94,7 @@ describe("signed-out visits to the signed-in portals", () => {
   it("covers the portals and below them only", () => {
     expect(isSignedInPath("/dev")).toBe(true);
     expect(isSignedInPath("/settings/security")).toBe(true);
+    expect(isSignedInPath("/notifications")).toBe(true);
     expect(isSignedInPath("/developer")).toBe(false);
     expect(isSignedInPath("/Dev")).toBe(false);
     expect(isSignedInPath("/admin")).toBe(false);
@@ -120,7 +121,7 @@ describe("the staff console, unchanged", () => {
 describe("where the proxy runs", () => {
   it("runs on the console and the signed-in portals, nested paths included", () => {
     for (const url of ["/admin", "/admin/claims/1", "/dev", "/dev/ideas/1/edit", "/org/inbox", "/billing/upgrade",
-      "/settings/notifications", "/problems/1"]) {
+      "/settings/notifications", "/problems/1", "/notifications"]) {
       expect(unstable_doesMiddlewareMatch({ config, nextConfig, url }), url).toBe(true);
     }
   });

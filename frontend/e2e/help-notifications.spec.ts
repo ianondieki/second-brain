@@ -84,7 +84,7 @@ test.describe("a signed-in developer", () => {
   });
 
   test("opens both pages from the account menu, saves a choice and signs out", async ({ page }) => {
-    await openMenuItem(page, "Notifications");
+    await openMenuItem(page, "Notification settings");
     await expect(page).toHaveURL(/\/settings\/notifications$/, SERVER_STEP);
     await expectNotificationSettings(page);
     await choicesReady(page);
