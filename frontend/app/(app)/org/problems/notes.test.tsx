@@ -30,6 +30,8 @@ describe("the state note", () => {
       </StateNote>,
     );
     const box = document.querySelector<HTMLElement>("[data-state-focus]")!;
+    expect(box.getAttribute("role")).toBe("status");
+    expect(box.getAttribute("tabindex")).toBe("-1");
     expect(document.activeElement).not.toBe(box);
     rerender(
       <StateNote state="closed">

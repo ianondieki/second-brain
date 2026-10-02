@@ -44,7 +44,8 @@ export function StateNote({ state, children }: { state: string; children: ReactN
     box.current?.focus();
   }, [state]);
   return (
-    <div ref={box} tabIndex={-1} className="focus:outline-none" data-state-focus="">
+    // A status, so screen readers that read nothing for a focused plain div announce the new state.
+    <div ref={box} role="status" tabIndex={-1} className="focus:outline-none" data-state-focus="">
       {children}
     </div>
   );
