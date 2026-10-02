@@ -211,3 +211,24 @@ async def test_a_running_check_answers_busy_and_a_new_day_starts_afresh(
     turned = clock.utcnow() + timedelta(minutes=1)  # the Nairobi day turns (the session would not survive a real day)
     monkeypatch.setattr(originality, "nairobi_day_start", lambda now: turned)
     assert (await client.get(PATH.format(proposal_id))).json() is None  # only today's check is shown again
+
+
+async def test_a_near_copy_is_found_through_the_stored_buckets(
+    developers: Developers, proposal_world: ProposalWorld
+) -> None:
+    """The fake embedder puts the two texts far apart, so only the LSH buckets in the database can find the copy."""
+    author, submitter = await developers(), await developers()
+    teaser = unique_teaser("Lodwar")  # fixed text: the bucket overlap below is a fact, not a chance
+    near = {**teaser, "summary": teaser["summary"].replace("repairs start sooner", "repairs begin sooner")}
+    theirs, mine = (originality.shingles(originality.submission_text(t)) for t in (teaser, near))
+    assert 0.8 <= originality.jaccard(theirs, mine) < 1.0
+    assert set(originality.lsh_bands(originality.signature(theirs))) & set(
+        originality.lsh_bands(originality.signature(mine))
+    )
+    install(author, provider="fake")
+    await published(author, proposal_world, **teaser)
+    install(submitter, provider="fake")
+    proposal_id = await new_draft(submitter, proposal_world, **near)
+    body = (await check(submitter, proposal_id)).json()
+    assert body["band"] == "high_overlap"
+    assert_no_leak(body, teaser)
