@@ -216,7 +216,7 @@
           "answer": {
             "maxLength": 2000,
             "minLength": 1,
-            "pattern": "^[^\\x00]*$",
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
             "title": "Answer",
             "type": "string"
           },
@@ -1881,6 +1881,7 @@
           "confirm_payment",
           "request_info",
           "answer_info",
+          "cancel_request",
           "pause",
           "resume"
         ],
@@ -7428,7 +7429,7 @@
           "question": {
             "maxLength": 2000,
             "minLength": 1,
-            "pattern": "^[^\\x00]*$",
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
             "title": "Question",
             "type": "string"
           }
@@ -15538,6 +15539,130 @@
           }
         },
         "summary": "Approve",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/cancel-request": {
+      "post": {
+        "description": "Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).",
+        "operationId": "engagement_cancel_request_api_engagements__engagement_id__cancel_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Engagement Cancel Request",
         "tags": [
           "engagements"
         ]

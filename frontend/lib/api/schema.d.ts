@@ -887,6 +887,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/cancel-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Engagement Cancel Request
+         * @description Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).
+         */
+        post: operations["engagement_cancel_request_api_engagements__engagement_id__cancel_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/confirm-contact": {
         parameters: {
             query?: never;
@@ -3157,7 +3177,7 @@ export interface components {
          * Command
          * @enum {string}
          */
-        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "pause" | "resume";
+        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
         /** CommandBody */
         CommandBody: {
             /**
@@ -10796,6 +10816,104 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ApproveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    engagement_cancel_request_api_engagements__engagement_id__cancel_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandBody"];
             };
         };
         responses: {
