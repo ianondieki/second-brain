@@ -338,6 +338,28 @@ describe("side states", () => {
     expect(found.get("r2")).toBe(early);
   });
 
+  it("pairs notes on their event's seq when the API sends it, even against their order", () => {
+    const base = history().events[1];
+    const events = [
+      { ...base, id: "h1", seq: 3, command: "pause" },
+      { ...base, id: "r1", seq: 4, command: "resume" },
+      { ...base, id: "h2", seq: 5, command: "pause" },
+    ];
+    // The notes arrive in the opposite order of their events: the seq decides, never the order.
+    const second = { ...held, body: "Second hold", seq: 5 };
+    const first = { ...held, body: "First hold", seq: 3 };
+    const found = notesByEvent(events, [second, first]);
+    expect(found.get("h1")).toBe(first);
+    expect(found.get("h2")).toBe(second);
+    expect(found.has("r1")).toBe(false);
+    // A note naming no event of the list is shown nowhere; one without a seq takes the next unpaired event of its kind.
+    const lost = { ...held, body: "Lost", seq: 99 };
+    const unnumbered = { ...held, body: "Unnumbered", seq: null };
+    const mixed = notesByEvent(events, [lost, unnumbered, second]);
+    expect(mixed.get("h2")).toBe(second);
+    expect(mixed.get("h1")).toBe(unnumbered);
+  });
+
   it("builds the side states' requests on their routes, with their texts", () => {
     expect(commandRequest("request_info", "e1", 4, { input: { question: "Which co-ops?" } })).toEqual({
       path: "/api/engagements/{engagement_id}/request-info",

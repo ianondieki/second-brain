@@ -275,16 +275,26 @@ const NOTE_OF: Partial<Record<string, Note["kind"]>> = {
 };
 
 /**
- * Each history event's note, by event id: the n-th event of a command that writes a note of a kind gets the n-th note
- * of that kind (one note per event, both in event order; the system's resume writes none and is left out).
+ * Each history event's note, by event id: on the note's `seq` (the event it explains) when the API sends it; a note
+ * without one falls back to order within its kind (the n-th event of a command that writes a note of that kind, not
+ * already paired, gets the n-th such note; the system's resume writes none and is left out).
  */
 export function notesByEvent(events: readonly HistoryEvent[], notes: readonly Note[]): Map<string, Note> {
-  const queues = new Map<Note["kind"], Note[]>();
-  for (const note of notes) queues.set(note.kind, [...(queues.get(note.kind) ?? []), note]);
   const found = new Map<string, Note>();
+  const bySeq = new Map(events.map((event) => [event.seq, event]));
+  const queues = new Map<Note["kind"], Note[]>();
+  for (const note of notes) {
+    if (note.seq != null) {
+      const event = bySeq.get(note.seq);
+      if (event) found.set(event.id, note);
+    } else {
+      queues.set(note.kind, [...(queues.get(note.kind) ?? []), note]);
+    }
+  }
+  if (queues.size === 0) return found;
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     const kind = NOTE_OF[event.command];
-    if (!kind || event.actor_role === "system") continue;
+    if (!kind || event.actor_role === "system" || found.has(event.id)) continue;
     const note = queues.get(kind)?.shift();
     if (note) found.set(event.id, note);
   }
