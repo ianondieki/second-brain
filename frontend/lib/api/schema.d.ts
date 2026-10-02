@@ -4556,6 +4556,11 @@ export interface components {
              */
             scout_id: string;
             teaser: components["schemas"]["TeaserOut"] | null;
+            /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day Express interest's contact-by date counts from
+             */
+            today?: string | null;
             /** Why */
             why: string | null;
             /**
