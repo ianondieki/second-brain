@@ -1,4 +1,4 @@
-"""REQ-REPO-01 (warn only) through the API: ``POST /api/me/proposals/{id}/disclosure-check``.
+"""REQ-PROP-02 (warn only) through the API: ``POST /api/me/proposals/{id}/disclosure-check``.
 
 The rules answer an obvious "how" without a model; a plain teaser goes to the ``over_disclosure_check`` task (the
 labelled demo fallback with the fake provider; the scripted answer on a free slot for demo accounts, Tier 1 only);

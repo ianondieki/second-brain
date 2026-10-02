@@ -1,4 +1,4 @@
-"""The teaser over-disclosure check (REQ-REPO-01; docs/spec/06 6.1: warn only; docs/spec/09: Haiku, sync).
+"""The teaser over-disclosure check (REQ-PROP-02; docs/spec/06 6.1: warn only; docs/spec/09: Haiku, sync).
 
 The teaser is public to every signed-in user before any NDA, so it should say what the project does, never how it
 works. Warn only: nothing here blocks saving or publishing.

@@ -27,7 +27,7 @@ EXPECTED = {
     ("POST", "/api/me/proposals/{proposal_id}/assistant/suggestions"),
 }
 # Tier-1-only routes next to the Tier-2 ones: they read the teaser only, so the flag must not gate them (REQ-PROP-04,
-# REQ-REPO-01).
+# REQ-PROP-02).
 TIER1_ONLY = {
     ("POST", "/api/me/proposals/{proposal_id}/originality"),
     ("GET", "/api/me/proposals/{proposal_id}/originality"),

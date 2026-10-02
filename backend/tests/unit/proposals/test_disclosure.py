@@ -1,4 +1,4 @@
-"""REQ-REPO-01 (warn only): the teaser over-disclosure check without a database (``bridge.proposals.disclosure``).
+"""REQ-PROP-02 (warn only): the teaser over-disclosure check without a database (``bridge.proposals.disclosure``).
 
 The rules answer the obvious without a model; the ``over_disclosure_check`` task's answer is parsed and kept only
 when code accepts it; refusals map to the assistant's fixed answers; nothing confidential is ever sent. Fakes only.
