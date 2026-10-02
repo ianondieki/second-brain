@@ -612,3 +612,14 @@ def test_the_four_stages_expire_after_expire_bd_paused_days_added() -> None:
     assert sm.expires_at(S.SUBMITTED, monday, None, None, set(), POLICY) == sm.end_of_day(date(2026, 11, 2))
     for state in (S.NEGOTIATION, S.ON_HOLD, S.INFO_REQUESTED, S.CLOSED):
         assert sm.expires_at(state, monday, monday, monday, set(), POLICY) is None
+
+
+def test_withdrawing_from_a_side_state_needs_its_stage_before_the_agreement() -> None:
+    developer = ACTORS[0]
+    for paused in (S.IN_IMPLEMENTATION, S.DELIVERED, None):
+        with pytest.raises(sm.Conflict) as refused:
+            sm.decide(C.WITHDRAW, developer, S.ON_HOLD, sm.Facts(paused_from=paused))
+        assert refused.value.code == "illegal_transition"
+    assert sm.decide(C.WITHDRAW, developer, S.INFO_REQUESTED, sm.Facts(paused_from=S.SUBMITTED)).to_state is (
+        S.WITHDRAWN
+    )

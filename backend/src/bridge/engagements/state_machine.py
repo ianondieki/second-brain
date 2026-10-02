@@ -561,6 +561,8 @@ def decide(
     decline reason code."""
     transition, role = authorize(command, actor, deals_enabled=facts.deals_enabled)
     check_source(command, state)
+    if command is Command.WITHDRAW and state in PAUSED and facts.paused_from not in BEFORE_AGREEMENT:
+        raise Conflict("illegal_transition", "Withdrawing is possible only before the agreement is signed.")
     _guard(command, actor.party, facts, milestone)
     to_state = transition.target or state
     if transition.completes is not None and facts.signed | {actor.party} == BOTH:
