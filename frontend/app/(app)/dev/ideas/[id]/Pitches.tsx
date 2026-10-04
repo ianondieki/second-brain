@@ -56,7 +56,6 @@ export async function Pitches({ ideaId, status, tags }: PitchesProps) {
       title={t("title")}
       headingId={PITCHES_HEADING}
       focusable
-      className="mt-12"
       description={
         !tags ? undefined : (
           <span data-cap="">

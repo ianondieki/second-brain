@@ -28,7 +28,7 @@ export async function Certificate({ idea, ownerName }: { idea: MyProposal; owner
   const certId = current?.cert_id;
   const stamped = current?.provenance?.status === "timestamped";
   return (
-    <Section title={t("certificateTitle")} headingId="certificate-heading" description={t("certificateLead")} className="mt-10">
+    <Section title={t("certificateTitle")} headingId="certificate-heading" description={t("certificateLead")}>
       {current && certId ? (
         <>
           <CertificateSheet
