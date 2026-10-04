@@ -4,6 +4,7 @@ import { RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 
 import { EngagementRow } from "./EngagementRow";
+import { NeedsYouCard } from "./NeedsYouCard";
 import { awaitsMe, type Party, type Summary } from "./model";
 
 /**
@@ -23,6 +24,7 @@ export async function EngagementList({
   query?: string;
 }) {
   const t = await getTranslations("tracker");
+  const open = (await getTranslations(mine === "org" ? "orgHome" : "devHome"))("openTracker");
   const waiting = items.filter((item) => awaitsMe(item, mine));
   const rest = items.filter((item) => !awaitsMe(item, mine));
   const groups = [
@@ -30,19 +32,31 @@ export async function EngagementList({
     { key: "rest", title: t("others"), items: rest },
   ].filter((group) => group.items.length > 0);
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-12">
       {groups.map((group) => (
         <Section key={group.key} title={group.title} headingId={`engagements-${group.key}`} data-group={group.key}>
-          <RowList>
-            {group.items.map((item) => (
-              <EngagementRow
-                key={item.id}
-                item={item}
-                mine={mine}
-                href={`${basePath}/${encodeURIComponent(item.id)}${query}`}
-              />
-            ))}
-          </RowList>
+          {/* What waits on the viewer is raised, as on Home (one card per engagement, each one link); the rest is a
+              list of rows. */}
+          {group.key === "needs" ? (
+            <ul className="flex flex-col gap-4">
+              {group.items.map((item) => (
+                <li key={item.id}>
+                  <NeedsYouCard item={item} mine={mine} href={`${basePath}/${encodeURIComponent(item.id)}${query}`} action={open} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <RowList>
+              {group.items.map((item) => (
+                <EngagementRow
+                  key={item.id}
+                  item={item}
+                  mine={mine}
+                  href={`${basePath}/${encodeURIComponent(item.id)}${query}`}
+                />
+              ))}
+            </RowList>
+          )}
         </Section>
       ))}
     </div>

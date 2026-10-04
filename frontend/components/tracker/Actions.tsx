@@ -200,7 +200,9 @@ export function Actions(props: ActionsProps) {
       {listNotice}
       {props.items.length === 0 && listed ? null : (
     <section aria-labelledby="actions-heading" aria-busy={busy} data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
-      <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
+      {/* Listing, the turn card's next-step sentence already names the step: the heading is for screen readers. A
+          form or sheet shows its own name. */}
+      <h2 id="actions-heading" ref={heading} tabIndex={-1} className={listed ? "sr-only" : "text-lg text-ink"}>
         {listed ? t("title") : label(mode.item)}
       </h2>
 

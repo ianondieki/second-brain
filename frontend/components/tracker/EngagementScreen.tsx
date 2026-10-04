@@ -134,7 +134,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       >
         {yours ? <Lattice /> : null}
         <WhoseTurn detail={detail} />
-        <div className="border-t border-line px-5 pt-5 pb-6 has-[>div:empty]:hidden sm:px-7">
+        <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">
           <Actions
             engagementId={detail.id}
             lockVersion={detail.lock_version}

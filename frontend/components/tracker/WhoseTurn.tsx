@@ -59,7 +59,7 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
       aria-labelledby="whose-turn"
       data-whose-turn={turn.kind}
       data-callout={tone}
-      className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:p-7"
+      className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:p-7"
     >
       <div className="min-w-0 flex-1">
         {yours ? (
@@ -69,24 +69,27 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
             </Badge>
           </p>
         ) : null}
-        <h2 id="whose-turn" className="flex items-start gap-2.5 text-xl text-ink sm:text-2xl">
-          {yours ? null : (
-            <ChipMark
-              kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : onHold ? "onHold" : "current"}
-              className={cn(
-                "mt-1.5 size-5 sm:mt-2",
-                turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : onHold ? "text-ink" : "text-accent",
-              )}
-            />
-          )}
-          <span className="min-w-0">{onHold ? t("turn.onHold") : headline}</span>
-        </h2>
-        <p className="mt-4 flex items-center gap-1.5" aria-label={t("parties")}>
-          <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
-          <span aria-hidden="true" className="h-px w-5 bg-line" />
-          <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
-        </p>
-        <div className="mt-4 flex flex-col gap-1.5 empty:hidden">
+        {/* The headline, and the two parties beside it (the one whose turn it is ringed). */}
+        <div className="flex items-start justify-between gap-4">
+          <h2 id="whose-turn" className="flex min-w-0 items-start gap-2.5 text-xl text-ink sm:text-2xl">
+            {yours ? null : (
+              <ChipMark
+                kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : onHold ? "onHold" : "current"}
+                className={cn(
+                  "mt-1.5 size-5 sm:mt-2",
+                  turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : onHold ? "text-ink" : "text-accent",
+                )}
+              />
+            )}
+            <span className="min-w-0">{onHold ? t("turn.onHold") : headline}</span>
+          </h2>
+          <p className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label={t("parties")}>
+            <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
+            <span aria-hidden="true" className="h-px w-3 bg-line sm:w-5" />
+            <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
+          </p>
+        </div>
+        <div className="mt-4 flex flex-col gap-2.5 empty:hidden">
           {side ? <SideState side={side} detail={detail} /> : null}
           {turn.kind === "ended" && detail.end_reason && side?.kind !== "expired" ? (
             <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
@@ -147,9 +150,9 @@ function Countdown({ due }: { due: Detail["due"] & object }) {
     <div
       aria-hidden="true"
       data-countdown={due.overdue ? "overdue" : "open"}
-      className="flex shrink-0 items-center gap-4 border-t border-line pt-4 sm:w-40 sm:flex-col sm:items-start sm:gap-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6"
+      className="flex shrink-0 items-center gap-4 border-t border-line pt-3 sm:w-40 sm:flex-col sm:items-start sm:gap-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6"
     >
-      <span className={cn("flex items-center gap-2 font-display text-4xl leading-none font-bold tabular-nums", due.overdue ? "text-error" : "text-ink")}>
+      <span className={cn("flex items-center gap-2 font-display text-3xl leading-none font-bold tabular-nums sm:text-4xl", due.overdue ? "text-error" : "text-ink")}>
         {due.overdue ? <ChipMark kind="overdue" className="size-6" /> : null}
         {count}
       </span>
