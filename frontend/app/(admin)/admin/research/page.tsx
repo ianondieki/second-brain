@@ -10,6 +10,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { AdminShell } from "../AdminShell";
+import { QueueSurface } from "../QueueSurface";
 import { staffContext } from "../staff";
 import { getResearch } from "./data";
 import { PageStepUp } from "./PageStepUp";
@@ -89,29 +90,33 @@ export default async function ResearchPage() {
 
         <Section title={t("queue.heading")} headingId="queue">
           {candidates.length > 0 ? (
-            <DataTable
-              aria-labelledby="queue"
-              columns={[t("columns.card"), t("columns.niche"), t("columns.confidence"), t("columns.sources"), t("columns.drafted")]}
-            >
-              {candidates.map((candidate) => (
-                <CandidateRow key={candidate.id} candidate={candidate} niches={niches} />
-              ))}
-            </DataTable>
+            <QueueSurface>
+              <DataTable
+                aria-labelledby="queue"
+                columns={[t("columns.card"), t("columns.niche"), t("columns.confidence"), t("columns.sources"), t("columns.drafted")]}
+              >
+                {candidates.map((candidate) => (
+                  <CandidateRow key={candidate.id} candidate={candidate} niches={niches} />
+                ))}
+              </DataTable>
+            </QueueSurface>
           ) : (
-            <EmptyState sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
+            <EmptyState rule={false} sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
           )}
         </Section>
 
         {runs.length > 0 ? (
           <Section title={t("runs.heading")} headingId="runs">
-            <DataTable
-              aria-label={t("runs.listLabel")}
-              columns={[t("columns.niche"), t("columns.started"), t("columns.status"), t("columns.result")]}
-            >
-              {runs.slice(0, RUNS_SHOWN).map((run) => (
-                <RunRow key={run.id} run={run} niches={niches} />
-              ))}
-            </DataTable>
+            <QueueSurface raised={false}>
+              <DataTable
+                aria-label={t("runs.listLabel")}
+                columns={[t("columns.niche"), t("columns.started"), t("columns.status"), t("columns.result")]}
+              >
+                {runs.slice(0, RUNS_SHOWN).map((run) => (
+                  <RunRow key={run.id} run={run} niches={niches} />
+                ))}
+              </DataTable>
+            </QueueSurface>
           </Section>
         ) : null}
 

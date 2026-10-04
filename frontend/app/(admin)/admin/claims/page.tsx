@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -8,13 +8,16 @@ import { DataTable } from "@/components/ui/DataTable";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 
+import { formatCalendarDate } from "@/lib/format";
+
 import { AdminShell } from "../AdminShell";
+import { QueueSummary, QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
 import { stepUpStrings } from "../strings";
 import { ViewTabs } from "../ViewTabs";
 import { ClaimRow } from "./ClaimRow";
-import { CLAIM_VIEWS, claimView, claimViewHref, type ClaimView } from "./claims";
+import { CLAIM_VIEWS, claimView, claimViewHref, slaState, type Claim, type ClaimView } from "./claims";
 import { getClaims } from "./data";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -66,14 +69,16 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <DataTable
-            aria-label={t(`list.${view}`)}
-            columns={[t("columns.organisation"), t("columns.level"), t("columns.claimant"), t("columns.filed"), t("columns.status")]}
-          >
-            {items.map((claim) => (
-              <ClaimRow key={claim.id} claim={claim} />
-            ))}
-          </DataTable>
+          <QueueSurface raised={view === "review"} summary={view === "review" ? await reviewSummary(items) : undefined}>
+            <DataTable
+              aria-label={t(`list.${view}`)}
+              columns={[t("columns.organisation"), t("columns.level"), t("columns.claimant"), t("columns.filed"), t("columns.status")]}
+            >
+              {items.map((claim) => (
+                <ClaimRow key={claim.id} claim={claim} />
+              ))}
+            </DataTable>
+          </QueueSurface>
         ) : (
           <EmptyState
             rule={false}
@@ -84,5 +89,28 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
         )}
       </div>
     </div>,
+  );
+}
+
+/**
+ * The review queue at a glance: how many claims wait, how many are due today or late, and the next day one falls due
+ * (the review time is counted in Kenyan business days; the API gives each claim's last day).
+ */
+async function reviewSummary(items: readonly Claim[]) {
+  const t = await getTranslations("adminClaims");
+  const locale = await getLocale();
+  const pressing = items.filter((claim) => {
+    const sla = slaState(claim.sla);
+    return sla !== null && sla.kind !== "due";
+  }).length;
+  const days = items.flatMap((claim) => (claim.sla ? [claim.sla.due_on] : [])).sort();
+  return (
+    <QueueSummary
+      figures={[
+        { key: "waiting", label: t("summary.waiting"), value: items.length },
+        { key: "pressing", label: t("summary.pressing"), value: pressing },
+        ...(days.length > 0 ? [{ key: "next", label: t("summary.next"), value: formatCalendarDate(locale, days[0]) }] : []),
+      ]}
+    />
   );
 }

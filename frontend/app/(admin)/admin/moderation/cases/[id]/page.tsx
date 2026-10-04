@@ -55,8 +55,8 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   const { role } = await staffContext();
   const { id } = await params;
   const t = await getTranslations("adminModeration");
-  const shell = (children: ReactNode) => (
-    <AdminShell role={role} current="moderation">
+  const shell = (children: ReactNode, wide = false) => (
+    <AdminShell role={role} current="moderation" wide={wide}>
       <BackLink href={MODERATION_PATH}>{t("case.back")}</BackLink>
       {children}
     </AdminShell>
@@ -100,7 +100,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   // Once the subject is gone there is no text to review; once decided, the text is no longer "under review".
   const subjectGone = seen === "gone";
   return shell(
-    <article aria-labelledby="case-title" className="flex flex-col gap-12">
+    <article aria-labelledby="case-title" className="flex max-w-5xl flex-col gap-10 lg:gap-12">
       <PageHeader titleId="case-title" focusable title={caseTitle(item) ?? t(`untitled.${kind}`)}>
         {/* What the case is about, then whether the subject can be seen now (or, once decided, the outcome: "Public
             while checked" or "Hidden until decided" would no longer be true), as the meta line. */}
@@ -122,56 +122,76 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
         </ul>
       </PageHeader>
 
-      <Section title={t("case.reasonsHeading")} headingId="reasons">
-        <ul className="flex flex-col gap-2" data-reasons="">
-          {caseReasons(item.reasons).map((reason) => (
-            <li key={reason} className="flex items-start gap-2 text-ink">
-              {reasonTone(reason) === "flag" ? (
-                <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
-              ) : (
-                <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
-              )}
-              <span>{t(`reason.${reason}`)}</span>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      {subjectGone ? null : (
-        <Section
-          title={result ? t("case.textHeadingDecided") : t("case.textHeading")}
-          headingId="text"
-          description={result ? t("case.textLeadDecided") : t("case.textLead")}
-          data-case-text=""
-        >
-          <CaseText item={item} flagged={flagged} label={t("case.flagged")} empty={t("case.noText")} />
+      {/* From 1024 px the text is read on the left while why it is here and the decision stay beside it (the
+          decision sticky, so a long text never hides the buttons); on a phone the three follow in reading order. */}
+      <div
+        className={cn(
+          "grid grid-cols-1 items-start gap-12",
+          subjectGone ? "max-w-xl" : "lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-x-10 lg:gap-y-8",
+        )}
+      >
+        <Section title={t("case.reasonsHeading")} headingId="reasons" className={subjectGone ? undefined : "lg:col-start-2 lg:row-start-1"}>
+          <ul className="flex flex-col gap-2" data-reasons="">
+            {caseReasons(item.reasons).map((reason) => (
+              <li key={reason} className="flex items-start gap-2 text-ink">
+                {reasonTone(reason) === "flag" ? (
+                  <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
+                ) : (
+                  <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+                )}
+                <span>{t(`reason.${reason}`)}</span>
+              </li>
+            ))}
+          </ul>
         </Section>
-      )}
 
-      <Section title={t("case.decisionHeading")} headingId="decision">
-        {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. */}
-        <ClientStrings key="decision" strings={await caseStrings()}>
-          <CaseDecision
-            caseId={item.id}
-            versionId={item.subject_version_id}
-            kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
-            actions={result ? [] : item.actions}
-            blocked={item.blocked}
-            decided={result && line ? { outcome: result, line } : null}
-            nextHref={nextId ? caseHref(nextId) : null}
-            lead={
-              actionable
-                ? seen === "briefHidden"
-                  ? t("case.leadBrief")
-                  : seen === "public"
-                    ? t("case.leadPublic")
-                    : t("case.leadHidden")
-                : null
-            }
-          />
-        </ClientStrings>
-      </Section>
+        {subjectGone ? null : (
+          <Section
+            title={result ? t("case.textHeadingDecided") : t("case.textHeading")}
+            headingId="text"
+            description={result ? t("case.textLeadDecided") : t("case.textLead")}
+            data-case-text=""
+            className="lg:col-start-1 lg:row-span-2 lg:row-start-1"
+          >
+            <div className="rounded-panel border border-line bg-field p-5 sm:p-6">
+              <CaseText item={item} flagged={flagged} label={t("case.flagged")} empty={t("case.noText")} />
+            </div>
+          </Section>
+        )}
+
+        <Section
+          title={t("case.decisionHeading")}
+          headingId="decision"
+          className={cn(
+            "rounded-panel border border-line bg-field p-5 shadow-card",
+            !subjectGone && "lg:sticky lg:top-6 lg:col-start-2 lg:row-start-2",
+          )}
+        >
+          {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. */}
+          <ClientStrings key="decision" strings={await caseStrings()}>
+            <CaseDecision
+              caseId={item.id}
+              versionId={item.subject_version_id}
+              kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
+              actions={result ? [] : item.actions}
+              blocked={item.blocked}
+              decided={result && line ? { outcome: result, line } : null}
+              nextHref={nextId ? caseHref(nextId) : null}
+              lead={
+                actionable
+                  ? seen === "briefHidden"
+                    ? t("case.leadBrief")
+                    : seen === "public"
+                      ? t("case.leadPublic")
+                      : t("case.leadHidden")
+                  : null
+              }
+            />
+          </ClientStrings>
+        </Section>
+      </div>
     </article>,
+    true,
   );
 }
 

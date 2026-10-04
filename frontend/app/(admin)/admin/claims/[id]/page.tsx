@@ -7,6 +7,7 @@ import { isUuid } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { formatDate, formatMoment } from "@/components/problem/problem";
 import { Callout } from "@/components/ui/Callout";
+import { cn } from "@/components/ui/cn";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Row, RowList } from "@/components/ui/RowList";
@@ -37,8 +38,8 @@ export default async function ClaimPage({ params }: PageProps<"/admin/claims/[id
   const { role } = await staffContext();
   const { id } = await params;
   const t = await getTranslations("adminClaims");
-  const shell = (children: ReactNode) => (
-    <AdminShell role={role} current="claims">
+  const shell = (children: ReactNode, wide = false) => (
+    <AdminShell role={role} current="claims" wide={wide}>
       <BackLink href={CLAIMS_PATH}>{t("detail.back")}</BackLink>
       {children}
     </AdminShell>
@@ -78,8 +79,21 @@ export default async function ClaimPage({ params }: PageProps<"/admin/claims/[id
   const given = (value: string | null) => value?.trim() || t("detail.notGiven");
   const closed = claim.status === "approved" || claim.status === "rejected" || claim.status === "withdrawn";
 
+  const organisation = (
+    <Facts id="organisation" heading={t("detail.orgHeading")}>
+      {claim.org.kind ? <Description label={t("detail.kind")}>{kinds(claim.org.kind)}</Description> : null}
+      {claim.org.verification ? (
+        <Description label={t("detail.verification")}>{t(`verification.${claim.org.verification}`)}</Description>
+      ) : null}
+      <Description label={t("detail.officialDomains")}>
+        {claim.official_domains.length > 0 ? claim.official_domains.join(", ") : t("detail.none")}
+      </Description>
+      <Description label={t("detail.verifiedDomain")}>{claim.verified_domain ?? t("detail.none")}</Description>
+    </Facts>
+  );
+
   return shell(
-    <article aria-labelledby="claim-title" className="flex flex-col gap-12">
+    <article aria-labelledby="claim-title" className="flex max-w-5xl flex-col gap-10 lg:gap-12">
       <PageHeader
         titleId="claim-title"
         focusable
@@ -97,71 +111,67 @@ export default async function ClaimPage({ params }: PageProps<"/admin/claims/[id
         </Callout>
       </PageHeader>
 
-      <Facts id="claim" heading={t("detail.claimHeading")}>
-        <Description label={t("detail.status")}>{t(`status.${claim.status}`)}</Description>
-        {sla && claim.sla ? (
-          <Description label={t("detail.reviewTime")}>{t("sla.dueBy", { date: formatDate(locale, claim.sla.due_on) })}</Description>
-        ) : null}
-        <Description label={t("detail.filed")}>{moment(claim.created_at)}</Description>
-        <Description label={t("detail.updated")}>{moment(claim.updated_at)}</Description>
-        {closed && claim.decided_at ? <Description label={t("detail.closed")}>{moment(claim.decided_at)}</Description> : null}
-      </Facts>
-
-      <Facts id="claimant" heading={t("detail.claimantHeading")}>
-        <Description label={t("detail.name")}>{claim.claimant.display_name}</Description>
-        <Description label={t("detail.email")}>{claim.email_address}</Description>
-        <Description label={t("detail.domain")}>{claim.domain}</Description>
-        <Description label={t("detail.domainOfficial")}>{claim.domain_is_official ? t("detail.yes") : t("detail.no")}</Description>
-      </Facts>
-
-      <Facts id="checks" heading={t("detail.checksHeading")}>
-        <Description label={t("detail.emailCode")}>
-          {claim.otp_verified_at
-            ? t("detail.confirmedOn", { date: moment(claim.otp_verified_at) })
-            : t("detail.notConfirmed")}
-          <span className="mt-0.5 block text-sm text-ink-soft">
-            {t("detail.codeUse", { attempts: claim.otp_attempts, reissues: claim.otp_reissues })}
-          </span>
-        </Description>
-        <Description label={t("detail.dns")}>
-          {claim.dns_verified_at ? t("detail.foundOn", { date: moment(claim.dns_verified_at) }) : t("detail.notFound")}
-        </Description>
-      </Facts>
-
-      {claim.level === "e2" ? (
-        <Facts id="evidence" heading={t("detail.evidenceHeading")} lead={t("detail.evidenceLead")}>
-          <Description label={t("detail.registrationNo")}>
-            <span data-pii="registration_no">{given(claim.registration_no)}</span>
-          </Description>
-          <Description label={t("detail.cr12Date")}>
-            {claim.cr12_date ? formatDate(locale, claim.cr12_date) : t("detail.notGiven")}
-          </Description>
-          <Description label={t("detail.kraPin")}>
-            <span data-pii="kra_pin">{given(claim.kra_pin)}</span>
-          </Description>
-          <Description label={t("detail.sectorRegister")}>{given(claim.sector_register)}</Description>
-          <Description label={t("detail.publicEntity")}>
-            {claim.public_entity_requested ? t("detail.requested") : t("detail.notRequested")}
-          </Description>
-          <Description label={t("detail.documents")}>
-            {claim.document_count > 0
-              ? t("detail.documentCount", { count: claim.document_count })
-              : t("detail.noDocuments")}
-            <span className="mt-0.5 block text-sm text-ink-soft">{t("detail.documentsNote")}</span>
-          </Description>
-        </Facts>
-      ) : null}
-
-      <Facts id="organisation" heading={t("detail.orgHeading")}>
-        {claim.org.kind ? <Description label={t("detail.kind")}>{kinds(claim.org.kind)}</Description> : null}
-        {claim.org.verification ? (
-          <Description label={t("detail.verification")}>{t(`verification.${claim.org.verification}`)}</Description>
-        ) : null}
-        <Description label={t("detail.officialDomains")}>
-          {claim.official_domains.length > 0 ? claim.official_domains.join(", ") : t("detail.none")}
-        </Description>
-        <Description label={t("detail.verifiedDomain")}>{claim.verified_domain ?? t("detail.none")}</Description>
-      </Facts>
+      {/* The facts in two columns from 1024 px: the claim, its checks (and the organisation beside E2 evidence) on
+          the left; who filed it and their evidence on the right, so the two columns end near each other. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <Facts id="claim" heading={t("detail.claimHeading")} raised>
+            <Description label={t("detail.status")}>{t(`status.${claim.status}`)}</Description>
+            {sla && claim.sla ? (
+              <Description label={t("detail.reviewTime")}>{t("sla.dueBy", { date: formatDate(locale, claim.sla.due_on) })}</Description>
+            ) : null}
+            <Description label={t("detail.filed")}>{moment(claim.created_at)}</Description>
+            <Description label={t("detail.updated")}>{moment(claim.updated_at)}</Description>
+            {closed && claim.decided_at ? <Description label={t("detail.closed")}>{moment(claim.decided_at)}</Description> : null}
+          </Facts>
+          <Facts id="checks" heading={t("detail.checksHeading")}>
+            <Description label={t("detail.emailCode")}>
+              {claim.otp_verified_at
+                ? t("detail.confirmedOn", { date: moment(claim.otp_verified_at) })
+                : t("detail.notConfirmed")}
+              <span className="mt-0.5 block text-sm text-ink-soft">
+                {t("detail.codeUse", { attempts: claim.otp_attempts, reissues: claim.otp_reissues })}
+              </span>
+            </Description>
+            <Description label={t("detail.dns")}>
+              {claim.dns_verified_at ? t("detail.foundOn", { date: moment(claim.dns_verified_at) }) : t("detail.notFound")}
+            </Description>
+          </Facts>
+          {claim.level === "e2" ? organisation : null}
+        </div>
+        <div className="flex flex-col gap-6">
+          <Facts id="claimant" heading={t("detail.claimantHeading")}>
+            <Description label={t("detail.name")}>{claim.claimant.display_name}</Description>
+            <Description label={t("detail.email")}>{claim.email_address}</Description>
+            <Description label={t("detail.domain")}>{claim.domain}</Description>
+            <Description label={t("detail.domainOfficial")}>{claim.domain_is_official ? t("detail.yes") : t("detail.no")}</Description>
+          </Facts>
+          {claim.level === "e2" ? (
+            <Facts id="evidence" heading={t("detail.evidenceHeading")} lead={t("detail.evidenceLead")}>
+              <Description label={t("detail.registrationNo")}>
+                <span data-pii="registration_no">{given(claim.registration_no)}</span>
+              </Description>
+              <Description label={t("detail.cr12Date")}>
+                {claim.cr12_date ? formatDate(locale, claim.cr12_date) : t("detail.notGiven")}
+              </Description>
+              <Description label={t("detail.kraPin")}>
+                <span data-pii="kra_pin">{given(claim.kra_pin)}</span>
+              </Description>
+              <Description label={t("detail.sectorRegister")}>{given(claim.sector_register)}</Description>
+              <Description label={t("detail.publicEntity")}>
+                {claim.public_entity_requested ? t("detail.requested") : t("detail.notRequested")}
+              </Description>
+              <Description label={t("detail.documents")}>
+                {claim.document_count > 0
+                  ? t("detail.documentCount", { count: claim.document_count })
+                  : t("detail.noDocuments")}
+                <span className="mt-0.5 block text-sm text-ink-soft">{t("detail.documentsNote")}</span>
+              </Description>
+            </Facts>
+          ) : null}
+          {claim.level === "e2" ? null : organisation}
+        </div>
+      </div>
 
       {claim.other_claims.length > 0 ? (
         <Section title={t("detail.othersHeading")} headingId="others">
@@ -206,14 +216,33 @@ export default async function ClaimPage({ params }: PageProps<"/admin/claims/[id
         </Facts>
       ) : null}
     </article>,
+    true,
   );
 }
 
-/** A titled group of the claim's facts: a Section with one DescriptionList (the page's one label column width). */
-function Facts({ id, heading, lead, children }: { id: string; heading: string; lead?: string; children: ReactNode }) {
+/** A titled group of the claim's facts: a Section on its own white panel with one DescriptionList (the page's one label column width); the claim itself is raised. */
+function Facts({
+  id,
+  heading,
+  lead,
+  raised = false,
+  children,
+}: {
+  id: string;
+  heading: string;
+  lead?: string;
+  raised?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <Section title={heading} headingId={id} description={lead}>
-      <DescriptionList>{children}</DescriptionList>
+    <Section
+      title={heading}
+      headingId={id}
+      description={lead}
+      className={cn("rounded-panel border border-line bg-field p-5 sm:p-6", raised && "shadow-card")}
+    >
+      {/* A narrower label column in a half-width panel, so values keep to one line where they can. */}
+      <DescriptionList className="lg:grid-cols-[8.5rem_minmax(0,1fr)] lg:gap-x-6">{children}</DescriptionList>
     </Section>
   );
 }
