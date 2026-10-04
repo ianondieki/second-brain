@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// REQ-UX-01..04 (P16 design system): every colour mix that was repeated inline is a named token in globals.css, exposed
+// REQ-UX-01..04 (P16 design system; values from P20, D-55): every colour mix that was repeated inline is a named token in globals.css, exposed
 // as a Tailwind utility, and no component spells one of them out again (docs/platform/design/p16-design-system.md).
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -13,15 +13,15 @@ const css = readFileSync(join(root, "app/globals.css"), "utf8");
 
 // The plan's token table, as Tailwind writes the mix inside an arbitrary value (spaces become underscores).
 const MIXES: Record<string, string> = {
-  "accent-strong": "color-mix(in oklab, var(--accent) 84%, var(--ink))",
+  "accent-strong": "color-mix(in oklab, var(--accent) 82%, var(--ink))",
   "wash-soft": "color-mix(in oklab, var(--accent-wash) 55%, var(--paper))",
   "error-wash": "color-mix(in oklab, var(--error) 7%, var(--field))",
   "ok-wash": "color-mix(in oklab, var(--ok) 7%, var(--field))",
   "error-line": "color-mix(in oklab, var(--error) 45%, var(--paper))",
   "ok-line": "color-mix(in oklab, var(--ok) 45%, var(--paper))",
   "accent-line": "color-mix(in oklab, var(--accent) 35%, var(--paper))",
-  "warm-line": "color-mix(in oklab, var(--warm) 45%, var(--paper))",
-  scrim: "color-mix(in oklab, var(--ink) 45%, transparent)",
+  "warm-line": "color-mix(in oklab, var(--warm) 40%, var(--paper))",
+  scrim: "color-mix(in oklab, var(--night) 55%, transparent)",
 };
 
 function sources(dir: string): string[] {
@@ -41,8 +41,8 @@ describe("design tokens", () => {
   // Two elevations (D-52): the card's, very soft and wide, and the overlay's; both offset with a blur and tinted from
   // ink in light mode, from black in dark mode; each is declared for light, dark and the system-dark fallback.
   it("has a card shadow and an overlay shadow, offset with a soft blur, for both modes", () => {
-    expect(css).toMatch(/--shadow-card: 0 1px 0 rgb\(26 25 22 \/ 0\.04\), 0 16px 40px -24px rgb\(26 25 22 \/ 0\.22\);/);
-    expect(css).toMatch(/--shadow-overlay: 0 16px 40px -16px rgb\(26 25 22 \/ 0\.24\), 0 2px 6px -2px rgb\(26 25 22 \/ 0\.1\);/);
+    expect(css).toMatch(/--shadow-card: 0 1px 2px rgb\(30 22 64 \/ 0\.06\), 0 12px 32px -16px rgb\(30 22 64 \/ 0\.2\);/);
+    expect(css).toMatch(/--shadow-overlay: 0 24px 48px -20px rgb\(30 22 64 \/ 0\.34\), 0 4px 10px -4px rgb\(30 22 64 \/ 0\.12\);/);
     expect(css.match(/--shadow-card: 0 /g)).toHaveLength(3);
     expect(css.match(/--shadow-overlay: 0 /g)).toHaveLength(3);
   });

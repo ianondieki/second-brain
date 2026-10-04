@@ -22,7 +22,7 @@ const tones: Record<BadgeTone, string> = {
 // Filled only for the one "Your turn" / "Needs you" marker of a row (the warm accent, D-52); rounded-full is kept for it and the avatar.
 const solidTones: Record<BadgeTone, string> = {
   accent: "bg-accent text-on-accent",
-  warm: "bg-warm text-on-warm",
+  warm: "bg-flourish text-on-warm",
   ok: "bg-ok text-on-ok",
   error: "bg-error text-on-accent",
   neutral: "bg-ink text-paper",
