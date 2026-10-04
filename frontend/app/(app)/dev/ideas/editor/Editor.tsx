@@ -418,7 +418,7 @@ export function Editor(props: EditorProps) {
   return (
     <>
     {/* "Edit idea" from the moment the first save made the draft. */}
-    <h1 className="mb-6 text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
+    <h1 className="mb-6 text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl">
       {created ? t("pageTitleEdit") : t("pageTitleNew")}
     </h1>
     {/* Disabled until React runs: anything typed into the server-rendered fields before then would be lost (slow
