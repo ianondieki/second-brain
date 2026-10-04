@@ -5,9 +5,10 @@ import { ConsiderIcon, NotNowIcon, PursueIcon } from "@/components/discover-icon
 import { problemHref } from "@/components/problem/problem";
 import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { textLinkClass } from "@/components/ui/Button";
+import { textLinkClass, titleLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Row, RowList } from "@/components/ui/RowList";
+import { cn } from "@/components/ui/cn";
+import { LinkPending } from "@/components/ui/LinkPending";
 import { Section } from "@/components/ui/Section";
 
 import { cardBadges, ChipList, MoreSummary, WhyChip } from "./Chips";
@@ -30,6 +31,9 @@ const DECISION_TONE: Record<Decision, BadgeTone> = {
   not_now: "neutral",
 };
 const DECISION_ICON = { pursue: PursueIcon, consider: ConsiderIcon, not_now: NotNowIcon } as const;
+
+/** The grid's columns by count: one, two or three across, never a third card alone under two. */
+const GRID: Record<number, string> = { 1: "", 2: "md:grid-cols-2", 3: "md:grid-cols-3" };
 
 /**
  * Home's "Recommended for you" (REQ-PERS-01; docs/spec/06 6.7): the first few recommendations, each with the pursuit
@@ -60,14 +64,17 @@ export function RecommendedForYou({ state }: { state: RecommendationsState }) {
     >
       {state.kind === "list" ? (
         <>
-          <RowList ordered cards>
+          {/* Three across on a wide column (no two-and-an-orphan), the cards as tall as their row. */}
+          <ol className={cn("grid grid-cols-1 gap-4 [&>li]:min-w-0", GRID[Math.min(state.items.length, 3)])}>
             {state.items.map((item) => (
-              <RecommendationRow key={item.problem.id} item={item} />
+              <li key={item.problem.id}>
+                <RecommendationRow item={item} />
+              </li>
             ))}
-          </RowList>
-          <StandaloneLink href={DISCOVER_PATH}>
-            {t("more")}
-          </StandaloneLink>
+          </ol>
+          <p className="mt-3">
+            <StandaloneLink href={DISCOVER_PATH}>{t("more")}</StandaloneLink>
+          </p>
         </>
       ) : state.kind === "noNiches" ? (
         <EmptyState sentence={t("noNiches")} action={t("noNichesAction")} href={NICHES_PATH} />
@@ -82,7 +89,11 @@ export function RecommendedForYou({ state }: { state: RecommendationsState }) {
   );
 }
 
-/** One recommendation, a Row: the problem (a link to its card), two badges, and the explanation on demand. */
+/**
+ * One recommendation as a compact card (P20): the problem (its title the link to the problem's page), one meta line
+ * (the niche, and the demo honesty label when it is a seeded example), the two chips in their own row, and the
+ * explanation on demand at the foot. Only the title is a link: the disclosure is a control of its own.
+ */
 export function RecommendationRow({ item }: { item: Recommendation }) {
   const t = useTranslations("recommendations");
   const { decision } = item.pursuit;
@@ -90,64 +101,72 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
   const DecisionIcon = DECISION_ICON[decision];
   const { lead: why, reasons, fits } = explain(item);
   const titleId = `recommended-${item.problem.id}`;
+  const badges = cardBadges([
+    <Badge key="pursuit" data-chip="pursuit" tone={DECISION_TONE[decision]} icon={<DecisionIcon />}>
+      {t("chip", { pursuit, fit: t(`fit.${FIT_KEY[item.label]}`) })}
+    </Badge>,
+    why ? <WhyChip key="why">{why}</WhyChip> : null,
+  ]);
 
   return (
-    <Row
+    <article
       aria-labelledby={titleId}
       data-recommendation={item.problem.id}
       data-decision={decision}
-      title={item.problem.title}
-      titleId={titleId}
-      href={problemHref(item.problem.id)}
-      stretch={false}
-      meta={
-        item.problem.niche || item.problem.label ? (
-          <span className="flex flex-wrap gap-x-4">
-            {item.problem.niche ? <span>{item.problem.niche.label}</span> : null}
-            <ProblemLabelText problem={item.problem} />
-          </span>
-        ) : undefined
-      }
-      badges={cardBadges([
-        <Badge key="pursuit" data-chip="pursuit" tone={DECISION_TONE[decision]} icon={<DecisionIcon />}>
-          {t("chip", { pursuit, fit: t(`fit.${FIT_KEY[item.label]}`) })}
-        </Badge>,
-        why ? <WhyChip key="why">{why}</WhyChip> : null,
-      ])}
+      className="relative flex h-full min-w-0 flex-col rounded-panel border border-line bg-field p-4 transition-[border-color] duration-(--motion-fast) hover:border-accent-line sm:p-5"
     >
-      {item.exploring ? <p className="text-sm text-ink-soft">{t("exploring")}</p> : null}
-      <details className="group">
-        <MoreSummary>{t("details")}</MoreSummary>
-        <div className="mt-1 mb-2 flex max-w-[65ch] flex-col gap-4">
-          {reasons.length > 0 ? (
-            <section>
-              <h4 className="text-sm font-semibold text-ink">{t("reasonsTitle", { pursuit })}</h4>
-              <div className="mt-1">
-                <ChipList items={reasons} />
-              </div>
-            </section>
-          ) : null}
-          {fits.length > 0 ? (
-            <section>
-              <h4 className="text-sm font-semibold text-ink">{t("whyTitle")}</h4>
-              <div className="mt-1">
-                <ChipList items={fits} />
-              </div>
-            </section>
-          ) : null}
-          {item.why_not ? (
-            <section>
-              <h4 className="text-sm font-semibold text-ink">{t("whyNotTitle")}</h4>
-              <p className="mt-1 text-ink">{item.why_not}</p>
-            </section>
-          ) : null}
-          <p>
-            <StandaloneLink href={startProposalHref(item.problem.id)}>
-              {t("start")}
-            </StandaloneLink>
-          </p>
+      <h3 id={titleId} className="text-base leading-snug font-semibold text-pretty [overflow-wrap:anywhere] text-ink">
+        <Link href={problemHref(item.problem.id)} className={titleLinkClass}>
+          {item.problem.title}
+          <LinkPending className="absolute -top-px left-4 sm:left-5" />
+        </Link>
+      </h3>
+      {item.problem.niche || item.problem.label ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-soft">
+          {item.problem.niche ? <span className="[overflow-wrap:anywhere]">{item.problem.niche.label}</span> : null}
+          <ProblemLabelText problem={item.problem} />
+        </p>
+      ) : null}
+      {badges ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {badges}
         </div>
-      </details>
-    </Row>
+      ) : null}
+      <div className="mt-auto pt-2">
+        {item.exploring ? <p className="text-sm text-ink-soft">{t("exploring")}</p> : null}
+        <details className="group">
+          <MoreSummary>{t("details")}</MoreSummary>
+          <div className="mt-1 mb-2 flex max-w-[65ch] flex-col gap-4">
+            {reasons.length > 0 ? (
+              <section>
+                <h4 className="text-sm font-semibold text-ink">{t("reasonsTitle", { pursuit })}</h4>
+                <div className="mt-1">
+                  <ChipList items={reasons} />
+                </div>
+              </section>
+            ) : null}
+            {fits.length > 0 ? (
+              <section>
+                <h4 className="text-sm font-semibold text-ink">{t("whyTitle")}</h4>
+                <div className="mt-1">
+                  <ChipList items={fits} />
+                </div>
+              </section>
+            ) : null}
+            {item.why_not ? (
+              <section>
+                <h4 className="text-sm font-semibold text-ink">{t("whyNotTitle")}</h4>
+                <p className="mt-1 text-ink">{item.why_not}</p>
+              </section>
+            ) : null}
+            <p>
+              <StandaloneLink href={startProposalHref(item.problem.id)}>
+                {t("start")}
+              </StandaloneLink>
+            </p>
+          </div>
+        </details>
+      </div>
+    </article>
   );
 }

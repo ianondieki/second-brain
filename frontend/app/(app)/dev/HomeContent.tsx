@@ -4,16 +4,16 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { EngagementCard } from "@/components/tracker/EngagementCard";
-import type { Summary } from "@/components/tracker/model";
-import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
+import { Chip } from "@/components/tracker/Chip";
+import { stageChip, type Summary } from "@/components/tracker/model";
+import { DueLine } from "@/components/tracker/When";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { CardGrid } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 import { Callout } from "@/components/ui/Callout";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { ClientStrings } from "@/components/ClientStrings";
@@ -28,6 +28,7 @@ import type { RecommendationsState } from "./discover/recommendations";
 import { homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
+import { NeedsYouHero } from "./NeedsYouHero";
 
 /** How many of the engagements not waiting on the developer, and of their ideas, Home shows before "All …". */
 const OTHERS_SHOWN = 4;
@@ -42,12 +43,18 @@ export interface HomeContentProps {
 }
 
 /**
- * Developer Home (docs/spec/07 item 1; D-52): four stat tiles, then what needs the developer as prominent cards with
- * the deadline and one action, "Recommended for you", then the rest as compact cards. "New proposal" is the screen's
- * one primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
+ * Developer Home (docs/spec/07 item 1; D-52, P20): four stat tiles, then what needs the developer as the page's one
+ * raised card each (the deadline as a figure, one way in), "Recommended for you" three across, then the rest as two
+ * lists of rows side by side on a wide column (the other engagements, the ideas). "New proposal" is the screen's one
+ * primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
  */
 export async function HomeContent({ me, engagements, ideas, recommended }: HomeContentProps) {
-  const [t, th, locale] = await Promise.all([getTranslations("devHome"), getTranslations("home"), getLocale()]);
+  const [t, th, tr, locale] = await Promise.all([
+    getTranslations("devHome"),
+    getTranslations("home"),
+    getTranslations("tracker"),
+    getLocale(),
+  ]);
   const { waiting, others } = homeGroups(engagements);
   const stats = homeStats(engagements, ideas);
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
@@ -70,7 +77,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
         />
       </div>
 
-      <div className="mt-8 flex max-w-4xl flex-col gap-12">
+      <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:gap-14">
         <section aria-label={t("stats.label")} data-home="stats">
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <li>
@@ -121,7 +128,7 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
             <ul className="flex flex-col gap-4">
               {waiting.map((item) => (
                 <li key={item.id}>
-                  <NeedsYouCard item={item} mine="developer" href={rowHref(item.id)} action={t("openTracker")} />
+                  <NeedsYouHero item={item} href={rowHref(item.id)} action={t("openTracker")} />
                 </li>
               ))}
             </ul>
@@ -130,36 +137,44 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
 
         <RecommendedForYou state={recommended} />
 
-        {others.length > 0 ? (
-          <Section
-            title={t("others")}
-            headingId="home-others"
-            data-home="others"
-            description={t("otherLead")}
-            link={{ href: ENGAGEMENTS_PATH, label: t("allEngagements") }}
-          >
-            <CardGrid>
-              {others.slice(0, OTHERS_SHOWN).map((item) => (
-                <li key={item.id}>
-                  <EngagementCard item={item} mine="developer" href={rowHref(item.id)} />
-                </li>
-              ))}
-            </CardGrid>
-          </Section>
-        ) : null}
+        {others.length > 0 || ideas.length > 0 ? (
+          // Two lists of rows: side by side from 1024 px when both are there, one column (or the full width) otherwise.
+          <div className="grid gap-12 lg:auto-cols-fr lg:grid-flow-col lg:gap-10">
+            {others.length > 0 ? (
+              <Section
+                title={t("others")}
+                headingId="home-others"
+                data-home="others"
+                link={{ href: ENGAGEMENTS_PATH, label: t("allEngagements") }}
+              >
+                <RowList>
+                  {others.slice(0, OTHERS_SHOWN).map((item) => (
+                    <Row
+                      key={item.id}
+                      data-engagement={item.id}
+                      href={rowHref(item.id)}
+                      title={item.proposal_title}
+                      meta={tr("withOrg", { org: item.org_name })}
+                      badges={[<Chip key="stage" kind={stageChip(item)}>{item.stage_label}</Chip>]}
+                    >
+                      <DueLine item={item} mine="developer" />
+                    </Row>
+                  ))}
+                </RowList>
+              </Section>
+            ) : null}
 
-        {ideas.length > 0 ? (
-          <Section title={t("ideasTitle")} headingId="home-ideas" data-home="ideas" link={{ href: "/dev/ideas", label: t("allIdeas") }}>
-            <CardGrid>
-              {ideas.slice(0, IDEAS_SHOWN).map((item) => (
-                <li key={item.id}>
-                  <IdeaCard item={item} headingLevel={3} />
-                </li>
-              ))}
-            </CardGrid>
-          </Section>
+            {ideas.length > 0 ? (
+              <Section title={t("ideasTitle")} headingId="home-ideas" data-home="ideas" link={{ href: "/dev/ideas", label: t("allIdeas") }}>
+                <RowList>
+                  {ideas.slice(0, IDEAS_SHOWN).map((item) => (
+                    <IdeaCard key={item.id} item={item} headingLevel={3} />
+                  ))}
+                </RowList>
+              </Section>
+            ) : null}
+          </div>
         ) : null}
-
       </div>
     </SignedInShell>
   );
