@@ -352,6 +352,36 @@ html[data-theme="dark"] {
 }
 
 /*
+ * A night band (the landing's hero text, proof and footer; the auth panel): the tokens are remapped inside it, so the
+ * kit's links, badges, inputs and the theme switch draw on the night violet without one-off styles. The mixes are
+ * declared again because a custom property's mix is computed where it is declared. AA on night: ink 14.3:1, ink-soft
+ * 8.3:1, accent #b7a6ff 8.0:1 (night text on it 8.0:1).
+ */
+.on-night {
+  --paper: var(--night);
+  --field: #2a2156;
+  --ink: var(--on-night);
+  --ink-soft: var(--night-soft);
+  --line: var(--night-line);
+  --accent: #b7a6ff;
+  --accent-wash: #30265e;
+  --on-accent: #1e1640;
+  --warm: #f6c155;
+  --warm-wash: #3a2e1a;
+  --ok: #7fdcac;
+  --error: #ff9a90;
+  --accent-strong: color-mix(in oklab, var(--accent) 82%, var(--ink));
+  --wash-soft: color-mix(in oklab, var(--accent-wash) 55%, var(--paper));
+  --error-wash: color-mix(in oklab, var(--error) 7%, var(--field));
+  --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field));
+  --error-line: color-mix(in oklab, var(--error) 45%, var(--paper));
+  --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper));
+  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper));
+  --warm-line: color-mix(in oklab, var(--warm) 40%, var(--paper));
+  color: var(--ink);
+}
+
+/*
  * Buttons (components/ui/Button.tsx): pills, one height (48 px; a label that wraps at 360 px keeps its padding and
  * stays centred). The primary is the bloom fill with a hairline of light on its top edge; secondary is a white pill
  * with a quiet edge; danger carries the error colour in words and edge, never a fill; link is a word with a line.
@@ -560,16 +590,36 @@ dialog[data-sheet][open] {
 [data-hero-visual] [data-stepper] p + p {
   font-size: 0.8125rem;
 }
-@media (width >= 64rem) {
-  [data-hero-visual] [data-stepper] p,
-  [data-hero-visual] [data-stepper] p + p {
-    font-size: 0.875rem;
+/* The one light behind the hero's product cards (D-55): a soft bloom light with a breath of saffron, on the
+   night band. A light, not a wash: it sits behind the cards only. */
+.hero-glow {
+  background:
+    radial-gradient(42% 46% at 58% 42%, rgb(123 96 255 / 0.42), transparent 72%),
+    radial-gradient(30% 32% at 30% 82%, rgb(244 181 63 / 0.16), transparent 70%);
+  filter: blur(8px);
+}
+
+/* The landing's one authored moment: the three product cards rise into place in sequence on load (each card sets
+   --rise-delay). Reduced motion shows them in place. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
-[data-hero-backdrop] {
-  background:
-    radial-gradient(60% 70% at 70% 20%, color-mix(in oklab, var(--accent-wash) 85%, transparent), transparent 70%),
-    radial-gradient(50% 60% at 15% 90%, color-mix(in oklab, var(--warm-wash) 90%, transparent), transparent 70%);
+.hero-rise {
+  animation: hero-rise 720ms var(--ease-out) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(#hero-title) {
+    scroll-behavior: smooth;
+  }
 }
 
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
@@ -589,7 +639,8 @@ dialog[data-sheet][open] {
   }
 
   .seal-draw,
-  .tour-enter {
+  .tour-enter,
+  .hero-rise {
     animation: none !important;
   }
 }
