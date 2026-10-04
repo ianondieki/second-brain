@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { ConfidentialIcon } from "@/components/org-icons";
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
 import { LockIcon } from "@/components/ui/status-icons";
 
@@ -71,7 +70,7 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
   return (
     // The fold between the public teaser and the full proposal: the lock, the heading and a hairline running to the
     // column's edge (no coloured left rule under it; the content keeps the page's own left edge).
-    <section aria-labelledby="full-proposal" className="mt-6" data-tier2-state={stateName(nda, viewing)}>
+    <section aria-labelledby="full-proposal" className="mt-2" data-tier2-state={stateName(nda, viewing)}>
       <div className="flex items-center gap-3">
         <ConfidentialIcon open={open} className="size-6 shrink-0 text-accent" />
         <h2 id="full-proposal" className="shrink-0 text-lg text-ink">
@@ -156,13 +155,15 @@ async function NdaStep({
   hrefs: FullProposalProps["hrefs"];
 }) {
   const t = await getTranslations("orgProposal");
+  // The step that needs the reader now: one raised card holding the NDA's text (an inset well, not a card in a card),
+  // its version and fingerprint, who sees the opening, and "Accept and view".
   return (
-    <div className="flex flex-col items-start gap-5">
+    <Card padding="none" className="flex flex-col gap-6 p-5 sm:p-7" data-nda-step="">
       <div>
-        <h3 className="text-base font-semibold text-ink">{t("ndaHeading")}</h3>
+        <h3 className="text-lg text-ink">{t("ndaHeading")}</h3>
         <p className="mt-1 max-w-[60ch] text-ink">{t("ndaLead", { org: orgName })}</p>
       </div>
-      <Card padding="none" className="w-full max-w-2xl overflow-hidden">
+      <div className="overflow-hidden rounded-control border border-line bg-paper">
         <div
           role="region"
           tabIndex={0}
@@ -186,20 +187,20 @@ async function NdaStep({
             </dd>
           </div>
         </dl>
-      </Card>
-      {nda.is_placeholder ? <p className="max-w-[60ch] text-sm text-ink-soft">{t("ndaDraft")}</p> : null}
-      <Callout
-        as="section"
-        tone="info"
-        icon={<LockIcon className="mt-0.5 size-5 shrink-0 text-accent" />}
-        title={t("noticeHeading")}
-        titleId="logging-notice-heading"
-        aria-labelledby="logging-notice-heading"
-        className="max-w-2xl"
-      >
-        {/* The viewer-logging notice exactly as the API sends it (its version is echoed on acceptance). */}
-        <p data-logging-notice={nda.logging_notice.version}>{nda.logging_notice.text}</p>
-      </Callout>
+      </div>
+      {nda.is_placeholder ? <p className="-mt-3 max-w-[60ch] text-sm text-ink-soft">{t("ndaDraft")}</p> : null}
+      <section aria-labelledby="logging-notice-heading" className="flex items-start gap-3 border-t border-line pt-5">
+        <LockIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+        <div className="min-w-0">
+          <h4 id="logging-notice-heading" className="font-semibold text-ink">
+            {t("noticeHeading")}
+          </h4>
+          {/* The viewer-logging notice exactly as the API sends it (its version is echoed on acceptance). */}
+          <p className="mt-1 max-w-[62ch] text-ink" data-logging-notice={nda.logging_notice.version}>
+            {nda.logging_notice.text}
+          </p>
+        </div>
+      </section>
       <NdaAccept
         key={`${nda.template_id}:${nda.sha256}:${nda.logging_notice.version}`}
         orgId={orgId}
@@ -211,7 +212,7 @@ async function NdaStep({
         inboxHref={hrefs.inbox}
         orgName={orgName}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -219,7 +220,7 @@ async function Accepted({ nda, hrefs }: { nda: EvaluationNda; hrefs: FullProposa
   const t = await getTranslations("orgProposal");
   const locale = await getLocale();
   return (
-    <div className="flex flex-col items-start gap-4">
+    <Card padding="none" className="flex flex-col items-start gap-4 p-5 sm:p-7" data-nda-step="accepted">
       <p className="max-w-[60ch] text-ink">
         {t("accepted", { version: nda.version, date: formatMoment(locale, nda.accepted_at!) })}
       </p>
@@ -227,6 +228,6 @@ async function Accepted({ nda, hrefs }: { nda: EvaluationNda; hrefs: FullProposa
       <ButtonLink href={hrefs.view} variant="primary">
         {t("view")}
       </ButtonLink>
-    </div>
+    </Card>
   );
 }
